@@ -36,6 +36,8 @@ interface IBaseOracle is IAccessControlEnumerable, IVersioned {
 }
 
 interface IBurner is IBurnerWithoutAccessControl, IAccessControlEnumerable {
+    function REQUEST_BURN_SHARES_ROLE() external view returns (bytes32);
+    function REQUEST_BURN_MY_STETH_ROLE() external view returns (bytes32);
 }
 
 interface ILidoLocatorOld {
@@ -55,7 +57,7 @@ interface ILidoLocatorOld {
     function oracleDaemonConfig() external view returns(address);
 }
 
-interface IAccountingOracle is IBaseOracle, IOssifiableProxy {
+interface IAccountingOracle is IBaseOracle {
     function initialize(address admin, address consensusContract, uint256 consensusVersion) external;
 }
 
@@ -64,6 +66,7 @@ interface IAragonAppRepo {
 }
 
 interface IStakingRouter is IAccessControlEnumerable {
+    function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
 }
 
 interface IUpgradeableBeacon {
@@ -81,14 +84,28 @@ interface IVaultFactory {
     function DASHBOARD_IMPL() external view returns (address);
 }
 
-interface IVaultHub is IPausableUntilWithRoles, IOssifiableProxy {
+interface IVaultHub is IPausableUntilWithRoles {
+    function VAULT_MASTER_ROLE() external view returns (bytes32);
+    function VAULT_REGISTRY_ROLE() external view returns (bytes32);
+    function RESUME_ROLE() external view returns (bytes32);
+    function PAUSE_ROLE() external view returns (bytes32);
 }
 
 interface IOracleReportSanityChecker is IAccessControlEnumerable {
+    function ALL_LIMITS_MANAGER_ROLE() external view returns (bytes32);
+    function EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE() external view returns (bytes32);
+    function APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE() external view returns (bytes32);
+    function ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE() external view returns (bytes32);
+    function SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE() external view returns (bytes32);
+    function MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE() external view returns (bytes32);
+    function MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE() external view returns (bytes32);
+    function MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE() external view returns (bytes32);
+    function REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE() external view returns (bytes32);
+    function MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE() external view returns (bytes32);
+    function SECOND_OPINION_MANAGER_ROLE() external view returns (bytes32);
+    function INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE() external view returns (bytes32);
 }
 
-interface IPredepositGuarantee is IOssifiableProxy {
-}
 
 /**
 * @title Lido V3 Upgrade Template
@@ -137,7 +154,7 @@ contract UpgradeTemplateV3 {
     // New proxy contracts
     address public immutable ACCOUNTING;
     IVaultHub public immutable VAULT_HUB;
-    IPredepositGuarantee public immutable PREDEPOSIT_GUARANTEE;
+    address public immutable PREDEPOSIT_GUARANTEE;
 
     // New non-proxy contracts
     IBurner public immutable BURNER;
@@ -173,48 +190,34 @@ contract UpgradeTemplateV3 {
     address public immutable WITHDRAWAL_QUEUE;
     address public immutable WSTETH;
 
-    // Values to set
-
-    //
     // Roles
-    // (stored instead of reading from the contracts to save contract bytecode size)
-    //
-    bytes32 internal constant DEFAULT_ADMIN_ROLE = 0x00;
+    // (stored as immutables initialized from contracts)
+    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
     // Burner
-    bytes32 internal constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
-    bytes32 internal constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
+    bytes32 public immutable REQUEST_BURN_SHARES_ROLE;
+    bytes32 public immutable REQUEST_BURN_MY_STETH_ROLE;
     // PauseUntilWithRoles
-    bytes32 internal constant RESUME_ROLE = keccak256("RESUME_ROLE");
-    bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 public immutable RESUME_ROLE;
+    bytes32 public immutable PAUSE_ROLE;
     // OracleReportSanityChecker
-    bytes32 internal constant ALL_LIMITS_MANAGER_ROLE = keccak256("ALL_LIMITS_MANAGER_ROLE");
-    bytes32 public constant EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
-        keccak256("EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
-    bytes32 public constant APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE =
-        keccak256("APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE");
-    bytes32 public constant ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE =
-        keccak256("ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE");
-    bytes32 public constant SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE =
-        keccak256("SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE");
-    bytes32 public constant MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE =
-        keccak256("MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE");
-    bytes32 public constant MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE =
-        keccak256("MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE");
-    bytes32 public constant MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE =
-        keccak256("MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE");
-    bytes32 public constant REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE = keccak256("REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE");
-    bytes32 public constant MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE =
-        keccak256("MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE");
-    bytes32 public constant SECOND_OPINION_MANAGER_ROLE =
-        keccak256("SECOND_OPINION_MANAGER_ROLE");
-    bytes32 public constant INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE =
-        keccak256("INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE");
+    bytes32 public immutable ALL_LIMITS_MANAGER_ROLE;
+    bytes32 public immutable EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE;
+    bytes32 public immutable APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE;
+    bytes32 public immutable ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE;
+    bytes32 public immutable SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE;
+    bytes32 public immutable MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE;
+    bytes32 public immutable MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE;
+    bytes32 public immutable MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE;
+    bytes32 public immutable REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE;
+    bytes32 public immutable MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE;
+    bytes32 public immutable SECOND_OPINION_MANAGER_ROLE;
+    bytes32 public immutable INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE;
     // StakingRouter
-    bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
+    bytes32 public immutable REPORT_REWARDS_MINTED_ROLE;
     // VaultHub
-    bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
-    bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
-
+    bytes32 public immutable VAULT_MASTER_ROLE;
+    bytes32 public immutable VAULT_REGISTRY_ROLE;
+    // OperatorGrid
     bytes32 public immutable REGISTRY_ROLE;
 
     //
@@ -258,6 +261,7 @@ contract UpgradeTemplateV3 {
 
         ALLOW_NON_SINGLE_BLOCK_UPGRADE = allowNonSingleBlockUpgrade;
 
+
         NEW_LOCATOR_IMPLEMENTATION = params.newLocatorImplementation;
         LOCATOR = ILidoLocator(params.locator);
 
@@ -274,7 +278,7 @@ contract UpgradeTemplateV3 {
         ILidoLocator newLocatorImpl = ILidoLocator(params.newLocatorImplementation);
         ACCOUNTING = newLocatorImpl.accounting();
         VAULT_HUB = IVaultHub(newLocatorImpl.vaultHub());
-        PREDEPOSIT_GUARANTEE = IPredepositGuarantee(newLocatorImpl.predepositGuarantee());
+        PREDEPOSIT_GUARANTEE = newLocatorImpl.predepositGuarantee();
         BURNER = IBurner(newLocatorImpl.burner());
         WSTETH = newLocatorImpl.wstETH();
         ORACLE_REPORT_SANITY_CHECKER = IOracleReportSanityChecker(newLocatorImpl.oracleReportSanityChecker());
@@ -293,6 +297,36 @@ contract UpgradeTemplateV3 {
         LIDO_IMPLEMENTATION = params.lidoImplementation;
         ACCOUNTING_ORACLE_IMPLEMENTATION = params.accountingOracleImplementation;
 
+        // Initialize Burner roles
+        REQUEST_BURN_SHARES_ROLE = BURNER.REQUEST_BURN_SHARES_ROLE();
+        REQUEST_BURN_MY_STETH_ROLE = BURNER.REQUEST_BURN_MY_STETH_ROLE();
+
+        // Initialize PauseUntilWithRoles roles
+        RESUME_ROLE = VAULT_HUB.RESUME_ROLE();
+        PAUSE_ROLE = VAULT_HUB.PAUSE_ROLE();
+
+        // Initialize OracleReportSanityChecker roles
+        ALL_LIMITS_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.ALL_LIMITS_MANAGER_ROLE();
+        EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE();
+        APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE();
+        ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE();
+        SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE();
+        MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE = ORACLE_REPORT_SANITY_CHECKER.MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE();
+        MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE = ORACLE_REPORT_SANITY_CHECKER.MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE();
+        MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE = ORACLE_REPORT_SANITY_CHECKER.MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE();
+        REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE();
+        MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE();
+        SECOND_OPINION_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.SECOND_OPINION_MANAGER_ROLE();
+        INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE();
+
+        // Initialize StakingRouter roles
+        REPORT_REWARDS_MINTED_ROLE = STAKING_ROUTER.REPORT_REWARDS_MINTED_ROLE();
+
+        // Initialize VaultHub roles
+        VAULT_MASTER_ROLE = VAULT_HUB.VAULT_MASTER_ROLE();
+        VAULT_REGISTRY_ROLE = VAULT_HUB.VAULT_REGISTRY_ROLE();
+
+        // Initialize OperatorGrid roles
         REGISTRY_ROLE = OPERATOR_GRID.REGISTRY_ROLE();
     }
 
@@ -439,7 +473,7 @@ contract UpgradeTemplateV3 {
 
         _assertAragonAppImplementation(ARAGON_APP_LIDO_REPO, LIDO_IMPLEMENTATION);
 
-        _assertProxyImplementation(ACCOUNTING_ORACLE, ACCOUNTING_ORACLE_IMPLEMENTATION);
+        _assertProxyImplementation(IOssifiableProxy(address(ACCOUNTING_ORACLE)), ACCOUNTING_ORACLE_IMPLEMENTATION);
 
         _assertBurnerAllowances();
 
@@ -532,7 +566,7 @@ contract UpgradeTemplateV3 {
         _assertSingleOZRoleHolder(VAULT_HUB, DEFAULT_ADMIN_ROLE, agent);
         _assertSingleOZRoleHolder(VAULT_HUB, VAULT_MASTER_ROLE, agent);
         _assertZeroOZRoleHolders(VAULT_HUB, VAULT_REGISTRY_ROLE);
-        _assertProxyAdmin(VAULT_HUB, agent);
+        _assertProxyAdmin(IOssifiableProxy(address(VAULT_HUB)), agent);
         // TODO: add PausableUntilWithRoles checks when gate seal is added
 
         // AccountingOracle
@@ -545,7 +579,7 @@ contract UpgradeTemplateV3 {
         _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), agent);
 
         // PredepositGuarantee
-        _assertProxyAdmin(PREDEPOSIT_GUARANTEE, agent);
+        _assertProxyAdmin(IOssifiableProxy(address(PREDEPOSIT_GUARANTEE)), agent);
 
         // StakingRouter
         {
