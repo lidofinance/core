@@ -507,18 +507,16 @@ contract UpgradeTemplateV3 {
         address agent = AGENT;
 
         // Burner
-        IBurner burner = BURNER;
-        _assertSingleOZRoleHolder(burner, DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(BURNER, DEFAULT_ADMIN_ROLE, agent);
         {
             address[] memory holders = new address[](4);
             holders[0] = address(LIDO);
             holders[1] = NODE_OPERATORS_REGISTRY;
             holders[2] = SIMPLE_DVT;
             holders[3] = ACCOUNTING;
-            _assertOZRoleHolders(burner, REQUEST_BURN_SHARES_ROLE, holders);
+            _assertOZRoleHolders(BURNER, REQUEST_BURN_SHARES_ROLE, holders);
         }
-        // NB: we don't check REQUEST_BURN_SHARES_ROLE on the old burner is revoked
-        //     because it is left intentionally to simplify aragon voting operations
+        _assertZeroOZRoleHolders(OLD_BURNER, REQUEST_BURN_SHARES_ROLE);
 
         // VaultHub
         _assertSingleOZRoleHolder(VAULT_HUB, DEFAULT_ADMIN_ROLE, agent);

@@ -2,6 +2,8 @@ import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   AccountingOracle,
+  Burner,
+  ICSModule,
   Kernel,
   Lido,
   LidoLocator,
@@ -14,11 +16,20 @@ import {
 import { ether, log } from "lib";
 import { impersonate } from "lib/account";
 import { loadContract } from "lib/contract";
-import { readNetworkState, Sk } from "lib/state-file";
+import { DeploymentState,readNetworkState, Sk } from "lib/state-file";
 
 import { readUpgradeParameters } from "../upgrade-utils";
 
+const CS_STAKING_MODULE_ID = 3;
 const MAINNET_LIDO_REPO = "0xF5Dc67E54FC96F993CD06073f71ca732C1E654B1";
+
+async function getCSAccountingAddress(state: DeploymentState) {
+  const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
+  const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
+  const csStakingModuleAddress = (await stakingRouter.getStakingModule(CS_STAKING_MODULE_ID)).stakingModuleAddress;
+  const csStakingModule = await loadContract<ICSModule>("ICSModule", csStakingModuleAddress);
+  return await csStakingModule.accounting();
+}
 
 export async function main(): Promise<void> {
   const state = readNetworkState();
@@ -34,6 +45,8 @@ export async function main(): Promise<void> {
   const accountingAddress = state[Sk.accounting].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
   const upgradeTemplateV3Address = state[Sk.upgradeTemplateV3].address;
+  const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
+  const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
 
   // Disable automine to ensure all transactions happen in the same block
   // TODO: automine false and mempool fifo order and manual nonce management still doesn't work!
@@ -42,7 +55,7 @@ export async function main(): Promise<void> {
 
   // while locator is not upgraded yet we can fetch the old burner address
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
-  const oldBurnerAddress = locator.burner();
+  const oldBurnerAddress = await locator.burner();
 
   const parameters = readUpgradeParameters();
   const aoConsensusVersion = parameters[Sk.accountingOracle].deployParameters.consensusVersion;
@@ -86,6 +99,22 @@ export async function main(): Promise<void> {
   votingNonce += 1;
   // NB: burner migration happens in Lido.finalizeUpgrade_v3()
   log("Lido finalizeUpgrade_v3");
+
+  const oldBurner = await loadContract<Burner>("Burner", oldBurnerAddress);
+  const REQUEST_BURN_SHARES_ROLE = await oldBurner.REQUEST_BURN_SHARES_ROLE();
+  const contractsWithTheRole = [
+    lidoAddress,
+    nodeOperatorsRegistryAddress,
+    simpleDvtAddress,
+    await getCSAccountingAddress(state),
+  ];
+  for (const address of contractsWithTheRole) {
+    await oldBurner.connect(agentSigner).revokeRole(REQUEST_BURN_SHARES_ROLE, address, {
+      nonce: agentNonce,
+    });
+    agentNonce += 1;
+    log("Burner revoked REQUEST_BURN_SHARES_ROLE from", address);
+  }
 
   const accountingOracleProxy = await loadContract<OssifiableProxy>("OssifiableProxy", accountingOracleAddress);
   await accountingOracleProxy.connect(agentSigner).proxy__upgradeTo(accountingOracleImplAddress, { nonce: agentNonce });
