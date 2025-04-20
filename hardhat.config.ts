@@ -18,6 +18,8 @@ import { mochaRootHooks } from "test/hooks";
 
 import "./tasks";
 
+Error.stackTraceLimit = 30;
+
 import { getHardhatForkingConfig, loadAccounts } from "./hardhat.helpers";
 
 const RPC_URL: string = process.env.RPC_URL || "";
