@@ -16,7 +16,7 @@ import {
 import { ether, log } from "lib";
 import { impersonate } from "lib/account";
 import { loadContract } from "lib/contract";
-import { DeploymentState,readNetworkState, Sk } from "lib/state-file";
+import { DeploymentState, readNetworkState, Sk } from "lib/state-file";
 
 import { readUpgradeParameters } from "../upgrade-utils";
 

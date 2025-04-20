@@ -176,7 +176,7 @@ describe("PredepositGuarantee.sol", () => {
 
       // Staking Vault is funded with enough ether to run validator
       await stakingVault.fund({ value: ether("32") });
-      expect(await stakingVault.valuation()).to.equal(ether("32"));
+      expect(await stakingVault.totalValue()).to.equal(ether("32"));
 
       // NO generates validator for vault
       const vaultWC = await stakingVault.withdrawalCredentials();
@@ -833,7 +833,7 @@ describe("PredepositGuarantee.sol", () => {
 
         // Staking Vault is funded with enough ether to run validator
         await stakingVault.fund({ value: ether("32") });
-        expect(await stakingVault.valuation()).to.equal(ether("32"));
+        expect(await stakingVault.totalValue()).to.equal(ether("32"));
 
         // NO generates validator for vault
         const vaultWC = await stakingVault.withdrawalCredentials();
@@ -1155,7 +1155,7 @@ describe("PredepositGuarantee.sol", () => {
           .withArgs(validNotPredepostedValidator.container.pubkey, 0n);
 
         const predeposit = await generatePredeposit(validNotPredepostedValidator);
-        // predepsit
+        // predeposit
         await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]);
 
         // Predeposited but it's valid

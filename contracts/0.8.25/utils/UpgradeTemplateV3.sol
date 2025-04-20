@@ -20,6 +20,10 @@ interface IPausableUntil {
 interface IPausableUntilWithRoles is IPausableUntil, IAccessControlEnumerable {
 }
 
+interface IOperatorGrid is IAccessControlEnumerable {
+    function REGISTRY_ROLE() external view returns (bytes32);
+}
+
 interface IOssifiableProxy {
     function proxy__upgradeTo(address newImplementation) external;
     function proxy__changeAdmin(address newAdmin) external;
@@ -161,6 +165,7 @@ contract UpgradeTemplateV3 {
     ILido public immutable LIDO;
     ILidoLocator public immutable LOCATOR;
     address public immutable NODE_OPERATORS_REGISTRY;
+    IOperatorGrid public immutable OPERATOR_GRID;
     address public immutable SIMPLE_DVT;
     IStakingRouter public immutable STAKING_ROUTER;
     address public immutable VALIDATORS_EXIT_BUS_ORACLE;
@@ -209,6 +214,8 @@ contract UpgradeTemplateV3 {
     // VaultHub
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
+
+    bytes32 public immutable REGISTRY_ROLE;
 
     //
     // Values for checks to compare with or other
@@ -271,6 +278,7 @@ contract UpgradeTemplateV3 {
         BURNER = IBurner(newLocatorImpl.burner());
         WSTETH = newLocatorImpl.wstETH();
         ORACLE_REPORT_SANITY_CHECKER = IOracleReportSanityChecker(newLocatorImpl.oracleReportSanityChecker());
+        OPERATOR_GRID = IOperatorGrid(newLocatorImpl.operatorGrid());
 
         VAULT_FACTORY = IVaultFactory(params.vaultFactory);
         UPGRADEABLE_BEACON = IUpgradeableBeacon(params.upgradeableBeacon);
@@ -284,6 +292,8 @@ contract UpgradeTemplateV3 {
         SIMPLE_DVT = params.simpleDvt;
         LIDO_IMPLEMENTATION = params.lidoImplementation;
         ACCOUNTING_ORACLE_IMPLEMENTATION = params.accountingOracleImplementation;
+
+        REGISTRY_ROLE = OPERATOR_GRID.REGISTRY_ROLE();
     }
 
     /// @notice Must be called after LidoLocator is upgraded
@@ -544,6 +554,11 @@ contract UpgradeTemplateV3 {
             holders[1] = ACCOUNTING;
             _assertOZRoleHolders(STAKING_ROUTER, REPORT_REWARDS_MINTED_ROLE, holders);
         }
+
+        // OperatorGrid
+        _assertProxyAdmin(IOssifiableProxy(address(OPERATOR_GRID)), agent);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), REGISTRY_ROLE, agent);
     }
 
     function _checkContractVersions() internal view {

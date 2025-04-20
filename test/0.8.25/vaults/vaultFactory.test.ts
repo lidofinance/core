@@ -9,6 +9,7 @@ import {
   Dashboard,
   DepositContract__MockForBeaconChainDepositor,
   LidoLocator,
+  OperatorGrid,
   OssifiableProxy,
   PredepositGuarantee_HarnessForFactory,
   StakingVault,
@@ -23,7 +24,7 @@ import {
 import { days, ether } from "lib";
 import { createVaultProxy } from "lib/protocol/helpers";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 describe("VaultFactory.sol", () => {
@@ -49,12 +50,14 @@ describe("VaultFactory.sol", () => {
   let wsteth: WstETH__HarnessForVault;
 
   let locator: LidoLocator;
+  let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
 
   let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
 
   let vaultBeaconProxy: BeaconProxy;
   let vaultBeaconProxyCode: string;
-
+  let vaultProxyCodeHash: string;
   let originalState: string;
 
   before(async () => {
@@ -81,6 +84,22 @@ describe("VaultFactory.sol", () => {
 
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
 
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+
+    const defaultTierParams = {
+      shareLimit: ether("1"),
+      reserveRatioBP: 2000n,
+      forcedRebalanceThresholdBP: 1800n,
+      treasuryFeeBP: 500n,
+    };
+    await operatorGrid.initialize(admin, defaultTierParams);
+    await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
+
+    await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
+
     // Accounting
     vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
@@ -98,6 +117,7 @@ describe("VaultFactory.sol", () => {
 
     vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beacon, "0x"]);
     vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
+    vaultProxyCodeHash = keccak256(vaultBeaconProxyCode);
 
     dashboard = await ethers.deployContract("Dashboard", [steth, wsteth, vaultHub], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, dashboard], {
@@ -168,6 +188,7 @@ describe("VaultFactory.sol", () => {
 
   context("createVaultWithDashboard", () => {
     it("works with empty `params`", async () => {
+      await vaultHub.connect(admin).addVaultProxyCodehash(vaultProxyCodeHash);
       const {
         tx,
         vault,
@@ -186,6 +207,7 @@ describe("VaultFactory.sol", () => {
     });
 
     it("check `version()`", async () => {
+      await vaultHub.connect(admin).addVaultProxyCodehash(vaultProxyCodeHash);
       const { vault } = await createVaultProxy(
         vaultOwner1,
         vaultFactory,
@@ -206,18 +228,13 @@ describe("VaultFactory.sol", () => {
       const vaultsBefore = await vaultHub.vaultsCount();
       expect(vaultsBefore).to.eq(0);
 
-      const config1 = {
-        shareLimit: 10n,
-        minReserveRatioBP: 500n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 500n,
-      };
-      const config2 = {
-        shareLimit: 20n,
-        minReserveRatioBP: 200n,
-        rebalanceThresholdBP: 20n,
-        treasuryFeeBP: 600n,
-      };
+      //attempting to create and connect a vault without adding a proxy bytecode to the allowed list
+      await expect(
+        createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [], "0x"),
+      ).to.revertedWithCustomError(vaultHub, "VaultProxyNotAllowed");
+
+      //add proxy code hash to whitelist
+      await vaultHub.connect(admin).addVaultProxyCodehash(vaultProxyCodeHash);
 
       //create vaults
       const { vault: vault1, dashboard: dashboard1 } = await createVaultProxy(
@@ -247,37 +264,8 @@ describe("VaultFactory.sol", () => {
       expect(await dashboard1.getAddress()).to.eq(await vault1.owner());
       expect(await dashboard2.getAddress()).to.eq(await vault2.owner());
 
-      //attempting to add a vault without adding a proxy bytecode to the allowed list
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            await vault1.getAddress(),
-            config1.shareLimit,
-            config1.minReserveRatioBP,
-            config1.rebalanceThresholdBP,
-            config1.treasuryFeeBP,
-          ),
-      ).to.revertedWithCustomError(vaultHub, "VaultProxyNotAllowed");
-
-      const vaultProxyCodeHash = keccak256(vaultBeaconProxyCode);
-
-      //add proxy code hash to whitelist
-      await vaultHub.connect(admin).addVaultProxyCodehash(vaultProxyCodeHash);
-
-      //connect vault 1 to VaultHub
-      await vaultHub
-        .connect(admin)
-        .connectVault(
-          await vault1.getAddress(),
-          config1.shareLimit,
-          config1.minReserveRatioBP,
-          config1.rebalanceThresholdBP,
-          config1.treasuryFeeBP,
-        );
-
       const vaultsAfter = await vaultHub.vaultsCount();
-      expect(vaultsAfter).to.eq(1);
+      expect(vaultsAfter).to.eq(2);
 
       const version1Before = await vault1.version();
       const version2Before = await vault2.version();
@@ -303,19 +291,6 @@ describe("VaultFactory.sol", () => {
         [],
         "0x",
       );
-
-      //we upgrade implementation - we do not check implementation, just proxy bytecode
-      await expect(
-        vaultHub
-          .connect(admin)
-          .connectVault(
-            await vault2.getAddress(),
-            config2.shareLimit,
-            config2.minReserveRatioBP,
-            config2.rebalanceThresholdBP,
-            config2.treasuryFeeBP,
-          ),
-      ).to.not.revertedWithCustomError(vaultHub, "VaultProxyNotAllowed");
 
       const vault1WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault1, deployer);
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
@@ -353,6 +328,7 @@ describe("VaultFactory.sol", () => {
 
   context("After upgrade", () => {
     it("exists vaults - init not works, finalize works ", async () => {
+      await vaultHub.connect(admin).addVaultProxyCodehash(vaultProxyCodeHash);
       const { vault: vault1 } = await createVaultProxy(
         vaultOwner1,
         vaultFactory,
@@ -379,6 +355,7 @@ describe("VaultFactory.sol", () => {
     it("new vaults - init works, finalize not works ", async () => {
       await beacon.connect(admin).upgradeTo(implNew);
 
+      await vaultHub.connect(admin).addVaultProxyCodehash(vaultProxyCodeHash);
       const { vault: vault2 } = await createVaultProxy(
         vaultOwner1,
         vaultFactory,

@@ -9,6 +9,8 @@ import {
   DepositContract__MockForVaultHub,
   Lido,
   LidoLocator,
+  OperatorGrid,
+  OssifiableProxy,
   PredepositGuarantee_HarnessForFactory,
   StakingVault__MockForVaultHub,
   VaultFactory__MockForVaultHub,
@@ -21,9 +23,10 @@ import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/va
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
+const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 const SHARE_LIMIT = ether("1");
 const RESERVE_RATIO_BP = 10_00n;
-const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
+const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
 const TREASURY_FEE_BP = 5_00n;
 
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
@@ -32,7 +35,7 @@ const CONNECT_DEPOSIT = ether("1");
 const TEST_ROOT = "0x4d7731e031705b521abbc5848458dc64ab85c2c3262be16f57bf5ea82a82178a";
 const TEST_PROOF = ["0xd129d34738564e7a38fa20b209e965b5fa6036268546a0d58bbe5806b2469c2e"];
 
-describe("VaultHub.sol:hub", () => {
+describe("VaultHub.sol:reporting", () => {
   let deployer: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let whale: HardhatEthersSigner;
@@ -42,6 +45,9 @@ describe("VaultHub.sol:hub", () => {
   let vaultHub: VaultHub__HarnessForReporting;
   let depositContract: DepositContract__MockForVaultHub;
   let vaultFactory: VaultFactory__MockForVaultHub;
+  let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
+  let proxy: OssifiableProxy;
   let lido: Lido;
   let acl: ACL;
 
@@ -66,7 +72,7 @@ describe("VaultHub.sol:hub", () => {
     options?: {
       shareLimit?: bigint;
       reserveRatioBP?: bigint;
-      rebalanceThresholdBP?: bigint;
+      forcedRebalanceThresholdBP?: bigint;
       treasuryFeeBP?: bigint;
     },
   ) {
@@ -74,15 +80,14 @@ describe("VaultHub.sol:hub", () => {
     await vault.connect(user).fund({ value: CONNECT_DEPOSIT });
     await vault.connect(user).lock(CONNECT_DEPOSIT);
 
-    await vaultHub
-      .connect(user)
-      .connectVault(
-        await vault.getAddress(),
-        options?.shareLimit ?? SHARE_LIMIT,
-        options?.reserveRatioBP ?? RESERVE_RATIO_BP,
-        options?.rebalanceThresholdBP ?? RESERVE_RATIO_THRESHOLD_BP,
-        options?.treasuryFeeBP ?? TREASURY_FEE_BP,
-      );
+    const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
+    await operatorGrid.connect(user).alterTier(defaultTierId, {
+      shareLimit: options?.shareLimit ?? SHARE_LIMIT,
+      reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
+      forcedRebalanceThresholdBP: options?.forcedRebalanceThresholdBP ?? FORCED_REBALANCE_THRESHOLD_BP,
+      treasuryFeeBP: options?.treasuryFeeBP ?? TREASURY_FEE_BP,
+    });
+    await vaultHub.connect(user).connectVault(vault);
 
     return vault;
   }
@@ -114,13 +119,26 @@ describe("VaultHub.sol:hub", () => {
 
     depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
 
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+    const defaultTierParams = {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: 2000n,
+      forcedRebalanceThresholdBP: 1800n,
+      treasuryFeeBP: 500n,
+    };
+    await operatorGrid.initialize(user, defaultTierParams);
+    await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
+
     const vaultHubImpl = await ethers.deployContract("VaultHub__HarnessForReporting", [
       locator,
       await locator.lido(),
       VAULTS_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
-    const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
+    proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     const vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
     await vaultHubAdmin.initialize(deployer);
@@ -131,7 +149,7 @@ describe("VaultHub.sol:hub", () => {
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
 
-    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee });
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
       await vaultHub.getAddress(),
@@ -176,7 +194,7 @@ describe("VaultHub.sol:hub", () => {
   });
 
   context("updateVaultData", () => {
-    it("accepts prooved values", async () => {
+    it("accepts proved values", async () => {
       const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
       await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
       await vaultHub.harness__connectVault(
@@ -199,7 +217,7 @@ describe("VaultHub.sol:hub", () => {
       ).to.be.revertedWithCustomError(vaultHub, "InvalidProof");
     });
 
-    it("accepts prooved values", async () => {
+    it("accepts proved values", async () => {
       const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
       await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
 
@@ -237,17 +255,17 @@ describe("VaultHub.sol:hub", () => {
 
     async function updateVaultReportHelper(
       vault: StakingVault__MockForVaultHub,
-      valuation: bigint,
+      totalValue: bigint,
       inOutDelta: bigint,
       treasuryFees: bigint,
-      sharesMinted: bigint,
+      liabilityShares: bigint,
     ) {
       const vaultReport: VaultReportItem = [
         await vault.getAddress(),
-        valuation,
+        totalValue,
         inOutDelta,
         treasuryFees,
-        sharesMinted,
+        liabilityShares,
       ];
       const tree = createVaultsReportTree([vaultReport]);
       const accountingAddress = await impersonate(await locator.accounting(), ether("100"));
@@ -255,10 +273,10 @@ describe("VaultHub.sol:hub", () => {
 
       await vaultHub.updateVaultData(
         vault.getAddress(),
-        valuation,
+        totalValue,
         inOutDelta,
         treasuryFees,
-        sharesMinted,
+        liabilityShares,
         tree.getProof(0),
       );
     }
@@ -267,7 +285,7 @@ describe("VaultHub.sol:hub", () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
         reserveRatioBP: 50_00n, // 50%
-        rebalanceThresholdBP: 50_00n, // 50%
+        forcedRebalanceThresholdBP: 50_00n, // 50%
       });
 
       await updateVaultReportHelper(vault, 99170000769726969624n, 33000000000000000000n, 100n, 0n);
@@ -285,7 +303,7 @@ describe("VaultHub.sol:hub", () => {
       const vault = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
         reserveRatioBP: 50_00n, // 50%
-        rebalanceThresholdBP: 50_00n, // 50%
+        forcedRebalanceThresholdBP: 50_00n, // 50%
       });
 
       await updateVaultReportHelper(vault, 99170000769726969624n, 33000000000000000000n, 100n, 0n);

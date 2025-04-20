@@ -145,7 +145,7 @@ contract NodeOperatorFee is Permissions {
         // cast down safely clamping to int128.max
         int128 adjustment = int128(int256(accruedRewardsAdjustment & ADJUSTMENT_CLAMP_MASK));
 
-        int128 rewardsAccrued = int128(latestReport.valuation) - int128(_lastClaimedReport.valuation) -
+        int128 rewardsAccrued = int128(latestReport.totalValue) - int128(_lastClaimedReport.totalValue) -
             (latestReport.inOutDelta - _lastClaimedReport.inOutDelta) -
             adjustment;
 

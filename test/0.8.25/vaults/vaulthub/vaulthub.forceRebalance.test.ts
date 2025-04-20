@@ -6,6 +6,8 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   LidoLocator,
+  OperatorGrid,
+  OperatorGrid__MockForVaultHub,
   PredepositGuarantee_HarnessForFactory,
   StakingVault__MockForVaultHub,
   StETH__HarnessForVaultHub,
@@ -17,7 +19,7 @@ import { impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const SHARE_LIMIT = ether("10");
@@ -36,27 +38,12 @@ describe("VaultHub.sol:forceRebalance", () => {
   let steth: StETH__HarnessForVaultHub;
   let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
   let locator: LidoLocator;
+  let operatorGrid: OperatorGrid;
+  let operatorGridMock: OperatorGrid__MockForVaultHub;
 
   let vaultAddress: string;
 
   let originalState: string;
-
-  async function report() {
-    const count = await vaultHub.vaultsCount();
-    const valuations = [];
-    const inOutDeltas = [];
-    const locked = [];
-    const treasuryFees = [];
-
-    for (let i = 0; i < count; i++) {
-      const vaultAddr = await vaultHub.vault(i);
-      const vaultContract = await ethers.getContractAt("StakingVault__MockForVaultHub", vaultAddr);
-      valuations.push(await vaultContract.valuation());
-      inOutDeltas.push(await vaultContract.inOutDelta());
-      locked.push(await vaultContract.locked());
-      treasuryFees.push(0n);
-    }
-  }
 
   // Simulate getting in the unhealthy state
   const mintStETHAndSlashVault = async () => {
@@ -77,6 +64,13 @@ describe("VaultHub.sol:forceRebalance", () => {
       lido: steth,
       predepositGuarantee: predepositGuarantee,
     });
+
+    // OperatorGrid
+    operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: deployer });
+    operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
+    await operatorGridMock.initialize(ether("1"));
+
+    await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
 
     const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
     const proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
@@ -106,15 +100,18 @@ describe("VaultHub.sol:forceRebalance", () => {
     const codehash = keccak256(await ethers.provider.getCode(vaultAddress));
     await vaultHub.connect(user).addVaultProxyCodehash(codehash);
 
+    await operatorGridMock.changeVaultTierParams(vaultAddress, {
+      shareLimit: SHARE_LIMIT,
+      reserveRatioBP: RESERVE_RATIO_BP,
+      forcedRebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,
+      treasuryFeeBP: TREASURY_FEE_BP,
+    });
+
     const connectDeposit = ether("1.0");
     await vault.connect(user).fund({ value: connectDeposit });
     await vault.connect(user).lock(connectDeposit);
 
-    await vaultHub
-      .connect(user)
-      .connectVault(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, RESERVE_RATIO_THRESHOLD_BP, TREASURY_FEE_BP);
-
-    await report();
+    await vaultHub.connect(user).connectVault(vaultAddress);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -151,7 +148,7 @@ describe("VaultHub.sol:forceRebalance", () => {
     beforeEach(async () => await mintStETHAndSlashVault());
 
     it("rebalances the vault with available balance", async () => {
-      const sharesMintedBefore = (await vaultHub["vaultSocket(address)"](vaultAddress)).sharesMinted;
+      const sharesMintedBefore = (await vaultHub["vaultSocket(address)"](vaultAddress)).liabilityShares;
       const balanceBefore = await ethers.provider.getBalance(vaultAddress);
       const expectedRebalanceAmount = await vaultHub.rebalanceShortfall(vaultAddress);
       const expectedSharesToBeBurned = await steth.getSharesByPooledEth(expectedRebalanceAmount);
@@ -163,17 +160,17 @@ describe("VaultHub.sol:forceRebalance", () => {
       const balanceAfter = await ethers.provider.getBalance(vaultAddress);
       expect(balanceAfter).to.equal(balanceBefore - expectedRebalanceAmount);
 
-      const sharesMintedAfter = (await vaultHub["vaultSocket(address)"](vaultAddress)).sharesMinted;
+      const sharesMintedAfter = (await vaultHub["vaultSocket(address)"](vaultAddress)).liabilityShares;
       expect(sharesMintedAfter).to.equal(sharesMintedBefore - expectedSharesToBeBurned);
     });
 
     it("rebalances with maximum available amount if shortfall exceeds balance", async () => {
-      await vault.connect(user).mock__increaseValuation(ether("1.0"));
+      await vault.connect(user).mock__increaseTotalValue(ether("1.0"));
       await vault.connect(user).lock(ether("1.0"));
       await vaultHub.connect(user).mintShares(vaultAddress, user, ether("0.5"));
-      await vault.connect(user).mock__decreaseValuation(ether("1.0"));
+      await vault.connect(user).mock__decreaseTotalValue(ether("1.0"));
 
-      const sharesMintedBefore = (await vaultHub["vaultSocket(address)"](vaultAddress)).sharesMinted;
+      const sharesMintedBefore = (await vaultHub["vaultSocket(address)"](vaultAddress)).liabilityShares;
       const expectedRebalanceAmount = await ethers.provider.getBalance(vaultAddress);
       const expectedSharesToBeBurned = await steth.getSharesByPooledEth(expectedRebalanceAmount);
 
@@ -184,7 +181,7 @@ describe("VaultHub.sol:forceRebalance", () => {
       const balanceAfter = await ethers.provider.getBalance(vaultAddress);
       expect(balanceAfter).to.equal(0);
 
-      const sharesMintedAfter = (await vaultHub["vaultSocket(address)"](vaultAddress)).sharesMinted;
+      const sharesMintedAfter = (await vaultHub["vaultSocket(address)"](vaultAddress)).liabilityShares;
       expect(sharesMintedAfter).to.equal(sharesMintedBefore - expectedSharesToBeBurned);
     });
 

@@ -102,6 +102,15 @@ export async function main() {
     oracleReportSanityCheckerArgs,
   );
 
+  // Deploy OperatorGrid
+  const operatorGrid = await deployBehindOssifiableProxy(
+    Sk.operatorGrid,
+    "OperatorGrid",
+    proxyContractsOwner,
+    deployer,
+    [locator.address],
+  );
+
   // Deploy new LidoLocator implementation
   const locatorConfig: string[] = [
     await locator.accountingOracle(),
@@ -121,6 +130,7 @@ export async function main() {
     predepositGuarantee.address,
     wstethAddress,
     vaultHub.address,
+    operatorGrid.address,
   ];
   await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
 

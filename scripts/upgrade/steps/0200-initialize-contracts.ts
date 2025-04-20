@@ -1,9 +1,9 @@
 import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
-import { Burner, PredepositGuarantee, VaultHub } from "typechain-types";
+import { Burner, OperatorGrid, PredepositGuarantee, VaultHub } from "typechain-types";
 
-import { log } from "lib";
+import { ether, log } from "lib";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
@@ -21,6 +21,7 @@ export async function main(): Promise<void> {
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
   const predepositGuaranteeAddress = state[Sk.predepositGuarantee].proxy.address;
+  const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
 
   // Deploy BeaconProxy to get bytecode and add it to whitelist
   const vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [stakingVaultBeaconAddress, "0x"]);
@@ -72,4 +73,23 @@ export async function main(): Promise<void> {
     predepositGuaranteeAddress,
   );
   await makeTx(predepositGuarantee, "initialize", [agentAddress], { from: deployer });
+
+  //
+  // OperatorGrid
+  //
+
+  const defaultTierParams = {
+    shareLimit: ether("1000"),
+    reserveRatioBP: 2000n,
+    forcedRebalanceThresholdBP: 1800n,
+    treasuryFeeBP: 500n,
+  };
+  const operatorGrid = await loadContract<OperatorGrid>("OperatorGrid", operatorGridAddress);
+  const operatorGridAdmin = deployer;
+  await makeTx(operatorGrid, "initialize", [operatorGridAdmin, defaultTierParams], { from: deployer });
+  await makeTx(operatorGrid, "grantRole", [await operatorGrid.REGISTRY_ROLE(), agentAddress], {
+    from: operatorGridAdmin,
+  });
+  await makeTx(operatorGrid, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
+  await makeTx(operatorGrid, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
 }

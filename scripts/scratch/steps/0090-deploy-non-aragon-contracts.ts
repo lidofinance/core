@@ -138,6 +138,15 @@ export async function main() {
     );
   }
 
+  // Deploy OperatorGrid
+  const operatorGrid = await deployBehindOssifiableProxy(
+    Sk.operatorGrid,
+    "OperatorGrid",
+    proxyContractsOwner,
+    deployer,
+    [locator.address],
+  );
+
   // Deploy Accounting
   const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
     locator.address,
@@ -255,6 +264,7 @@ export async function main() {
     predepositGuarantee.address,
     wstETH.address,
     vaultHub.address,
+    operatorGrid.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }

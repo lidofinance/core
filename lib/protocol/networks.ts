@@ -90,6 +90,7 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
     easyTrackAddress: config[Sk.appVoting].proxy.address,
     stakingVaultFactory: config[Sk.stakingVaultFactory].address,
     stakingVaultBeacon: config[Sk.stakingVaultBeacon].address,
+    operatorGrid: config[Sk.operatorGrid].proxy.address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }

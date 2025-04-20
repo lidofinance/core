@@ -16,6 +16,7 @@ contract VaultHub__MockForDashboard {
     uint256 internal constant BPS_BASE = 100_00;
     IStETH public immutable steth;
     address public immutable LIDO_LOCATOR;
+    uint256 public constant CONNECT_DEPOSIT = 1 ether;
     uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
 
     constructor(IStETH _steth, address _lidoLocator) {
@@ -23,6 +24,7 @@ contract VaultHub__MockForDashboard {
         LIDO_LOCATOR = _lidoLocator;
     }
 
+    event VaultConnected(address vault);
     event Mock__VaultDisconnected(address vault);
     event Mock__Rebalanced(uint256 amount);
 
@@ -48,20 +50,24 @@ contract VaultHub__MockForDashboard {
         delete vaultSockets[vault];
     }
 
+    function connectVault(address vault) external {
+        emit VaultConnected(vault);
+    }
+
     function mintShares(address vault, address recipient, uint256 amount) external {
         if (vault == address(0)) revert ZeroArgument("_vault");
         if (recipient == address(0)) revert ZeroArgument("recipient");
         if (amount == 0) revert ZeroArgument("amount");
 
         steth.mintExternalShares(recipient, amount);
-        vaultSockets[vault].sharesMinted = uint96(vaultSockets[vault].sharesMinted + amount);
+        vaultSockets[vault].liabilityShares = uint96(vaultSockets[vault].liabilityShares + amount);
     }
 
     function burnShares(address _vault, uint256 _amountOfShares) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
         steth.burnExternalShares(_amountOfShares);
-        vaultSockets[_vault].sharesMinted = uint96(vaultSockets[_vault].sharesMinted - _amountOfShares);
+        vaultSockets[_vault].liabilityShares = uint96(vaultSockets[_vault].liabilityShares - _amountOfShares);
     }
 
     function voluntaryDisconnect(address _vault) external {
@@ -69,7 +75,7 @@ contract VaultHub__MockForDashboard {
     }
 
     function rebalance() external payable {
-        vaultSockets[msg.sender].sharesMinted = 0;
+        vaultSockets[msg.sender].liabilityShares = 0;
 
         emit Mock__Rebalanced(msg.value);
     }

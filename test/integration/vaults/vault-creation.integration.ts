@@ -19,7 +19,6 @@ import {
   updateBalance,
 } from "lib";
 import {
-  connectToHub,
   createVaultWithDashboard,
   generateFeesToClaim,
   getProtocolContext,
@@ -71,8 +70,6 @@ describe("Scenario: Actions on vault creation", () => {
     ));
 
     await updateBalance(roles.funder.address, ether("1000000000"));
-
-    await connectToHub(ctx, dashboard, stakingVault);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -132,9 +129,14 @@ describe("Scenario: Actions on vault creation", () => {
   context("Disconnected vault", () => {
     let disconnectedDashboard: Dashboard;
     let disconnectedRoles: VaultRoles;
+    let connectedStakingVault: StakingVault;
 
     before(async () => {
-      ({ dashboard: disconnectedDashboard, roles: disconnectedRoles } = await createVaultWithDashboard(
+      ({
+        stakingVault: connectedStakingVault,
+        dashboard: disconnectedDashboard,
+        roles: disconnectedRoles,
+      } = await createVaultWithDashboard(
         ctx,
         ctx.contracts.stakingVaultFactory,
         owner,
@@ -152,6 +154,11 @@ describe("Scenario: Actions on vault creation", () => {
         .connect(owner)
         .grantRole(await disconnectedDashboard.LOCK_ROLE(), disconnectedRoles.minter.address);
 
+      const { vaultHub } = ctx.contracts;
+      const agentSigner = await ctx.getSigner("agent");
+
+      await vaultHub.connect(agentSigner).disconnect(connectedStakingVault);
+
       await expect(
         disconnectedDashboard.connect(disconnectedRoles.minter).mintStETH(disconnectedRoles.locker, 10n),
       ).to.be.revertedWithCustomError(ctx.contracts.vaultHub, "NotConnectedToHub");
@@ -165,6 +172,9 @@ describe("Scenario: Actions on vault creation", () => {
       await lido.connect(disconnectedRoles.burner).approve(disconnectedDashboard, 100000n);
       await lido.connect(accountingSigner).mintShares(disconnectedRoles.burner, 10n);
 
+      const agentSigner = await ctx.getSigner("agent");
+      await vaultHub.connect(agentSigner).disconnect(connectedStakingVault);
+
       await expect(
         disconnectedDashboard.connect(disconnectedRoles.burner).burnStETH(10n),
       ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
@@ -175,7 +185,7 @@ describe("Scenario: Actions on vault creation", () => {
     it("Allows minting stETH", async () => {
       const { vaultHub } = ctx.contracts;
 
-      // add some stETH to the vault to have valuation
+      // add some stETH to the vault to have totalValue
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
       const stethAmount = 10n;
@@ -190,7 +200,7 @@ describe("Scenario: Actions on vault creation", () => {
       const stethAmount = 10n;
       const sharesAmount = await ctx.contracts.lido.getSharesByPooledEth(stethAmount);
 
-      // add some stETH to the vault to have valuation, mint shares and approve stETH
+      // add some stETH to the vault to have totalValue, mint shares and approve stETH
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
       await dashboard.connect(roles.minter).mintStETH(roles.burner, stethAmount);
       await lido.connect(roles.burner).approve(dashboard, stethAmount);

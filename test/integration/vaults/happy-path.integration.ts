@@ -44,7 +44,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   let depositContract: string;
 
   const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
-  const rebalanceThreshold = 8_00n; // 8% is a threshold to force rebalance on the vault
+  const forcedRebalanceThreshold = 8_00n; // 8% is a threshold to force rebalance on the vault
   const mintableRatio = TOTAL_BASIS_POINTS - reserveRatio; // 90% LTV
 
   let dashboard: Dashboard;
@@ -120,12 +120,27 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Owner to create vault and assign NodeOperator and Curator roles", async () => {
-    const { stakingVaultFactory } = ctx.contracts;
+    const { lido, stakingVaultFactory, operatorGrid } = ctx.contracts;
+
+    // only equivalent of 10.0% of TVL can be minted as stETH on the vault
+    const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
+
+    const agentSigner = await ctx.getSigner("agent");
+
+    const defaultGroupId = await operatorGrid.DEFAULT_TIER_ID();
+    await operatorGrid.connect(agentSigner).alterTier(defaultGroupId, {
+      shareLimit,
+      reserveRatioBP: reserveRatio,
+      forcedRebalanceThresholdBP: forcedRebalanceThreshold,
+      treasuryFeeBP: treasuryFeeBP,
+    });
 
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory
       .connect(owner)
-      .createVaultWithDashboard(owner, nodeOperator, nodeOperator, VAULT_NODE_OPERATOR_FEE, CONFIRM_EXPIRY, [], "0x");
+      .createVaultWithDashboard(owner, nodeOperator, nodeOperator, VAULT_NODE_OPERATOR_FEE, CONFIRM_EXPIRY, [], "0x", {
+        value: VAULT_CONNECTION_DEPOSIT,
+      });
 
     const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
     const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
@@ -205,22 +220,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
     const { lido, vaultHub } = ctx.contracts;
 
-    expect(await stakingVault.locked()).to.equal(0n); // no ETH locked yet
+    expect(await stakingVault.locked()).to.equal(ether("1")); // has locked value cause of connection deposit
 
     const votingSigner = await ctx.getSigner("voting");
     await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
-
-    // only equivalent of 10.0% of TVL can be minted as stETH on the vault
-    const shareLimit = (await lido.getTotalShares()) / 10n; // 10% of total shares
-
-    const agentSigner = await ctx.getSigner("agent");
-
-    await dashboard.connect(curator).fund({ value: ether("1") });
-    await dashboard.connect(curator).lock(ether("1"));
-
-    await vaultHub
-      .connect(agentSigner)
-      .connectVault(stakingVault, shareLimit, reserveRatio, rebalanceThreshold, treasuryFeeBP);
 
     expect(await vaultHub.vaultsCount()).to.equal(1n);
     expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT);
@@ -232,7 +235,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
 
     expect(vaultBalance).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
-    expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
+    expect(await stakingVault.totalValue()).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
   });
 
   it("Should allow NodeOperator to deposit validators from the vault via PDG", async () => {
@@ -306,7 +309,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
     expect(vaultBalance).to.equal(VAULT_CONNECTION_DEPOSIT);
-    expect(await stakingVault.valuation()).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
+    expect(await stakingVault.totalValue()).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
   });
 
   it("Should allow Curator to mint max stETH", async () => {
@@ -319,7 +322,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     log.debug("Staking Vault", {
       "Staking Vault Address": stakingVaultAddress,
-      "Total ETH": await stakingVault.valuation(),
+      "Total ETH": await stakingVault.totalValue(),
       "Max shares": stakingVaultMaxMintingShares,
     });
 
@@ -367,12 +370,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   //   const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
 
   //   const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
-  //   expect(socket.sharesMinted).to.be.gt(stakingVaultMaxMintingShares);
+  //   expect(socket.liabilityShares).to.be.gt(stakingVaultMaxMintingShares);
 
   //   const vaultReportedEvent = ctx.getEvents(reportTxReceipt, "Reported", [stakingVault.interface]);
   //   expect(vaultReportedEvent.length).to.equal(1n);
 
-  //   expect(vaultReportedEvent[0].args?.valuation).to.equal(vaultValue);
+  //   expect(vaultReportedEvent[0].args?.totalValue).to.equal(vaultValue);
   //   expect(vaultReportedEvent[0].args?.inOutDelta).to.equal(VAULT_DEPOSIT);
   //   // TODO: add assertions or locked values and rewards
 
@@ -423,7 +426,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   //   await report(ctx, params);
 
   //   const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
-  //   const mintedShares = socket.sharesMinted;
+  //   const mintedShares = socket.liabilityShares;
   //   expect(mintedShares).to.be.gt(0n); // we still have the protocol fees minted
 
   //   const lockedOnVault = await stakingVault.locked();
@@ -434,7 +437,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   //   const { vaultHub, lido } = ctx.contracts;
 
   //   const socket = await vaultHub["vaultSocket(address)"](stakingVaultAddress);
-  //   const stETHToRebalance = await lido.getPooledEthByShares(socket.sharesMinted);
+  //   const stETHToRebalance = await lido.getPooledEthByShares(socket.liabilityShares);
 
   //   await delegation.connect(curator).rebalanceVault(stETHToRebalance, { value: stETHToRebalance });
 
