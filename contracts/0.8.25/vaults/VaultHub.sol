@@ -75,6 +75,9 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 private constant VAULT_HUB_STORAGE_LOCATION =
         0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
 
+    /// @notice codehash of the account with no code
+    bytes32 private constant EMPTY_CODEHASH = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470;
+
     /// @notice role that allows to connect vaults to the hub
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
     /// @notice role that allows to add factories and vault implementations to hub
@@ -135,15 +138,16 @@ contract VaultHub is PausableUntilWithRoles {
         return LIDO_LOCATOR.operatorGrid();
     }
 
-    /// @notice added vault proxy codehash to allowed list
-    /// @param codehash vault proxy codehash
-    function addVaultProxyCodehash(bytes32 codehash) public onlyRole(VAULT_REGISTRY_ROLE) {
-        if (codehash == bytes32(0)) revert ZeroArgument("codehash");
+    /// @notice Add vault proxy codehash to allow list.
+    /// @param _codehash vault proxy codehash
+    function addVaultProxyCodehash(bytes32 _codehash) public onlyRole(VAULT_REGISTRY_ROLE) {
+        if (_codehash == bytes32(0)) revert ZeroArgument("codehash");
+        if (_codehash == EMPTY_CODEHASH) revert VaultProxyZeroCodehash();
 
         VaultHubStorage storage $ = _getVaultHubStorage();
-        if ($.vaultProxyCodehash[codehash]) revert AlreadyExists(codehash);
-        $.vaultProxyCodehash[codehash] = true;
-        emit VaultProxyCodehashAdded(codehash);
+        if ($.vaultProxyCodehash[_codehash]) revert AlreadyExists(_codehash);
+        $.vaultProxyCodehash[_codehash] = true;
+        emit VaultProxyCodehashAdded(_codehash);
     }
 
     /// @notice returns the number of vaults connected to the hub
@@ -316,7 +320,7 @@ contract VaultHub is PausableUntilWithRoles {
         if ($.vaultIndex[_vault] != 0) revert AlreadyConnected(_vault, $.vaultIndex[_vault]);
 
         bytes32 vaultProxyCodehash = address(_vault).codehash;
-        if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
+        if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault, vaultProxyCodehash);
 
         if (vault_.depositor() != LIDO_LOCATOR.predepositGuarantee())
             revert VaultDepositorNotAllowed(vault_.depositor());
@@ -688,7 +692,7 @@ contract VaultHub is PausableUntilWithRoles {
     error InsufficientTotalValueToMint(address vault, uint256 totalValue);
     error AlreadyExists(bytes32 codehash);
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
-    error VaultProxyNotAllowed(address beacon);
+    error VaultProxyNotAllowed(address beacon, bytes32 codehash);
     error InvalidPubkeysLength();
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error VaultDepositorNotAllowed(address depositor);
@@ -699,4 +703,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
     error VaultReportStaled(address vault);
     error VaultDeauthorized(address vault);
+    error VaultProxyZeroCodehash();
 }
