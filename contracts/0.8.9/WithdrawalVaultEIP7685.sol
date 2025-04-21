@@ -7,7 +7,7 @@ pragma solidity 0.8.9;
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
 
 import {TriggerableWithdrawals} from "../common/lib/TriggerableWithdrawals.sol";
-
+import {Eip7251MaxEffectiveBalance} from "../common/lib/Eip7251MaxEffectiveBalance.sol";
 /**
  * @title A base contract for a withdrawal vault implementing EIP-7685: General Purpose Execution Layer Requests
  * @dev This contract enables validators to submit EIP-7002 withdrawal requests
@@ -16,6 +16,7 @@ import {TriggerableWithdrawals} from "../common/lib/TriggerableWithdrawals.sol";
 abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable {
     bytes32 public constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
     bytes32 public constant ADD_PARTIAL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_PARTIAL_WITHDRAWAL_REQUEST_ROLE");
+    bytes32 public constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
@@ -98,6 +99,48 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable {
      */
     function getWithdrawalRequestFee() external view returns (uint256) {
         return TriggerableWithdrawals.getWithdrawalRequestFee();
+    }
+
+    /**
+     * @dev Submits EIP-7251 consolidation requests for the specified public keys.
+     *      Each request consolidate validators.
+     *      Refunds any excess fee to the caller after deducting the total fees,
+     *      which are calculated based on the number of requests and the current minimum fee per withdrawal request.
+     *
+     * @param sourcePubkeys A tightly packed array of 48-byte source public keys corresponding to validators requesting consolidation.
+     *                | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
+     *
+     * @param targetPubkeys A tightly packed array of 48-byte target public keys corresponding to validators requesting consolidation.
+     *                | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
+     *
+     * @notice Reverts if:
+     *         - The caller does not have the `ADD_CONSOLIDATION_REQUEST_ROLE`.
+     *         - Validation of any of the provided public keys fails.
+     *         - The source and target public key arrays have different lengths.
+     *         - The provided public key arrays is empty.
+     *         - The provided total consolidation fee is insufficient to cover all requests.
+     *         - Refund of the excess fee fails.
+     */
+    function addConsolidationRequests(
+        bytes calldata sourcePubkeys,
+        bytes calldata targetPubkeys
+    ) external payable onlyRole(ADD_CONSOLIDATION_REQUEST_ROLE) preservesEthBalance {
+        uint256 feePerRequest = Eip7251MaxEffectiveBalance.getConsolidationRequestFee();
+        uint256 totalFee = _countPubkeys(sourcePubkeys) * feePerRequest;
+
+        _requireSufficientFee(totalFee);
+
+        Eip7251MaxEffectiveBalance.addConsolidationRequests(sourcePubkeys, targetPubkeys, feePerRequest);
+
+        _refundExcessFee(totalFee);
+    }
+
+    /**
+     * @dev Retrieves the current EIP-7251 consolidation fee.
+     * @return The minimum fee required per consolidation request.
+     */
+    function getConsolidationRequestFee() external view returns (uint256) {
+        return Eip7251MaxEffectiveBalance.getConsolidationRequestFee();
     }
 
     function _countPubkeys(bytes calldata pubkeys) internal pure returns (uint256) {
