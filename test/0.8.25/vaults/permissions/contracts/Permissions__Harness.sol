@@ -3,11 +3,13 @@
 
 pragma solidity ^0.8.0;
 
-import {Permissions} from "contracts/0.8.25/vaults/Permissions.sol";
+import {Permissions} from "contracts/0.8.25/vaults/dashboard/Permissions.sol";
 
 contract Permissions__Harness is Permissions {
+    constructor(address _vaultHub) Permissions(_vaultHub) {}
+
     function initialize(address _defaultAdmin, uint256 _confirmExpiry) external {
-        _initialize(_defaultAdmin, _confirmExpiry);
+        super._initialize(_defaultAdmin, _confirmExpiry);
     }
 
     function revertDoubleInitialize(address _defaultAdmin, uint256 _confirmExpiry) external {
@@ -15,8 +17,10 @@ contract Permissions__Harness is Permissions {
         _initialize(_defaultAdmin, _confirmExpiry);
     }
 
-    function confirmingRoles() external pure returns (bytes32[] memory) {
-        return _confirmingRoles();
+    function confirmingRoles() public pure override returns (bytes32[] memory) {
+        bytes32[] memory roles = new bytes32[](1);
+        roles[0] = DEFAULT_ADMIN_ROLE;
+        return roles;
     }
 
     function fund(uint256 _ether) external payable {

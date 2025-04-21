@@ -12,8 +12,10 @@ import {
   Lido__MockForAccounting,
   Lido__MockForAccounting__factory,
   LidoLocator,
+  OperatorGrid,
   OracleReportSanityChecker__MockForAccounting,
   OracleReportSanityChecker__MockForAccounting__factory,
+  OssifiableProxy,
   PostTokenRebaseReceiver__MockForAccounting__factory,
   StakingRouter__MockForLidoAccounting,
   StakingRouter__MockForLidoAccounting__factory,
@@ -27,12 +29,17 @@ import { certainAddress, ether, getCurrentBlockTimestamp, impersonate } from "li
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
+const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
+
 describe("Accounting.sol:report", () => {
   let deployer: HardhatEthersSigner;
 
   let accounting: Accounting;
   let postTokenRebaseReceiver: IPostTokenRebaseReceiver;
   let locator: LidoLocator;
+  let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
+  let proxy: OssifiableProxy;
 
   let lido: Lido__MockForAccounting;
   let stakingRouter: StakingRouter__MockForLidoAccounting;
@@ -74,11 +81,25 @@ describe("Accounting.sol:report", () => {
     accounting = await ethers.getContractAt("Accounting", accountingProxy, deployer);
     await updateLidoLocatorImplementation(await locator.getAddress(), { accounting });
 
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+
+    const defaultTierParams = {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: 2000n,
+      forcedRebalanceThresholdBP: 1800n,
+      treasuryFeeBP: 500n,
+    };
+    await operatorGrid.initialize(deployer, defaultTierParams);
+
     const vaultHubImpl = await ethers.deployContract(
       "VaultHub",
       [locator, lido, VAULTS_RELATIVE_SHARE_LIMIT_BP],
       deployer,
     );
+
     const vaultHubProxy = await ethers.deployContract(
       "OssifiableProxy",
       [vaultHubImpl, deployer, new Uint8Array()],

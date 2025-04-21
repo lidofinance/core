@@ -19,10 +19,9 @@ export { ensureDsmGuardians } from "./dsm";
 export { norSdvtEnsureOperators } from "./nor-sdvt";
 export { calcNodeOperatorRewards } from "./staking-module";
 export {
-  connectToHub,
   createVaultProxy,
   createVaultsReportTree,
-  createVaultWithDelegation,
+  createVaultWithDashboard,
   disconnectFromHub,
   generateFeesToClaim,
   reportVaultDataWithProof,

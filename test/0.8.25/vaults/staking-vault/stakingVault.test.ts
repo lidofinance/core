@@ -160,7 +160,7 @@ describe("StakingVault.sol", () => {
       expect(await stakingVault.getInitializedVersion()).to.equal(1n);
       expect(await stakingVault.version()).to.equal(1n);
       expect(await stakingVault.vaultHub()).to.equal(vaultHubAddress);
-      expect(await stakingVault.valuation()).to.equal(0n);
+      expect(await stakingVault.totalValue()).to.equal(0n);
       expect(await stakingVault.locked()).to.equal(0n);
       expect(await stakingVault.unlocked()).to.equal(0n);
       expect(await stakingVault.inOutDelta()).to.equal(0n);
@@ -173,12 +173,12 @@ describe("StakingVault.sol", () => {
     });
   });
 
-  context("valuation", () => {
-    it("returns the correct valuation", async () => {
-      expect(await stakingVault.valuation()).to.equal(0n);
+  context("totalValue", () => {
+    it("returns the correct totalValue", async () => {
+      expect(await stakingVault.totalValue()).to.equal(0n);
 
       await stakingVault.fund({ value: ether("1") });
-      expect(await stakingVault.valuation()).to.equal(ether("1"));
+      expect(await stakingVault.totalValue()).to.equal(ether("1"));
     });
   });
 
@@ -222,7 +222,7 @@ describe("StakingVault.sol", () => {
       expect(await stakingVault.unlocked()).to.equal(0n);
     });
 
-    it("returns 0 if locked amount is greater than valuation", async () => {
+    it("returns 0 if locked amount is greater than totalValue", async () => {
       const amount = ether("1");
       await stakingVault.fund({ value: amount });
       await stakingVault.authorizeLidoVaultHub(); // needed for the report
@@ -231,35 +231,35 @@ describe("StakingVault.sol", () => {
         .connect(vaultHubSigner)
         .report(
           await getCurrentBlockTimestamp(),
-          await stakingVault.valuation(),
+          await stakingVault.totalValue(),
           await stakingVault.inOutDelta(),
           amount + 1n,
         );
       const timestamp = await getCurrentBlockTimestamp();
-      await stakingVault.connect(vaultHubSigner).report(timestamp, amount - 1n, amount, amount); // locked > valuation
+      await stakingVault.connect(vaultHubSigner).report(timestamp, amount - 1n, amount, amount); // locked > totalValue
 
-      expect(await stakingVault.valuation()).to.equal(amount - 1n);
+      expect(await stakingVault.totalValue()).to.equal(amount - 1n);
       expect(await stakingVault.locked()).to.equal(amount);
       expect(await stakingVault.unlocked()).to.equal(0n);
     });
 
-    it("returns the difference between valuation and locked if locked amount is less than or equal to valuation", async () => {
+    it("returns the difference between totalValue and locked if locked amount is less than or equal to totalValue", async () => {
       const amount = ether("1");
 
       await stakingVault.fund({ value: amount });
-      expect(await stakingVault.valuation()).to.equal(amount);
+      expect(await stakingVault.totalValue()).to.equal(amount);
       expect(await stakingVault.locked()).to.equal(0n);
       expect(await stakingVault.unlocked()).to.equal(amount);
 
       const halfAmount = amount / 2n;
       await stakingVault.connect(vaultOwner).lock(halfAmount);
 
-      expect(await stakingVault.valuation()).to.equal(amount);
+      expect(await stakingVault.totalValue()).to.equal(amount);
       expect(await stakingVault.locked()).to.equal(halfAmount);
       expect(await stakingVault.unlocked()).to.equal(halfAmount);
 
       await stakingVault.connect(vaultOwner).lock(amount);
-      expect(await stakingVault.valuation()).to.equal(amount);
+      expect(await stakingVault.totalValue()).to.equal(amount);
       expect(await stakingVault.locked()).to.equal(amount);
       expect(await stakingVault.unlocked()).to.equal(0n);
     });
@@ -456,7 +456,7 @@ describe("StakingVault.sol", () => {
         .withArgs(vaultOwnerAddress, ether("1"));
 
       expect(await stakingVault.inOutDelta()).to.equal(inOutDeltaBefore + ether("1"));
-      expect(await stakingVault.valuation()).to.equal(ether("1"));
+      expect(await stakingVault.totalValue()).to.equal(ether("1"));
     });
 
     it("does not revert if the amount is max int128", async () => {
@@ -470,17 +470,17 @@ describe("StakingVault.sol", () => {
     });
 
     it("restores the vault to a healthy state if the vault was unhealthy", async () => {
-      const valuation = 0n;
+      const totalValue = 0n;
       const inOutDelta = 0n;
       const locked = ether("1.0");
       const timestamp = await getCurrentBlockTimestamp();
 
       await stakingVault.authorizeLidoVaultHub(); // needed for the report
-      await stakingVault.connect(vaultHubSigner).report(timestamp, valuation, inOutDelta, locked);
-      expect(await stakingVault.valuation()).to.be.lessThan(locked);
+      await stakingVault.connect(vaultHubSigner).report(timestamp, totalValue, inOutDelta, locked);
+      expect(await stakingVault.totalValue()).to.be.lessThan(locked);
 
       await stakingVault.fund({ value: ether("1") });
-      expect(await stakingVault.valuation()).to.be.greaterThanOrEqual(await stakingVault.locked());
+      expect(await stakingVault.totalValue()).to.be.greaterThanOrEqual(await stakingVault.locked());
     });
   });
 
@@ -523,7 +523,7 @@ describe("StakingVault.sol", () => {
         .withArgs(unlocked);
     });
 
-    it.skip("reverts if vault valuation is less than locked amount (reentrancy)", async () => {});
+    it.skip("reverts if vault totalValue is less than locked amount (reentrancy)", async () => {});
 
     it("does not revert on max int128", async () => {
       const forGas = ether("10");
@@ -535,7 +535,7 @@ describe("StakingVault.sol", () => {
         .to.emit(stakingVault, "Withdrawn")
         .withArgs(vaultOwnerAddress, vaultOwnerAddress, MAX_INT128);
       expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(0n);
-      expect(await stakingVault.valuation()).to.equal(0n);
+      expect(await stakingVault.totalValue()).to.equal(0n);
       expect(await stakingVault.inOutDelta()).to.equal(0n);
     });
 
@@ -553,19 +553,19 @@ describe("StakingVault.sol", () => {
         .to.emit(stakingVault, "Withdrawn")
         .withArgs(vaultOwnerAddress, vaultOwnerAddress, ether("10"));
       expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(0n);
-      expect(await stakingVault.valuation()).to.equal(0n);
+      expect(await stakingVault.totalValue()).to.equal(0n);
       expect(await stakingVault.inOutDelta()).to.equal(0n);
     });
 
     it("makes inOutDelta negative if withdrawals are greater than deposits (after rewards)", async () => {
-      const valuation = ether("10");
+      const totalValue = ether("10");
 
       await stakingVault.authorizeLidoVaultHub(); // needed for the report
       await stakingVault
         .connect(vaultHubSigner)
-        .report(await getCurrentBlockTimestamp(), valuation, ether("0"), ether("0"));
+        .report(await getCurrentBlockTimestamp(), totalValue, ether("0"), ether("0"));
 
-      expect(await stakingVault.valuation()).to.equal(valuation);
+      expect(await stakingVault.totalValue()).to.equal(totalValue);
       expect(await stakingVault.inOutDelta()).to.equal(0n);
 
       const elRewardsAmount = ether("1");
@@ -575,7 +575,7 @@ describe("StakingVault.sol", () => {
         .to.emit(stakingVault, "Withdrawn")
         .withArgs(vaultOwnerAddress, vaultOwnerAddress, elRewardsAmount);
       expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(0n);
-      expect(await stakingVault.valuation()).to.equal(valuation - elRewardsAmount);
+      expect(await stakingVault.totalValue()).to.equal(totalValue - elRewardsAmount);
       expect(await stakingVault.inOutDelta()).to.equal(-elRewardsAmount);
     });
   });
@@ -621,13 +621,13 @@ describe("StakingVault.sol", () => {
       );
     });
 
-    it("reverts if the new locked amount exceeds the valuation", async () => {
+    it("reverts if the new locked amount exceeds the totalValue", async () => {
       const amount = ether("1");
       await stakingVault.fund({ value: amount });
 
       await expect(stakingVault.connect(vaultOwner).lock(amount + 1n)).to.be.revertedWithCustomError(
         stakingVault,
-        "NewLockedExceedsValuation",
+        "NewLockedExceedsTotalValue",
       );
     });
   });
@@ -650,12 +650,12 @@ describe("StakingVault.sol", () => {
         .withArgs(0n);
     });
 
-    it("reverts if the rebalance amount exceeds the valuation", async () => {
+    it("reverts if the rebalance amount exceeds the totalValue", async () => {
       await stranger.sendTransaction({ to: stakingVaultAddress, value: ether("1") });
-      expect(await stakingVault.valuation()).to.equal(ether("0"));
+      expect(await stakingVault.totalValue()).to.equal(ether("0"));
 
       await expect(stakingVault.rebalance(ether("1")))
-        .to.be.revertedWithCustomError(stakingVault, "RebalanceAmountExceedsValuation")
+        .to.be.revertedWithCustomError(stakingVault, "RebalanceAmountExceedsTotalValue")
         .withArgs(ether("0"), ether("1"));
     });
 
@@ -707,7 +707,7 @@ describe("StakingVault.sol", () => {
       await stakingVault
         .connect(vaultHubSigner)
         .report(await getCurrentBlockTimestamp(), ether("1"), ether("0.1"), ether("1.1"));
-      expect(await stakingVault.valuation()).to.be.lessThan(await stakingVault.locked());
+      expect(await stakingVault.totalValue()).to.be.lessThan(await stakingVault.locked());
       expect(await stakingVault.inOutDelta()).to.equal(ether("0"));
       await elRewardsSender.sendTransaction({ to: stakingVaultAddress, value: ether("0.1") });
 
@@ -843,7 +843,7 @@ describe("StakingVault.sol", () => {
         .withArgs("_deposits");
     });
 
-    it("reverts if the vault valuation is below the locked amount", async () => {
+    it("reverts if the vault totalValue is below the locked amount", async () => {
       const timestamp = await getCurrentBlockTimestamp();
       await stakingVault.authorizeLidoVaultHub(); // needed for the report
       await stakingVault.connect(vaultHubSigner).report(timestamp, ether("0"), ether("0"), ether("1"));
@@ -854,7 +854,7 @@ describe("StakingVault.sol", () => {
           .depositToBeaconChain([
             { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
           ]),
-      ).to.be.revertedWithCustomError(stakingVault, "ValuationBelowLockedAmount");
+      ).to.be.revertedWithCustomError(stakingVault, "TotalValueBelowLockedAmount");
     });
 
     it("reverts if the deposits are paused", async () => {
@@ -1046,7 +1046,7 @@ describe("StakingVault.sol", () => {
         .withArgs("triggerValidatorWithdrawal", vaultHubAddress);
     });
 
-    it("reverts if called by the vault hub with non fresh report with valuation > locked", async () => {
+    it("reverts if called by the vault hub with non fresh report with totalValue > locked", async () => {
       await stakingVault.authorizeLidoVaultHub(); // needed for the report
 
       await expect(
