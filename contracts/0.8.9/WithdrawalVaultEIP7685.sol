@@ -5,15 +5,19 @@
 pragma solidity 0.8.9;
 
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
+import {PausableUntil} from "./utils/PausableUntil.sol";
 
 import {TriggerableWithdrawals} from "../common/lib/TriggerableWithdrawals.sol";
 import {Eip7251MaxEffectiveBalance} from "../common/lib/Eip7251MaxEffectiveBalance.sol";
+
 /**
  * @title A base contract for a withdrawal vault implementing EIP-7685: General Purpose Execution Layer Requests
  * @dev This contract enables validators to submit EIP-7002 withdrawal requests
  *      and manages the associated fees.
  */
-abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable {
+abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable, PausableUntil {
+    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
     bytes32 public constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
     bytes32 public constant ADD_PARTIAL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_PARTIAL_WITHDRAWAL_REQUEST_ROLE");
     bytes32 public constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
@@ -28,6 +32,40 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable {
         uint256 balanceBeforeCall = address(this).balance - msg.value;
         _;
         assert(address(this).balance == balanceBeforeCall);
+    }
+
+    /**
+     * @dev Resumes the general purpose execution layer requests.
+     * @notice Reverts if:
+     *         - The contract is not paused.
+     *         - The sender does not have the `RESUME_ROLE`.
+     */
+    function resume() external onlyRole(RESUME_ROLE) {
+        _resume();
+    }
+
+    /**
+     * @notice Pauses the general purpose execution layer requests placement for a specified duration.
+     * @param _duration The pause duration in seconds (use `PAUSE_INFINITELY` for unlimited).
+     * @dev Reverts if:
+     *         - The contract is already paused.
+     *         - The sender does not have the `PAUSE_ROLE`.
+     *         - A zero duration is passed.
+     */
+    function pauseFor(uint256 _duration) external onlyRole(PAUSE_ROLE) {
+        _pauseFor(_duration);
+    }
+
+    /**
+     * @notice Pauses the general purpose execution layer requests placement until a specified timestamp.
+     * @param _pauseUntilInclusive The last second to pause until (inclusive).
+     * @dev Reverts if:
+     *         - The timestamp is in the past.
+     *         - The sender does not have the `PAUSE_ROLE`.
+     *         - The contract is already paused.
+     */
+    function pauseUntil(uint256 _pauseUntilInclusive) external onlyRole(PAUSE_ROLE) {
+        _pauseUntil(_pauseUntilInclusive);
     }
 
     /**
@@ -48,7 +86,7 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable {
      */
     function addFullWithdrawalRequests(
         bytes calldata pubkeys
-    ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance {
+    ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) whenResumed preservesEthBalance {
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = _countPubkeys(pubkeys) * feePerRequest;
 
@@ -82,7 +120,7 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable {
     function addPartialWithdrawalRequests(
         bytes calldata pubkeys,
         uint64[] calldata amounts
-    ) external payable onlyRole(ADD_PARTIAL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance {
+    ) external payable onlyRole(ADD_PARTIAL_WITHDRAWAL_REQUEST_ROLE) whenResumed preservesEthBalance {
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = _countPubkeys(pubkeys) * feePerRequest;
 
@@ -117,14 +155,14 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable {
      *         - The caller does not have the `ADD_CONSOLIDATION_REQUEST_ROLE`.
      *         - Validation of any of the provided public keys fails.
      *         - The source and target public key arrays have different lengths.
-     *         - The provided public key arrays is empty.
+     *         - The provided public key arrays are empty.
      *         - The provided total consolidation fee is insufficient to cover all requests.
      *         - Refund of the excess fee fails.
      */
     function addConsolidationRequests(
         bytes calldata sourcePubkeys,
         bytes calldata targetPubkeys
-    ) external payable onlyRole(ADD_CONSOLIDATION_REQUEST_ROLE) preservesEthBalance {
+    ) external payable onlyRole(ADD_CONSOLIDATION_REQUEST_ROLE) whenResumed preservesEthBalance {
         uint256 feePerRequest = Eip7251MaxEffectiveBalance.getConsolidationRequestFee();
         uint256 totalFee = _countPubkeys(sourcePubkeys) * feePerRequest;
 
