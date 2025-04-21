@@ -51,7 +51,6 @@ export async function main(): Promise<void> {
   const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
 
   // Disable automine to ensure all transactions happen in the same block
-  // TODO: automine false and mempool fifo order and manual nonce management still doesn't work!
   await ethers.provider.send("evm_setAutomine", [false]);
 
   // while locator is not upgraded yet we can fetch the old burner address
@@ -80,9 +79,7 @@ export async function main(): Promise<void> {
   const aragonKernel = await loadContract<Kernel>("Kernel", kernelAddress);
   const appBasesNamespace = await aragonKernel.APP_BASES_NAMESPACE();
   const lidoAppId = state[Sk.appLido].aragonApp.id;
-  await aragonKernel
-    .connect(votingSigner)
-    .setApp(appBasesNamespace, lidoAppId, lidoImplAddress);
+  await aragonKernel.connect(votingSigner).setApp(appBasesNamespace, lidoAppId, lidoImplAddress);
   log("Lido upgraded to implementation", lidoImplAddress);
 
   const lido = await loadContract<Lido>("Lido", lidoAddress);

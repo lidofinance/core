@@ -1,7 +1,8 @@
 import { ethers } from "hardhat";
 
-import { OssifiableProxy__factory } from "typechain-types";
+import { IAragonAppRepo, IOssifiableProxy, OssifiableProxy__factory } from "typechain-types";
 
+import { loadContract } from "lib/contract";
 import { deployWithoutProxy } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
 
@@ -14,10 +15,24 @@ export async function main() {
   const parameters = readUpgradeParameters();
 
   const locator = OssifiableProxy__factory.connect(state[Sk.lidoLocator].proxy.address, deployerSigner);
-  const oldLocatorImpl = await locator.proxy__getImplementation();
+  const oldLocatorImplementation = await locator.proxy__getImplementation();
+  const accountingOracle = await loadContract<IOssifiableProxy>(
+    "IOssifiableProxy",
+    state[Sk.accountingOracle].proxy.address,
+  );
+  const lidoRepo = await loadContract<IAragonAppRepo>("IAragonAppRepo", state[Sk.aragonLidoAppRepo].proxy.address);
+  const [, lidoImplementation] = await lidoRepo.getLatest();
 
   await deployWithoutProxy(Sk.upgradeTemplateV3, "UpgradeTemplateV3", deployer, [
     [
+      // Old implementations
+      oldLocatorImplementation,
+      lidoImplementation,
+      await accountingOracle.proxy__getImplementation(),
+
+      // New implementations
+      state[Sk.lidoLocator].implementation.address,
+
       // New non-proxy contracts
       state[Sk.stakingVaultFactory].address,
 
@@ -26,22 +41,14 @@ export async function main() {
       state[Sk.stakingVaultImplementation].address,
       state[Sk.dashboardImpl].address,
 
-      // Aragon Apps new implementations
-      state[Sk.appLido].implementation.address,
-
-      // New non-aragon implementations
-      state[Sk.accountingOracle].implementation.address,
-      state[Sk.lidoLocator].implementation.address,
-
       // Existing proxies and contracts
-      oldLocatorImpl,
       state[Sk.appAgent].proxy.address,
       state[Sk.aragonLidoAppRepo].proxy.address,
-      parameters["csm"].accounting,
       state[Sk.lidoLocator].proxy.address,
+      state[Sk.appVoting].proxy.address,
       state[Sk.appNodeOperatorsRegistry].proxy.address,
       state[Sk.appSimpleDvt].proxy.address,
-      state[Sk.appVoting].proxy.address,
+      parameters["csm"].accounting,
     ],
   ]);
 }
