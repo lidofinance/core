@@ -81,7 +81,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         .withArgs(dashboard, amount);
 
       expect(await stakingVault.inOutDelta()).to.equal(amount);
-      expect(await stakingVault.valuation()).to.equal(amount);
+      expect(await stakingVault.totalValue()).to.equal(amount);
 
       expect(await dashboard.withdrawableEther()).to.equal(amount);
     });
@@ -109,7 +109,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
       await expect(dashboard.connect(roles.locker).lock(amount + 1n)).to.be.revertedWithCustomError(
         stakingVault,
-        "NewLockedExceedsValuation",
+        "NewLockedExceedstotalValue",
       );
     });
 
@@ -125,7 +125,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         .withArgs(dashboard, stranger, 1n);
 
       expect(await stakingVault.inOutDelta()).to.equal(2n);
-      expect(await stakingVault.valuation()).to.equal(2n);
+      expect(await stakingVault.totalValue()).to.equal(2n);
       expect(await dashboard.withdrawableEther()).to.equal(2n);
     });
 
