@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3206"  lines-covered="3154"  line-rate="0.9838"  branches-valid="1414"  branches-covered="1354"  branch-rate="0.9576"  timestamp="1744881527498" complexity="0" version="0.1">
+<coverage lines-valid="3212"  lines-covered="3154"  line-rate="0.9819"  branches-valid="1418"  branches-covered="1354"  branch-rate="0.9549"  timestamp="1745223825281" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2190,7 +2190,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9"  line-rate="0.9959"  branch-rate="0.9806" >
+	<package name="0.8.9"  line-rate="0.9899"  branch-rate="0.9731000000000001" >
 	<classes>
 		<class name="BeaconChainDepositor.sol"  filename="contracts/0.8.9/BeaconChainDepositor.sol"  line-rate="0.9048"  branch-rate="0.5" >
 		<methods>
@@ -3901,53 +3901,65 @@
 			<line number="144"  hits="40"  branch="false" />
 		</lines>
 		</class>
-		<class name="WithdrawalVaultEIP7685.sol"  filename="contracts/0.8.9/WithdrawalVaultEIP7685.sol"  line-rate="1"  branch-rate="0.8571" >
+		<class name="WithdrawalVaultEIP7685.sol"  filename="contracts/0.8.9/WithdrawalVaultEIP7685.sol"  line-rate="0.7857"  branch-rate="0.6667000000000001" >
 		<methods>
 			<method name="preservesEthBalance"  hits="67"  signature="()V" >
-				<lines><line number="26"  hits="67" /></lines>
+				<lines><line number="27"  hits="67" /></lines>
 			</method>
 			<method name="addFullWithdrawalRequests"  hits="32"  signature="()V" >
-				<lines><line number="50"  hits="32" /></lines>
+				<lines><line number="51"  hits="32" /></lines>
 			</method>
 			<method name="addPartialWithdrawalRequests"  hits="35"  signature="()V" >
-				<lines><line number="84"  hits="35" /></lines>
+				<lines><line number="85"  hits="35" /></lines>
 			</method>
 			<method name="getWithdrawalRequestFee"  hits="24"  signature="()V" >
-				<lines><line number="99"  hits="24" /></lines>
+				<lines><line number="100"  hits="24" /></lines>
+			</method>
+			<method name="addConsolidationRequests"  hits="0"  signature="()V" >
+				<lines><line number="127"  hits="0" /></lines>
+			</method>
+			<method name="getConsolidationRequestFee"  hits="0"  signature="()V" >
+				<lines><line number="142"  hits="0" /></lines>
 			</method>
 			<method name="_countPubkeys"  hits="57"  signature="()V" >
-				<lines><line number="103"  hits="57" /></lines>
+				<lines><line number="146"  hits="57" /></lines>
 			</method>
 			<method name="_requireSufficientFee"  hits="57"  signature="()V" >
-				<lines><line number="107"  hits="57" /></lines>
+				<lines><line number="150"  hits="57" /></lines>
 			</method>
 			<method name="_refundExcessFee"  hits="42"  signature="()V" >
-				<lines><line number="113"  hits="42" /></lines>
+				<lines><line number="156"  hits="42" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="27"  hits="67"  branch="false" />
 			<line number="28"  hits="67"  branch="false" />
-			<line number="29"  hits="38"  branch="false" />
-			<line number="51"  hits="32"  branch="false" />
-			<line number="52"  hits="27"  branch="false" />
-			<line number="54"  hits="27"  branch="false" />
-			<line number="56"  hits="25"  branch="false" />
-			<line number="58"  hits="21"  branch="false" />
-			<line number="85"  hits="35"  branch="false" />
-			<line number="86"  hits="30"  branch="false" />
-			<line number="88"  hits="30"  branch="false" />
-			<line number="90"  hits="28"  branch="false" />
-			<line number="92"  hits="21"  branch="false" />
-			<line number="100"  hits="24"  branch="false" />
-			<line number="104"  hits="57"  branch="false" />
-			<line number="108"  hits="57"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="109"  hits="4"  branch="false" />
-			<line number="114"  hits="42"  branch="false" />
-			<line number="115"  hits="42"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="116"  hits="26"  branch="false" />
-			<line number="118"  hits="26"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="119"  hits="4"  branch="false" />
+			<line number="29"  hits="67"  branch="false" />
+			<line number="30"  hits="38"  branch="false" />
+			<line number="52"  hits="32"  branch="false" />
+			<line number="53"  hits="27"  branch="false" />
+			<line number="55"  hits="27"  branch="false" />
+			<line number="57"  hits="25"  branch="false" />
+			<line number="59"  hits="21"  branch="false" />
+			<line number="86"  hits="35"  branch="false" />
+			<line number="87"  hits="30"  branch="false" />
+			<line number="89"  hits="30"  branch="false" />
+			<line number="91"  hits="28"  branch="false" />
+			<line number="93"  hits="21"  branch="false" />
+			<line number="101"  hits="24"  branch="false" />
+			<line number="128"  hits="0"  branch="false" />
+			<line number="129"  hits="0"  branch="false" />
+			<line number="131"  hits="0"  branch="false" />
+			<line number="133"  hits="0"  branch="false" />
+			<line number="135"  hits="0"  branch="false" />
+			<line number="143"  hits="0"  branch="false" />
+			<line number="147"  hits="57"  branch="false" />
+			<line number="151"  hits="57"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="152"  hits="4"  branch="false" />
+			<line number="157"  hits="42"  branch="false" />
+			<line number="158"  hits="42"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="159"  hits="26"  branch="false" />
+			<line number="161"  hits="26"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="162"  hits="4"  branch="false" />
 		</lines>
 		</class>
 	</classes>
