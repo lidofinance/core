@@ -65,6 +65,33 @@ async function main() {
     await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, withdrawalVaultArgs)
   ).address;
   log.success(`WithdrawalVault address implementation: ${withdrawalVault}`);
+
+  const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
+  const libraries = {
+    MinFirstAllocationStrategy: minFirstAllocationStrategyAddress,
+  };
+
+  const DEPOSIT_CONTRACT_ADDRESS = state[Sk.chainSpec].depositContract;
+  log(`Deposit contract address: ${DEPOSIT_CONTRACT_ADDRESS}`);
+  const stakingRouterAddress = (
+    await deployImplementation(Sk.stakingRouter, "StakingRouter", deployer, [DEPOSIT_CONTRACT_ADDRESS], { libraries })
+  ).address;
+
+  log(`StakingRouter implementation address: ${stakingRouterAddress}`);
+
+  const NOR = await deployImplementation(Sk.appNodeOperatorsRegistry, "NodeOperatorsRegistry", deployer, [], {
+    libraries,
+  });
+
+  log.success(`NOR implementation address: ${NOR.address}`);
+
+  log.emptyLine();
+
+  log(`Configuration for voting script:`);
+  log(`VALIDATORS_EXIT_BUS_ORACLE_IMPL = "${validatorsExitBusOracle}"
+WITHDRAWAL_VAULT_IMPL = "${withdrawalVault}"
+STAKING_ROUTER_IMPL = "${stakingRouterAddress}"
+NODE_OPERATORS_REGISTRY_IMPL = "${NOR.address}"`);
 }
 
 main()
