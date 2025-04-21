@@ -75,8 +75,8 @@ declare namespace NodeJS {
     MAINNET_WITHDRAWAL_VAULT_ADDRESS?: string;
     MAINNET_STAKING_VAULT_FACTORY_ADDRESS?: string;
 
-    HOLESKY_RPC_URL?: string;
     SEPOLIA_RPC_URL?: string;
+    HOODI_RPC_URL?: string;
 
     /* for contract sourcecode verification with `hardhat-verify` */
     ETHERSCAN_API_KEY?: string;

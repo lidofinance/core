@@ -4,6 +4,9 @@ import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
 import "./assertion/revertedWithOZAccessControlError";
 
+// Increase number of stack frames shown in error messages
+Error.stackTraceLimit = Infinity;
+
 export const mochaRootHooks: Mocha.RootHookObject = {
   /**
    * This mine before all tests is to fix an error "No known hardfork for execution on historical block"
