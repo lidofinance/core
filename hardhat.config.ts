@@ -90,6 +90,14 @@ const config: HardhatUserConfig = {
         },
       },
       {
+        network: "hoodi",
+        chainId: 560048,
+        urls: {
+          apiURL: "https://api-hoodi.etherscan.io/api",
+          browserURL: "https://hoodi.etherscan.io/",
+        },
+      },
+      {
         network: "local-devnet",
         chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10),
         urls: {
