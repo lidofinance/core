@@ -166,7 +166,7 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
       "PredepositGuarantee",
       config.get("predepositGuarantee") || (await locator.predepositGuarantee()),
     ),
-    operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid")),
+    operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid") || (await locator.operatorGrid())),
   })) as VaultsContracts;
 };
 
