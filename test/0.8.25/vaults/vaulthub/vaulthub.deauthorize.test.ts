@@ -182,7 +182,7 @@ describe("VaultHub.sol:deauthorize", () => {
       );
     });
 
-    it("authorize=on, connect vault, pendingDisonnect, authorize=exception", async () => {
+    it("authorize=on, connect vault, pendingDisconnect, authorize=exception", async () => {
       const { vault, dashboard: _dashboard } = await createVaultProxy(
         vaultOwner1,
         vaultFactory,
@@ -205,7 +205,7 @@ describe("VaultHub.sol:deauthorize", () => {
       );
     });
 
-    it("authorize=on, connect vault, pendingDisonnect, report, authorize=off", async () => {
+    it("authorize=on, connect vault, pendingDisconnect, report, authorize=off", async () => {
       const { vault, dashboard: _dashboard } = await createVaultProxy(
         vaultOwner1,
         vaultFactory,

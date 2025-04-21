@@ -149,7 +149,7 @@ export async function main() {
   const defaultTierParams = {
     shareLimit: ether("1000"),
     reserveRatioBP: 2000n,
-    rebalanceThresholdBP: 1800n,
+    forcedRebalanceThresholdBP: 1800n,
     treasuryFeeBP: 500n,
   };
   const operatorGrid = await loadContract("OperatorGrid", operatorGridAddress);

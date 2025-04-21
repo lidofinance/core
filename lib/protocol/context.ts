@@ -12,6 +12,10 @@ const getSigner = async (signer: Signer, balance = ether("100"), signers: Protoc
   return impersonate(signerAddress, balance);
 };
 
+export const withCSM = () => {
+  return process.env.INTEGRATION_WITH_CSM !== "off";
+};
+
 export const getProtocolContext = async (): Promise<ProtocolContext> => {
   if (hre.network.name === "hardhat") {
     const networkConfig = hre.config.networks[hre.network.name];
@@ -27,7 +31,7 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
 
   // By default, all flags are "on"
   const flags = {
-    withCSM: process.env.INTEGRATION_WITH_CSM !== "off",
+    withCSM: withCSM(),
   } as ProtocolContextFlags;
 
   log.debug("Protocol context flags", {

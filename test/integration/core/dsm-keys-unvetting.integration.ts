@@ -7,10 +7,14 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { DepositSecurityModule } from "typechain-types";
 
-import { certainAddress, DSMUnvetMessage, ether, findEventsWithInterfaces, impersonate } from "lib";
+import { BigIntMath, certainAddress, DSMUnvetMessage, ether, findEventsWithInterfaces, impersonate } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { setSingleGuardian } from "lib/protocol/helpers/dsm";
-import { norAddNodeOperator, norAddOperatorKeys, norSetOperatorStakingLimit } from "lib/protocol/helpers/nor";
+import {
+  norSdvtAddNodeOperator,
+  norSdvtAddOperatorKeys,
+  norSdvtSetOperatorStakingLimit,
+} from "lib/protocol/helpers/nor-sdvt";
 
 import { Snapshot } from "test/suite";
 
@@ -139,6 +143,10 @@ describe("Integration: DSM keys unvetting", () => {
     const nodeOperatorBefore = await nor.getNodeOperator(operatorId, true);
     const totalVettedValidatorsBefore = nodeOperatorBefore.totalVettedValidators;
     expect(totalVettedValidatorsBefore).to.be.not.equal(vettedSigningKeysCount);
+    const totalVettedValidatorsAfter = BigIntMath.max(
+      vettedSigningKeysCount,
+      nodeOperatorBefore.totalDepositedValidators,
+    );
 
     // Unvet signing keys
     const tx = await dsm
@@ -150,11 +158,11 @@ describe("Integration: DSM keys unvetting", () => {
     const unvetEvents = findEventsWithInterfaces(receipt!, "VettedSigningKeysCountChanged", [nor.interface]);
     expect(unvetEvents.length).to.equal(1);
     expect(unvetEvents[0].args.nodeOperatorId).to.equal(operatorId);
-    expect(unvetEvents[0].args.approvedValidatorsCount).to.equal(vettedSigningKeysCount);
+    expect(unvetEvents[0].args.approvedValidatorsCount).to.equal(totalVettedValidatorsAfter);
 
     // Verify node operator state after unvetting
     const nodeOperatorAfter = await nor.getNodeOperator(operatorId, true);
-    expect(nodeOperatorAfter.totalVettedValidators).to.equal(vettedSigningKeysCount);
+    expect(nodeOperatorAfter.totalVettedValidators).to.equal(totalVettedValidatorsAfter);
   });
 
   it("Should allow guardian to unvet signing keys directly", async () => {
@@ -176,8 +184,12 @@ describe("Integration: DSM keys unvetting", () => {
     const nonce = await ctx.contracts.stakingRouter.getStakingModuleNonce(stakingModuleId);
 
     // Get node operator state before unvetting
-    const nodeOperatorsBefore = await nor.getNodeOperator(operatorId, true);
-    const totalDepositedValidatorsBefore = nodeOperatorsBefore.totalDepositedValidators;
+    const nodeOperatorBefore = await nor.getNodeOperator(operatorId, true);
+    const totalDepositedValidatorsBefore = nodeOperatorBefore.totalDepositedValidators;
+    const totalVettedValidatorsAfter = Math.max(
+      Number(vettedSigningKeysCount),
+      Number(nodeOperatorBefore.totalDepositedValidators),
+    );
     expect(totalDepositedValidatorsBefore).to.be.gte(1n);
 
     // Pack operator IDs into bytes (8 bytes per ID)
@@ -199,12 +211,12 @@ describe("Integration: DSM keys unvetting", () => {
     const unvetEvents = findEventsWithInterfaces(receipt!, "VettedSigningKeysCountChanged", [nor.interface]);
     expect(unvetEvents.length).to.equal(1);
     expect(unvetEvents[0].args.nodeOperatorId).to.equal(operatorId);
-    expect(unvetEvents[0].args.approvedValidatorsCount).to.equal(vettedSigningKeysCount);
+    expect(unvetEvents[0].args.approvedValidatorsCount).to.equal(totalVettedValidatorsAfter);
 
     // Verify node operator state after unvetting
     const nodeOperatorAfter = await nor.getNodeOperator(operatorId, true);
     expect(nodeOperatorAfter.totalDepositedValidators).to.equal(totalDepositedValidatorsBefore);
-    expect(nodeOperatorAfter.totalVettedValidators).to.equal(vettedSigningKeysCount);
+    expect(nodeOperatorAfter.totalVettedValidators).to.equal(totalVettedValidatorsAfter);
   });
 
   it("Should allow guardian to decrease vetted signing keys count", async () => {
@@ -213,16 +225,22 @@ describe("Integration: DSM keys unvetting", () => {
     // Add node operator and signing keys
     const stakingModuleId = 1;
     const rewardAddress = certainAddress("rewardAddress");
-    const operatorId = await norAddNodeOperator(ctx, {
+    const operatorId = await norSdvtAddNodeOperator(ctx, ctx.contracts.nor, {
       name: "test",
       rewardAddress,
     });
 
     // Add signing keys
-    await norAddOperatorKeys(ctx, { operatorId, keysToAdd: 10n });
+    await norSdvtAddOperatorKeys(ctx, ctx.contracts.nor, {
+      operatorId,
+      keysToAdd: 10n,
+    });
 
     // Set staking limit to 8
-    await norSetOperatorStakingLimit(ctx, { operatorId, limit: 8n });
+    await norSdvtSetOperatorStakingLimit(ctx, ctx.contracts.nor, {
+      operatorId,
+      limit: 8n,
+    });
 
     // Prepare unvet parameters
     const blockNumber = await time.latestBlock();

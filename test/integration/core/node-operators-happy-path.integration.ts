@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { certainAddress, ether, findEventsWithInterfaces, impersonate } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { randomPubkeys, randomSignatures } from "lib/protocol/helpers/nor";
+import { randomPubkeys, randomSignatures } from "lib/protocol/helpers/staking-module";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 

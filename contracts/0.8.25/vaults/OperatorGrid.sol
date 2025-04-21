@@ -14,7 +14,7 @@ import {VaultHub} from "./VaultHub.sol";
 struct TierParams {
     uint256 shareLimit;
     uint256 reserveRatioBP;
-    uint256 rebalanceThresholdBP;
+    uint256 forcedRebalanceThresholdBP;
     uint256 treasuryFeeBP;
 }
 
@@ -26,7 +26,7 @@ struct TierParams {
  * These parameters include:
  * - shareLimit: maximum amount of shares that can be minted
  * - reserveRatioBP: reserve ratio in basis points
- * - rebalanceThresholdBP: rebalance threshold in basis points
+ * - forcedRebalanceThresholdBP: forced rebalance threshold in basis points
  * - treasuryFeeBP: treasury fee in basis points
  *
  * These parameters are determined by the Tier in which the Vault is registered.
@@ -71,7 +71,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         │  ┌──────────────────────┐  ┌──────────────────────┐  │
         │  │       Tier 1         │  │       Tier 2         │  │
         │  │  tierShareLimit = x  │  │  tierShareLimit = y  │  │
-        │  │  Vault2 ... Vaultk   │  │                      │  │
+        │  │  Vault_2 ... Vault_k │  │                      │  │
         │  └──────────────────────┘  └──────────────────────┘  │
         └──────────────────────────────────────────────────────┘
      */
@@ -85,7 +85,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
     /// @notice Default group address
     uint256 public constant DEFAULT_TIER_ID = 0;
-    address public constant DEFAULT_TIER_ADDRESS = address(uint160(type(uint160).max));
+    address public constant DEFAULT_TIER_OPERATOR = address(uint160(type(uint160).max));
 
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
@@ -96,16 +96,16 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     struct Group {
         address operator;
         uint96 shareLimit;
-        uint96 mintedShares;
+        uint96 liabilityShares;
         uint128[] tierIds;
     }
 
     struct Tier {
         address operator;
         uint96 shareLimit;
-        uint96 mintedShares;
+        uint96 liabilityShares;
         uint16 reserveRatioBP;
-        uint16 rebalanceThresholdBP;
+        uint16 forcedRebalanceThresholdBP;
         uint16 treasuryFeeBP;
     }
 
@@ -121,8 +121,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
      * @custom:tiers Tiers
      * @custom:vaultTier Vault tiers
      * @custom:groups Groups
-     * @custom:nodeOperators Node operators
      * @custom:pendingRequests Pending requests
+     * @custom:nodeOperators Node operators
      */
     struct ERC7201Storage {
         Tier[] tiers;
@@ -163,12 +163,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         //create default tier with default share limit
         $.tiers.push(
             Tier({
-                operator: DEFAULT_TIER_ADDRESS,
+                operator: DEFAULT_TIER_OPERATOR,
                 shareLimit: uint96(_defaultTierParams.shareLimit),
                 reserveRatioBP: uint16(_defaultTierParams.reserveRatioBP),
-                rebalanceThresholdBP: uint16(_defaultTierParams.rebalanceThresholdBP),
+                forcedRebalanceThresholdBP: uint16(_defaultTierParams.forcedRebalanceThresholdBP),
                 treasuryFeeBP: uint16(_defaultTierParams.treasuryFeeBP),
-                mintedShares: 0
+                liabilityShares: 0
             })
         );
     }
@@ -185,7 +185,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         $.groups[_nodeOperator] = Group({
             operator: _nodeOperator,
             shareLimit: uint96(_shareLimit),
-            mintedShares: 0,
+            liabilityShares: 0,
             tierIds: new uint128[](0)
         });
         $.nodeOperators.push(_nodeOperator);
@@ -208,7 +208,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         emit GroupShareLimitUpdated(_nodeOperator, uint96(_shareLimit));
     }
 
-    /// @notice Returns a node operator address
+    /// @notice Returns a group by node operator address
     /// @param _nodeOperator address of the node operator
     /// @return Group
     function group(address _nodeOperator) external view returns (Group memory) {
@@ -219,7 +219,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @param _index index of the node operator
     /// @return Node operator address
     function nodeOperatorAddress(uint256 _index) external view returns (address) {
-        return _getStorage().nodeOperators[_index];
+        ERC7201Storage storage $ = _getStorage();
+        if (_index >= $.nodeOperators.length) revert NodeOperatorNotExists();
+        return $.nodeOperators[_index];
     }
 
     /// @notice Returns a node operator count
@@ -244,15 +246,15 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         uint128 tierId = uint128($.tiers.length);
         uint256 length = _tiers.length;
         for (uint256 i = 0; i < length; i++) {
-            _validateParams(tierId, _tiers[i].reserveRatioBP, _tiers[i].rebalanceThresholdBP, _tiers[i].treasuryFeeBP);
+            _validateParams(tierId, _tiers[i].reserveRatioBP, _tiers[i].forcedRebalanceThresholdBP, _tiers[i].treasuryFeeBP);
 
             Tier memory tier_ = Tier({
                 operator: _nodeOperator,
                 shareLimit: uint96(_tiers[i].shareLimit),
                 reserveRatioBP: uint16(_tiers[i].reserveRatioBP),
-                rebalanceThresholdBP: uint16(_tiers[i].rebalanceThresholdBP),
+                forcedRebalanceThresholdBP: uint16(_tiers[i].forcedRebalanceThresholdBP),
                 treasuryFeeBP: uint16(_tiers[i].treasuryFeeBP),
-                mintedShares: 0
+                liabilityShares: 0
             });
             $.tiers.push(tier_);
             group_.tierIds.push(tierId);
@@ -262,7 +264,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
                 tierId,
                 uint96(_tiers[i].shareLimit),
                 uint16(_tiers[i].reserveRatioBP),
-                uint16(_tiers[i].rebalanceThresholdBP),
+                uint16(_tiers[i].forcedRebalanceThresholdBP),
                 uint16(_tiers[i].treasuryFeeBP)
             );
 
@@ -274,7 +276,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @param _tierId id of the tier
     /// @return Tier
     function tier(uint256 _tierId) external view returns (Tier memory) {
-        return _getStorage().tiers[_tierId];
+        ERC7201Storage storage $ = _getStorage();
+        if (_tierId >= $.tiers.length) revert TierNotExists();
+        return $.tiers[_tierId];
     }
 
     /// @notice Alters a tier
@@ -285,16 +289,16 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
         if (_tierId >= $.tiers.length) revert TierNotExists();
 
-        _validateParams(_tierId, _tierParams.reserveRatioBP, _tierParams.rebalanceThresholdBP, _tierParams.treasuryFeeBP);
+        _validateParams(_tierId, _tierParams.reserveRatioBP, _tierParams.forcedRebalanceThresholdBP, _tierParams.treasuryFeeBP);
 
         Tier storage tier_ = $.tiers[_tierId];
 
         tier_.shareLimit = uint96(_tierParams.shareLimit);
         tier_.reserveRatioBP = uint16(_tierParams.reserveRatioBP);
-        tier_.rebalanceThresholdBP = uint16(_tierParams.rebalanceThresholdBP);
+        tier_.forcedRebalanceThresholdBP = uint16(_tierParams.forcedRebalanceThresholdBP);
         tier_.treasuryFeeBP = uint16(_tierParams.treasuryFeeBP);
 
-        emit TierUpdated(_tierId, tier_.shareLimit, tier_.reserveRatioBP, tier_.rebalanceThresholdBP, tier_.treasuryFeeBP);
+        emit TierUpdated(_tierId, tier_.shareLimit, tier_.reserveRatioBP, tier_.forcedRebalanceThresholdBP, tier_.treasuryFeeBP);
     }
 
     /// @notice Request to change tier
@@ -333,7 +337,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /*
 
     Legend:
-    V = Vault1.mintedShares
+    V = Vault1.liabilityShares
 
     Scheme1 - transfer Vault from default tier to Tier2
 
@@ -345,13 +349,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     │  minted: -V        │    ─────▶     │  │ minted:+V │  │           │  │
     └────────────────────┘               │  └───────────┘  └───────────┘  │
                                          │                                │
-                                         │   Group1.mintedShares: +V      │
+                                         │   Group1.liabilityShares: +V   │
                                          └────────────────────────────────┘
 
     After confirmation:
-    - Tier 1.mintedShares   = -V
-    - Tier 2.mintedShares   = +V
-    - Group1.mintedShares   = +V
+    - Tier 1.liabilityShares   = -V
+    - Tier 2.liabilityShares   = +V
+    - Group1.liabilityShares   = +V
 
     --------------------------------------------------------------------------
     Scheme2 - transfer Vault from Tier2 to Tier3, no need to change group minted shares
@@ -367,8 +371,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     └────────────────────────────────┘     └────────────────────────────────┘
 
     After confirmation:
-    - Tier 2.mintedShares   = -V
-    - Tier 3.mintedShares   = +V
+    - Tier 2.liabilityShares   = -V
+    - Tier 3.liabilityShares   = +V
 
     NB: Cannot change from Tier2 to Tier1, because Tier1 has no group. Reverts on `requestTierChange`
     NB: Cannot change from Tier2 to Tier4, because Tier4 has different operator.
@@ -386,28 +390,28 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         uint128 requestedTierId = vaultTier.requestedTierId;
         if (requestedTierId != _tierIdToConfirm) revert InvalidTierId(requestedTierId, _tierIdToConfirm);
 
-        Tier memory requestedTier = $.tiers[requestedTierId];
+        Tier storage requestedTier = $.tiers[requestedTierId];
 
         VaultHub vaultHub = VaultHub(LIDO_LOCATOR.vaultHub());
         VaultHub.VaultSocket memory vaultSocket = vaultHub.vaultSocket(_vault);
-        uint256 vaultShares = vaultSocket.sharesMinted;
+        uint256 vaultLiabilityShares = vaultSocket.liabilityShares;
 
         //check if tier limit is exceeded
-        if (requestedTier.mintedShares + vaultShares > requestedTier.shareLimit) revert TierLimitExceeded();
+        if (requestedTier.liabilityShares + vaultLiabilityShares > requestedTier.shareLimit) revert TierLimitExceeded();
 
         // if the vault was in the default tier:
         // - that mean that the vault has no group, so we decrease only the minted shares of the default tier
         // - but need to check requested group limit exceeded
         if (vaultTier.currentTierId == DEFAULT_TIER_ID) {
             Group storage requestedGroup = $.groups[nodeOperator];
-            if (requestedGroup.mintedShares + vaultShares > requestedGroup.shareLimit) revert GroupLimitExceeded();
-            requestedGroup.mintedShares += uint96(vaultShares);
+            if (requestedGroup.liabilityShares + vaultLiabilityShares > requestedGroup.shareLimit) revert GroupLimitExceeded();
+            requestedGroup.liabilityShares += uint96(vaultLiabilityShares);
         }
 
         Tier storage currentTier = $.tiers[vaultTier.currentTierId];
 
-        currentTier.mintedShares -= uint96(vaultShares);
-        requestedTier.mintedShares += uint96(vaultShares);
+        currentTier.liabilityShares -= uint96(vaultLiabilityShares);
+        requestedTier.liabilityShares += uint96(vaultLiabilityShares);
 
         vaultTier.currentTierId = requestedTierId;
         vaultTier.requestedTierId = 0;
@@ -418,7 +422,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
             _vault,
             requestedTier.shareLimit,
             requestedTier.reserveRatioBP,
-            requestedTier.rebalanceThresholdBP,
+            requestedTier.forcedRebalanceThresholdBP,
             requestedTier.treasuryFeeBP
         );
 
@@ -469,17 +473,17 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         Tier storage tier_ = $.tiers[tierId];
 
-        uint96 tierMintedShares = tier_.mintedShares; //cache
-        if (tierMintedShares + amount_ > tier_.shareLimit) revert TierLimitExceeded();
+        uint96 tierLiabilityShares = tier_.liabilityShares; //cache
+        if (tierLiabilityShares + amount_ > tier_.shareLimit) revert TierLimitExceeded();
 
-        tier_.mintedShares = tierMintedShares + amount_;
+        tier_.liabilityShares = tierLiabilityShares + amount_;
 
         if (tierId != DEFAULT_TIER_ID) {
             Group storage group_ = $.groups[tier_.operator];
-            uint96 groupMintedShares = group_.mintedShares;
+            uint96 groupMintedShares = group_.liabilityShares;
             if (groupMintedShares + amount_ > group_.shareLimit) revert GroupLimitExceeded();
 
-            group_.mintedShares = groupMintedShares + amount_;
+            group_.liabilityShares = groupMintedShares + amount_;
         }
     }
 
@@ -503,11 +507,11 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         // we skip the check for minted shared underflow, because it's done in the VaultHub.burnShares()
 
-        tier_.mintedShares -= amount_;
+        tier_.liabilityShares -= amount_;
 
         if (tierId != DEFAULT_TIER_ID) {
             Group storage group_ = $.groups[tier_.operator];
-            group_.mintedShares -= amount_;
+            group_.liabilityShares -= amount_;
         }
     }
 
@@ -517,7 +521,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @return tierId tier id of the vault
     /// @return shareLimit share limit of the vault
     /// @return reserveRatioBP reserve ratio of the vault
-    /// @return rebalanceThresholdBP rebalance threshold of the vault
+    /// @return forcedRebalanceThresholdBP forced rebalance threshold of the vault
     /// @return treasuryFeeBP treasury fee of the vault
     function vaultInfo(address vaultAddr)
         external
@@ -527,7 +531,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
             uint256 tierId,
             uint256 shareLimit,
             uint256 reserveRatioBP,
-            uint256 rebalanceThresholdBP,
+            uint256 forcedRebalanceThresholdBP,
             uint256 treasuryFeeBP
         )
     {
@@ -541,27 +545,27 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         shareLimit = t.shareLimit;
         reserveRatioBP = t.reserveRatioBP;
-        rebalanceThresholdBP = t.rebalanceThresholdBP;
+        forcedRebalanceThresholdBP = t.forcedRebalanceThresholdBP;
         treasuryFeeBP = t.treasuryFeeBP;
     }
 
     /// @notice Validates tier parameters
     /// @param _reserveRatioBP Reserve ratio
-    /// @param _rebalanceThresholdBP Rebalance threshold
+    /// @param _forcedRebalanceThresholdBP Forced rebalance threshold
     /// @param _treasuryFeeBP Treasury fee
     function _validateParams(
       uint256 _tierId,
       uint256 _reserveRatioBP,
-      uint256 _rebalanceThresholdBP,
+      uint256 _forcedRebalanceThresholdBP,
       uint256 _treasuryFeeBP
     ) internal pure {
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
         if (_reserveRatioBP > TOTAL_BASIS_POINTS)
             revert ReserveRatioTooHigh(_tierId, _reserveRatioBP, TOTAL_BASIS_POINTS);
 
-        if (_rebalanceThresholdBP == 0) revert ZeroArgument("_rebalanceThresholdBP");
-        if (_rebalanceThresholdBP > _reserveRatioBP)
-            revert RebalanceThresholdTooHigh(_tierId, _rebalanceThresholdBP, _reserveRatioBP);
+        if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument("_forcedRebalanceThresholdBP");
+        if (_forcedRebalanceThresholdBP > _reserveRatioBP)
+            revert ForcedRebalanceThresholdTooHigh(_tierId, _forcedRebalanceThresholdBP, _reserveRatioBP);
 
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS)
             revert TreasuryFeeTooHigh(_tierId, _treasuryFeeBP, TOTAL_BASIS_POINTS);
@@ -578,11 +582,11 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     // -----------------------------
     event GroupAdded(address indexed nodeOperator, uint256 shareLimit);
     event GroupShareLimitUpdated(address indexed nodeOperator, uint256 shareLimit);
-    event TierAdded(address indexed nodeOperator, uint256 indexed tierId, uint256 shareLimit, uint256 reserveRatioBP, uint256 rebalanceThresholdBP, uint256 treasuryFee);
+    event TierAdded(address indexed nodeOperator, uint256 indexed tierId, uint256 shareLimit, uint256 reserveRatioBP, uint256 forcedRebalanceThresholdBP, uint256 treasuryFee);
     event VaultAdded(address indexed vault);
     event TierChanged(address indexed vault, uint256 indexed tierId);
     event TierChangeRequested(address indexed vault, uint256 indexed currentTierId, uint256 indexed requestedTierId);
-    event TierUpdated(uint256 indexed tierId, uint256 shareLimit, uint256 reserveRatioBP, uint256 rebalanceThresholdBP, uint256 treasuryFee);
+    event TierUpdated(uint256 indexed tierId, uint256 shareLimit, uint256 reserveRatioBP, uint256 forcedRebalanceThresholdBP, uint256 treasuryFee);
 
     // -----------------------------
     //            ERRORS
@@ -593,7 +597,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     error GroupNotExists();
     error GroupLimitExceeded();
     error GroupMintedSharesUnderflow();
-
+    error NodeOperatorNotExists();
     error TierExists();
     error TiersNotAvailable();
     error TierLimitExceeded();
@@ -607,6 +611,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     error CannotChangeToDefaultTier();
 
     error ReserveRatioTooHigh(uint256 tierId, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
-    error RebalanceThresholdTooHigh(uint256 tierId, uint256 rebalanceThresholdBP, uint256 reserveRatioBP);
+    error ForcedRebalanceThresholdTooHigh(uint256 tierId, uint256 forcedRebalanceThresholdBP, uint256 reserveRatioBP);
     error TreasuryFeeTooHigh(uint256 tierId, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
 }

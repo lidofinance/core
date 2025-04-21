@@ -9,14 +9,14 @@ contract VaultHub__MockForOperatorGrid {
         /// @notice vault address
         address vault;
         /// @notice total number of stETH shares minted by the vault
-        uint96 sharesMinted;
+        uint96 liabilityShares;
         // ### 2nd slot
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 shareLimit;
         /// @notice minimal share of ether that is reserved for each stETH minted
         uint16 reserveRatioBP;
         /// @notice if vault's reserve decreases to this threshold, it should be force rebalanced
-        uint16 rebalanceThresholdBP;
+        uint16 forcedRebalanceThresholdBP;
         /// @notice treasury fee in basis points
         uint16 treasuryFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
@@ -41,17 +41,17 @@ contract VaultHub__MockForOperatorGrid {
         address _vault,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
-        uint256 _rebalanceThresholdBP,
+        uint256 _forcedRebalanceThresholdBP,
         uint256 _treasuryFeeBP
     ) external {
-        emit VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
+        emit VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
 
     event VaultConnectionUpdated(
         address indexed vault,
         uint256 shareLimit,
         uint256 reserveRatioBP,
-        uint256 rebalanceThresholdBP,
+        uint256 forcedRebalanceThresholdBP,
         uint256 treasuryFeeBP
     );
 }
