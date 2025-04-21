@@ -57,6 +57,13 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     data: string;
   }
 
+  interface ExitRequestLimitData {
+    prevExitRequestsBlockNumber: number;
+    prevExitRequestsLimit: number;
+    maxExitRequestsLimitGrowthBlocks: number;
+    maxExitRequestsLimit: number;
+  }
+
   const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
     const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
     const reportDataHash = ethers.keccak256(
@@ -613,8 +620,13 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     it("Set exit limit", async () => {
       const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
       await oracle.grantRole(role, admin);
-      const exitLimitTx = await oracle.connect(admin).setExitReportLimit(4, 1);
-      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(4, 1);
+      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit({
+        maxExitRequestsLimit: 4,
+        exitRequestsLimitIncreasePerBlock: 1,
+        maxTWExitRequestsLimit: 4,
+        twExitRequestsLimitIncreasePerBlock: 1,
+      });
+      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(4, 1, 4, 1);
     });
 
     it("deliver report by actor different from oracle", async () => {

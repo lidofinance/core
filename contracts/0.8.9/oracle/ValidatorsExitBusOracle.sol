@@ -244,7 +244,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         // Check VEB common limit
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
 
-        if (exitRequestLimitData.isExitReportLimitSet()) {
+        if (exitRequestLimitData.isExitRequestLimitSet()) {
             uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
 
             if (data.requestsCount > limit) {

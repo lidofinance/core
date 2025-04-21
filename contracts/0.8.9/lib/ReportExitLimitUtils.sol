@@ -11,11 +11,16 @@ import {UnstructuredStorage} from "./UnstructuredStorage.sol";
 // |<--- 96 bits --->|<---------- 32 bits -------->|<--- 96 bits ---->|<----- 32 bits ------------->|
 //
 
+// TODO: maybe we need smaller type for maxExitRequestsLimit
 struct ExitRequestLimitData {
     uint32 prevExitRequestsBlockNumber; // block number of the previous exit requests
-    uint96 prevExitRequestsLimit; // limit value (<= `maxExitRequestLimit`) obtained on the previous exit request
-    uint32 maxExitRequestsLimitGrowthBlocks; // limit regeneration speed expressed in blocks
-    uint96 maxExitRequestsLimit; // maximum limit value
+    // Remaining portion of the limit available  after the previous request.
+    // Always less than or equal to `maxExitRequestsLimit`.
+    uint96 prevExitRequestsLimit;
+    // Number of block to regenerate limit from 0 to maxExitRequestsLimit
+    uint32 maxExitRequestsLimitGrowthBlocks;
+    // TODO: mabe use uint16 type
+    uint96 maxExitRequestsLimit; // maximum exit requests limit value
 }
 
 library ReportExitLimitUtilsStorage {
@@ -87,7 +92,7 @@ library ReportExitLimitUtils {
      * @param _maxExitRequestsLimit exit request limit max value
      * @param _exitRequestsLimitIncreasePerBlock exit request limit increase (restoration) per block
      */
-    function setExitReportLimit(
+    function setExitRequestLimit(
         ExitRequestLimitData memory _data,
         uint256 _maxExitRequestsLimit,
         uint256 _exitRequestsLimitIncreasePerBlock
@@ -114,6 +119,7 @@ library ReportExitLimitUtils {
 
         _data.maxExitRequestsLimit = uint96(_maxExitRequestsLimit);
 
+        // do we need to set block here, or for some edge case we need to have 0 here
         _data.prevExitRequestsBlockNumber = uint32(block.number);
 
         return _data;
@@ -123,7 +129,7 @@ library ReportExitLimitUtils {
      * TODO: discuss this part
      * @notice check if max exit request limit is set. Otherwise there are no limits on exits
      */
-    function isExitReportLimitSet(ExitRequestLimitData memory _data) internal pure returns (bool) {
+    function isExitRequestLimitSet(ExitRequestLimitData memory _data) internal pure returns (bool) {
         return _data.maxExitRequestsLimit != 0;
     }
 

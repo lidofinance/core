@@ -43,6 +43,13 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
     data: string;
   }
 
+  interface ExitRequestLimitData {
+    prevExitRequestsBlockNumber: number;
+    prevExitRequestsLimit: number;
+    maxExitRequestsLimitGrowthBlocks: number;
+    maxExitRequestsLimit: number;
+  }
+
   const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
     const pubkeyHex = de0x(valPubkey);
     expect(pubkeyHex.length).to.equal(48 * 2);
@@ -173,8 +180,13 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
   it("Should deliver part of request if limit is smaller than number of requests", async () => {
     const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
     await oracle.grantRole(role, authorizedEntity);
-    const exitLimitTx = await oracle.connect(authorizedEntity).setExitReportLimit(2, 1);
-    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(2, 1);
+    const exitLimitTx = await oracle.connect(authorizedEntity).setExitRequestLimit({
+      maxExitRequestsLimit: 2,
+      exitRequestsLimitIncreasePerBlock: 1,
+      twExitRequestsLimitIncreasePerBlock: 1,
+      maxTWExitRequestsLimit: 2,
+    });
+    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(2, 1, 2, 1);
 
     exitRequests = [
       { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },

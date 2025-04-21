@@ -57,7 +57,12 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         bytes validatorPubkey,
         uint256 timestamp
     );
-    event ExitRequestsLimitSet(uint256 _maxExitRequestsLimit, uint256 _exitRequestsLimitIncreasePerBlock);
+    event ExitRequestsLimitSet(
+        uint256 maxExitRequestsLimit,
+        uint256 exitRequestsLimitIncreasePerBlock,
+        uint256 maxTWExitRequestsLimit,
+        uint256 twExitRequestsLimitIncreasePerBlock
+    );
 
     event DirectExitRequest(
         uint256 indexed stakingModuleId,
@@ -82,8 +87,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     /// @notice An ACL role granting the permission to resume accepting validator exit requests
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
-
-    bytes32 public constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestsLimit");
 
     /// Length in bytes of packed request
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
@@ -112,6 +115,10 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
     /// Hash constant for mapping exit requests storage
     bytes32 internal constant EXIT_REQUESTS_HASHES_POSITION = keccak256("lido.ValidatorsExitBus.reportHashes");
+    bytes32 public constant EXIT_REQUEST_LIMIT_POSITION =
+        keccak256("lido.ValidatorsExitBus.maxExitRequestsLimit");
+    bytes32 public constant TW_EXIT_REQUEST_LIMIT_POSITION =
+        keccak256("lido.ValidatorsExitBus.maxTWExitRequestsLimit");
 
     /// @dev Ensures the contract’s ETH balance is unchanged.
     modifier preservesEthBalance() {
@@ -166,7 +173,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
         uint256 toDeliver;
 
-        if (exitRequestLimitData.isExitReportLimitSet()) {
+        if (exitRequestLimitData.isExitRequestLimitSet()) {
             uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
             if (limit == 0) {
                 revert ExitRequestsLimit();
@@ -212,9 +219,23 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         _checkContractVersion(requestStatus.contractVersion);
 
+        // limit check
+        ExitRequestLimitData memory exitRequestLimitData = TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
+
+        if (exitRequestLimitData.isExitRequestLimitSet()) {
+            uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
+
+            if (keyIndexes.length > limit) {
+                revert ExitRequestsLimit();
+            }
+
+            EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+                exitRequestLimitData.updatePrevExitRequestsLimit(limit - keyIndexes.length)
+            );
+        }
+
         address withdrawalVaultAddr = LOCATOR.withdrawalVault();
         uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
-        address stakingRouterAddr = LOCATOR.stakingRouter();
 
         if (msg.value < keyIndexes.length * withdrawalFee) {
             revert InsufficientPayment(withdrawalFee, keyIndexes.length, msg.value);
@@ -268,7 +289,13 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
                 calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
             }
 
-            IStakingRouter(stakingRouterAddr).onValidatorExitTriggered(moduleId, nodeOpId, pubkey, withdrawalFee, 0);
+            IStakingRouter(LOCATOR.stakingRouter()).onValidatorExitTriggered(
+                moduleId,
+                nodeOpId,
+                pubkey,
+                withdrawalFee,
+                0
+            );
         }
 
         IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: keyIndexes.length * withdrawalFee}(
@@ -281,9 +308,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     function triggerExitsDirectly(
         DirectExitData calldata exitData
     ) external payable whenResumed onlyRole(DIRECT_EXIT_ROLE) preservesEthBalance returns (uint256) {
-        address withdrawalVaultAddr = LOCATOR.withdrawalVault();
-        uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
-        address stakingRouterAddr = LOCATOR.stakingRouter();
+        address withdrawalVault = LOCATOR.withdrawalVault();
+        uint256 withdrawalFee = IWithdrawalVault(withdrawalVault).getWithdrawalRequestFee();
 
         if (exitData.validatorsPubkeys.length == 0) {
             revert NoExitRequestProvided();
@@ -294,6 +320,21 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
 
         uint256 requestsCount = exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH;
+
+        ExitRequestLimitData memory twExitRequestLimitData = TW_EXIT_REQUEST_LIMIT_POSITION
+            .getStorageExitRequestLimit();
+
+        if (twExitRequestLimitData.isExitRequestLimitSet()) {
+            uint256 limit = twExitRequestLimitData.calculateCurrentExitRequestLimit();
+
+            if (requestsCount > limit) {
+                revert ExitRequestsLimit();
+            }
+
+            TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+                twExitRequestLimitData.updatePrevExitRequestsLimit(limit - requestsCount)
+            );
+        }
 
         if (msg.value < withdrawalFee * requestsCount) {
             revert InsufficientPayment(withdrawalFee, requestsCount, msg.value);
@@ -312,7 +353,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
                 calldatacopy(dest, offset, PUBLIC_KEY_LENGTH)
             }
 
-            IStakingRouter(stakingRouterAddr).onValidatorExitTriggered(
+            IStakingRouter(LOCATOR.stakingRouter()).onValidatorExitTriggered(
                 exitData.stakingModuleId,
                 exitData.nodeOperatorId,
                 pubkey,
@@ -323,25 +364,46 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             emit DirectExitRequest(exitData.stakingModuleId, exitData.nodeOperatorId, pubkey, timestamp);
         }
 
-        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: withdrawalFee * requestsCount}(
+        IWithdrawalVault(withdrawalVault).addFullWithdrawalRequests{value: withdrawalFee * requestsCount}(
             exitData.validatorsPubkeys
         );
 
         return _refundFee(requestsCount * withdrawalFee);
     }
 
-    function setExitReportLimit(
-        uint256 _maxExitRequestsLimit,
-        uint256 _exitRequestsLimitIncreasePerBlock
-    ) external onlyRole(EXIT_REPORT_LIMIT_ROLE) {
+    function setExitRequestLimit(ExitLimits calldata limits) external onlyRole(EXIT_REPORT_LIMIT_ROLE) {
+        require(limits.maxExitRequestsLimit != 0, "ZERO_MAX_EXIT_REQUEST_LIMIT");
+        require(limits.maxTWExitRequestsLimit != 0, "ZERO_MAX_TW_EXIT_REQUEST_LIMIT");
+        require(
+            limits.maxExitRequestsLimit >= limits.exitRequestsLimitIncreasePerBlock,
+            "TOO_LARGE_EXIT_LIMIT_INCREASE"
+        );
+        require(
+            limits.maxTWExitRequestsLimit >= limits.twExitRequestsLimitIncreasePerBlock,
+            "TOO_LARGE_TW_EXIT_LIMIT_INCREASE"
+        );
+        // TODO: what maximum value for block distance to replenish limits we can set here? limits.maxExitRequestsLimit / limits.exitRequestsLimitIncreasePerBlock
+
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitReportLimit(
-                _maxExitRequestsLimit,
-                _exitRequestsLimitIncreasePerBlock
+            EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitRequestLimit(
+                limits.maxExitRequestsLimit,
+                limits.exitRequestsLimitIncreasePerBlock
             )
         );
 
-        emit ExitRequestsLimitSet(_maxExitRequestsLimit, _exitRequestsLimitIncreasePerBlock);
+        TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+            TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitRequestLimit(
+                limits.maxTWExitRequestsLimit,
+                limits.twExitRequestsLimitIncreasePerBlock
+            )
+        );
+
+        emit ExitRequestsLimitSet(
+            limits.maxExitRequestsLimit,
+            limits.exitRequestsLimitIncreasePerBlock,
+            limits.maxTWExitRequestsLimit,
+            limits.twExitRequestsLimitIncreasePerBlock
+        );
     }
 
     function getExitRequestsDeliveryHistory(

@@ -20,6 +20,20 @@ interface IValidatorsExitBus {
         uint256 timestamp;
     }
 
+    struct ExitLimits {
+        /// @notice Maximum limit value for exits that will be processed through the CL
+        /// TODO: @dev Must fit into uint16 (<= 65_535) ? Is this value the same as exitedValidatorsPerDayLimit; in OracleReportSanityChecker
+        uint256 maxExitRequestsLimit;
+        /// @notice Exit limit increase per block for exits that will be processed through the CL
+        /// @dev This value will be used for limit replenishment
+        uint256 exitRequestsLimitIncreasePerBlock;
+        /// @notice Maximum limit value for exits that will be processed via TW (eip-7002)
+        /// TODO: @dev Must fit into uint16 (<= 65_535) ? Is this value the same as exitedValidatorsPerDayLimit; in OracleReportSanityChecker
+        uint256 maxTWExitRequestsLimit;
+        /// @notice Exit limit increase per block for exits that will be processed via TW (eip-7002)
+        uint256 twExitRequestsLimitIncreasePerBlock;
+    }
+
     function submitReportHash(bytes32 exitReportHash) external;
 
     function emitExitEvents(ExitRequestData calldata request) external;
@@ -28,7 +42,7 @@ interface IValidatorsExitBus {
 
     function triggerExitsDirectly(DirectExitData calldata exitData) external payable returns (uint256);
 
-    function setExitReportLimit(uint256 _maxExitRequestsLimit, uint256 _exitRequestsLimitIncreasePerBlock) external;
+    function setExitRequestLimit(ExitLimits calldata limits) external;
 
     function getExitRequestsDeliveryHistory(
         bytes32 exitRequestsHash
