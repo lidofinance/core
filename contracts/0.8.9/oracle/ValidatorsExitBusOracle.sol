@@ -4,55 +4,33 @@ pragma solidity 0.8.9;
 
 import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import { ILidoLocator } from "../../common/interfaces/ILidoLocator.sol";
-import { Math256 } from "../../common/lib/Math256.sol";
-import { PausableUntil } from "../utils/PausableUntil.sol";
 import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
 import { BaseOracle } from "./BaseOracle.sol";
 import { ValidatorsExitBus } from "./ValidatorsExitBus.sol";
-
+import { ReportExitLimitUtils, ReportExitLimitUtilsStorage, ExitRequestLimitData } from "../lib/ReportExitLimitUtils.sol";
 
 interface IOracleReportSanityChecker {
     function checkExitBusOracleReport(uint256 _exitRequestsCount) external view;
 }
 
 
-contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus {
+contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
+    using ReportExitLimitUtilsStorage for bytes32;
+    using ReportExitLimitUtils for ExitRequestLimitData;
+
 
     error AdminCannotBeZero();
     error SenderNotAllowed();
-    error UnsupportedRequestsDataFormat(uint256 format);
-    error InvalidRequestsData();
-    error InvalidRequestsDataLength();
     error UnexpectedRequestsDataLength();
-    error InvalidRequestsDataSortOrder();
     error ArgumentOutOfBounds();
-    error NodeOpValidatorIndexMustIncrease(
-        uint256 moduleId,
-        uint256 nodeOpId,
-        uint256 prevRequestedValidatorIndex,
-        uint256 requestedValidatorIndex
-    );
-
-    event ValidatorExitRequest(
-        uint256 indexed stakingModuleId,
-        uint256 indexed nodeOperatorId,
-        uint256 indexed validatorIndex,
-        bytes validatorPubkey,
-        uint256 timestamp
-    );
 
     event WarnDataIncompleteProcessing(
         uint256 indexed refSlot,
         uint256 requestsProcessed,
         uint256 requestsCount
-    );
-
-    event StoreOracleExitRequestHashStart(
-        bytes32 exitRequestHash
     );
 
     struct DataProcessingState {
@@ -62,44 +40,30 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         uint16 dataFormat;
     }
 
-    struct RequestedValidator {
-        bool requested;
-        uint64 index;
-    }
-
     /// @notice An ACL role granting the permission to submit the data for a committee report.
     bytes32 public constant SUBMIT_DATA_ROLE = keccak256("SUBMIT_DATA_ROLE");
-
-    /// @notice An ACL role granting the permission to pause accepting validator exit requests
-    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
-
-    /// @notice An ACL role granting the permission to resume accepting validator exit requests
-    bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
 
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
 
-    /// @dev Storage slot: mapping(uint256 => RequestedValidator) lastRequestedValidatorIndices
-    /// A mapping from the (moduleId, nodeOpId) packed key to the last requested validator index.
-    bytes32 internal constant LAST_REQUESTED_VALIDATOR_INDICES_POSITION =
-        keccak256("lido.ValidatorsExitBusOracle.lastRequestedValidatorIndices");
+    /// @dev [DEPRECATED] Storage slot: mapping(uint256 => RequestedValidator) lastRequestedValidatorIndices
+    /// This mapping was previously used for storing last requested validator indexes per (moduleId, nodeOpId) key.
+    /// This code was removed from the contract, but slots can still contain logic.
 
     /// @dev Storage slot: DataProcessingState dataProcessingState
     bytes32 internal constant DATA_PROCESSING_STATE_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.dataProcessingState");
 
-    ILidoLocator internal immutable LOCATOR;
-
     ///
     /// Initialization & admin functions
     ///
 
-    constructor(uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator)
-        BaseOracle(secondsPerSlot, genesisTime)
-    {
-        LOCATOR = ILidoLocator(lidoLocator);
-    }
+    constructor(
+        uint256 secondsPerSlot,
+        uint256 genesisTime,
+        address lidoLocator
+    ) BaseOracle(secondsPerSlot, genesisTime) ValidatorsExitBus(lidoLocator) {}
 
     function initialize(
         address admin,
@@ -116,36 +80,7 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
 
     function finalizeUpgrade_v2() external {
         _updateContractVersion(2);
-        _setLocatorAddress(address(LOCATOR));
-    }
 
-    /// @notice Resume accepting validator exit requests
-    ///
-    /// @dev Reverts with `PausedExpected()` if contract is already resumed
-    /// @dev Reverts with `AccessControl:...` reason if sender has no `RESUME_ROLE`
-    ///
-    function resume() external whenPaused onlyRole(RESUME_ROLE) {
-        _resume();
-    }
-
-    /// @notice Pause accepting validator exit requests util in after duration
-    ///
-    /// @param _duration pause duration, seconds (use `PAUSE_INFINITELY` for unlimited)
-    /// @dev Reverts with `ResumedExpected()` if contract is already paused
-    /// @dev Reverts with `AccessControl:...` reason if sender has no `PAUSE_ROLE`
-    /// @dev Reverts with `ZeroPauseDuration()` if zero duration is passed
-    ///
-    function pauseFor(uint256 _duration) external onlyRole(PAUSE_ROLE) {
-        _pauseFor(_duration);
-    }
-
-    /// @notice Pause accepting report data
-    /// @param _pauseUntilInclusive the last second to pause until
-    /// @dev Reverts with `ResumeSinceInPast()` if the timestamp is in the past
-    /// @dev Reverts with `AccessControl:...` reason if sender has no `PAUSE_ROLE`
-    /// @dev Reverts with `ResumedExpected()` if contract is already paused
-    function pauseUntil(uint256 _pauseUntilInclusive) external onlyRole(PAUSE_ROLE) {
-        _pauseUntil(_pauseUntilInclusive);
     }
 
     ///
@@ -184,24 +119,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         bytes data;
     }
 
-    /// @notice The list format of the validator exit requests data. Used when all
-    /// requests fit into a single transaction.
-    ///
-    /// Each validator exit request is described by the following 64-byte array:
-    ///
-    /// MSB <------------------------------------------------------- LSB
-    /// |  3 bytes   |  5 bytes   |     8 bytes      |    48 bytes     |
-    /// |  moduleId  |  nodeOpId  |  validatorIndex  | validatorPubkey |
-    ///
-    /// All requests are tightly packed into a byte array where requests follow
-    /// one another without any separator or padding, and passed to the `data`
-    /// field of the report structure.
-    ///
-    /// Requests must be sorted in the ascending order by the following compound
-    /// key: (moduleId, nodeOpId, validatorIndex).
-    ///
-    uint256 public constant DATA_FORMAT_LIST = 1;
-
     /// @notice Submits report data for processing.
     ///
     /// @param data The data. See the `ReportData` structure's docs for details.
@@ -237,31 +154,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
     ///
     function getTotalRequestsProcessed() external view returns (uint256) {
         return TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256();
-    }
-
-    /// @notice Returns the latest validator indices that were requested to exit for the given
-    /// `nodeOpIds` in the given `moduleId`. For node operators that were never requested to exit
-    /// any validator, index is set to -1.
-    ///
-    /// @param moduleId ID of the staking module.
-    /// @param nodeOpIds IDs of the staking module's node operators.
-    ///
-    function getLastRequestedValidatorIndices(uint256 moduleId, uint256[] calldata nodeOpIds)
-        external view returns (int256[] memory)
-    {
-        if (moduleId > type(uint24).max) revert ArgumentOutOfBounds();
-
-        int256[] memory indices = new int256[](nodeOpIds.length);
-
-        for (uint256 i = 0; i < nodeOpIds.length; ++i) {
-            uint256 nodeOpId = nodeOpIds[i];
-            if (nodeOpId > type(uint40).max) revert ArgumentOutOfBounds();
-            uint256 nodeOpKey = _computeNodeOpKey(moduleId, nodeOpId);
-            RequestedValidator memory validator = _storageLastRequestedValidatorIndices()[nodeOpKey];
-            indices[i] = validator.requested ? int256(uint256(validator.index)) : -1;
-        }
-
-        return indices;
     }
 
     struct ProcessingState {
@@ -311,72 +203,6 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         result.requestsSubmitted = procState.requestsProcessed;
     }
 
-    function unpackExitRequest(
-        bytes calldata exitRequests,
-        uint256 dataFormat,
-        uint256 index
-    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
-        if (dataFormat != DATA_FORMAT_LIST) {
-            revert UnsupportedRequestsDataFormat(dataFormat);
-        }
-
-        if (exitRequests.length % PACKED_REQUEST_LENGTH != 0) {
-            revert InvalidRequestsDataLength();
-        }
-
-        if (index >= exitRequests.length / PACKED_REQUEST_LENGTH) {
-            revert KeyIndexOutOfRange(index, exitRequests.length / PACKED_REQUEST_LENGTH);
-        }
-
-        uint256 itemOffset;
-        uint256 dataWithoutPubkey;
-
-        assembly {
-            // Compute the start of this packed request (item)
-            itemOffset := add(exitRequests.offset, mul(PACKED_REQUEST_LENGTH, index))
-
-            // Load the first 16 bytes which contain moduleId (24 bits),
-            // nodeOpId (40 bits), and valIndex (64 bits).
-            dataWithoutPubkey := shr(128, calldataload(itemOffset))
-        }
-
-        // dataWithoutPubkey format (128 bits total):
-        // MSB <-------------------- 128 bits --------------------> LSB
-        // |   128 bits: zeros  | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
-
-        valIndex = uint64(dataWithoutPubkey);
-        nodeOpId = uint40(dataWithoutPubkey >> 64);
-        moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-
-        // Allocate a new bytes array in memory for the pubkey
-        pubkey = new bytes(PUBLIC_KEY_LENGTH);
-
-        assembly {
-            // Starting offset in calldata for the pubkey part
-            let pubkeyCalldataOffset := add(itemOffset, 16)
-
-            // Memory location of the 'pubkey' bytes array data
-            let pubkeyMemPtr := add(pubkey, 32)
-
-            // Copy the 48 bytes of the pubkey from calldata into memory
-            calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
-        }
-
-        return (pubkey, nodeOpId, moduleId, valIndex);
-    }
-
-    function getExitRequestsDeliveryHistory(
-        bytes32 exitRequestsHash
-    ) external view returns (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history) {
-        RequestStatus storage requestStatus = _storageExitRequestsHashes()[exitRequestsHash];
-
-        if (requestStatus.contractVersion == 0) {
-            revert ExitHashWasNotSubmitted();
-        }
-
-        return (requestStatus.totalItemsCount, requestStatus.deliveredItemsCount, requestStatus.deliverHistory);
-    }
-
     ///
     /// Implementation & helpers
     ///
@@ -412,15 +238,29 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
             revert InvalidRequestsDataLength();
         }
 
-        // TODO: next iteration will check ref slot deliveredReportAmount
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
             .checkExitBusOracleReport(data.requestsCount);
+
+        // Check VEB common limit
+        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
+
+        if (exitRequestLimitData.isExitReportLimitSet()) {
+            uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
+
+            if (data.requestsCount > limit) {
+                revert ExitRequestsLimit();
+            }
+
+            EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+                exitRequestLimitData.updatePrevExitRequestsLimit(limit - data.requestsCount)
+            );
+        }
 
         if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
             revert UnexpectedRequestsDataLength();
         }
 
-        _processExitRequestsList(data.data);
+        _processExitRequestsList(data.data, 0, data.requestsCount);
 
         _storageDataProcessingState().value = DataProcessingState({
             refSlot: data.refSlot.toUint64(),
@@ -438,101 +278,22 @@ contract ValidatorsExitBusOracle is BaseOracle, PausableUntil, ValidatorsExitBus
         );
     }
 
-    function _processExitRequestsList(bytes calldata data) internal {
-        uint256 offset;
-        uint256 offsetPastEnd;
-        assembly {
-            offset := data.offset
-            offsetPastEnd := add(offset, data.length)
-        }
-
-        uint256 lastDataWithoutPubkey = 0;
-        uint256 lastNodeOpKey = 0;
-        RequestedValidator memory lastRequestedVal;
-        bytes calldata pubkey;
-
-        assembly {
-            pubkey.length := 48
-        }
-
-        uint256 timestamp = _getTime();
-
-        while (offset < offsetPastEnd) {
-            uint256 dataWithoutPubkey;
-            assembly {
-                // 16 most significant bytes are taken by module id, node op id, and val index
-                dataWithoutPubkey := shr(128, calldataload(offset))
-                // the next 48 bytes are taken by the pubkey
-                pubkey.offset := add(offset, 16)
-                // totalling to 64 bytes
-                offset := add(offset, 64)
-            }
-            //                              dataWithoutPubkey
-            // MSB <---------------------------------------------------------------------- LSB
-            // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
-            //
-            if (dataWithoutPubkey <= lastDataWithoutPubkey) {
-                revert InvalidRequestsDataSortOrder();
-            }
-
-            uint64 valIndex = uint64(dataWithoutPubkey);
-            uint256 nodeOpId = uint40(dataWithoutPubkey >> 64);
-            uint256 moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-
-            if (moduleId == 0) {
-                revert InvalidRequestsData();
-            }
-
-            uint256 nodeOpKey = _computeNodeOpKey(moduleId, nodeOpId);
-            if (nodeOpKey != lastNodeOpKey) {
-                if (lastNodeOpKey != 0) {
-                    _storageLastRequestedValidatorIndices()[lastNodeOpKey] = lastRequestedVal;
-                }
-                lastRequestedVal = _storageLastRequestedValidatorIndices()[nodeOpKey];
-                lastNodeOpKey = nodeOpKey;
-            }
-
-            if (lastRequestedVal.requested && valIndex <= lastRequestedVal.index) {
-                revert NodeOpValidatorIndexMustIncrease(
-                    moduleId,
-                    nodeOpId,
-                    lastRequestedVal.index,
-                    valIndex
-                );
-            }
-
-            lastRequestedVal = RequestedValidator(true, valIndex);
-            lastDataWithoutPubkey = dataWithoutPubkey;
-
-            emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
-        }
-
-        if (lastNodeOpKey != 0) {
-            _storageLastRequestedValidatorIndices()[lastNodeOpKey] = lastRequestedVal;
-        }
-    }
-
-    function _computeNodeOpKey(uint256 moduleId, uint256 nodeOpId) internal pure returns (uint256) {
-        return (moduleId << 40) | nodeOpId;
-    }
-
     function _storeOracleExitRequestHash(bytes32 exitRequestHash, uint256 requestsCount, uint256 contractVersion) internal {
         if (requestsCount == 0) {
             return;
         }
-        _storeExitRequestHash(exitRequestHash, requestsCount, requestsCount, contractVersion, requestsCount - 1);
+        _storeExitRequestHash(
+            exitRequestHash,
+            requestsCount,
+            requestsCount,
+            contractVersion,
+            DeliveryHistory(requestsCount - 1, _getTimestamp())
+        );
     }
 
     ///
     /// Storage helpers
     ///
-
-    function _storageLastRequestedValidatorIndices() internal pure returns (
-        mapping(uint256 => RequestedValidator) storage r
-    ) {
-        bytes32 position = LAST_REQUESTED_VALIDATOR_INDICES_POSITION;
-        assembly { r.slot := position }
-    }
 
     struct StorageDataProcessingState {
         DataProcessingState value;

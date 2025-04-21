@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IValidatorsExitBusOracle, DeliveryHistory} from "contracts/0.8.25/interfaces/IValidatorsExitBusOracle.sol";
+import {IValidatorsExitBus, DeliveryHistory} from "contracts/0.8.25/interfaces/IValidatorsExitBus.sol";
 
 struct MockExitRequestDeliveryHistory {
     uint256 totalItemsCount;
@@ -15,7 +15,7 @@ struct MockExitRequestData {
     uint256 moduleId;
     uint256 valIndex;
 }
-contract ValidatorsExitBusOracle_Mock is IValidatorsExitBusOracle {
+contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
     bytes32 _hash;
     MockExitRequestDeliveryHistory private _history;
     MockExitRequestData[] private _data;

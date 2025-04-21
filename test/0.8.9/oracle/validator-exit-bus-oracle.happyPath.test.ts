@@ -241,14 +241,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     expect(procState.requestsSubmitted).to.equal(exitRequests.length);
   });
 
-  it("last requested validator indices are updated", async () => {
-    const indices1 = await oracle.getLastRequestedValidatorIndices(1n, [0n, 1n, 2n]);
-    const indices2 = await oracle.getLastRequestedValidatorIndices(2n, [0n, 1n, 2n]);
-
-    expect([...indices1]).to.have.ordered.members([2n, -1n, -1n]);
-    expect([...indices2]).to.have.ordered.members([1n, -1n, -1n]);
-  });
-
   it("no data can be submitted for the same reference slot again", async () => {
     await expect(oracle.connect(member2).submitReportData(reportFields, oracleVersion)).to.be.revertedWithCustomError(
       oracle,
