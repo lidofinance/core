@@ -240,11 +240,6 @@ contract UpgradeTemplateV3 {
     uint256 internal constant UPGRADE_NOT_STARTED = 0;
 
     //
-    // Immutables
-    //
-    bool immutable public ALLOW_NON_SINGLE_BLOCK_UPGRADE;
-
-    //
     // Structured storage
     //
     uint256 private _upgradeBlockNumber = UPGRADE_NOT_STARTED;
@@ -253,14 +248,10 @@ contract UpgradeTemplateV3 {
 
 
     /// @param params Parameters for the upgrade template
-    /// @param allowNonSingleBlockUpgrade Hack to allow mocking DAO upgrade (in multiple blocks)
-    constructor(UpgradeTemplateV3Params memory params, bool allowNonSingleBlockUpgrade) {
+    constructor(UpgradeTemplateV3Params memory params) {
         if (params.newLocatorImplementation == params.oldLocatorImpl) {
             revert NewAndOldLocatorImplementationsMustBeDifferent();
         }
-
-        ALLOW_NON_SINGLE_BLOCK_UPGRADE = allowNonSingleBlockUpgrade;
-
 
         NEW_LOCATOR_IMPLEMENTATION = params.newLocatorImplementation;
         LOCATOR = ILidoLocator(params.locator);
@@ -336,10 +327,8 @@ contract UpgradeTemplateV3 {
         _assertNotExpired();
         if (_isUpgradeFinished) revert UpgradeAlreadyFinished();
 
-        if (!ALLOW_NON_SINGLE_BLOCK_UPGRADE) {
-            if (_upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
-            _upgradeBlockNumber = block.number;
-        }
+        if (_upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
+        _upgradeBlockNumber = block.number;
 
         // Save initial state for the check after burner migration
         _initialOldBurnerStethBalance = LIDO.balanceOf(address(OLD_BURNER));
@@ -355,9 +344,7 @@ contract UpgradeTemplateV3 {
         if (_isUpgradeFinished) revert CanOnlyFinishOnce();
         _isUpgradeFinished = true;
 
-        if (!ALLOW_NON_SINGLE_BLOCK_UPGRADE) {
-            if (_upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
-        }
+        if (_upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
 
         _passAdminRolesFromTemplateToAgent();
 

@@ -16,7 +16,6 @@ export async function main() {
   const locator = OssifiableProxy__factory.connect(state[Sk.lidoLocator].proxy.address, deployerSigner);
   const oldLocatorImpl = await locator.proxy__getImplementation();
 
-  const allowNonSingleBlockUpgrade = true;
   await deployWithoutProxy(Sk.upgradeTemplateV3, "UpgradeTemplateV3", deployer, [
     [
       // New non-proxy contracts
@@ -44,6 +43,5 @@ export async function main() {
       state[Sk.appSimpleDvt].proxy.address,
       state[Sk.appVoting].proxy.address,
     ],
-    allowNonSingleBlockUpgrade,
   ]);
 }
