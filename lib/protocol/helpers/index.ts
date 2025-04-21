@@ -16,14 +16,12 @@ export {
 } from "./accounting";
 
 export { ensureDsmGuardians } from "./dsm";
-export { getRandomSigners } from "./get-random-signers";
 export { norEnsureOperators } from "./nor";
 export { sdvtEnsureOperators } from "./sdvt";
 export {
-  connectToHub,
   createVaultProxy,
   createVaultsReportTree,
-  createVaultWithDelegation,
+  createVaultWithDashboard,
   disconnectFromHub,
   generateFeesToClaim,
   reportVaultDataWithProof,

@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { before } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
@@ -7,17 +8,52 @@ import {
   DepositContract__MockForStakingVault,
   Permissions__Harness,
   Permissions__Harness__factory,
+  PredepositGuarantee__MockPermissions,
   StakingVault,
   StakingVault__factory,
   UpgradeableBeacon,
   VaultFactory__MockPermissions,
   VaultHub__MockPermissions,
 } from "typechain-types";
-import { PermissionsConfigStruct } from "typechain-types/test/0.8.25/vaults/permissions/contracts/VaultFactory__MockPermissions";
 
-import { certainAddress, days, ether, findEvents } from "lib";
+import {
+  certainAddress,
+  days,
+  deployEIP7002WithdrawalRequestContract,
+  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+  ether,
+  findEvents,
+  getRandomSigners,
+} from "lib";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
+
+type PermissionsConfigStruct = {
+  defaultAdmin: HardhatEthersSigner;
+  nodeOperator: HardhatEthersSigner;
+  confirmExpiry: bigint;
+  funder: HardhatEthersSigner;
+  withdrawer: HardhatEthersSigner;
+  locker: HardhatEthersSigner;
+  minter: HardhatEthersSigner;
+  burner: HardhatEthersSigner;
+  rebalancer: HardhatEthersSigner;
+  depositPauser: HardhatEthersSigner;
+  depositResumer: HardhatEthersSigner;
+  pdgCompensator: HardhatEthersSigner;
+  unknownValidatorProver: HardhatEthersSigner;
+  unguaranteedBeaconChainDepositor: HardhatEthersSigner;
+  validatorExitRequester: HardhatEthersSigner;
+  validatorWithdrawalTriggerer: HardhatEthersSigner;
+  disconnecter: HardhatEthersSigner;
+  lidoVaultHubAuthorizer: HardhatEthersSigner;
+  lidoVaultHubDeauthorizer: HardhatEthersSigner;
+  ossifier: HardhatEthersSigner;
+  depositorSetter: HardhatEthersSigner;
+  lockedResetter: HardhatEthersSigner;
+  tierChanger: HardhatEthersSigner;
+};
 
 describe("Permissions", () => {
   let deployer: HardhatEthersSigner;
@@ -25,13 +61,24 @@ describe("Permissions", () => {
   let nodeOperator: HardhatEthersSigner;
   let funder: HardhatEthersSigner;
   let withdrawer: HardhatEthersSigner;
+  let locker: HardhatEthersSigner;
   let minter: HardhatEthersSigner;
   let burner: HardhatEthersSigner;
   let rebalancer: HardhatEthersSigner;
   let depositPauser: HardhatEthersSigner;
   let depositResumer: HardhatEthersSigner;
-  let exitRequester: HardhatEthersSigner;
+  let pdgCompensator: HardhatEthersSigner;
+  let unknownValidatorProver: HardhatEthersSigner;
+  let unguaranteedBeaconChainDepositor: HardhatEthersSigner;
+  let validatorExitRequester: HardhatEthersSigner;
+  let validatorWithdrawalTriggerer: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
+  let lidoVaultHubAuthorizer: HardhatEthersSigner;
+  let lidoVaultHubDeauthorizer: HardhatEthersSigner;
+  let ossifier: HardhatEthersSigner;
+  let depositorSetter: HardhatEthersSigner;
+  let lockedResetter: HardhatEthersSigner;
+  let tierChanger: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForStakingVault;
@@ -42,6 +89,7 @@ describe("Permissions", () => {
   let vaultFactory: VaultFactory__MockPermissions;
   let stakingVault: StakingVault;
   let permissions: Permissions__Harness;
+  let pdg: PredepositGuarantee__MockPermissions;
 
   let originalState: string;
 
@@ -52,24 +100,39 @@ describe("Permissions", () => {
       nodeOperator,
       funder,
       withdrawer,
+      locker,
       minter,
       burner,
       rebalancer,
       depositPauser,
       depositResumer,
-      exitRequester,
+      pdgCompensator,
+      unknownValidatorProver,
+      unguaranteedBeaconChainDepositor,
+      validatorExitRequester,
       disconnecter,
+      validatorWithdrawalTriggerer,
+      lidoVaultHubAuthorizer,
+      lidoVaultHubDeauthorizer,
+      ossifier,
+      depositorSetter,
+      lockedResetter,
+      tierChanger,
       stranger,
-    ] = await ethers.getSigners();
+    ] = await getRandomSigners(30);
+
+    await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
+
+    pdg = await ethers.deployContract("PredepositGuarantee__MockPermissions");
 
     // 1. Deploy DepositContract
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
+    const lidoLocator = await deployLidoLocator({ predepositGuarantee: pdg });
 
     // 2. Deploy VaultHub
-    vaultHub = await ethers.deployContract("VaultHub__MockPermissions");
+    vaultHub = await ethers.deployContract("VaultHub__MockPermissions", [lidoLocator]);
 
     // 3. Deploy StakingVault implementation
-    // TODO: PDG harness
     stakingVaultImpl = await ethers.deployContract("StakingVault", [vaultHub, depositContract]);
     expect(await stakingVaultImpl.DEPOSIT_CONTRACT()).to.equal(depositContract);
 
@@ -77,14 +140,11 @@ describe("Permissions", () => {
     beacon = await ethers.deployContract("UpgradeableBeacon", [stakingVaultImpl, deployer]);
 
     // 5. Deploy Permissions implementation
-    permissionsImpl = await ethers.deployContract("Permissions__Harness");
+    permissionsImpl = await ethers.deployContract("Permissions__Harness", [vaultHub]);
 
     // 6. Deploy VaultFactory and use Beacon and Permissions implementations
-    vaultFactory = await ethers.deployContract("VaultFactory__MockPermissions", [
-      beacon,
-      permissionsImpl,
-      depositContract,
-    ]);
+
+    vaultFactory = await ethers.deployContract("VaultFactory__MockPermissions", [beacon, permissionsImpl, pdg]);
 
     // 7. Create StakingVault and Permissions proxies using VaultFactory
     const vaultCreationTx = await vaultFactory.connect(deployer).createVaultWithPermissions(
@@ -94,13 +154,24 @@ describe("Permissions", () => {
         confirmExpiry: days(7n),
         funder,
         withdrawer,
+        locker,
         minter,
         burner,
         rebalancer,
         depositPauser,
         depositResumer,
-        exitRequester,
+        pdgCompensator,
+        unknownValidatorProver,
+        unguaranteedBeaconChainDepositor,
+        validatorExitRequester,
+        validatorWithdrawalTriggerer,
         disconnecter,
+        lidoVaultHubAuthorizer,
+        lidoVaultHubDeauthorizer,
+        ossifier,
+        depositorSetter,
+        lockedResetter,
+        tierChanger,
       } as PermissionsConfigStruct,
       "0x",
     );
@@ -149,8 +220,21 @@ describe("Permissions", () => {
       await checkSoleMember(rebalancer, await permissions.REBALANCE_ROLE());
       await checkSoleMember(depositPauser, await permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE());
       await checkSoleMember(depositResumer, await permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE());
-      await checkSoleMember(exitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
+      await checkSoleMember(pdgCompensator, await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE());
+      await checkSoleMember(unknownValidatorProver, await permissions.PDG_PROVE_VALIDATOR_ROLE());
+      await checkSoleMember(
+        unguaranteedBeaconChainDepositor,
+        await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+      );
+      await checkSoleMember(validatorExitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
+      await checkSoleMember(validatorWithdrawalTriggerer, await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await checkSoleMember(disconnecter, await permissions.VOLUNTARY_DISCONNECT_ROLE());
+      await checkSoleMember(lidoVaultHubAuthorizer, await permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE());
+      await checkSoleMember(lidoVaultHubDeauthorizer, await permissions.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE());
+      await checkSoleMember(ossifier, await permissions.OSSIFY_ROLE());
+      await checkSoleMember(depositorSetter, await permissions.SET_DEPOSITOR_ROLE());
+      await checkSoleMember(lockedResetter, await permissions.RESET_LOCKED_ROLE());
+      await checkSoleMember(tierChanger, await permissions.REQUEST_TIER_CHANGE_ROLE());
     });
   });
 
@@ -164,13 +248,24 @@ describe("Permissions", () => {
             confirmExpiry: days(7n),
             funder,
             withdrawer,
+            locker,
             minter,
             burner,
             rebalancer,
             depositPauser,
             depositResumer,
-            exitRequester,
+            pdgCompensator,
+            unknownValidatorProver,
+            unguaranteedBeaconChainDepositor,
+            validatorExitRequester,
+            validatorWithdrawalTriggerer,
             disconnecter,
+            lidoVaultHubAuthorizer,
+            lidoVaultHubDeauthorizer,
+            ossifier,
+            depositorSetter,
+            lockedResetter,
+            tierChanger,
           } as PermissionsConfigStruct,
           "0x",
         ),
@@ -178,7 +273,7 @@ describe("Permissions", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const newImplementation = await ethers.deployContract("Permissions__Harness");
+      const newImplementation = await ethers.deployContract("Permissions__Harness", [vaultHub]);
       await expect(newImplementation.initialize(defaultAdmin, days(7n))).to.be.revertedWithCustomError(
         permissions,
         "NonProxyCallsForbidden",
@@ -194,13 +289,24 @@ describe("Permissions", () => {
             confirmExpiry: days(7n),
             funder,
             withdrawer,
+            locker,
             minter,
             burner,
             rebalancer,
             depositPauser,
             depositResumer,
-            exitRequester,
+            pdgCompensator,
+            unknownValidatorProver,
+            unguaranteedBeaconChainDepositor,
+            validatorExitRequester,
+            validatorWithdrawalTriggerer,
             disconnecter,
+            lidoVaultHubAuthorizer,
+            lidoVaultHubDeauthorizer,
+            ossifier,
+            depositorSetter,
+            lockedResetter,
+            tierChanger,
           } as PermissionsConfigStruct,
           "0x",
         ),
@@ -358,7 +464,7 @@ describe("Permissions", () => {
         { role: rebalanceRole, account: rebalancer },
         { role: pauseDepositRole, account: depositPauser },
         { role: resumeDepositRole, account: depositResumer },
-        { role: exitRequesterRole, account: exitRequester },
+        { role: exitRequesterRole, account: validatorExitRequester },
         { role: disconnectRole, account: disconnecter },
       ];
 
@@ -378,7 +484,7 @@ describe("Permissions", () => {
         .and.to.emit(permissions, "RoleRevoked")
         .withArgs(resumeDepositRole, depositResumer, defaultAdmin)
         .and.to.emit(permissions, "RoleRevoked")
-        .withArgs(exitRequesterRole, exitRequester, defaultAdmin)
+        .withArgs(exitRequesterRole, validatorExitRequester, defaultAdmin)
         .and.to.emit(permissions, "RoleRevoked")
         .withArgs(disconnectRole, disconnecter, defaultAdmin);
 
@@ -458,6 +564,23 @@ describe("Permissions", () => {
       await expect(permissions.connect(stranger).withdraw(stranger, ether("1")))
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
         .withArgs(stranger, await permissions.WITHDRAW_ROLE());
+    });
+  });
+
+  context("lock()", () => {
+    it("locks the requested amount on the StakingVault", async () => {
+      const amount = ether("1");
+      await permissions.connect(funder).fund(amount, { value: amount });
+
+      await expect(permissions.connect(locker).lock(amount)).to.emit(stakingVault, "LockedIncreased").withArgs(amount);
+    });
+
+    it("reverts if the caller is not a member of the lock role", async () => {
+      expect(await permissions.hasRole(await permissions.LOCK_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).lock(ether("1")))
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.LOCK_ROLE());
     });
   });
 
@@ -565,7 +688,7 @@ describe("Permissions", () => {
   context("requestValidatorExit()", () => {
     it("requests a validator exit", async () => {
       const pubkeys = "0x" + "beef".repeat(24);
-      await expect(permissions.connect(exitRequester).requestValidatorExit(pubkeys))
+      await expect(permissions.connect(validatorExitRequester).requestValidatorExit(pubkeys))
         .to.emit(stakingVault, "ValidatorExitRequested")
         .withArgs(permissions, pubkeys, pubkeys);
     });
@@ -576,6 +699,31 @@ describe("Permissions", () => {
       await expect(permissions.connect(stranger).requestValidatorExit("0xabcdef"))
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
         .withArgs(stranger, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
+    });
+  });
+
+  context("triggerValidatorWithdrawal()", () => {
+    const pubkeys = "0x" + "beef".repeat(24);
+    const withdrawalAmount = ether("1");
+
+    it("emits mock event on the mock vault hub", async () => {
+      await expect(
+        permissions
+          .connect(validatorWithdrawalTriggerer)
+          .triggerValidatorWithdrawal(pubkeys, [withdrawalAmount], stranger, {
+            value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+          }),
+      )
+        .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
+        .withArgs(permissions, pubkeys, [withdrawalAmount], stranger, 0n);
+    });
+
+    it("reverts if the caller is not a member of the trigger withdrawal role", async () => {
+      expect(await permissions.hasRole(await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).triggerValidatorWithdrawal(pubkeys, [withdrawalAmount], stranger))
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
     });
   });
 
@@ -595,6 +743,24 @@ describe("Permissions", () => {
     });
   });
 
+  context("compensateDisprovenPredepositFromPDG()", () => {
+    const pubkeys = "0x" + "beef".repeat(24);
+
+    it("compensates the disproven predeposit from PDG", async () => {
+      await expect(permissions.connect(pdgCompensator).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
+        .to.emit(pdg, "Mock__CompensateDisprovenPredeposit")
+        .withArgs(pubkeys, stranger);
+    });
+
+    it("reverts if the caller is not a member of the compensate disproven predeposit role", async () => {
+      expect(await permissions.hasRole(await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE());
+    });
+  });
+
   context("transferStakingVaultOwnership()", () => {
     it("transfers the StakingVault ownership", async () => {
       const newOwner = certainAddress("new-owner");
@@ -611,6 +777,79 @@ describe("Permissions", () => {
       await expect(
         permissions.connect(stranger).transferStakingVaultOwnership(certainAddress("new-owner")),
       ).to.be.revertedWithCustomError(permissions, "SenderNotMember");
+    });
+  });
+
+  context("authorizeLidoVaultHub()", () => {
+    it("sets vault hub authorization", async () => {
+      await expect(permissions.connect(lidoVaultHubAuthorizer).authorizeLidoVaultHub()).to.emit(
+        stakingVault,
+        "VaultHubAuthorizedSet",
+      );
+
+      expect(await stakingVault.vaultHubAuthorized()).to.be.true;
+    });
+
+    it("reverts if the caller is not a member of the lido vault hub authorization role", async () => {
+      expect(await permissions.hasRole(await permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).authorizeLidoVaultHub())
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE());
+    });
+  });
+
+  context("ossifyStakingVault()", () => {
+    it("ossifies the StakingVault", async () => {
+      await expect(permissions.connect(ossifier).ossifyStakingVault()).to.emit(
+        stakingVault,
+        "PinnedImplementationUpdated",
+      );
+
+      expect(await stakingVault.ossified()).to.be.true;
+    });
+
+    it("reverts if the caller is not a member of the ossifier role", async () => {
+      expect(await permissions.hasRole(await permissions.OSSIFY_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).ossifyStakingVault())
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.OSSIFY_ROLE());
+    });
+  });
+
+  context("setDepositor()", () => {
+    it("sets the depositor", async () => {
+      await expect(permissions.connect(depositorSetter).setDepositor(certainAddress("new-depositor"))).to.emit(
+        stakingVault,
+        "DepositorSet",
+      );
+
+      expect(await stakingVault.depositor()).to.equal(certainAddress("new-depositor"));
+    });
+
+    it("reverts if the caller is not a member of the set depositor role", async () => {
+      expect(await permissions.hasRole(await permissions.SET_DEPOSITOR_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).setDepositor(certainAddress("new-depositor")))
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.SET_DEPOSITOR_ROLE());
+    });
+  });
+
+  context("resetLocked()", () => {
+    it("resets the locked state", async () => {
+      await expect(permissions.connect(lockedResetter).resetLocked()).to.emit(stakingVault, "LockedReset");
+
+      expect(await stakingVault.locked()).to.equal(0n);
+    });
+
+    it("reverts if the caller is not a member of the reset locked role", async () => {
+      expect(await permissions.hasRole(await permissions.RESET_LOCKED_ROLE(), stranger)).to.be.false;
+
+      await expect(permissions.connect(stranger).resetLocked())
+        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await permissions.RESET_LOCKED_ROLE());
     });
   });
 

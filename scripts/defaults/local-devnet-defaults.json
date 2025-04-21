@@ -68,11 +68,6 @@
       "totalNonCoverSharesBurnt": "0"
     }
   },
-  "legacyOracle": {
-    "deployParameters": {
-      "lastCompletedEpochId": 0
-    }
-  },
   "hashConsensusForAccountingOracle": {
     "deployParameters": {
       "fastLaneLengthSlots": 10,
@@ -157,11 +152,6 @@
       "name": "Lido: stETH Withdrawal NFT",
       "symbol": "unstETH",
       "baseUri": null
-    }
-  },
-  "delegation": {
-    "deployParameters": {
-      "wethContract": "0x94373a4919B3240D86eA41593D5eBa789FEF3848"
     }
   },
   "predepositGuarantee": {
