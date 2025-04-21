@@ -28,12 +28,12 @@ struct StakingVaultDeposit {
  */
 interface IStakingVault {
     /**
-     * @notice Latest reported valuation and inOutDelta
-     * @custom:valuation Aggregated validator balances plus the balance of `StakingVault`
+     * @notice Latest reported totalValue and inOutDelta
+     * @custom:totalValue Aggregated validator balances plus the balance of `StakingVault`
      * @custom:inOutDelta Net difference between ether funded and withdrawn from `StakingVault`
      */
     struct Report {
-        uint128 valuation;
+        uint128 totalValue;
         int128 inOutDelta;
         uint64 timestamp;
     }
@@ -48,7 +48,7 @@ interface IStakingVault {
     function nodeOperator() external view returns (address);
     function depositor() external view returns (address);
     function locked() external view returns (uint256);
-    function valuation() external view returns (uint256);
+    function totalValue() external view returns (uint256);
     function unlocked() external view returns (uint256);
     function inOutDelta() external view returns (int256);
     function fund() external payable;
@@ -56,7 +56,7 @@ interface IStakingVault {
     function lock(uint256 _locked) external;
     function rebalance(uint256 _ether) external;
     function latestReport() external view returns (Report memory);
-    function report(uint64 _timestamp, uint256 _valuation, int256 _inOutDelta, uint256 _locked) external;
+    function report(uint64 _timestamp, uint256 _totalValue, int256 _inOutDelta, uint256 _locked) external;
     function withdrawalCredentials() external view returns (bytes32);
     function beaconChainDepositsPaused() external view returns (bool);
     function pauseBeaconChainDeposits() external;
@@ -73,7 +73,8 @@ interface IStakingVault {
     function deauthorizeLidoVaultHub() external;
     function vaultHubAuthorized() external view returns (bool);
     function ossifyStakingVault() external;
-    function isOssified() external view returns (bool);
+    function ossified() external view returns (bool);
     function setDepositor(address _depositor) external;
+    function resetLocked() external;
     function isReportFresh() external view returns (bool);
 }

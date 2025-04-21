@@ -75,7 +75,6 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         depositSecurityModule: deployer.address,
         elRewardsVault: deployer.address,
         accountingOracle: await accountingOracle.getAddress(),
-        legacyOracle: deployer.address,
         oracleReportSanityChecker: sanityCheckerAddress,
         burner: await burner.getAddress(),
         validatorsExitBusOracle: deployer.address,
@@ -89,6 +88,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         wstETH: deployer.address,
         vaultHub: deployer.address,
         predepositGuarantee: deployer.address,
+        operatorGrid: deployer.address,
       },
     ]);
 

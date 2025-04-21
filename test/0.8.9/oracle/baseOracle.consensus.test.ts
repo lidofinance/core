@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types";
 
-import { CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
+import { BASE_CONSENSUS_VERSION, EPOCHS_PER_FRAME, GENESIS_TIME, SECONDS_PER_SLOT, SLOTS_PER_EPOCH } from "lib";
 
 import { deadlineFromRefSlot, deployBaseOracle, epochFirstSlotAt, HASH_1, HASH_2 } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -130,7 +130,7 @@ describe("BaseOracle.sol:consensus", () => {
 
   context("setConsensusVersion", () => {
     it("Reverts on same version", async () => {
-      await expect(baseOracle.setConsensusVersion(CONSENSUS_VERSION)).to.be.revertedWithCustomError(
+      await expect(baseOracle.setConsensusVersion(BASE_CONSENSUS_VERSION)).to.be.revertedWithCustomError(
         baseOracle,
         "VersionCannotBeSame",
       );
@@ -139,7 +139,7 @@ describe("BaseOracle.sol:consensus", () => {
     it("Updates consensus version", async () => {
       await expect(baseOracle.setConsensusVersion(3))
         .to.emit(baseOracle, "ConsensusVersionSet")
-        .withArgs(3, CONSENSUS_VERSION);
+        .withArgs(3, BASE_CONSENSUS_VERSION);
 
       const versionInState = await baseOracle.getConsensusVersion();
 
@@ -159,28 +159,28 @@ describe("BaseOracle.sol:consensus", () => {
       it("on mismatched slot", async () => {
         const badSlot = initialRefSlot + 1n;
 
-        await expect(baseOracle.checkConsensusData(badSlot, CONSENSUS_VERSION, HASH_1))
+        await expect(baseOracle.checkConsensusData(badSlot, BASE_CONSENSUS_VERSION, HASH_1))
           .to.be.revertedWithCustomError(baseOracle, "UnexpectedRefSlot")
           .withArgs(initialRefSlot, badSlot);
       });
 
       it("on mismatched consensus version", async () => {
-        const badVersion = CONSENSUS_VERSION + 1n;
+        const badVersion = BASE_CONSENSUS_VERSION + 1n;
 
         await expect(baseOracle.checkConsensusData(initialRefSlot, badVersion, HASH_1))
           .to.be.revertedWithCustomError(baseOracle, "UnexpectedConsensusVersion")
-          .withArgs(CONSENSUS_VERSION, badVersion);
+          .withArgs(BASE_CONSENSUS_VERSION, badVersion);
       });
 
       it("on mismatched hash", async () => {
-        await expect(baseOracle.checkConsensusData(initialRefSlot, CONSENSUS_VERSION, HASH_2))
+        await expect(baseOracle.checkConsensusData(initialRefSlot, BASE_CONSENSUS_VERSION, HASH_2))
           .to.be.revertedWithCustomError(baseOracle, "UnexpectedDataHash")
           .withArgs(HASH_1, HASH_2);
       });
     });
 
     it("Checks correct data without errors", async () => {
-      await expect(baseOracle.checkConsensusData(initialRefSlot, CONSENSUS_VERSION, HASH_1)).not.to.be.reverted;
+      await expect(baseOracle.checkConsensusData(initialRefSlot, BASE_CONSENSUS_VERSION, HASH_1)).not.to.be.reverted;
     });
   });
 

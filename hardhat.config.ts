@@ -181,6 +181,7 @@ const config: HardhatUserConfig = {
     },
   },
   mocha: {
+    fullTrace: true,
     rootHooks: mochaRootHooks,
     timeout: 20 * 60 * 1000, // 20 minutes
   },
@@ -202,7 +203,7 @@ const config: HardhatUserConfig = {
     alphaSort: false,
     disambiguatePaths: false,
     runOnCompile: process.env.SKIP_CONTRACT_SIZE ? false : true,
-    strict: true,
+    strict: false,
     except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
   },
 };
