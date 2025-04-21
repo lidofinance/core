@@ -76,7 +76,7 @@ contract VaultHub is PausableUntilWithRoles {
         0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
 
     /// @notice codehash of the account with no code
-    bytes32 private constant EMPTY_CODEHASH = 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470;
+    bytes32 private constant EMPTY_CODEHASH = keccak256("");
 
     /// @notice role that allows to connect vaults to the hub
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
