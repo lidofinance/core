@@ -9,6 +9,7 @@ import {
   Burner,
   DepositSecurityModule,
   HashConsensus,
+  IStakingModule,
   Kernel,
   Lido,
   LidoExecutionLayerRewardsVault,
@@ -54,6 +55,7 @@ export type ProtocolNetworkItems = {
   // stacking modules
   nor: string;
   sdvt: string;
+  csm: string;
   // hash consensus
   hashConsensus: string;
   // vaults
@@ -88,6 +90,7 @@ export interface ContractTypes {
   UpgradeableBeacon: UpgradeableBeacon;
   VaultHub: VaultHub;
   OperatorGrid: OperatorGrid;
+  IStakingModule: IStakingModule;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -123,6 +126,7 @@ export type AragonContracts = {
 export type StakingModuleContracts = {
   nor: LoadedContract<NodeOperatorsRegistry>;
   sdvt: LoadedContract<NodeOperatorsRegistry>;
+  csm?: LoadedContract<IStakingModule>;
 };
 
 export type StakingModuleName = "nor" | "sdvt";

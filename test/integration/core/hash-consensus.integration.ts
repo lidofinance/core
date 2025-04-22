@@ -4,6 +4,8 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
+import { HashConsensus } from "typechain-types";
+
 import { ether, impersonate } from "lib";
 import {
   calcReportDataHash,
@@ -15,8 +17,6 @@ import {
 } from "lib/protocol";
 
 import { Snapshot, ZERO_HASH } from "test/suite";
-
-import { HashConsensus } from "../../../typechain-types";
 
 const UINT64_MAX = 2n ** 64n - 1n;
 

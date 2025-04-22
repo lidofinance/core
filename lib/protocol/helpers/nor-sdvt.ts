@@ -1,38 +1,46 @@
 import { expect } from "chai";
-import { ethers, randomBytes } from "ethers";
+import { CallExceptionError,ethers } from "ethers";
+
+import { NodeOperatorsRegistry } from "typechain-types";
 
 import { certainAddress, log } from "lib";
+import { LoadedContract } from "lib/protocol/types";
 
 import { ProtocolContext, StakingModuleName } from "../types";
 
 import { depositAndReportValidators } from "./staking";
+import { NOR_MODULE_ID, randomPubkeys, randomSignatures, SDVT_MODULE_ID } from "./staking-module";
 
-export const NOR_MODULE_ID = 1n;
 const MIN_OPS_COUNT = 3n;
 const MIN_OP_KEYS_COUNT = 10n;
 
-const PUBKEY_LENGTH = 48n;
-const SIGNATURE_LENGTH = 96n;
+async function isNor(module: LoadedContract<NodeOperatorsRegistry>, ctx: ProtocolContext) {
+  return (await module.getAddress()) === ctx.contracts.nor.target;
+}
 
-export const norEnsureOperators = async (
+export const norSdvtEnsureOperators = async (
   ctx: ProtocolContext,
+  module: LoadedContract<NodeOperatorsRegistry>,
   minOperatorsCount = MIN_OPS_COUNT,
   minOperatorKeysCount = MIN_OP_KEYS_COUNT,
 ) => {
-  const { nor } = ctx.contracts;
-
-  const newOperatorsCount = await norEnsureOperatorsHaveMinKeys(ctx, minOperatorsCount, minOperatorKeysCount);
+  const { numBefore, numAdded } = await norSdvtEnsureOperatorsHaveMinKeys(
+    ctx,
+    module,
+    minOperatorsCount,
+    minOperatorKeysCount,
+  );
   for (let operatorId = 0n; operatorId < minOperatorsCount; operatorId++) {
-    const nodeOperatorBefore = await nor.getNodeOperator(operatorId, false);
+    const nodeOperatorBefore = await module.getNodeOperator(operatorId, false);
 
     if (nodeOperatorBefore.totalVettedValidators < nodeOperatorBefore.totalAddedValidators) {
-      await norSetOperatorStakingLimit(ctx, {
+      await norSdvtSetOperatorStakingLimit(ctx, module, {
         operatorId,
         limit: nodeOperatorBefore.totalAddedValidators,
       });
     }
 
-    const nodeOperatorAfter = await nor.getNodeOperator(operatorId, false);
+    const nodeOperatorAfter = await module.getNodeOperator(operatorId, false);
 
     expect(nodeOperatorAfter.totalVettedValidators).to.equal(nodeOperatorBefore.totalAddedValidators);
   }
@@ -42,81 +50,84 @@ export const norEnsureOperators = async (
     "Min keys count": minOperatorKeysCount,
   });
 
-  if (newOperatorsCount > 0) {
-    await depositAndReportValidators(ctx, NOR_MODULE_ID, newOperatorsCount);
+  if (numAdded > 0) {
+    const moduleId = (await isNor(module, ctx)) ? NOR_MODULE_ID : SDVT_MODULE_ID;
+    await depositAndReportValidators(ctx, moduleId, numAdded * (minOperatorKeysCount / 2n));
   }
+  return { numBefore, numAdded };
 };
 
 /**
  * Fills the Nor operators with some keys to deposit in case there are not enough of them.
  */
-const norEnsureOperatorsHaveMinKeys = async (
+const norSdvtEnsureOperatorsHaveMinKeys = async (
   ctx: ProtocolContext,
+  module: LoadedContract<NodeOperatorsRegistry>,
   minOperatorsCount = MIN_OPS_COUNT,
   minKeysCount = MIN_OP_KEYS_COUNT,
-): Promise<bigint> => {
-  const newOperatorsCount = await norEnsureMinOperators(ctx, minOperatorsCount);
-
-  const { nor } = ctx.contracts;
+): Promise<{ numBefore: bigint; numAdded: bigint }> => {
+  const { numBefore, numAdded } = await norSdvtEnsureMinOperators(ctx, module, minOperatorsCount);
 
   for (let operatorId = 0n; operatorId < minOperatorsCount; operatorId++) {
-    const keysCount = await nor.getTotalSigningKeyCount(operatorId);
+    const keysCount = await module.getTotalSigningKeyCount(operatorId);
 
     if (keysCount < minKeysCount) {
-      await norAddOperatorKeys(ctx, {
+      await norSdvtAddOperatorKeys(ctx, module, {
         operatorId,
         keysToAdd: minKeysCount - keysCount,
       });
     }
 
-    const keysCountAfter = await nor.getTotalSigningKeyCount(operatorId);
+    const keysCountAfter = await module.getTotalSigningKeyCount(operatorId);
 
     expect(keysCountAfter).to.be.gte(minKeysCount);
   }
 
-  return newOperatorsCount;
+  return { numBefore, numAdded };
 };
 
 /**
  * Fills the NOR with some operators in case there are not enough of them.
  */
-const norEnsureMinOperators = async (ctx: ProtocolContext, minOperatorsCount = MIN_OPS_COUNT): Promise<bigint> => {
-  const { nor } = ctx.contracts;
+const norSdvtEnsureMinOperators = async (
+  ctx: ProtocolContext,
+  module: LoadedContract<NodeOperatorsRegistry>,
+  minOperatorsCount = MIN_OPS_COUNT,
+): Promise<{ numBefore: bigint; numAdded: bigint }> => {
+  const numBefore = await module.getNodeOperatorsCount();
+  let numAdded = 0n;
 
-  const before = await nor.getNodeOperatorsCount();
-  let count = 0n;
-
-  while (before + count < minOperatorsCount) {
-    const operatorId = before + count;
+  while (numBefore + numAdded < minOperatorsCount) {
+    const operatorId = numBefore + numAdded;
 
     const operator = {
-      name: getOperatorName("nor", operatorId),
-      rewardAddress: getOperatorRewardAddress("nor", operatorId),
+      name: getOperatorName((await isNor(module, ctx)) ? "nor" : "sdvt", operatorId),
+      rewardAddress: getOperatorRewardAddress((await isNor(module, ctx)) ? "nor" : "sdvt", operatorId),
     };
 
-    await norAddNodeOperator(ctx, operator);
-    count++;
+    await norSdvtAddNodeOperator(ctx, module, operator);
+    numAdded++;
   }
 
-  const after = await nor.getNodeOperatorsCount();
+  const after = await module.getNodeOperatorsCount();
 
-  expect(after).to.equal(before + count);
+  expect(after).to.equal(numBefore + numAdded);
   expect(after).to.be.gte(minOperatorsCount);
 
-  return count;
+  return { numBefore, numAdded };
 };
 
 /**
  * Adds a new node operator to the NOR.
  */
-export const norAddNodeOperator = async (
+export const norSdvtAddNodeOperator = async (
   ctx: ProtocolContext,
+  module: LoadedContract<NodeOperatorsRegistry>,
   params: {
     name: string;
     rewardAddress: string;
   },
 ) => {
-  const { nor } = ctx.contracts;
   const { name, rewardAddress } = params;
 
   log.debug(`Adding fake NOR operator`, {
@@ -124,9 +135,10 @@ export const norAddNodeOperator = async (
     "Reward address": rewardAddress,
   });
 
-  const agentSigner = await ctx.getSigner("agent");
-  const operatorId = await nor.getNodeOperatorsCount();
-  await nor.connect(agentSigner).addNodeOperator(name, rewardAddress);
+  const operatorId = await module.getNodeOperatorsCount();
+
+  const managerSigner = (await isNor(module, ctx)) ? await ctx.getSigner("agent") : await ctx.getSigner("voting");
+  await module.connect(managerSigner).addNodeOperator(name, rewardAddress);
 
   log.debug("Added NOR fake operator", {
     "Operator ID": operatorId,
@@ -142,14 +154,14 @@ export const norAddNodeOperator = async (
 /**
  * Adds some signing keys to the operator in the NOR.
  */
-export const norAddOperatorKeys = async (
+export const norSdvtAddOperatorKeys = async (
   ctx: ProtocolContext,
+  module: LoadedContract<NodeOperatorsRegistry>,
   params: {
     operatorId: bigint;
     keysToAdd: bigint;
   },
 ) => {
-  const { nor } = ctx.contracts;
   const { operatorId, keysToAdd } = params;
 
   log.debug(`Adding fake keys to NOR operator ${operatorId}`, {
@@ -157,17 +169,16 @@ export const norAddOperatorKeys = async (
     "Keys to add": keysToAdd,
   });
 
-  const totalKeysBefore = await nor.getTotalSigningKeyCount(operatorId);
-  const unusedKeysBefore = await nor.getUnusedSigningKeyCount(operatorId);
+  const totalKeysBefore = await module.getTotalSigningKeyCount(operatorId);
+  const unusedKeysBefore = await module.getUnusedSigningKeyCount(operatorId);
 
   const votingSigner = await ctx.getSigner("voting");
-
-  await nor
+  await module
     .connect(votingSigner)
     .addSigningKeys(operatorId, keysToAdd, randomPubkeys(Number(keysToAdd)), randomSignatures(Number(keysToAdd)));
 
-  const totalKeysAfter = await nor.getTotalSigningKeyCount(operatorId);
-  const unusedKeysAfter = await nor.getUnusedSigningKeyCount(operatorId);
+  const totalKeysAfter = await module.getTotalSigningKeyCount(operatorId);
+  const unusedKeysAfter = await module.getUnusedSigningKeyCount(operatorId);
 
   expect(totalKeysAfter).to.equal(totalKeysBefore + keysToAdd);
   expect(unusedKeysAfter).to.equal(unusedKeysBefore + keysToAdd);
@@ -185,30 +196,16 @@ export const norAddOperatorKeys = async (
 };
 
 /**
- * Generates an array of random pubkeys in the correct format for NOR
- */
-export const randomPubkeys = (count: number) => {
-  return randomBytes(count * Number(PUBKEY_LENGTH));
-};
-
-/**
- * Generates an array of random signatures in the correct format for NOR
- */
-export const randomSignatures = (count: number) => {
-  return randomBytes(count * Number(SIGNATURE_LENGTH));
-};
-
-/**
  * Sets the staking limit for the operator.
  */
-export const norSetOperatorStakingLimit = async (
+export const norSdvtSetOperatorStakingLimit = async (
   ctx: ProtocolContext,
+  module: LoadedContract<NodeOperatorsRegistry>,
   params: {
     operatorId: bigint;
     limit: bigint;
   },
 ) => {
-  const { nor } = ctx.contracts;
   const { operatorId, limit } = params;
 
   log.debug(`Setting NOR operator ${operatorId} staking limit`, {
@@ -216,8 +213,18 @@ export const norSetOperatorStakingLimit = async (
     "Limit": ethers.formatEther(limit),
   });
 
-  const votingSigner = await ctx.getSigner("voting");
-  await nor.connect(votingSigner).setNodeOperatorStakingLimit(operatorId, limit);
+  try {
+    // For SDVT scratch deployment and for NOR
+    const votingSigner = await ctx.getSigner("voting");
+    await module.connect(votingSigner).setNodeOperatorStakingLimit(operatorId, limit);
+  } catch (error: unknown) {
+    if ((error as CallExceptionError).message.includes("APP_AUTH_FAILED")) {
+      const easyTrackSigner = await ctx.getSigner("easyTrack");
+      await module.connect(easyTrackSigner).setNodeOperatorStakingLimit(operatorId, limit);
+    } else {
+      throw error;
+    }
+  }
 
   log.success(`Set NOR operator ${operatorId} staking limit`);
 };

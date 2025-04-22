@@ -6,8 +6,7 @@ import {
   ensureOracleCommitteeMembers,
   ensureStakeLimit,
   finalizeWithdrawalQueue,
-  norEnsureOperators,
-  sdvtEnsureOperators,
+  norSdvtEnsureOperators,
   unpauseStaking,
   unpauseWithdrawalQueue,
 } from "./helpers";
@@ -32,8 +31,8 @@ export const provision = async (ctx: ProtocolContext) => {
   await unpauseStaking(ctx);
   await unpauseWithdrawalQueue(ctx);
 
-  await norEnsureOperators(ctx, 3n, 5n);
-  await sdvtEnsureOperators(ctx, 3n, 5n);
+  await norSdvtEnsureOperators(ctx, ctx.contracts.nor, 5n, 9n);
+  await norSdvtEnsureOperators(ctx, ctx.contracts.sdvt, 5n, 9n);
 
   await finalizeWithdrawalQueue(ctx);
 

@@ -67,6 +67,7 @@ const defaultEnv = {
   // stacking modules
   nor: "NODE_OPERATORS_REGISTRY_ADDRESS",
   sdvt: "SIMPLE_DVT_REGISTRY_ADDRESS",
+  csm: "CSM_REGISTRY_ADDRESS",
   // hash consensus
   hashConsensus: "HASH_CONSENSUS_ADDRESS",
   // vaults

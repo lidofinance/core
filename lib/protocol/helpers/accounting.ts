@@ -12,11 +12,13 @@ import {
   certainAddress,
   ether,
   EXTRA_DATA_FORMAT_EMPTY,
+  EXTRA_DATA_FORMAT_LIST,
   getCurrentBlockTimestamp,
   HASH_CONSENSUS_FAR_FUTURE_EPOCH,
   impersonate,
   log,
   ONE_GWEI,
+  prepareExtraData,
 } from "lib";
 
 import { ProtocolContext } from "../types";
@@ -212,6 +214,56 @@ export const report = async (
     extraDataList,
   });
 };
+
+export async function reportWithoutExtraData(
+  ctx: ProtocolContext,
+  numExitedValidatorsByStakingModule: bigint[],
+  stakingModuleIdsWithNewlyExitedValidators: bigint[],
+  extraData: ReturnType<typeof prepareExtraData>,
+) {
+  const { accountingOracle } = ctx.contracts;
+
+  const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = extraData;
+
+  const reportData: OracleReportParams = {
+    excludeVaultsBalances: true,
+    extraDataFormat: EXTRA_DATA_FORMAT_LIST,
+    extraDataHash: extraDataChunkHashes[0],
+    extraDataItemsCount: BigInt(extraDataItemsCount),
+    numExitedValidatorsByStakingModule,
+    stakingModuleIdsWithNewlyExitedValidators,
+    skipWithdrawals: true,
+  };
+
+  const { data } = await report(ctx, { ...reportData, dryRun: true });
+
+  const items = getReportDataItems(data);
+  const hash = calcReportDataHash(items);
+  const oracleVersion = await accountingOracle.getContractVersion();
+
+  const submitter = await reachConsensus(ctx, {
+    refSlot: BigInt(data.refSlot),
+    reportHash: hash,
+    consensusVersion: BigInt(data.consensusVersion),
+  });
+
+  const reportTx = await accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
+  log.debug("Pushed oracle report main data", {
+    "Ref slot": data.refSlot,
+    "Consensus version": data.consensusVersion,
+    "Report hash": hash,
+  });
+
+  // Get processing state after main report is submitted
+  const processingStateAfterMainReport = await accountingOracle.getProcessingState();
+
+  // Verify that extra data is not yet submitted
+  expect(processingStateAfterMainReport.extraDataSubmitted).to.be.false;
+  expect(processingStateAfterMainReport.extraDataItemsCount).to.equal(extraDataItemsCount);
+  expect(processingStateAfterMainReport.extraDataItemsSubmitted).to.equal(0n);
+
+  return { reportTx, data, submitter, extraDataChunks, extraDataChunkHashes };
+}
 
 export const getReportTimeElapsed = async (ctx: ProtocolContext) => {
   const { hashConsensus } = ctx.contracts;

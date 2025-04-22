@@ -24,3 +24,8 @@ export function numberToHex(n: BigNumberish, byteLen: number | undefined = undef
   const s = n.toString(16);
   return byteLen === undefined ? s : s.padStart(byteLen * 2, "0");
 }
+
+export function hexToBytes(hex: string): Uint8Array {
+  const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
+  return new Uint8Array(Buffer.from(cleanHex, "hex"));
+}
