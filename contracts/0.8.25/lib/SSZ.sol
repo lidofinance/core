@@ -22,7 +22,7 @@ library SSZ {
     /// @notice computed fork agnostic DEPOSIT_DOMAIN
     /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_domain
     /// @dev fork agnostic per `apply_deposit` at https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#deposits
-    bytes32 public constant DEPOSIT_DOMAIN = 0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9;
+    bytes32 public constant DEPOSIT_DOMAIN = 0x03000000719103511efa4f1362ff2a50996cccf329cc84cb410c5e5c7d351d03;
 
     /// @notice calculation of signing root for deposit message
     /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
