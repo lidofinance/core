@@ -265,7 +265,7 @@ contract BaseProtocolTest is Test {
         // Deploy AccountingOracle
         deployCodeTo(
             "AccountingOracle.sol:AccountingOracle",
-            abi.encode(address(lidoLocator), lidoLocator.legacyOracle(), 12, genesisTimestamp),
+            abi.encode(address(lidoLocator), 12, genesisTimestamp),
             lidoLocator.accountingOracle()
         );
 
@@ -394,7 +394,6 @@ contract BaseProtocolTest is Test {
             accountingOracle: makeAddr("dummy-locator:accountingOracle"),
             depositSecurityModule: makeAddr("dummy-locator:depositSecurityModule"),
             elRewardsVault: makeAddr("dummy-locator:elRewardsVault"),
-            legacyOracle: makeAddr("dummy-locator:legacyOracle"),
             lido: lido,
             oracleReportSanityChecker: makeAddr("dummy-locator:oracleReportSanityChecker"),
             postTokenRebaseReceiver: address(0),
@@ -408,7 +407,8 @@ contract BaseProtocolTest is Test {
             accounting: makeAddr("dummy-locator:accounting"),
             predepositGuarantee: makeAddr("dummy-locator:predeposit_guarantee"),
             wstETH: wstETHAdr,
-            vaultHub: makeAddr("dummy-locator:vaultHub")
+            vaultHub: makeAddr("dummy-locator:vaultHub"),
+            operatorGrid: makeAddr("dummy-locator:operatorGrid")
         });
 
         return LidoLocator(deployCode("LidoLocator.sol:LidoLocator", abi.encode(config)));
