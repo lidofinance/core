@@ -857,6 +857,20 @@ describe("StakingVault.sol", () => {
       ).to.be.revertedWithCustomError(stakingVault, "TotalValueBelowLockedAmount");
     });
 
+    it("reverts if the total amount of deposits exceeds the vault's balance", async () => {
+      await stakingVault.fund({ value: ether("1") });
+
+      await expect(
+        stakingVault
+          .connect(depositor)
+          .depositToBeaconChain([
+            { pubkey: "0x", signature: "0x", amount: ether("2"), depositDataRoot: streccak("random-root") },
+          ]),
+      )
+        .to.be.revertedWithCustomError(stakingVault, "InsufficientBalance")
+        .withArgs(ether("1"));
+    });
+
     it("reverts if the deposits are paused", async () => {
       await stakingVault.connect(vaultOwner).pauseBeaconChainDeposits();
       await expect(
