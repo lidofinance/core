@@ -6,7 +6,7 @@ import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.s
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
 import {Versioned} from "../utils/Versioned.sol";
-import {ReportExitLimitUtils, ReportExitLimitUtilsStorage, ExitRequestLimitData} from "../lib/ReportExitLimitUtils.sol";
+import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
 import {PausableUntil} from "../utils/PausableUntil.sol";
 import {IValidatorsExitBus} from "../interfaces/IValidatorExitBus.sol";
 
@@ -28,8 +28,8 @@ interface IStakingRouter {
 
 contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
-    using ReportExitLimitUtilsStorage for bytes32;
-    using ReportExitLimitUtils for ExitRequestLimitData;
+    using ExitLimitUtilsStorage for bytes32;
+    using ExitLimitUtils for ExitRequestLimitData;
 
     /// @dev Errors
     error KeyWasNotDelivered(uint256 keyIndex, uint256 lastDeliveredKeyIndex);
@@ -42,9 +42,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     error InvalidRequestsDataLength();
     error InvalidRequestsData();
     error RequestsAlreadyDelivered();
-    // TODO: create better name than prevLimit
-    error ExitRequestsLimit(uint256 requestsCount, uint256 prevLimit);
-    error TWExitRequestsLimit(uint256 requestsCount, uint256 prevLimit);
+    error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
+    error TWExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
     error InvalidPubkeysArray();
     error NoExitRequestProvided();
     error InvalidRequestsDataSortOrder();
@@ -59,12 +58,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         bytes validatorPubkey,
         uint256 timestamp
     );
-    event ExitRequestsLimitSet(
-        uint256 maxExitRequestsLimit,
-        uint256 exitRequestsLimitIncreasePerBlock,
-        uint256 maxTWExitRequestsLimit,
-        uint256 twExitRequestsLimitIncreasePerBlock
-    );
+    event ExitRequestsLimitSet(uint256 exitRequestsLimit, uint256 twExitRequestsLimit);
 
     event DirectExitRequest(
         uint256 indexed stakingModuleId,
@@ -117,8 +111,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
     /// Hash constant for mapping exit requests storage
     bytes32 internal constant EXIT_REQUESTS_HASHES_POSITION = keccak256("lido.ValidatorsExitBus.reportHashes");
-    bytes32 public constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestsLimit");
-    bytes32 public constant TW_EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxTWExitRequestsLimit");
+    bytes32 public constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.exitDailyLimit");
+    bytes32 public constant TW_EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.twExitDailyLimit");
 
     /// @dev Ensures the contract’s ETH balance is unchanged.
     modifier preservesEthBalance() {
@@ -171,26 +165,31 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
 
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        uint256 toDeliver;
+        uint256 requestsToDeliver;
 
-        if (exitRequestLimitData.isExitRequestLimitSet()) {
-            uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
+        if (exitRequestLimitData.isExitDailyLimitSet()) {
+            uint256 day = _getTimestamp() / 1 days;
+            uint256 limit = exitRequestLimitData.remainingLimit(day);
+
             if (limit == 0) {
                 revert ExitRequestsLimit(undeliveredItemsCount, limit);
             }
 
-            toDeliver = undeliveredItemsCount > limit ? limit : undeliveredItemsCount;
+            requestsToDeliver = undeliveredItemsCount > limit ? limit : undeliveredItemsCount;
 
             EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-                exitRequestLimitData.updatePrevExitRequestsLimit(limit - toDeliver)
+                exitRequestLimitData.updateRequestsCounter(day, requestsToDeliver)
             );
         } else {
-            toDeliver = undeliveredItemsCount;
+            requestsToDeliver = undeliveredItemsCount;
         }
-        _processExitRequestsList(request.data, deliveredItemsCount, toDeliver);
 
-        requestStatus.deliverHistory.push(DeliveryHistory(deliveredItemsCount + toDeliver - 1, _getTimestamp()));
-        requestStatus.deliveredItemsCount += toDeliver;
+        _processExitRequestsList(request.data, deliveredItemsCount, requestsToDeliver);
+
+        requestStatus.deliverHistory.push(
+            DeliveryHistory(deliveredItemsCount + requestsToDeliver - 1, _getTimestamp())
+        );
+        requestStatus.deliveredItemsCount += requestsToDeliver;
     }
 
     /// @notice Triggers exits on the EL via the Withdrawal Vault contract after
@@ -219,26 +218,25 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         _checkContractVersion(requestStatus.contractVersion);
 
-        // limit check
-        ExitRequestLimitData memory exitRequestLimitData = TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-
-        if (exitRequestLimitData.isExitRequestLimitSet()) {
-            uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
-
-            if (keyIndexes.length > limit) {
-                revert TWExitRequestsLimit(keyIndexes.length, limit);
-            }
-
-            TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-                exitRequestLimitData.updatePrevExitRequestsLimit(limit - keyIndexes.length)
-            );
-        }
-
         address withdrawalVaultAddr = LOCATOR.withdrawalVault();
         uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
 
         if (msg.value < keyIndexes.length * withdrawalFee) {
             revert InsufficientPayment(withdrawalFee, keyIndexes.length, msg.value);
+        }
+
+        ExitRequestLimitData memory exitRequestLimitData = TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
+
+        if (exitRequestLimitData.isExitDailyLimitSet()) {
+            uint256 day = _getTimestamp() / 1 days;
+            uint256 limit = exitRequestLimitData.remainingLimit(day);
+            if (keyIndexes.length > limit) {
+                revert TWExitRequestsLimit(keyIndexes.length, limit);
+            }
+
+            TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+                exitRequestLimitData.updateRequestsCounter(day, keyIndexes.length)
+            );
         }
 
         uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
@@ -321,26 +319,25 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         uint256 requestsCount = exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH;
 
-        ExitRequestLimitData memory twExitRequestLimitData = TW_EXIT_REQUEST_LIMIT_POSITION
-            .getStorageExitRequestLimit();
+        if (msg.value < withdrawalFee * requestsCount) {
+            revert InsufficientPayment(withdrawalFee, requestsCount, msg.value);
+        }
 
-        if (twExitRequestLimitData.isExitRequestLimitSet()) {
-            uint256 limit = twExitRequestLimitData.calculateCurrentExitRequestLimit();
+        ExitRequestLimitData memory exitRequestLimitData = TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
+        uint256 timestamp = _getTimestamp();
+
+        if (exitRequestLimitData.isExitDailyLimitSet()) {
+            uint256 day = timestamp / 1 days;
+            uint256 limit = exitRequestLimitData.remainingLimit(day);
 
             if (requestsCount > limit) {
                 revert TWExitRequestsLimit(requestsCount, limit);
             }
 
             TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-                twExitRequestLimitData.updatePrevExitRequestsLimit(limit - requestsCount)
+                exitRequestLimitData.updateRequestsCounter(day, requestsCount)
             );
         }
-
-        if (msg.value < withdrawalFee * requestsCount) {
-            revert InsufficientPayment(withdrawalFee, requestsCount, msg.value);
-        }
-
-        uint256 timestamp = _getTimestamp();
 
         bytes calldata data = exitData.validatorsPubkeys;
 
@@ -371,39 +368,23 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         return _refundFee(requestsCount * withdrawalFee);
     }
 
-    function setExitRequestLimit(ExitLimits calldata limits) external onlyRole(EXIT_REPORT_LIMIT_ROLE) {
-        require(limits.maxExitRequestsLimit != 0, "ZERO_MAX_EXIT_REQUEST_LIMIT");
-        require(limits.maxTWExitRequestsLimit != 0, "ZERO_MAX_TW_EXIT_REQUEST_LIMIT");
-        require(
-            limits.maxExitRequestsLimit >= limits.exitRequestsLimitIncreasePerBlock,
-            "TOO_LARGE_EXIT_LIMIT_INCREASE"
-        );
-        require(
-            limits.maxTWExitRequestsLimit >= limits.twExitRequestsLimitIncreasePerBlock,
-            "TOO_LARGE_TW_EXIT_LIMIT_INCREASE"
-        );
-        // TODO: what maximum value for block distance to replenish limits we can set here? limits.maxExitRequestsLimit / limits.exitRequestsLimitIncreasePerBlock
+    function setExitRequestLimit(
+        uint256 exitsDailyLimit,
+        uint256 twExitsDailyLimit
+    ) external onlyRole(EXIT_REPORT_LIMIT_ROLE) {
+        require(exitsDailyLimit != 0, "ZERO_MAX_EXIT_REQUEST_LIMIT");
+        require(twExitsDailyLimit != 0, "ZERO_MAX_TW_EXIT_REQUEST_LIMIT");
+        require(exitsDailyLimit >= twExitsDailyLimit, "TOO_LARGE_TW_EXIT_REQUEST_LIMIT");
 
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitRequestLimit(
-                limits.maxExitRequestsLimit,
-                limits.exitRequestsLimitIncreasePerBlock
-            )
+            EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitDailyLimit(exitsDailyLimit)
         );
 
         TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitRequestLimit(
-                limits.maxTWExitRequestsLimit,
-                limits.twExitRequestsLimitIncreasePerBlock
-            )
+            TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitDailyLimit(twExitsDailyLimit)
         );
 
-        emit ExitRequestsLimitSet(
-            limits.maxExitRequestsLimit,
-            limits.exitRequestsLimitIncreasePerBlock,
-            limits.maxTWExitRequestsLimit,
-            limits.twExitRequestsLimitIncreasePerBlock
-        );
+        emit ExitRequestsLimitSet(exitsDailyLimit, twExitsDailyLimit);
     }
 
     function getExitRequestsDeliveryHistory(

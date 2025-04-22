@@ -118,17 +118,16 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
+  it("some time passes", async () => {
+    await consensus.advanceTimeBy(24 * 60 * 60);
+  });
+
   it("Should set limit for tw", async () => {
     const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
     await oracle.grantRole(role, admin);
-    const exitLimitTx = await oracle.connect(admin).setExitRequestLimit({
-      maxExitRequestsLimit: 4,
-      exitRequestsLimitIncreasePerBlock: 1,
-      twExitRequestsLimitIncreasePerBlock: 1,
-      maxTWExitRequestsLimit: 2,
-    });
+    const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(8, 8);
 
-    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(4, 1, 2, 1);
+    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(8, 8);
   });
 
   it("initially, consensus report is empty and is not being processed", async () => {
@@ -230,27 +229,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     expect(procState.requestsSubmitted).to.equal(exitRequests.length);
   });
 
-  it("Out of tw exit request limit", async () => {
-    await expect(
-      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1, 3], {
-        value: 10,
-      }),
-    )
-      .to.be.revertedWithCustomError(oracle, "TWExitRequestsLimit")
-      .withArgs(3, 2);
-  });
-
-  it("Increase limit", async () => {
-    const exitLimitTx = await oracle.connect(admin).setExitRequestLimit({
-      maxExitRequestsLimit: 4,
-      exitRequestsLimitIncreasePerBlock: 1,
-      twExitRequestsLimitIncreasePerBlock: 1,
-      maxTWExitRequestsLimit: 10,
-    });
-
-    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(4, 1, 10, 1);
-  });
-
   it("someone submitted exit report data and triggered exit", async () => {
     const tx = await oracle.triggerExits(
       { data: reportFields.data, dataFormat: reportFields.dataFormat },
@@ -336,5 +314,45 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     )
       .to.be.revertedWithCustomError(oracle, "KeyIndexOutOfRange")
       .withArgs(5, 4);
+  });
+
+  it("someone submitted exit report data and triggered exit on not sequential indexes", async () => {
+    await expect(
+      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1, 3], {
+        value: 10,
+      }),
+    )
+      .to.be.revertedWithCustomError(oracle, "TWExitRequestsLimit")
+      .withArgs(3, 1);
+  });
+
+  it("some time passes", async () => {
+    await consensus.advanceTimeBy(24 * 60 * 60);
+  });
+
+  it("Limit regenerated in a day", async () => {
+    const tx = await oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1, 3], {
+      value: 10,
+    });
+
+    const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
+    const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
+    await expect(tx)
+      .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
+      .withArgs("0x" + concatenatedPubKeys);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitRequests[0].moduleId, exitRequests[0].nodeOpId, pubkeys[0], 1, 0);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitRequests[1].moduleId, exitRequests[1].nodeOpId, pubkeys[1], 1, 0);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitRequests[3].moduleId, exitRequests[3].nodeOpId, pubkeys[2], 1, 0);
+
+    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 7);
   });
 });

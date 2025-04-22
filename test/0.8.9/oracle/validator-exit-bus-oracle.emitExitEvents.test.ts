@@ -43,13 +43,6 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
     data: string;
   }
 
-  interface ExitRequestLimitData {
-    prevExitRequestsBlockNumber: number;
-    prevExitRequestsLimit: number;
-    maxExitRequestsLimitGrowthBlocks: number;
-    maxExitRequestsLimit: number;
-  }
-
   const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
     const pubkeyHex = de0x(valPubkey);
     expect(pubkeyHex.length).to.equal(48 * 2);
@@ -177,125 +170,138 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
       .withArgs(2);
   });
 
-  it("Should deliver part of request if limit is smaller than number of requests", async () => {
-    const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
-    await oracle.grantRole(role, authorizedEntity);
-    const exitLimitTx = await oracle.connect(authorizedEntity).setExitRequestLimit({
-      maxExitRequestsLimit: 2,
-      exitRequestsLimitIncreasePerBlock: 1,
-      twExitRequestsLimitIncreasePerBlock: 1,
-      maxTWExitRequestsLimit: 2,
+  describe("Exit Request Limits", function () {
+    before(async () => {
+      const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      await oracle.grantRole(role, authorizedEntity);
+      await consensus.advanceTimeBy(24 * 60 * 60);
     });
-    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(2, 1, 2, 1);
 
-    exitRequests = [
-      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
-      { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
-      { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] },
-    ];
+    it("Should deliver request fully as it is below limit (5)", async () => {
+      await oracle.connect(authorizedEntity).setExitRequestLimit(5, 2);
 
-    exitRequest = { dataFormat: DATA_FORMAT_LIST, data: encodeExitRequestsDataList(exitRequests) };
+      exitRequests = [
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+      ];
 
-    exitRequestHash = ethers.keccak256(
-      ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [exitRequest.data, exitRequest.dataFormat]),
-    );
+      exitRequest = {
+        dataFormat: DATA_FORMAT_LIST,
+        data: encodeExitRequestsDataList(exitRequests),
+      };
 
-    // const history0 = await oracle.getDeliveryHistory(exitRequestHash);
-    // expect(history0.length).to.eq(0);
-
-    const submitTx = await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
-    await expect(submitTx).to.emit(oracle, "StoredExitRequestHash");
-
-    const emitTx = await oracle.emitExitEvents(exitRequest);
-
-    const receipt = await emitTx.wait();
-    expect(receipt?.logs.length).to.eq(2);
-
-    const timestamp = await oracle.getTime();
-
-    await expect(emitTx)
-      .to.emit(oracle, "ValidatorExitRequest")
-      .withArgs(
-        exitRequests[0].moduleId,
-        exitRequests[0].nodeOpId,
-        exitRequests[0].valIndex,
-        exitRequests[0].valPubkey,
-        timestamp,
+      exitRequestHash = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [exitRequest.data, exitRequest.dataFormat]),
       );
 
-    await expect(emitTx)
-      .to.emit(oracle, "ValidatorExitRequest")
-      .withArgs(
-        exitRequests[1].moduleId,
-        exitRequests[1].nodeOpId,
-        exitRequests[1].valIndex,
-        exitRequests[1].valPubkey,
-        timestamp,
+      await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
+      const emitTx = await oracle.emitExitEvents(exitRequest);
+      const receipt = await emitTx.wait();
+
+      expect(receipt?.logs.length).to.eq(2);
+
+      const timestamp = await oracle.getTime();
+
+      for (const request of exitRequests) {
+        await expect(emitTx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
+      }
+    });
+
+    it("Should deliver part of request equal to remaining limit", async () => {
+      exitRequests = [
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
+        { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] },
+      ];
+
+      exitRequest = {
+        dataFormat: DATA_FORMAT_LIST,
+        data: encodeExitRequestsDataList(exitRequests),
+      };
+
+      exitRequestHash = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [exitRequest.data, exitRequest.dataFormat]),
       );
 
-    // const history1 = await oracle.getDeliveryHistory(exitRequestHash);
-    // expect(history1.length).to.eq(1);
-    // expect(history1[0].lastDeliveredKeyIndex).to.eq(1);
+      await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
+      const emitTx = await oracle.emitExitEvents(exitRequest);
+      const receipt = await emitTx.wait();
 
-    const emitTx2 = await oracle.emitExitEvents(exitRequest);
+      expect(receipt?.logs.length).to.eq(3);
 
-    const receipt2 = await emitTx2.wait();
-    expect(receipt2?.logs.length).to.eq(1);
+      const timestamp = await oracle.getTime();
 
-    await expect(emitTx2)
-      .to.emit(oracle, "ValidatorExitRequest")
-      .withArgs(
-        exitRequests[2].moduleId,
-        exitRequests[2].nodeOpId,
-        exitRequests[2].valIndex,
-        exitRequests[2].valPubkey,
-        timestamp,
+      for (let i = 0; i < 3; i++) {
+        const request = exitRequests[i];
+        await expect(emitTx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
+      }
+    });
+
+    it("Should revert when limit exceeded for the day", async () => {
+      exitRequests = [
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
+        { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] },
+      ];
+
+      exitRequest = {
+        dataFormat: DATA_FORMAT_LIST,
+        data: encodeExitRequestsDataList(exitRequests),
+      };
+
+      await expect(oracle.emitExitEvents(exitRequest))
+        .to.be.revertedWithCustomError(oracle, "ExitRequestsLimit")
+        .withArgs(2, 0);
+    });
+
+    it("Should process remaining requests after a day passes", async () => {
+      await consensus.advanceTimeBy(24 * 60 * 60);
+
+      exitRequests = [
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
+        { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] },
+      ];
+
+      exitRequest = {
+        dataFormat: DATA_FORMAT_LIST,
+        data: encodeExitRequestsDataList(exitRequests),
+      };
+
+      const emitTx = await oracle.emitExitEvents(exitRequest);
+      const timestamp = await oracle.getTime();
+
+      for (let i = 3; i < 5; i++) {
+        const request = exitRequests[i];
+        await expect(emitTx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
+      }
+    });
+
+    it("Should revert when no new requests to deliver", async () => {
+      exitRequests = [
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
+        { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] },
+      ];
+
+      await expect(oracle.emitExitEvents(exitRequest)).to.be.revertedWithCustomError(
+        oracle,
+        "RequestsAlreadyDelivered",
       );
-
-    // const history2 = await oracle.getDeliveryHistory(exitRequestHash);
-    // expect(history2.length).to.eq(2);
-    // expect(history2[1].lastDeliveredKeyIndex).to.eq(2);
-
-    const emitTx3 = await oracle.emitExitEvents(exitRequest);
-
-    const receipt3 = await emitTx2.wait();
-    expect(receipt3?.logs.length).to.eq(1);
-
-    await expect(emitTx3)
-      .to.emit(oracle, "ValidatorExitRequest")
-      .withArgs(
-        exitRequests[3].moduleId,
-        exitRequests[3].nodeOpId,
-        exitRequests[3].valIndex,
-        exitRequests[3].valPubkey,
-        timestamp,
-      );
-
-    // const history3 = await oracle.getDeliveryHistory(exitRequestHash);
-    // expect(history3.length).to.eq(3);
-    // expect(history3[2].lastDeliveredKeyIndex).to.eq(3);
-
-    const emitTx4 = await oracle.emitExitEvents(exitRequest);
-
-    const receipt4 = await emitTx2.wait();
-    expect(receipt4?.logs.length).to.eq(1);
-
-    await expect(emitTx4)
-      .to.emit(oracle, "ValidatorExitRequest")
-      .withArgs(
-        exitRequests[4].moduleId,
-        exitRequests[4].nodeOpId,
-        exitRequests[4].valIndex,
-        exitRequests[4].valPubkey,
-        timestamp,
-      );
-
-    // const history4 = await oracle.getDeliveryHistory(exitRequestHash);
-    // expect(history4.length).to.eq(4);
-    // expect(history4[3].lastDeliveredKeyIndex).to.eq(4);
-
-    await expect(oracle.emitExitEvents(exitRequest)).to.be.revertedWithCustomError(oracle, "RequestsAlreadyDelivered");
+    });
   });
 });

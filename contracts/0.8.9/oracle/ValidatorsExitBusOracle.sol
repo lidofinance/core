@@ -8,7 +8,7 @@ import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
 import { BaseOracle } from "./BaseOracle.sol";
 import { ValidatorsExitBus } from "./ValidatorsExitBus.sol";
-import { ReportExitLimitUtils, ReportExitLimitUtilsStorage, ExitRequestLimitData } from "../lib/ReportExitLimitUtils.sol";
+import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
 
 interface IOracleReportSanityChecker {
     function checkExitBusOracleReport(uint256 _exitRequestsCount) external view;
@@ -18,8 +18,8 @@ interface IOracleReportSanityChecker {
 contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
-    using ReportExitLimitUtilsStorage for bytes32;
-    using ReportExitLimitUtils for ExitRequestLimitData;
+    using ExitLimitUtilsStorage for bytes32;
+    using ExitLimitUtils for ExitRequestLimitData;
 
 
     error AdminCannotBeZero();
@@ -244,15 +244,16 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         // Check VEB common limit
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
 
-        if (exitRequestLimitData.isExitRequestLimitSet()) {
-            uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
+        if (exitRequestLimitData.isExitDailyLimitSet()) {
+            uint256 day = _getTimestamp() / 1 days;
+            uint256 limit = exitRequestLimitData.remainingLimit(day);
 
             if (data.requestsCount > limit) {
                 revert ExitRequestsLimit(data.requestsCount, limit);
             }
 
             EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-                exitRequestLimitData.updatePrevExitRequestsLimit(limit - data.requestsCount)
+                exitRequestLimitData.updateRequestsCounter(day, data.requestsCount)
             );
         }
 

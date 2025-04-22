@@ -610,16 +610,15 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     });
     after(async () => await Snapshot.restore(originalState));
 
+    it("some time passes", async () => {
+      await consensus.advanceTimeBy(24 * 60 * 60);
+    });
+
     it("Set exit limit", async () => {
       const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
       await oracle.grantRole(role, admin);
-      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit({
-        maxExitRequestsLimit: 4,
-        exitRequestsLimitIncreasePerBlock: 1,
-        maxTWExitRequestsLimit: 4,
-        twExitRequestsLimitIncreasePerBlock: 1,
-      });
-      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(4, 1, 4, 1);
+      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7, 7);
+      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(7, 7);
     });
 
     it("deliver report by actor different from oracle", async () => {
@@ -672,10 +671,23 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       ];
       const { reportData } = await prepareReportAndSubmitHash(requests);
 
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
-        oracle,
-        "ExitRequestsLimit",
-      );
+      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
+        .to.be.revertedWithCustomError(oracle, "ExitRequestsLimit")
+        .withArgs(4, 3);
+    });
+
+    it("day passes", async () => {
+      await consensus.advanceTimeBy(24 * 60 * 60);
+    });
+
+    it("Limit regenerated in a day", async () => {
+      const requests = [
+        { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[2] },
+        { moduleId: 2, nodeOpId: 3, valIndex: 4, valPubkey: PUBKEYS[4] },
+      ];
+      const { reportData } = await prepareReportAndSubmitHash(requests);
 
       const tx = await oracle.connect(member1).submitReportData(reportData, oracleVersion);
       const timestamp = await consensus.getTime();

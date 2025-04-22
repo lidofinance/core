@@ -64,17 +64,16 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
     await deploy();
   });
 
+  it("some time passes", async () => {
+    await consensus.advanceTimeBy(24 * 60 * 60);
+  });
+
   it("Should set limit for tw", async () => {
     const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
     await oracle.grantRole(role, authorizedEntity);
-    const exitLimitTx = await oracle.connect(authorizedEntity).setExitRequestLimit({
-      maxExitRequestsLimit: 2,
-      exitRequestsLimitIncreasePerBlock: 1,
-      twExitRequestsLimitIncreasePerBlock: 1,
-      maxTWExitRequestsLimit: 2,
-    });
+    const exitLimitTx = await oracle.connect(authorizedEntity).setExitRequestLimit(4, 4);
 
-    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(2, 1, 2, 1);
+    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(4, 4);
   });
 
   it("Should revert without DIRECT_EXIT_ROLE role", async () => {
@@ -99,27 +98,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
     await oracle.grantRole(role, authorizedEntity);
   });
 
-  it("Out of tw exit request limit", async () => {
-    await expect(
-      oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
-        value: 4,
-      }),
-    )
-      .to.be.revertedWithCustomError(oracle, "TWExitRequestsLimit")
-      .withArgs(3, 2);
-  });
-
-  it("Increase limit", async () => {
-    const exitLimitTx = await oracle.connect(authorizedEntity).setExitRequestLimit({
-      maxExitRequestsLimit: 2,
-      exitRequestsLimitIncreasePerBlock: 1,
-      twExitRequestsLimitIncreasePerBlock: 1,
-      maxTWExitRequestsLimit: 4,
-    });
-
-    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(2, 1, 4, 1);
-  });
-
   it("Not enough fee", async () => {
     await expect(
       oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
@@ -134,6 +112,52 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
     const tx = await oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
       value: 4,
     });
+    const timestamp = await oracle.getTime();
+    await expect(tx).to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled").withArgs(exitData.validatorsPubkeys);
+    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 1);
+
+    await expect(tx)
+      .to.emit(oracle, "DirectExitRequest")
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[0], timestamp);
+    await expect(tx)
+      .to.emit(oracle, "DirectExitRequest")
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[1], timestamp);
+    await expect(tx)
+      .to.emit(oracle, "DirectExitRequest")
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[2], timestamp);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[0], 1, 0);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[1], 1, 0);
+
+    await expect(tx)
+      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[2], 1, 0);
+  });
+
+  it("Out of tw exit request limit", async () => {
+    await expect(
+      oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
+        value: 4,
+      }),
+    )
+      .to.be.revertedWithCustomError(oracle, "TWExitRequestsLimit")
+      .withArgs(3, 1);
+  });
+
+  it("some time passes", async () => {
+    await consensus.advanceTimeBy(24 * 60 * 60);
+  });
+
+  it("Limit regenerated in a day", async () => {
+    const tx = oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
+      value: 4,
+    });
+
     const timestamp = await oracle.getTime();
     await expect(tx).to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled").withArgs(exitData.validatorsPubkeys);
     await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 1);
