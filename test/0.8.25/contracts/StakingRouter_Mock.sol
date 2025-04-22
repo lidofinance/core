@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 import {IStakingRouter} from "contracts/0.8.25/interfaces/IStakingRouter.sol";
 
 contract StakingRouter_Mock is IStakingRouter {
-    // An event to track when shouldValidatorBePenalized is called
+    // An event to track when reportValidatorExitDelay is called
     event UnexitedValidatorReported(
         uint256 moduleId,
         uint256 nodeOperatorId,
@@ -13,7 +13,7 @@ contract StakingRouter_Mock is IStakingRouter {
         uint256 secondsSinceEligibleExitRequest
     );
 
-    function shouldValidatorBePenalized(
+    function reportValidatorExitDelay(
         uint256 moduleId,
         uint256 nodeOperatorId,
         uint256 _proofSlotTimestamp,

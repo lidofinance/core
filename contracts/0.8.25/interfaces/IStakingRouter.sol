@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 interface IStakingRouter {
-    function shouldValidatorBePenalized(
+    function reportValidatorExitDelay(
         uint256 _moduleId,
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
