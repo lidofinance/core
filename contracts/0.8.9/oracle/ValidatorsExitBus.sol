@@ -42,7 +42,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     error InvalidRequestsDataLength();
     error InvalidRequestsData();
     error RequestsAlreadyDelivered();
-    error ExitRequestsLimit();
+    // TODO: create better name than prevLimit
+    error ExitRequestsLimit(uint256 requestsCount, uint256 prevLimit);
+    error TWExitRequestsLimit(uint256 requestsCount, uint256 prevLimit);
     error InvalidPubkeysArray();
     error NoExitRequestProvided();
     error InvalidRequestsDataSortOrder();
@@ -115,10 +117,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
     /// Hash constant for mapping exit requests storage
     bytes32 internal constant EXIT_REQUESTS_HASHES_POSITION = keccak256("lido.ValidatorsExitBus.reportHashes");
-    bytes32 public constant EXIT_REQUEST_LIMIT_POSITION =
-        keccak256("lido.ValidatorsExitBus.maxExitRequestsLimit");
-    bytes32 public constant TW_EXIT_REQUEST_LIMIT_POSITION =
-        keccak256("lido.ValidatorsExitBus.maxTWExitRequestsLimit");
+    bytes32 public constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestsLimit");
+    bytes32 public constant TW_EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxTWExitRequestsLimit");
 
     /// @dev Ensures the contract’s ETH balance is unchanged.
     modifier preservesEthBalance() {
@@ -176,7 +176,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         if (exitRequestLimitData.isExitRequestLimitSet()) {
             uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
             if (limit == 0) {
-                revert ExitRequestsLimit();
+                revert ExitRequestsLimit(undeliveredItemsCount, limit);
             }
 
             toDeliver = undeliveredItemsCount > limit ? limit : undeliveredItemsCount;
@@ -226,10 +226,10 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
 
             if (keyIndexes.length > limit) {
-                revert ExitRequestsLimit();
+                revert TWExitRequestsLimit(keyIndexes.length, limit);
             }
 
-            EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+            TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
                 exitRequestLimitData.updatePrevExitRequestsLimit(limit - keyIndexes.length)
             );
         }
@@ -328,7 +328,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             uint256 limit = twExitRequestLimitData.calculateCurrentExitRequestLimit();
 
             if (requestsCount > limit) {
-                revert ExitRequestsLimit();
+                revert TWExitRequestsLimit(requestsCount, limit);
             }
 
             TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(

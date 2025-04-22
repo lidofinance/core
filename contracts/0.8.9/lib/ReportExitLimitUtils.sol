@@ -19,7 +19,7 @@ struct ExitRequestLimitData {
     uint96 prevExitRequestsLimit;
     // Number of block to regenerate limit from 0 to maxExitRequestsLimit
     uint32 maxExitRequestsLimitGrowthBlocks;
-    // TODO: mabe use uint16 type
+    // TODO: maybe use uint16 type
     uint96 maxExitRequestsLimit; // maximum exit requests limit value
 }
 
@@ -77,8 +77,6 @@ library ReportExitLimitUtils {
         ExitRequestLimitData memory _data,
         uint256 _newPrevExitRequestsLimit
     ) internal view returns (ExitRequestLimitData memory) {
-        // assert(_data.prevExitRequestsBlockNumber != 0);
-
         _data.prevExitRequestsLimit = uint96(_newPrevExitRequestsLimit);
         _data.prevExitRequestsBlockNumber = uint32(block.number);
 
@@ -119,14 +117,14 @@ library ReportExitLimitUtils {
 
         _data.maxExitRequestsLimit = uint96(_maxExitRequestsLimit);
 
-        // do we need to set block here, or for some edge case we need to have 0 here
-        _data.prevExitRequestsBlockNumber = uint32(block.number);
+        if (_data.prevExitRequestsBlockNumber != 0) {
+            _data.prevExitRequestsBlockNumber = uint32(block.number);
+        }
 
         return _data;
     }
 
     /**
-     * TODO: discuss this part
      * @notice check if max exit request limit is set. Otherwise there are no limits on exits
      */
     function isExitRequestLimitSet(ExitRequestLimitData memory _data) internal pure returns (bool) {

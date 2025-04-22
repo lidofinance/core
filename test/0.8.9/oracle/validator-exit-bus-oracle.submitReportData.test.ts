@@ -57,13 +57,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     data: string;
   }
 
-  interface ExitRequestLimitData {
-    prevExitRequestsBlockNumber: number;
-    prevExitRequestsLimit: number;
-    maxExitRequestsLimitGrowthBlocks: number;
-    maxExitRequestsLimit: number;
-  }
-
   const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
     const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
     const reportDataHash = ethers.keccak256(

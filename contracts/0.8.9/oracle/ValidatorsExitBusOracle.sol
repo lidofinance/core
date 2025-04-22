@@ -248,7 +248,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
             uint256 limit = exitRequestLimitData.calculateCurrentExitRequestLimit();
 
             if (data.requestsCount > limit) {
-                revert ExitRequestsLimit();
+                revert ExitRequestsLimit(data.requestsCount, limit);
             }
 
             EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(

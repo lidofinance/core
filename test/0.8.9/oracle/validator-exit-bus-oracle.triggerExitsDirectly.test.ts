@@ -64,6 +64,19 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
     await deploy();
   });
 
+  it("Should set limit for tw", async () => {
+    const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
+    await oracle.grantRole(role, authorizedEntity);
+    const exitLimitTx = await oracle.connect(authorizedEntity).setExitRequestLimit({
+      maxExitRequestsLimit: 2,
+      exitRequestsLimitIncreasePerBlock: 1,
+      twExitRequestsLimitIncreasePerBlock: 1,
+      maxTWExitRequestsLimit: 2,
+    });
+
+    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(2, 1, 2, 1);
+  });
+
   it("Should revert without DIRECT_EXIT_ROLE role", async () => {
     const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
 
@@ -80,11 +93,34 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
     ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), await oracle.DIRECT_EXIT_ROLE());
   });
 
-  it("Not enough fee", async () => {
+  it("Grant DIRECT_EXIT_ROLE role", async () => {
     const role = await oracle.DIRECT_EXIT_ROLE();
 
     await oracle.grantRole(role, authorizedEntity);
+  });
 
+  it("Out of tw exit request limit", async () => {
+    await expect(
+      oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
+        value: 4,
+      }),
+    )
+      .to.be.revertedWithCustomError(oracle, "TWExitRequestsLimit")
+      .withArgs(3, 2);
+  });
+
+  it("Increase limit", async () => {
+    const exitLimitTx = await oracle.connect(authorizedEntity).setExitRequestLimit({
+      maxExitRequestsLimit: 2,
+      exitRequestsLimitIncreasePerBlock: 1,
+      twExitRequestsLimitIncreasePerBlock: 1,
+      maxTWExitRequestsLimit: 4,
+    });
+
+    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(2, 1, 4, 1);
+  });
+
+  it("Not enough fee", async () => {
     await expect(
       oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
         value: 2,

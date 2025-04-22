@@ -118,6 +118,19 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
+  it("Should set limit for tw", async () => {
+    const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
+    await oracle.grantRole(role, admin);
+    const exitLimitTx = await oracle.connect(admin).setExitRequestLimit({
+      maxExitRequestsLimit: 4,
+      exitRequestsLimitIncreasePerBlock: 1,
+      twExitRequestsLimitIncreasePerBlock: 1,
+      maxTWExitRequestsLimit: 2,
+    });
+
+    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(4, 1, 2, 1);
+  });
+
   it("initially, consensus report is empty and is not being processed", async () => {
     const report = await oracle.getConsensusReport();
     expect(report.hash).to.equal(ZeroHash);
@@ -215,6 +228,27 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     expect(procState.dataFormat).to.equal(DATA_FORMAT_LIST);
     expect(procState.requestsCount).to.equal(exitRequests.length);
     expect(procState.requestsSubmitted).to.equal(exitRequests.length);
+  });
+
+  it("Out of tw exit request limit", async () => {
+    await expect(
+      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1, 3], {
+        value: 10,
+      }),
+    )
+      .to.be.revertedWithCustomError(oracle, "TWExitRequestsLimit")
+      .withArgs(3, 2);
+  });
+
+  it("Increase limit", async () => {
+    const exitLimitTx = await oracle.connect(admin).setExitRequestLimit({
+      maxExitRequestsLimit: 4,
+      exitRequestsLimitIncreasePerBlock: 1,
+      twExitRequestsLimitIncreasePerBlock: 1,
+      maxTWExitRequestsLimit: 10,
+    });
+
+    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(4, 1, 10, 1);
   });
 
   it("someone submitted exit report data and triggered exit", async () => {
