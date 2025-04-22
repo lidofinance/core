@@ -21,7 +21,7 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { days, ether } from "lib";
+import { days, DEPOSIT_DOMAIN, ether } from "lib";
 import { createVaultProxy } from "lib/protocol/helpers";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
@@ -71,6 +71,7 @@ describe("VaultFactory.sol", () => {
 
     //predeposit guarantee
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      DEPOSIT_DOMAIN,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,

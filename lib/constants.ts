@@ -26,6 +26,7 @@ export const INVALID_INTERFACE_ID = "0xffffffff";
 // Chain related
 export const SECONDS_PER_SLOT = 12n;
 export const EPOCHS_PER_FRAME = 225n; // one day;
+export const DEPOSIT_DOMAIN = "0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9"; // for mainnet
 
 // Oracle report related
 export const GENESIS_TIME = 100n;
