@@ -56,7 +56,7 @@ export function formatAmount(amount: bigint) {
   return Buffer.from(bytes, "hex").reverse().toString("hex");
 }
 
-export const computeDepositDomain = async (genesisFork = "0x00000000") => {
+export const computeDepositDomain = async (forkVersionString = "0x00000000") => {
   // ssz ESM is not compatible with require
   const ssz = sszCached ?? (await eval(`import("@chainsafe/ssz")`));
   sszCached = ssz;
@@ -96,7 +96,7 @@ export const computeDepositDomain = async (genesisFork = "0x00000000") => {
     return ForkData.hashTreeRoot({ currentVersion, genesisValidatorsRoot });
   };
 
-  return computeDomain(DOMAIN_DEPOSIT, fromHexString(genesisFork), ZERO_HASH);
+  return computeDomain(DOMAIN_DEPOSIT, fromHexString(forkVersionString), ZERO_HASH);
 };
 
 export const computeDepositMessageRoot = async (
@@ -107,8 +107,6 @@ export const computeDepositMessageRoot = async (
 ): Promise<Uint8Array> => {
   const ssz = sszCached ?? (await eval(`import("@chainsafe/ssz")`));
   sszCached = ssz;
-
-  const domainBytes = domain ? ssz.fromHexString(domain) : await computeDepositDomain();
 
   const { ByteVectorType, ContainerType, UintNumberType } = ssz;
 
@@ -133,6 +131,8 @@ export const computeDepositMessageRoot = async (
     { typeName: "SigningData", jsonCase: "eth2" },
   );
 
+  const domainBytes = domain ? Domain.fromJson(toHexString(domain)) : await computeDepositDomain();
+
   const depositMessage = {
     pubkey: BLSPubkey.fromJson(toHexString(pubkey)),
     withdrawalCredentials: Bytes32.fromJson(toHexString(withdrawalCredentials)),
@@ -141,6 +141,6 @@ export const computeDepositMessageRoot = async (
 
   return SigningData.hashTreeRoot({
     objectRoot: DepositMessage.hashTreeRoot(depositMessage),
-    domainBytes,
+    domain: domainBytes,
   });
 };
