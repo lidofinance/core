@@ -19,7 +19,9 @@ library SSZ {
     error InvalidPubkeyLength();
     error InvalidBlockHeader();
 
-    bytes4 internal constant DOMAIN_DEPOSIT = bytes4(hex"03000000");
+    /// @notice Domain for deposit message signing
+    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#domain-types
+    bytes4 internal constant DOMAIN_DEPOSIT = 0x03000000;
 
     /// @notice calculation of deposit domain based on fork version
     /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_domain
