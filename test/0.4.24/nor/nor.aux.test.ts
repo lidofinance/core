@@ -119,7 +119,7 @@ describe("NodeOperatorsRegistry.sol:auxiliary", () => {
     locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy.
-    await expect(nor.initialize(locator, moduleType, penaltyDelay))
+    await expect(nor.initialize(locator, moduleType, penaltyDelay, 86400n))
       .to.emit(nor, "ContractVersionSet")
       .withArgs(contractVersionV2)
       .to.emit(nor, "ContractVersionSet")

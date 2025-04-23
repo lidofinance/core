@@ -125,7 +125,7 @@ describe("NodeOperatorsRegistry.sol:stakingLimit", () => {
     locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy.
-    await expect(nor.initialize(locator, moduleType, penaltyDelay))
+    await expect(nor.initialize(locator, moduleType, penaltyDelay, 86400n))
       .to.emit(nor, "ContractVersionSet")
       .withArgs(contractVersion)
       .and.to.emit(nor, "LocatorContractSet")
