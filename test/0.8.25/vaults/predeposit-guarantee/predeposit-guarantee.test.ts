@@ -21,13 +21,13 @@ import {
 
 import {
   addressToWC,
-  DEPOSIT_DOMAIN,
   ether,
   findEvents,
   generateBeaconHeader,
   generatePostDeposit,
   generatePredeposit,
   generateValidator,
+  GENESIS_FORK_VERSION,
   prepareLocalMerkleTree,
   randomBytes32,
   setBeaconBlockRoot,
@@ -104,7 +104,7 @@ describe("PredepositGuarantee.sol", () => {
     // PDG
     pdgImpl = await ethers.deployContract(
       "PredepositGuarantee",
-      [DEPOSIT_DOMAIN, localMerkle.gIFirstValidator, localMerkle.gIFirstValidator, 0],
+      [GENESIS_FORK_VERSION, localMerkle.gIFirstValidator, localMerkle.gIFirstValidator, 0],
       { from: deployer },
     );
     proxy = await ethers.deployContract("OssifiableProxy", [pdgImpl, admin, new Uint8Array()], admin);
