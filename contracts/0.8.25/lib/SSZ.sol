@@ -21,13 +21,13 @@ library SSZ {
 
     /// @notice Domain for deposit message signing
     /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#domain-types
-    bytes4 internal constant DOMAIN_DEPOSIT = 0x03000000;
+    bytes4 internal constant DOMAIN_DEPOSIT_TYPE = 0x03000000;
 
     /// @notice calculation of deposit domain based on fork version
     /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_domain
     function computeDepositDomain(bytes4 genesisForkVersion) internal view returns (bytes32 depositDomain) {
         bytes32 forkDataRoot = sha256Pair(genesisForkVersion, bytes32(0));
-        depositDomain = DOMAIN_DEPOSIT | (forkDataRoot >> 32);
+        depositDomain = DOMAIN_DEPOSIT_TYPE | (forkDataRoot >> 32);
     }
 
     /// @notice calculation of signing root for deposit message

@@ -23,7 +23,7 @@ export async function main() {
   const depositContractAddress = getEnvVariable("DEPOSIT_CONTRACT", "");
   const withdrawalQueueBaseUri = getEnvVariable("WITHDRAWAL_QUEUE_BASE_URI", "");
   const dsmPredefinedAddress = getEnvVariable("DSM_PREDEFINED_ADDRESS", "");
-  const forkVersion = getEnvVariable("FORK_VERSION", "0x00000000");
+  const genesisForkVersion = getEnvVariable("GENESIS_FORK_VERSION", "0x00000000");
 
   const state = readNetworkState();
 
@@ -36,7 +36,7 @@ export async function main() {
   state.chainSpec = {
     ...state.chainSpec,
     genesisTime,
-    forkVersion,
+    genesisForkVersion,
     slotsPerEpoch,
   };
 
