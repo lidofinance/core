@@ -120,8 +120,8 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
     agentAddress: state[Sk.appAgent].proxy.address,
     votingAddress: state[Sk.appVoting].proxy.address,
     easyTrackAddress: state["easyTrackEVMScriptExecutor"].address,
-    stakingVaultFactory: state[Sk.stakingVaultFactory].address,
-    stakingVaultBeacon: state[Sk.stakingVaultBeacon].address,
+    stakingVaultFactory: state[Sk.stakingVaultFactory] && state[Sk.stakingVaultFactory].address,
+    stakingVaultBeacon: state[Sk.stakingVaultBeacon] && state[Sk.stakingVaultBeacon].address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "state-network-config");
 }

@@ -65,13 +65,13 @@ export async function main(): Promise<void> {
   const agentSigner = await impersonate(agentAddress, ether("1"));
   const votingSigner = await impersonate(votingAddress, ether("1"));
 
-  const locatorProxy = await loadContract<OssifiableProxy>("OssifiableProxy", locatorAddress);
-  await locatorProxy.connect(agentSigner).proxy__upgradeTo(locatorImplAddress, { gasLimit: TX_GAS_LIMIT });
-  log("LidoLocator upgraded to implementation", locatorImplAddress);
-
   const upgradeTemplate = await loadContract<UpgradeTemplateV3>("UpgradeTemplateV3", upgradeTemplateV3Address);
   await upgradeTemplate.connect(votingSigner).startUpgrade({ gasLimit: TX_GAS_LIMIT });
   log("UpgradeTemplateV3 startUpgrade");
+
+  const locatorProxy = await loadContract<OssifiableProxy>("OssifiableProxy", locatorAddress);
+  await locatorProxy.connect(agentSigner).proxy__upgradeTo(locatorImplAddress, { gasLimit: TX_GAS_LIMIT });
+  log("LidoLocator upgraded to implementation", locatorImplAddress);
 
   const lidoRepo = await loadContract<Repo>("Repo", aragonLidoAppRepoAddress);
   await lidoRepo.connect(votingSigner).newVersion(lidoAppNewVersion, lidoImplAddress, "0x", { gasLimit: TX_GAS_LIMIT });

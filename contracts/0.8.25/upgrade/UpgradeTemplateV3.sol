@@ -40,6 +40,7 @@ interface IBaseOracle is IAccessControlEnumerable, IVersioned {
 interface IBurner is IBurnerWithoutAccessControl, IAccessControlEnumerable {
     function REQUEST_BURN_SHARES_ROLE() external view returns (bytes32);
     function REQUEST_BURN_MY_STETH_ROLE() external view returns (bytes32);
+    function isMigrationAllowed() external view returns (bool);
 }
 
 interface ICSModule {
@@ -201,6 +202,7 @@ contract UpgradeTemplateV3 {
 
     // Old implementations
     address public immutable OLD_ACCOUNTING_ORACLE_IMPLEMENTATION;
+    address public immutable OLD_LOCATOR_IMPLEMENTATION;
 
     // Aragon Apps new implementations
     address public immutable OLD_LIDO_IMPLEMENTATION;
@@ -268,9 +270,11 @@ contract UpgradeTemplateV3 {
     // Structured storage
     //
 
-    uint256 internal _upgradeBlockNumber = UPGRADE_NOT_STARTED;
-    bool public _isUpgradeFinished;
-    uint256 internal _initialOldBurnerStethBalance;
+    uint256 public upgradeBlockNumber = UPGRADE_NOT_STARTED;
+    bool public isUpgradeFinished;
+    uint256 internal initialOldBurnerStethSharesBalance;
+    uint256 internal initialTotalShares;
+    uint256 internal initialTotalPooledEther;
 
 
     /// @param params Parameters for the upgrade template
@@ -281,6 +285,7 @@ contract UpgradeTemplateV3 {
 
         NEW_LOCATOR_IMPLEMENTATION = params.newLocatorImplementation;
         LOCATOR = ILidoLocator(params.locator);
+        OLD_LOCATOR_IMPLEMENTATION = params.oldLocatorImplementation;
 
         ILidoLocatorOld oldLocatorImpl = ILidoLocatorOld(params.oldLocatorImplementation);
         OLD_ACCOUNTING_ORACLE_IMPLEMENTATION = params.oldAccountingOracleImplementation;
@@ -360,23 +365,28 @@ contract UpgradeTemplateV3 {
     function startUpgrade() external {
         if (msg.sender != VOTING) revert OnlyVotingCanUpgrade();
         if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
-        if (_isUpgradeFinished) revert UpgradeAlreadyFinished();
+        if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
 
-        if (_upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
-        _upgradeBlockNumber = block.number;
+        upgradeBlockNumber = block.number;
+
+        initialTotalShares = LIDO.getTotalShares();
+        initialTotalPooledEther = LIDO.getTotalPooledEther();
 
         _assertPreUpgradeState();
 
         // Save initial state for the check after burner migration
-        _initialOldBurnerStethBalance = LIDO.balanceOf(address(OLD_BURNER));
+        initialOldBurnerStethSharesBalance = LIDO.sharesOf(address(OLD_BURNER));
     }
 
     function finishUpgrade() external {
         if (msg.sender != VOTING) revert OnlyVotingCanUpgrade();
-        if (_isUpgradeFinished) revert UpgradeAlreadyFinished();
-        _isUpgradeFinished = true;
+        if (upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
+        if (isUpgradeFinished) revert UpgradeAlreadyFinished();
+        if (LIDO.getTotalShares() != initialTotalShares || LIDO.getTotalPooledEther() != initialTotalPooledEther) {
+            revert TotalSharesOrPooledEtherChanged();
+        }
 
-        if (_upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
+        isUpgradeFinished = true;
 
         LIDO.finalizeUpgrade_v3(address(OLD_BURNER), [
             WITHDRAWAL_QUEUE,
@@ -393,10 +403,8 @@ contract UpgradeTemplateV3 {
     }
 
     function _assertPreUpgradeState() internal view {
-        // Check LidoLocator was upgraded
-        _assertProxyImplementation(IOssifiableProxy(address(LOCATOR)), NEW_LOCATOR_IMPLEMENTATION);
-
         // Check initial implementations of the proxies to be upgraded
+        _assertProxyImplementation(IOssifiableProxy(address(LOCATOR)), OLD_LOCATOR_IMPLEMENTATION);
         _assertProxyImplementation(IOssifiableProxy(address(ACCOUNTING_ORACLE)), OLD_ACCOUNTING_ORACLE_IMPLEMENTATION);
         _assertAragonAppImplementation(ARAGON_APP_LIDO_REPO, OLD_LIDO_IMPLEMENTATION);
 
@@ -415,6 +423,9 @@ contract UpgradeTemplateV3 {
     }
 
     function _assertPostUpgradeState() internal view {
+        // Check LidoLocator was upgraded
+        _assertProxyImplementation(IOssifiableProxy(address(LOCATOR)), NEW_LOCATOR_IMPLEMENTATION);
+
         // Check contract versions
         _assertContractVersion(LIDO, EXPECTED_FINAL_LIDO_VERSION);
         _assertContractVersion(ACCOUNTING_ORACLE, EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
@@ -513,7 +524,7 @@ contract UpgradeTemplateV3 {
             oldCoverShares != newCoverShares ||
             oldNonCoverShares != newNonCoverShares ||
             LIDO.balanceOf(address(OLD_BURNER)) != 0 ||
-            LIDO.balanceOf(address(BURNER)) != _initialOldBurnerStethBalance ||
+            LIDO.balanceOf(address(BURNER)) != initialOldBurnerStethSharesBalance ||
             BURNER.isMigrationAllowed()
         ) {
             revert IncorrectBurnerSharesMigration();
@@ -607,4 +618,5 @@ contract UpgradeTemplateV3 {
     error IncorrectUpgradeableBeaconImplementation(address beacon, address implementation);
     error NewAndOldLocatorImplementationsMustBeDifferent();
     error IncorrectStakingModuleName(string name);
+    error TotalSharesOrPooledEtherChanged();
 }

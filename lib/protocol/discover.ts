@@ -71,7 +71,11 @@ const loadContract = async <Name extends ContractName>(name: Name, address: stri
 /**
  * Load all Lido protocol foundation contracts.
  */
-const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: ProtocolNetworkConfig) => {
+const getCoreContracts = async (
+  locator: LoadedContract<LidoLocator>,
+  config: ProtocolNetworkConfig,
+  skipV3Contracts: boolean,
+) => {
   return (await batch({
     accountingOracle: loadContract(
       "AccountingOracle",
@@ -86,7 +90,6 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
       config.get("elRewardsVault") || (await locator.elRewardsVault()),
     ),
     lido: loadContract("Lido", config.get("lido") || (await locator.lido())),
-    accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
     oracleReportSanityChecker: loadContract(
       "OracleReportSanityChecker",
       config.get("oracleReportSanityChecker") || (await locator.oracleReportSanityChecker()),
@@ -109,6 +112,11 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
       "OracleDaemonConfig",
       config.get("oracleDaemonConfig") || (await locator.oracleDaemonConfig()),
     ),
+    ...(skipV3Contracts
+      ? {}
+      : {
+          accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
+        }),
   })) as CoreContracts;
 };
 
@@ -185,10 +193,10 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
   })) as VaultsContracts;
 };
 
-export async function discover() {
+export async function discover(skipV3Contracts: boolean) {
   const networkConfig = await getDiscoveryConfig();
   const locator = await loadContract("LidoLocator", networkConfig.get("locator"));
-  const foundationContracts = await getCoreContracts(locator, networkConfig);
+  const foundationContracts = await getCoreContracts(locator, networkConfig, skipV3Contracts);
 
   const contracts = {
     locator,
@@ -197,18 +205,18 @@ export async function discover() {
     ...(await getStakingModules(foundationContracts.stakingRouter, networkConfig)),
     ...(await getHashConsensusContract(foundationContracts.accountingOracle, networkConfig)),
     ...(await getWstEthContract(foundationContracts.withdrawalQueue, networkConfig)),
-    ...(await getVaultsContracts(networkConfig, locator)),
+    ...(skipV3Contracts ? {} : await getVaultsContracts(networkConfig, locator)),
   } as ProtocolContracts;
 
   log.debug("Contracts discovered", {
     "Locator": locator.address,
     "Lido": foundationContracts.lido.address,
-    "Accounting": foundationContracts.accounting.address,
+    "Accounting": foundationContracts.accounting && foundationContracts.accounting.address,
     "Accounting Oracle": foundationContracts.accountingOracle.address,
     "Hash Consensus": contracts.hashConsensus.address,
     "Execution Layer Rewards Vault": foundationContracts.elRewardsVault.address,
     "Withdrawal Queue": foundationContracts.withdrawalQueue.address,
-    "Withdrawal Vault": foundationContracts.withdrawalVault.address,
+    "Withdrawal Vault": foundationContracts.withdrawalVault && foundationContracts.withdrawalVault.address,
     "Validators Exit Bus Oracle": foundationContracts.validatorsExitBusOracle.address,
     "Oracle Daemon Config": foundationContracts.oracleDaemonConfig.address,
     "Oracle Report Sanity Checker": foundationContracts.oracleReportSanityChecker.address,
@@ -221,11 +229,11 @@ export async function discover() {
     "Burner": foundationContracts.burner.address,
     "wstETH": contracts.wstETH.address,
     // Vaults
-    "Staking Vault Factory": contracts.stakingVaultFactory.address,
-    "Staking Vault Beacon": contracts.stakingVaultBeacon.address,
-    "Vault Hub": contracts.vaultHub.address,
-    "Predeposit Guarantee": contracts.predepositGuarantee.address,
-    "Operator Grid": contracts.operatorGrid.address,
+    "Staking Vault Factory": contracts.stakingVaultFactory && contracts.stakingVaultFactory.address,
+    "Staking Vault Beacon": contracts.stakingVaultBeacon && contracts.stakingVaultBeacon.address,
+    "Vault Hub": contracts.vaultHub && contracts.vaultHub.address,
+    "Predeposit Guarantee": contracts.predepositGuarantee && contracts.predepositGuarantee.address,
+    "Operator Grid": contracts.operatorGrid && contracts.operatorGrid.address,
   });
 
   const signers = {

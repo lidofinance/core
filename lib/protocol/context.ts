@@ -18,19 +18,19 @@ export const withCSM = () => {
   return process.env.INTEGRATION_WITH_CSM !== "off";
 };
 
-export const getProtocolContext = async (): Promise<ProtocolContext> => {
+export const getProtocolContext = async (skipV3Contracts: boolean = false): Promise<ProtocolContext> => {
   const isScratch = getMode() === "scratch";
 
   if (isScratch) {
     await deployScratchProtocol(hre.network.name);
   } else if (process.env.UPGRADE) {
-    await deployUpgrade(hre.network.name);
+    await deployUpgrade(hre.network.name, "upgrade/steps-upgrade-for-tests.json");
   }
 
-  // TODO: revisit this when Pectra is live for upgrade mode
+  // TODO: revisit this when Pectra is live
   await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
 
-  const { contracts, signers } = await discover();
+  const { contracts, signers } = await discover(skipV3Contracts);
   const interfaces = Object.values(contracts).map((contract) => contract.interface);
 
   // By default, all flags are "on"
