@@ -1,4 +1,4 @@
 import "./logger";
-import "./solidity-get-source";
+import "./overrides";
 import "./extract-abis";
 import "./verify-contracts";

@@ -235,7 +235,6 @@ async function getLocatorConfig(locatorAddress: string) {
     "accountingOracle",
     "depositSecurityModule",
     "elRewardsVault",
-    "legacyOracle",
     "lido",
     "oracleReportSanityChecker",
     "postTokenRebaseReceiver",
@@ -246,6 +245,11 @@ async function getLocatorConfig(locatorAddress: string) {
     "withdrawalQueue",
     "withdrawalVault",
     "oracleDaemonConfig",
+    "accounting",
+    "wstETH",
+    "predepositGuarantee",
+    "vaultHub",
+    "operatorGrid",
   ] as (keyof LidoLocator.ConfigStruct)[];
 
   const configPromises = addresses.map((name) => locator[name]());

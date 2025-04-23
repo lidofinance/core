@@ -1,18 +1,30 @@
-export { unpauseStaking, ensureStakeLimit, depositAndReportValidators } from "./staking";
+export { depositAndReportValidators, ensureStakeLimit, unpauseStaking } from "./staking";
 
-export { unpauseWithdrawalQueue, finalizeWithdrawalQueue } from "./withdrawal";
+export { finalizeWithdrawalQueue, unpauseWithdrawalQueue } from "./withdrawal";
 
 export {
-  OracleReportOptions,
-  OracleReportPushOptions,
+  calcReportDataHash,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
+  getReportDataItems,
   getReportTimeElapsed,
-  waitNextAvailableReportTime,
   handleOracleReport,
-  submitReport,
+  OracleReportParams,
+  OracleReportSubmitParams,
   report,
+  waitNextAvailableReportTime,
 } from "./accounting";
 
-export { sdvtEnsureOperators } from "./sdvt";
-export { norEnsureOperators } from "./nor";
+export { ensureDsmGuardians } from "./dsm";
+export { norSdvtEnsureOperators } from "./nor-sdvt";
+export { calcNodeOperatorRewards } from "./staking-module";
+export {
+  createVaultProxy,
+  createVaultsReportTree,
+  createVaultWithDashboard,
+  disconnectFromHub,
+  generateFeesToClaim,
+  reportVaultDataWithProof,
+  setupLido,
+  VaultRoles,
+} from "./vaults";

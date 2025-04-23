@@ -12,7 +12,6 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address depositSecurityModule;
         address elRewardsVault;
         address accountingOracle;
-        address legacyOracle;
         address oracleReportSanityChecker;
         address burner;
         address validatorsExitBusOracle;
@@ -22,13 +21,17 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address withdrawalVault;
         address postTokenRebaseReceiver;
         address oracleDaemonConfig;
+        address accounting;
+        address predepositGuarantee;
+        address wstETH;
+        address vaultHub;
+        address operatorGrid;
     }
 
     address public immutable lido;
     address public immutable depositSecurityModule;
     address public immutable elRewardsVault;
     address public immutable accountingOracle;
-    address public immutable legacyOracle;
     address public immutable oracleReportSanityChecker;
     address public immutable burner;
     address public immutable validatorsExitBusOracle;
@@ -38,15 +41,17 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable postTokenRebaseReceiver;
     address public immutable oracleDaemonConfig;
+    address public immutable accounting;
+    address public immutable predepositGuarantee;
+    address public immutable wstETH;
+    address public immutable vaultHub;
+    address public immutable operatorGrid;
 
-    constructor (
-        ContractAddresses memory addresses
-    ) {
+    constructor(ContractAddresses memory addresses) {
         lido = addresses.lido;
         depositSecurityModule = addresses.depositSecurityModule;
         elRewardsVault = addresses.elRewardsVault;
         accountingOracle = addresses.accountingOracle;
-        legacyOracle = addresses.legacyOracle;
         oracleReportSanityChecker = addresses.oracleReportSanityChecker;
         burner = addresses.burner;
         validatorsExitBusOracle = addresses.validatorsExitBusOracle;
@@ -56,36 +61,30 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         withdrawalVault = addresses.withdrawalVault;
         postTokenRebaseReceiver = addresses.postTokenRebaseReceiver;
         oracleDaemonConfig = addresses.oracleDaemonConfig;
+        accounting = addresses.accounting;
+        wstETH = addresses.wstETH;
+        predepositGuarantee = addresses.predepositGuarantee;
+        vaultHub = addresses.vaultHub;
+        operatorGrid = addresses.operatorGrid;
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {
-        return (
-            elRewardsVault,
-            oracleReportSanityChecker,
-            stakingRouter,
-            treasury,
-            withdrawalQueue,
-            withdrawalVault
-        );
+        return (elRewardsVault, oracleReportSanityChecker, stakingRouter, treasury, withdrawalQueue, withdrawalVault);
     }
 
-    function oracleReportComponentsForLido() external view returns (
-        address,
-        address,
-        address,
-        address,
-        address,
-        address,
-        address
-    ) {
+    function oracleReportComponents()
+        external
+        view
+        returns (address, address, address, address, address, address, address)
+    {
         return (
             accountingOracle,
-            elRewardsVault,
             oracleReportSanityChecker,
             burner,
             withdrawalQueue,
-            withdrawalVault,
-            postTokenRebaseReceiver
+            postTokenRebaseReceiver,
+            stakingRouter,
+            vaultHub
         );
     }
 }

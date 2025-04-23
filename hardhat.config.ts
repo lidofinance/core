@@ -44,7 +44,9 @@ const config: HardhatUserConfig = {
         accountsBalance: "100000000000000000000000",
       },
       forking: getHardhatForkingConfig(),
+      hardfork: "prague",
     },
+    // local nodes
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
     },
@@ -52,27 +54,49 @@ const config: HardhatUserConfig = {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
       accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
     },
-    "mainnet-fork": {
-      url: process.env.MAINNET_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
-    "holesky": {
-      url: process.env.HOLESKY_RPC_URL || RPC_URL,
-      chainId: 17000,
-      accounts: loadAccounts("holesky"),
-    },
+    // testnets
     "sepolia": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
+    "hoodi": {
+      url: process.env.HOODI_RPC_URL || RPC_URL,
+      chainId: 560048,
+      accounts: loadAccounts("hoodi"),
+    },
+    // forks
+    "mainnet-fork": {
+      url: process.env.MAINNET_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
     "sepolia-fork": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
     },
+    "hoodi-fork": {
+      url: process.env.HOODI_RPC_URL || RPC_URL,
+      chainId: 560048,
+    },
   },
   etherscan: {
     customChains: [
+      {
+        network: "local-devnet",
+        chainId: 32382,
+        urls: {
+          apiURL: "http://localhost:3080/api",
+          browserURL: "http://localhost:3080",
+        },
+      },
+      {
+        network: "hoodi",
+        chainId: 560048,
+        urls: {
+          apiURL: "https://api-hoodi.etherscan.io/api",
+          browserURL: "https://hoodi.etherscan.io/",
+        },
+      },
       {
         network: "local-devnet",
         chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10),
@@ -174,6 +198,7 @@ const config: HardhatUserConfig = {
     },
   },
   mocha: {
+    fullTrace: true,
     rootHooks: mochaRootHooks,
     timeout: 20 * 60 * 1000, // 20 minutes
   },
@@ -195,7 +220,7 @@ const config: HardhatUserConfig = {
     alphaSort: false,
     disambiguatePaths: false,
     runOnCompile: process.env.SKIP_CONTRACT_SIZE ? false : true,
-    strict: true,
+    strict: false,
     except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
   },
 };

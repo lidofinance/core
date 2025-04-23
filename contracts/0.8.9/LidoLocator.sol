@@ -17,7 +17,6 @@ contract LidoLocator is ILidoLocator {
         address accountingOracle;
         address depositSecurityModule;
         address elRewardsVault;
-        address legacyOracle;
         address lido;
         address oracleReportSanityChecker;
         address postTokenRebaseReceiver;
@@ -28,14 +27,19 @@ contract LidoLocator is ILidoLocator {
         address withdrawalQueue;
         address withdrawalVault;
         address oracleDaemonConfig;
+        address accounting;
+        address predepositGuarantee;
+        address wstETH;
+        address vaultHub;
+        address operatorGrid;
     }
 
     error ZeroAddress();
 
+    //solhint-disable immutable-vars-naming
     address public immutable accountingOracle;
     address public immutable depositSecurityModule;
     address public immutable elRewardsVault;
-    address public immutable legacyOracle;
     address public immutable lido;
     address public immutable oracleReportSanityChecker;
     address public immutable postTokenRebaseReceiver;
@@ -46,6 +50,12 @@ contract LidoLocator is ILidoLocator {
     address public immutable withdrawalQueue;
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
+    address public immutable accounting;
+    address public immutable predepositGuarantee;
+    address public immutable wstETH;
+    address public immutable vaultHub;
+    address public immutable operatorGrid;
+    //solhint-enable immutable-vars-naming
 
     /**
      * @notice declare service locations
@@ -56,10 +66,9 @@ contract LidoLocator is ILidoLocator {
         accountingOracle = _assertNonZero(_config.accountingOracle);
         depositSecurityModule = _assertNonZero(_config.depositSecurityModule);
         elRewardsVault = _assertNonZero(_config.elRewardsVault);
-        legacyOracle = _assertNonZero(_config.legacyOracle);
         lido = _assertNonZero(_config.lido);
         oracleReportSanityChecker = _assertNonZero(_config.oracleReportSanityChecker);
-        postTokenRebaseReceiver = _assertNonZero(_config.postTokenRebaseReceiver);
+        postTokenRebaseReceiver = _config.postTokenRebaseReceiver;
         burner = _assertNonZero(_config.burner);
         stakingRouter = _assertNonZero(_config.stakingRouter);
         treasury = _assertNonZero(_config.treasury);
@@ -67,9 +76,14 @@ contract LidoLocator is ILidoLocator {
         withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
+        accounting = _assertNonZero(_config.accounting);
+        predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
+        wstETH = _assertNonZero(_config.wstETH);
+        vaultHub = _assertNonZero(_config.vaultHub);
+        operatorGrid = _assertNonZero(_config.operatorGrid);
     }
 
-    function coreComponents() external view returns(
+    function coreComponents() external view returns (
         address,
         address,
         address,
@@ -87,7 +101,7 @@ contract LidoLocator is ILidoLocator {
         );
     }
 
-    function oracleReportComponentsForLido() external view returns(
+    function oracleReportComponents() external view returns(
         address,
         address,
         address,
@@ -98,12 +112,12 @@ contract LidoLocator is ILidoLocator {
     ) {
         return (
             accountingOracle,
-            elRewardsVault,
             oracleReportSanityChecker,
             burner,
             withdrawalQueue,
-            withdrawalVault,
-            postTokenRebaseReceiver
+            postTokenRebaseReceiver,
+            stakingRouter,
+            vaultHub
         );
     }
 

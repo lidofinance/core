@@ -26,11 +26,13 @@ export const INVALID_INTERFACE_ID = "0xffffffff";
 // Chain related
 export const SECONDS_PER_SLOT = 12n;
 export const EPOCHS_PER_FRAME = 225n; // one day;
-
+export const GENESIS_FORK_VERSION = "0x00000000"; // for mainnet
 // Oracle report related
 export const GENESIS_TIME = 100n;
 export const SLOTS_PER_EPOCH = 32n;
-export const CONSENSUS_VERSION = 2n;
+export const BASE_CONSENSUS_VERSION = 1n;
+export const AO_CONSENSUS_VERSION = 3n;
+export const VEBO_CONSENSUS_VERSION = 2n;
 export const INITIAL_EPOCH = 1n;
 export const INITIAL_FAST_LANE_LENGTH_SLOTS = 0n;
 

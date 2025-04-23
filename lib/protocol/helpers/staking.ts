@@ -43,9 +43,9 @@ export const ensureStakeLimit = async (ctx: ProtocolContext) => {
 
 export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
   const { lido, depositSecurityModule } = ctx.contracts;
-  const ethHolder = await impersonate(certainAddress("provision:eth:whale"), ether("100000"));
+  const ethHolder = await impersonate(certainAddress("provision:eth:whale"), ether("1000000"));
 
-  await lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
+  await lido.connect(ethHolder).submit(ZeroAddress, { value: ether("20000") });
 
   // Deposit validators
   const dsmSigner = await impersonate(depositSecurityModule.address, ether("100000"));
