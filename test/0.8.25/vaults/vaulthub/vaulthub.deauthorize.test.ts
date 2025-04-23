@@ -22,7 +22,7 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { days, ether, getCurrentBlockTimestamp, impersonate } from "lib";
+import { days, DEPOSIT_DOMAIN, ether, getCurrentBlockTimestamp, impersonate } from "lib";
 import { createVaultProxy, createVaultsReportTree } from "lib/protocol/helpers";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
@@ -68,6 +68,7 @@ describe("VaultHub.sol:deauthorize", () => {
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
 
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      DEPOSIT_DOMAIN,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,

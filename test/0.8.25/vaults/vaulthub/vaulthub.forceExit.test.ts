@@ -16,7 +16,7 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { impersonate } from "lib";
+import { DEPOSIT_DOMAIN, impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
@@ -60,6 +60,7 @@ describe("VaultHub.sol:forceExit", () => {
     const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      DEPOSIT_DOMAIN,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,

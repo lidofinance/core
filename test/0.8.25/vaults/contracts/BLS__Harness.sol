@@ -16,15 +16,27 @@ struct PrecomputedDepositMessage {
 contract BLS__Harness {
     BLS__HarnessVerifier public verifier;
 
+    bytes32 public immutable DEPOSIT_DOMAIN;
+
     function verifyDepositMessage(
         StakingVaultDeposit calldata deposit,
         BLS12_381.DepositY calldata depositY,
         bytes32 withdrawalCredentials
     ) public view {
-        BLS12_381.verifyDepositMessage(deposit, depositY, withdrawalCredentials);
+        BLS12_381.verifyDepositMessage(deposit, depositY, withdrawalCredentials, DEPOSIT_DOMAIN);
     }
 
-    constructor() {
+    function verifyDepositMessageCustomDomain(
+        StakingVaultDeposit calldata deposit,
+        BLS12_381.DepositY calldata depositY,
+        bytes32 withdrawalCredentials,
+        bytes32 customDomain
+    ) public view {
+        BLS12_381.verifyDepositMessage(deposit, depositY, withdrawalCredentials, customDomain);
+    }
+
+    constructor(bytes32 _depositDomain) {
+        DEPOSIT_DOMAIN = _depositDomain;
         verifier = new BLS__HarnessVerifier(this);
     }
 
@@ -67,6 +79,12 @@ contract BLS__HarnessVerifier {
 
     function verifyBLSSupport() external view {
         PrecomputedDepositMessage memory message = harness.LOCAL_MESSAGE_1();
-        harness.verifyDepositMessage(message.deposit, message.depositYComponents, message.withdrawalCredentials);
+        harness.verifyDepositMessageCustomDomain(
+            message.deposit,
+            message.depositYComponents,
+            message.withdrawalCredentials,
+            // mainnet domain
+            0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9
+        );
     }
 }

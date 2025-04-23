@@ -18,7 +18,16 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { BigIntMath, ether, findEvents, getCurrentBlockTimestamp, impersonate, MAX_UINT256, randomAddress } from "lib";
+import {
+  BigIntMath,
+  DEPOSIT_DOMAIN,
+  ether,
+  findEvents,
+  getCurrentBlockTimestamp,
+  impersonate,
+  MAX_UINT256,
+  randomAddress,
+} from "lib";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
@@ -92,6 +101,7 @@ describe("VaultHub.sol:hub", () => {
     [deployer, user, stranger, whale] = await ethers.getSigners();
 
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      DEPOSIT_DOMAIN,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,
