@@ -25,6 +25,16 @@ contract SSZTest is Utilities, Test {
         lib = new Library();
     }
 
+    function test_computeDepositDomainMainnet() public view {
+        bytes32 depositDomain = SSZ.computeDepositDomain(bytes4(0));
+        assertEq(depositDomain, hex"03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9");
+    }
+
+    function test_computeDepositDomainHoodi() public view {
+        bytes32 depositDomain = SSZ.computeDepositDomain(bytes4(hex"10000910"));
+        assertEq(depositDomain, hex"03000000719103511efa4f1362ff2a50996cccf329cc84cb410c5e5c7d351d03");
+    }
+
     function test_toLittleEndianUint() public pure {
         uint256 v = 0x1234567890ABCDEF;
         bytes32 expected = bytes32(bytes.concat(hex"EFCDAB9078563412", bytes24(0)));

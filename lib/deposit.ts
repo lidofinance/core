@@ -1,7 +1,7 @@
 import { bigintToHex } from "bigint-conversion";
 import { BytesLike, getBytes, sha256, zeroPadBytes } from "ethers";
 
-import { ONE_GWEI } from "./constants";
+import { GENESIS_FORK_VERSION, ONE_GWEI } from "./constants";
 
 let sszCached: unknown;
 
@@ -54,7 +54,7 @@ export function formatAmount(amount: bigint) {
   return Buffer.from(bytes, "hex").reverse().toString("hex");
 }
 
-export const computeDepositDomain = async (forkVersionString = "0x00000000") => {
+export const computeDepositDomain = async (genesisForkVersionString = GENESIS_FORK_VERSION) => {
   // ssz ESM is not compatible with require
   const ssz = sszCached ?? (await eval(`import("@chainsafe/ssz")`));
   sszCached = ssz;
@@ -80,10 +80,10 @@ export const computeDepositDomain = async (forkVersionString = "0x00000000") => 
 
   const computeDomain = (
     domainType: ByteArray,
-    forkVersion: ByteArray,
+    genesisForkVersion: ByteArray,
     genesisValidatorRoot: ByteArray,
   ): Uint8Array => {
-    const forkDataRoot = computeForkDataRoot(forkVersion, genesisValidatorRoot);
+    const forkDataRoot = computeForkDataRoot(genesisForkVersion, genesisValidatorRoot);
     const domain = new Uint8Array(32);
     domain.set(domainType, 0);
     domain.set(forkDataRoot.slice(0, 28), 4);
@@ -94,7 +94,7 @@ export const computeDepositDomain = async (forkVersionString = "0x00000000") => 
     return ForkData.hashTreeRoot({ currentVersion, genesisValidatorsRoot });
   };
 
-  return computeDomain(DOMAIN_DEPOSIT, fromHexString(forkVersionString), ZERO_HASH);
+  return computeDomain(DOMAIN_DEPOSIT, fromHexString(genesisForkVersionString), ZERO_HASH);
 };
 
 export const computeDepositMessageRoot = async (
