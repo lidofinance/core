@@ -24,9 +24,18 @@ interface IValidatorsExitBus {
 
     function emitExitEvents(ExitRequestData calldata request) external;
 
-    function triggerExits(ExitRequestData calldata request, uint256[] calldata keyIndexes) external payable;
+    function triggerExits(
+        ExitRequestData calldata request,
+        uint256[] calldata keyIndexes,
+        address refundRecipient,
+        uint8 exitType
+    ) external payable;
 
-    function triggerExitsDirectly(DirectExitData calldata exitData) external payable returns (uint256);
+    function triggerExitsDirectly(
+        DirectExitData calldata exitData,
+        address refundRecipient,
+        uint8 exitType
+    ) external payable;
 
     function setExitRequestLimit(uint256 exitsDailyLimit, uint256 twExitsDailyLimit) external;
 

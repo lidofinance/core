@@ -1,7 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
@@ -20,6 +19,8 @@ const PUBKEYS = [
   "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 ];
+
+const ZERO_ADDRESS = ethers.ZeroAddress;
 
 describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
   let consensus: HashConsensus__Harness;
@@ -86,7 +87,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
     };
 
     await expect(
-      oracle.connect(stranger).triggerExitsDirectly(exitData, {
+      oracle.connect(stranger).triggerExitsDirectly(exitData, ZERO_ADDRESS, 0, {
         value: 4,
       }),
     ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), await oracle.DIRECT_EXIT_ROLE());
@@ -100,31 +101,31 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
 
   it("Not enough fee", async () => {
     await expect(
-      oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
+      oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, ZERO_ADDRESS, 0, {
         value: 2,
       }),
     )
-      .to.be.revertedWithCustomError(oracle, "InsufficientPayment")
-      .withArgs(1, 3, 2);
+      .to.be.revertedWithCustomError(oracle, "InsufficientWithdrawalFee")
+      .withArgs(3, 2);
   });
 
   it("Emit ValidatorExit event and should trigger withdrawals", async () => {
-    const tx = await oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
+    const tx = await oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, ZERO_ADDRESS, 0, {
       value: 4,
     });
     const timestamp = await oracle.getTime();
     await expect(tx).to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled").withArgs(exitData.validatorsPubkeys);
-    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 1);
+    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(authorizedEntity, 1);
 
     await expect(tx)
       .to.emit(oracle, "DirectExitRequest")
-      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[0], timestamp);
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[0], timestamp, authorizedEntity);
     await expect(tx)
       .to.emit(oracle, "DirectExitRequest")
-      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[1], timestamp);
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[1], timestamp, authorizedEntity);
     await expect(tx)
       .to.emit(oracle, "DirectExitRequest")
-      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[2], timestamp);
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[2], timestamp, authorizedEntity);
 
     await expect(tx)
       .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
@@ -141,11 +142,11 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
 
   it("Out of tw exit request limit", async () => {
     await expect(
-      oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
+      oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, ZERO_ADDRESS, 0, {
         value: 4,
       }),
     )
-      .to.be.revertedWithCustomError(oracle, "TWExitRequestsLimit")
+      .to.be.revertedWithCustomError(oracle, "ExitRequestsLimit")
       .withArgs(3, 1);
   });
 
@@ -154,23 +155,23 @@ describe("ValidatorsExitBusOracle.sol:triggerExitsDirectly", () => {
   });
 
   it("Limit regenerated in a day", async () => {
-    const tx = oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, {
+    const tx = oracle.connect(authorizedEntity).triggerExitsDirectly(exitData, ZERO_ADDRESS, 0, {
       value: 4,
     });
 
     const timestamp = await oracle.getTime();
     await expect(tx).to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled").withArgs(exitData.validatorsPubkeys);
-    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 1);
+    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(authorizedEntity, 1);
 
     await expect(tx)
       .to.emit(oracle, "DirectExitRequest")
-      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[0], timestamp);
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[0], timestamp, authorizedEntity);
     await expect(tx)
       .to.emit(oracle, "DirectExitRequest")
-      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[1], timestamp);
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[1], timestamp, authorizedEntity);
     await expect(tx)
       .to.emit(oracle, "DirectExitRequest")
-      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[2], timestamp);
+      .withArgs(exitData.stakingModuleId, exitData.nodeOperatorId, pubkeys[2], timestamp, authorizedEntity);
 
     await expect(tx)
       .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")

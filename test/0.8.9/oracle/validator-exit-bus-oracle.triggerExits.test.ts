@@ -2,7 +2,6 @@ import { expect } from "chai";
 import { ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
-import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
@@ -30,6 +29,8 @@ const PUBKEYS = [
   "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 ];
+
+const ZERO_ADDRESS = ethers.ZeroAddress;
 
 describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   let consensus: HashConsensus__Harness;
@@ -233,6 +234,8 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     const tx = await oracle.triggerExits(
       { data: reportFields.data, dataFormat: reportFields.dataFormat },
       [0, 1, 2, 3],
+      ZERO_ADDRESS,
+      0,
       { value: 4 },
     );
 
@@ -260,9 +263,15 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   });
 
   it("someone submitted exit report data and triggered exit on not sequential indexes", async () => {
-    const tx = await oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1, 3], {
-      value: 10,
-    });
+    const tx = await oracle.triggerExits(
+      { data: reportFields.data, dataFormat: reportFields.dataFormat },
+      [0, 1, 3],
+      ZERO_ADDRESS,
+      0,
+      {
+        value: 10,
+      },
+    );
 
     const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
     const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
@@ -282,17 +291,17 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
       .withArgs(exitRequests[3].moduleId, exitRequests[3].nodeOpId, pubkeys[2], 1, 0);
 
-    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 7);
+    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(admin, 7);
   });
 
   it("Not enough fee", async () => {
     await expect(
-      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1], {
+      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1], ZERO_ADDRESS, 0, {
         value: 1,
       }),
     )
-      .to.be.revertedWithCustomError(oracle, "InsufficientPayment")
-      .withArgs(1, 2, 1);
+      .to.be.revertedWithCustomError(oracle, "InsufficientWithdrawalFee")
+      .withArgs(2, 1);
   });
 
   it("Should trigger withdrawals only for validators that were requested for voluntary exit by trusted entities earlier", async () => {
@@ -303,6 +312,8 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
           dataFormat: reportFields.dataFormat,
         },
         [0],
+        ZERO_ADDRESS,
+        0,
         { value: 2 },
       ),
     ).to.be.revertedWithCustomError(oracle, "ExitHashWasNotSubmitted");
@@ -310,7 +321,9 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
   it("Requested index out of range", async () => {
     await expect(
-      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [5], { value: 2 }),
+      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [5], ZERO_ADDRESS, 0, {
+        value: 2,
+      }),
     )
       .to.be.revertedWithCustomError(oracle, "KeyIndexOutOfRange")
       .withArgs(5, 4);
@@ -318,11 +331,17 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
   it("someone submitted exit report data and triggered exit on not sequential indexes", async () => {
     await expect(
-      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1, 3], {
-        value: 10,
-      }),
+      oracle.triggerExits(
+        { data: reportFields.data, dataFormat: reportFields.dataFormat },
+        [0, 1, 3],
+        ZERO_ADDRESS,
+        0,
+        {
+          value: 10,
+        },
+      ),
     )
-      .to.be.revertedWithCustomError(oracle, "TWExitRequestsLimit")
+      .to.be.revertedWithCustomError(oracle, "ExitRequestsLimit")
       .withArgs(3, 1);
   });
 
@@ -331,9 +350,15 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   });
 
   it("Limit regenerated in a day", async () => {
-    const tx = await oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1, 3], {
-      value: 10,
-    });
+    const tx = await oracle.triggerExits(
+      { data: reportFields.data, dataFormat: reportFields.dataFormat },
+      [0, 1, 3],
+      ZERO_ADDRESS,
+      0,
+      {
+        value: 10,
+      },
+    );
 
     const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
     const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
@@ -353,6 +378,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
       .withArgs(exitRequests[3].moduleId, exitRequests[3].nodeOpId, pubkeys[2], 1, 0);
 
-    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(anyValue, 7);
+    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(admin, 7);
   });
 });
