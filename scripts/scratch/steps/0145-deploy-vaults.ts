@@ -33,7 +33,6 @@ export async function main() {
   ]);
   const dashboardAddress = await dashboard.getAddress();
 
-  // Deploy Dashboard implementation contract
   const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
     vaultImplementationAddress,
     deployer,
@@ -42,6 +41,8 @@ export async function main() {
 
   // Deploy BeaconProxy to get bytecode and add it to whitelist
   const vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beaconAddress, "0x"]);
+  await vaultBeaconProxy.waitForDeployment();
+
   const vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
   const vaultBeaconProxyCodeHash = keccak256(vaultBeaconProxyCode);
 

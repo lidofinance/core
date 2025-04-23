@@ -541,7 +541,13 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         if (totalValue() < $.locked) revert TotalValueBelowLockedAmount();
 
         uint256 numberOfDeposits = _deposits.length;
-        uint256 totalAmount = 0;
+
+        uint256 totalAmount;
+        for (uint256 i = 0; i < numberOfDeposits; i++) {
+            totalAmount += _deposits[i].amount;
+        }
+        if (totalAmount > address(this).balance) revert InsufficientBalance(address(this).balance);
+
         bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
 
         for (uint256 i = 0; i < numberOfDeposits; i++) {
@@ -553,8 +559,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
                 deposit.signature,
                 deposit.depositDataRoot
             );
-
-            totalAmount += deposit.amount;
         }
 
         emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
