@@ -149,11 +149,11 @@ describe("NodeOperatorsRegistry.sol:auxiliary", () => {
     });
 
     it("Reverts if no such an operator exists", async () => {
-      await expect(nor.unsafeUpdateValidatorsCount(3n, 0n)).to.be.revertedWith("OUT_OF_RANGE");
+      await expect(nor.unsafeUpdateValidatorsCount(3n, 0n, 0n)).to.be.revertedWith("OUT_OF_RANGE");
     });
 
     it("Reverts if has not STAKING_ROUTER_ROLE assigned", async () => {
-      await expect(nor.connect(stranger).unsafeUpdateValidatorsCount(firstNodeOperatorId, 0n)).to.be.revertedWith(
+      await expect(nor.connect(stranger).unsafeUpdateValidatorsCount(firstNodeOperatorId, 0n, 0n)).to.be.revertedWith(
         "APP_AUTH_FAILED",
       );
     });

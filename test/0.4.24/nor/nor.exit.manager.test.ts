@@ -196,7 +196,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
   context("exitDeadlineThreshold", () => {
     it("returns the expected value", async () => {
-      const threshold = await nor.getExitDeadlineThreshold();
+      const threshold = await nor.exitDeadlineThreshold();
       expect(threshold).to.equal(86400n);
     });
   });
