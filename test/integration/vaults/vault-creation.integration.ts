@@ -236,7 +236,9 @@ describe("Scenario: Actions on vault creation", () => {
     // Step 2: Predeposit a validator
     const withdrawalCredentials = await stakingVault.withdrawalCredentials();
     const validator = generateValidator(withdrawalCredentials);
-    const predepositData = await generatePredeposit(validator);
+    const predepositData = await generatePredeposit(validator, {
+      depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
+    });
 
     await expect(
       predepositGuarantee
