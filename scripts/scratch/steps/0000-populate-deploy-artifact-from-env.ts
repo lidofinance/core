@@ -2,7 +2,7 @@ import * as process from "node:process";
 
 import { ethers } from "hardhat";
 
-import { computeDepositDomain, log, toHexString } from "lib";
+import { log } from "lib";
 import { persistNetworkState, readNetworkState, Sk } from "lib/state-file";
 
 function getEnvVariable(name: string, defaultValue?: string): string {
@@ -32,14 +32,12 @@ export async function main() {
   state.chainId = parseInt((await ethers.provider.getNetwork()).chainId.toString());
   state.deployer = deployer;
 
-  const depositDomainBytes = await computeDepositDomain(forkVersion);
-
   // Update state with new values from environment variables
   state.chainSpec = {
     ...state.chainSpec,
     genesisTime,
+    forkVersion,
     slotsPerEpoch,
-    depositDomain: toHexString(depositDomainBytes),
   };
 
   if (depositContractAddress) {

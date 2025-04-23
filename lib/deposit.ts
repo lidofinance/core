@@ -1,7 +1,7 @@
 import { bigintToHex } from "bigint-conversion";
 import { BytesLike, getBytes, sha256, zeroPadBytes } from "ethers";
 
-import { ONE_GWEI } from "./constants";
+import { GENESIS_FORK_VERSION, ONE_GWEI } from "./constants";
 
 let sszCached: unknown;
 
@@ -54,7 +54,7 @@ export function formatAmount(amount: bigint) {
   return Buffer.from(bytes, "hex").reverse().toString("hex");
 }
 
-export const computeDepositDomain = async (forkVersionString = "0x00000000") => {
+export const computeDepositDomain = async (forkVersionString = GENESIS_FORK_VERSION) => {
   // ssz ESM is not compatible with require
   const ssz = sszCached ?? (await eval(`import("@chainsafe/ssz")`));
   sszCached = ssz;

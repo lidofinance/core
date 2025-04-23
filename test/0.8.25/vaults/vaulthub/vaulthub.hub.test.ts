@@ -20,9 +20,9 @@ import {
 
 import {
   BigIntMath,
-  DEPOSIT_DOMAIN,
   ether,
   findEvents,
+  GENESIS_FORK_VERSION,
   getCurrentBlockTimestamp,
   impersonate,
   MAX_UINT256,
@@ -101,7 +101,7 @@ describe("VaultHub.sol:hub", () => {
     [deployer, user, stranger, whale] = await ethers.getSigners();
 
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
-      DEPOSIT_DOMAIN,
+      GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,

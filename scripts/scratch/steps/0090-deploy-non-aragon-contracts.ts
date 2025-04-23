@@ -215,7 +215,7 @@ export async function main() {
     proxyContractsOwner,
     deployer,
     [
-      state.chainSpec.depositDomain,
+      state.chainSpec.forkVersion,
       pdgDeployParams.gIndex,
       pdgDeployParams.gIndexAfterChange,
       pdgDeployParams.changeSlot,

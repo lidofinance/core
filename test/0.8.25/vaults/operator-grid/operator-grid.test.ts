@@ -16,7 +16,7 @@ import {
 } from "typechain-types";
 import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 
-import { certainAddress, DEPOSIT_DOMAIN, ether, impersonate } from "lib";
+import { certainAddress, ether, GENESIS_FORK_VERSION, impersonate } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -58,7 +58,7 @@ describe("OperatorGrid.sol", () => {
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
 
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
-      DEPOSIT_DOMAIN,
+      GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,
