@@ -56,7 +56,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
   ];
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
-  const penaltyDelay = 86400n;
+  const exitDeadlineThreshold = 86400n;
 
   const testPublicKey = "0x" + "0".repeat(48 * 2);
   const eligibleToExitInSec = 86400n; // 2 days
@@ -104,7 +104,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy
-    await expect(nor.initialize(locator, moduleType, penaltyDelay, 86400n))
+    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold))
       .to.emit(nor, "RewardDistributionStateChanged")
       .withArgs(RewardDistributionState.Distributed);
 

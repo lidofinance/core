@@ -133,7 +133,6 @@
     "deployParameters": {
       "stakingModuleName": "Curated",
       "stakingModuleTypeId": "curated-onchain-v1",
-      "stuckPenaltyDelay": 172800,
       "exitDeadlineThresholdInSeconds": 86400
     }
   },
@@ -141,7 +140,6 @@
     "deployParameters": {
       "stakingModuleName": "SimpleDVT",
       "stakingModuleTypeId": "curated-onchain-v1",
-      "stuckPenaltyDelay": 432000,
       "exitDeadlineThresholdInSeconds": 86400
     }
   },

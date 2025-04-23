@@ -237,20 +237,20 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     //
     // METHODS
     //
-    function initialize(address _locator, bytes32 _type, uint256 /* _stuckPenaltyDelay */, uint256 _thresholdInSeconds) public onlyInit {
+    function initialize(address _locator, bytes32 _type, uint256 _exitDeadlineThresholdInSeconds) public onlyInit {
         // Initializations for v1 --> v2
-        _initialize_v2(_locator, _type, 0);
+        _initialize_v2(_locator, _type);
 
         // Initializations for v2 --> v3
         _initialize_v3();
 
         // Initializations for v3 --> v4
-        _initialize_v4(_thresholdInSeconds);
+        _initialize_v4(_exitDeadlineThresholdInSeconds);
 
         initialized();
     }
 
-    function _initialize_v2(address _locator, bytes32 _type, uint256 /* _stuckPenaltyDelay */) internal {
+    function _initialize_v2(address _locator, bytes32 _type) internal {
         _onlyNonZeroAddress(_locator);
         LIDO_LOCATOR_POSITION.setStorageAddress(_locator);
         TYPE_POSITION.setStorageBytes32(_type);
@@ -269,9 +269,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _updateRewardDistributionState(RewardDistributionState.Distributed);
     }
 
-    function _initialize_v4(uint256 _thresholdInSeconds) internal {
+    function _initialize_v4(uint256 _exitDeadlineThresholdInSeconds) internal {
         _setContractVersion(4);
-        EXIT_DELAY_THRESHOLD_SECONDS.setStorageUint256(_thresholdInSeconds);
+        EXIT_DELAY_THRESHOLD_SECONDS.setStorageUint256(_exitDeadlineThresholdInSeconds);
     }
 
     /// @notice A function to finalize upgrade to v2 (from v1). Can be called only once.
@@ -283,10 +283,10 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// See historical usage in commit: https://github.com/lidofinance/core/blob/c19480aa3366b26aa6eac17f85a6efae8b9f4f72/contracts/0.4.24/nos/NodeOperatorsRegistry.sol#L298
     /// function finalizeUpgrade_v3() external
 
-    function finalizeUpgrade_v4(uint256 _thresholdInSeconds) external {
+    function finalizeUpgrade_v4(uint256 _exitDeadlineThresholdInSeconds) external {
         require(hasInitialized(), "CONTRACT_NOT_INITIALIZED");
         _checkContractVersion(3);
-        _initialize_v4(_thresholdInSeconds);
+        _initialize_v4(_exitDeadlineThresholdInSeconds);
     }
 
     /// @notice Add node operator named `name` with reward address `rewardAddress` and staking limit = 0 validators
