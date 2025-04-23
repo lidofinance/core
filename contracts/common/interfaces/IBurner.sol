@@ -5,7 +5,6 @@
 // solhint-disable-next-line
 pragma solidity >=0.4.24 <0.9.0;
 
-// import { IAccessControlEnumerable } from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
 
 interface IBurner {
     /**

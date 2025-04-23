@@ -18,6 +18,8 @@ interface IPausableUntil {
 }
 
 interface IPausableUntilWithRoles is IPausableUntil, IAccessControlEnumerable {
+    function RESUME_ROLE() external view returns (bytes32);
+    function PAUSE_ROLE() external view returns (bytes32);
 }
 
 interface IOperatorGrid is IAccessControlEnumerable {
@@ -40,6 +42,14 @@ interface IBurner is IBurnerWithoutAccessControl, IAccessControlEnumerable {
     function REQUEST_BURN_MY_STETH_ROLE() external view returns (bytes32);
 }
 
+interface ICSModule {
+    function accounting() external view returns (address);
+}
+
+interface ILidoWithFinalizeUpgrade is ILido {
+    function finalizeUpgrade_v3(address _oldBurner, address[4] calldata _contractsWithBurnerAllowances) external;
+}
+
 interface ILidoLocatorOld {
     function accountingOracle() external view returns(address);
     function depositSecurityModule() external view returns(address);
@@ -58,7 +68,7 @@ interface ILidoLocatorOld {
 }
 
 interface IAccountingOracle is IBaseOracle {
-    function initialize(address admin, address consensusContract, uint256 consensusVersion) external;
+    function finalizeUpgrade_v3(uint256 consensusVersion) external;
 }
 
 interface IAragonAppRepo {
@@ -66,7 +76,24 @@ interface IAragonAppRepo {
 }
 
 interface IStakingRouter is IAccessControlEnumerable {
+    struct StakingModule {
+        uint24 id;
+        address stakingModuleAddress;
+        uint16 stakingModuleFee;
+        uint16 treasuryFee;
+        uint16 stakeShareLimit;
+        uint8 status;
+        string name;
+        uint64 lastDepositAt;
+        uint256 lastDepositBlock;
+        uint256 exitedValidatorsCount;
+        uint16 priorityExitShareThreshold;
+        uint64 maxDepositsPerBlock;
+        uint64 minDepositBlockDistance;
+    }
+
     function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
+    function getStakingModules() external view returns (StakingModule[] memory res);
 }
 
 interface IUpgradeableBeacon {
@@ -87,8 +114,6 @@ interface IVaultFactory {
 interface IVaultHub is IPausableUntilWithRoles {
     function VAULT_MASTER_ROLE() external view returns (bytes32);
     function VAULT_REGISTRY_ROLE() external view returns (bytes32);
-    function RESUME_ROLE() external view returns (bytes32);
-    function PAUSE_ROLE() external view returns (bytes32);
 }
 
 interface IOracleReportSanityChecker is IAccessControlEnumerable {
@@ -115,10 +140,6 @@ interface IOracleReportSanityChecker is IAccessControlEnumerable {
 *   - `finishUpgrade()` as the last step of the upgrade
 */
 contract UpgradeTemplateV3 {
-    //
-    // Events
-    //
-    event UpgradeFinished();
 
     struct UpgradeTemplateV3Params {
         // Old implementations
@@ -142,10 +163,22 @@ contract UpgradeTemplateV3 {
         address aragonAppLidoRepo;
         address locator;
         address voting;
-        address nodeOperatorsRegistry;
-        address simpleDvt;
-        address csmAccounting;
     }
+
+    //
+    // Events
+    //
+
+    event UpgradeFinished();
+
+    //
+    // Constants and immutables
+    //
+
+    uint256 internal constant ACCOUNTING_ORACLE_CONSENSUS_VERSION = 3;
+
+    uint256 internal constant EXPECTED_FINAL_LIDO_VERSION = 3;
+    uint256 internal constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
 
     // Old upgraded non-proxy contracts
     IBurner public immutable OLD_BURNER;
@@ -181,7 +214,7 @@ contract UpgradeTemplateV3 {
     IAccountingOracle public immutable ACCOUNTING_ORACLE;
     address public immutable CSM_ACCOUNTING;
     address public immutable EL_REWARDS_VAULT;
-    ILido public immutable LIDO;
+    ILidoWithFinalizeUpgrade public immutable LIDO;
     ILidoLocator public immutable LOCATOR;
     address public immutable NODE_OPERATORS_REGISTRY;
     IOperatorGrid public immutable OPERATOR_GRID;
@@ -193,7 +226,6 @@ contract UpgradeTemplateV3 {
     address public immutable WSTETH;
 
     // Roles
-    // (stored as immutables initialized from contracts)
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
     // Burner
     bytes32 public immutable REQUEST_BURN_SHARES_ROLE;
@@ -222,17 +254,6 @@ contract UpgradeTemplateV3 {
     // OperatorGrid
     bytes32 public immutable REGISTRY_ROLE;
 
-    //
-    // Constants
-    //
-
-    //
-    // Values for checks to compare with or other
-    //
-
-    uint256 internal constant EXPECTED_FINAL_LIDO_VERSION = 3;
-    uint256 internal constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
-
     // Timestamp since startUpgrade() and finishUpgrade() revert with Expired()
     // This behavior is introduced to disarm the template if the upgrade voting creation or enactment didn't
     // happen in proper time period
@@ -241,12 +262,12 @@ contract UpgradeTemplateV3 {
     // Initial value of _upgradeBlockNumber
     uint256 internal constant UPGRADE_NOT_STARTED = 0;
 
-
     uint256 internal constant INFINITE_ALLOWANCE = type(uint256).max;
 
     //
     // Structured storage
     //
+
     uint256 internal _upgradeBlockNumber = UPGRADE_NOT_STARTED;
     bool public _isUpgradeFinished;
     uint256 internal _initialOldBurnerStethBalance;
@@ -268,7 +289,7 @@ contract UpgradeTemplateV3 {
         ACCOUNTING_ORACLE = IAccountingOracle(oldLocatorImpl.accountingOracle());
         EL_REWARDS_VAULT = oldLocatorImpl.elRewardsVault();
         STAKING_ROUTER = IStakingRouter(oldLocatorImpl.stakingRouter());
-        LIDO = ILido(oldLocatorImpl.lido());
+        LIDO = ILidoWithFinalizeUpgrade(oldLocatorImpl.lido());
         VALIDATORS_EXIT_BUS_ORACLE = oldLocatorImpl.validatorsExitBusOracle();
         WITHDRAWAL_QUEUE = oldLocatorImpl.withdrawalQueue();
 
@@ -281,6 +302,18 @@ contract UpgradeTemplateV3 {
         ORACLE_REPORT_SANITY_CHECKER = IOracleReportSanityChecker(newLocatorImpl.oracleReportSanityChecker());
         OPERATOR_GRID = IOperatorGrid(newLocatorImpl.operatorGrid());
 
+        // Retrieve contracts with burner allowances to migrate
+        IStakingRouter.StakingModule[] memory stakingModules = STAKING_ROUTER.getStakingModules();
+        IStakingRouter.StakingModule memory curated = stakingModules[0];
+        if (keccak256(abi.encodePacked(curated.name)) != keccak256("curated-onchain-v1")) revert IncorrectStakingModuleName(curated.name);
+        NODE_OPERATORS_REGISTRY = curated.stakingModuleAddress;
+        IStakingRouter.StakingModule memory simpleDvt = stakingModules[1];
+        if (keccak256(abi.encodePacked(simpleDvt.name)) != keccak256("SimpleDVT")) revert IncorrectStakingModuleName(simpleDvt.name);
+        SIMPLE_DVT = simpleDvt.stakingModuleAddress;
+        IStakingRouter.StakingModule memory csm = stakingModules[2];
+        if (keccak256(abi.encodePacked(csm.name)) != keccak256("Community Staking")) revert IncorrectStakingModuleName(csm.name);
+        CSM_ACCOUNTING = ICSModule(csm.stakingModuleAddress).accounting();
+
         VAULT_FACTORY = IVaultFactory(params.vaultFactory);
         UPGRADEABLE_BEACON = IUpgradeableBeacon(params.upgradeableBeacon);
         STAKING_VAULT_IMPLEMENTATION = params.stakingVaultImplementation;
@@ -288,9 +321,6 @@ contract UpgradeTemplateV3 {
         AGENT = params.agent;
         ARAGON_APP_LIDO_REPO = IAragonAppRepo(params.aragonAppLidoRepo);
         VOTING = params.voting;
-        CSM_ACCOUNTING = params.csmAccounting;
-        NODE_OPERATORS_REGISTRY = params.nodeOperatorsRegistry;
-        SIMPLE_DVT = params.simpleDvt;
         OLD_LIDO_IMPLEMENTATION = params.oldLidoImplementation;
 
         // Initialize Burner roles
@@ -348,8 +378,14 @@ contract UpgradeTemplateV3 {
 
         if (_upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
 
-        BURNER.grantRole(DEFAULT_ADMIN_ROLE, AGENT);
-        BURNER.renounceRole(DEFAULT_ADMIN_ROLE, address(this));
+        LIDO.finalizeUpgrade_v3(address(OLD_BURNER), [
+            WITHDRAWAL_QUEUE,
+            NODE_OPERATORS_REGISTRY,
+            SIMPLE_DVT,
+            CSM_ACCOUNTING
+        ]);
+
+        ACCOUNTING_ORACLE.finalizeUpgrade_v3(ACCOUNTING_ORACLE_CONSENSUS_VERSION);
 
         _assertPostUpgradeState();
 
@@ -365,16 +401,15 @@ contract UpgradeTemplateV3 {
         _assertAragonAppImplementation(ARAGON_APP_LIDO_REPO, OLD_LIDO_IMPLEMENTATION);
 
         // Check allowances of the old burner
-        address oldBurner = address(OLD_BURNER);
         address[4] memory contracts = [
             WITHDRAWAL_QUEUE,
-            SIMPLE_DVT,
             NODE_OPERATORS_REGISTRY,
+            SIMPLE_DVT,
             CSM_ACCOUNTING
         ];
         for (uint256 i = 0; i < contracts.length; ++i) {
-            if (LIDO.allowance(contracts[i], oldBurner) != INFINITE_ALLOWANCE) {
-                revert IncorrectBurnerAllowance(contracts[i], oldBurner);
+            if (LIDO.allowance(contracts[i], address(OLD_BURNER)) != INFINITE_ALLOWANCE) {
+                revert IncorrectBurnerAllowance(contracts[i], address(OLD_BURNER));
             }
         }
     }
@@ -547,9 +582,6 @@ contract UpgradeTemplateV3 {
         }
     }
 
-    function _checkContractVersions() internal view {
-    }
-
     function _assertContractVersion(IVersioned versioned, uint256 expectedVersion) internal view {
         if (versioned.getContractVersion() != expectedVersion) {
             revert InvalidContractVersion(address(versioned), expectedVersion);
@@ -574,4 +606,5 @@ contract UpgradeTemplateV3 {
     error IncorrectUpgradeableBeaconOwner(address beacon, address owner);
     error IncorrectUpgradeableBeaconImplementation(address beacon, address implementation);
     error NewAndOldLocatorImplementationsMustBeDifferent();
+    error IncorrectStakingModuleName(string name);
 }

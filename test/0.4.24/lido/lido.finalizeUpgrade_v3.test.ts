@@ -88,7 +88,14 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       .and.to.emit(lido, "ContractVersionSet")
       .withArgs(initialVersion);
 
-    await expect(lido.finalizeUpgrade_v3(ZeroAddress)).to.be.revertedWith("NOT_INITIALIZED");
+    await expect(
+      lido.finalizeUpgrade_v3(ZeroAddress, [
+        nodeOperatorsRegistryAddress,
+        simpleDvtAddress,
+        csmAccountingAddress,
+        withdrawalQueueAddress,
+      ]),
+    ).to.be.revertedWith("NOT_INITIALIZED");
   });
 
   context("initialized", () => {
@@ -104,15 +111,36 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
     it("Reverts if contract version does not equal 2", async () => {
       const unexpectedVersion = 1n;
       await lido.harness_setContractVersion(unexpectedVersion);
-      await expect(lido.finalizeUpgrade_v3(ZeroAddress)).to.be.reverted;
+      await expect(
+        lido.finalizeUpgrade_v3(ZeroAddress, [
+          nodeOperatorsRegistryAddress,
+          simpleDvtAddress,
+          csmAccountingAddress,
+          withdrawalQueueAddress,
+        ]),
+      ).to.be.reverted;
     });
 
     it("Reverts if old burner is the same as new burner", async () => {
-      await expect(lido.finalizeUpgrade_v3(burner.target)).to.be.revertedWith("OLD_BURNER_SAME_AS_NEW");
+      await expect(
+        lido.finalizeUpgrade_v3(burner.target, [
+          nodeOperatorsRegistryAddress,
+          simpleDvtAddress,
+          csmAccountingAddress,
+          withdrawalQueueAddress,
+        ]),
+      ).to.be.revertedWith("OLD_BURNER_SAME_AS_NEW");
     });
 
     it("Sets contract version to 3", async () => {
-      await expect(lido.finalizeUpgrade_v3(oldBurner.target))
+      await expect(
+        lido.finalizeUpgrade_v3(oldBurner.target, [
+          nodeOperatorsRegistryAddress,
+          simpleDvtAddress,
+          csmAccountingAddress,
+          withdrawalQueueAddress,
+        ]),
+      )
         .and.to.emit(lido, "ContractVersionSet")
         .withArgs(finalizeVersion);
 
@@ -123,7 +151,14 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       await lido.harness_mintShares(oldBurner.target, sharesOnOldBurner);
       expect(await lido.sharesOf(oldBurner.target)).to.equal(sharesOnOldBurner);
 
-      await expect(lido.finalizeUpgrade_v3(oldBurner.target))
+      await expect(
+        lido.finalizeUpgrade_v3(oldBurner.target, [
+          nodeOperatorsRegistryAddress,
+          simpleDvtAddress,
+          csmAccountingAddress,
+          withdrawalQueueAddress,
+        ]),
+      )
         .and.to.emit(lido, "TransferShares")
         .withArgs(oldBurner.target, burner.target, sharesOnOldBurner);
 

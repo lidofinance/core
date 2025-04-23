@@ -10,10 +10,10 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState();
 
-  const upgradeTemplate = state[Sk.upgradeTemplateV3].address;
+  const agentAddress = state[Sk.appAgent].proxy.address;
 
   // Transfer OZ admin roles for various contracts
-  const ozAdminTransfers = [{ name: "Burner", address: state[Sk.burner].address, recipient: upgradeTemplate }];
+  const ozAdminTransfers = [{ name: "Burner", address: state[Sk.burner].address, recipient: agentAddress }];
 
   for (const params of ozAdminTransfers) {
     const contractInstance = await loadContract(params.name, params.address);

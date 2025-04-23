@@ -45,6 +45,11 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
       hardfork: "prague",
+      mining: {
+        mempool: {
+          order: "fifo",
+        },
+      },
     },
     "custom": {
       url: RPC_URL,

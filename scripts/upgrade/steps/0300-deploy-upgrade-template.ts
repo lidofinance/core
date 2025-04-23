@@ -6,13 +6,10 @@ import { loadContract } from "lib/contract";
 import { deployWithoutProxy } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
 
-import { readUpgradeParameters } from "../upgrade-utils";
-
 export async function main() {
   const deployerSigner = await ethers.provider.getSigner();
   const deployer = deployerSigner.address;
   const state = readNetworkState();
-  const parameters = readUpgradeParameters();
 
   const locator = OssifiableProxy__factory.connect(state[Sk.lidoLocator].proxy.address, deployerSigner);
   const oldLocatorImplementation = await locator.proxy__getImplementation();
@@ -46,9 +43,6 @@ export async function main() {
       state[Sk.aragonLidoAppRepo].proxy.address,
       state[Sk.lidoLocator].proxy.address,
       state[Sk.appVoting].proxy.address,
-      state[Sk.appNodeOperatorsRegistry].proxy.address,
-      state[Sk.appSimpleDvt].proxy.address,
-      parameters["csm"].accounting,
     ],
   ]);
 }

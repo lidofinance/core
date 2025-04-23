@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { CallExceptionError,ethers } from "ethers";
+import { CallExceptionError, ethers } from "ethers";
 
 import { NodeOperatorsRegistry } from "typechain-types";
 

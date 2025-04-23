@@ -4,11 +4,6 @@
       "relativeShareLimitBP": 1000
     }
   },
-  "accountingOracle": {
-    "deployParameters": {
-      "consensusVersion": 3
-    }
-  },
   "oracleReportSanityChecker": {
     "deployParameters": {
       "exitedValidatorsPerDayLimit": 1500,
@@ -40,8 +35,5 @@
   },
   "app:lido": {
     "newVersion": [5, 0, 0]
-  },
-  "csm": {
-    "accounting": "0x4d72BFF1BeaC69925F8Bd12526a39BAAb069e5Da"
   }
 }
