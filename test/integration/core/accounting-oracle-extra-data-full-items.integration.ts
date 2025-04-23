@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Burner__factory, IStakingModule,NodeOperatorsRegistry } from "typechain-types";
+import { Burner__factory, IStakingModule, NodeOperatorsRegistry } from "typechain-types";
 
 import {
   advanceChainTime,

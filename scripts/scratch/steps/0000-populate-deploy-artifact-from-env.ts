@@ -1,5 +1,3 @@
-import * as process from "node:process";
-
 import { ethers } from "hardhat";
 
 import { log } from "lib";

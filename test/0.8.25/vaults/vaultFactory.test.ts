@@ -21,7 +21,7 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { days, ether,GENESIS_FORK_VERSION } from "lib";
+import { days, ether, GENESIS_FORK_VERSION } from "lib";
 import { createVaultProxy } from "lib/protocol/helpers";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
