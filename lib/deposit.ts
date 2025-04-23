@@ -5,8 +5,6 @@ import { ONE_GWEI } from "./constants";
 
 let sszCached: unknown;
 
-export const sanitazeHex = (hex: string) => hex.replace("0x", "").toLowerCase();
-
 export const toHexString = (value: unknown): string => {
   if (typeof value === "string" && !value.startsWith("0x")) {
     return `0x${value}`;

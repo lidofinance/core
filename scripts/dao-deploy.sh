@@ -15,6 +15,11 @@ if [[ -z "${NETWORK}" ]]; then
 fi
 echo "NETWORK is $NETWORK"
 
+if [[ -z "${FORK_VERSION}" ]]; then
+  echo "Error: Environment variable FORK_VERSION must be set"
+  exit 1
+fi
+
 rm -f "${NETWORK_STATE_FILE}"
 cp "${NETWORK_STATE_DEFAULTS_FILE}" "${NETWORK_STATE_FILE}"
 
