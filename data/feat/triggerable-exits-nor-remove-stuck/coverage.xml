@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3234"  lines-covered="3143"  line-rate="0.9719"  branches-valid="1482"  branches-covered="1371"  branch-rate="0.9251"  timestamp="1745412970532" complexity="0" version="0.1">
+<coverage lines-valid="3234"  lines-covered="3143"  line-rate="0.9719"  branches-valid="1482"  branches-covered="1371"  branch-rate="0.9251"  timestamp="1745414816929" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -883,8 +883,8 @@
 			<method name="removeSigningKeysOperatorBH"  hits="15"  signature="()V" >
 				<lines><line number="1051"  hits="15" /></lines>
 			</method>
-			<method name="exitDeadlineThreshold"  hits="5"  signature="()V" >
-				<lines><line number="1055"  hits="5" /></lines>
+			<method name="exitDeadlineThreshold"  hits="6"  signature="()V" >
+				<lines><line number="1055"  hits="6" /></lines>
 			</method>
 			<method name="setExitDeadlineThreshold"  hits="0"  signature="()V" >
 				<lines><line number="1059"  hits="0" /></lines>
@@ -1323,7 +1323,7 @@
 			<line number="1035"  hits="19"  branch="false" />
 			<line number="1043"  hits="11"  branch="false" />
 			<line number="1052"  hits="15"  branch="false" />
-			<line number="1056"  hits="5"  branch="false" />
+			<line number="1056"  hits="6"  branch="false" />
 			<line number="1060"  hits="0"  branch="false" />
 			<line number="1061"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
 			<line number="1062"  hits="0"  branch="false" />
@@ -2561,8 +2561,8 @@
 		</class>
 		<class name="LidoLocator.sol"  filename="contracts/0.8.9/LidoLocator.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="153"  signature="()V" >
-				<lines><line number="55"  hits="153" /></lines>
+			<method name="constructor"  hits="152"  signature="()V" >
+				<lines><line number="55"  hits="152" /></lines>
 			</method>
 			<method name="coreComponents"  hits="1"  signature="()V" >
 				<lines><line number="72"  hits="1" /></lines>
@@ -2570,29 +2570,29 @@
 			<method name="oracleReportComponentsForLido"  hits="29"  signature="()V" >
 				<lines><line number="90"  hits="29" /></lines>
 			</method>
-			<method name="_assertNonZero"  hits="2051"  signature="()V" >
-				<lines><line number="110"  hits="2051" /></lines>
+			<method name="_assertNonZero"  hits="2037"  signature="()V" >
+				<lines><line number="110"  hits="2037" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="56"  hits="153"  branch="false" />
-			<line number="57"  hits="152"  branch="false" />
-			<line number="58"  hits="151"  branch="false" />
-			<line number="59"  hits="150"  branch="false" />
-			<line number="60"  hits="149"  branch="false" />
-			<line number="61"  hits="148"  branch="false" />
-			<line number="62"  hits="147"  branch="false" />
-			<line number="63"  hits="146"  branch="false" />
-			<line number="64"  hits="145"  branch="false" />
-			<line number="65"  hits="144"  branch="false" />
-			<line number="66"  hits="143"  branch="false" />
-			<line number="67"  hits="142"  branch="false" />
-			<line number="68"  hits="141"  branch="false" />
-			<line number="69"  hits="140"  branch="false" />
+			<line number="56"  hits="152"  branch="false" />
+			<line number="57"  hits="151"  branch="false" />
+			<line number="58"  hits="150"  branch="false" />
+			<line number="59"  hits="149"  branch="false" />
+			<line number="60"  hits="148"  branch="false" />
+			<line number="61"  hits="147"  branch="false" />
+			<line number="62"  hits="146"  branch="false" />
+			<line number="63"  hits="145"  branch="false" />
+			<line number="64"  hits="144"  branch="false" />
+			<line number="65"  hits="143"  branch="false" />
+			<line number="66"  hits="142"  branch="false" />
+			<line number="67"  hits="141"  branch="false" />
+			<line number="68"  hits="140"  branch="false" />
+			<line number="69"  hits="139"  branch="false" />
 			<line number="80"  hits="1"  branch="false" />
 			<line number="99"  hits="29"  branch="false" />
-			<line number="111"  hits="2051"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="112"  hits="2037"  branch="false" />
+			<line number="111"  hits="2037"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="112"  hits="2023"  branch="false" />
 		</lines>
 		</class>
 		<class name="OracleDaemonConfig.sol"  filename="contracts/0.8.9/OracleDaemonConfig.sol"  line-rate="1"  branch-rate="1" >
@@ -5192,8 +5192,8 @@
 	<classes>
 		<class name="OssifiableProxy.sol"  filename="contracts/0.8.9/proxy/OssifiableProxy.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="119"  signature="()V" >
-				<lines><line number="23"  hits="119" /></lines>
+			<method name="constructor"  hits="118"  signature="()V" >
+				<lines><line number="23"  hits="118" /></lines>
 			</method>
 			<method name="proxy__getAdmin"  hits="3"  signature="()V" >
 				<lines><line number="28"  hits="3" /></lines>
@@ -5221,7 +5221,7 @@
 			</method>
 		</methods>
 		<lines>
-			<line number="24"  hits="119"  branch="false" />
+			<line number="24"  hits="118"  branch="false" />
 			<line number="29"  hits="3"  branch="false" />
 			<line number="34"  hits="4"  branch="false" />
 			<line number="39"  hits="5"  branch="false" />
