@@ -225,7 +225,7 @@ library BLS12_381 {
      * @param deposit staking vault deposit to verify
      * @param depositY Y coordinates of uncompressed pubkey and signature
      * @param withdrawalCredentials missing part of deposit message
-     * @param depositDomain domain of the deposit message for current chain
+     * @param depositDomain domain of the deposit message for the current chain
      * @dev will revert with `InvalidSignature` if the signature is invalid
      * @dev will revert with `InputHasInfinityPoints` if the input contains infinity points(zero values)
      */
