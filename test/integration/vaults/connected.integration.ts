@@ -10,6 +10,7 @@ import {
   disconnectFromHub,
   getProtocolContext,
   ProtocolContext,
+  reportVaultDataWithProof,
   setupLido,
   VaultRoles,
 } from "lib/protocol";
@@ -58,11 +59,10 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
   afterEach(async () => await Snapshot.restore(snapshot));
 
   after(async () => await Snapshot.restore(originalSnapshot));
-
   it("Allows minting stETH", async () => {
     const { vaultHub } = ctx.contracts;
 
-    // add some stETH to the vault to have valuation
+    // add some stETH to the vault to have totalValue
     await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
     await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
@@ -73,7 +73,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
   it("Allows burning stETH", async () => {
     const { vaultHub, lido } = ctx.contracts;
 
-    // add some stETH to the vault to have valuation, mint shares and approve stETH
+    // add some stETH to the vault to have totalValue, mint shares and approve stETH
     await dashboard.connect(roles.funder).fund({ value: ether("1") });
     await dashboard.connect(roles.minter).mintStETH(roles.burner, 1n);
     await lido.connect(roles.burner).approve(dashboard, 1n);
@@ -82,7 +82,6 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
       .to.emit(vaultHub, "BurnedSharesOnVault")
       .withArgs(stakingVault, 1n);
   });
-
   it("Allows trigger validator withdrawal", async () => {
     await expect(
       dashboard
@@ -112,7 +111,8 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
 
     it.skip("Can deauthorize Lido VaultHub if dicsconnected from Hub", async () => {
       await disconnectFromHub(ctx, stakingVault);
-      // todo: need to call something to actually disconnect the socket, but did not find, what to call
+      await reportVaultDataWithProof(stakingVault);
+
       await expect(dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub())
         .to.emit(stakingVault, "VaultHubAuthorizedSet")
         .withArgs(false);

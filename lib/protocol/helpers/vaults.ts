@@ -14,7 +14,7 @@ import { ProtocolContext } from "../types";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
-const VAULT_CONNECTION_DEPOSIT = ether("1");
+export const VAULT_CONNECTION_DEPOSIT = ether("1");
 
 export type VaultRoles = {
   assetRecoverer: HardhatEthersSigner;

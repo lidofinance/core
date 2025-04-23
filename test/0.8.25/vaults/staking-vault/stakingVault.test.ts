@@ -27,11 +27,10 @@ import {
   proxify,
   streccak,
 } from "lib";
+import { getPubkeys } from "lib/protocol/helpers/vaults";
 
 import { deployStakingVaultBehindBeaconProxy } from "test/deploy";
 import { Snapshot } from "test/suite";
-
-import { getPubkeys } from "../../../../lib/protocol/helpers/vaults";
 
 const MAX_INT128 = 2n ** 127n - 1n;
 
