@@ -56,10 +56,10 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
   ];
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
-  const penaltyDelay = 86400n;
+  const exitDeadlineThreshold = 86400n;
 
-  const testPublicKey = "0x123456";
-  const eligibleToExitInSec = 172800n; // 2 days
+  const testPublicKey = "0x" + "0".repeat(48 * 2);
+  const eligibleToExitInSec = 86400n; // 2 days
   const proofSlotTimestamp = 1234567890n;
   const withdrawalRequestPaidFee = 100000n;
   const exitType = 1n;
@@ -104,7 +104,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy
-    await expect(nor.initialize(locator, moduleType, penaltyDelay))
+    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold))
       .to.emit(nor, "RewardDistributionStateChanged")
       .withArgs(RewardDistributionState.Distributed);
 
@@ -146,8 +146,6 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
           eligibleToExitInSec
         )
       )
-        .to.emit(nor, "PenaltyApplied")
-        .withArgs(firstNodeOperatorId, testPublicKey, ethers.parseEther("1"), "EXCESS_EXIT_TIME")
         .and.to.emit(nor, "ValidatorExitStatusUpdated")
         .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, proofSlotTimestamp);
     });
@@ -191,26 +189,15 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
           exitType
         )
       )
-        .to.emit(nor, "TriggerableExitFeeSet")
+        .to.emit(nor, "ValidatorExitTriggered")
         .withArgs(firstNodeOperatorId, testPublicKey, withdrawalRequestPaidFee, exitType);
-    });
-
-    it("reverts when public key is empty", async () => {
-      await expect(
-        nor.connect(stakingRouter).onValidatorExitTriggered(
-          firstNodeOperatorId,
-          "0x",
-          withdrawalRequestPaidFee,
-          exitType
-        )
-      ).to.be.revertedWith("INVALID_PUBLIC_KEY");
     });
   });
 
   context("exitDeadlineThreshold", () => {
     it("returns the expected value", async () => {
-      const threshold = await nor.exitDeadlineThreshold(firstNodeOperatorId);
-      expect(threshold).to.equal(172800n); // 2 days in seconds
+      const threshold = await nor.exitDeadlineThreshold();
+      expect(threshold).to.equal(86400n);
     });
   });
 
@@ -238,7 +225,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         firstNodeOperatorId,
         proofSlotTimestamp,
         testPublicKey,
-        172799n // Less than the threshold
+        1n // Less than the threshold
       );
       expect(shouldPenalize).to.be.false;
     });

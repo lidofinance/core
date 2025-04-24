@@ -69,13 +69,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         uint256 eligibleToExitInSec,
         uint256 proofSlotTimestamp
     );
-    event TriggerableExitFeeSet(
+    event ValidatorExitTriggered(
         uint256 indexed nodeOperatorId,
         bytes publicKey,
         uint256 withdrawalRequestPaidFee,
         uint256 exitType
     );
-    event PenaltyApplied(uint256 indexed nodeOperatorId, bytes publicKey, uint256 penaltyAmount, string penaltyType);
     event ExitDeadlineThresholdChanged(uint256 threshold);
 
     // Enum to represent the state of the reward distribution process
@@ -127,8 +126,10 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     // StuckPenaltyStats
     /// @dev stuck keys count from oracle report
+    /// @dev [DEPRECATED]
     uint8 internal constant STUCK_VALIDATORS_COUNT_OFFSET = 0;
     /// @dev refunded keys count from dao
+    /// @dev [DEPRECATED]
     uint8 internal constant REFUNDED_VALIDATORS_COUNT_OFFSET = 1;
     /// @dev extra penalty time after stuck keys resolved (refunded and/or exited)
     /// @notice field is also used as flag for "half-cleaned" penalty status
@@ -136,6 +137,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     ///         `STUCK_VALIDATORS_COUNT <= REFUNDED_VALIDATORS_COUNT && STUCK_PENALTY_END_TIMESTAMP <= refund timestamp + STUCK_PENALTY_DELAY`
     ///         When operator refund all stuck validators and time has pass STUCK_PENALTY_DELAY, but STUCK_PENALTY_END_TIMESTAMP not zeroed,
     ///         then Operator can receive rewards but can't get new deposits until the new Oracle report or `clearNodeOperatorPenalty` is called.
+    /// @dev [DEPRECATED]
     uint8 internal constant STUCK_PENALTY_END_TIMESTAMP_OFFSET = 2;
 
     // Summary SigningKeysStats
@@ -179,6 +181,11 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     // bytes32 internal constant REWARD_DISTRIBUTION_STATE = keccak256("lido.NodeOperatorsRegistry.rewardDistributionState");
     bytes32 internal constant REWARD_DISTRIBUTION_STATE = 0x4ddbb0dcdc5f7692e494c15a7fca1f9eb65f31da0b5ce1c3381f6a1a1fd579b6;
+
+    // Threshold in seconds after which a delayed exit is penalized
+    // bytes32 internal constant EXIT_DELAY_THRESHOLD_SECONDS = keccak256("lido.NodeOperatorsRegistry.exitDelayThresholdSeconds");
+    bytes32 internal constant EXIT_DELAY_THRESHOLD_SECONDS = 0x96656d3ece9cdbe3bd729ff6d7df8d0aeb457ff7c7c42372184ae30b10b37976;
+
 
     //
     // DATA TYPES
@@ -230,27 +237,25 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     //
     // METHODS
     //
-    function initialize(address _locator, bytes32 _type, uint256 _stuckPenaltyDelay) public onlyInit {
+    function initialize(address _locator, bytes32 _type, uint256 _exitDeadlineThresholdInSeconds) public onlyInit {
         // Initializations for v1 --> v2
-        _initialize_v2(_locator, _type, _stuckPenaltyDelay);
+        _initialize_v2(_locator, _type);
 
         // Initializations for v2 --> v3
         _initialize_v3();
 
-        _initialize_v4();
+        // Initializations for v3 --> v4
+        _initialize_v4(_exitDeadlineThresholdInSeconds);
 
         initialized();
     }
 
-    function _initialize_v2(address _locator, bytes32 _type, uint256 _stuckPenaltyDelay) internal {
+    function _initialize_v2(address _locator, bytes32 _type) internal {
         _onlyNonZeroAddress(_locator);
         LIDO_LOCATOR_POSITION.setStorageAddress(_locator);
         TYPE_POSITION.setStorageBytes32(_type);
 
         _setContractVersion(2);
-
-        _setStuckPenaltyDelay(_stuckPenaltyDelay);
-
         // set unlimited allowance for burner from staking router
         // to burn stuck keys penalized shares
         IStETH(getLocator().lido()).approve(getLocator().burner(), ~uint256(0));
@@ -264,9 +269,24 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _updateRewardDistributionState(RewardDistributionState.Distributed);
     }
 
-     function _initialize_v4() internal {
+    function _initialize_v4(uint256 _exitDeadlineThresholdInSeconds) internal {
         _setContractVersion(4);
-        // TODO: after devnet-1 set correct logic
+        EXIT_DELAY_THRESHOLD_SECONDS.setStorageUint256(_exitDeadlineThresholdInSeconds);
+    }
+
+    /// @notice A function to finalize upgrade to v2 (from v1). Can be called only once.
+    /// For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
+    ///      See historical usage in commit: https://github.com/lidofinance/core/blob/c19480aa3366b26aa6eac17f85a6efae8b9f4f72/contracts/0.4.24/nos/NodeOperatorsRegistry.sol#L230
+    /// function finalizeUpgrade_v2(address _locator, bytes32 _type, uint256 _stuckPenaltyDelay) external
+
+    /// @notice A function to finalize upgrade to v3 (from v2). Can be called only once.
+    /// See historical usage in commit: https://github.com/lidofinance/core/blob/c19480aa3366b26aa6eac17f85a6efae8b9f4f72/contracts/0.4.24/nos/NodeOperatorsRegistry.sol#L298
+    /// function finalizeUpgrade_v3() external
+
+    function finalizeUpgrade_v4(uint256 _exitDeadlineThresholdInSeconds) external {
+        require(hasInitialized(), "CONTRACT_NOT_INITIALIZED");
+        _checkContractVersion(3);
+        _initialize_v4(_exitDeadlineThresholdInSeconds);
     }
 
     /// @notice Add node operator named `name` with reward address `rewardAddress` and staking limit = 0 validators
@@ -463,45 +483,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         require(countsLength / 16 == count && idsLength % 8 == 0 && countsLength % 16 == 0, "INVALID_REPORT_DATA");
     }
 
-    /// @notice Called by StakingRouter to update the number of the validators of the given node
-    /// operator that were requested to exit but failed to do so in the max allowed time
-    ///
-    /// @param _nodeOperatorIds bytes packed array of the node operators id
-    /// @param _stuckValidatorsCounts bytes packed array of the new number of stuck validators for the node operators
-    function updateStuckValidatorsCount(bytes _nodeOperatorIds, bytes _stuckValidatorsCounts) external {
-        _auth(STAKING_ROUTER_ROLE);
-        uint256 nodeOperatorsCount = _checkReportPayload(_nodeOperatorIds.length, _stuckValidatorsCounts.length);
-        uint256 totalNodeOperatorsCount = getNodeOperatorsCount();
-
-        uint256 nodeOperatorId;
-        uint256 validatorsCount;
-        uint256 _nodeOperatorIdsOffset;
-        uint256 _stuckValidatorsCountsOffset;
-
-        /// @dev calldata layout:
-        /// | func sig (4 bytes) | ABI-enc data |
-        ///
-        /// ABI-enc data:
-        ///
-        /// |    32 bytes    |     32 bytes      |  32 bytes  | ... |  32 bytes  | ...... |
-        /// | ids len offset | counts len offset |  ids len   | ids | counts len | counts |
-        assembly {
-            _nodeOperatorIdsOffset := add(calldataload(4), 36) // arg1 calldata offset + 4 (signature len) + 32 (length slot)
-            _stuckValidatorsCountsOffset := add(calldataload(36), 36) // arg2 calldata offset + 4 (signature len) + 32 (length slot))
-        }
-        for (uint256 i; i < nodeOperatorsCount;) {
-            /// @solidity memory-safe-assembly
-            assembly {
-                nodeOperatorId := shr(192, calldataload(add(_nodeOperatorIdsOffset, mul(i, 8))))
-                validatorsCount := shr(128, calldataload(add(_stuckValidatorsCountsOffset, mul(i, 16))))
-                i := add(i, 1)
-            }
-            _requireValidRange(nodeOperatorId < totalNodeOperatorsCount);
-            _updateStuckValidatorsCount(nodeOperatorId, validatorsCount);
-        }
-        _increaseValidatorsKeysNonce();
-    }
-
     /// @notice Called by StakingRouter to update the number of the validators in the EXITED state
     /// for node operator with given id
     ///
@@ -539,17 +520,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _increaseValidatorsKeysNonce();
     }
 
-    /// @notice Updates the number of the refunded validators for node operator with the given id
-    /// @param _nodeOperatorId Id of the node operator
-    /// @param _refundedValidatorsCount New number of refunded validators of the node operator
-    function updateRefundedValidatorsCount(uint256 _nodeOperatorId, uint256 _refundedValidatorsCount) external {
-        _onlyExistedNodeOperator(_nodeOperatorId);
-        _auth(STAKING_ROUTER_ROLE);
-
-        _updateRefundValidatorsKeysCount(_nodeOperatorId, _refundedValidatorsCount);
-        _increaseValidatorsKeysNonce();
-    }
-
     /// @notice Permissionless method for distributing all accumulated module rewards among node operators
     /// based on the latest accounting report.
     ///
@@ -584,20 +554,20 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _updateRewardDistributionState(RewardDistributionState.ReadyForDistribution);
     }
 
-    /// @notice Unsafely updates the number of validators in the EXITED/STUCK states for node operator with given id
-    ///      'unsafely' means that this method can both increase and decrease exited and stuck counters
+    /// @notice [DEPRECATED] `_stuckValidatorsCount` is ignored.
+    /// @notice Unsafely updates the number of validators in the EXITED/STUCK states for node operator with given id.
     /// @param _nodeOperatorId Id of the node operator
     /// @param _exitedValidatorsCount New number of EXITED validators for the node operator
-    /// @param _stuckValidatorsCount New number of STUCK validator for the node operator
+    /// @dev _stuckValidatorsCount [DEPRECATED] Ignored.
     function unsafeUpdateValidatorsCount(
         uint256 _nodeOperatorId,
         uint256 _exitedValidatorsCount,
-        uint256 _stuckValidatorsCount
+        uint256 /* _stuckValidatorsCount */
     ) external {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _auth(STAKING_ROUTER_ROLE);
 
-        _updateStuckValidatorsCount(_nodeOperatorId, _stuckValidatorsCount);
+        // _updateStuckValidatorsCount(_nodeOperatorId, _stuckValidatorsCount); // removed
         _updateExitedValidatorsCount(_nodeOperatorId, _exitedValidatorsCount, true /* _allowDecrease */ );
         _increaseValidatorsKeysNonce();
     }
@@ -614,12 +584,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         );
 
         uint256 depositedValidatorsCount = signingKeysStats.get(TOTAL_DEPOSITED_KEYS_COUNT_OFFSET);
-        uint256 stuckValidatorsCount =
-            _loadOperatorStuckPenaltyStats(_nodeOperatorId).get(STUCK_VALIDATORS_COUNT_OFFSET);
 
-        // sustain invariant exited + stuck <= deposited
-        assert(depositedValidatorsCount >= stuckValidatorsCount);
-        _requireValidRange(_exitedValidatorsCount <= depositedValidatorsCount - stuckValidatorsCount);
+        // sustain invariant exited <= deposited
+        _requireValidRange(_exitedValidatorsCount <= depositedValidatorsCount);
 
         signingKeysStats.set(TOTAL_EXITED_KEYS_COUNT_OFFSET, _exitedValidatorsCount);
         _saveOperatorSigningKeysStats(_nodeOperatorId, signingKeysStats);
@@ -666,63 +633,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
         _updateSummaryMaxValidatorsCount(_nodeOperatorId);
         _increaseValidatorsKeysNonce();
-    }
-
-    /**
-     * @notice Set the stuck signings keys count
-     */
-    function _updateStuckValidatorsCount(uint256 _nodeOperatorId, uint256 _stuckValidatorsCount) internal {
-        Packed64x4.Packed memory stuckPenaltyStats = _loadOperatorStuckPenaltyStats(_nodeOperatorId);
-        uint256 curStuckValidatorsCount = stuckPenaltyStats.get(STUCK_VALIDATORS_COUNT_OFFSET);
-        if (_stuckValidatorsCount == curStuckValidatorsCount) return;
-
-        Packed64x4.Packed memory signingKeysStats = _loadOperatorSigningKeysStats(_nodeOperatorId);
-        uint256 exitedValidatorsCount = signingKeysStats.get(TOTAL_EXITED_KEYS_COUNT_OFFSET);
-        uint256 depositedValidatorsCount = signingKeysStats.get(TOTAL_DEPOSITED_KEYS_COUNT_OFFSET);
-
-        // sustain invariant exited + stuck <= deposited
-        assert(depositedValidatorsCount >= exitedValidatorsCount);
-        _requireValidRange(_stuckValidatorsCount <= depositedValidatorsCount - exitedValidatorsCount);
-
-        uint256 curRefundedValidatorsCount = stuckPenaltyStats.get(REFUNDED_VALIDATORS_COUNT_OFFSET);
-        if (_stuckValidatorsCount <= curRefundedValidatorsCount && curStuckValidatorsCount > curRefundedValidatorsCount) {
-            stuckPenaltyStats.set(STUCK_PENALTY_END_TIMESTAMP_OFFSET, block.timestamp + getStuckPenaltyDelay());
-        }
-
-        stuckPenaltyStats.set(STUCK_VALIDATORS_COUNT_OFFSET, _stuckValidatorsCount);
-        _saveOperatorStuckPenaltyStats(_nodeOperatorId, stuckPenaltyStats);
-        emit StuckPenaltyStateChanged(
-            _nodeOperatorId,
-            _stuckValidatorsCount,
-            curRefundedValidatorsCount,
-            stuckPenaltyStats.get(STUCK_PENALTY_END_TIMESTAMP_OFFSET)
-            );
-
-        _updateSummaryMaxValidatorsCount(_nodeOperatorId);
-    }
-
-    function _updateRefundValidatorsKeysCount(uint256 _nodeOperatorId, uint256 _refundedValidatorsCount) internal {
-        Packed64x4.Packed memory stuckPenaltyStats = _loadOperatorStuckPenaltyStats(_nodeOperatorId);
-        uint256 curRefundedValidatorsCount = stuckPenaltyStats.get(REFUNDED_VALIDATORS_COUNT_OFFSET);
-        if (_refundedValidatorsCount == curRefundedValidatorsCount) return;
-
-        Packed64x4.Packed memory signingKeysStats = _loadOperatorSigningKeysStats(_nodeOperatorId);
-        _requireValidRange(_refundedValidatorsCount <= signingKeysStats.get(TOTAL_DEPOSITED_KEYS_COUNT_OFFSET));
-
-        uint256 curStuckValidatorsCount = stuckPenaltyStats.get(STUCK_VALIDATORS_COUNT_OFFSET);
-        if (_refundedValidatorsCount >= curStuckValidatorsCount && curRefundedValidatorsCount < curStuckValidatorsCount) {
-            stuckPenaltyStats.set(STUCK_PENALTY_END_TIMESTAMP_OFFSET, block.timestamp + getStuckPenaltyDelay());
-        }
-
-        stuckPenaltyStats.set(REFUNDED_VALIDATORS_COUNT_OFFSET, _refundedValidatorsCount);
-        _saveOperatorStuckPenaltyStats(_nodeOperatorId, stuckPenaltyStats);
-        emit StuckPenaltyStateChanged(
-            _nodeOperatorId,
-            curStuckValidatorsCount,
-            _refundedValidatorsCount,
-            stuckPenaltyStats.get(STUCK_PENALTY_END_TIMESTAMP_OFFSET)
-            );
-        _updateSummaryMaxValidatorsCount(_nodeOperatorId);
     }
 
     // @dev Recalculate and update the max validator count for operator and summary stats
@@ -853,10 +763,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         // so optimistically, set the count of max validators equal to the vetted validators count.
         newMaxSigningKeysCount = signingKeysStats.get(TOTAL_VETTED_KEYS_COUNT_OFFSET);
 
-        if (!isOperatorPenaltyCleared(_nodeOperatorId)) {
-            // when the node operator is penalized zeroing its depositable validators count
-            newMaxSigningKeysCount = depositedSigningKeysCount;
-        } else if (operatorTargetStats.get(TARGET_LIMIT_MODE_OFFSET) != 0) {
+        if (operatorTargetStats.get(TARGET_LIMIT_MODE_OFFSET) != 0) {
             // apply target limit when it's active and the node operator is not penalized
             newMaxSigningKeysCount = Math256.max(
                 // max validators count can't be less than the deposited validators count
@@ -1007,6 +914,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     }
 
     /// @notice Returns the rewards distribution proportional to the effective stake for each node operator.
+    /// @notice [DEPRECATED] The `penalized` array is no longer relevant and always contains only `false`.
     /// @param _totalRewardShares Total amount of reward shares to distribute.
     function getRewardsDistribution(uint256 _totalRewardShares)
         public
@@ -1041,7 +949,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
             recipients[idx] = _nodeOperators[operatorId].rewardAddress;
             // prefill shares array with 'key share' for recipient, see below
             shares[idx] = activeValidatorsCount;
-            penalized[idx] = isOperatorPenalized(operatorId);
+
+            // [DEPRECATED] Penalized flag is no longer relevant. Always false.
+            // penalized[idx] = false;
 
             ++idx;
         }
@@ -1142,22 +1052,15 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _removeUnusedSigningKeys(_nodeOperatorId, _fromIndex, _keysCount);
     }
 
-    function _getExitDeadlineThreshold() public view returns (uint256) {
-        return 60 * 60 * 24 * 2; // 2 days
+    function exitDeadlineThreshold() public view returns (uint256) {
+        return EXIT_DELAY_THRESHOLD_SECONDS.getStorageUint256();
     }
 
-    function reportValidatorExitDelay(
-        uint256 _nodeOperatorId,
-        uint256 _proofSlotTimestamp,
-        bytes _publicKey,
-        uint256 _eligibleToExitInSec
-    ) external {
-        _auth(STAKING_ROUTER_ROLE);
-        require(_eligibleToExitInSec >= 0, "INVALID_EXIT_TIME"); // placeholder check
-        require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
-
-        emit PenaltyApplied(_nodeOperatorId, _publicKey, 1 ether, "EXCESS_EXIT_TIME");
-        emit ValidatorExitStatusUpdated(_nodeOperatorId, _publicKey, _eligibleToExitInSec, _proofSlotTimestamp);
+    function setExitDeadlineThreshold(uint256 _threshold) external {
+        _auth(MANAGE_NODE_OPERATOR_ROLE);
+        require(_threshold > 0, "INVALID_EXIT_DELAY_THRESHOLD");
+        EXIT_DELAY_THRESHOLD_SECONDS.setStorageUint256(_threshold);
+        emit ExitDeadlineThresholdChanged(_threshold);
     }
 
     function onValidatorExitTriggered(
@@ -1167,13 +1070,8 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         uint256 _exitType
     ) external {
         _auth(STAKING_ROUTER_ROLE);
-        require(_publicKey.length > 0, "INVALID_PUBLIC_KEY");
 
-        emit TriggerableExitFeeSet(_nodeOperatorId, _publicKey, _withdrawalRequestPaidFee, _exitType);
-    }
-
-    function exitDeadlineThreshold(uint256 /* _nodeOperatorId */) external view returns (uint256) {
-       return _getExitDeadlineThreshold();
+        emit ValidatorExitTriggered(_nodeOperatorId, _publicKey, _withdrawalRequestPaidFee, _exitType);
     }
 
     function isValidatorExitDelayPenaltyApplicable(
@@ -1182,7 +1080,22 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         bytes, // _publicKey
         uint256 _eligibleToExitInSec
     ) external view returns (bool) {
-         return _eligibleToExitInSec >= _getExitDeadlineThreshold();
+        return _eligibleToExitInSec >= exitDeadlineThreshold();
+    }
+
+    function reportValidatorExitDelay(
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes _publicKey,
+        uint256 _eligibleToExitInSec
+    ) external {
+        _auth(STAKING_ROUTER_ROLE);
+        require(_publicKey.length == 48, "INVALID_PUBLIC_KEY");
+
+        // Check if exit delay exceeds the threshold
+        require(_eligibleToExitInSec >= exitDeadlineThreshold(), "EXIT_DELAY_BELOW_THRESHOLD");
+
+        emit ValidatorExitStatusUpdated(_nodeOperatorId, _publicKey, _eligibleToExitInSec, _proofSlotTimestamp);
     }
 
     function _removeUnusedSigningKeys(uint256 _nodeOperatorId, uint256 _fromIndex, uint256 _keysCount) internal {
@@ -1308,13 +1221,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _onlyExistedNodeOperator(_nodeOperatorId);
 
         Packed64x4.Packed memory operatorTargetStats = _loadOperatorTargetValidatorsStats(_nodeOperatorId);
-        Packed64x4.Packed memory stuckPenaltyStats = _loadOperatorStuckPenaltyStats(_nodeOperatorId);
 
         targetLimitMode = operatorTargetStats.get(TARGET_LIMIT_MODE_OFFSET);
         targetValidatorsCount = operatorTargetStats.get(TARGET_VALIDATORS_COUNT_OFFSET);
-        stuckValidatorsCount = stuckPenaltyStats.get(STUCK_VALIDATORS_COUNT_OFFSET);
-        refundedValidatorsCount = stuckPenaltyStats.get(REFUNDED_VALIDATORS_COUNT_OFFSET);
-        stuckPenaltyEndTimestamp = stuckPenaltyStats.get(STUCK_PENALTY_END_TIMESTAMP_OFFSET);
+        stuckValidatorsCount = 0;
+        refundedValidatorsCount = 0;
+        stuckPenaltyEndTimestamp = 0;
 
         (totalExitedValidators, totalDepositedValidators, depositableValidatorsCount) =
             _getNodeOperatorValidatorsSummary(_nodeOperatorId);
@@ -1331,33 +1243,17 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         depositableValidatorsCount = totalMaxValidators - totalDepositedValidators;
     }
 
-    function _isOperatorPenalized(Packed64x4.Packed memory stuckPenaltyStats) internal view returns (bool) {
-        return stuckPenaltyStats.get(REFUNDED_VALIDATORS_COUNT_OFFSET) < stuckPenaltyStats.get(STUCK_VALIDATORS_COUNT_OFFSET)
-            || block.timestamp <= stuckPenaltyStats.get(STUCK_PENALTY_END_TIMESTAMP_OFFSET);
+    /// @notice [DEPRECATED] Penalty logic removed. Always returns `false`.
+    /// @dev _nodeOperatorId Ignored.
+    /// @return Always returns `false`.
+    function isOperatorPenalized(uint256 /* _nodeOperatorId */) public pure returns (bool) {
+        return false;
     }
 
-    function isOperatorPenalized(uint256 _nodeOperatorId) public view returns (bool) {
-        Packed64x4.Packed memory stuckPenaltyStats = _loadOperatorStuckPenaltyStats(_nodeOperatorId);
-        return _isOperatorPenalized(stuckPenaltyStats);
-    }
-
-    function isOperatorPenaltyCleared(uint256 _nodeOperatorId) public view returns (bool) {
-        Packed64x4.Packed memory stuckPenaltyStats = _loadOperatorStuckPenaltyStats(_nodeOperatorId);
-        return !_isOperatorPenalized(stuckPenaltyStats) && stuckPenaltyStats.get(STUCK_PENALTY_END_TIMESTAMP_OFFSET) == 0;
-    }
-
-    function clearNodeOperatorPenalty(uint256 _nodeOperatorId) external returns (bool) {
-        Packed64x4.Packed memory stuckPenaltyStats = _loadOperatorStuckPenaltyStats(_nodeOperatorId);
-        require(
-            !_isOperatorPenalized(stuckPenaltyStats) && stuckPenaltyStats.get(STUCK_PENALTY_END_TIMESTAMP_OFFSET) != 0,
-            "CANT_CLEAR_PENALTY"
-        );
-        stuckPenaltyStats.set(STUCK_PENALTY_END_TIMESTAMP_OFFSET, 0);
-        _saveOperatorStuckPenaltyStats(_nodeOperatorId, stuckPenaltyStats);
-        _updateSummaryMaxValidatorsCount(_nodeOperatorId);
-        _increaseValidatorsKeysNonce();
-
-        emit NodeOperatorPenaltyCleared(_nodeOperatorId);
+    /// @notice [DEPRECATED] Penalty logic removed. Always returns `true`.
+    /// @dev _nodeOperatorId Ignored.
+    /// @return Always returns `true`.
+    function isOperatorPenaltyCleared(uint256 /* _nodeOperatorId */) public pure returns (bool) {
         return true;
     }
 
@@ -1422,21 +1318,13 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
             return;
         }
 
-        (address[] memory recipients, uint256[] memory shares, bool[] memory penalized) =
+        (address[] memory recipients, uint256[] memory shares,) =
             getRewardsDistribution(sharesToDistribute);
 
         uint256 toBurn;
         for (uint256 idx; idx < recipients.length; ++idx) {
             /// @dev skip ultra-low amounts processing to avoid transfer zero amount in case of a penalty
             if (shares[idx] < 2) continue;
-            if (penalized[idx]) {
-                /// @dev half reward punishment
-                /// @dev ignore remainder since it accumulated on contract balance
-                shares[idx] >>= 1;
-                toBurn = toBurn.add(shares[idx]);
-                emit NodeOperatorPenalized(recipients[idx], shares[idx]);
-            }
-            // TODO: apply penalty to the operator
             stETH.transferShares(recipients[idx], shares[idx]);
             distributed = distributed.add(shares[idx]);
             emit RewardsDistributed(recipients[idx], shares[idx]);
@@ -1450,14 +1338,10 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         return ILidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
     }
 
-    function getStuckPenaltyDelay() public view returns (uint256) {
-        return STUCK_PENALTY_DELAY_POSITION.getStorageUint256();
-    }
-
-    function setStuckPenaltyDelay(uint256 _delay) external {
-        _auth(MANAGE_NODE_OPERATOR_ROLE);
-
-        _setStuckPenaltyDelay(_delay);
+    /// @notice [DEPRECATED] Stuck penalty delay logic removed. Always returns 0.
+    /// @return Always returns 0.
+    function getStuckPenaltyDelay() public pure returns (uint256) {
+        return 0;
     }
 
     /// @dev Get the current reward distribution state, anyone can monitor this state
@@ -1470,13 +1354,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     function _updateRewardDistributionState(RewardDistributionState _state) internal {
         REWARD_DISTRIBUTION_STATE.setStorageUint256(uint256(_state));
         emit RewardDistributionStateChanged(_state);
-    }
-
-    /// @dev set new stuck penalty delay, duration in sec
-    function _setStuckPenaltyDelay(uint256 _delay) internal {
-        _requireValidRange(_delay <= MAX_STUCK_PENALTY_DELAY);
-        STUCK_PENALTY_DELAY_POSITION.setStorageUint256(_delay);
-        emit StuckPenaltyDelayChanged(_delay);
     }
 
     function _increaseValidatorsKeysNonce() internal {
@@ -1503,13 +1380,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _nodeOperators[_nodeOperatorId].targetValidatorsStats = _val;
     }
 
-    function _loadOperatorStuckPenaltyStats(uint256 _nodeOperatorId) internal view returns (Packed64x4.Packed memory) {
-        return _nodeOperators[_nodeOperatorId].stuckPenaltyStats;
-    }
-
-    function _saveOperatorStuckPenaltyStats(uint256 _nodeOperatorId, Packed64x4.Packed memory _val) internal {
-        _nodeOperators[_nodeOperatorId].stuckPenaltyStats = _val;
-    }
 
     function _loadOperatorSigningKeysStats(uint256 _nodeOperatorId) internal view returns (Packed64x4.Packed memory) {
         return _nodeOperators[_nodeOperatorId].signingKeysStats;
