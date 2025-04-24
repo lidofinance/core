@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3245"  lines-covered="3155"  line-rate="0.9723"  branches-valid="1494"  branches-covered="1382"  branch-rate="0.925"  timestamp="1745489265344" complexity="0" version="0.1">
+<coverage lines-valid="3246"  lines-covered="3156"  line-rate="0.9723"  branches-valid="1494"  branches-covered="1382"  branch-rate="0.925"  timestamp="1745495611292" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2561,38 +2561,39 @@
 		</class>
 		<class name="LidoLocator.sol"  filename="contracts/0.8.9/LidoLocator.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="constructor"  hits="152"  signature="()V" >
-				<lines><line number="55"  hits="152" /></lines>
+			<method name="constructor"  hits="153"  signature="()V" >
+				<lines><line number="57"  hits="153" /></lines>
 			</method>
 			<method name="coreComponents"  hits="1"  signature="()V" >
-				<lines><line number="72"  hits="1" /></lines>
+				<lines><line number="75"  hits="1" /></lines>
 			</method>
 			<method name="oracleReportComponentsForLido"  hits="29"  signature="()V" >
-				<lines><line number="90"  hits="29" /></lines>
+				<lines><line number="93"  hits="29" /></lines>
 			</method>
-			<method name="_assertNonZero"  hits="2037"  signature="()V" >
-				<lines><line number="110"  hits="2037" /></lines>
+			<method name="_assertNonZero"  hits="2190"  signature="()V" >
+				<lines><line number="113"  hits="2190" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="56"  hits="152"  branch="false" />
-			<line number="57"  hits="151"  branch="false" />
-			<line number="58"  hits="150"  branch="false" />
-			<line number="59"  hits="149"  branch="false" />
-			<line number="60"  hits="148"  branch="false" />
-			<line number="61"  hits="147"  branch="false" />
-			<line number="62"  hits="146"  branch="false" />
-			<line number="63"  hits="145"  branch="false" />
-			<line number="64"  hits="144"  branch="false" />
-			<line number="65"  hits="143"  branch="false" />
-			<line number="66"  hits="142"  branch="false" />
-			<line number="67"  hits="141"  branch="false" />
-			<line number="68"  hits="140"  branch="false" />
-			<line number="69"  hits="139"  branch="false" />
-			<line number="80"  hits="1"  branch="false" />
-			<line number="99"  hits="29"  branch="false" />
-			<line number="111"  hits="2037"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="112"  hits="2023"  branch="false" />
+			<line number="58"  hits="153"  branch="false" />
+			<line number="59"  hits="152"  branch="false" />
+			<line number="60"  hits="151"  branch="false" />
+			<line number="61"  hits="150"  branch="false" />
+			<line number="62"  hits="149"  branch="false" />
+			<line number="63"  hits="148"  branch="false" />
+			<line number="64"  hits="147"  branch="false" />
+			<line number="65"  hits="146"  branch="false" />
+			<line number="66"  hits="145"  branch="false" />
+			<line number="67"  hits="144"  branch="false" />
+			<line number="68"  hits="143"  branch="false" />
+			<line number="69"  hits="142"  branch="false" />
+			<line number="70"  hits="141"  branch="false" />
+			<line number="71"  hits="140"  branch="false" />
+			<line number="72"  hits="139"  branch="false" />
+			<line number="83"  hits="1"  branch="false" />
+			<line number="102"  hits="29"  branch="false" />
+			<line number="114"  hits="2190"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="115"  hits="2175"  branch="false" />
 		</lines>
 		</class>
 		<class name="OracleDaemonConfig.sol"  filename="contracts/0.8.9/OracleDaemonConfig.sol"  line-rate="1"  branch-rate="1" >
