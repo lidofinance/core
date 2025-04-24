@@ -201,7 +201,7 @@ export async function main() {
   ]);
 
   // Deploy ValidatorExitVerifier
-  const validatorExitVerifier = await deployWithoutProxy(Sk.validatorExitVerifier, "validatorExitVerifier", deployer, [
+  const validatorExitVerifier = await deployWithoutProxy(Sk.validatorExitVerifier, "ValidatorExitVerifier", deployer, [
     locator.address,
     "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorPrev,
     "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorCurr,
