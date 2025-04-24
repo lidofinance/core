@@ -12,6 +12,15 @@ import {
 import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
+function getEnvVariable(name: string, defaultValue?: string): string {
+  const value = process.env[name] ?? defaultValue;
+  if (value === undefined) {
+    throw new Error(`Environment variable ${name} is required`);
+  }
+  log(`${name} = ${value}`);
+  return value;
+}
+
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
@@ -191,6 +200,22 @@ export async function main() {
     burnerParams.totalNonCoverSharesBurnt,
   ]);
 
+  // Deploy ValidatorExitVerifier
+  const validatorExitVerifier = await deployWithoutProxy(Sk.validatorExitVerifier, "validatorExitVerifier", deployer, [
+    locator.address,
+    "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorPrev,
+    "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorCurr,
+    "0x000000000000000000000000000000000000000000000000000000000161c004", // GIndex gIHistoricalSummariesPrev,
+    "0x000000000000000000000000000000000000000000000000000000000161c004", // GIndex gIHistoricalSummariesCurr,
+    1, // uint64 firstSupportedSlot,
+    1, // uint64 pivotSlot,
+    chainSpec.slotsPerEpoch, // uint32 slotsPerEpoch,
+    chainSpec.secondsPerSlot, // uint32 secondsPerSlot,
+    parseInt(getEnvVariable("GENESIS_TIME")), // uint64 genesisTime,
+    // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
+    2 ** 8 * 32 * 12, // uint32 shardCommitteePeriodInSeconds
+  ]);
+
   // Update LidoLocator with valid implementation
   const locatorConfig: string[] = [
     accountingOracle.address,
@@ -207,6 +232,7 @@ export async function main() {
     withdrawalQueueERC721.address,
     withdrawalVaultAddress,
     oracleDaemonConfig.address,
+    validatorExitVerifier.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }
