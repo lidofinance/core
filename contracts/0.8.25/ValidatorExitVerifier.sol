@@ -197,7 +197,7 @@ contract ValidatorExitVerifier {
 
             _verifyValidatorIsNotExited(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
 
-            stakingRouter.shouldValidatorBePenalized(
+            stakingRouter.reportValidatorExitDelay(
                 moduleId,
                 nodeOpId,
                 proofSlotTimestamp,
@@ -248,7 +248,7 @@ contract ValidatorExitVerifier {
 
             _verifyValidatorIsNotExited(oldBlock.header, witness, pubkey, valIndex);
 
-            stakingRouter.shouldValidatorBePenalized(
+            stakingRouter.reportValidatorExitDelay(
                 moduleId,
                 nodeOpId,
                 proofSlotTimestamp,

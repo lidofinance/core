@@ -8,7 +8,7 @@ const eventName = "RequestAdded__Mock";
 const eip7002MockEventABI = [`event ${eventName}(bytes request, uint256 fee)`];
 const eip7002MockInterface = new ethers.Interface(eip7002MockEventABI);
 
-function encodeEIP7002Payload(pubkey: string, amount: bigint): string {
+export function encodeEIP7002Payload(pubkey: string, amount: bigint): string {
   return `0x${pubkey}${amount.toString(16).padStart(16, "0")}`;
 }
 
