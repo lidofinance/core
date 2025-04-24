@@ -79,7 +79,7 @@ async function main() {
 
   await run("verify:verify", {
     address: state[Sk.lidoLocator].implementation.address,
-    constructorArguments: locatorConfig,
+    constructorArguments: [], // TBD
     contract: "contracts/0.8.9/LidoLocator.sol:LidoLocator",
   });
 }

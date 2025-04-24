@@ -116,28 +116,24 @@ async function main() {
 
   // fetch contract addresses that will not changed
   const locatorConfig = [
-    [
-      await locator.accountingOracle(),
-      await locator.depositSecurityModule(),
-      await locator.elRewardsVault(),
-      await locator.legacyOracle(),
-      await locator.lido(),
-      await locator.oracleReportSanityChecker(),
-      await locator.postTokenRebaseReceiver(),
-      await locator.burner(),
-      await locator.stakingRouter(),
-      await locator.treasury(),
-      await locator.validatorsExitBusOracle(),
-      await locator.withdrawalQueue(),
-      await locator.withdrawalVault(),
-      await locator.oracleDaemonConfig(),
-    ],
+    await locator.accountingOracle(),
+    await locator.depositSecurityModule(),
+    await locator.elRewardsVault(),
+    await locator.legacyOracle(),
+    await locator.lido(),
+    await locator.oracleReportSanityChecker(),
+    await locator.postTokenRebaseReceiver(),
+    await locator.burner(),
+    await locator.stakingRouter(),
+    await locator.treasury(),
+    await locator.validatorsExitBusOracle(),
+    await locator.withdrawalQueue(),
+    await locator.withdrawalVault(),
+    await locator.oracleDaemonConfig(),
+    validatorExitVerifier.address,
   ];
 
-  const lidoLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [
-    ...locatorConfig,
-    validatorExitVerifier.address,
-  ]);
+  const lidoLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
 
   log(`Configuration for voting script:`);
   log(`

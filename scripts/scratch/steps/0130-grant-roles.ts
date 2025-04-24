@@ -90,7 +90,7 @@ export async function main() {
   await makeTx(
     withdrawalVault,
     "grantRole",
-    [await withdrawalVault.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), validatorsExitBusOracleAddress],
+    [await withdrawalVault.ADD_WITHDRAWAL_REQUEST_ROLE(), validatorsExitBusOracleAddress],
     {
       from: deployer,
     },
