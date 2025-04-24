@@ -44,8 +44,20 @@ async function main() {
   const TREASURY_PROXY = await locator.treasury();
 
   const validatorsExitBusOracleArgs = [SECONDS_PER_SLOT, genesisTime, locator.address];
-
   const withdrawalVaultArgs = [LIDO_PROXY, TREASURY_PROXY];
+  const validatorExitVerifierArgs = [
+    locator.address,
+    "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorPrev,
+    "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorCurr,
+    "0x000000000000000000000000000000000000000000000000000000000161c004", // GIndex gIHistoricalSummariesPrev,
+    "0x000000000000000000000000000000000000000000000000000000000161c004", // GIndex gIHistoricalSummariesCurr,
+    1, // uint64 firstSupportedSlot,
+    1, // uint64 pivotSlot,
+    32, // uint32 slotsPerEpoch,
+    12, // uint32 secondsPerSlot,
+    genesisTime, // uint64 genesisTime,
+    2 ** 8 * 32 * 12, // uint32 shardCommitteePeriodInSeconds
+  ];
 
   await run("verify:verify", {
     address: state[Sk.withdrawalVault].implementation.address,
@@ -57,6 +69,18 @@ async function main() {
     address: state[Sk.validatorsExitBusOracle].implementation.address,
     constructorArguments: validatorsExitBusOracleArgs,
     contract: "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol:ValidatorsExitBusOracle",
+  });
+
+  await run("verify:verify", {
+    address: state[Sk.validatorExitVerifier].implementation.address,
+    constructorArguments: validatorExitVerifierArgs,
+    contract: "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol:ValidatorsExitBusOracle",
+  });
+
+  await run("verify:verify", {
+    address: state[Sk.lidoLocator].implementation.address,
+    constructorArguments: locatorConfig,
+    contract: "contracts/0.8.9/LidoLocator.sol:LidoLocator",
   });
 }
 

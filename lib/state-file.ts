@@ -87,6 +87,7 @@ export enum Sk {
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
   triggerableWithdrawals = "triggerableWithdrawals",
+  validatorExitVerifier = "validatorExitVerifier",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {

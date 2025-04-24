@@ -84,14 +84,64 @@ async function main() {
   });
 
   log.success(`NOR implementation address: ${NOR.address}`);
-
   log.emptyLine();
 
+  const validatorExitVerifierArgs = [
+    locator.address,
+    "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorPrev,
+    "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorCurr,
+    "0x000000000000000000000000000000000000000000000000000000000161c004", // GIndex gIHistoricalSummariesPrev,
+    "0x000000000000000000000000000000000000000000000000000000000161c004", // GIndex gIHistoricalSummariesCurr,
+    1, // uint64 firstSupportedSlot,
+    1, // uint64 pivotSlot,
+    32, // uint32 slotsPerEpoch,
+    12, // uint32 secondsPerSlot,
+    genesisTime, // uint64 genesisTime,
+    2 ** 8 * 32 * 12, // uint32 shardCommitteePeriodInSeconds
+  ];
+
+  const validatorExitVerifier = await deployImplementation(
+    Sk.validatorExitVerifier,
+    "ValidatorExitVerifier",
+    deployer,
+    validatorExitVerifierArgs,
+  );
+  log.success(`ValidatorExitVerifier implementation address: ${NOR.address}`);
+  log.emptyLine();
+
+  // Update lido locator
+  const locatorImplContract = await loadContract<LidoLocator>("LidoLocator", INTERMEDIATE_LOCATOR_IMPL);
+  // fetch contract addresses that will not changed
+  const locatorConfig = [
+    [
+      await locatorImplContract.accountingOracle(),
+      await locatorImplContract.depositSecurityModule(),
+      await locatorImplContract.elRewardsVault(),
+      await locatorImplContract.legacyOracle(),
+      await locatorImplContract.lido(),
+      await locatorImplContract.oracleReportSanityChecker(),
+      await locatorImplContract.postTokenRebaseReceiver(),
+      await locatorImplContract.burner(),
+      await locatorImplContract.stakingRouter(),
+      await locatorImplContract.treasury(),
+      await locatorImplContract.validatorsExitBusOracle(),
+      await locatorImplContract.withdrawalQueue(),
+      await locatorImplContract.withdrawalVault(),
+      await locatorImplContract.oracleDaemonConfig(),
+    ],
+  ];
+
+  const lidoLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, locatorConfig);
+
   log(`Configuration for voting script:`);
-  log(`VALIDATORS_EXIT_BUS_ORACLE_IMPL = "${validatorsExitBusOracle}"
+  log(`
+LIDO_LOCATOR = "${lidoLocator.address}"
+VALIDATORS_EXIT_BUS_ORACLE_IMPL = "${validatorsExitBusOracle}"
 WITHDRAWAL_VAULT_IMPL = "${withdrawalVault}"
 STAKING_ROUTER_IMPL = "${stakingRouterAddress}"
-NODE_OPERATORS_REGISTRY_IMPL = "${NOR.address}"`);
+NODE_OPERATORS_REGISTRY_IMPL = "${NOR.address}"
+VALIDATOR_EXIT_VERIFIER = "${validatorExitVerifier.address}"
+`);
 }
 
 main()
