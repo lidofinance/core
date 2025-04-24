@@ -75,6 +75,10 @@ library ExitLimitUtils {
         uint256 updatedCount = uint256(data.dailyExitCount) + newCount;
         require(updatedCount <= type(uint96).max, "DAILY_EXIT_COUNT_OVERFLOW");
 
+        if (data.dailyLimit != 0) {
+            require(updatedCount <= data.dailyLimit, "DAILY_LIMIT_REACHED");
+        }
+
         data.dailyExitCount = uint96(updatedCount);
 
         return data;
@@ -105,12 +109,6 @@ library ExitLimitUtils {
         require(data.currentDay <= day, "INVALID_TIMESTAMP_BACKWARD");
 
         data.dailyLimit = uint96(limit);
-
-        if (day == data.currentDay && data.dailyExitCount > data.dailyLimit) {
-            data.dailyExitCount = data.dailyLimit;
-        }
-
-        // other values doesnt look like we need to set here in other cases
 
         return data;
     }

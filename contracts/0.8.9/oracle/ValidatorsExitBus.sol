@@ -32,24 +32,61 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     using ExitLimitUtils for ExitRequestLimitData;
 
     /// @dev Errors
-    error KeyWasNotDelivered(uint256 keyIndex, uint256 lastDeliveredKeyIndex);
-    error ZeroAddress();
-    error InsufficientPayment(uint256 withdrawalFeePerRequest, uint256 requestCount, uint256 msgValue);
-    error TriggerableWithdrawalRefundFailed();
-    error ExitHashWasNotSubmitted();
-    error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
+    /**
+     * @notice Thrown when an invalid zero value is passed
+     * @param name Name of the argument that was zero
+     */
+    error ZeroArgument(string name);
+
+    /**
+     * @notice Thrown when exit request passed to method contain wrong DATA_FORMAT
+     * @param format code of format, currently only DATA_FORMAT=1 is supported in the contract
+     */
     error UnsupportedRequestsDataFormat(uint256 format);
+    /**
+     * @notice Thrown when exit request has wrong length
+     */
     error InvalidRequestsDataLength();
+
+    /**
+     * @notice Thrown than module id equal to zero
+     */
     error InvalidRequestsData();
-    error RequestsAlreadyDelivered();
-    error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
-    error TWExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
-    error InvalidPubkeysArray();
-    error NoExitRequestProvided();
+
+    /**
+     * @notice
+     */
     error InvalidRequestsDataSortOrder();
+    error InvalidPubkeysArray();
+
+    error NoExitRequestProvided();
+    error ExitHashWasNotSubmitted();
+
+    error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
+    error RequestsAlreadyDelivered();
+    error KeyWasNotDelivered(uint256 keyIndex, uint256 lastDeliveredKeyIndex);
+
+    /**
+     * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
+     * @param requestsCount Amount of requests that were sent for processing
+     * @param remainingLimit Amount of requests that still can be processed at current day
+     */
+    error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
+
+    /**
+     * @notice Thrown when a withdrawal fee insufficient
+     * @param feeRequired Amount of fee required to cover withdrawal request
+     * @param passedValue Amount of fee sent to cover withdrawal request
+     */
+    error InsufficientWithdrawalFee(uint256 feeRequired, uint256 passedValue);
+
+    /**
+     * @notice Thrown when a withdrawal fee refund failed
+     */
+    error TriggerableWithdrawalFeeRefundFailed();
 
     /// @dev Events
-    event MadeRefund(address sender, uint256 refundValue);
+    event MadeRefund(address sender, uint256 refundValue); // maybe we dont need it
     event StoredExitRequestHash(bytes32 exitRequestHash);
     event ValidatorExitRequest(
         uint256 indexed stakingModuleId,
@@ -58,13 +95,14 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         bytes validatorPubkey,
         uint256 timestamp
     );
-    event ExitRequestsLimitSet(uint256 exitRequestsLimit, uint256 twExitRequestsLimit);
+    event ExitRequestsLimitSet(uint256 exitRequestsLimit, uint256 ExitRequestsLimit);
 
     event DirectExitRequest(
         uint256 indexed stakingModuleId,
         uint256 indexed nodeOperatorId,
         bytes validatoPubkey,
-        uint256 timestamp
+        uint256 timestamp,
+        address indexed refundRecipient
     );
     struct RequestStatus {
         // Total items count in report (by default type(uint32).max, update on first report delivery)
@@ -74,6 +112,13 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         // Vebo contract version at the time of hash submission
         uint256 contractVersion;
         DeliveryHistory[] deliverHistory;
+    }
+
+    struct ValidatorData {
+        uint256 nodeOpId;
+        uint256 moduleId;
+        uint256 valIndex;
+        bytes pubkey;
     }
 
     bytes32 public constant SUBMIT_REPORT_HASH_ROLE = keccak256("SUBMIT_REPORT_HASH_ROLE");
@@ -125,6 +170,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         LOCATOR = ILidoLocator(lidoLocator);
     }
 
+    /// @notice Method for submitting request hash by trusted entities
+    /// @param exitReportHash Request hash
+    /// @dev After request was stored anyone can deliver it via emitExitEvents method below
     function submitReportHash(bytes32 exitReportHash) external whenResumed onlyRole(SUBMIT_REPORT_HASH_ROLE) {
         uint256 contractVersion = getContractVersion();
         _storeExitRequestHash(exitReportHash, type(uint256).max, 0, contractVersion, DeliveryHistory(0, 0));
@@ -164,25 +212,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert RequestsAlreadyDelivered();
         }
 
-        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        uint256 requestsToDeliver;
-
-        if (exitRequestLimitData.isExitDailyLimitSet()) {
-            uint256 day = _getTimestamp() / 1 days;
-            uint256 limit = exitRequestLimitData.remainingLimit(day);
-
-            if (limit == 0) {
-                revert ExitRequestsLimit(undeliveredItemsCount, limit);
-            }
-
-            requestsToDeliver = undeliveredItemsCount > limit ? limit : undeliveredItemsCount;
-
-            EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-                exitRequestLimitData.updateRequestsCounter(day, requestsToDeliver)
-            );
-        } else {
-            requestsToDeliver = undeliveredItemsCount;
-        }
+        uint256 requestsToDeliver = _applyExitLimitOrRevert(EXIT_REQUEST_LIMIT_POSITION, undeliveredItemsCount);
 
         _processExitRequestsList(request.data, deliveredItemsCount, requestsToDeliver);
 
@@ -192,13 +222,27 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         requestStatus.deliveredItemsCount += requestsToDeliver;
     }
 
-    /// @notice Triggers exits on the EL via the Withdrawal Vault contract after
+    /// @notice Triggers exits on the EL via the Withdrawal Vault contract
+    /// @param request Exit request data struct
+    /// @param keyIndexes Array of indexes of requests in request.data
+    /// @param refundRecipient Address to return extra fee on TW (eip-7002) exit
+    /// @param exitType type of request. 0 - non-refundable, 1 - require refund
     /// @dev This function verifies that the hash of the provided exit request data exists in storage
     // and ensures that the events for the requests specified in the `keyIndexes` array have already been delivered.
+    // Verify that keyIndexes amount fits within the limits
     function triggerExits(
         ExitRequestData calldata request,
-        uint256[] calldata keyIndexes
+        uint256[] calldata keyIndexes,
+        address refundRecipient,
+        uint8 exitType
     ) external payable whenResumed preservesEthBalance {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+
+        // If the refund recipient is not set, use the sender as the refund recipient
+        if (refundRecipient == address(0)) {
+            refundRecipient = msg.sender;
+        }
+
         bytes calldata data = request.data;
         RequestStatus storage requestStatus = _storageExitRequestsHashes()[
             keccak256(abi.encode(data, request.dataFormat))
@@ -218,96 +262,69 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         _checkContractVersion(requestStatus.contractVersion);
 
-        address withdrawalVaultAddr = LOCATOR.withdrawalVault();
-        uint256 withdrawalFee = IWithdrawalVault(withdrawalVaultAddr).getWithdrawalRequestFee();
+        uint256 withdrawalFee = IWithdrawalVault(LOCATOR.withdrawalVault()).getWithdrawalRequestFee();
 
         if (msg.value < keyIndexes.length * withdrawalFee) {
-            revert InsufficientPayment(withdrawalFee, keyIndexes.length, msg.value);
+            revert InsufficientWithdrawalFee(keyIndexes.length * withdrawalFee, msg.value);
         }
 
-        ExitRequestLimitData memory exitRequestLimitData = TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-
-        if (exitRequestLimitData.isExitDailyLimitSet()) {
-            uint256 day = _getTimestamp() / 1 days;
-            uint256 limit = exitRequestLimitData.remainingLimit(day);
-            if (keyIndexes.length > limit) {
-                revert TWExitRequestsLimit(keyIndexes.length, limit);
-            }
-
-            TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-                exitRequestLimitData.updateRequestsCounter(day, keyIndexes.length)
-            );
-        }
-
-        uint256 lastDeliveredKeyIndex = requestStatus.deliveredItemsCount - 1;
+        _checkAndUpdateDailyExitLimit(TW_EXIT_REQUEST_LIMIT_POSITION, keyIndexes.length);
 
         bytes memory pubkeys = new bytes(keyIndexes.length * PUBLIC_KEY_LENGTH);
         bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
 
-        // TODO: create library for reading DATA
         for (uint256 i = 0; i < keyIndexes.length; i++) {
             if (keyIndexes[i] >= requestStatus.totalItemsCount) {
                 revert KeyIndexOutOfRange(keyIndexes[i], requestStatus.totalItemsCount);
             }
 
-            if (keyIndexes[i] > lastDeliveredKeyIndex) {
-                revert KeyWasNotDelivered(keyIndexes[i], lastDeliveredKeyIndex);
+            if (keyIndexes[i] > (requestStatus.deliveredItemsCount - 1)) {
+                revert KeyWasNotDelivered(keyIndexes[i], requestStatus.deliveredItemsCount - 1);
             }
 
-            uint256 itemOffset;
-            uint256 dataWithoutPubkey;
-            uint256 index = keyIndexes[i];
+            ValidatorData memory validatorData = getValidatorData(data, keyIndexes[i]);
+            if (validatorData.moduleId == 0) revert InvalidRequestsData();
+            pubkey = validatorData.pubkey;
 
             assembly {
-                // Compute the start of this packed request (item)
-                itemOffset := add(data.offset, mul(PACKED_REQUEST_LENGTH, index))
-
-                // Load the first 16 bytes which contain moduleId (24 bits),
-                // nodeOpId (40 bits), and valIndex (64 bits).
-                dataWithoutPubkey := shr(128, calldataload(itemOffset))
-            }
-
-            // dataWithoutPubkey format (128 bits total):
-            // MSB <-------------------- 128 bits --------------------> LSB
-            // |   128 bits: zeros  | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
-
-            uint256 nodeOpId = uint40(dataWithoutPubkey >> 64);
-            uint256 moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-
-            if (moduleId == 0) {
-                revert InvalidRequestsData();
-            }
-
-            assembly {
-                let pubkeyCalldataOffset := add(itemOffset, 16)
                 let pubkeyMemPtr := add(pubkey, 32)
                 let dest := add(pubkeys, add(32, mul(PUBLIC_KEY_LENGTH, i)))
-
-                calldatacopy(dest, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
-                calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
+                mstore(dest, mload(pubkeyMemPtr))
+                mstore(add(dest, 32), mload(add(pubkeyMemPtr, 32)))
             }
 
             IStakingRouter(LOCATOR.stakingRouter()).onValidatorExitTriggered(
-                moduleId,
-                nodeOpId,
+                validatorData.moduleId,
+                validatorData.nodeOpId,
                 pubkey,
                 withdrawalFee,
-                0
+                exitType
             );
         }
 
-        IWithdrawalVault(withdrawalVaultAddr).addFullWithdrawalRequests{value: keyIndexes.length * withdrawalFee}(
+        IWithdrawalVault(LOCATOR.withdrawalVault()).addFullWithdrawalRequests{value: keyIndexes.length * withdrawalFee}(
             pubkeys
         );
 
-        _refundFee(keyIndexes.length * withdrawalFee);
+        _refundFee(keyIndexes.length * withdrawalFee, refundRecipient);
     }
 
+    /// @notice Directly emit exit events and request validators through the TW to exit them without delivering hashes and any proving
+    /// @param exitData Direct exit request data struct
+    /// @param refundRecipient Address to return extra fee on TW (eip-7002) exit
+    /// @param exitType type of request. 0 - non-refundable, 1 - require refund
+    /// @dev  Verify that requests amount fits within the limits
     function triggerExitsDirectly(
-        DirectExitData calldata exitData
-    ) external payable whenResumed onlyRole(DIRECT_EXIT_ROLE) preservesEthBalance returns (uint256) {
-        address withdrawalVault = LOCATOR.withdrawalVault();
-        uint256 withdrawalFee = IWithdrawalVault(withdrawalVault).getWithdrawalRequestFee();
+        DirectExitData calldata exitData,
+        address refundRecipient,
+        uint8 exitType
+    ) external payable whenResumed onlyRole(DIRECT_EXIT_ROLE) preservesEthBalance {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+
+        // If the refund recipient is not set, use the sender as the refund recipient
+        if (refundRecipient == address(0)) {
+            refundRecipient = msg.sender;
+        }
 
         if (exitData.validatorsPubkeys.length == 0) {
             revert NoExitRequestProvided();
@@ -318,54 +335,41 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
 
         uint256 requestsCount = exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH;
+        uint256 withdrawalFee = IWithdrawalVault(LOCATOR.withdrawalVault()).getWithdrawalRequestFee();
 
         if (msg.value < withdrawalFee * requestsCount) {
-            revert InsufficientPayment(withdrawalFee, requestsCount, msg.value);
+            revert InsufficientWithdrawalFee(withdrawalFee * requestsCount, msg.value);
         }
 
-        ExitRequestLimitData memory exitRequestLimitData = TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        uint256 timestamp = _getTimestamp();
-
-        if (exitRequestLimitData.isExitDailyLimitSet()) {
-            uint256 day = timestamp / 1 days;
-            uint256 limit = exitRequestLimitData.remainingLimit(day);
-
-            if (requestsCount > limit) {
-                revert TWExitRequestsLimit(requestsCount, limit);
-            }
-
-            TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-                exitRequestLimitData.updateRequestsCounter(day, requestsCount)
-            );
-        }
-
-        bytes calldata data = exitData.validatorsPubkeys;
+        _checkAndUpdateDailyExitLimit(TW_EXIT_REQUEST_LIMIT_POSITION, requestsCount);
 
         for (uint256 i = 0; i < requestsCount; i++) {
             bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
 
-            assembly {
-                let offset := add(data.offset, mul(i, PUBLIC_KEY_LENGTH))
-                let dest := add(pubkey, 0x20)
-                calldatacopy(dest, offset, PUBLIC_KEY_LENGTH)
-            }
+            pubkey = getPubkey(exitData.validatorsPubkeys, i);
 
             IStakingRouter(LOCATOR.stakingRouter()).onValidatorExitTriggered(
                 exitData.stakingModuleId,
                 exitData.nodeOperatorId,
                 pubkey,
                 withdrawalFee,
-                0
+                exitType
             );
 
-            emit DirectExitRequest(exitData.stakingModuleId, exitData.nodeOperatorId, pubkey, timestamp);
+            emit DirectExitRequest(
+                exitData.stakingModuleId,
+                exitData.nodeOperatorId,
+                pubkey,
+                _getTimestamp(),
+                refundRecipient
+            );
         }
 
-        IWithdrawalVault(withdrawalVault).addFullWithdrawalRequests{value: withdrawalFee * requestsCount}(
+        IWithdrawalVault(LOCATOR.withdrawalVault()).addFullWithdrawalRequests{value: withdrawalFee * requestsCount}(
             exitData.validatorsPubkeys
         );
 
-        return _refundFee(requestsCount * withdrawalFee);
+        _refundFee(requestsCount * withdrawalFee, refundRecipient);
     }
 
     function setExitRequestLimit(
@@ -416,39 +420,12 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert KeyIndexOutOfRange(index, exitRequests.length / PACKED_REQUEST_LENGTH);
         }
 
-        uint256 itemOffset;
-        uint256 dataWithoutPubkey;
+        ValidatorData memory validatorData = getValidatorData(exitRequests, index);
 
-        assembly {
-            // Compute the start of this packed request (item)
-            itemOffset := add(exitRequests.offset, mul(PACKED_REQUEST_LENGTH, index))
-
-            // Load the first 16 bytes which contain moduleId (24 bits),
-            // nodeOpId (40 bits), and valIndex (64 bits).
-            dataWithoutPubkey := shr(128, calldataload(itemOffset))
-        }
-
-        // dataWithoutPubkey format (128 bits total):
-        // MSB <-------------------- 128 bits --------------------> LSB
-        // |   128 bits: zeros  | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
-
-        valIndex = uint64(dataWithoutPubkey);
-        nodeOpId = uint40(dataWithoutPubkey >> 64);
-        moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-
-        // Allocate a new bytes array in memory for the pubkey
-        pubkey = new bytes(PUBLIC_KEY_LENGTH);
-
-        assembly {
-            // Starting offset in calldata for the pubkey part
-            let pubkeyCalldataOffset := add(itemOffset, 16)
-
-            // Memory location of the 'pubkey' bytes array data
-            let pubkeyMemPtr := add(pubkey, 32)
-
-            // Copy the 48 bytes of the pubkey from calldata into memory
-            calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
-        }
+        valIndex = validatorData.valIndex;
+        nodeOpId = validatorData.nodeOpId;
+        moduleId = validatorData.moduleId;
+        pubkey = validatorData.pubkey;
 
         return (pubkey, nodeOpId, moduleId, valIndex);
     }
@@ -484,6 +461,10 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
     /// Internal functions
 
+    /**
+     * @notice
+     * @dev We have sorting order for both
+     */
     function _processExitRequestsList(bytes calldata data, uint256 startIndex, uint256 count) internal {
         uint256 offset;
         uint256 offsetPastEnd;
@@ -531,14 +512,14 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
     }
 
-    function _refundFee(uint256 fee) internal returns (uint256) {
+    function _refundFee(uint256 fee, address recipient) internal returns (uint256) {
         uint256 refund = msg.value - fee;
 
         if (refund > 0) {
-            (bool success, ) = msg.sender.call{value: refund}("");
+            (bool success, ) = recipient.call{value: refund}("");
 
             if (!success) {
-                revert TriggerableWithdrawalRefundFailed();
+                revert TriggerableWithdrawalFeeRefundFailed();
             }
 
             emit MadeRefund(msg.sender, refund);
@@ -547,11 +528,50 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         return refund;
     }
 
+    function _checkAndUpdateDailyExitLimit(bytes32 _exitRequestPosition, uint256 requestsCount) internal {
+        ExitRequestLimitData memory exitRequestLimitData = _exitRequestPosition.getStorageExitRequestLimit();
+
+        if (!exitRequestLimitData.isExitDailyLimitSet()) {
+            return;
+        }
+
+        uint256 day = _getTimestamp() / 1 days;
+        uint256 limit = exitRequestLimitData.remainingLimit(day);
+
+        if (requestsCount > limit) {
+            revert ExitRequestsLimit(requestsCount, limit);
+        }
+
+        _exitRequestPosition.setStorageExitRequestLimit(exitRequestLimitData.updateRequestsCounter(day, requestsCount));
+    }
+
+    function _applyExitLimitOrRevert(bytes32 _exitRequestPosition, uint256 requestsCount) internal returns (uint256) {
+        ExitRequestLimitData memory exitRequestLimitData = _exitRequestPosition.getStorageExitRequestLimit();
+
+        if (!exitRequestLimitData.isExitDailyLimitSet()) {
+            return requestsCount;
+        }
+
+        uint256 day = _getTimestamp() / 1 days;
+        uint256 limit = exitRequestLimitData.remainingLimit(day);
+
+        if (limit == 0) {
+            revert ExitRequestsLimit(requestsCount, limit);
+        }
+
+        uint256 requestsToDeliver = requestsCount > limit ? limit : requestsCount;
+
+        _exitRequestPosition.setStorageExitRequestLimit(
+            exitRequestLimitData.updateRequestsCounter(day, requestsToDeliver)
+        );
+
+        return requestsToDeliver;
+    }
+
     function _getTimestamp() internal view virtual returns (uint256) {
         return block.timestamp; // solhint-disable-line not-rely-on-time
     }
 
-    // this method
     function _storeExitRequestHash(
         bytes32 exitRequestHash,
         uint256 totalItemsCount,
@@ -572,6 +592,66 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
 
         emit StoredExitRequestHash(exitRequestHash);
+    }
+
+    /// Methods for reading data from tightly packed validator exit requests
+    /// Format DATA_FORMAT_LIST = 1;
+
+    /**
+     * @notice Method for reading node operator id, module id and validator index from validator exit request data
+     * @param exitRequestData Validator exit requests data. DATA_FORMAT = 1
+     * @param index index of request in array above
+     * @return validatorData Validator data including node operator id, module id, validator index
+     */
+    function getValidatorData(
+        bytes calldata exitRequestData,
+        uint256 index
+    ) internal pure returns (ValidatorData memory validatorData) {
+        uint256 itemOffset;
+        uint256 dataWithoutPubkey;
+
+        assembly {
+            // Compute the start of this packed request (item)
+            itemOffset := add(exitRequestData.offset, mul(PACKED_REQUEST_LENGTH, index))
+
+            // Load the first 16 bytes which contain moduleId (24 bits),
+            // nodeOpId (40 bits), and valIndex (64 bits).
+            dataWithoutPubkey := shr(128, calldataload(itemOffset))
+        }
+
+        // dataWithoutPubkey format (128 bits total):
+        // MSB <-------------------- 128 bits --------------------> LSB
+        // |   128 bits: zeros  | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
+
+        validatorData.valIndex = uint64(dataWithoutPubkey);
+        validatorData.nodeOpId = uint40(dataWithoutPubkey >> 64);
+        validatorData.moduleId = uint24(dataWithoutPubkey >> (64 + 40));
+
+        bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
+        assembly {
+            itemOffset := add(exitRequestData.offset, mul(PACKED_REQUEST_LENGTH, index))
+            let pubkeyCalldataOffset := add(itemOffset, 16)
+            let pubkeyMemPtr := add(pubkey, 32)
+            calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
+        }
+
+        validatorData.pubkey = pubkey;
+    }
+
+    /**
+     * @notice Method for reading public key value from pubkeys list
+     * @param pubkeys Concatenated list of pubkeys
+     * @param index index of pubkey in array above
+     * @return pubkey Validator public key
+     */
+    function getPubkey(bytes calldata pubkeys, uint256 index) internal pure returns (bytes memory pubkey) {
+        pubkey = new bytes(PUBLIC_KEY_LENGTH);
+
+        assembly {
+            let offset := add(pubkeys.offset, mul(index, PUBLIC_KEY_LENGTH))
+            let dest := add(pubkey, 0x20)
+            calldatacopy(dest, offset, PUBLIC_KEY_LENGTH)
+        }
     }
 
     /// Storage helpers
