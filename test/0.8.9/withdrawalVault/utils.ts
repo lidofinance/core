@@ -35,3 +35,22 @@ export function generateWithdrawalRequestPayload(numberOfRequests: number) {
     mixedWithdrawalAmounts,
   };
 }
+
+export function generateConsolidationRequestPayload(numberOfRequests: number) {
+  const sourcePubkeys: string[] = [];
+  const targetPubkeys: string[] = [];
+
+  const targetPubkey = toValidatorPubKey(0);
+
+  for (let i = 1; i <= numberOfRequests; i++) {
+    sourcePubkeys.push(toValidatorPubKey(i));
+    targetPubkeys.push(targetPubkey);
+  }
+
+  return {
+    sourcePubkeysHexString: `0x${sourcePubkeys.join("")}`,
+    sourcePubkeys,
+    targetPubkeysHexString: `0x${targetPubkeys.join("")}`,
+    targetPubkeys,
+  };
+}

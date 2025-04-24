@@ -160,7 +160,7 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable, PausableUnt
         if (sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
         if (sourcePubkeys.length % PUBLIC_KEY_LENGTH != 0) revert MalformedPubkeysArray();
         if (sourcePubkeys.length != targetPubkeys.length)
-            revert ArraysLengthMismatch(sourcePubkeys.length, sourcePubkeys.length);
+            revert ArraysLengthMismatch(sourcePubkeys.length, targetPubkeys.length);
 
         uint256 requestsCount = _countPubkeys(sourcePubkeys);
         uint256 feePerRequest = _getRequestFee(CONSOLIDATION_REQUEST);
