@@ -17,7 +17,7 @@ import { deployEIP7002WithdrawalRequestContract, EIP7002_ADDRESS, MAX_UINT256, p
 
 import { Snapshot } from "test/suite";
 
-import { findEIP7002MockEvents, testEIP7002Mock } from "./eip7002Mock";
+import { encodeEIP7002Payload, findEIP7002MockEvents, testEIP7002Mock } from "./eip7002Mock";
 import { generateWithdrawalRequestPayload } from "./utils";
 
 const PETRIFIED_VERSION = MAX_UINT256;
@@ -480,6 +480,27 @@ describe("WithdrawalVault.sol", () => {
         mixedWithdrawalAmounts,
         highFee,
       );
+    });
+
+    it("Should emit withdrawal event", async function () {
+      const requestCount = 3;
+      const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+
+      const fee = 3n;
+      await withdrawalsPredeployed.mock__setFee(fee);
+      const expectedTotalWithdrawalFee = 9n; // 3 requests * 3 gwei (fee) = 9 gwei
+
+      await expect(
+        vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, {
+          value: expectedTotalWithdrawalFee,
+        }),
+      )
+        .to.emit(vault, "WithdrawalRequestAdded")
+        .withArgs(encodeEIP7002Payload(pubkeys[0], mixedWithdrawalAmounts[0]))
+        .and.to.emit(vault, "WithdrawalRequestAdded")
+        .withArgs(encodeEIP7002Payload(pubkeys[1], mixedWithdrawalAmounts[1]))
+        .and.to.emit(vault, "WithdrawalRequestAdded")
+        .withArgs(encodeEIP7002Payload(pubkeys[2], mixedWithdrawalAmounts[2]));
     });
 
     it("Should not affect contract balance", async function () {

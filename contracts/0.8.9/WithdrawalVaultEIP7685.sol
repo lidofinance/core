@@ -23,6 +23,9 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable, PausableUnt
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
+    event WithdrawalRequestAdded(bytes request);
+    event ConsolidationRequestAdded(bytes request);
+
     error ZeroArgument(string name);
     error MalformedPubkeysArray();
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
@@ -121,6 +124,8 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable, PausableUnt
             if (!success) {
                 revert RequestAdditionFailed(request);
             }
+
+            emit WithdrawalRequestAdded(request);
         }
     }
 
@@ -174,6 +179,8 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable, PausableUnt
             if (!success) {
                 revert RequestAdditionFailed(request);
             }
+
+            emit ConsolidationRequestAdded(request);
         }
     }
 
