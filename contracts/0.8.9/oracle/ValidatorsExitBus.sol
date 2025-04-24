@@ -11,7 +11,7 @@ import {PausableUntil} from "../utils/PausableUntil.sol";
 import {IValidatorsExitBus} from "../interfaces/IValidatorExitBus.sol";
 
 interface IWithdrawalVault {
-    function addFullWithdrawalRequests(bytes calldata pubkeys) external payable;
+    function addWithdrawalRequests(bytes calldata pubkeys, uint64[] calldata amounts) external payable;
 
     function getWithdrawalRequestFee() external view returns (uint256);
 }
@@ -302,8 +302,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             );
         }
 
-        IWithdrawalVault(LOCATOR.withdrawalVault()).addFullWithdrawalRequests{value: keyIndexes.length * withdrawalFee}(
-            pubkeys
+        IWithdrawalVault(LOCATOR.withdrawalVault()).addWithdrawalRequests{value: keyIndexes.length * withdrawalFee}(
+            pubkeys,
+            new uint64[](keyIndexes.length)
         );
 
         _refundFee(keyIndexes.length * withdrawalFee, refundRecipient);
@@ -365,8 +366,10 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             );
         }
 
-        IWithdrawalVault(LOCATOR.withdrawalVault()).addFullWithdrawalRequests{value: withdrawalFee * requestsCount}(
-            exitData.validatorsPubkeys
+        uint64[] memory amount = new uint64[](requestsCount);
+        IWithdrawalVault(LOCATOR.withdrawalVault()).addWithdrawalRequests{value: withdrawalFee * requestsCount}(
+            exitData.validatorsPubkeys,
+            amount
         );
 
         _refundFee(requestsCount * withdrawalFee, refundRecipient);
