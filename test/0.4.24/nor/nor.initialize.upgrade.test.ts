@@ -32,7 +32,6 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
   const contractVersionV2 = 2n;
-  const contractVersionV3 = 3n;
 
   before(async () => {
     [deployer, user, stakingRouter, nodeOperatorsManager, signingKeysManager, limitsManager] =
@@ -89,16 +88,11 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
     });
 
     it("Reverts if Locator is zero address", async () => {
-      await expect(nor.initialize(ZeroAddress, moduleType, 43200n)).to.be.reverted;
-    });
-
-    it("Reverts if stuck penalty delay exceeds MAX_STUCK_PENALTY_DELAY", async () => {
-      const MAX_STUCK_PENALTY_DELAY = await nor.MAX_STUCK_PENALTY_DELAY();
-      await expect(nor.initialize(locator, "curated-onchain-v1", MAX_STUCK_PENALTY_DELAY + 1n));
+      await expect(nor.initialize(ZeroAddress, moduleType, 86400n)).to.be.reverted;
     });
 
     it("Reverts if was initialized with v1", async () => {
-      const MAX_STUCK_PENALTY_DELAY = await nor.MAX_STUCK_PENALTY_DELAY();
+      const MAX_STUCK_PENALTY_DELAY = await nor.exitDeadlineThreshold();
       await nor.harness__initialize(1n);
 
       await expect(nor.initialize(locator, moduleType, MAX_STUCK_PENALTY_DELAY)).to.be.revertedWith(
@@ -107,10 +101,9 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
     });
 
     it("Reverts if already initialized", async () => {
-      const MAX_STUCK_PENALTY_DELAY = await nor.MAX_STUCK_PENALTY_DELAY();
-      await nor.initialize(locator, encodeBytes32String("curated-onchain-v1"), MAX_STUCK_PENALTY_DELAY);
+      await nor.initialize(locator, encodeBytes32String("curated-onchain-v1"), 86400n);
 
-      await expect(nor.initialize(locator, moduleType, MAX_STUCK_PENALTY_DELAY)).to.be.revertedWith(
+      await expect(nor.initialize(locator, moduleType, 86400n)).to.be.revertedWith(
         "INIT_ALREADY_INITIALIZED",
       );
     });
@@ -122,10 +115,6 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
       await expect(nor.initialize(locator, moduleType, 86400n))
         .to.emit(nor, "ContractVersionSet")
         .withArgs(contractVersionV2)
-        .to.emit(nor, "ContractVersionSet")
-        .withArgs(contractVersionV3)
-        .and.to.emit(nor, "StuckPenaltyDelayChanged")
-        .withArgs(86400n)
         .and.to.emit(nor, "LocatorContractSet")
         .withArgs(await locator.getAddress())
         .and.to.emit(nor, "StakingModuleTypeSet")
@@ -136,7 +125,6 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
       expect(await nor.getLocator()).to.equal(await locator.getAddress());
       expect(await nor.getInitializationBlock()).to.equal(latestBlock + 1n);
       expect(await lido.allowance(await nor.getAddress(), burnerAddress)).to.equal(MaxUint256);
-      expect(await nor.getStuckPenaltyDelay()).to.equal(86400n);
       expect(await nor.getContractVersion()).to.equal(4);
       expect(await nor.getType()).to.equal(moduleType);
     });

@@ -50,7 +50,7 @@ export async function main() {
     [
       lidoLocatorAddress,
       encodeStakingModuleTypeId(nodeOperatorsRegistryParams.stakingModuleTypeId),
-      nodeOperatorsRegistryParams.stuckPenaltyDelay,
+      simpleDvtRegistryParams.exitDeadlineThresholdInSeconds,
     ],
     { from: deployer },
   );
@@ -62,7 +62,7 @@ export async function main() {
     [
       lidoLocatorAddress,
       encodeStakingModuleTypeId(simpleDvtRegistryParams.stakingModuleTypeId),
-      simpleDvtRegistryParams.stuckPenaltyDelay,
+      simpleDvtRegistryParams.exitDeadlineThresholdInSeconds,
     ],
     { from: deployer },
   );
