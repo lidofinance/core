@@ -48,23 +48,24 @@ async function main() {
   // uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator
   const validatorsExitBusOracleArgs = [SECONDS_PER_SLOT, genesisTime, locator.address];
 
-  const validatorsExitBusOracle = (
-    await deployImplementation(
-      Sk.validatorsExitBusOracle,
-      "ValidatorsExitBusOracle",
-      deployer,
-      validatorsExitBusOracleArgs,
-    )
-  ).address;
-  log.success(`ValidatorsExitBusOracle address: ${validatorsExitBusOracle}`);
+  const validatorsExitBusOracle = await deployImplementation(
+    Sk.validatorsExitBusOracle,
+    "ValidatorsExitBusOracle",
+    deployer,
+    validatorsExitBusOracleArgs,
+  );
+  log.success(`ValidatorsExitBusOracle address: ${validatorsExitBusOracle.address}`);
   log.emptyLine();
 
   const withdrawalVaultArgs = [LIDO_PROXY, TREASURY_PROXY];
 
-  const withdrawalVault = (
-    await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, withdrawalVaultArgs)
-  ).address;
-  log.success(`WithdrawalVault address implementation: ${withdrawalVault}`);
+  const withdrawalVault = await deployImplementation(
+    Sk.withdrawalVault,
+    "WithdrawalVault",
+    deployer,
+    withdrawalVaultArgs,
+  );
+  log.success(`WithdrawalVault address implementation: ${withdrawalVault.address}`);
 
   const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
   const libraries = {
@@ -73,11 +74,15 @@ async function main() {
 
   const DEPOSIT_CONTRACT_ADDRESS = state[Sk.chainSpec].depositContract;
   log(`Deposit contract address: ${DEPOSIT_CONTRACT_ADDRESS}`);
-  const stakingRouterAddress = (
-    await deployImplementation(Sk.stakingRouter, "StakingRouter", deployer, [DEPOSIT_CONTRACT_ADDRESS], { libraries })
-  ).address;
+  const stakingRouterAddress = await deployImplementation(
+    Sk.stakingRouter,
+    "StakingRouter",
+    deployer,
+    [DEPOSIT_CONTRACT_ADDRESS],
+    { libraries },
+  );
 
-  log(`StakingRouter implementation address: ${stakingRouterAddress}`);
+  log(`StakingRouter implementation address: ${stakingRouterAddress.address}`);
 
   const NOR = await deployImplementation(Sk.appNodeOperatorsRegistry, "NodeOperatorsRegistry", deployer, [], {
     libraries,
@@ -109,36 +114,37 @@ async function main() {
   log.success(`ValidatorExitVerifier implementation address: ${NOR.address}`);
   log.emptyLine();
 
-  // Update lido locator
-  const locatorImplContract = await loadContract<LidoLocator>("LidoLocator", INTERMEDIATE_LOCATOR_IMPL);
   // fetch contract addresses that will not changed
   const locatorConfig = [
     [
-      await locatorImplContract.accountingOracle(),
-      await locatorImplContract.depositSecurityModule(),
-      await locatorImplContract.elRewardsVault(),
-      await locatorImplContract.legacyOracle(),
-      await locatorImplContract.lido(),
-      await locatorImplContract.oracleReportSanityChecker(),
-      await locatorImplContract.postTokenRebaseReceiver(),
-      await locatorImplContract.burner(),
-      await locatorImplContract.stakingRouter(),
-      await locatorImplContract.treasury(),
-      await locatorImplContract.validatorsExitBusOracle(),
-      await locatorImplContract.withdrawalQueue(),
-      await locatorImplContract.withdrawalVault(),
-      await locatorImplContract.oracleDaemonConfig(),
+      await locator.accountingOracle(),
+      await locator.depositSecurityModule(),
+      await locator.elRewardsVault(),
+      await locator.legacyOracle(),
+      await locator.lido(),
+      await locator.oracleReportSanityChecker(),
+      await locator.postTokenRebaseReceiver(),
+      await locator.burner(),
+      await locator.stakingRouter(),
+      await locator.treasury(),
+      await locator.validatorsExitBusOracle(),
+      await locator.withdrawalQueue(),
+      await locator.withdrawalVault(),
+      await locator.oracleDaemonConfig(),
     ],
   ];
 
-  const lidoLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, locatorConfig);
+  const lidoLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [
+    ...locatorConfig,
+    validatorExitVerifier.address,
+  ]);
 
   log(`Configuration for voting script:`);
   log(`
-LIDO_LOCATOR = "${lidoLocator.address}"
-VALIDATORS_EXIT_BUS_ORACLE_IMPL = "${validatorsExitBusOracle}"
-WITHDRAWAL_VAULT_IMPL = "${withdrawalVault}"
-STAKING_ROUTER_IMPL = "${stakingRouterAddress}"
+LIDO_LOCATOR_IMPL = "${lidoLocator.address}"
+VALIDATORS_EXIT_BUS_ORACLE_IMPL = "${validatorsExitBusOracle.address}"
+WITHDRAWAL_VAULT_IMPL = "${withdrawalVault.address}"
+STAKING_ROUTER_IMPL = "${stakingRouterAddress.address}"
 NODE_OPERATORS_REGISTRY_IMPL = "${NOR.address}"
 VALIDATOR_EXIT_VERIFIER = "${validatorExitVerifier.address}"
 `);
