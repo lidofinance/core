@@ -226,6 +226,8 @@ contract VaultHubTest is Test {
     uint256 internal constant SECONDS_PER_DAY = 86400;
     uint256 internal constant LOCKED_AMOUNT = 32 ether;
     uint256 internal constant MAX_USERS_TO_STAKING = 100;
+    uint256 internal constant CHANCE_TO_CREATE_AND_CONNECT_VAULT = 10;
+    uint256 internal constant CHANCE_TO_CALL_REBALANCE_OR_BURN = 10;
 
     uint256 private constant INACTIVE_PENALTY_PERIOD = 21 days;
     uint256 private constant INACTIVE_PENALTY_TOTAL_BP = 6000;
@@ -252,9 +254,9 @@ contract VaultHubTest is Test {
         // average core protocol APR is between 2.78-3.6%
         rewardSimulatorForCoreProtocol = new RewardSimulator(_seed, 278, 360, lido.getTotalPooledEther());
 
-        uint256 shareLimit = 64 ether + rnd.randInt(1) * 1 ether; // between 32 and 33 ETH
+        uint256 shareLimit = 35 ether + rnd.randInt(5) * 1 ether; // between 35 and 40 ETH
         uint256 reserveRatioBp = 1000 + rnd.randInt(1000); // between 10% and 20%
-        uint256 forcedRebalanceThresholdBp = rnd.randInt(reserveRatioBp - 500); // between 0 and 95% of reserveRatioBp
+        uint256 forcedRebalanceThresholdBp = 500 + rnd.randInt(reserveRatioBp - 500); // between 5% and 95% of reserveRatioBp
         uint256 treasuryFeeBp = 500 + rnd.randInt(500); // between 1% and 10%
         operatorGrid = new OperatorGridMock(shareLimit, reserveRatioBp, forcedRebalanceThresholdBp, treasuryFeeBp);
 
@@ -317,7 +319,7 @@ contract VaultHubTest is Test {
         Vault memory vault = Vault({
             stakingVaultProxy: stakingVaultProxy,
             isValidatorPerformingWell: rnd.randBool(),
-            lifetime: rnd.randInt(ITERATIONS / 2) + 10,
+            lifetime: rnd.randInt(ITERATIONS / 2),
             lastInactivePenaltyTime: 0,
             validatorState: validatorState,
             lastState: VaultState.Unknown
@@ -335,7 +337,7 @@ contract VaultHubTest is Test {
         createAndConnectVault(true, _testMode);
 
         for (uint256 iterationIdx = 0; iterationIdx < ITERATIONS; iterationIdx++) {
-            if (vaults.length < CONNECTED_VAULTS_LIMIT && rnd.randInt(100) < 10) {
+            if (vaults.length < CONNECTED_VAULTS_LIMIT && rnd.randInt(100) < CHANCE_TO_CREATE_AND_CONNECT_VAULT) {
                 createAndConnectVault(false, _testMode);
             }
 
@@ -434,11 +436,6 @@ contract VaultHubTest is Test {
             Vault memory vault = vaults[i];
             uint256 sharesMinted = vaultHubProxy.vaultSocket(address(vault.stakingVaultProxy)).liabilityShares;
 
-            console2.log(
-                "lido.getPooledEthBySharesRoundUp(sharesMinted) = ",
-                formatEth(lido.getPooledEthBySharesRoundUp(sharesMinted))
-            );
-            console2.log("vault.stakingVaultProxy.totalValue() = ", formatEth(vault.stakingVaultProxy.totalValue()));
             if (getVaultState(vault) != VaultState.BadDebt) {
                 assertLe(lido.getPooledEthBySharesRoundUp(sharesMinted), vault.stakingVaultProxy.totalValue());
             }
@@ -491,9 +488,9 @@ contract VaultHubTest is Test {
             }
 
             if (state == VaultState.MintingAllowed) {
-                transitionRandomMint(vault.stakingVaultProxy);
+                transitionMintMaxAllowedShares(vault.stakingVaultProxy);
             } else if (state == VaultState.Healthy || state == VaultState.Unhealthy) {
-                if (rnd.randInt(100) < 10) {
+                if (rnd.randInt(100) < CHANCE_TO_CALL_REBALANCE_OR_BURN) {
                     if (rnd.randBool()) {
                         transitionRandomBurn(vault.stakingVaultProxy);
                     } else {
@@ -505,14 +502,6 @@ contract VaultHubTest is Test {
                 uint256 rebalanceShortfall = vaultHubProxy.rebalanceShortfall(address(vault.stakingVaultProxy));
                 assertEq(rebalanceShortfall, type(uint256).max);
                 vault.lifetime = 0;
-            }
-
-            if (vault.validatorState == ValidatorState.Active) {
-                console2.log("Vault state active");
-            } else if (vault.validatorState == ValidatorState.Inactive) {
-                console2.log("Vault state inactive");
-            } else if (vault.validatorState == ValidatorState.Slashed) {
-                console2.log("Vault state slashed");
             }
 
             if (vault.validatorState == ValidatorState.Active) {
@@ -541,10 +530,10 @@ contract VaultHubTest is Test {
         runTests(23172389139823, TestMode.WellPerformingValidators);
     }
 
-    // function testFuzz_SolvencyAllTransitions(uint256 _seed) external {
-    //     TestMode testMode = TestMode(rnd.randInt(2));
-    //     runTests(_seed, testMode);
-    // }
+    function testFuzz_SolvencyAllTransitions(uint256 _seed) external {
+        TestMode testMode = TestMode(rnd.randInt(2));
+        runTests(_seed, testMode);
+    }
 
     function transitionRandomCoreProtocolStaking() internal {
         uint256 amountOfUseres = rnd.randInt(MAX_USERS_TO_STAKING);
@@ -597,7 +586,7 @@ contract VaultHubTest is Test {
         vm.deal(address(_stakingVault), address(_stakingVault).balance - penalty);
     }
 
-    function transitionRandomMint(StakingVault _stakingVault) internal {
+    function transitionMintMaxAllowedShares(StakingVault _stakingVault) internal {
         uint256 totalShares = lido.getTotalShares();
         uint256 totalPooledEther = lido.getTotalPooledEther();
 
