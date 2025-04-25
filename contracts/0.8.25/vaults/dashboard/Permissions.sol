@@ -455,9 +455,4 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param argument Name of the argument
      */
     error ZeroArgument(string argument);
-
-    /**
-     * @notice Error thrown for when a given role is not authorized
-     */
-    error NotAuthorized();
 }
