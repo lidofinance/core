@@ -30,7 +30,7 @@ import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.so
 import {StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {DepositContract__MockForStakingVault} from "./contracts/DepositContract__MockForStakingVault.sol";
 import {RandomLib} from "./RandomLib.sol";
-
+import {RewardSimulator} from "./RewardSimulator.sol";
 contract LidoLocatorMock is Test {
     address private depositor;
 
@@ -43,32 +43,29 @@ contract LidoLocatorMock is Test {
     }
 }
 
-contract VaultHubMock is Test {
+contract VaultHubMock is RewardSimulator {
     event Mock__Rebalanced(address indexed vault, uint256 amount);
 
     using RandomLib for RandomLib.Storage;
 
     uint256 constant TOTAL_BASIS_POINTS = 10000;
     uint256 constant RESERVE_RATIO_BP = 1000; // 10% reserve ratio
-    uint256 constant REWARD_RATE_MIN_BP = 100; // 1% min reward rate
-    uint256 constant REWARD_RATE_MAX_BP = 500; // 5% max reward rate
-    uint256 constant TREASURY_FEE_BP = 500; // 5% treasury fee
     uint256 constant REBALANCE_THRESHOLD_BP = 9500; // 95% - vault needs rebalance if valuation drops below this
     uint256 constant CONNECT_DEPOSIT = 1 ether;
-    uint256 constant SECONDS_PER_DAY = 86400;
-    uint256 constant DAYS_PER_YEAR = 365;
 
     LidoLocatorMock private lidoLocator;
-    RandomLib.Storage private rnd;
 
     uint256 private lastRewardTimestamp;
     uint256 private currentAPR;
 
-    constructor(uint256 _seed, address _lidoLocator) {
-        rnd.seed = _seed;
+    constructor(
+        address _lidoLocator,
+        uint256 _seed,
+        uint256 _aprMin,
+        uint256 _aprMax,
+        uint256 _minValidatorBalance
+    ) RewardSimulator(_seed, _aprMin, _aprMax, _minValidatorBalance) {
         lidoLocator = LidoLocatorMock(_lidoLocator);
-        lastRewardTimestamp = block.timestamp;
-        currentAPR = REWARD_RATE_MIN_BP + rnd.randInt(REWARD_RATE_MAX_BP - REWARD_RATE_MIN_BP);
     }
 
     function LIDO_LOCATOR() public view returns (LidoLocatorMock) {
@@ -79,30 +76,14 @@ contract VaultHubMock is Test {
         return 1 days;
     }
 
-    function maxMintableEther(uint256 vaultValuation) public returns (uint256) {
+    function getMaxMintableEther(uint256 vaultValuation) public pure returns (uint256) {
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - RESERVE_RATIO_BP;
         return (vaultValuation * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
     }
 
-    function protocolDaylyReward() public returns (uint256) {
-        uint256 timePassed = block.timestamp - lastRewardTimestamp;
-        if (timePassed < SECONDS_PER_DAY) {
-            return 0;
-        }
-
-        uint256 daysPassed = timePassed / SECONDS_PER_DAY;
-        lastRewardTimestamp += daysPassed * SECONDS_PER_DAY;
-        uint256 dailyReward = (CONNECT_DEPOSIT * currentAPR * daysPassed) / (TOTAL_BASIS_POINTS * DAYS_PER_YEAR);
-        int256 randomVariation = int256(rnd.randInt(200)) - 100;
-        dailyReward = uint256((int256(dailyReward) * (1000 + randomVariation)) / 1000);
-        currentAPR = REWARD_RATE_MIN_BP + rnd.randInt(REWARD_RATE_MAX_BP - REWARD_RATE_MIN_BP);
-
-        return dailyReward;
-    }
-
-    function newLockedEther(uint256 valuation) public returns (uint256) {
-        uint256 maxMintableEther = maxMintableEther(valuation);
-        uint256 protocolDaylyReward = protocolDaylyReward();
+    function getNewLockedEther(uint256 valuation) public returns (uint256) {
+        uint256 maxMintableEther = getMaxMintableEther(valuation);
+        uint256 protocolDaylyReward = getDailyReward();
         return Math.max(CONNECT_DEPOSIT, maxMintableEther + protocolDaylyReward);
     }
 
@@ -118,50 +99,6 @@ contract VaultHubMock is Test {
 
     function rebalance() external payable {
         emit Mock__Rebalanced(msg.sender, msg.value);
-    }
-}
-
-contract ValidatorMock is Test {
-    using RandomLib for RandomLib.Storage;
-
-    uint256 constant SECONDS_PER_DAY = 86400;
-    uint256 constant APR_DENOMINATOR = 10000;
-    uint256 constant DAYS_PER_YEAR = 365;
-    uint256 constant APR_MIN = 300; // 3.00% minimum APR
-    uint256 constant APR_MAX = 500; // 5.00% maximum APR
-    uint256 constant MIN_VALIDATOR_BALANCE = 32 ether;
-
-    uint256 private currentAPR;
-    uint256 private lastRewardTimestamp;
-
-    RandomLib.Storage private rnd;
-
-    constructor(uint256 _seed) {
-        rnd.seed = _seed;
-        lastRewardTimestamp = block.timestamp;
-        currentAPR = APR_MIN + rnd.randInt(APR_MAX - APR_MIN);
-    }
-
-    function getDailyReward() public returns (uint256) {
-        uint256 timePassed = block.timestamp - lastRewardTimestamp;
-        if (timePassed < SECONDS_PER_DAY) {
-            return 0;
-        }
-
-        uint256 daysPassed = timePassed / SECONDS_PER_DAY;
-        lastRewardTimestamp += daysPassed * SECONDS_PER_DAY;
-
-        uint256 yearlyReward = (MIN_VALIDATOR_BALANCE * currentAPR) / APR_DENOMINATOR;
-        uint256 dailyReward = (yearlyReward * daysPassed) / DAYS_PER_YEAR;
-
-        int256 randomVariation = int256(rnd.randInt(200)) - 100;
-        dailyReward = uint256((int256(dailyReward) * (1000 + randomVariation)) / 1000);
-
-        if (rnd.randBool()) {
-            currentAPR = APR_MIN + rnd.randInt(APR_MAX - APR_MIN);
-        }
-
-        return dailyReward;
     }
 }
 
@@ -186,7 +123,7 @@ contract StakingVaultTest is Test {
     StakingVault private stakingVault;
     StakingVault private stakingVaultProxy;
     VaultHubMock private vaultHub;
-    ValidatorMock private validator;
+    RewardSimulator private validator;
 
     uint256 private deposits;
     uint256 private withdrawals;
@@ -255,8 +192,8 @@ contract StakingVaultTest is Test {
 
         LidoLocatorMock lidoLocator = new LidoLocatorMock(depositor);
         DepositContract__MockForStakingVault depositContract = new DepositContract__MockForStakingVault();
-        vaultHub = new VaultHubMock(_seed, address(lidoLocator));
-        validator = new ValidatorMock(_seed);
+        vaultHub = new VaultHubMock(address(lidoLocator), _seed, 300, 500, 9365361 ether);
+        validator = new RewardSimulator(_seed, 300, 500, 32 ether);
         stakingVault = new StakingVault(address(vaultHub), address(depositContract));
 
         ERC1967Proxy proxy = new ERC1967Proxy(
@@ -540,7 +477,7 @@ contract StakingVaultTest is Test {
         uint256 currentLocked = stakingVaultProxy.locked();
 
         uint256 newValuation = address(stakingVaultProxy).balance;
-        uint256 newLocked = vaultHub.newLockedEther(currentValuation);
+        uint256 newLocked = vaultHub.getNewLockedEther(currentValuation);
         console2.log(
             "Receive report oldLocked: %s newLocked: %s currentValuation: %s",
             formatEth(currentLocked),
@@ -571,7 +508,7 @@ contract StakingVaultTest is Test {
 
     function transitionRandomMintShares() internal {
         uint256 vaultResources = Math.min(stakingVaultProxy.totalValue(), address(stakingVaultProxy).balance);
-        uint256 maxMintableEther = vaultHub.maxMintableEther(vaultResources);
+        uint256 maxMintableEther = vaultHub.getMaxMintableEther(vaultResources);
         uint256 currentLocked = stakingVaultProxy.locked();
 
         if (maxMintableEther <= currentLocked) {
@@ -593,7 +530,7 @@ contract StakingVaultTest is Test {
         uint256 currentLocked = stakingVaultProxy.locked();
 
         uint256 newValuation = address(stakingVaultProxy).balance;
-        uint256 newLocked = vaultHub.newLockedEther(currentValuation);
+        uint256 newLocked = vaultHub.getNewLockedEther(currentValuation);
         console2.log(
             "Receive report oldLocked: %s newLocked: %s currentValuation: %s",
             formatEth(currentLocked),
@@ -670,7 +607,7 @@ contract StakingVaultTest is Test {
         return string.concat(etherStr, ".", decimalStr, " ETH");
     }
 
-    function logVaultState() internal {
+    function logVaultState() internal view {
         if (address(stakingVaultProxy).balance < stakingVaultProxy.locked()) {
             console2.log("-----vault state: %s", "balance < locked");
         } else {
