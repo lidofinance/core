@@ -41,43 +41,102 @@ library ExitLimitUtilsStorage {
     }
 }
 
+// TODO: description
+// dailyLimit 0 - exits unlimited
 library ExitLimitUtils {
     /**
-     * @notice Returns the current limit for the current day
-     * @param data Exit request limit struct
-     * @param day Full days since the Unix epoch (block.timestamp / 1 days)
+     * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
+     * @param requestsCount Amount of requests that were sent for processing
+     * @param remainingLimit Amount of requests that still can be processed at current day
      */
-    function remainingLimit(ExitRequestLimitData memory data, uint256 day) internal pure returns (uint256) {
-        // TODO: uint64?
-        if (data.currentDay != day) {
-            return data.dailyLimit;
+    error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
+
+    /**
+     * Method check limit and return how much can be processed
+     * @param requestsCount Amount of requests for processing
+     * @param currentTimestamp Block timestamp
+     * @return limit Amount of requests that can be processed
+     */
+    function consumeLimit(
+        ExitRequestLimitData memory data,
+        uint256 requestsCount,
+        uint256 currentTimestamp
+    ) internal pure returns (uint256 limit) {
+        uint64 currentDay = uint64(currentTimestamp / 1 days);
+
+        // exits unlimited
+        if (data.dailyLimit == 0) {
+            return requestsCount;
         }
 
-        return data.dailyExitCount >= data.dailyLimit ? 0 : data.dailyLimit - data.dailyExitCount;
+        if (data.currentDay != currentDay) {
+            return data.dailyLimit >= requestsCount ? requestsCount : data.dailyLimit;
+        }
+
+        if (data.dailyExitCount >= data.dailyLimit) {
+            revert ExitRequestsLimit(requestsCount, 0);
+        }
+
+        uint256 remainingLimit = data.dailyLimit - data.dailyExitCount;
+        return remainingLimit >= requestsCount ? requestsCount : remainingLimit;
+    }
+
+    /**
+     * Method check limit and revert if requests amount is more than limit
+     * @param requestsCount Amount of requests for processing
+     * @param currentTimestamp Block timestamp
+     */
+    function checkLimit(
+        ExitRequestLimitData memory data,
+        uint256 requestsCount,
+        uint256 currentTimestamp
+    ) internal pure {
+        uint64 currentDay = uint64(currentTimestamp / 1 days);
+
+        // exits unlimited
+        if (data.dailyLimit == 0) return;
+
+        if (data.currentDay != currentDay) return;
+
+        if (data.dailyExitCount >= data.dailyLimit) {
+            revert ExitRequestsLimit(requestsCount, 0);
+        }
+
+        uint256 remainingLimit = data.dailyLimit - data.dailyExitCount;
+
+        if (requestsCount > remainingLimit) {
+            revert ExitRequestsLimit(requestsCount, remainingLimit);
+        }
     }
 
     /**
      * @notice Updates the current request counter and day in the exit limit data
      * @param data Exit request limit struct
-     * @param currentDay Full days since the Unix epoch (block.timestamp / 1 days)
      * @param newCount New requests amount spent during the day
+     * @param currentTimestamp Block timestamp
      */
     function updateRequestsCounter(
         ExitRequestLimitData memory data,
-        uint256 currentDay,
-        uint256 newCount
+        uint256 newCount,
+        uint256 currentTimestamp
     ) internal pure returns (ExitRequestLimitData memory) {
+        require(newCount <= type(uint96).max, "TOO_LARGE_REQUESTS_COUNT_LIMIT");
+
+        // TODO: Should we count requests when exits are unlimited?
+        // If a limit is set after a period of unlimited exits, should we account for the requests that already occurred?
+        // if (data.dailyLimit == 0) return;
+
+        uint64 currentDay = uint64(currentTimestamp / 1 days);
+
         if (data.currentDay != currentDay) {
-            data.currentDay = uint64(currentDay);
+            data.currentDay = currentDay;
             data.dailyExitCount = 0;
         }
 
+        require(data.dailyLimit == 0 || newCount <=  data.dailyLimit - data.dailyExitCount , "REQUESTS_COUNT_EXCEED_LIMIT");
+
         uint256 updatedCount = uint256(data.dailyExitCount) + newCount;
         require(updatedCount <= type(uint96).max, "DAILY_EXIT_COUNT_OVERFLOW");
-
-        if (data.dailyLimit != 0) {
-            require(updatedCount <= data.dailyLimit, "DAILY_LIMIT_REACHED");
-        }
 
         data.dailyExitCount = uint96(updatedCount);
 
@@ -85,27 +144,19 @@ library ExitLimitUtils {
     }
 
     /**
-     * @notice check if max daily exit request limit is set. Otherwise there are no limits on exits
-     */
-    function isExitDailyLimitSet(ExitRequestLimitData memory data) internal pure returns (bool) {
-        return data.dailyLimit != 0;
-    }
-
-    /**
      * @notice Update daily limit
      * @param data Exit request limit struct
      * @param limit Exit request limit per day
-     * @dev  TODO: maybe we need use here uin96
-     * what will happen if method got argument with bigger value than uint96?
+     * @param currentTimestamp Block timestamp
      */
     function setExitDailyLimit(
         ExitRequestLimitData memory data,
-        uint256 limit
-    ) internal view returns (ExitRequestLimitData memory) {
-        require(limit != 0, "ZERO_EXIT_REQUESTS_LIMIT");
-        require(limit <= type(uint96).max, "TOO_LARGE_MAX_EXIT_REQUESTS_LIMIT");
+        uint256 limit,
+        uint256 currentTimestamp
+    ) internal pure returns (ExitRequestLimitData memory) {
+        require(limit <= type(uint96).max, "TOO_LARGE_DAILY_LIMIT");
 
-        uint64 day = uint64(block.timestamp / 1 days);
+        uint64 day = uint64(currentTimestamp / 1 days);
         require(data.currentDay <= day, "INVALID_TIMESTAMP_BACKWARD");
 
         data.dailyLimit = uint96(limit);
