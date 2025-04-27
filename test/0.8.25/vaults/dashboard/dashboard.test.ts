@@ -609,7 +609,7 @@ describe("Dashboard.sol", () => {
 
     it("disconnects the staking vault from the vault hub", async () => {
       await dashboard.connect(vaultOwner).grantRole(await dashboard.VOLUNTARY_DISCONNECT_ROLE(), vaultOwner);
-      await expect(dashboard.voluntaryDisconnect()).to.emit(hub, "Mock__VaultDisconnected").withArgs(vault);
+      await expect(dashboard.voluntaryDisconnect()).to.emit(hub, "Mock__VaultDisconnectInitiated").withArgs(vault);
     });
   });
 

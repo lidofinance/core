@@ -967,9 +967,9 @@ describe("VaultHub.sol:hub", () => {
       );
     });
 
-    it("disconnects the vault", async () => {
+    it("initiates the disconnect process", async () => {
       await expect(vaultHub.connect(user).disconnect(vaultAddress))
-        .to.emit(vaultHub, "VaultDisconnected")
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vaultAddress);
 
       const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);
@@ -1029,7 +1029,7 @@ describe("VaultHub.sol:hub", () => {
 
     it("disconnects the vault", async () => {
       await expect(vaultHub.connect(user).disconnect(vaultAddress))
-        .to.emit(vaultHub, "VaultDisconnected")
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vaultAddress);
 
       const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);
