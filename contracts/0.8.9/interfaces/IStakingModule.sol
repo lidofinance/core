@@ -27,7 +27,7 @@ interface IStakingModule {
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
         bytes calldata _publicKey,
-        bytes calldata _eligibleToExitInSec
+        uint256 _eligibleToExitInSec
     ) external;
 
     /// @notice Handles the triggerable exit event for a validator belonging to a specific node operator.

@@ -15,7 +15,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         uint256 nodeOperatorId,
         uint256 proofSlotTimestamp,
         bytes publicKeys,
-        bytes eligibleToExitInSec
+        uint256 eligibleToExitInSec
     );
 
     event Mock__onValidatorExitTriggered(
@@ -272,7 +272,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
         bytes calldata _publicKeys,
-        bytes calldata _eligibleToExitInSec
+        uint256 _eligibleToExitInSec
     ) external {
         emit Mock__reportValidatorExitDelay(
             _nodeOperatorId,
