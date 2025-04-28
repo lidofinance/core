@@ -195,7 +195,7 @@ describe("VaultHub.sol:reporting", () => {
   });
 
   context("updateVaultData", () => {
-    it("accepts proved values", async () => {
+    it("reverts on invalid proof", async () => {
       const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
       await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
       await vaultHub.harness__connectVault(
@@ -216,6 +216,96 @@ describe("VaultHub.sol:reporting", () => {
           TEST_PROOF,
         ),
       ).to.be.revertedWithCustomError(vaultHub, "InvalidProof");
+    });
+
+    it("accepts generated proof", async () => {
+      const vaultsReport: VaultReportItem[] = [
+        ["0xE312f1ed35c4dBd010A332118baAD69d45A0E302", 33000000000000000000n, 33000000000000000000n, 0n, 0n],
+        [
+          "0x652b70E0Ae932896035d553fEaA02f37Ab34f7DC",
+          3100000000000000000n,
+          3100000000000000000n,
+          0n,
+          510300000000000000n,
+        ],
+        [
+          "0x20d34FD0482E3BdC944952D0277A306860be0014",
+          2580000000000012501n,
+          580000000000012501n,
+          0n,
+          1449900000000010001n,
+        ],
+        ["0x60B614c42d92d6c2E68AF7f4b741867648aBf9A4", 1000000000000000000n, 1000000000000000000n, 0n, 0n],
+        [
+          "0xE6BdAFAac1d91605903D203539faEd173793b7D7",
+          1030000000000000000n,
+          1030000000000000000n,
+          0n,
+          400000000000000000n,
+        ],
+        ["0x34ebc5780F36d3fD6F1e7b43CF8DB4a80dCE42De", 1000000000000000000n, 1000000000000000000n, 0n, 0n],
+        [
+          "0x3018F0cC632Aa3805a8a676613c62F55Ae4018C7",
+          2000000000000000000n,
+          2000000000000000000n,
+          0n,
+          100000000000000000n,
+        ],
+        [
+          "0x40998324129B774fFc7cDA103A2d2cFd23EcB56e",
+          1000000000000000000n,
+          1000000000000000000n,
+          0n,
+          300000000000000000n,
+        ],
+        ["0x4ae099982712e2164fBb973554991111A418ab2B", 1000000000000000000n, 1000000000000000000n, 0n, 0n],
+        ["0x59536AC6211C1deEf1EE37CDC11242A0bDc7db83", 1000000000000000000n, 1000000000000000000n, 0n, 0n],
+      ];
+
+      const tree = createVaultsReportTree(vaultsReport);
+      expect(tree.root).to.equal("0x305228cb82b2385b40ebeb7f0b805e58c2e9942bd84183eb1d603b765af94ca1");
+      const proof = tree.getProof(1);
+      expect(proof).to.deep.equal([
+        "0x3dfaa9117d824d40ae979f184ce0a9e60d7474912e7b53603e40b0b34cbba72f",
+        "0x33c5d49ae39b473dc097b8987ab2f876542ad500209b96af5600da11289fe643",
+        "0x5060c4e8e98281c0181273abcabb2e9e8f06fe6353e99f96606bb87635c9b090",
+      ]);
+    });
+
+    it("updates vault data with precalculated proof", async () => {
+      const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
+      await expect(
+        vaultHub
+          .connect(accountingAddress)
+          .updateReportData(0, "0x305228cb82b2385b40ebeb7f0b805e58c2e9942bd84183eb1d603b765af94ca1", ""),
+      ).to.not.reverted;
+
+      await vaultHub.harness__connectVault(
+        "0x20d34FD0482E3BdC944952D0277A306860be0014",
+        99170000769726969624n,
+        33000000000000000000n,
+        0n,
+        0n,
+      );
+
+      try {
+        await vaultHub.updateVaultData(
+          "0x20d34FD0482E3BdC944952D0277A306860be0014",
+          2580000000000012501n,
+          580000000000012501n,
+          0n,
+          1449900000000010001n,
+          [
+            "0x3ce25daf426ef04e5e0714b61a4a46c1ecb59922de95b73c45afe57779f1cc26",
+            "0x33c5d49ae39b473dc097b8987ab2f876542ad500209b96af5600da11289fe643",
+            "0x5060c4e8e98281c0181273abcabb2e9e8f06fe6353e99f96606bb87635c9b090",
+          ],
+        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (error: any) {
+        // NOTE: Check that it's not InvalidProof but error while calling report() for fake StakingVault address
+        expect(error.message).to.include("function call to a non-contract account");
+      }
     });
 
     it("accepts proved values", async () => {
