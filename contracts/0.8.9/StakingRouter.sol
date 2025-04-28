@@ -1482,7 +1482,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
         bytes calldata _publicKey,
-        bytes calldata _eligibleToExitInSec
+        uint256 _eligibleToExitInSec
     )
         external
         onlyRole(REPORT_EXITED_VALIDATORS_STATUS_ROLE)
