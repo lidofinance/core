@@ -211,19 +211,23 @@ export async function lockConnectionDeposit(ctx: ProtocolContext, dashboard: Das
   await stakingVault.connect(dashboardSigner).lock(ether("1"));
 }
 
-export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: StakingVault) {
+/**
+ * Generates fees to claim for the vault
+ * @param ctx Protocol context for contract interaction
+ * @param stakingVault Staking vault instance
+ * @param amount Amount of fees to claim
+ */
+export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: StakingVault, amount: bigint) {
   const { vaultHub } = ctx.contracts;
   const hubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-  const rewards = ether("1");
-  await stakingVault.connect(hubSigner).report(await getCurrentBlockTimestamp(), rewards, 0n, 0n);
+  await stakingVault.connect(hubSigner).report(await getCurrentBlockTimestamp(), amount, 0n, 0n);
 }
 
 // address, totalValue, inOutDelta, treasuryFees, liabilityShares
 export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
 
 export function createVaultsReportTree(vaults: VaultReportItem[]) {
-  const tree = StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256", "uint256"]);
-  return tree;
+  return StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256", "uint256"]);
 }
 
 export async function reportVaultDataWithProof(stakingVault: StakingVault) {
@@ -339,10 +343,9 @@ export const generatePredepositData = async (
   });
 
   // Step 2: Predeposit a validator
-  const predepositData = await generatePredeposit(validator, {
+  return await generatePredeposit(validator, {
     depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
   });
-  return predepositData;
 };
 
 export const getProofAndDepositData = async (
