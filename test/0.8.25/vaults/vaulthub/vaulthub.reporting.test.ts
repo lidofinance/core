@@ -3,6 +3,7 @@ import { ContractTransactionReceipt, keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setCode } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   ACL,
@@ -52,6 +53,7 @@ describe("VaultHub.sol:reporting", () => {
   let acl: ACL;
 
   let codehash: string;
+  let vaultCode: string;
 
   let originalState: string;
 
@@ -160,7 +162,8 @@ describe("VaultHub.sol:reporting", () => {
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
     const vault = await createVault(vaultFactory);
 
-    codehash = keccak256(await ethers.provider.getCode(await vault.getAddress()));
+    vaultCode = await ethers.provider.getCode(await vault.getAddress());
+    codehash = keccak256(vaultCode);
     await vaultHub.connect(user).addVaultProxyCodehash(codehash);
   });
 
@@ -200,10 +203,10 @@ describe("VaultHub.sol:reporting", () => {
       await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
       await vaultHub.harness__connectVault(
         "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
-        99170000769726969624n,
-        33000000000000000000n,
-        0n,
-        0n,
+        SHARE_LIMIT,
+        RESERVE_RATIO_BP,
+        FORCED_REBALANCE_THRESHOLD_BP,
+        TREASURY_FEE_BP,
       );
 
       await expect(
@@ -263,6 +266,29 @@ describe("VaultHub.sol:reporting", () => {
       ];
 
       const tree = createVaultsReportTree(vaultsReport);
+      const accountingAddress = await impersonate(await locator.accounting(), ether("100"));
+      await vaultHub.connect(accountingAddress).updateReportData(await getCurrentBlockTimestamp(), tree.root, "");
+
+      for (let index = 0; index < vaultsReport.length; index++) {
+        const vaultReport = vaultsReport[index];
+        await vaultHub.harness__connectVault(
+          vaultReport[0],
+          SHARE_LIMIT,
+          RESERVE_RATIO_BP,
+          FORCED_REBALANCE_THRESHOLD_BP,
+          TREASURY_FEE_BP,
+        );
+        await setCode(vaultReport[0], vaultCode);
+        await vaultHub.updateVaultData(
+          vaultReport[0],
+          vaultReport[1],
+          vaultReport[2],
+          vaultReport[3],
+          vaultReport[4],
+          tree.getProof(index),
+        );
+      }
+
       expect(tree.root).to.equal("0x305228cb82b2385b40ebeb7f0b805e58c2e9942bd84183eb1d603b765af94ca1");
       const proof = tree.getProof(1);
       expect(proof).to.deep.equal([
@@ -273,6 +299,7 @@ describe("VaultHub.sol:reporting", () => {
     });
 
     it("updates vault data with precalculated proof", async () => {
+      const testVaultAddress = "0x20d34FD0482E3BdC944952D0277A306860be0014";
       const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
       await expect(
         vaultHub
@@ -281,16 +308,18 @@ describe("VaultHub.sol:reporting", () => {
       ).to.not.reverted;
 
       await vaultHub.harness__connectVault(
-        "0x20d34FD0482E3BdC944952D0277A306860be0014",
-        99170000769726969624n,
-        33000000000000000000n,
-        0n,
-        0n,
+        testVaultAddress,
+        SHARE_LIMIT,
+        RESERVE_RATIO_BP,
+        FORCED_REBALANCE_THRESHOLD_BP,
+        TREASURY_FEE_BP,
       );
 
-      try {
-        await vaultHub.updateVaultData(
-          "0x20d34FD0482E3BdC944952D0277A306860be0014",
+      await setCode(testVaultAddress, vaultCode);
+
+      await expect(
+        vaultHub.updateVaultData(
+          testVaultAddress,
           2580000000000012501n,
           580000000000012501n,
           0n,
@@ -300,36 +329,8 @@ describe("VaultHub.sol:reporting", () => {
             "0x33c5d49ae39b473dc097b8987ab2f876542ad500209b96af5600da11289fe643",
             "0x5060c4e8e98281c0181273abcabb2e9e8f06fe6353e99f96606bb87635c9b090",
           ],
-        );
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
-        // NOTE: Check that it's not InvalidProof but error while calling report() for fake StakingVault address
-        expect(error.message).to.include("function call to a non-contract account");
-      }
-    });
-
-    it("accepts proved values", async () => {
-      const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
-      await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
-
-      await vaultHub.harness__connectVault(
-        "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
-        99170000769726969624n,
-        33000000000000000000n,
-        0n,
-        0n,
-      );
-
-      await expect(
-        vaultHub.updateVaultData(
-          "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
-          99170000769726969624n,
-          33000000000000000000n,
-          0n,
-          0n,
-          TEST_PROOF,
         ),
-      ).to.be.reverted;
+      ).to.not.reverted;
     });
 
     it("calculates merkle tree the same way as off-chain implementation", async () => {
