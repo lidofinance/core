@@ -84,9 +84,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      */
     error InsufficientWithdrawalFee(uint256 feeRequired, uint256 passedValue);
 
-    /**
-     * @notice Index in
-     */
     error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
 
     /**

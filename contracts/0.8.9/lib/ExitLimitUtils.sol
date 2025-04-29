@@ -133,10 +133,9 @@ library ExitLimitUtils {
             data.dailyExitCount = 0;
         }
 
-        require(data.dailyLimit == 0 || newCount <=  data.dailyLimit - data.dailyExitCount , "REQUESTS_COUNT_EXCEED_LIMIT");
-
         uint256 updatedCount = uint256(data.dailyExitCount) + newCount;
         require(updatedCount <= type(uint96).max, "DAILY_EXIT_COUNT_OVERFLOW");
+        require(data.dailyLimit == 0 || updatedCount <= data.dailyLimit, "REQUESTS_COUNT_EXCEED_LIMIT");
 
         data.dailyExitCount = uint96(updatedCount);
 
