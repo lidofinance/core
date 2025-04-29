@@ -628,7 +628,7 @@ contract VaultHub is PausableUntilWithRoles {
             $.sockets.pop();
             delete $.vaultIndex[vaultAddress];
 
-            emit VaultDisconnected(vaultAddress);
+            emit VaultDisconnectCompleted(vaultAddress);
         }
     }
 
@@ -673,7 +673,7 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultsReportDataUpdated(uint64 indexed timestamp, bytes32 root, string cid);
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultDisconnectInitiated(address indexed vault);
-    event VaultDisconnected(address indexed vault);
+    event VaultDisconnectCompleted(address indexed vault);
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
