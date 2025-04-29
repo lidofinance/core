@@ -7,7 +7,7 @@ import { SSZHelpers, SSZMerkleTree } from "typechain-types";
 import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 import { StakingVaultDepositStruct } from "typechain-types/contracts/0.8.25/vaults/StakingVault";
 
-import { computeDepositDataRoot, computeDepositMessageRoot, de0x, DEPOSIT_DOMAIN, ether, impersonate } from "lib";
+import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "lib";
 
 export type Validator = { container: SSZHelpers.ValidatorStruct; blsPrivateKey: SecretKey };
 
@@ -51,7 +51,7 @@ export const generatePredeposit = async (
   validator: Validator,
   options = {} as GeneratePredepositOptions,
 ): Promise<{ deposit: StakingVaultDepositStruct; depositY: BLS12_381.DepositYStruct }> => {
-  const { overrideAmount = ether("1"), depositDomain = DEPOSIT_DOMAIN } = options;
+  const { overrideAmount = ether("1"), depositDomain } = options;
   const amount = overrideAmount;
   const pubkey = validator.blsPrivateKey.toPublicKey();
 

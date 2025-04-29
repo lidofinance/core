@@ -8,9 +8,9 @@ import {PredepositGuarantee} from "contracts/0.8.25/vaults/predeposit_guarantee/
 
 contract PredepositGuarantee_HarnessForFactory is PredepositGuarantee {
     constructor(
-        bytes32 _depositDomain,
+        bytes4 _genesisForkVersion,
         GIndex _gIFirstValidator,
         GIndex _gIFirstValidatorAfterChange,
         uint64 _changeSlot
-    ) PredepositGuarantee(_depositDomain, _gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {}
+    ) PredepositGuarantee(_genesisForkVersion, _gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {}
 }

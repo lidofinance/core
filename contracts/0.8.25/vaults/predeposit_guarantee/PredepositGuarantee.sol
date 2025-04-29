@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {GIndex} from "contracts/0.8.25/lib/GIndex.sol";
+import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
 import {BLS12_381} from "contracts/0.8.25/lib/BLS.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
@@ -116,19 +117,19 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         0xf66b5a365356c5798cc70e3ea6a236b181a826a69f730fc07cc548244bee5200;
 
     /**
-     * @param _depositDomain computed deposit domain for the current chain
+     * @param _genesisForkVersion genesis fork version for the current chain
      * @param _gIFirstValidator packed(general index + depth in tree, see GIndex.sol) GIndex of first validator in CL state tree
      * @param _gIFirstValidatorAfterChange packed GIndex of first validator after fork changes tree structure
      * @param _changeSlot slot of the fork that alters first validator GIndex
      * @dev if no fork changes are known,  _gIFirstValidatorAfterChange = _gIFirstValidator and _changeSlot = 0
      */
     constructor(
-        bytes32 _depositDomain,
+        bytes4 _genesisForkVersion,
         GIndex _gIFirstValidator,
         GIndex _gIFirstValidatorAfterChange,
         uint64 _changeSlot
     ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {
-        DEPOSIT_DOMAIN = _depositDomain;
+        DEPOSIT_DOMAIN = SSZ.computeDepositDomain(_genesisForkVersion);
         _disableInitializers();
         _pauseUntil(PAUSE_INFINITELY);
     }
