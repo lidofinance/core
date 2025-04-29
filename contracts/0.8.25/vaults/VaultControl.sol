@@ -1,0 +1,193 @@
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
+// SPDX-License-Identifier: GPL-3.0
+
+// See contracts/COMPILERS.md
+pragma solidity 0.8.25;
+
+import {VaultHub} from "./VaultHub.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {ILido} from "../interfaces/ILido.sol";
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
+import {StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
+
+contract VaultControl is VaultHub {
+    constructor(
+        ILidoLocator _locator,
+        ILido _lido,
+        uint256 _relativeShareLimitBP
+    ) VaultHub(_locator, _lido, _relativeShareLimitBP) {}
+
+    function unlocked(address _vault) public view returns (uint256) {
+        uint256 totalValue_ = totalValue(_vault);
+        uint256 locked_ = _connectedSocket(_vault).locked;
+
+        if (locked_ > totalValue_) return 0;
+
+        return totalValue_ - locked_;
+    }
+
+    function latestReport(address _vault) public view returns (VaultHub.Report memory) {
+        return _connectedSocket(_vault).report;
+    }
+
+    function fund(address _vault) external payable onlyVaultOwner(_vault, "fund") {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+
+        _connectedSocket(_vault).inOutDelta += int128(int256(msg.value));
+
+        (bool success, ) = _vault.call{value: msg.value}("");
+        if (!success) revert TransferFailed(_vault, msg.value);
+
+        emit VaultFunded(_vault, msg.sender, msg.value);
+    }
+
+    function withdraw(address _vault, address _recipient, uint256 _ether) external onlyVaultOwner(_vault, "withdraw") {
+        uint256 unlocked_ = unlocked(_vault);
+        if (_ether > unlocked_) revert InsufficientUnlocked(unlocked_);
+
+        _withdrawFromVault(_vault, _recipient, _ether);
+
+        uint256 totalValueAfterWithdraw = totalValue(_vault);
+
+        if (isReportFresh(_vault)) {
+            if (totalValueAfterWithdraw < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
+        } else {
+            if (_vault.balance < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
+        }
+
+        emit VaultWithdrawn(_vault, msg.sender, _recipient, _ether);
+    }
+
+    /// @notice permissionless rebalance for unhealthy vaults
+    /// @param _vault vault address
+    /// @dev rebalance all available amount of ether until the vault is healthy
+    function forceRebalance(address _vault) external {
+        uint256 fullRebalanceAmount = rebalanceShortfall(_vault);
+        if (fullRebalanceAmount == 0) revert AlreadyHealthy(_vault);
+
+        // TODO: add some gas compensation here
+        _rebalance(_vault, Math256.min(fullRebalanceAmount, _vault.balance));
+    }
+
+    /**
+     * @notice Rebalances StakingVault by withdrawing ether to VaultHub
+     * @dev Can only be called by VaultHub if StakingVault totalValue is less than locked amount
+     * @param _ether Amount of ether to rebalance
+     */
+    function rebalance(address _vault, uint256 _ether) external onlyVaultOwner(_vault, "rebalance") {
+        _rebalance(_vault, _ether);
+    }
+
+    function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external {
+        if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized("depositToBeaconChain", msg.sender);
+        if (totalValue(_vault) < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
+
+        IStakingVault(_vault).depositToBeaconChain(_deposits);
+    }
+
+    function triggerValidatorWithdrawal(
+        address _vault,
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) external payable {
+        if (totalValue(_vault) < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
+
+        IStakingVault vault_ = IStakingVault(_vault);
+        if (msg.sender != vault_.owner() && msg.sender != vault_.nodeOperator())
+            revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
+
+        vault_.triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
+    }
+
+    function _rebalance(address _vault, uint256 _ether) internal {
+        if (_ether == 0) revert ZeroArgument("_ether");
+        if (_ether > _vault.balance) revert InsufficientBalance(_vault.balance);
+
+        uint256 totalValue_ = totalValue(_vault);
+        if (_ether > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, _ether);
+
+        VaultSocket storage socket = _connectedSocket(_vault);
+
+        uint256 sharesToBurn = LIDO.getSharesByPooledEth(_ether);
+        uint256 liabilityShares = socket.liabilityShares;
+        if (liabilityShares < sharesToBurn) revert InsufficientSharesToBurn(msg.sender, liabilityShares);
+        socket.liabilityShares = uint96(liabilityShares - sharesToBurn);
+
+        _withdrawFromVault(_vault, address(this), _ether);
+
+        LIDO.rebalanceExternalEtherToInternal{value: _ether}();
+        emit VaultRebalanced(msg.sender, sharesToBurn);
+    }
+
+    function _withdrawFromVault(address _vault, address _recipient, uint256 _amount) internal {
+        _connectedSocket(_vault).inOutDelta -= int128(int256(_amount));
+        IStakingVault(_vault).withdraw(_recipient, _amount);
+        emit VaultWithdrawn(_vault, msg.sender, _recipient, _amount);
+    }
+
+    /**
+     * @notice Emitted when `StakingVault` is funded with ether
+     * @dev Event is not emitted upon direct transfers through `receive()`
+     * @param sender Address that funded the vault
+     * @param amount Amount of ether funded
+     */
+    event VaultFunded(address indexed vault, address indexed sender, uint256 amount);
+
+    /**
+     * @notice Emitted when ether is withdrawn from `StakingVault`
+     * @dev Also emitted upon rebalancing in favor of `VaultHub`
+     * @param sender Address that initiated the withdrawal
+     * @param recipient Address that received the withdrawn ether
+     * @param amount Amount of ether withdrawn
+     */
+    event VaultWithdrawn(address indexed vault, address indexed sender, address indexed recipient, uint256 amount);
+
+    /**
+     * @notice Emitted when the locked amount is increased
+     * @param locked New amount of locked ether
+     */
+    event LockedIncreased(uint256 locked);
+
+    /**
+     * @notice Thrown when attempting to decrease the locked amount outside of a report
+     */
+    error NewLockedNotGreaterThanCurrent();
+
+    /**
+     * @notice Thrown when the locked amount exceeds the total value
+     */
+    error NewLockedExceedsTotalValue();
+
+    /**
+     * @notice Thrown when the transfer of ether to a recipient fails
+     * @param recipient Address that was supposed to receive the transfer
+     * @param amount Amount that failed to transfer
+     */
+    error TransferFailed(address recipient, uint256 amount);
+
+    /**
+     * @notice Thrown when trying to withdraw more ether than the balance of `StakingVault`
+     * @param balance Current balance
+     */
+    error InsufficientBalance(uint256 balance);
+
+    /**
+     * @notice Thrown when trying to withdraw more than the unlocked amount
+     * @param unlocked Current unlocked amount
+     */
+    error InsufficientUnlocked(uint256 unlocked);
+
+    /**
+     * @notice Thrown when the total value of the vault falls below the locked amount
+     */
+    error TotalValueBelowLockedAmount();
+
+    /**
+     * @notice Thrown when attempting to rebalance more ether than the current total value of the vault
+     * @param totalValue Current total value of the vault
+     * @param rebalanceAmount Amount attempting to rebalance
+     */
+    error RebalanceAmountExceedsTotalValue(uint256 totalValue, uint256 rebalanceAmount);
+}
