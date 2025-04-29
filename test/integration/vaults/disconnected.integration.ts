@@ -126,13 +126,13 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
       expect(await dashboard.withdrawableEther()).to.equal(VAULT_CONNECTION_DEPOSIT + 3n);
 
-      await expect(await dashboard.connect(roles.withdrawer).withdraw(stranger, 1n))
+      await expect(await dashboard.connect(roles.withdrawer).withdraw(stranger, 3n))
         .to.emit(stakingVault, "Withdrawn")
-        .withArgs(dashboard, stranger, 1n);
+        .withArgs(dashboard, stranger, 3n);
 
-      expect(await stakingVault.inOutDelta()).to.equal(VAULT_CONNECTION_DEPOSIT + 2n);
-      expect(await stakingVault.totalValue()).to.equal(VAULT_CONNECTION_DEPOSIT + 2n);
-      expect(await dashboard.withdrawableEther()).to.equal(VAULT_CONNECTION_DEPOSIT + 2n);
+      expect(await stakingVault.inOutDelta()).to.equal(VAULT_CONNECTION_DEPOSIT);
+      expect(await stakingVault.totalValue()).to.equal(VAULT_CONNECTION_DEPOSIT);
+      expect(await dashboard.withdrawableEther()).to.equal(VAULT_CONNECTION_DEPOSIT);
     });
 
     it("can reset lock and withdraw all the funded amount", async () => {
@@ -158,9 +158,11 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         to: stakingVault.getAddress(),
         value: 50n,
       });
+
       console.log(await ethers.provider.getBalance(stakingVault.getAddress()));
+
       await dashboard.connect(roles.locker).lock(13n);
-      expect(await dashboard.withdrawableEther()).to.equal(1n);
+      expect(await dashboard.withdrawableEther()).to.equal(VAULT_CONNECTION_DEPOSIT + 50n);
       await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, 2n)).to.emit(stakingVault, "Withdrawn");
     });
   });
@@ -257,7 +259,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     it("can't perform trigger if withdrawal fee is insufficient", async () => {
       const keysAmount = 3;
-      const value = 2n;
+      const value = await stakingVault.calculateValidatorWithdrawalFee(keysAmount - 1);
       const keys = getPubkeys(keysAmount);
       await dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub();
       await expect(
@@ -323,10 +325,14 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       "BeaconChainDepositsPaused",
     );
 
+    // TODO: try deposit, shoule revert
+
     await expect(dashboard.connect(roles.depositResumer).resumeBeaconChainDeposits()).to.emit(
       stakingVault,
       "BeaconChainDepositsResumed",
     );
+
+    // TODO: try deposit, should not revert
   });
 
   it("Allows ask Node Operator to exit validator(s)", async () => {
@@ -342,6 +348,8 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     await dashboard.connect(nodeOperator).setNodeOperatorFeeBP(1n);
     await dashboard.connect(owner).setNodeOperatorFeeBP(1n);
 
+    const vaultHubAuthorized = await stakingVault.vaultHubAuthorized();
+    console.log(vaultHubAuthorized);
     await expect(
       dashboard.connect(roles.nodeOperatorFeeClaimer).claimNodeOperatorFee(stranger),
     ).to.be.revertedWithCustomError(dashboard, "NoUnclaimedFee");
@@ -350,7 +358,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     await expect(dashboard.connect(roles.nodeOperatorFeeClaimer).claimNodeOperatorFee(stranger))
       .to.emit(stakingVault, "Withdrawn")
-      .withArgs(dashboard, stranger, 100000000000000n);
+      .withArgs(dashboard, stranger, 100000000000000n); // 1% from 1 ether
   });
 
   it("Allows pre and depositing validators to beacon chain", async () => {
