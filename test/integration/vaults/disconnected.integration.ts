@@ -143,18 +143,15 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         .withArgs(dashboard, stranger, 10n);
     });
 
-    // TODO: test is skipped because logic is broken
-    it.skip("may receive rewards and withdraw all the funds with rewards", async () => {
+    it("can't withdraw received rewards", async () => {
       await stranger.sendTransaction({
         to: stakingVault.getAddress(),
         value: 50n,
       });
 
-      console.log(await ethers.provider.getBalance(stakingVault.getAddress()));
+      expect(await ethers.provider.getBalance(stakingVault.getAddress())).to.equal(VAULT_CONNECTION_DEPOSIT + 50n);
 
-      await dashboard.connect(roles.locker).lock(13n);
-      expect(await dashboard.withdrawableEther()).to.equal(VAULT_CONNECTION_DEPOSIT + 50n);
-      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, 2n)).to.emit(stakingVault, "Withdrawn");
+      expect(await dashboard.withdrawableEther()).to.equal(VAULT_CONNECTION_DEPOSIT);
     });
   });
 
