@@ -1,16 +1,36 @@
 import { expect } from "chai";
-import { BytesLike, ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
+import { BytesLike, ContractTransactionReceipt, ContractTransactionResponse, hexlify } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
-import { Dashboard, Permissions, PinnedBeaconProxy, StakingVault, VaultFactory } from "typechain-types";
+import {
+  Dashboard,
+  Permissions,
+  PinnedBeaconProxy,
+  PredepositGuarantee,
+  StakingVault,
+  VaultFactory,
+} from "typechain-types";
 
-import { days, de0x, findEventsWithInterfaces, getCurrentBlockTimestamp, impersonate } from "lib";
+import {
+  computeDepositDataRoot,
+  days,
+  de0x,
+  findEventsWithInterfaces,
+  generatePostDeposit,
+  generatePredeposit,
+  getCurrentBlockTimestamp,
+  impersonate,
+  prepareLocalMerkleTree,
+  Validator,
+} from "lib";
 
+import { BLS12_381 } from "../../../typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
+import { StakingVaultDepositStruct } from "../../../typechain-types/contracts/0.8.25/vaults/StakingVault";
 import { ether } from "../../units";
-import { ProtocolContext } from "../types";
+import { LoadedContract, ProtocolContext } from "../types";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
@@ -298,4 +318,52 @@ export const getPubkeys = (num: number): { pubkeys: string[]; stringified: strin
     pubkeys,
     stringified: `0x${pubkeys.map(de0x).join("")}`,
   };
+};
+
+export const generatePredepositData = async (
+  predepositGuarantee: LoadedContract<PredepositGuarantee>,
+  dashboard: Dashboard,
+  roles: VaultRoles,
+  nodeOperator: HardhatEthersSigner,
+  validator: Validator,
+): Promise<{
+  deposit: StakingVaultDepositStruct;
+  depositY: BLS12_381.DepositYStruct;
+}> => {
+  // Pre-requisite: fund the vault to have enough balance to start a validator
+  await dashboard.connect(roles.funder).fund({ value: ether("32") });
+
+  // Step 1: Top up the node operator balance
+  await predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, {
+    value: ether("1"),
+  });
+
+  // Step 2: Predeposit a validator
+  const predepositData = await generatePredeposit(validator, {
+    depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
+  });
+  return predepositData;
+};
+
+export const getProofAndDepositData = async (
+  predepositGuarantee: LoadedContract<PredepositGuarantee>,
+  validator: Validator,
+  withdrawalCredentials: string,
+) => {
+  // Step 3: Prove and deposit the validator
+  const slot = await predepositGuarantee.SLOT_CHANGE_GI_FIRST_VALIDATOR();
+
+  const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_AFTER_CHANGE());
+  const { validatorIndex } = await mockCLtree.addValidator(validator.container);
+  const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(Number(slot) + 100);
+  const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
+
+  const postdeposit = generatePostDeposit(validator.container);
+  const pubkey = hexlify(validator.container.pubkey);
+  const signature = hexlify(postdeposit.signature);
+
+  postdeposit.depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, ether("31"));
+
+  const witnesses = [{ proof, pubkey, validatorIndex, childBlockTimestamp }];
+  return { witnesses, postdeposit };
 };

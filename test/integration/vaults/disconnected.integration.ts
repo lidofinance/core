@@ -1,22 +1,11 @@
 import { expect } from "chai";
-import { hexlify } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
-import {
-  certainAddress,
-  computeDepositDataRoot,
-  days,
-  ether,
-  generatePostDeposit,
-  generatePredeposit,
-  generateValidator,
-  impersonate,
-  prepareLocalMerkleTree,
-} from "lib";
+import { certainAddress, days, ether, generateValidator, impersonate } from "lib";
 import {
   createVaultWithDashboard,
   disconnectFromHub,
@@ -27,11 +16,15 @@ import {
   setupLido,
   VaultRoles,
 } from "lib/protocol";
-import { getPubkeys, VAULT_CONNECTION_DEPOSIT } from "lib/protocol/helpers/vaults";
+import {
+  generatePredepositData,
+  getProofAndDepositData,
+  getPubkeys,
+  VAULT_CONNECTION_DEPOSIT,
+} from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
 
-const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const VAULT_NODE_OPERATOR_FEE = 200n;
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
 describe("Integration: Actions with vault disconnected from hub", () => {
@@ -77,8 +70,6 @@ describe("Integration: Actions with vault disconnected from hub", () => {
   afterEach(async () => await Snapshot.restore(snapshot));
 
   after(async () => await Snapshot.restore(originalSnapshot));
-
-  // TODO: take all actions for disconnected vaults and tru to test them and check that they change state as expected
 
   describe("Funding", () => {
     it("Allows to fund amount less or equal then funder's balance + gas price", async () => {
@@ -152,7 +143,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         .withArgs(dashboard, stranger, 10n);
     });
 
-    // todo: could not fid out how to send reward in a way it would be withdrawable
+    // TODO: test is skipped because logic is broken
     it.skip("may receive rewards and withdraw all the funds with rewards", async () => {
       await stranger.sendTransaction({
         to: stakingVault.getAddress(),
@@ -246,7 +237,6 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     });
   });
 
-  // TODO: test that vault owner can request validator exit and both can trigger exits
   describe("Request / trigger validator exit", () => {
     it("Vault owner can request validator(s) exit", async () => {
       const keys = getPubkeys(2);
@@ -319,37 +309,63 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     });
   });
 
-  it("Allows pause/resume deposits to beacon chain", async () => {
-    await expect(dashboard.connect(roles.depositPauser).pauseBeaconChainDeposits()).to.emit(
-      stakingVault,
-      "BeaconChainDepositsPaused",
-    );
+  describe("Pausing/resuming deposits to beacon chain", () => {
+    it("Allows pause/resume deposits to beacon chain", async () => {
+      await expect(dashboard.connect(roles.depositPauser).pauseBeaconChainDeposits()).to.emit(
+        stakingVault,
+        "BeaconChainDepositsPaused",
+      );
+      await expect(dashboard.connect(roles.depositPauser).pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        stakingVault,
+        "BeaconChainDepositsResumeExpected",
+      );
 
-    // TODO: try deposit, shoule revert
+      await expect(dashboard.connect(roles.depositResumer).resumeBeaconChainDeposits()).to.emit(
+        stakingVault,
+        "BeaconChainDepositsResumed",
+      );
+      await expect(dashboard.connect(roles.depositResumer).resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        stakingVault,
+        "BeaconChainDepositsPauseExpected",
+      );
+    });
 
-    await expect(dashboard.connect(roles.depositResumer).resumeBeaconChainDeposits()).to.emit(
-      stakingVault,
-      "BeaconChainDepositsResumed",
-    );
+    it("Allows to deposit only if deposits are not paused", async () => {
+      const { predepositGuarantee } = ctx.contracts;
+      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
+      const validator = generateValidator(withdrawalCredentials);
+      const predepositData = await generatePredepositData(
+        predepositGuarantee,
+        dashboard,
+        roles,
+        nodeOperator,
+        validator,
+      );
 
-    // TODO: try deposit, should not revert
-  });
+      await dashboard.connect(roles.depositPauser).pauseBeaconChainDeposits();
 
-  it("Allows ask Node Operator to exit validator(s)", async () => {
-    await expect(dashboard.connect(roles.validatorExitRequester).requestValidatorExit(SAMPLE_PUBKEY))
-      .to.emit(stakingVault, "ValidatorExitRequested")
-      .withArgs(dashboard, SAMPLE_PUBKEY, SAMPLE_PUBKEY);
+      await expect(
+        predepositGuarantee
+          .connect(nodeOperator)
+          .predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]),
+      ).to.be.revertedWithCustomError(stakingVault, "BeaconChainDepositsArePaused");
+
+      await dashboard.connect(roles.depositResumer).resumeBeaconChainDeposits();
+
+      await expect(
+        predepositGuarantee
+          .connect(nodeOperator)
+          .predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]),
+      ).to.emit(stakingVault, "DepositedToBeaconChain");
+    });
   });
 
   // Node Operator Manager roles actions
-
   it("Allows claiming NO's fee", async () => {
     await dashboard.connect(roles.funder).fund({ value: ether("1") });
     await dashboard.connect(nodeOperator).setNodeOperatorFeeBP(1n);
     await dashboard.connect(owner).setNodeOperatorFeeBP(1n);
 
-    const vaultHubAuthorized = await stakingVault.vaultHubAuthorized();
-    console.log(vaultHubAuthorized);
     await expect(
       dashboard.connect(roles.nodeOperatorFeeClaimer).claimNodeOperatorFee(stranger),
     ).to.be.revertedWithCustomError(dashboard, "NoUnclaimedFee");
@@ -364,20 +380,10 @@ describe("Integration: Actions with vault disconnected from hub", () => {
   it("Allows pre and depositing validators to beacon chain", async () => {
     const { predepositGuarantee } = ctx.contracts;
 
-    // Pre-requisite: fund the vault to have enough balance to start a validator
-    await dashboard.connect(roles.funder).fund({ value: ether("32") });
-
-    // Step 1: Top up the node operator balance
-    await predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, {
-      value: ether("1"),
-    });
-
-    // Step 2: Predeposit a validator
     const withdrawalCredentials = await stakingVault.withdrawalCredentials();
     const validator = generateValidator(withdrawalCredentials);
-    const predepositData = await generatePredeposit(validator, {
-      depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
-    });
+
+    const predepositData = await generatePredepositData(predepositGuarantee, dashboard, roles, nodeOperator, validator);
 
     await expect(
       predepositGuarantee
@@ -387,21 +393,11 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       .to.emit(stakingVault, "DepositedToBeaconChain")
       .withArgs(ctx.contracts.predepositGuarantee.address, 1, ether("1"));
 
-    // Step 3: Prove and deposit the validator
-    const slot = await predepositGuarantee.SLOT_CHANGE_GI_FIRST_VALIDATOR();
-
-    const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_AFTER_CHANGE());
-    const { validatorIndex } = await mockCLtree.addValidator(validator.container);
-    const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(Number(slot) + 100);
-    const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
-
-    const postdeposit = generatePostDeposit(validator.container);
-    const pubkey = hexlify(validator.container.pubkey);
-    const signature = hexlify(postdeposit.signature);
-
-    postdeposit.depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, ether("31"));
-
-    const witnesses = [{ proof, pubkey, validatorIndex, childBlockTimestamp }];
+    const { witnesses, postdeposit } = await getProofAndDepositData(
+      predepositGuarantee,
+      validator,
+      withdrawalCredentials,
+    );
 
     await expect(predepositGuarantee.connect(nodeOperator).proveAndDeposit(witnesses, [postdeposit], stakingVault))
       .to.emit(stakingVault, "DepositedToBeaconChain")

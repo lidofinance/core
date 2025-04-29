@@ -59,6 +59,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
   afterEach(async () => await Snapshot.restore(snapshot));
 
   after(async () => await Snapshot.restore(originalSnapshot));
+
   it("Allows minting stETH", async () => {
     const { vaultHub } = ctx.contracts;
 
@@ -82,6 +83,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
       .to.emit(vaultHub, "BurnedSharesOnVault")
       .withArgs(stakingVault, 1n);
   });
+
   it("Allows trigger validator withdrawal", async () => {
     await expect(
       dashboard
@@ -109,7 +111,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
       ).to.be.revertedWithCustomError(stakingVault, "VaultConnected");
     });
 
-    it.skip("Can deauthorize Lido VaultHub if dicsconnected from Hub", async () => {
+    it("Can deauthorize Lido VaultHub if dicsconnected from Hub", async () => {
       await disconnectFromHub(ctx, stakingVault);
       await reportVaultDataWithProof(stakingVault);
 
