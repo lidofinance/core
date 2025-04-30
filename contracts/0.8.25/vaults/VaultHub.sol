@@ -478,10 +478,10 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
-        uint256 minLocked = (stETHAfterMint * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
+        uint256 etherToLock = (stETHAfterMint * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
 
-        if (minLocked > socket.locked) {
-            revert VaultInsufficientLocked(_vault, socket.locked, minLocked);
+        if (etherToLock > socket.locked) {
+            socket.locked = uint128(etherToLock);
         }
 
         socket.liabilityShares = uint96(vaultSharesAfterMint);
