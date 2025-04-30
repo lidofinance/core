@@ -87,7 +87,7 @@ abstract contract CLProofVerifier {
     GIndex public immutable GI_FIRST_VALIDATOR_PREV;
     /// @notice GIndex of first validator in CL state tree after PIVOT_SLOT
     GIndex public immutable GI_FIRST_VALIDATOR_CURR;
-    /// @notice slot when GIndex change will occur
+    /// @notice slot when GIndex change will occur due to the hardfork
     uint64 public immutable PIVOT_SLOT;
 
     /**
@@ -152,7 +152,7 @@ abstract contract CLProofVerifier {
     ) internal view {
         // verifies user provided slot against user provided proof
         // proof verification is done in `SSZ.verifyProof` and is not affected by slot
-        uint64 provenSlot = _verifySlot(_witness);
+        _verifySlot(_witness);
 
         // parent node for first two leaves in validator container tree: pubkey & wc
         // we use 'leaf' instead of 'node' due to proving a subtree where this node is a leaf
@@ -162,7 +162,7 @@ abstract contract CLProofVerifier {
         // parent(pubkey + wc) ->  Validator Index in state tree -> stateView Index in Beacon block Tree
         GIndex gIndex = concat(
             GI_STATE_ROOT,
-            concat(_getValidatorGI(_witness.validatorIndex, provenSlot), GI_PUBKEY_WC_PARENT)
+            concat(_getValidatorGI(_witness.validatorIndex, _witness.slot), GI_PUBKEY_WC_PARENT)
         );
 
         SSZ.verifyProof({
@@ -176,23 +176,10 @@ abstract contract CLProofVerifier {
     /**
      * @notice returns parent CL block root for given child block timestamp
      * @param _witness object containing proof, slot and proposerIndex
-     * @return slot verified against `_witness.proof`
-     * @dev checks slot and proposerIndex from against proof[:-2]
-     * This is not a case of circular proving - e.g. slot manipulates gIndex and allows to manipulate proof
-     * Consider Merkle proof for `slot -> beacon root`
-     *  proof[0] - proposerIndex
-     *  proof[1] - parent node for stateRoot
-     *  proof[2] - equal to _witness.proof[-1]
-     * All of those are user supplied and can be attempted to manipulate.
-     * So even if you could manipulate slot and use it to manipulate gIndex and beginning of the proof,
-     * it's equivalent to user supplying the `proof[1]` of `slot -> beacon root` proof.
-     * Thus equivalent to both
-     *  - user supplying `slot -> beacon root` proof separately
-     *  - or CSM way: user supplying whole beacon block header and verifying rest of proof against `header.stateRoot`
-     * So verification of full `pk+wc -> beacon root` proof later in code also verifies `slot -> beacon root`
-     * This approach is more gas efficient and takes advantage of merkle tree multi-proof property.
+     * @dev checks slot and proposerIndex against proof[:-2] which latter is verified against Beacon block root
+     * This is a trivial case of multi Merkle proofs where a short proof branch proves slot
      */
-    function _verifySlot(IPredepositGuarantee.ValidatorWitness calldata _witness) internal view returns (uint64) {
+    function _verifySlot(IPredepositGuarantee.ValidatorWitness calldata _witness) internal view {
         bytes32 parentSlotProposer = SSZ.sha256Pair(
             SSZ.toLittleEndian(_witness.slot),
             SSZ.toLittleEndian(_witness.proposerIndex)
@@ -200,12 +187,12 @@ abstract contract CLProofVerifier {
         if (_witness.proof[_witness.proof.length - SLOT_PROPOSER_PARENT_PROOF_OFFSET] != parentSlotProposer) {
             revert InvalidSlot();
         }
-        return _witness.slot;
     }
 
     /**
      * @notice calculates general validator index in CL state tree by provided offset
      * @param _offset from first validator (Validator Index)
+     * @param _provenSlot slot of the Beacon block for which proof is collected
      * @return gIndex of container in CL state tree
      */
     function _getValidatorGI(uint256 _offset, uint64 _provenSlot) internal view returns (GIndex) {
