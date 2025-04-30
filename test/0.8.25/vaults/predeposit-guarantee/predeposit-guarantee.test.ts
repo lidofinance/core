@@ -21,13 +21,13 @@ import {
 
 import {
   addressToWC,
-  deployBLSPrecompileStubs,
   ether,
   findEvents,
   generateBeaconHeader,
   generatePostDeposit,
   generatePredeposit,
   generateValidator,
+  GENESIS_FORK_VERSION,
   prepareLocalMerkleTree,
   randomBytes32,
   setBeaconBlockRoot,
@@ -90,8 +90,6 @@ describe("PredepositGuarantee.sol", () => {
   before(async () => {
     [deployer, admin, vaultOwner, vaultOperator, vaultOperatorGuarantor, pauser, stranger] = await ethers.getSigners();
 
-    await deployBLSPrecompileStubs();
-
     // local merkle tree with 1st validator
     const localMerkle = await prepareLocalMerkleTree();
     sszMerkleTree = localMerkle.sszMerkleTree;
@@ -106,7 +104,7 @@ describe("PredepositGuarantee.sol", () => {
     // PDG
     pdgImpl = await ethers.deployContract(
       "PredepositGuarantee",
-      [localMerkle.gIFirstValidator, localMerkle.gIFirstValidator, 0],
+      [GENESIS_FORK_VERSION, localMerkle.gIFirstValidator, localMerkle.gIFirstValidator, 0],
       { from: deployer },
     );
     proxy = await ethers.deployContract("OssifiableProxy", [pdgImpl, admin, new Uint8Array()], admin);
@@ -179,7 +177,7 @@ describe("PredepositGuarantee.sol", () => {
 
       // Staking Vault is funded with enough ether to run validator
       await stakingVault.fund({ value: ether("32") });
-      expect(await stakingVault.valuation()).to.equal(ether("32"));
+      expect(await stakingVault.totalValue()).to.equal(ether("32"));
 
       // NO generates validator for vault
       const vaultWC = await stakingVault.withdrawalCredentials();
@@ -274,7 +272,7 @@ describe("PredepositGuarantee.sol", () => {
 
       it("reverts when setting guarantor with in-flight deposits", async () => {
         await stakingVault.fund({ value: ether("32") });
-        const validator = generateValidator();
+        const validator = generateValidator(await stakingVault.withdrawalCredentials());
         const predeposit = await generatePredeposit(validator);
         await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY], { value: ether("1") });
 
@@ -521,7 +519,7 @@ describe("PredepositGuarantee.sol", () => {
           .withArgs(0n, balance);
 
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: balance });
-        const predeposit = await generatePredeposit(generateValidator());
+        const predeposit = await generatePredeposit(generateValidator(await stakingVault.withdrawalCredentials()));
         await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]);
 
         await expect(pdg.withdrawNodeOperatorBalance(vaultOperator, balance, stranger))
@@ -582,7 +580,9 @@ describe("PredepositGuarantee.sol", () => {
       });
 
       it("revert when not NO tries to predeposit", async () => {
-        const { deposit, depositY } = await generatePredeposit(generateValidator());
+        const { deposit, depositY } = await generatePredeposit(
+          generateValidator(await stakingVault.withdrawalCredentials()),
+        );
         await expect(
           pdg.connect(vaultOwner).predeposit(stakingVault, [deposit], [depositY]),
         ).to.be.revertedWithCustomError(pdg, "NotNodeOperator");
@@ -592,12 +592,13 @@ describe("PredepositGuarantee.sol", () => {
       });
 
       it("reverts when using locked balance", async () => {
-        const predeposit = await generatePredeposit(generateValidator());
+        const wc = await stakingVault.withdrawalCredentials();
+        const predeposit = await generatePredeposit(generateValidator(wc));
         await expect(pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]))
           .to.be.revertedWithCustomError(pdg, "NotEnoughUnlocked")
           .withArgs(0n, ether("1"));
 
-        const predeposit2 = await generatePredeposit(generateValidator());
+        const predeposit2 = await generatePredeposit(generateValidator(wc));
 
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("1") });
 
@@ -614,7 +615,8 @@ describe("PredepositGuarantee.sol", () => {
 
       it("reverts on re-use of validator", async () => {
         await stakingVault.fund({ value: ether("32") });
-        const validator = generateValidator();
+        const wc = await stakingVault.withdrawalCredentials();
+        const validator = generateValidator(wc);
         const predeposit = await generatePredeposit(validator);
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("3") });
 
@@ -624,7 +626,7 @@ describe("PredepositGuarantee.sol", () => {
         const validatorStatus = await pdg.validatorStatus(validator.container.pubkey);
         expect(validatorStatus.stage).to.equal(PREDEPOSITED_STAGE);
 
-        const predeposit2 = await generatePredeposit(generateValidator());
+        const predeposit2 = await generatePredeposit(generateValidator(wc));
 
         await expect(
           pdg.predeposit(
@@ -639,8 +641,9 @@ describe("PredepositGuarantee.sol", () => {
 
       it("reverts on invalid predeposit amount", async () => {
         await stakingVault.fund({ value: ether("32") });
-        const validator = generateValidator();
-        const predeposit = await generatePredeposit(validator, ether("2"));
+        const wc = await stakingVault.withdrawalCredentials();
+        const validator = generateValidator(wc);
+        const predeposit = await generatePredeposit(validator, { overrideAmount: ether("2") });
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("3") });
 
         await expect(pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]))
@@ -842,7 +845,7 @@ describe("PredepositGuarantee.sol", () => {
 
         // Staking Vault is funded with enough ether to run validator
         await stakingVault.fund({ value: ether("32") });
-        expect(await stakingVault.valuation()).to.equal(ether("32"));
+        expect(await stakingVault.totalValue()).to.equal(ether("32"));
 
         // NO generates validator for vault
         const vaultWC = await stakingVault.withdrawalCredentials();
@@ -1105,13 +1108,17 @@ describe("PredepositGuarantee.sol", () => {
         validValidator = generateValidator(validWC);
         validNotPredepostedValidator = generateValidator(validWC);
 
-        const invalidaPredeposit = await generatePredeposit(invalidValidator);
+        // sign predeposit with valid WC
+        const invalidPredeposit = await generatePredeposit({
+          ...invalidValidator,
+          container: { ...invalidValidator.container, withdrawalCredentials: validWC },
+        });
         const validPredeposit = await generatePredeposit(validValidator);
 
         await pdg.predeposit(
           stakingVault,
-          [invalidaPredeposit.deposit, validPredeposit.deposit],
-          [invalidaPredeposit.depositY, validPredeposit.depositY],
+          [invalidPredeposit.deposit, validPredeposit.deposit],
+          [invalidPredeposit.depositY, validPredeposit.depositY],
         );
 
         await sszMerkleTree.addValidatorLeaf(invalidValidator.container);
@@ -1168,7 +1175,7 @@ describe("PredepositGuarantee.sol", () => {
           .withArgs(validNotPredepostedValidator.container.pubkey, 0n);
 
         const predeposit = await generatePredeposit(validNotPredepostedValidator);
-        // predepsit
+        // predeposit
         await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]);
 
         // Predeposited but it's valid
@@ -1228,13 +1235,18 @@ describe("PredepositGuarantee.sol", () => {
         invalidValidator = generateValidator(invalidWC);
         validValidator = generateValidator(validWC);
 
-        const invalidaPredeposit = await generatePredeposit(invalidValidator);
+        const invalidValidatorHackedWC = {
+          ...invalidValidator,
+          container: { ...invalidValidator.container, withdrawalCredentials: validWC },
+        };
+
+        const invalidPredeposit = await generatePredeposit(invalidValidatorHackedWC);
         const validPredeposit = await generatePredeposit(validValidator);
 
         await pdg.predeposit(
           stakingVault,
-          [invalidaPredeposit.deposit, validPredeposit.deposit],
-          [invalidaPredeposit.depositY, validPredeposit.depositY],
+          [invalidPredeposit.deposit, validPredeposit.deposit],
+          [invalidPredeposit.depositY, validPredeposit.depositY],
         );
 
         await sszMerkleTree.addValidatorLeaf(invalidValidator.container);

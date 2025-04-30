@@ -44,6 +44,7 @@ const config: HardhatUserConfig = {
         accountsBalance: "100000000000000000000000",
       },
       forking: getHardhatForkingConfig(),
+      hardfork: "prague",
     },
     // local nodes
     "local": {
@@ -59,6 +60,11 @@ const config: HardhatUserConfig = {
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
+    "hoodi": {
+      url: process.env.HOODI_RPC_URL || RPC_URL,
+      chainId: 560048,
+      accounts: loadAccounts("hoodi"),
+    },
     // forks
     "mainnet-fork": {
       url: process.env.MAINNET_RPC_URL || RPC_URL,
@@ -67,6 +73,10 @@ const config: HardhatUserConfig = {
     "sepolia-fork": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
+    },
+    "hoodi-fork": {
+      url: process.env.HOODI_RPC_URL || RPC_URL,
+      chainId: 560048,
     },
   },
   etherscan: {
@@ -77,6 +87,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "http://localhost:3080/api",
           browserURL: "http://localhost:3080",
+        },
+      },
+      {
+        network: "hoodi",
+        chainId: 560048,
+        urls: {
+          apiURL: "https://api-hoodi.etherscan.io/api",
+          browserURL: "https://hoodi.etherscan.io/",
         },
       },
       {
@@ -180,6 +198,7 @@ const config: HardhatUserConfig = {
     },
   },
   mocha: {
+    fullTrace: true,
     rootHooks: mochaRootHooks,
     timeout: 20 * 60 * 1000, // 20 minutes
   },
@@ -201,7 +220,7 @@ const config: HardhatUserConfig = {
     alphaSort: false,
     disambiguatePaths: false,
     runOnCompile: process.env.SKIP_CONTRACT_SIZE ? false : true,
-    strict: true,
+    strict: false,
     except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
   },
 };

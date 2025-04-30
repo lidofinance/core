@@ -11,11 +11,12 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
+  const stethAddress = state[Sk.appLido].proxy.address;
+  const wstethAddress = state[Sk.wstETH].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
-  const wethContract = state.delegation.deployParameters.wethContract;
 
   // Deploy StakingVault implementation contract
   const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
@@ -24,19 +25,21 @@ export async function main() {
   ]);
   const impAddress = await imp.getAddress();
 
-  // Deploy Delegation implementation contract
-  const delegation = await deployWithoutProxy(Sk.delegationImpl, "Delegation", deployer, [
-    wethContract,
-    locatorAddress,
+  // Deploy Dashboard implementation contract
+  const dashboard = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [
+    stethAddress,
+    wstethAddress,
+    vaultHubAddress,
   ]);
-  const delegationAddress = await delegation.getAddress();
+  const dashboardAddress = await dashboard.getAddress();
 
-  // Deploy Delegation implementation contract
   const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [impAddress, deployer]);
   const beaconAddress = await beacon.getAddress();
 
   // Deploy BeaconProxy to get bytecode and add it to whitelist
   const vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beaconAddress, "0x"]);
+  await vaultBeaconProxy.waitForDeployment();
+
   const vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
   const vaultBeaconProxyCodeHash = keccak256(vaultBeaconProxyCode);
 
@@ -46,7 +49,7 @@ export async function main() {
   const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     locatorAddress,
     beaconAddress,
-    delegationAddress,
+    dashboardAddress,
   ]);
   console.log("Factory address", await factory.getAddress());
 

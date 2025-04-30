@@ -48,7 +48,6 @@ const defaultEnv = {
   accountingOracle: "ACCOUNTING_ORACLE_ADDRESS",
   depositSecurityModule: "DEPOSIT_SECURITY_MODULE_ADDRESS",
   elRewardsVault: "EL_REWARDS_VAULT_ADDRESS",
-  legacyOracle: "LEGACY_ORACLE_ADDRESS",
   lido: "LIDO_ADDRESS",
   accounting: "ACCOUNTING_ADDRESS",
   oracleReportSanityChecker: "ORACLE_REPORT_SANITY_CHECKER_ADDRESS",
@@ -65,6 +64,7 @@ const defaultEnv = {
   // stacking modules
   nor: "NODE_OPERATORS_REGISTRY_ADDRESS",
   sdvt: "SIMPLE_DVT_REGISTRY_ADDRESS",
+  csm: "CSM_REGISTRY_ADDRESS",
   // hash consensus
   hashConsensus: "HASH_CONSENSUS_ADDRESS",
   // vaults
@@ -88,6 +88,7 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
     easyTrackAddress: config["app:aragon-voting"].proxy.address,
     stakingVaultFactory: config["stakingVaultFactory"].address,
     stakingVaultBeacon: config["stakingVaultBeacon"].address,
+    operatorGrid: config["operatorGrid"].proxy.address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }

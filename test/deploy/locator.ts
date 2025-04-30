@@ -18,7 +18,6 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     burner: certainAddress("dummy-locator:burner"),
     depositSecurityModule: certainAddress("dummy-locator:depositSecurityModule"),
     elRewardsVault: certainAddress("dummy-locator:elRewardsVault"),
-    legacyOracle: certainAddress("dummy-locator:legacyOracle"),
     lido: certainAddress("dummy-locator:lido"),
     oracleDaemonConfig: certainAddress("dummy-locator:oracleDaemonConfig"),
     oracleReportSanityChecker: certainAddress("dummy-locator:oracleReportSanityChecker"),
@@ -32,6 +31,7 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     wstETH: certainAddress("dummy-locator:wstETH"),
     predepositGuarantee: certainAddress("dummy-locator:predepositGuarantee"),
     vaultHub: certainAddress("dummy-locator:vaultHub"),
+    operatorGrid: certainAddress("dummy-locator:operatorGrid"),
     ...config,
   });
 
@@ -95,7 +95,6 @@ async function getLocatorConfig(locatorAddress: string) {
     "accountingOracle",
     "depositSecurityModule",
     "elRewardsVault",
-    "legacyOracle",
     "lido",
     "oracleReportSanityChecker",
     "postTokenRebaseReceiver",
@@ -110,6 +109,7 @@ async function getLocatorConfig(locatorAddress: string) {
     "wstETH",
     "predepositGuarantee",
     "vaultHub",
+    "operatorGrid",
   ] as Partial<keyof LidoLocator.ConfigStruct>[];
 
   const configPromises = addresses.map((name) => locator[name]());

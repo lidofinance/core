@@ -5,6 +5,8 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
+import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -14,9 +16,8 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 
-/// @notice VaultHub is a contract that manages vaults connected to the Lido protocol
-/// It allows to connect vaults, disconnect them, mint and burn stETH
-/// It also allows to force rebalance of the vaults
+/// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
+/// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
 /// Also, it passes the report from the accounting oracle to the vaults and charges fees
 /// @author folkyatina
 contract VaultHub is PausableUntilWithRoles {
@@ -30,27 +31,36 @@ contract VaultHub is PausableUntilWithRoles {
         mapping(address => uint256) vaultIndex;
         /// @notice allowed beacon addresses
         mapping(bytes32 => bool) vaultProxyCodehash;
+        /// @notice root of the vaults data tree
+        bytes32 vaultsDataTreeRoot;
+        /// @notice CID of the vaults data tree
+        string vaultsDataReportCid;
+        /// @notice timestamp of the vaults data
+        uint64 vaultsDataTimestamp;
     }
 
     struct VaultSocket {
         // ### 1st slot
         /// @notice vault address
         address vault;
-        /// @notice total number of stETH shares minted by the vault
-        uint96 sharesMinted;
+        /// @notice total number of stETH shares that the vault owes to Lido
+        uint96 liabilityShares;
         // ### 2nd slot
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 shareLimit;
-        /// @notice minimal share of ether that is reserved for each stETH minted
+        /// @notice share of ether that is locked on the vault as an additional reserve
+        /// e.g RR=30% means that for 1stETH minted 1/(1-0.3)=1.428571428571428571 ETH is locked on the vault
         uint16 reserveRatioBP;
         /// @notice if vault's reserve decreases to this threshold, it should be force rebalanced
-        uint16 rebalanceThresholdBP;
+        uint16 forcedRebalanceThresholdBP;
         /// @notice treasury fee in basis points
         uint16 treasuryFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
+        /// @notice cumulative amount of shares charged as fees for the vault
+        uint96 feeSharesCharged;
         /// @notice unused gap in the slot 2
-        /// uint104 _unused_gap_;
+        /// uint8 _unused_gap_;
     }
 
     struct VaultInfo {
@@ -58,12 +68,15 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 balance;
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
-        uint256 sharesMinted;
+        uint256 liabilityShares;
     }
 
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant VAULT_HUB_STORAGE_LOCATION =
         0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
+
+    /// @notice codehash of the account with no code
+    bytes32 private constant EMPTY_CODEHASH = keccak256("");
 
     /// @notice role that allows to connect vaults to the hub
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
@@ -71,10 +84,12 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
-    /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
-    uint256 internal constant CONNECT_DEPOSIT = 1 ether;
     /// @notice length of the validator pubkey in bytes
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
+    /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
+    uint256 public constant CONNECT_DEPOSIT = 1 ether;
+    /// @notice The time delta for report freshness check
+    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
 
     /// @notice limit for a single vault share limit relative to Lido TVL in basis points
     uint256 private immutable RELATIVE_SHARE_LIMIT_BP;
@@ -114,20 +129,25 @@ contract VaultHub is PausableUntilWithRoles {
         __AccessControlEnumerable_init();
 
         // the stone in the elevator
-        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false));
+        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, false, 0));
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
-    /// @notice added vault proxy codehash to allowed list
-    /// @param codehash vault proxy codehash
-    function addVaultProxyCodehash(bytes32 codehash) public onlyRole(VAULT_REGISTRY_ROLE) {
-        if (codehash == bytes32(0)) revert ZeroArgument("codehash");
+    function operatorGrid() external view returns (address) {
+        return LIDO_LOCATOR.operatorGrid();
+    }
+
+    /// @notice Add vault proxy codehash to allow list.
+    /// @param _codehash vault proxy codehash
+    function addVaultProxyCodehash(bytes32 _codehash) public onlyRole(VAULT_REGISTRY_ROLE) {
+        if (_codehash == bytes32(0)) revert ZeroArgument("codehash");
+        if (_codehash == EMPTY_CODEHASH) revert VaultProxyZeroCodehash();
 
         VaultHubStorage storage $ = _getVaultHubStorage();
-        if ($.vaultProxyCodehash[codehash]) revert AlreadyExists(codehash);
-        $.vaultProxyCodehash[codehash] = true;
-        emit VaultProxyCodehashAdded(codehash);
+        if ($.vaultProxyCodehash[_codehash]) revert AlreadyExists(_codehash);
+        $.vaultProxyCodehash[_codehash] = true;
+        emit VaultProxyCodehashAdded(_codehash);
     }
 
     /// @notice returns the number of vaults connected to the hub
@@ -170,89 +190,137 @@ contract VaultHub is PausableUntilWithRoles {
                 address(currentVault).balance,
                 currentVault.inOutDelta(),
                 currentVault.withdrawalCredentials(),
-                socket.sharesMinted
+                socket.liabilityShares
             );
         }
         return batch;
     }
 
-    /// @notice checks if the vault is healthy by comparing its projected valuation after applying rebalance threshold
-    ///         against the current value of minted shares
+    /// @notice checks if the vault is healthy by comparing its total value after applying rebalance threshold
+    ///         against current liability shares
     /// @param _vault vault address
     /// @return true if vault is healthy, false otherwise
-    function isVaultHealthy(address _vault) public view returns (bool) {
+    function isVaultHealthyAsOfLatestReport(address _vault) public view returns (bool) {
         VaultSocket storage socket = _connectedSocket(_vault);
-        if (socket.sharesMinted == 0) return true;
+        return _isVaultHealthyByThreshold(
+            IStakingVault(_vault).totalValue(),
+            socket.liabilityShares,
+            socket.forcedRebalanceThresholdBP
+        );
+    }
+
+    function _isVaultHealthyByThreshold(
+        uint256 _totalValue,
+        uint256 _liabilityShares,
+        uint256 _checkThreshold
+    ) internal view returns (bool) {
+        if (_liabilityShares == 0) return true;
 
         return
-            ((IStakingVault(_vault).valuation() * (TOTAL_BASIS_POINTS - socket.rebalanceThresholdBP)) /
-                TOTAL_BASIS_POINTS) >= LIDO.getPooledEthBySharesRoundUp(socket.sharesMinted);
+            ((_totalValue * (TOTAL_BASIS_POINTS - _checkThreshold)) /
+                TOTAL_BASIS_POINTS) >= LIDO.getPooledEthBySharesRoundUp(_liabilityShares);
     }
 
     /// @notice estimate ether amount to make the vault healthy using rebalance
     /// @param _vault vault address
-    /// @return amount to rebalance
+    /// @return amount to rebalance  or UINT256_MAX if it's impossible to make the vault healthy using rebalance
     function rebalanceShortfall(address _vault) public view returns (uint256) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
+        bool isHealthy = isVaultHealthyAsOfLatestReport(_vault);
+
+        // Health vault do not need to rebalance
+        if (isHealthy) {
+            return 0;
+        }
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 mintedStETH = LIDO.getPooledEthBySharesRoundUp(socket.sharesMinted);
+        uint256 liabilityStETH = LIDO.getPooledEthBySharesRoundUp(socket.liabilityShares);
         uint256 reserveRatioBP = socket.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
-        uint256 valuation = IStakingVault(_vault).valuation();
+        uint256 totalValue = IStakingVault(_vault).totalValue();
 
-        // to avoid revert below
-        if (mintedStETH * TOTAL_BASIS_POINTS < valuation * maxMintableRatio) {
+        // Impossible to rebalance a vault with deficit
+        if (liabilityStETH >= totalValue) {
             // return MAX_UINT_256
             return type(uint256).max;
         }
 
-        // (mintedStETH - X) / (vault.valuation() - X) = maxMintableRatio / TOTAL_BASIS_POINTS
-        // (mintedStETH - X) * TOTAL_BASIS_POINTS = (vault.valuation() - X) * maxMintableRatio
-        // mintedStETH * TOTAL_BASIS_POINTS - X * TOTAL_BASIS_POINTS = vault.valuation() * maxMintableRatio - X * maxMintableRatio
-        // X * maxMintableRatio - X * TOTAL_BASIS_POINTS = vault.valuation() * maxMintableRatio - mintedStETH * TOTAL_BASIS_POINTS
-        // X * (maxMintableRatio - TOTAL_BASIS_POINTS) = vault.valuation() * maxMintableRatio - mintedStETH * TOTAL_BASIS_POINTS
-        // X = (vault.valuation() * maxMintableRatio - mintedStETH * TOTAL_BASIS_POINTS) / (maxMintableRatio - TOTAL_BASIS_POINTS)
-        // X = (mintedStETH * TOTAL_BASIS_POINTS - vault.valuation() * maxMintableRatio) / (TOTAL_BASIS_POINTS - maxMintableRatio)
+        // (liabilityStETH - X) / (vault.totalValue() - X) = maxMintableRatio / TOTAL_BASIS_POINTS
+        // (liabilityStETH - X) * TOTAL_BASIS_POINTS = (vault.totalValue() - X) * maxMintableRatio
+        // liabilityStETH * TOTAL_BASIS_POINTS - X * TOTAL_BASIS_POINTS = totalValue * maxMintableRatio - X * maxMintableRatio
+        // X * maxMintableRatio - X * TOTAL_BASIS_POINTS = totalValue * maxMintableRatio - liabilityStETH * TOTAL_BASIS_POINTS
+        // X * (maxMintableRatio - TOTAL_BASIS_POINTS) = vault.totalValue() * maxMintableRatio - liabilityStETH * TOTAL_BASIS_POINTS
+        // X = (vault.totalValue() * maxMintableRatio - liabilityStETH * TOTAL_BASIS_POINTS) / (maxMintableRatio - TOTAL_BASIS_POINTS)
+        // X = (liabilityStETH * TOTAL_BASIS_POINTS - vault.totalValue() * maxMintableRatio) / (TOTAL_BASIS_POINTS - maxMintableRatio)
         // reserveRatio = TOTAL_BASIS_POINTS - maxMintableRatio
-        // X = (mintedStETH * TOTAL_BASIS_POINTS - vault.valuation() * maxMintableRatio) / reserveRatio
+        // X = (liabilityStETH * TOTAL_BASIS_POINTS - totalValue * maxMintableRatio) / reserveRatio
 
-        return (mintedStETH * TOTAL_BASIS_POINTS - valuation * maxMintableRatio) / reserveRatioBP;
+        return (liabilityStETH * TOTAL_BASIS_POINTS - totalValue * maxMintableRatio) / reserveRatioBP;
+    }
+
+    /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
+    /// @param _vault vault address
+    function connectVault(address _vault) external {
+        (
+        /* address nodeOperator */,
+        /* uint256 tierId */,
+            uint256 shareLimit,
+            uint256 reserveRatioBP,
+            uint256 forcedRebalanceThresholdBP,
+            uint256 treasuryFeeBP
+        ) = OperatorGrid(LIDO_LOCATOR.operatorGrid()).vaultInfo(_vault);
+        _connectVault(_vault, shareLimit, reserveRatioBP, forcedRebalanceThresholdBP, treasuryFeeBP);
+    }
+
+    /// @notice returns the latest report data
+    /// @return timestamp of the report
+    /// @return treeRoot of the report
+    /// @return reportCid of the report
+    function latestReportData() external view returns (
+        uint64 timestamp,
+        bytes32 treeRoot,
+        string memory reportCid
+    ) {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        return (
+            $.vaultsDataTimestamp,
+            $.vaultsDataTreeRoot,
+            $.vaultsDataReportCid
+        );
     }
 
     /// @notice connects a vault to the hub
     /// @param _vault vault address
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
     /// @param _reserveRatioBP minimum reserve ratio in basis points
-    /// @param _rebalanceThresholdBP threshold to force rebalance on the vault in basis points
+    /// @param _forcedRebalanceThresholdBP threshold to force rebalance on the vault in basis points
     /// @param _treasuryFeeBP treasury fee in basis points
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function connectVault(
+    function _connectVault(
         address _vault,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
-        uint256 _rebalanceThresholdBP,
+        uint256 _forcedRebalanceThresholdBP,
         uint256 _treasuryFeeBP
-    ) external onlyRole(VAULT_MASTER_ROLE) {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
+    ) internal {
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
         if (_reserveRatioBP > TOTAL_BASIS_POINTS)
             revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
-        if (_rebalanceThresholdBP == 0) revert ZeroArgument("_rebalanceThresholdBP");
-        if (_rebalanceThresholdBP > _reserveRatioBP)
-            revert RebalanceThresholdTooHigh(_vault, _rebalanceThresholdBP, _reserveRatioBP);
+        if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument("_forcedRebalanceThresholdBP");
+        if (_forcedRebalanceThresholdBP > _reserveRatioBP)
+            revert ForcedRebalanceThresholdTooHigh(_vault, _forcedRebalanceThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
 
         IStakingVault vault_ = IStakingVault(_vault);
-        if (vault_.isOssified()) revert VaultIsOssified(_vault);
+        if (vault_.ossified()) revert VaultOssified(_vault);
+        if (!vault_.vaultHubAuthorized()) revert VaultDeauthorized(_vault);
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
         if ($.vaultIndex[_vault] != 0) revert AlreadyConnected(_vault, $.vaultIndex[_vault]);
 
         bytes32 vaultProxyCodehash = address(_vault).codehash;
-        if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault);
+        if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault, vaultProxyCodehash);
 
         if (vault_.depositor() != LIDO_LOCATOR.predepositGuarantee())
             revert VaultDepositorNotAllowed(vault_.depositor());
@@ -262,21 +330,23 @@ contract VaultHub is PausableUntilWithRoles {
         if (_vault.balance < CONNECT_DEPOSIT)
             revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
 
-        vault_.report(_vault.balance, vault_.inOutDelta(), vault_.locked());
-
         VaultSocket memory vsocket = VaultSocket(
             _vault,
-            0, // sharesMinted
+            0, // liabilityShares
             uint96(_shareLimit),
             uint16(_reserveRatioBP),
-            uint16(_rebalanceThresholdBP),
+            uint16(_forcedRebalanceThresholdBP),
             uint16(_treasuryFeeBP),
-            false // pendingDisconnect
+            false, // pendingDisconnect
+            0
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
 
-        emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _rebalanceThresholdBP, _treasuryFeeBP);
+        // here we intentionally prohibit all reports having referenceSlot earlier than the current block;
+        vault_.report(uint64(block.timestamp), _vault.balance, vault_.inOutDelta(), vault_.locked());
+
+        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
 
     /// @notice updates share limit for the vault
@@ -296,10 +366,59 @@ contract VaultHub is PausableUntilWithRoles {
         emit ShareLimitUpdated(_vault, _shareLimit);
     }
 
+    /// @notice updates the vault's connection parameters
+    /// @dev Reverts if the vault is not healthy as of latest report
+    /// @param _vault vault address
+    /// @param _shareLimit new share limit
+    /// @param _reserveRatioBP new reserve ratio
+    /// @param _forcedRebalanceThresholdBP new forced rebalance threshold
+    /// @param _treasuryFeeBP new treasury fee
+    function updateConnection(
+        address _vault,
+        uint256 _shareLimit,
+        uint256 _reserveRatioBP,
+        uint256 _forcedRebalanceThresholdBP,
+        uint256 _treasuryFeeBP
+    ) external {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+        _checkShareLimitUpperBound(_vault, _shareLimit);
+        if (msg.sender != LIDO_LOCATOR.operatorGrid()) revert NotAuthorized("updateConnection", msg.sender);
+
+        VaultSocket storage socket = _connectedSocket(_vault);
+
+        uint256 totalValue = IStakingVault(_vault).totalValue();
+        uint256 liabilityShares = socket.liabilityShares;
+
+        // check healthy with new rebalance threshold
+        if (!_isVaultHealthyByThreshold(totalValue, liabilityShares, _reserveRatioBP))
+            revert VaultMintingCapacityExceeded(_vault, totalValue, liabilityShares, _reserveRatioBP);
+
+        socket.shareLimit = uint96(_shareLimit);
+        socket.reserveRatioBP = uint16(_reserveRatioBP);
+        socket.forcedRebalanceThresholdBP = uint16(_forcedRebalanceThresholdBP);
+        socket.treasuryFeeBP = uint16(_treasuryFeeBP);
+
+        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
+    }
+
+    function updateReportData(
+        uint64 _vaultsDataTimestamp,
+        bytes32 _vaultsDataTreeRoot,
+        string memory _vaultsDataReportCid
+    ) external {
+        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateReportData", msg.sender);
+
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        $.vaultsDataTimestamp = _vaultsDataTimestamp;
+        $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
+        $.vaultsDataReportCid = _vaultsDataReportCid;
+        emit VaultsReportDataUpdated(_vaultsDataTimestamp, _vaultsDataTreeRoot, _vaultsDataReportCid);
+    }
+
     /// @notice force disconnects a vault from the hub
     /// @param _vault vault address
     /// @dev msg.sender must have VAULT_MASTER_ROLE
-    /// @dev vault's `mintedShares` should be zero
+    /// @dev vault's `liabilityShares` should be zero
     function disconnect(address _vault) external onlyRole(VAULT_MASTER_ROLE) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
@@ -309,7 +428,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice disconnects a vault from the hub
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
-    /// @dev vault's `mintedShares` should be zero
+    /// @dev vault's `liabilityShares` should be zero
     function voluntaryDisconnect(address _vault) external whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         _vaultAuth(_vault, "disconnect");
@@ -331,16 +450,18 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 vaultSharesAfterMint = socket.sharesMinted + _amountOfShares;
+        uint256 vaultSharesAfterMint = socket.liabilityShares + _amountOfShares;
         uint256 shareLimit = socket.shareLimit;
         if (vaultSharesAfterMint > shareLimit) revert ShareLimitExceeded(_vault, shareLimit);
 
         IStakingVault vault_ = IStakingVault(_vault);
+        if (!vault_.isReportFresh()) revert VaultReportStaled(_vault);
+
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - socket.reserveRatioBP;
-        uint256 maxMintableEther = (vault_.valuation() * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 maxMintableEther = (vault_.totalValue() * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
         uint256 stETHAfterMint = LIDO.getPooledEthBySharesRoundUp(vaultSharesAfterMint);
         if (stETHAfterMint > maxMintableEther) {
-            revert InsufficientValuationToMint(_vault, vault_.valuation());
+            revert InsufficientTotalValueToMint(_vault, vault_.totalValue());
         }
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
@@ -350,8 +471,9 @@ contract VaultHub is PausableUntilWithRoles {
             revert VaultInsufficientLocked(_vault, vault_.locked(), minLocked);
         }
 
-        socket.sharesMinted = uint96(vaultSharesAfterMint);
+        socket.liabilityShares = uint96(vaultSharesAfterMint);
         LIDO.mintExternalShares(_recipient, _amountOfShares);
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onMintedShares(_vault, _amountOfShares);
 
         emit MintedSharesOnVault(_vault, _amountOfShares);
     }
@@ -368,12 +490,13 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        uint256 sharesMinted = socket.sharesMinted;
-        if (sharesMinted < _amountOfShares) revert InsufficientSharesToBurn(_vault, sharesMinted);
+        uint256 liabilityShares = socket.liabilityShares;
+        if (liabilityShares < _amountOfShares) revert InsufficientSharesToBurn(_vault, liabilityShares);
 
-        socket.sharesMinted = uint96(sharesMinted - _amountOfShares);
+        socket.liabilityShares = uint96(liabilityShares - _amountOfShares);
 
         LIDO.burnExternalShares(_amountOfShares);
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onBurnedShares(_vault, _amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
@@ -386,21 +509,22 @@ contract VaultHub is PausableUntilWithRoles {
         burnShares(_vault, _amountOfShares);
     }
 
-    /// @notice force rebalance of the vault to have sufficient reserve ratio
+    /// @notice permissionless rebalance for unhealthy vaults
     /// @param _vault vault address
-    /// @dev permissionless if the vault's min reserve ratio is broken
+    /// @dev rebalance all available amount of ether until the vault is healthy
     function forceRebalance(address _vault) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
-        _requireUnhealthy(_vault);
 
-        uint256 amountToRebalance = rebalanceShortfall(_vault);
+        uint256 maxAmountToRebalance = rebalanceShortfall(_vault);
+        if (maxAmountToRebalance == 0) revert AlreadyHealthy(_vault);
+        uint256 amountToRebalance = Math256.min(maxAmountToRebalance, _vault.balance);
 
         // TODO: add some gas compensation here
         IStakingVault(_vault).rebalance(amountToRebalance);
     }
 
     /// @notice rebalances the vault by writing off the amount of ether equal
-    ///     to `msg.value` from the vault's minted stETH
+    ///     to `msg.value` from the vault's liability stETH
     /// @dev msg.sender should be vault's contract
     function rebalance() external payable whenResumed {
         if (msg.value == 0) revert ZeroArgument("msg.value");
@@ -408,10 +532,10 @@ contract VaultHub is PausableUntilWithRoles {
         VaultSocket storage socket = _connectedSocket(msg.sender);
 
         uint256 sharesToBurn = LIDO.getSharesByPooledEth(msg.value);
-        uint256 sharesMinted = socket.sharesMinted;
-        if (sharesMinted < sharesToBurn) revert InsufficientSharesToBurn(msg.sender, sharesMinted);
+        uint256 liabilityShares = socket.liabilityShares;
+        if (liabilityShares < sharesToBurn) revert InsufficientSharesToBurn(msg.sender, liabilityShares);
 
-        socket.sharesMinted = uint96(sharesMinted - sharesToBurn);
+        socket.liabilityShares = uint96(liabilityShares - sharesToBurn);
 
         LIDO.rebalanceExternalEtherToInternal{value: msg.value}();
 
@@ -430,186 +554,81 @@ contract VaultHub is PausableUntilWithRoles {
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_refundRecipient == address(0)) revert ZeroArgument("_refundRecipient");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
-        _requireUnhealthy(_vault);
+        if (isVaultHealthyAsOfLatestReport(_vault)) revert AlreadyHealthy(_vault);
 
         uint256 numValidators = _pubkeys.length / PUBLIC_KEY_LENGTH;
         uint64[] memory amounts = new uint64[](numValidators);
 
         IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, amounts, _refundRecipient);
 
-        emit ForceValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
+        emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
     function _disconnect(address _vault) internal {
         VaultSocket storage socket = _connectedSocket(_vault);
-        IStakingVault vault_ = IStakingVault(socket.vault);
 
-        uint256 sharesMinted = socket.sharesMinted;
-        if (sharesMinted > 0) {
-            revert NoMintedSharesShouldBeLeft(_vault, sharesMinted);
+        uint256 liabilityShares = socket.liabilityShares;
+        if (liabilityShares > 0) {
+            revert NoLiabilitySharesShouldBeLeft(_vault, liabilityShares);
         }
 
         socket.pendingDisconnect = true;
 
-        vault_.report(vault_.valuation(), vault_.inOutDelta(), 0);
-
-        emit VaultDisconnected(_vault);
+        emit VaultDisconnectInitiated(_vault);
     }
 
-    function calculateVaultsRebase(
-        uint256[] memory vaultsValuations,
-        uint256 _preTotalShares,
-        uint256 _preTotalPooledEther,
-        uint256 _postInternalShares,
-        uint256 _postInternalEther,
-        uint256 _sharesToMintAsLidoCoreFees
-    )
-        public
-        view
-        returns (uint256[] memory lockedEther, uint256[] memory treasuryFeeShares, uint256 totalTreasuryFeeShares)
-    {
-        /// HERE WILL BE ACCOUNTING DRAGON
-
-        //                 \||/
-        //                 |  $___oo
-        //       /\  /\   / (__,,,,|
-        //     ) /^\) ^\/ _)
-        //     )   /^\/   _)
-        //     )   _ /  / _)
-        // /\  )/\/ ||  | )_)
-        //<  >      |(,,) )__)
-        // ||      /    \)___)\
-        // | \____(      )___) )___
-        //  \______(_______;;; __;;;
-
+    /// @notice Permissionless update of the vault data
+    /// @param _vault the address of the vault
+    /// @param _totalValue the total value of the vault
+    /// @param _inOutDelta the inOutDelta of the vault
+    /// @param _feeSharesCharged the feeSharesCharged of the vault
+    /// @param _liabilityShares the liabilityShares of the vault
+    /// @param _proof the proof of the reported data
+    function updateVaultData(
+        address _vault,
+        uint256 _totalValue,
+        int256 _inOutDelta,
+        uint256 _feeSharesCharged,
+        uint256 _liabilityShares,
+        bytes32[] calldata _proof
+    ) external {
         VaultHubStorage storage $ = _getVaultHubStorage();
+        uint256 vaultIndex = $.vaultIndex[_vault];
+        if (vaultIndex == 0) revert NotConnectedToHub(_vault);
 
-        uint256 length = vaultsCount();
+        bytes32 root = $.vaultsDataTreeRoot;
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(_vault, _totalValue, _inOutDelta, _feeSharesCharged, _liabilityShares))));
+        if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
 
-        treasuryFeeShares = new uint256[](length);
-        lockedEther = new uint256[](length);
-
-        for (uint256 i = 0; i < length; ++i) {
-            VaultSocket memory socket = $.sockets[i + 1];
-            if (!socket.pendingDisconnect) {
-                uint256 newMintedShares = socket.sharesMinted;
-                if (_sharesToMintAsLidoCoreFees > 0) {
-                    treasuryFeeShares[i] = calculateVaultTreasuryFees(
-                        vaultsValuations[i],
-                        socket,
-                        _preTotalShares,
-                        _preTotalPooledEther,
-                        _postInternalShares,
-                        _postInternalEther,
-                        _sharesToMintAsLidoCoreFees
-                    );
-                    totalTreasuryFeeShares += treasuryFeeShares[i];
-                    newMintedShares += treasuryFeeShares[i];
-                }
-
-                lockedEther[i] = Math256.max(
-                    // combining two division into one here:
-                    // uint256 newMintedStETH = (newMintedShares * _postInternalEther) / _postInternalShares;
-                    // uint256 lockedEther = newMintedStETH * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
-                    (newMintedShares * _postInternalEther * TOTAL_BASIS_POINTS)
-                        / (_postInternalShares * (TOTAL_BASIS_POINTS - socket.reserveRatioBP)),
-                    CONNECT_DEPOSIT
-                );
-            }
+        VaultSocket storage socket = $.sockets[vaultIndex];
+        // NB: charged fees can only cumulatively increase with time
+        if (_feeSharesCharged  < socket.feeSharesCharged) {
+            revert InvalidFees(_vault, _feeSharesCharged, socket.feeSharesCharged);
         }
-    }
+        socket.liabilityShares += uint96(_feeSharesCharged - socket.feeSharesCharged);
+        socket.feeSharesCharged = uint96(_feeSharesCharged);
 
-    /// @notice calculates the amount of shares to mint as treasury fees for the vault
-    /// @param _reportValuation the valuation of the vault from the report
-    /// @param socket the socket of the vault
-    /// @param _preTotalShares the total shares of the Lido protocol before the report
-    /// @param _preTotalPooledEther the total pooled ether of the Lido protocol before the report
-    /// @param _postInternalShares the internal shares of the Lido protocol after the report
-    /// @param _postInternalEther the internal ether of the Lido protocol after the report
-    /// @param _sharesToMintAsLidoCoreFees the amount of shares that is minted as the total Lido core fees (treasury and NO)
-    /// @return treasuryFeeShares the amount of shares to mint as treasury fees or 0 if _sharesToMintAsLidoCoreFees is 0
-    function calculateVaultTreasuryFees(
-        uint256 _reportValuation,
-        VaultSocket memory socket,
-
-        uint256 _preTotalShares,
-        uint256 _preTotalPooledEther,
-        uint256 _postInternalShares,
-        uint256 _postInternalEther,
-        uint256 _sharesToMintAsLidoCoreFees
-    ) public pure returns (uint256 treasuryFeeShares) {
-        // if lido doesn't charge the protocol fees, vaults don't charge either
-        if (_sharesToMintAsLidoCoreFees == 0) {
-            return 0;
-        }
-
-        uint256 mintableRatio = (TOTAL_BASIS_POINTS - socket.reserveRatioBP);
-
-        uint256 chargeableValuation = Math256.min(
-            // we are charging fees over the mintable part of the vault's valuation
-            _reportValuation * mintableRatio / TOTAL_BASIS_POINTS,
-            // capped by the vault's shareLimit
-            socket.shareLimit * _postInternalEther / _postInternalShares
+        uint256 newLiabilityShares = Math256.max(socket.liabilityShares, _liabilityShares);
+        // locked ether can only be increased asynchronously once the oracle settled the new floor value
+        // as of reference slot to prevent slashing upsides in between the report gathering and delivering
+        uint256 lockedEther = Math256.max(
+            LIDO.getPooledEthBySharesRoundUp(newLiabilityShares) * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - socket.reserveRatioBP),
+            socket.pendingDisconnect ? 0 : CONNECT_DEPOSIT
         );
 
-        // We are charging `socket.treasuryFeeBP` of the vault's `potentialRewards`
-        // that is equal to `chargeableValuation * (LidoCoreGrossRewardRate - 1)`
-        // TODO: maybe use net APR for simplicity ?
-
-        // `LidoCoreGrossRewardRate` is the Lido core protocol validation reward rate for the day without fees charged
-        // It's calculated as a change of share rate before and after the report without the protocol fees charged
-        // `LidoCoreGrossRewardRate = shareRateAfterReportWithoutFeesCharged / shareRateBeforeReport`
-        // `shareRateAfterReportWithoutFeesCharged = _postInternalEther / (_postInternalShares - _sharesToMintAsLidoCoreFees)`
-        // `shareRateBeforeReport = _preTotalPooledEther / _preTotalShares`
-        uint256 potentialRewards = chargeableValuation * _postInternalEther * _preTotalShares
-                            / ((_postInternalShares - _sharesToMintAsLidoCoreFees) * _preTotalPooledEther)
-                            - chargeableValuation;
-
-        // We are charging `socket.treasuryFeeBP` of the vault's `potentialRewards`
-        // and convert them in shares using postShareRate (_postInternalEther/_postInternalShares)
-        // we can use the postShareRate here, because charging fees for the vaults does not change shareRate
-        // like in the the case of internal treasury fees
-        treasuryFeeShares = potentialRewards * socket.treasuryFeeBP * _postInternalShares / (_postInternalEther * TOTAL_BASIS_POINTS);
-    }
-
-    function updateVaults(
-        uint256[] memory _valuations,
-        int256[] memory _inOutDeltas,
-        uint256[] memory _locked,
-        uint256[] memory _treasureFeeShares
-    ) external {
-        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateVaults", msg.sender);
-        VaultHubStorage storage $ = _getVaultHubStorage();
-
-        for (uint256 i = 0; i < _valuations.length; i++) {
-            VaultSocket storage socket = $.sockets[i + 1];
-
-            if (socket.pendingDisconnect) continue; // we skip disconnected vaults
-
-            uint256 treasuryFeeShares = _treasureFeeShares[i];
-            if (treasuryFeeShares > 0) {
-                socket.sharesMinted += uint96(treasuryFeeShares);
-            }
-
-            IStakingVault(socket.vault).report(_valuations[i], _inOutDeltas[i], _locked[i]);
-        }
+        IStakingVault(socket.vault).report($.vaultsDataTimestamp, _totalValue, _inOutDelta, lockedEther);
 
         uint256 length = $.sockets.length;
+        if (socket.pendingDisconnect) {
+            // remove disconnected vault from the list
+            address vaultAddress = socket.vault;
+            VaultSocket memory lastSocket = $.sockets[length - 1];
+            $.sockets[vaultIndex] = lastSocket;
+            $.vaultIndex[lastSocket.vault] = vaultIndex;
+            $.sockets.pop();
+            delete $.vaultIndex[vaultAddress];
 
-        for (uint256 i = 1; i < length; i++) {
-            VaultSocket memory socket = $.sockets[i];
-            if (socket.pendingDisconnect) {
-                // deauthorize vaultHub from the vault
-                IStakingVault(socket.vault).deauthorizeLidoVaultHub();
-
-                // remove disconnected vault from the list
-                VaultSocket memory lastSocket = $.sockets[length - 1];
-                $.sockets[i] = lastSocket;
-                $.vaultIndex[lastSocket.vault] = i;
-                $.sockets.pop(); // TODO: replace with length--
-                delete $.vaultIndex[socket.vault];
-                --length;
-            }
+            emit VaultDisconnectCompleted(vaultAddress);
         }
     }
 
@@ -643,43 +662,49 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    function _requireUnhealthy(address _vault) internal view {
-        if (isVaultHealthy(_vault)) revert AlreadyHealthy(_vault);
-    }
-
-    event VaultConnected(
+    event VaultConnectionSet(
         address indexed vault,
-        uint256 capShares,
-        uint256 minReserveRatio,
-        uint256 rebalanceThreshold,
+        uint256 shareLimit,
+        uint256 reserveRatioBP,
+        uint256 forcedRebalanceThresholdBP,
         uint256 treasuryFeeBP
     );
+
+    event VaultsReportDataUpdated(uint64 indexed timestamp, bytes32 root, string cid);
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
-    event VaultDisconnected(address indexed vault);
+    event VaultDisconnectInitiated(address indexed vault);
+    event VaultDisconnectCompleted(address indexed vault);
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
-    event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
+    event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
+
     error AlreadyHealthy(address vault);
+    error VaultMintingCapacityExceeded(address vault, uint256 totalValue, uint256 liabilityShares, uint256 newRebalanceThresholdBP);
     error InsufficientSharesToBurn(address vault, uint256 amount);
-    error ShareLimitExceeded(address vault, uint256 capShares);
+    error ShareLimitExceeded(address vault, uint256 shareLimit);
     error AlreadyConnected(address vault, uint256 index);
     error NotConnectedToHub(address vault);
     error NotAuthorized(string operation, address addr);
     error ZeroArgument(string argument);
-    error ShareLimitTooHigh(address vault, uint256 capShares, uint256 maxCapShares);
+    error ShareLimitTooHigh(address vault, uint256 shareLimit, uint256 maxShareLimit);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
-    error RebalanceThresholdTooHigh(address vault, uint256 rebalanceThresholdBP, uint256 maxRebalanceThresholdBP);
+    error ForcedRebalanceThresholdTooHigh(address vault, uint256 forcedRebalanceThresholdBP, uint256 maxForcedRebalanceThresholdBP);
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
-    error InsufficientValuationToMint(address vault, uint256 valuation);
+    error InsufficientTotalValueToMint(address vault, uint256 totalValue);
     error AlreadyExists(bytes32 codehash);
-    error NoMintedSharesShouldBeLeft(address vault, uint256 sharesMinted);
-    error VaultProxyNotAllowed(address beacon);
+    error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
+    error VaultProxyNotAllowed(address beacon, bytes32 codehash);
     error InvalidPubkeysLength();
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error VaultDepositorNotAllowed(address depositor);
+    error InvalidProof();
+    error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
     error VaultInsufficientLocked(address vault, uint256 currentLocked, uint256 expectedLocked);
-    error VaultIsOssified(address vault);
+    error VaultOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
+    error VaultReportStaled(address vault);
+    error VaultDeauthorized(address vault);
+    error VaultProxyZeroCodehash();
 }

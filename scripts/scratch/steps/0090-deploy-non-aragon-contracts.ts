@@ -19,7 +19,6 @@ export async function main() {
 
   // Extract necessary addresses and parameters from the state
   const lidoAddress = state[Sk.appLido].proxy.address;
-  const legacyOracleAddress = state[Sk.appOracle].proxy.address;
   const votingAddress = state[Sk.appVoting].proxy.address;
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
@@ -139,6 +138,15 @@ export async function main() {
     );
   }
 
+  // Deploy OperatorGrid
+  const operatorGrid = await deployBehindOssifiableProxy(
+    Sk.operatorGrid,
+    "OperatorGrid",
+    proxyContractsOwner,
+    deployer,
+    [locator.address],
+  );
+
   // Deploy Accounting
   const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
     locator.address,
@@ -157,7 +165,7 @@ export async function main() {
     "AccountingOracle",
     proxyContractsOwner,
     deployer,
-    [locator.address, legacyOracleAddress, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
+    [locator.address, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
   );
 
   // Deploy HashConsensus for AccountingOracle
@@ -206,7 +214,12 @@ export async function main() {
     "PredepositGuarantee",
     proxyContractsOwner,
     deployer,
-    [pdgDeployParams.gIndex, pdgDeployParams.gIndexAfterChange, pdgDeployParams.changeSlot],
+    [
+      state.chainSpec.genesisForkVersion,
+      pdgDeployParams.gIndex,
+      pdgDeployParams.gIndexAfterChange,
+      pdgDeployParams.changeSlot,
+    ],
   );
 
   // Update LidoLocator with valid implementation
@@ -214,7 +227,6 @@ export async function main() {
     accountingOracle.address,
     depositSecurityModuleAddress,
     elRewardsVault.address,
-    legacyOracleAddress,
     lidoAddress,
     certainAddress("dummy-locator:oracleReportSanityChecker"), // requires LidoLocator in the constructor, so deployed after it
     ZeroAddress,
@@ -229,6 +241,7 @@ export async function main() {
     predepositGuarantee.address,
     wstETH.address,
     vaultHub.address,
+    operatorGrid.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }

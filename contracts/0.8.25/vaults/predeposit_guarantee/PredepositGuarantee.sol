@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {GIndex} from "contracts/0.8.25/lib/GIndex.sol";
+import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
 import {BLS12_381} from "contracts/0.8.25/lib/BLS.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
@@ -101,6 +102,13 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     uint128 public constant PREDEPOSIT_AMOUNT = 1 ether;
 
     /**
+     * @notice computed DEPOSIT_DOMAIN for current chain
+     * @dev changes between chains and testnets depending on GENESIS_FORK_VERSION
+     * @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_domain
+     */
+    bytes32 public immutable DEPOSIT_DOMAIN;
+
+    /**
      * @notice Storage offset slot for ERC-7201 namespace
      *         The storage namespace is used to prevent upgrade collisions
      *         keccak256(abi.encode(uint256(keccak256("Lido.Vaults.PredepositGuarantee")) - 1)) & ~bytes32(uint256(0xff))
@@ -109,16 +117,19 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         0xf66b5a365356c5798cc70e3ea6a236b181a826a69f730fc07cc548244bee5200;
 
     /**
+     * @param _genesisForkVersion genesis fork version for the current chain
      * @param _gIFirstValidator packed(general index + depth in tree, see GIndex.sol) GIndex of first validator in CL state tree
      * @param _gIFirstValidatorAfterChange packed GIndex of first validator after fork changes tree structure
      * @param _changeSlot slot of the fork that alters first validator GIndex
      * @dev if no fork changes are known,  _gIFirstValidatorAfterChange = _gIFirstValidator and _changeSlot = 0
      */
     constructor(
+        bytes4 _genesisForkVersion,
         GIndex _gIFirstValidator,
         GIndex _gIFirstValidatorAfterChange,
         uint64 _changeSlot
     ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {
+        DEPOSIT_DOMAIN = SSZ.computeDepositDomain(_genesisForkVersion);
         _disableInitializers();
         _pauseUntil(PAUSE_INFINITELY);
     }
@@ -317,7 +328,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
             // this check isn't needed in  `depositToBeaconChain` because
             // Beacon Chain doesn't enforce the signature checks for existing validators and just top-ups to their balance
-            BLS12_381.verifyDepositMessage(_deposit, _depositsY[i], withdrawalCredentials);
+            BLS12_381.verifyDepositMessage(_deposit, _depositsY[i], withdrawalCredentials, DEPOSIT_DOMAIN);
 
             if ($.validatorStatus[_deposit.pubkey].stage != ValidatorStage.NONE) {
                 revert ValidatorNotNew(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);

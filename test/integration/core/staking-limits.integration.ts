@@ -4,12 +4,12 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { mine } from "@nomicfoundation/hardhat-network-helpers";
 
+import { Lido } from "typechain-types";
+
 import { ether } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
-
-import { Lido } from "../../../typechain-types";
 
 describe("Staking limits", () => {
   let ctx: ProtocolContext;

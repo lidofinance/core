@@ -1,6 +1,14 @@
 import hre from "hardhat";
 
-import { AccountingOracle, Lido, LidoLocator, StakingRouter, WithdrawalQueueERC721 } from "typechain-types";
+import {
+  AccountingOracle,
+  ICSModule,
+  Lido,
+  LidoLocator,
+  NodeOperatorsRegistry,
+  StakingRouter,
+  WithdrawalQueueERC721,
+} from "typechain-types";
 
 import { batch, log } from "lib";
 
@@ -77,7 +85,6 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
       "LidoExecutionLayerRewardsVault",
       config.get("elRewardsVault") || (await locator.elRewardsVault()),
     ),
-    legacyOracle: loadContract("LegacyOracle", config.get("legacyOracle") || (await locator.legacyOracle())),
     lido: loadContract("Lido", config.get("lido") || (await locator.lido())),
     accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
     oracleReportSanityChecker: loadContract(
@@ -121,11 +128,18 @@ const getAragonContracts = async (lido: LoadedContract<Lido>, config: ProtocolNe
  * Load staking modules contracts registered in the staking router.
  */
 const getStakingModules = async (stakingRouter: LoadedContract<StakingRouter>, config: ProtocolNetworkConfig) => {
-  const [nor, sdvt] = await stakingRouter.getStakingModules();
-  return (await batch({
+  const [nor, sdvt, csm] = await stakingRouter.getStakingModules();
+
+  const promises: { [key: string]: Promise<LoadedContract<NodeOperatorsRegistry | ICSModule>> } = {
     nor: loadContract("NodeOperatorsRegistry", config.get("nor") || nor.stakingModuleAddress),
     sdvt: loadContract("NodeOperatorsRegistry", config.get("sdvt") || sdvt.stakingModuleAddress),
-  })) as StakingModuleContracts;
+  };
+
+  if (csm) {
+    promises.csm = loadContract("ICSModule", config.get("csm") || csm.stakingModuleAddress);
+  }
+
+  return (await batch(promises)) as StakingModuleContracts;
 };
 
 /**
@@ -167,6 +181,7 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
       "PredepositGuarantee",
       config.get("predepositGuarantee") || (await locator.predepositGuarantee()),
     ),
+    operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid")),
   })) as VaultsContracts;
 };
 
@@ -204,13 +219,13 @@ export async function discover() {
     "Kernel": contracts.kernel.address,
     "ACL": contracts.acl.address,
     "Burner": foundationContracts.burner.address,
-    "Legacy Oracle": foundationContracts.legacyOracle.address,
     "wstETH": contracts.wstETH.address,
     // Vaults
     "Staking Vault Factory": contracts.stakingVaultFactory.address,
     "Staking Vault Beacon": contracts.stakingVaultBeacon.address,
     "Vault Hub": contracts.vaultHub.address,
     "Predeposit Guarantee": contracts.predepositGuarantee.address,
+    "Operator Grid": contracts.operatorGrid.address,
   });
 
   const signers = {

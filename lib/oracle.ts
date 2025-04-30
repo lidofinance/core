@@ -1,13 +1,12 @@
 import { bigintToHex } from "bigint-conversion";
-import { assert } from "chai";
 import { keccak256, ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
-import { AccountingOracle, HashConsensus } from "typechain-types";
-
-import { CONSENSUS_VERSION } from "lib/constants";
+import { AccountingOracle, HashConsensus, OracleReportSanityChecker } from "typechain-types";
 
 import { numberToHex } from "./string";
+
+import { ether, impersonate } from ".";
 
 function splitArrayIntoChunks<T>(inputArray: T[], maxItemsPerChunk: number): T[][] {
   const result: T[][] = [];
@@ -45,8 +44,10 @@ export const DEFAULT_REPORT_FIELDS: OracleReport = {
   sharesRequestedToBurn: 0n,
   withdrawalFinalizationBatches: [],
   isBunkerMode: false,
-  vaultsValues: [],
-  vaultsInOutDeltas: [],
+  vaultsTotalTreasuryFeesShares: 0n,
+  vaultsTotalDeficit: 0n,
+  vaultsDataTreeRoot: ethers.ZeroHash,
+  vaultsDataTreeCid: "",
   extraDataFormat: 0n,
   extraDataHash: ethers.ZeroHash,
   extraDataItemsCount: 0n,
@@ -65,8 +66,10 @@ export function getReportDataItems(r: OracleReport) {
     r.sharesRequestedToBurn,
     r.withdrawalFinalizationBatches,
     r.isBunkerMode,
-    r.vaultsValues,
-    r.vaultsInOutDeltas,
+    r.vaultsTotalTreasuryFeesShares,
+    r.vaultsTotalDeficit,
+    r.vaultsDataTreeRoot,
+    r.vaultsDataTreeCid,
     r.extraDataFormat,
     r.extraDataHash,
     r.extraDataItemsCount,
@@ -76,7 +79,7 @@ export function getReportDataItems(r: OracleReport) {
 export function calcReportDataHash(reportItems: ReportAsArray) {
   const data = ethers.AbiCoder.defaultAbiCoder().encode(
     [
-      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], bool, uint256[], int256[], uint256, bytes32, uint256)",
+      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], bool, uint256, uint256, bytes32, string, uint256, bytes32, uint256)",
     ],
     [reportItems],
   );
@@ -99,44 +102,6 @@ export async function prepareOracleReport({
   const hash = calcReportDataHash(items);
 
   return { fields, items, hash };
-}
-
-export async function triggerConsensusOnHash(hash: string, consensus: HashConsensus) {
-  const { refSlot } = await consensus.getCurrentFrame();
-  const membersInfo = await consensus.getMembers();
-  const signers = [
-    await ethers.provider.getSigner(membersInfo.addresses[0]),
-    await ethers.provider.getSigner(membersInfo.addresses[1]),
-  ];
-  for (const s of signers) {
-    await consensus.connect(s).submitReport(refSlot, hash, CONSENSUS_VERSION);
-  }
-  assert.equal((await consensus.getConsensusState()).consensusReport, hash);
-}
-
-export async function reportOracle(
-  consensus: HashConsensus,
-  oracle: AccountingOracle,
-  reportFields: Partial<OracleReport> & { clBalance: bigint },
-) {
-  const { refSlot } = await consensus.getCurrentFrame();
-  const report = await prepareOracleReport({ ...reportFields, refSlot });
-
-  // non-empty extra data is not supported here yet
-  assert.equal(report.fields.extraDataFormat, 0n);
-  assert.equal(report.fields.extraDataHash, ethers.ZeroHash);
-  assert.equal(report.fields.extraDataItemsCount, 0n);
-
-  const membersInfo = await consensus.getMembers();
-  await triggerConsensusOnHash(report.hash, consensus);
-
-  const oracleVersion = await oracle.getContractVersion();
-
-  const memberSigner = await ethers.provider.getSigner(membersInfo.addresses[0]);
-  const submitDataTx = await oracle.connect(memberSigner).submitReportData(report.fields, oracleVersion);
-  const submitExtraDataTx = await oracle.connect(memberSigner).submitReportExtraDataEmpty();
-
-  return { report, submitDataTx, submitExtraDataTx };
 }
 
 export function encodeExtraDataItem(
@@ -231,7 +196,7 @@ export type OracleReportProps = {
   config?: ExtraDataConfig;
 };
 
-export function constructOracleReport({ reportFieldsWithoutExtraData, extraData, config }: OracleReportProps) {
+export function prepareExtraData(extraData: ExtraData, config?: ExtraDataConfig) {
   const extraDataItems: string[] = [];
 
   if (Array.isArray(extraData)) {
@@ -249,11 +214,17 @@ export function constructOracleReport({ reportFieldsWithoutExtraData, extraData,
   const extraDataChunks = packExtraDataItemsToChunksLinkedByHash(extraDataItems, maxItemsPerChunk);
   const extraDataChunkHashes = extraDataChunks.map((chunk) => calcExtraDataListHash(chunk));
 
+  return { extraDataItemsCount, extraDataChunks, extraDataChunkHashes };
+}
+
+export function constructOracleReport({ reportFieldsWithoutExtraData, extraData, config }: OracleReportProps) {
+  const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = prepareExtraData(extraData, config);
+
   const report: OracleReport = {
     ...reportFieldsWithoutExtraData,
-    extraDataHash: extraDataItems.length ? extraDataChunkHashes[0] : ZeroHash,
-    extraDataItemsCount: extraDataItems.length,
-    extraDataFormat: extraDataItems.length ? EXTRA_DATA_FORMAT_LIST : EXTRA_DATA_FORMAT_EMPTY,
+    extraDataHash: extraDataItemsCount ? extraDataChunkHashes[0] : ZeroHash,
+    extraDataItemsCount,
+    extraDataFormat: extraDataItemsCount ? EXTRA_DATA_FORMAT_LIST : EXTRA_DATA_FORMAT_EMPTY,
   };
 
   const reportHash = calcReportDataHash(getReportDataItems(report));
@@ -275,4 +246,23 @@ export async function getSecondsPerFrame(consensus: HashConsensus) {
 export async function getSlotTimestamp(slot: bigint, consensus: HashConsensus) {
   const chainConfig = await consensus.getChainConfig();
   return chainConfig.genesisTime + chainConfig.secondsPerSlot * slot;
+}
+
+// Might be useful for tests on scratch where even reporting a single exited validator
+// is too much for the default limit
+export async function setAnnualBalanceIncreaseLimit(sanityChecker: OracleReportSanityChecker, limitBP: bigint) {
+  const adminRole = await sanityChecker.DEFAULT_ADMIN_ROLE();
+
+  const admin = await sanityChecker.getRoleMember(adminRole, 0);
+  const adminSigner = await impersonate(admin, ether("1"));
+
+  const setLimitRole = await sanityChecker.ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE();
+
+  // Grant the role to the current signer
+  await sanityChecker.connect(adminSigner).grantRole(setLimitRole, adminSigner.address);
+
+  await sanityChecker.connect(adminSigner).setAnnualBalanceIncreaseBPLimit(limitBP);
+
+  // Revoke the role after setting the limit
+  await sanityChecker.connect(adminSigner).revokeRole(setLimitRole, adminSigner.address);
 }

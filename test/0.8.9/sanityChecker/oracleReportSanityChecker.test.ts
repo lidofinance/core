@@ -100,7 +100,6 @@ describe("OracleReportSanityChecker.sol", () => {
         depositSecurityModule: deployer.address,
         elRewardsVault: elRewardsVault.address,
         accountingOracle: accountingOracleAddress,
-        legacyOracle: deployer.address,
         oracleReportSanityChecker: deployer.address,
         burner: burnerAddress,
         validatorsExitBusOracle: deployer.address,
@@ -114,6 +113,7 @@ describe("OracleReportSanityChecker.sol", () => {
         vaultHub: deployer.address,
         wstETH: deployer.address,
         predepositGuarantee: deployer.address,
+        operatorGrid: deployer.address,
       }),
     );
 

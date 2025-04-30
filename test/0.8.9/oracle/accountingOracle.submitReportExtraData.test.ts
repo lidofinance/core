@@ -13,9 +13,9 @@ import {
 } from "typechain-types";
 
 import {
+  AO_CONSENSUS_VERSION,
   calcExtraDataListHash,
   calcReportDataHash,
-  CONSENSUS_VERSION,
   constructOracleReport,
   encodeExtraDataItem,
   encodeExtraDataItems,
@@ -51,7 +51,7 @@ const getDefaultExtraData = (): ExtraDataType => ({
 });
 
 const getDefaultReportFields = (override = {}) => ({
-  consensusVersion: BigInt(CONSENSUS_VERSION),
+  consensusVersion: AO_CONSENSUS_VERSION,
   refSlot: 0,
   numValidators: 10,
   clBalanceGwei: 320n * ONE_GWEI,
@@ -62,8 +62,10 @@ const getDefaultReportFields = (override = {}) => ({
   sharesRequestedToBurn: ether("3"),
   withdrawalFinalizationBatches: [1],
   isBunkerMode: true,
-  vaultsValues: [],
-  vaultsInOutDeltas: [],
+  vaultsTotalTreasuryFeesShares: ether("4"),
+  vaultsTotalDeficit: ether("5"),
+  vaultsDataTreeRoot: ethers.ZeroHash,
+  vaultsDataTreeCid: "",
   extraDataFormat: EXTRA_DATA_FORMAT_LIST,
   extraDataHash: ZeroHash,
   extraDataItemsCount: 0,
@@ -161,7 +163,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
   }
 
   async function oracleMemberSubmitReportHash(refSlot: BigNumberish, reportHash: string) {
-    return await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
+    return await consensus.connect(member1).submitReport(refSlot, reportHash, AO_CONSENSUS_VERSION);
   }
 
   async function oracleMemberSubmitReportData(report: OracleReport) {
@@ -386,7 +388,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         const { report, reportHash, extraDataChunks } = await constructOracleReportWithDefaultValuesForCurrentRefSlot(
           {},
         );
-        await consensus.connect(member1).submitReport(report.refSlot, reportHash, CONSENSUS_VERSION);
+        await consensus.connect(member1).submitReport(report.refSlot, reportHash, AO_CONSENSUS_VERSION);
         // No submitReportData here — trying to send extra data ahead of it
         await expect(
           oracle.connect(member1).submitReportExtraDataList(extraDataChunks[0]),
@@ -398,7 +400,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
           {},
         );
 
-        await consensus.connect(member1).submitReport(report.refSlot, reportHash, CONSENSUS_VERSION);
+        await consensus.connect(member1).submitReport(report.refSlot, reportHash, AO_CONSENSUS_VERSION);
         // Now submitReportData on it's place
         await oracle.connect(member1).submitReportData(report, oracleVersion);
         const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataChunks[0]);
@@ -1031,7 +1033,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         const reportItems = getReportDataItems(reportFields);
         const reportHash = calcReportDataHash(reportItems);
 
-        await consensus.connect(member1).submitReport(reportFields.refSlot, reportHash, CONSENSUS_VERSION);
+        await consensus.connect(member1).submitReport(reportFields.refSlot, reportHash, AO_CONSENSUS_VERSION);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
         await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
@@ -1112,7 +1114,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
 
       await consensus
         .connect(member1)
-        .submitReport(report1.reportFields.refSlot, report1.reportHash, CONSENSUS_VERSION);
+        .submitReport(report1.reportFields.refSlot, report1.reportHash, AO_CONSENSUS_VERSION);
 
       await expect(
         oracle.connect(member1).submitReportExtraDataList(report1.extraDataList),

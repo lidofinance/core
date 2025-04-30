@@ -225,16 +225,18 @@ library BLS12_381 {
      * @param deposit staking vault deposit to verify
      * @param depositY Y coordinates of uncompressed pubkey and signature
      * @param withdrawalCredentials missing part of deposit message
+     * @param depositDomain domain of the deposit message for the current chain
      * @dev will revert with `InvalidSignature` if the signature is invalid
      * @dev will revert with `InputHasInfinityPoints` if the input contains infinity points(zero values)
      */
     function verifyDepositMessage(
         StakingVaultDeposit calldata deposit,
         DepositY calldata depositY,
-        bytes32 withdrawalCredentials
+        bytes32 withdrawalCredentials,
+        bytes32 depositDomain
     ) internal view {
         // Hash the deposit message and map it to G2 point on the curve
-        G2Point memory msgG2 = hashToG2(SSZ.depositMessageSigningRoot(deposit, withdrawalCredentials));
+        G2Point memory msgG2 = hashToG2(SSZ.depositMessageSigningRoot(deposit, withdrawalCredentials, depositDomain));
 
         // BLS Pairing check input
         // pubkeyG1 | msgG2 | NEGATED_G1_GENERATOR | signatureG2

@@ -19,17 +19,24 @@ library SSZ {
     error InvalidPubkeyLength();
     error InvalidBlockHeader();
 
-    /// @notice computed fork agnostic DEPOSIT_DOMAIN
+    /// @notice Domain for deposit message signing
+    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#domain-types
+    bytes4 internal constant DOMAIN_DEPOSIT_TYPE = 0x03000000;
+
+    /// @notice calculation of deposit domain based on fork version
     /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_domain
-    /// @dev fork agnostic per `apply_deposit` at https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#deposits
-    bytes32 public constant DEPOSIT_DOMAIN = 0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9;
+    function computeDepositDomain(bytes4 genesisForkVersion) internal view returns (bytes32 depositDomain) {
+        bytes32 forkDataRoot = sha256Pair(genesisForkVersion, bytes32(0));
+        depositDomain = DOMAIN_DEPOSIT_TYPE | (forkDataRoot >> 32);
+    }
 
     /// @notice calculation of signing root for deposit message
     /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
     /// @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
     function depositMessageSigningRoot(
         StakingVaultDeposit calldata deposit,
-        bytes32 withdrawalCredentials
+        bytes32 withdrawalCredentials,
+        bytes32 depositDomain
     ) internal view returns (bytes32 root) {
         root = sha256Pair(
             // merkle root of the deposit message
@@ -45,7 +52,7 @@ library SSZ {
                     bytes32(0)
                 )
             ),
-            DEPOSIT_DOMAIN
+            depositDomain
         );
     }
 

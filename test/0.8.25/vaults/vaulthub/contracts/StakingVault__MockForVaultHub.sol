@@ -4,6 +4,7 @@
 pragma solidity ^0.8.0;
 
 import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 
 contract StakingVault__MockForVaultHub {
     address public immutable VAULT_HUB;
@@ -15,8 +16,9 @@ contract StakingVault__MockForVaultHub {
     bool public vaultHubAuthorized;
 
     uint256 public $locked;
-    uint256 public $valuation;
+    uint256 public $totalValue;
     int256 public $inOutDelta;
+    uint64 public $timestamp;
 
     bytes32 public withdrawalCredentials;
 
@@ -44,8 +46,8 @@ contract StakingVault__MockForVaultHub {
         return $locked;
     }
 
-    function valuation() external view returns (uint256) {
-        return $valuation;
+    function totalValue() external view returns (uint256) {
+        return $totalValue;
     }
 
     function mock__setWithdrawalCredentials(bytes32 _wc) external {
@@ -61,17 +63,22 @@ contract StakingVault__MockForVaultHub {
     }
 
     function fund() external payable {
-        $valuation += msg.value;
+        $totalValue += msg.value;
         $inOutDelta += int256(msg.value);
     }
 
     function withdraw(address, uint256 amount) external {
-        $valuation -= amount;
+        $totalValue -= amount;
         $inOutDelta -= int256(amount);
     }
 
-    function report(uint256 _valuation, int256 _inOutDelta, uint256 _locked) external {
-        $valuation = _valuation;
+    function rebalance(uint256 amount) external {
+        VaultHub(VAULT_HUB).rebalance{value: amount}();
+    }
+
+    function report(uint64 _timestamp, uint256 _totalValue, int256 _inOutDelta, uint256 _locked) external {
+        $timestamp = _timestamp;
+        $totalValue = _totalValue;
         $inOutDelta = _inOutDelta;
         $locked = _locked;
     }
@@ -85,24 +92,24 @@ contract StakingVault__MockForVaultHub {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        if ($valuation > $locked) {
+        if ($totalValue > $locked) {
             revert Mock__HealthyVault();
         }
 
         emit ValidatorWithdrawalTriggered(_pubkeys, _amounts, _refundRecipient);
     }
 
-    function mock__decreaseValuation(uint256 amount) external {
-        $valuation -= amount;
+    function mock__decreaseTotalValue(uint256 amount) external {
+        $totalValue -= amount;
     }
 
-    function mock__increaseValuation(uint256 amount) external {
-        $valuation += amount;
+    function mock__increaseTotalValue(uint256 amount) external {
+        $totalValue += amount;
     }
 
     function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {}
 
-    function isOssified() external pure returns (bool) {
+    function ossified() external pure returns (bool) {
         return false;
     }
 
@@ -112,6 +119,10 @@ contract StakingVault__MockForVaultHub {
 
     function deauthorizeLidoVaultHub() external {
         vaultHubAuthorized = false;
+    }
+
+    function isReportFresh() external pure returns (bool) {
+        return true;
     }
 
     event ValidatorWithdrawalTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
