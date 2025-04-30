@@ -31,8 +31,8 @@ contract VaultControl is VaultHub {
         return _connectedSocket(_vault).report;
     }
 
-    function fund(address _vault) external payable onlyVaultOwner(_vault, "fund") {
-        if (msg.value == 0) revert ZeroArgument("msg.value");
+    function fund(address _vault) external payable {
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("fund", msg.sender);
 
         _connectedSocket(_vault).inOutDelta += int128(int256(msg.value));
 
@@ -42,7 +42,9 @@ contract VaultControl is VaultHub {
         emit VaultFunded(_vault, msg.sender, msg.value);
     }
 
-    function withdraw(address _vault, address _recipient, uint256 _ether) external onlyVaultOwner(_vault, "withdraw") {
+    function withdraw(address _vault, address _recipient, uint256 _ether) external {
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("withdraw", msg.sender);
+
         uint256 unlocked_ = unlocked(_vault);
         if (_ether > unlocked_) revert InsufficientUnlocked(unlocked_);
 
@@ -75,7 +77,9 @@ contract VaultControl is VaultHub {
      * @dev Can only be called by VaultHub if StakingVault totalValue is less than locked amount
      * @param _ether Amount of ether to rebalance
      */
-    function rebalance(address _vault, uint256 _ether) external onlyVaultOwner(_vault, "rebalance") {
+    function rebalance(address _vault, uint256 _ether) external {
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("rebalance", msg.sender);
+
         _rebalance(_vault, _ether);
     }
 

@@ -440,8 +440,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     /// @dev vault's `liabilityShares` should be zero
-    function voluntaryDisconnect(address _vault) external whenResumed onlyVaultOwner(_vault, "disconnect") {
+    function voluntaryDisconnect(address _vault) external whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("voluntaryDisconnect", msg.sender);
 
         _disconnect(_vault);
     }
@@ -455,10 +456,11 @@ contract VaultHub is PausableUntilWithRoles {
         address _vault,
         address _recipient,
         uint256 _amountOfShares
-    ) external whenResumed onlyVaultOwner(_vault, "mintShares") {
+    ) external whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("mintShares", msg.sender);
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
@@ -497,9 +499,10 @@ contract VaultHub is PausableUntilWithRoles {
     function burnShares(
         address _vault,
         uint256 _amountOfShares
-    ) public whenResumed onlyVaultOwner(_vault, "burnShares") {
+    ) public whenResumed {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("burnShares", msg.sender);
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
@@ -634,9 +637,8 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    modifier onlyVaultOwner(address _vault, string memory _operation) {
-        if (msg.sender != OwnableUpgradeable(_vault).owner()) revert NotAuthorized(_operation, msg.sender);
-        _;
+    function _isCallerVaultOwner(address _vault) internal view returns (bool) {
+        return msg.sender == OwnableUpgradeable(_vault).owner();
     }
 
     /// @dev check if the share limit is within the upper bound set by RELATIVE_SHARE_LIMIT_BP
