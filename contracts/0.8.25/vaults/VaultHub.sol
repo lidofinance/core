@@ -334,8 +334,7 @@ contract VaultHub is PausableUntilWithRoles {
         bytes32 vaultProxyCodehash = address(_vault).codehash;
         if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault, vaultProxyCodehash);
 
-        if (vault_.depositor() != LIDO_LOCATOR.predepositGuarantee())
-            revert VaultDepositorNotAllowed(vault_.depositor());
+        if (vault_.depositor() != address(this)) revert VaultDepositorNotAllowed(vault_.depositor());
 
         if (_vault.balance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
 
@@ -452,11 +451,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _recipient address of the receiver
     /// @param _amountOfShares amount of stETH shares to mint
     /// @dev msg.sender should be vault's owner
-    function mintShares(
-        address _vault,
-        address _recipient,
-        uint256 _amountOfShares
-    ) external whenResumed {
+    function mintShares(address _vault, address _recipient, uint256 _amountOfShares) external whenResumed {
         if (_vault == address(0)) revert VaultZeroAddress();
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
@@ -496,10 +491,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _amountOfShares amount of shares to burn
     /// @dev msg.sender should be vault's owner
     /// @dev VaultHub must have all the stETH on its balance
-    function burnShares(
-        address _vault,
-        uint256 _amountOfShares
-    ) public whenResumed {
+    function burnShares(address _vault, uint256 _amountOfShares) public whenResumed {
         if (_vault == address(0)) revert VaultZeroAddress();
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
         if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();

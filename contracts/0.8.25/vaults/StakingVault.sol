@@ -195,9 +195,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
         if ($.vaultHubAuthorized) revert VaultHubAuthorized();
         if (ossified()) revert VaultOssified();
-
-        address lidoPredepositGuarantee = VaultHub(VAULT_HUB).LIDO_LOCATOR().predepositGuarantee();
-        if ($.depositor != lidoPredepositGuarantee) revert InvalidDepositor($.depositor);
+        if ($.depositor != address(VAULT_HUB)) revert InvalidDepositor($.depositor);
 
         $.vaultHubAuthorized = true;
 
@@ -367,12 +365,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsArePaused();
-
-        if (_getStorage().vaultHubAuthorized) {
-            if (msg.sender != address(VAULT_HUB)) revert NotAuthorized("depositToBeaconChain", msg.sender);
-        } else {
-            if (msg.sender != $.depositor) revert NotAuthorized("depositToBeaconChain", msg.sender);
-        }
+        if (msg.sender != $.depositor) revert NotAuthorized("depositToBeaconChain", msg.sender);
 
         uint256 numberOfDeposits = _deposits.length;
 
