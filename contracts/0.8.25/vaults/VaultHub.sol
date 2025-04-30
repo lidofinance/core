@@ -245,7 +245,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @return amount to rebalance  or UINT256_MAX if it's impossible to make the vault healthy using rebalance
     function rebalanceShortfall(address _vault) public view returns (uint256) {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (_vault == address(0)) revert VaultZeroAddress();
         bool isHealthy = isVaultHealthyAsOfLatestReport(_vault);
 
         // Health vault do not need to rebalance
@@ -367,7 +367,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _shareLimit new share limit
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     function updateShareLimit(address _vault, uint256 _shareLimit) external onlyRole(VAULT_MASTER_ROLE) {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (_vault == address(0)) revert VaultZeroAddress();
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultSocket storage socket = _connectedSocket(_vault);
@@ -391,9 +391,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _forcedRebalanceThresholdBP,
         uint256 _treasuryFeeBP
     ) external {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (_vault == address(0)) revert VaultZeroAddress();
         _checkShareLimitUpperBound(_vault, _shareLimit);
-        if (msg.sender != LIDO_LOCATOR.operatorGrid()) revert NotAuthorized("updateConnection", msg.sender);
+        if (msg.sender != LIDO_LOCATOR.operatorGrid()) revert NotAuthorized();
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
@@ -417,7 +417,7 @@ contract VaultHub is PausableUntilWithRoles {
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataReportCid
     ) external {
-        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("updateReportData", msg.sender);
+        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized();
 
         VaultHubStorage storage $ = _getVaultHubStorage();
         $.vaultsDataTimestamp = _vaultsDataTimestamp;
@@ -431,7 +431,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     /// @dev vault's `liabilityShares` should be zero
     function disconnect(address _vault) external onlyRole(VAULT_MASTER_ROLE) {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (_vault == address(0)) revert VaultZeroAddress();
 
         _disconnect(_vault);
     }
@@ -441,8 +441,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev msg.sender should be vault's owner
     /// @dev vault's `liabilityShares` should be zero
     function voluntaryDisconnect(address _vault) external whenResumed {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("voluntaryDisconnect", msg.sender);
+        if (_vault == address(0)) revert VaultZeroAddress();
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
 
         _disconnect(_vault);
     }
@@ -457,10 +457,10 @@ contract VaultHub is PausableUntilWithRoles {
         address _recipient,
         uint256 _amountOfShares
     ) external whenResumed {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (_vault == address(0)) revert VaultZeroAddress();
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("mintShares", msg.sender);
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
@@ -500,9 +500,9 @@ contract VaultHub is PausableUntilWithRoles {
         address _vault,
         uint256 _amountOfShares
     ) public whenResumed {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (_vault == address(0)) revert VaultZeroAddress();
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("burnShares", msg.sender);
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
@@ -533,7 +533,7 @@ contract VaultHub is PausableUntilWithRoles {
     ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
     function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _refundRecipient) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
-        if (_vault == address(0)) revert ZeroArgument("_vault");
+        if (_vault == address(0)) revert VaultZeroAddress();
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_refundRecipient == address(0)) revert ZeroArgument("_refundRecipient");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
@@ -620,7 +620,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function mintVaultsTreasuryFeeShares(uint256 _amountOfShares) external {
-        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized("mintVaultsTreasuryFeeShares", msg.sender);
+        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized();
         LIDO.mintExternalShares(LIDO_LOCATOR.treasury(), _amountOfShares);
     }
 
@@ -677,7 +677,8 @@ contract VaultHub is PausableUntilWithRoles {
     error ShareLimitExceeded(address vault, uint256 shareLimit);
     error AlreadyConnected(address vault, uint256 index);
     error NotConnectedToHub(address vault);
-    error NotAuthorized(string operation, address addr);
+    error NotAuthorized();
+    error VaultZeroAddress();
     error ZeroArgument(string argument);
     error ShareLimitTooHigh(address vault, uint256 shareLimit, uint256 maxShareLimit);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);

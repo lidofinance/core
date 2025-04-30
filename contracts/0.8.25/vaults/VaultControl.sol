@@ -32,7 +32,7 @@ contract VaultControl is VaultHub {
     }
 
     function fund(address _vault) external payable {
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("fund", msg.sender);
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
 
         _connectedSocket(_vault).inOutDelta += int128(int256(msg.value));
 
@@ -43,7 +43,7 @@ contract VaultControl is VaultHub {
     }
 
     function withdraw(address _vault, address _recipient, uint256 _ether) external {
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("withdraw", msg.sender);
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
 
         uint256 unlocked_ = unlocked(_vault);
         if (_ether > unlocked_) revert InsufficientUnlocked(unlocked_);
@@ -78,13 +78,13 @@ contract VaultControl is VaultHub {
      * @param _ether Amount of ether to rebalance
      */
     function rebalance(address _vault, uint256 _ether) external {
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized("rebalance", msg.sender);
+        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
 
         _rebalance(_vault, _ether);
     }
 
     function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external {
-        if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized("depositToBeaconChain", msg.sender);
+        if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
         if (totalValue(_vault) < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
 
         IStakingVault(_vault).depositToBeaconChain(_deposits);
@@ -100,7 +100,7 @@ contract VaultControl is VaultHub {
 
         IStakingVault vault_ = IStakingVault(_vault);
         if (msg.sender != vault_.owner() && msg.sender != vault_.nodeOperator())
-            revert NotAuthorized("triggerValidatorWithdrawal", msg.sender);
+            revert NotAuthorized();
 
         vault_.triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
