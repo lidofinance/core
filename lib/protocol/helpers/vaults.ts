@@ -354,11 +354,13 @@ export const getProofAndDepositData = async (
   withdrawalCredentials: string,
 ) => {
   // Step 3: Prove and deposit the validator
-  const slot = await predepositGuarantee.PIVOT_SLOT();
+  const pivot_slot = await predepositGuarantee.PIVOT_SLOT();
 
-  const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_CURR());
+  const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PREV());
   const { validatorIndex } = await mockCLtree.addValidator(validator.container);
-  const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(Number(slot) + 100);
+  const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(
+    Number(pivot_slot) + 100,
+  );
   const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
 
   const postdeposit = generatePostDeposit(validator.container);
@@ -368,7 +370,14 @@ export const getProofAndDepositData = async (
   postdeposit.depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, ether("31"));
 
   const witnesses = [
-    { proof, pubkey, validatorIndex, childBlockTimestamp, slot, proposerIndex: beaconBlockHeader.proposerIndex },
+    {
+      proof,
+      pubkey,
+      validatorIndex,
+      childBlockTimestamp,
+      slot: beaconBlockHeader.slot,
+      proposerIndex: beaconBlockHeader.proposerIndex,
+    },
   ];
   return { witnesses, postdeposit };
 };
