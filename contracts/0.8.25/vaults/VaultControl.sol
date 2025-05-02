@@ -28,7 +28,7 @@ contract VaultControl is VaultHub {
 
     function unlocked(address _vault) public view returns (uint256) {
         uint256 totalValue_ = totalValue(_vault);
-        uint256 locked_ = _connectedSocket(_vault).locked;
+        uint256 locked_ = _socket(_vault).locked;
 
         if (locked_ > totalValue_) return 0;
 
@@ -36,13 +36,13 @@ contract VaultControl is VaultHub {
     }
 
     function latestReport(address _vault) public view returns (VaultHub.Report memory) {
-        return _connectedSocket(_vault).report;
+        return _socket(_vault).report;
     }
 
     function fund(address _vault) external payable {
         if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
 
-        _connectedSocket(_vault).inOutDelta += int128(int256(msg.value));
+        _socket(_vault).inOutDelta += int128(int256(msg.value));
 
         (bool success, ) = _vault.call{value: msg.value}("");
         if (!success) revert TransferFailed(_vault, msg.value);
@@ -61,9 +61,9 @@ contract VaultControl is VaultHub {
         uint256 totalValueAfterWithdraw = totalValue(_vault);
 
         if (isReportFresh(_vault)) {
-            if (totalValueAfterWithdraw < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
+            if (totalValueAfterWithdraw < _socket(_vault).locked) revert TotalValueBelowLockedAmount();
         } else {
-            if (_vault.balance < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
+            if (_vault.balance < _socket(_vault).locked) revert TotalValueBelowLockedAmount();
         }
     }
 
@@ -92,7 +92,7 @@ contract VaultControl is VaultHub {
     function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
 
-        VaultSocket storage socket = _connectedSocket(_vault);
+        VaultSocket storage socket = _socket(_vault);
         if (socket.depositsPaused) revert BeaconChainDepositsArePaused();
         if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
@@ -128,7 +128,7 @@ contract VaultControl is VaultHub {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        VaultSocket storage socket = _connectedSocket(_vault);
+        VaultSocket storage socket = _socket(_vault);
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
 
         if (msg.sender != socket.manager && msg.sender != socket.operator) revert NotAuthorized();
@@ -143,7 +143,7 @@ contract VaultControl is VaultHub {
         uint256 totalValue_ = totalValue(_vault);
         if (_ether > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, _ether);
 
-        VaultSocket storage socket = _connectedSocket(_vault);
+        VaultSocket storage socket = _socket(_vault);
 
         uint256 sharesToBurn = LIDO.getSharesByPooledEth(_ether);
         uint256 liabilityShares = socket.liabilityShares;
@@ -157,7 +157,7 @@ contract VaultControl is VaultHub {
     }
 
     function _withdrawFromVault(address _vault, address _recipient, uint256 _amount) internal {
-        _connectedSocket(_vault).inOutDelta -= int128(int256(_amount));
+        _socket(_vault).inOutDelta -= int128(int256(_amount));
         IStakingVault(_vault).withdraw(_recipient, _amount);
         emit VaultWithdrawn(_vault, msg.sender, _recipient, _amount);
     }
