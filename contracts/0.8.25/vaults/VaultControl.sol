@@ -10,13 +10,21 @@ import {ILido} from "../interfaces/ILido.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
+import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 
 contract VaultControl is VaultHub {
+    IDepositContract public immutable DEPOSIT_CONTRACT;
+
     constructor(
         ILidoLocator _locator,
         ILido _lido,
-        uint256 _relativeShareLimitBP
-    ) VaultHub(_locator, _lido, _relativeShareLimitBP) {}
+        uint256 _relativeShareLimitBP,
+        IDepositContract _depositContract
+    ) VaultHub(_locator, _lido, _relativeShareLimitBP) {
+        if (address(_depositContract) == address(0)) revert ZeroArgument("_depositContract");
+
+        DEPOSIT_CONTRACT = _depositContract;
+    }
 
     function unlocked(address _vault) public view returns (uint256) {
         uint256 totalValue_ = totalValue(_vault);
@@ -57,8 +65,6 @@ contract VaultControl is VaultHub {
         } else {
             if (_vault.balance < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
         }
-
-        emit VaultWithdrawn(_vault, msg.sender, _recipient, _ether);
     }
 
     /// @notice permissionless rebalance for unhealthy vaults
@@ -84,10 +90,36 @@ contract VaultControl is VaultHub {
     }
 
     function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external {
-        if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
-        if (totalValue(_vault) < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
+        if (_deposits.length == 0) revert ZeroArgument("_deposits");
 
-        IStakingVault(_vault).depositToBeaconChain(_deposits);
+        VaultSocket storage socket = _connectedSocket(_vault);
+        if (socket.depositsPaused) revert BeaconChainDepositsArePaused();
+        if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
+        if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
+
+        uint256 numberOfDeposits = _deposits.length;
+
+        uint256 totalAmount;
+        for (uint256 i = 0; i < numberOfDeposits; i++) {
+            totalAmount += _deposits[i].amount;
+        }
+        if (totalAmount > _vault.balance) revert InsufficientBalance(_vault.balance);
+        _withdrawFromVault(_vault, address(this), totalAmount);
+
+        bytes memory withdrawalCredentials_ = bytes.concat(IStakingVault(_vault).withdrawalCredentials());
+
+        for (uint256 i = 0; i < numberOfDeposits; i++) {
+            StakingVaultDeposit calldata deposit = _deposits[i];
+
+            DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
+                deposit.pubkey,
+                withdrawalCredentials_,
+                deposit.signature,
+                deposit.depositDataRoot
+            );
+        }
+
+        emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
     }
 
     function triggerValidatorWithdrawal(
@@ -96,13 +128,12 @@ contract VaultControl is VaultHub {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        if (totalValue(_vault) < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
+        VaultSocket storage socket = _connectedSocket(_vault);
+        if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
 
-        IStakingVault vault_ = IStakingVault(_vault);
-        if (msg.sender != vault_.owner() && msg.sender != vault_.nodeOperator())
-            revert NotAuthorized();
+        if (msg.sender != socket.manager && msg.sender != socket.operator) revert NotAuthorized();
 
-        vault_.triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
+        IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
     function _rebalance(address _vault, uint256 _ether) internal {
@@ -155,6 +186,11 @@ contract VaultControl is VaultHub {
     event LockedIncreased(uint256 locked);
 
     /**
+     * @notice Emitted when deposits are paused
+     */
+    event DepositedToBeaconChain(address indexed sender, uint256 numberOfDeposits, uint256 totalAmount);
+
+    /**
      * @notice Thrown when attempting to decrease the locked amount outside of a report
      */
     error NewLockedNotGreaterThanCurrent();
@@ -194,4 +230,6 @@ contract VaultControl is VaultHub {
      * @param rebalanceAmount Amount attempting to rebalance
      */
     error RebalanceAmountExceedsTotalValue(uint256 totalValue, uint256 rebalanceAmount);
+
+    error BeaconChainDepositsArePaused();
 }

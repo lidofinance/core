@@ -55,9 +55,17 @@ contract VaultHub is PausableUntilWithRoles {
         // ### 1st slot
         /// @notice vault address
         address vault;
+        /// @notice vault manager address
+        address manager;
+        /// @notice vault operator address
+        address operator;
         Report report;
         uint128 locked;
         int128 inOutDelta;
+        /// @notice true if connection not confirmed by the report
+        bool pendingConnect;
+        /// @notice true if deposits are paused
+        bool depositsPaused;
         /// @notice total number of stETH shares that the vault owes to Lido
         uint96 liabilityShares;
         // ### 2nd slot
@@ -129,6 +137,10 @@ contract VaultHub is PausableUntilWithRoles {
         _disableInitializers();
     }
 
+    receive() external payable {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+    }
+
     function initialize(address _admin) external initializer {
         if (_admin == address(0)) revert ZeroArgument("_admin");
 
@@ -140,7 +152,25 @@ contract VaultHub is PausableUntilWithRoles {
         __AccessControlEnumerable_init();
 
         // the stone in the elevator
-        _getVaultHubStorage().sockets.push(VaultSocket(address(0), Report(0, 0, 0), 0, 0, 0, 0, 0, 0, 0, false, 0));
+        _getVaultHubStorage().sockets.push(
+            VaultSocket(
+                address(0),
+                address(0),
+                address(0),
+                Report(0, 0, 0),
+                0,
+                0,
+                false,
+                false,
+                0,
+                0,
+                0,
+                0,
+                0,
+                false,
+                0
+            )
+        );
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -192,7 +222,6 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function isReportFresh(address _vault) public view returns (bool) {
-        if (IStakingVault(_vault).vaultHubAuthorized()) return true;
         VaultSocket storage socket = _connectedSocket(_vault);
         return block.timestamp - socket.report.timestamp < REPORT_FRESHNESS_DELTA;
     }
@@ -281,16 +310,35 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
     /// @param _vault vault address
-    function connectVault(address _vault) external {
+    function connectVault(address _vault, address _manager, address _operator) external {
         (
-            ,
-            ,
-            /* address nodeOperator */ /* uint256 tierId */ uint256 shareLimit,
+            address nodeOperator,
+            , // tierId
+            uint256 shareLimit,
             uint256 reserveRatioBP,
             uint256 forcedRebalanceThresholdBP,
             uint256 treasuryFeeBP
         ) = OperatorGrid(LIDO_LOCATOR.operatorGrid()).vaultInfo(_vault);
-        _connectVault(_vault, shareLimit, reserveRatioBP, forcedRebalanceThresholdBP, treasuryFeeBP);
+        if (_operator != nodeOperator) revert NotAuthorized();
+
+        _connectVault(_vault, _manager, _operator, shareLimit, reserveRatioBP, forcedRebalanceThresholdBP, treasuryFeeBP);
+    }
+
+    function cancelPendingConnect(address _vault) external {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        VaultSocket storage socket = _connectedSocket(_vault);
+
+        if (msg.sender != socket.manager) revert NotAuthorized();
+
+        if (socket.pendingConnect) {
+            address vaultAddress = socket.vault;
+            uint256 vaultIndex = $.vaultIndex[vaultAddress];
+            VaultSocket memory lastSocket = $.sockets[$.sockets.length - 1];
+            $.sockets[vaultIndex] = lastSocket;
+            $.vaultIndex[lastSocket.vault] = vaultIndex;
+            $.sockets.pop();
+            delete $.vaultIndex[vaultAddress];
+        }
     }
 
     /// @notice returns the latest report data
@@ -310,6 +358,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _treasuryFeeBP treasury fee in basis points
     function _connectVault(
         address _vault,
+        address _manager,
+        address _operator,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
@@ -324,8 +374,8 @@ contract VaultHub is PausableUntilWithRoles {
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
 
         IStakingVault vault_ = IStakingVault(_vault);
-        if (vault_.ossified()) revert VaultOssified(_vault);
-        if (!vault_.vaultHubAuthorized()) revert VaultDeauthorized(_vault);
+        if (vault_.isOssified()) revert VaultOssified(_vault);
+        if (vault_.owner() != address(this)) revert VaultHubMustBeOwner(_vault);
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
@@ -334,17 +384,23 @@ contract VaultHub is PausableUntilWithRoles {
         bytes32 vaultProxyCodehash = address(_vault).codehash;
         if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault, vaultProxyCodehash);
 
-        if (vault_.depositor() != address(this)) revert VaultDepositorNotAllowed(vault_.depositor());
-
         if (_vault.balance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
 
-        Report memory report = Report(uint128(_vault.balance), int128(int256(_vault.balance)), uint64(block.timestamp));
+        Report memory report = Report(
+            uint128(_vault.balance), // totalValue
+            int128(int256(_vault.balance)), // inOutDelta
+            uint64(block.timestamp) // timestamp
+        );
 
         VaultSocket memory vsocket = VaultSocket(
             _vault,
+            _manager,
+            _operator,
             report,
-            uint128(CONNECT_DEPOSIT),
-            int128(int256(_vault.balance)),
+            uint128(CONNECT_DEPOSIT), // locked
+            int128(int256(_vault.balance)), // inOutDelta
+            true, // pendingConnect
+            false, // depositsPaused
             0, // liabilityShares
             uint96(_shareLimit),
             uint16(_reserveRatioBP),
@@ -693,6 +749,6 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
     error VaultReportStaled(address vault);
-    error VaultDeauthorized(address vault);
+    error VaultHubMustBeOwner(address vault);
     error VaultProxyZeroCodehash();
 }
