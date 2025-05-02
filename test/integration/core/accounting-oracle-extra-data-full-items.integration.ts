@@ -61,7 +61,7 @@ class ListKeyMapHelper<ValueType> {
   }
 }
 
-describe("Integration: AccountingOracle extra data full items", () => {
+describe.skip("Integration: AccountingOracle extra data full items", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
 

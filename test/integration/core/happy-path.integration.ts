@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { batch, ether, impersonate, log, updateBalance } from "lib";
+import { advanceChainTime, batch, ether, impersonate, log, updateBalance } from "lib";
 import {
   finalizeWithdrawalQueue,
   getProtocolContext,
@@ -292,6 +292,7 @@ describe("Scenario: Protocol Happy Path", () => {
       clAppearedValidators: depositCount,
     };
 
+    await advanceChainTime(12n * 60n * 60n);
     const { reportTx, extraDataTx } = (await report(ctx, reportData)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;

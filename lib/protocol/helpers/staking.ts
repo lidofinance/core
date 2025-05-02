@@ -112,8 +112,16 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
     throw new Error(`Not enough max deposits count for staking module ${moduleId}`);
   }
 
+  const numDepositedBefore = (await lido.getBeaconStat()).depositedValidators;
+
   // Deposit validators
   await lido.connect(dsmSigner).deposit(depositsCount, moduleId, ZERO_HASH);
+
+  const numDepositedAfter = (await lido.getBeaconStat()).depositedValidators;
+
+  if (numDepositedAfter !== numDepositedBefore + depositsCount) {
+    throw new Error(`Deposited ${numDepositedAfter} validators, expected ${numDepositedBefore + depositsCount}`);
+  }
 
   // Restore staking module statuses
   for (const [mId, originalStatus] of Object.entries(otherModulesStatusesBefore)) {

@@ -5,7 +5,7 @@ import { beforeEach } from "mocha";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import { OssifiableProxy,UpgradeTemplateV3 } from "typechain-types";
+import { OssifiableProxy, UpgradeTemplateV3 } from "typechain-types";
 
 import { deployUpgrade, loadContract, readNetworkState, Sk } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -14,15 +14,26 @@ import { Snapshot } from "test/suite";
 
 import { getMode } from "../../../hardhat.helpers";
 
+function needToSkipTemplateTests() {
+  return process.env.UPGRADE || getMode() === "scratch";
+}
+
 describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
+  let originalSnapshot: string;
   let template: UpgradeTemplateV3;
   let deployer: HardhatEthersSigner;
   let votingSigner: HardhatEthersSigner;
   let agentSigner: HardhatEthersSigner;
 
   before(async () => {
+    originalSnapshot = await Snapshot.take();
+
+    if (needToSkipTemplateTests()) {
+      return;
+    }
+
     [deployer] = await hre.ethers.getSigners();
 
     await deployUpgrade(hre.network.name, "upgrade/steps-deploy.json");
@@ -36,21 +47,19 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     agentSigner = await ctx.getSigner("agent");
   });
 
+  after(async () => await Snapshot.restore(originalSnapshot));
+
   beforeEach(async () => {
     snapshot = await Snapshot.take();
   });
 
   afterEach(async () => await Snapshot.restore(snapshot));
 
-  function skipIfNotUpgradeTemplateTestRun(_this: Mocha.Context) {
-    if (process.env.UPGRADE || getMode() === "scratch") {
-      _this.skip();
-    }
-  }
-
   function it_(title: string, fn: () => Promise<void>) {
     it(title, async function () {
-      skipIfNotUpgradeTemplateTestRun(this);
+      if (needToSkipTemplateTests()) {
+        this.skip();
+      }
       await fn();
     });
   }
