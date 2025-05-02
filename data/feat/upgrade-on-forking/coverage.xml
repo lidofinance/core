@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4208"  lines-covered="3928"  line-rate="0.9335"  branches-valid="2072"  branches-covered="1894"  branch-rate="0.9140999999999999"  timestamp="1745441325516" complexity="0" version="0.1">
+<coverage lines-valid="4209"  lines-covered="3929"  line-rate="0.9335"  branches-valid="2072"  branches-covered="1894"  branch-rate="0.9140999999999999"  timestamp="1746211489864" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2315,7 +2315,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25.vaults"  line-rate="0.9455"  branch-rate="0.9005" >
+	<package name="0.8.25.vaults"  line-rate="0.9456"  branch-rate="0.9005" >
 	<classes>
 		<class name="OperatorGrid.sol"  filename="contracts/0.8.25/vaults/OperatorGrid.sol"  line-rate="1"  branch-rate="0.9875" >
 		<methods>
@@ -2853,7 +2853,7 @@
 			<line number="103"  hits="14"  branch="false" />
 		</lines>
 		</class>
-		<class name="VaultHub.sol"  filename="contracts/0.8.25/vaults/VaultHub.sol"  line-rate="0.8867"  branch-rate="0.7970999999999999" >
+		<class name="VaultHub.sol"  filename="contracts/0.8.25/vaults/VaultHub.sol"  line-rate="0.8873000000000001"  branch-rate="0.7970999999999999" >
 		<methods>
 			<method name="constructor"  hits="28"  signature="()V" >
 				<lines><line number="105"  hits="28" /></lines>
@@ -2943,19 +2943,19 @@
 				<lines><line number="587"  hits="9" /></lines>
 			</method>
 			<method name="mintVaultsTreasuryFeeShares"  hits="0"  signature="()V" >
-				<lines><line number="633"  hits="0" /></lines>
+				<lines><line number="635"  hits="0" /></lines>
 			</method>
 			<method name="_vaultAuth"  hits="73"  signature="()V" >
-				<lines><line number="638"  hits="73" /></lines>
+				<lines><line number="640"  hits="73" /></lines>
 			</method>
 			<method name="_connectedSocket"  hits="190"  signature="()V" >
-				<lines><line number="642"  hits="190" /></lines>
+				<lines><line number="644"  hits="190" /></lines>
 			</method>
 			<method name="_getVaultHubStorage"  hits="404"  signature="()V" >
-				<lines><line number="649"  hits="404" /></lines>
+				<lines><line number="651"  hits="404" /></lines>
 			</method>
 			<method name="_checkShareLimitUpperBound"  hits="102"  signature="()V" >
-				<lines><line number="656"  hits="102" /></lines>
+				<lines><line number="658"  hits="102" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -3151,17 +3151,18 @@
 			<line number="627"  hits="3"  branch="false" />
 			<line number="628"  hits="3"  branch="false" />
 			<line number="629"  hits="3"  branch="false" />
-			<line number="634"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="635"  hits="0"  branch="false" />
-			<line number="639"  hits="73"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="643"  hits="190"  branch="false" />
-			<line number="644"  hits="190"  branch="false" />
-			<line number="645"  hits="190"  branch="true"  condition-coverage="100% (4/4)" />
-			<line number="646"  hits="183"  branch="false" />
-			<line number="650"  hits="404"  branch="false" />
-			<line number="657"  hits="102"  branch="false" />
-			<line number="658"  hits="102"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="659"  hits="1"  branch="false" />
+			<line number="631"  hits="3"  branch="false" />
+			<line number="636"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="637"  hits="0"  branch="false" />
+			<line number="641"  hits="73"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="645"  hits="190"  branch="false" />
+			<line number="646"  hits="190"  branch="false" />
+			<line number="647"  hits="190"  branch="true"  condition-coverage="100% (4/4)" />
+			<line number="648"  hits="183"  branch="false" />
+			<line number="652"  hits="404"  branch="false" />
+			<line number="659"  hits="102"  branch="false" />
+			<line number="660"  hits="102"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="661"  hits="1"  branch="false" />
 		</lines>
 		</class>
 	</classes>
