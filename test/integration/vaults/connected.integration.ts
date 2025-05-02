@@ -19,6 +19,7 @@ import { ether } from "lib/units";
 import { Snapshot } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
+const TEST_STETH_AMOUNT_WEI = 100n;
 
 describe("Integration: Actions with vault is connected to VaultHub", () => {
   let ctx: ProtocolContext;
@@ -65,23 +66,25 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
 
     // add some stETH to the vault to have totalValue
     await dashboard.connect(roles.funder).fund({ value: ether("1") });
+    const sharesAmount = await ctx.contracts.lido.getSharesByPooledEth(TEST_STETH_AMOUNT_WEI);
 
-    await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
+    await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
       .to.emit(vaultHub, "MintedSharesOnVault")
-      .withArgs(stakingVault, 1n);
+      .withArgs(stakingVault, sharesAmount);
   });
 
   it("Allows burning stETH", async () => {
     const { vaultHub, lido } = ctx.contracts;
+    const sharesAmount = await ctx.contracts.lido.getSharesByPooledEth(TEST_STETH_AMOUNT_WEI);
 
     // add some stETH to the vault to have totalValue, mint shares and approve stETH
     await dashboard.connect(roles.funder).fund({ value: ether("1") });
-    await dashboard.connect(roles.minter).mintStETH(roles.burner, 1n);
-    await lido.connect(roles.burner).approve(dashboard, 1n);
+    await dashboard.connect(roles.minter).mintStETH(roles.burner, TEST_STETH_AMOUNT_WEI);
+    await lido.connect(roles.burner).approve(dashboard, TEST_STETH_AMOUNT_WEI);
 
-    await expect(dashboard.connect(roles.burner).burnStETH(1n))
+    await expect(dashboard.connect(roles.burner).burnStETH(TEST_STETH_AMOUNT_WEI))
       .to.emit(vaultHub, "BurnedSharesOnVault")
-      .withArgs(stakingVault, 1n);
+      .withArgs(stakingVault, sharesAmount);
   });
 
   it("Allows trigger validator withdrawal", async () => {

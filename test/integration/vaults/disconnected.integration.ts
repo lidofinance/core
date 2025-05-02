@@ -171,7 +171,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       ).to.be.revertedWithCustomError(stakingVault, "NewLockedExceedsTotalValue");
     });
 
-    it("Allows to lock ammount required to connect to hub", async () => {
+    it("Allows to lock amount required to connect to hub", async () => {
       const amount = ether("1");
       await expect(dashboard.connect(roles.funder).fund({ value: amount }))
         .to.emit(stakingVault, "Funded")
@@ -274,7 +274,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
       await dashboard.connect(owner).grantRole(await dashboard.LOCK_ROLE(), roles.minter.address);
 
-      await expect(dashboard.connect(roles.minter).mintStETH(roles.locker, 1n)).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(roles.minter).mintStETH(roles.locker, 100n)).to.be.revertedWithCustomError(
         ctx.contracts.vaultHub,
         "NotConnectedToHub",
       );
@@ -283,11 +283,15 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     it("Reverts on burning stETH", async () => {
       const { lido, vaultHub, locator } = ctx.contracts;
 
-      // suppose user somehow got 1 share and tries to burn it via the dashboard contract on disconnected vault
+      // suppose user somehow got some shares and tries to burn it via the dashboard contract on disconnected vault
       const accountingSigner = await impersonate(await locator.accounting(), ether("1"));
-      await lido.connect(accountingSigner).mintShares(roles.burner, 1n);
+      const sharesToMint = 100n;
+      await lido.connect(accountingSigner).mintShares(roles.burner, sharesToMint);
+      const mintedStethAmount = await lido.getPooledEthByShares(sharesToMint);
 
-      await expect(dashboard.connect(roles.burner).burnStETH(1n)).to.be.revertedWithCustomError(
+      await lido.connect(roles.burner).approve(dashboard, mintedStethAmount);
+
+      await expect(dashboard.connect(roles.burner).burnStETH(mintedStethAmount)).to.be.revertedWithCustomError(
         vaultHub,
         "NotConnectedToHub",
       );
