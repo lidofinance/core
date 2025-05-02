@@ -497,7 +497,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev vault's `liabilityShares` should be zero
     function voluntaryDisconnect(address _vault) external whenResumed {
         if (_vault == address(0)) revert VaultZeroAddress();
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
         _disconnect(_vault);
     }
@@ -511,7 +511,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_vault == address(0)) revert VaultZeroAddress();
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
         VaultSocket storage socket = _socket(_vault);
 
@@ -550,7 +550,7 @@ contract VaultHub is PausableUntilWithRoles {
     function burnShares(address _vault, uint256 _amountOfShares) public whenResumed {
         if (_vault == address(0)) revert VaultZeroAddress();
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
         VaultSocket storage socket = _socket(_vault);
 
@@ -685,8 +685,8 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    function _isCallerVaultOwner(address _vault) internal view returns (bool) {
-        return msg.sender == OwnableUpgradeable(_vault).owner();
+    function _isManager(address _account, address _vault) internal view returns (bool) {
+        return _account == _socket(_vault).manager;
     }
 
     /// @dev check if the share limit is within the upper bound set by RELATIVE_SHARE_LIMIT_BP

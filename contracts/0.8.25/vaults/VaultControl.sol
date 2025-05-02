@@ -40,7 +40,7 @@ contract VaultControl is VaultHub {
     }
 
     function fund(address _vault) external payable {
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
         _socket(_vault).inOutDelta += int128(int256(msg.value));
 
@@ -51,7 +51,7 @@ contract VaultControl is VaultHub {
     }
 
     function withdraw(address _vault, address _recipient, uint256 _ether) external {
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
         uint256 unlocked_ = unlocked(_vault);
         if (_ether > unlocked_) revert InsufficientUnlocked(unlocked_);
@@ -84,7 +84,7 @@ contract VaultControl is VaultHub {
      * @param _ether Amount of ether to rebalance
      */
     function rebalance(address _vault, uint256 _ether) external {
-        if (!_isCallerVaultOwner(_vault)) revert NotAuthorized();
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
         _rebalance(_vault, _ether);
     }
