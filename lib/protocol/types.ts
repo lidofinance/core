@@ -2,6 +2,10 @@ import { BaseContract as EthersBaseContract, ContractTransactionReceipt, Interfa
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
+export type LogDescriptionExtended = LogDescription & {
+  address?: string;
+};
+
 import {
   Accounting,
   AccountingOracle,
@@ -177,5 +181,5 @@ export type ProtocolContext = {
     receipt: ContractTransactionReceipt,
     eventName: string,
     extraInterfaces?: Interface[], // additional interfaces to parse
-  ) => LogDescription[];
+  ) => LogDescriptionExtended[];
 };
