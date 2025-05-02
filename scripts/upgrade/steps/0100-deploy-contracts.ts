@@ -55,7 +55,12 @@ export async function main() {
     "PredepositGuarantee",
     proxyContractsOwner,
     deployer,
-    [pdgDeployParams.gIndex, pdgDeployParams.gIndexAfterChange, pdgDeployParams.changeSlot],
+    [
+      pdgDeployParams.genesisForkVersion,
+      pdgDeployParams.gIndex,
+      pdgDeployParams.gIndexAfterChange,
+      pdgDeployParams.changeSlot,
+    ],
   );
 
   // Deploy AccountingOracle new implementation

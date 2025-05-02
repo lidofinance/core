@@ -18,7 +18,16 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { BigIntMath, ether, findEvents, getCurrentBlockTimestamp, impersonate, MAX_UINT256, randomAddress } from "lib";
+import {
+  BigIntMath,
+  ether,
+  findEvents,
+  GENESIS_FORK_VERSION,
+  getCurrentBlockTimestamp,
+  impersonate,
+  MAX_UINT256,
+  randomAddress,
+} from "lib";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
@@ -92,6 +101,7 @@ describe("VaultHub.sol:hub", () => {
     [deployer, user, stranger, whale] = await ethers.getSigners();
 
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,
@@ -957,9 +967,9 @@ describe("VaultHub.sol:hub", () => {
       );
     });
 
-    it("disconnects the vault", async () => {
+    it("initiates the disconnect process", async () => {
       await expect(vaultHub.connect(user).disconnect(vaultAddress))
-        .to.emit(vaultHub, "VaultDisconnected")
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vaultAddress);
 
       const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);
@@ -1019,7 +1029,7 @@ describe("VaultHub.sol:hub", () => {
 
     it("disconnects the vault", async () => {
       await expect(vaultHub.connect(user).disconnect(vaultAddress))
-        .to.emit(vaultHub, "VaultDisconnected")
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vaultAddress);
 
       const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);

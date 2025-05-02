@@ -42,17 +42,24 @@ export const generateValidator = (customWC?: string): Validator => {
   };
 };
 
+type GeneratePredepositOptions = {
+  overrideAmount?: bigint;
+  depositDomain?: string;
+};
+
 export const generatePredeposit = async (
   validator: Validator,
-  overrideAmount?: bigint,
+  options = {} as GeneratePredepositOptions,
 ): Promise<{ deposit: StakingVaultDepositStruct; depositY: BLS12_381.DepositYStruct }> => {
-  const amount = overrideAmount ?? ether("1");
+  const { overrideAmount = ether("1"), depositDomain } = options;
+  const amount = overrideAmount;
   const pubkey = validator.blsPrivateKey.toPublicKey();
 
   const messageRoot = await computeDepositMessageRoot(
     pubkey.toHex(true),
     hexlify(validator.container.withdrawalCredentials),
     amount,
+    depositDomain,
   );
 
   const pubkeyY = pubkey.toBytes(false).slice(48);

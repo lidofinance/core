@@ -21,11 +21,21 @@ struct PrecomputedDepositMessage {
 // harness to test methods with calldata args
 contract BLSHarness {
     function verifyDepositMessage(PrecomputedDepositMessage calldata message) public view {
-        BLS12_381.verifyDepositMessage(message.deposit, message.depositYComponents, message.withdrawalCredentials);
+        BLS12_381.verifyDepositMessage(
+            message.deposit,
+            message.depositYComponents,
+            message.withdrawalCredentials,
+            0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9
+        );
     }
 
     function depositMessageSigningRoot(PrecomputedDepositMessage calldata message) public view returns (bytes32) {
-        return SSZ.depositMessageSigningRoot(message.deposit, message.withdrawalCredentials);
+        return
+            SSZ.depositMessageSigningRoot(
+                message.deposit,
+                message.withdrawalCredentials,
+                0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9
+            );
     }
 }
 

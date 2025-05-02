@@ -243,6 +243,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const withdrawalCredentials = await stakingVault.withdrawalCredentials();
     const predepositAmount = await ctx.contracts.predepositGuarantee.PREDEPOSIT_AMOUNT();
+    const depositDomain = await ctx.contracts.predepositGuarantee.DEPOSIT_DOMAIN();
 
     const validators: {
       container: SSZHelpers.ValidatorStruct;
@@ -257,7 +258,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const predeposits = await Promise.all(
       validators.map((validator) => {
-        return generatePredeposit(validator);
+        return generatePredeposit(validator, { depositDomain });
       }),
     );
 

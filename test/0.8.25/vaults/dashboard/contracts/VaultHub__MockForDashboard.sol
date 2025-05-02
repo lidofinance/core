@@ -25,7 +25,7 @@ contract VaultHub__MockForDashboard {
     }
 
     event VaultConnected(address vault);
-    event Mock__VaultDisconnected(address vault);
+    event Mock__VaultDisconnectInitiated(address vault);
     event Mock__Rebalanced(uint256 amount);
 
     mapping(address => VaultHub.VaultSocket) public vaultSockets;
@@ -43,7 +43,7 @@ contract VaultHub__MockForDashboard {
     }
 
     function disconnect(address vault) external {
-        emit Mock__VaultDisconnected(vault);
+        emit Mock__VaultDisconnectInitiated(vault);
     }
 
     function deleteVaultSocket(address vault) external {
@@ -71,7 +71,7 @@ contract VaultHub__MockForDashboard {
     }
 
     function voluntaryDisconnect(address _vault) external {
-        emit Mock__VaultDisconnected(_vault);
+        emit Mock__VaultDisconnectInitiated(_vault);
     }
 
     function rebalance() external payable {

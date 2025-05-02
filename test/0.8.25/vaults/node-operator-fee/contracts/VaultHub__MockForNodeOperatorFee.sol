@@ -18,7 +18,7 @@ contract VaultHub__MockForNodeOperatorFee {
         steth = _steth;
     }
 
-    event Mock__VaultDisconnected(address vault);
+    event Mock__VaultDisconnectInitiated(address vault);
     event Mock__Rebalanced(uint256 amount);
     event Mock__VaultConnected(address vault);
 
@@ -27,7 +27,7 @@ contract VaultHub__MockForNodeOperatorFee {
     }
 
     function disconnect(address vault) external {
-        emit Mock__VaultDisconnected(vault);
+        emit Mock__VaultDisconnectInitiated(vault);
     }
 
     function mintShares(address /* vault */, address recipient, uint256 amount) external {
@@ -39,7 +39,7 @@ contract VaultHub__MockForNodeOperatorFee {
     }
 
     function voluntaryDisconnect(address _vault) external {
-        emit Mock__VaultDisconnected(_vault);
+        emit Mock__VaultDisconnectInitiated(_vault);
     }
 
     function rebalance() external payable {

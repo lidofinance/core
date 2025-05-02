@@ -17,7 +17,7 @@ import {
   VaultHub__HarnessForReporting,
 } from "typechain-types";
 
-import { ether, findEvents, getCurrentBlockTimestamp, impersonate } from "lib";
+import { ether, findEvents, GENESIS_FORK_VERSION, getCurrentBlockTimestamp, impersonate } from "lib";
 import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
@@ -96,6 +96,7 @@ describe("VaultHub.sol:reporting", () => {
     [deployer, user, whale] = await ethers.getSigners();
 
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,

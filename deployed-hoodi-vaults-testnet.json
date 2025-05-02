@@ -591,8 +591,9 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol",
-      "address": "0xb92681d60E4314F0f9DEdFcCC3C0A4E156080357",
+      "address": "0x306F410c6b238348fa098761a860CAf571d84F41",
       "constructorArgs": [
+        "0x10000910",
         "0x0000000000000000000000000000000000000000000000000096000000000028",
         "0x0000000000000000000000000000000000000000000000000096000000000028",
         0

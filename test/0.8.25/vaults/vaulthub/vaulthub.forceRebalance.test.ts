@@ -15,7 +15,7 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { impersonate } from "lib";
+import { GENESIS_FORK_VERSION, impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
@@ -56,6 +56,7 @@ describe("VaultHub.sol:forceRebalance", () => {
     const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("1000.0") });
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,

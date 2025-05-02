@@ -23,6 +23,7 @@
   },
   "predepositGuarantee": {
     "deployParameters": {
+      "genesisForkVersion": "0x00000000",
       "gIndex": "0x0000000000000000000000000000000000000000000000000096000000000028",
       "gIndexAfterChange": "0x0000000000000000000000000000000000000000000000000096000000000028",
       "changeSlot": 0

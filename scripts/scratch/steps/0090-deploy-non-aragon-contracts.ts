@@ -242,7 +242,12 @@ export async function main() {
     "PredepositGuarantee",
     proxyContractsOwner,
     deployer,
-    [pdgDeployParams.gIndex, pdgDeployParams.gIndexAfterChange, pdgDeployParams.changeSlot],
+    [
+      state.chainSpec.genesisForkVersion,
+      pdgDeployParams.gIndex,
+      pdgDeployParams.gIndexAfterChange,
+      pdgDeployParams.changeSlot,
+    ],
   );
 
   // Update LidoLocator with valid implementation

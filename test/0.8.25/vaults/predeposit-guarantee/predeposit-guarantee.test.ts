@@ -27,6 +27,7 @@ import {
   generatePostDeposit,
   generatePredeposit,
   generateValidator,
+  GENESIS_FORK_VERSION,
   prepareLocalMerkleTree,
   randomBytes32,
   setBeaconBlockRoot,
@@ -103,7 +104,7 @@ describe("PredepositGuarantee.sol", () => {
     // PDG
     pdgImpl = await ethers.deployContract(
       "PredepositGuarantee",
-      [localMerkle.gIFirstValidator, localMerkle.gIFirstValidator, 0],
+      [GENESIS_FORK_VERSION, localMerkle.gIFirstValidator, localMerkle.gIFirstValidator, 0],
       { from: deployer },
     );
     proxy = await ethers.deployContract("OssifiableProxy", [pdgImpl, admin, new Uint8Array()], admin);
@@ -633,7 +634,7 @@ describe("PredepositGuarantee.sol", () => {
         await stakingVault.fund({ value: ether("32") });
         const wc = await stakingVault.withdrawalCredentials();
         const validator = generateValidator(wc);
-        const predeposit = await generatePredeposit(validator, ether("2"));
+        const predeposit = await generatePredeposit(validator, { overrideAmount: ether("2") });
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("3") });
 
         await expect(pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]))
