@@ -20,7 +20,7 @@ The repository contains bash scripts for deploying the DAO across various enviro
 
 - Local Node Deployment - `scripts/dao-local-deploy.sh` (Supports Ganache, Anvil, Hardhat Network, and other local
   Ethereum nodes)
-- Holešky Testnet Deployment – `scripts/dao-holesky-deploy.sh`
+- Holesky Testnet Deployment – `scripts/dao-holesky-deploy.sh`
 
 The protocol requires configuration of numerous parameters for a scratch deployment. The default configurations are
 stored in JSON files named `deployed-<deploy env>-defaults.json`, where `<deploy env>` represents the target
@@ -102,7 +102,7 @@ mnemonic.
 
 Follow these steps for local deployment:
 
-1. Run `yarn install` (get sure repo dependencies are installed)
+1. Run `yarn install` (ensure repo dependencies are installed)
 2. Run the node on port 8555 (for the commands, see subsections below)
 3. Run the deploy script `bash scripts/dao-local-deploy.sh` from root repo directory
 4. Check out the deploy artifacts in `deployed-local.json`
@@ -121,9 +121,9 @@ anvil -p 8555 --mnemonic "test test test test test test test test test test test
 yarn hardhat node
 ```
 
-### Holešky Testnet Deployment
+### Holesky Testnet Deployment
 
-To do Holešky deployment, the following parameters must be set up via env variables:
+To do Holesky deployment, the following parameters must be set up via env variables:
 
 - `DEPLOYER`. The deployer address. The deployer must own its private key. To ensure proper operation, it should have an
   adequate amount of ether. The total deployment gas cost is approximately 120,000,000 gas, and this cost can vary based
@@ -134,27 +134,27 @@ To do Holešky deployment, the following parameters must be set up via env varia
 - `GAS_MAX_FEE`. Gas max fee. By default set to `100`
 - `GATE_SEAL_FACTORY`. Address of the [GateSeal Factory](https://github.com/lidofinance/gate-seals) contract. Must be
   deployed in advance. Can be set to any `0x0000000000000000000000000000000000000000` to debug deployment
-- `WITHDRAWAL_QUEUE_BASE_URI`. BaseURI for WithdrawalQueueERC712. By default not set (left an empty string)
+- `WITHDRAWAL_QUEUE_BASE_URI`. BaseURI for WithdrawalQueueERC721. By default not set (left an empty string)
 - `DSM_PREDEFINED_ADDRESS`. Address to use instead of deploying `DepositSecurityModule` or `null` otherwise. If used,
   the deposits can be made by calling `Lido.deposit` from the address.
 
 Also you need to specify `DEPLOYER` private key in `accounts.json` under `/eth/holesky` like `"holesky": ["<key>"]`. See
 `accounts.sample.json` for an example.
 
-To start the deployment, run (the env variables must already defined) from the root repo directory:
+To start the deployment, run (the env variables must already be defined) from the root repo directory, e.g.:
 
 ```shell
 bash scripts/scratch/dao-holesky-deploy.sh
 ```
 
-Deploy artifacts information will be stored in `deployed-holesky.json`.
+Deployment artifacts information will be stored in `deployed-holesky.json`.
 
 ## Post-Deployment Tasks
 
 ### Publishing Sources to Etherscan
 
 ```shell
-NETWORK=<PUT-YOUR-VALUE> RPC_URL=<PUT-YOUR-VALUE> bash ./scripts/verify-contracts-code.sh
+yarn verify:deployed --network <network> (--file <path-to-deployed-json>)
 ```
 
 #### Issues with verification of part of the contracts deployed from factories
@@ -169,18 +169,18 @@ There are some contracts deployed from other contracts for which automatic hardh
 - `CallsScript` -- Aragon internal contract
 - `EVMScriptRegistry` -- Aragon internal contract
 
-The workaround used during Holešky deployment is to deploy auxiliary instances of these contracts standalone and verify
+The workaround used during Holesky deployment is to deploy auxiliary instances of these contracts standalone and verify
 them via hardhat Etherscan plugin. After this Etherscan will mark the target contracts as verified by "Similar Match
 Source Code".
 
-NB, that some contracts require additional auxiliary contract to be deployed. Namely, the constructor of
+Note that some contracts require additional auxiliary contracts to be deployed. Namely, the constructor of
 `AppProxyPinned` depends on proxy implementation ("base" in Aragon terms) contract with `initialize()` function and
 `Kernel` contract, which must return the implementation by call `kernel().getApp(KERNEL_APP_BASES_NAMESPACE, _appId)`.
 See `@aragon/os/contracts/apps/AppProxyBase.sol` for the details.
 
 ### Initialization to Fully Operational State
 
-In order to make the protocol fully operational, the additional steps are required:
+In order to make the protocol fully operational, the following additional steps are required:
 
 - add oracle committee members to `HashConsensus` contracts for `AccountingOracle` and `ValidatorsExitBusOracle`:
   `HashConsensus.addMember`;
@@ -194,7 +194,7 @@ In order to make the protocol fully operational, the additional steps are requir
 - set staking limits for the Node Operators: `NodeOperatorsRegistry.setNodeOperatorStakingLimit`.
 
 > [!NOTE]
-> That part of the actions require prior granting of the required roles, e.g. `STAKING_MODULE_MANAGE_ROLE` for
+> Some of these actions require prior granting of the required roles, e.g. `STAKING_MODULE_MANAGE_ROLE` for
 > `StakingRouter.addStakingModule`:
 
 ```js
@@ -215,7 +215,7 @@ await stakingRouter.renounceRole(STAKING_MODULE_MANAGE_ROLE, agent.address, { fr
 
 ## Protocol Parameters
 
-This section describes part of the parameters and their values used at the deployment. The values are specified in
+This section describes part of the parameters and their values used during deployment. The values are specified in
 `deployed-testnet-defaults.json`.
 
 ### OracleDaemonConfig
@@ -225,23 +225,23 @@ This section describes part of the parameters and their values used at the deplo
 # See https://research.lido.fi/t/withdrawals-for-lido-on-ethereum-bunker-mode-design-and-implementation/3890/4
 # and https://snapshot.org/#/lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330
 # NB: BASE_REWARD_FACTOR: https://ethereum.github.io/consensus-specs/specs/phase0/beacon-chain/#rewards-and-penalties
-NORMALIZED_CL_REWARD_PER_EPOCH=64
-NORMALIZED_CL_REWARD_MISTAKE_RATE_BP=1000  # 10%
-REBASE_CHECK_NEAREST_EPOCH_DISTANCE=1
-REBASE_CHECK_DISTANT_EPOCH_DISTANCE=23  # 10% of AO 225 epochs frame
-VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS=7200  # 1 day
+NORMALIZED_CL_REWARD_PER_EPOCH = 64
+NORMALIZED_CL_REWARD_MISTAKE_RATE_BP = 1000  # 10%
+REBASE_CHECK_NEAREST_EPOCH_DISTANCE = 1
+REBASE_CHECK_DISTANT_EPOCH_DISTANCE = 23  # 10% of AO 225 epochs frame
+VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS = 7200  # 1 day
 
 # See https://snapshot.org/#/lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330 for "Requirement not be considered Delinquent"
-VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS=28800  # 4 days
+VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS = 28800  # 4 days
 
 # See "B.3.I" of https://snapshot.org/#/lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330
-NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP=100  # 1% network penetration for a single NO
+NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP = 100  # 1% network penetration for a single NO
 
 # Time period of historical observations used for prediction of the rewards amount
 # see https://research.lido.fi/t/withdrawals-for-lido-on-ethereum-bunker-mode-design-and-implementation/3890/4
-PREDICTION_DURATION_IN_SLOTS=50400  # 7 days
+PREDICTION_DURATION_IN_SLOTS = 50400  # 7 days
 
 # Max period of delay for requests finalization in case of bunker due to negative rebase
 # twice min governance response time - 3 days voting duration
-FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT=1350  # 6 days
+FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT = 1350  # 6 days
 ```
