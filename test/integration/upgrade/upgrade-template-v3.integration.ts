@@ -12,13 +12,11 @@ import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
-import { getMode } from "../../../hardhat.helpers";
-
 function needToSkipTemplateTests() {
-  return process.env.UPGRADE || getMode() === "scratch";
+  return !process.env.TEMPLATE_TEST;
 }
 
-describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
+describe("Integration: Upgrade Template V3 tests", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;

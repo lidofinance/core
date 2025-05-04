@@ -176,7 +176,7 @@ contract UpgradeTemplateV3 {
     // Constants and immutables
     //
 
-    uint256 internal constant ACCOUNTING_ORACLE_CONSENSUS_VERSION = 3;
+    uint256 internal constant ACCOUNTING_ORACLE_CONSENSUS_VERSION = 4;
 
     uint256 internal constant EXPECTED_FINAL_LIDO_VERSION = 3;
     uint256 internal constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
