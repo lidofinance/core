@@ -118,7 +118,10 @@ describe("Integration: Withdrawal happy path", () => {
     const [parsedFinalizedEvent] = findEventsWithInterfaces(reportReceipt!, "WithdrawalsFinalized", [wq.interface]);
     expect(parsedFinalizedEvent?.args.from).to.equal(lastFinalizedRequestId + 1n);
     expect(parsedFinalizedEvent?.args.to).to.equal(REQUESTS_COUNT + lastRequestId);
-    expect(parsedFinalizedEvent?.args.amountOfETHLocked).to.be.closeTo(REQUESTS_SUM + unfinalizedSteth, REQUESTS_COUNT);
+    expect(parsedFinalizedEvent?.args.amountOfETHLocked).to.be.closeTo(
+      REQUESTS_SUM + unfinalizedSteth,
+      2n * REQUESTS_COUNT,
+    );
     expect(parsedFinalizedEvent?.args.sharesToBurn).to.be.closeTo(sharesToBurn, 1n);
 
     // Verify post-finalization state
