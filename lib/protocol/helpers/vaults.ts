@@ -254,6 +254,18 @@ export async function reportVaultDataWithProof(stakingVault: StakingVault) {
   );
 }
 
+export async function reportVaultWithoutProof(stakingVault: StakingVault) {
+  const vaultHubSigner = await impersonate(await stakingVault.vaultHub(), ether("100"));
+  await stakingVault
+    .connect(vaultHubSigner)
+    .report(
+      await getCurrentBlockTimestamp(),
+      await stakingVault.totalValue(),
+      await stakingVault.inOutDelta(),
+      await stakingVault.locked(),
+    );
+}
+
 interface CreateVaultResponse {
   tx: ContractTransactionResponse;
   proxy: PinnedBeaconProxy;

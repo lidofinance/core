@@ -406,11 +406,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
 
-        if (isReportFresh()) {
-            if (totalValue() < $.locked) revert TotalValueBelowLockedAmount();
-        } else {
-            if (address(this).balance < $.locked) revert TotalValueBelowLockedAmount();
-        }
+        if (!isReportFresh()) revert ReportStaled();
+
+        if (totalValue() < $.locked) revert TotalValueBelowLockedAmount();
 
         emit Withdrawn(msg.sender, _recipient, _ether);
     }
@@ -653,11 +651,6 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
         if (!$.vaultHubAuthorized) return true;
         return block.timestamp - $.report.timestamp < VAULT_HUB.REPORT_FRESHNESS_DELTA();
-    }
-
-    function _checkFreshnessAndGetTotalValue() internal view returns (uint256) {
-        if (!isReportFresh()) revert ReportStaled();
-        return totalValue();
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {

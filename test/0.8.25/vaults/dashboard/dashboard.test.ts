@@ -33,6 +33,7 @@ import {
   impersonate,
   randomValidatorPubkey,
 } from "lib";
+import { reportVaultWithoutProof } from "lib/protocol/helpers/vaults";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -646,6 +647,8 @@ describe("Dashboard.sol", () => {
       await dashboard.connect(vaultOwner).fund({ value: amount });
       const recipient = certainAddress("dashboard:test:recipient");
       const previousBalance = await ethers.provider.getBalance(recipient);
+      const stakingVaultContract = await ethers.getContractAt("StakingVault", await dashboard.stakingVault());
+      await reportVaultWithoutProof(stakingVaultContract);
 
       await expect(dashboard.connect(vaultOwner).withdraw(recipient, amount))
         .to.emit(vault, "Withdrawn")
