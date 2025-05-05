@@ -351,7 +351,7 @@
   },
   "ens": {
     "address": "0x5A8bF7fe99a69c2b34B540eA09d4a48c6ae78C21",
-    "constructorArgs": ["0x26EDb7f0f223A25EE390aCCccb577F3a31edDfC5"],
+    "constructorArgs": [],
     "contract": "@aragon/os/contracts/lib/ens/ENS.sol"
   },
   "ensFactory": {

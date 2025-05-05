@@ -83,7 +83,7 @@ export async function main() {
     ens = await loadContract<ENS>("ENS", ensAddress);
     state = updateObjectInState(Sk.ens, {
       address: ensAddress,
-      constructorArgs: [deployer],
+      constructorArgs: [],
       contract: ens.contractPath,
     });
   }
