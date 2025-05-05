@@ -29,11 +29,10 @@ import {
   ether,
   findEvents,
   getCurrentBlockTimestamp,
-  getNextBlockTimestamp,
   impersonate,
   randomValidatorPubkey,
 } from "lib";
-import { reportVaultWithoutProof } from "lib/protocol/helpers/vaults";
+import { reportVaultWithMockedVaultHub, reportVaultWithoutProof } from "lib/protocol/helpers/vaults";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -541,6 +540,7 @@ describe("Dashboard.sol", () => {
       const amount = ether("1");
       await dashboard.connect(vaultOwner).fund({ value: amount });
 
+      await reportVaultWithoutProof(vault);
       await dashboard.connect(vaultOwner).lock(amount);
 
       expect(await dashboard.withdrawableEther()).to.equal(0n);
@@ -1239,7 +1239,8 @@ describe("Dashboard.sol", () => {
       const validatorPublicKeys = randomValidatorPubkey();
       const amounts = [ether("0.1")];
 
-      await vault.connect(hubSigner).report(await getNextBlockTimestamp(), ether("1"), 0n, ether("1"));
+      const stakingVault = await ethers.getContractAt("StakingVault", await dashboard.stakingVault());
+      await reportVaultWithMockedVaultHub(stakingVault);
 
       await expect(
         dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, {

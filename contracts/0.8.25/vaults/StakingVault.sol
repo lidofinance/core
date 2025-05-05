@@ -650,7 +650,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     function isReportFresh() public view returns (bool) {
         ERC7201Storage storage $ = _getStorage();
         if (!$.vaultHubAuthorized) return true;
-        return block.timestamp - $.report.timestamp < VAULT_HUB.REPORT_FRESHNESS_DELTA();
+        (uint64 latestReportTimestamp,,) = VAULT_HUB.latestReportData();
+        return latestReportTimestamp == $.report.timestamp && block.timestamp - $.report.timestamp < VAULT_HUB.REPORT_FRESHNESS_DELTA();
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {

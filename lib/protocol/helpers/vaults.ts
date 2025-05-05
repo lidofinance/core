@@ -255,11 +255,31 @@ export async function reportVaultDataWithProof(stakingVault: StakingVault) {
 }
 
 export async function reportVaultWithoutProof(stakingVault: StakingVault) {
-  const vaultHubSigner = await impersonate(await stakingVault.vaultHub(), ether("100"));
+  const reportTimestamp = await getCurrentBlockTimestamp();
+  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
+  const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
+  const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+  const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+  await vaultHub.connect(accountingSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
   await stakingVault
     .connect(vaultHubSigner)
     .report(
-      await getCurrentBlockTimestamp(),
+      reportTimestamp,
+      await stakingVault.totalValue(),
+      await stakingVault.inOutDelta(),
+      await stakingVault.locked(),
+    );
+}
+
+export async function reportVaultWithMockedVaultHub(stakingVault: StakingVault) {
+  const reportTimestamp = await getCurrentBlockTimestamp();
+  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
+  const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+  await vaultHub.updateReportData(reportTimestamp, ethers.ZeroHash, "");
+  await stakingVault
+    .connect(vaultHubSigner)
+    .report(
+      reportTimestamp,
       await stakingVault.totalValue(),
       await stakingVault.inOutDelta(),
       await stakingVault.locked(),
