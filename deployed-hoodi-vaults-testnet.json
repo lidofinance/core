@@ -509,6 +509,7 @@
   "miniMeTokenFactory": {
     "address": "0x4d0E05677c1005C4C808cb5e824abE99b2b39497",
     "contract": "@aragon/minime/contracts/MiniMeToken.sol",
+    "contractName": "MiniMeTokenFactory",
     "constructorArgs": []
   },
   "networkId": 560048,
