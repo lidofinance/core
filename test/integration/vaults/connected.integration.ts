@@ -65,6 +65,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
 
     // add some stETH to the vault to have totalValue
     await dashboard.connect(roles.funder).fund({ value: ether("1") });
+    await reportVaultDataWithProof(stakingVault);
 
     await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
       .to.emit(vaultHub, "MintedSharesOnVault")
@@ -76,6 +77,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
 
     // add some stETH to the vault to have totalValue, mint shares and approve stETH
     await dashboard.connect(roles.funder).fund({ value: ether("1") });
+    await reportVaultDataWithProof(stakingVault);
     await dashboard.connect(roles.minter).mintStETH(roles.burner, 1n);
     await lido.connect(roles.burner).approve(dashboard, 1n);
 
@@ -85,6 +87,8 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
   });
 
   it("Allows trigger validator withdrawal", async () => {
+    await reportVaultDataWithProof(stakingVault);
+
     await expect(
       dashboard
         .connect(roles.validatorWithdrawalTriggerer)
