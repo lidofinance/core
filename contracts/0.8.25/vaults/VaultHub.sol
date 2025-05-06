@@ -11,6 +11,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "../interfaces/ILido.sol";
 import {OperatorGrid} from "./OperatorGrid.sol";
+import {ReportHelper} from "./ReportHelper.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
@@ -84,14 +85,6 @@ contract VaultHub is PausableUntilWithRoles {
         /// uint8 _unused_gap_;
     }
 
-    struct VaultInfo {
-        address vault;
-        uint256 balance;
-        int256 inOutDelta;
-        bytes32 withdrawalCredentials;
-        uint256 liabilityShares;
-    }
-
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant VAULT_HUB_STORAGE_LOCATION =
         0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
@@ -120,10 +113,13 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Lido Locator contract
     ILidoLocator public immutable LIDO_LOCATOR;
 
+    /// @notice ReportHelper contract
+    ReportHelper public immutable REPORT_HELPER;
+
     /// @param _locator Lido Locator contract
     /// @param _lido Lido stETH contract
     /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
-    constructor(ILidoLocator _locator, ILido _lido, uint256 _relativeShareLimitBP) {
+    constructor(ILidoLocator _locator, ILido _lido, uint256 _relativeShareLimitBP, address _reportHelper) {
         if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
         if (_relativeShareLimitBP > TOTAL_BASIS_POINTS)
             revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
@@ -131,6 +127,7 @@ contract VaultHub is PausableUntilWithRoles {
         LIDO_LOCATOR = _locator;
         LIDO = _lido;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
+        REPORT_HELPER = ReportHelper(_reportHelper);
 
         _disableInitializers();
     }
@@ -141,7 +138,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function initialize(address _admin) external initializer {
         if (_admin == address(0)) revert ZeroArgument("_admin");
-
         __VaultHub_init(_admin);
     }
 
@@ -206,28 +202,6 @@ contract VaultHub is PausableUntilWithRoles {
     function isReportFresh(address _vault) public view returns (bool) {
         VaultSocket storage socket = _socket(_vault);
         return block.timestamp - socket.report.timestamp < REPORT_FRESHNESS_DELTA;
-    }
-
-    /// @notice returns batch of vaults info
-    /// @param _offset offset of the vault in the batch (indexes start from 0)
-    /// @param _limit limit of the batch
-    /// @return batch of vaults info
-    function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory) {
-        VaultHubStorage storage $ = _storage();
-        uint256 limit = _offset + _limit > $.sockets.length - 1 ? $.sockets.length - 1 - _offset : _limit;
-        VaultInfo[] memory batch = new VaultInfo[](limit);
-        for (uint256 i = 0; i < limit; i++) {
-            VaultSocket storage socket = $.sockets[i + 1 + _offset];
-            IStakingVault currentVault = IStakingVault(socket.vault);
-            batch[i] = VaultInfo(
-                address(currentVault),
-                address(currentVault).balance,
-                socket.inOutDelta,
-                currentVault.withdrawalCredentials(),
-                socket.liabilityShares
-            );
-        }
-        return batch;
     }
 
     /// @notice checks if the vault is healthy by comparing its total value after applying rebalance threshold
@@ -317,7 +291,6 @@ contract VaultHub is PausableUntilWithRoles {
 
         _disconnect(_vault);
     }
-
 
     /// @notice returns the latest report data
     /// @return timestamp of the report
@@ -520,11 +493,17 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 vaultIndex = $.vaultIndex[_vault];
         if (vaultIndex == 0) revert NotConnectedToHub(_vault);
 
-        bytes32 root = $.vaultsDataTreeRoot;
-        bytes32 leaf = keccak256(
-            bytes.concat(keccak256(abi.encode(_vault, _totalValue, _inOutDelta, _feeSharesCharged, _liabilityShares)))
-        );
-        if (!MerkleProof.verify(_proof, root, leaf)) revert InvalidProof();
+        if (
+            !REPORT_HELPER.isValidProof(
+                _vault,
+                _proof,
+                $.vaultsDataTreeRoot,
+                _totalValue,
+                _inOutDelta,
+                _feeSharesCharged,
+                _liabilityShares
+            )
+        ) revert InvalidProof();
 
         VaultSocket storage socket = $.sockets[vaultIndex];
         // NB: charged fees can only cumulatively increase with time

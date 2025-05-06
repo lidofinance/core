@@ -14,18 +14,12 @@ import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol
 import {OperatorGrid} from "./OperatorGrid.sol";
 
 contract VaultControl is VaultHub {
-    IDepositContract public immutable DEPOSIT_CONTRACT;
-
     constructor(
         ILidoLocator _locator,
         ILido _lido,
         uint256 _relativeShareLimitBP,
-        IDepositContract _depositContract
-    ) VaultHub(_locator, _lido, _relativeShareLimitBP) {
-        if (address(_depositContract) == address(0)) revert ZeroArgument("_depositContract");
-
-        DEPOSIT_CONTRACT = _depositContract;
-    }
+        address _reportHelper
+    ) VaultHub(_locator, _lido, _relativeShareLimitBP, _reportHelper) {}
 
     function unlocked(address _vault) public view returns (uint256) {
         uint256 totalValue_ = totalValue(_vault);
