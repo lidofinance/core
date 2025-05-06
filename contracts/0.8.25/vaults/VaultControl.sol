@@ -17,9 +17,8 @@ contract VaultControl is VaultHub {
     constructor(
         ILidoLocator _locator,
         ILido _lido,
-        uint256 _relativeShareLimitBP,
-        address _reportHelper
-    ) VaultHub(_locator, _lido, _relativeShareLimitBP, _reportHelper) {}
+        uint256 _relativeShareLimitBP
+    ) VaultHub(_locator, _lido, _relativeShareLimitBP) {}
 
     function unlocked(address _vault) public view returns (uint256) {
         uint256 totalValue_ = totalValue(_vault);

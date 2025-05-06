@@ -14,6 +14,7 @@ import {IOracleReportSanityChecker} from "./interfaces/IOracleReportSanityChecke
 import {IWithdrawalQueue} from "./interfaces/IWithdrawalQueue.sol";
 import {ILido} from "./interfaces/ILido.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
+import {LazyOracle} from "./vaults/LazyOracle.sol";
 
 /// @title Lido Accounting contract
 /// @author folkyatina
@@ -29,6 +30,7 @@ contract Accounting {
         IPostTokenRebaseReceiver postTokenRebaseReceiver;
         IStakingRouter stakingRouter;
         VaultHub vaultHub;
+        LazyOracle lazyOracle;
     }
 
     struct PreReportState {
@@ -312,7 +314,7 @@ contract Accounting {
             _update.etherToFinalizeWQ
         );
 
-        _contracts.vaultHub.updateReportData(
+        _contracts.lazyOracle.updateReportData(
             uint64(_report.timestamp),
             _report.vaultsDataTreeRoot,
             _report.vaultsDataTreeCid
@@ -441,7 +443,8 @@ contract Accounting {
             address withdrawalQueue,
             address postTokenRebaseReceiver,
             address stakingRouter,
-            address vaultHub
+            address vaultHub,
+            address lazyOracle
         ) = LIDO_LOCATOR.oracleReportComponents();
 
         return
@@ -452,7 +455,8 @@ contract Accounting {
                 IWithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
                 IStakingRouter(stakingRouter),
-                VaultHub(payable(vaultHub))
+                VaultHub(payable(vaultHub)),
+                LazyOracle(lazyOracle)
             );
     }
 

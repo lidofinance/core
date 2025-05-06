@@ -11,7 +11,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "../interfaces/ILido.sol";
 import {OperatorGrid} from "./OperatorGrid.sol";
-import {ReportHelper} from "./ReportHelper.sol";
+import {LazyOracle} from "./LazyOracle.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
@@ -113,13 +113,10 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Lido Locator contract
     ILidoLocator public immutable LIDO_LOCATOR;
 
-    /// @notice ReportHelper contract
-    ReportHelper public immutable REPORT_HELPER;
-
     /// @param _locator Lido Locator contract
     /// @param _lido Lido stETH contract
     /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
-    constructor(ILidoLocator _locator, ILido _lido, uint256 _relativeShareLimitBP, address _reportHelper) {
+    constructor(ILidoLocator _locator, ILido _lido, uint256 _relativeShareLimitBP) {
         if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
         if (_relativeShareLimitBP > TOTAL_BASIS_POINTS)
             revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
@@ -127,7 +124,6 @@ contract VaultHub is PausableUntilWithRoles {
         LIDO_LOCATOR = _locator;
         LIDO = _lido;
         RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
-        REPORT_HELPER = ReportHelper(_reportHelper);
 
         _disableInitializers();
     }
@@ -437,20 +433,6 @@ contract VaultHub is PausableUntilWithRoles {
         emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
 
-    function updateReportData(
-        uint64 _vaultsDataTimestamp,
-        bytes32 _vaultsDataTreeRoot,
-        string memory _vaultsDataReportCid
-    ) external {
-        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized();
-
-        VaultHubStorage storage $ = _storage();
-        $.vaultsDataTimestamp = _vaultsDataTimestamp;
-        $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
-        $.vaultsDataReportCid = _vaultsDataReportCid;
-        emit VaultsReportDataUpdated(_vaultsDataTimestamp, _vaultsDataTreeRoot, _vaultsDataReportCid);
-    }
-
     /// @notice force disconnects a vault from the hub
     /// @param _vault vault address
     /// @dev msg.sender must have VAULT_MASTER_ROLE
@@ -480,33 +462,20 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _inOutDelta the inOutDelta of the vault
     /// @param _feeSharesCharged the feeSharesCharged of the vault
     /// @param _liabilityShares the liabilityShares of the vault
-    /// @param _proof the proof of the reported data
-    function updateVaultData(
+    function updateSocket(
         address _vault,
         uint256 _totalValue,
         int256 _inOutDelta,
         uint256 _feeSharesCharged,
-        uint256 _liabilityShares,
-        bytes32[] calldata _proof
+        uint256 _liabilityShares
     ) external {
+        if (msg.sender != LIDO_LOCATOR.lazyOracle()) revert NotAuthorized();
+
         VaultHubStorage storage $ = _storage();
         uint256 vaultIndex = $.vaultIndex[_vault];
         if (vaultIndex == 0) revert NotConnectedToHub(_vault);
 
-        if (
-            !REPORT_HELPER.isValidProof(
-                _vault,
-                _proof,
-                $.vaultsDataTreeRoot,
-                _totalValue,
-                _inOutDelta,
-                _feeSharesCharged,
-                _liabilityShares
-            )
-        ) revert InvalidProof();
-
         VaultSocket storage socket = $.sockets[vaultIndex];
-        // NB: charged fees can only cumulatively increase with time
         if (_feeSharesCharged < socket.feeSharesCharged) {
             revert InvalidFees(_vault, _feeSharesCharged, socket.feeSharesCharged);
         }
@@ -517,8 +486,7 @@ contract VaultHub is PausableUntilWithRoles {
         // locked ether can only be increased asynchronously once the oracle settled the new floor value
         // as of reference slot to prevent slashing upsides in between the report gathering and delivering
         uint256 lockedEther = Math256.max(
-            (LIDO.getPooledEthBySharesRoundUp(newLiabilityShares) * TOTAL_BASIS_POINTS) /
-                (TOTAL_BASIS_POINTS - socket.reserveRatioBP),
+            LIDO.getPooledEthBySharesRoundUp(newLiabilityShares) * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - socket.reserveRatioBP),
             socket.pendingDisconnect ? 0 : CONNECT_DEPOSIT
         );
 
