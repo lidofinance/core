@@ -150,6 +150,10 @@ contract Dashboard is NodeOperatorFee {
         return VAULT_CONTROL.vaultSocket(address(_stakingVault())).locked;
     }
 
+    function obligationsValue() public view returns (uint256) {
+        return VAULT_CONTROL.obligationsValue(address(_stakingVault()));
+    }
+
     /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      * @return The maximum number of mintable stETH shares.
@@ -175,13 +179,13 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the unreserved amount of ether,
      * i.e. the amount of total value that is not locked in the StakingVault
-     * and not reserved for node operator fee.
+     * and not reserved for node operator or treasury fees or protocol withdrawals.
      * This amount does not account for the current balance of the StakingVault and
      * can return a value greater than the actual balance of the StakingVault.
      * @return uint256: the amount of unreserved ether.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = locked() + nodeOperatorUnclaimedFee();
+        uint256 reserved = locked() + nodeOperatorUnclaimedFee() + obligationsValue();
         uint256 totalValue_ = totalValue();
 
         return reserved > totalValue_ ? 0 : totalValue_ - reserved;

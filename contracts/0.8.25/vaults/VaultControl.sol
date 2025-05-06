@@ -49,6 +49,12 @@ contract VaultControl is VaultHub {
         _withdrawFromVault(_vault, _recipient, _ether);
 
         uint256 totalValueAfterWithdraw = totalValue(_vault);
+        uint256 obligationsValue_ = obligationsValue(_vault);
+        uint256 balance = address(_vault).balance;
+
+        if (balance < obligationsValue_) {
+            revert ObligationsValueExceedsBalance(balance, obligationsValue_);
+        }
 
         if (isReportFresh(_vault)) {
             if (totalValueAfterWithdraw < _socket(_vault).locked) revert TotalValueBelowLockedAmount();
@@ -164,6 +170,17 @@ contract VaultControl is VaultHub {
         if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
         VaultSocket storage socket = _socket(_vault);
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
+
+        uint256 totalAmount;
+        for (uint256 i = 0; i < _deposits.length; i++) {
+            totalAmount += _deposits[i].amount;
+        }
+
+        uint256 contractBalance = address(this).balance;
+        uint256 obligationsValue_ = obligationsValue(_vault);
+        if (contractBalance - totalAmount < obligationsValue_) {
+            revert ObligationsValueExceedsBalance(contractBalance - totalAmount, obligationsValue_);
+        }
 
         IStakingVault(_vault).depositToBeaconChain(_deposits);
     }
@@ -312,4 +329,11 @@ contract VaultControl is VaultHub {
     error RebalanceAmountExceedsTotalValue(uint256 totalValue, uint256 rebalanceAmount);
 
     error BeaconChainDepositsArePaused();
+
+    /**
+     * @notice Thrown when the balance of the vault is less than the vault's obligations value
+     * @param balance Current balance of the vault
+     * @param obligationsValue Current obligations value of the vault
+     */
+    error ObligationsValueExceedsBalance(uint256 balance, uint256 obligationsValue);
 }

@@ -79,8 +79,12 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 treasuryFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
-        /// @notice cumulative amount of shares charged as fees for the vault
-        uint96 feeSharesCharged;
+        /// @notice cumulative amount of treasury fees settled on the vault
+        uint96 settledTreasuryFees;
+        /// @notice amount of ether that is locked on the vault as a reserve for the treasury fees
+        uint96 outstandingTreasuryFee;
+        /// @notice amount of ether that is locked on the vault as a reserve for the withdrawal queue supply
+        uint96 outstandingWithdrawal;
         /// @notice unused gap in the slot 2
         /// uint8 _unused_gap_;
     }
@@ -96,6 +100,8 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
     /// @notice role that allows to add factories and vault implementations to hub
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
+    /// @notice role that allows to accrue withdrawal requests
+    bytes32 public constant ACCRUE_WITHDRAWALS_ROLE = keccak256("Vaults.VaultHub.AccrueWithdrawalsRole");
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
     /// @notice length of the validator pubkey in bytes
@@ -143,7 +149,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // the stone in the elevator
         _storage().sockets.push(
-            VaultSocket(address(0), address(0), Report(0, 0, 0), 0, 0, false, 0, 0, 0, 0, 0, false, 0)
+            VaultSocket(address(0), address(0), Report(0, 0, 0), 0, 0, false, 0, 0, 0, 0, 0, false, 0, 0, 0)
         );
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
@@ -193,6 +199,13 @@ contract VaultHub is PausableUntilWithRoles {
         VaultHubStorage storage $ = _storage();
         VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
         return uint256(int256(int128(socket.report.totalValue) + socket.inOutDelta - socket.report.inOutDelta));
+    }
+
+    function obligationsValue(address _vault) public view returns (uint256) {
+        VaultHubStorage storage $ = _storage();
+        VaultSocket storage socket = $.sockets[$.vaultIndex[_vault]];
+
+        return socket.outstandingWithdrawal + socket.outstandingTreasuryFee;
     }
 
     function isReportFresh(address _vault) public view returns (bool) {
@@ -366,7 +379,9 @@ contract VaultHub is PausableUntilWithRoles {
             uint16(_forcedRebalanceThresholdBP),
             uint16(_treasuryFeeBP),
             false, // pendingDisconnect
-            0
+            0, // settledTreasuryFees
+            0, // outstandingWithdrawal
+            0  // outstandingTreasuryFee
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
@@ -453,13 +468,13 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault
     /// @param _inOutDelta the inOutDelta of the vault
-    /// @param _feeSharesCharged the feeSharesCharged of the vault
+    /// @param _feeCharged the feeCharged of the vault
     /// @param _liabilityShares the liabilityShares of the vault
     function updateSocket(
         address _vault,
         uint256 _totalValue,
         int256 _inOutDelta,
-        uint256 _feeSharesCharged,
+        uint256 _feeCharged,
         uint256 _liabilityShares
     ) external {
         if (msg.sender != LIDO_LOCATOR.lazyOracle()) revert NotAuthorized();
@@ -469,11 +484,9 @@ contract VaultHub is PausableUntilWithRoles {
         if (vaultIndex == 0) revert NotConnectedToHub(_vault);
 
         VaultSocket storage socket = $.sockets[vaultIndex];
-        if (_feeSharesCharged < socket.feeSharesCharged) {
-            revert InvalidFees(_vault, _feeSharesCharged, socket.feeSharesCharged);
+        if (_feeCharged < socket.settledTreasuryFees) {
+            revert InvalidFees(_vault, _feeCharged, socket.settledTreasuryFees);
         }
-        socket.liabilityShares += uint96(_feeSharesCharged - socket.feeSharesCharged);
-        socket.feeSharesCharged = uint96(_feeSharesCharged);
 
         uint256 newLiabilityShares = Math256.max(socket.liabilityShares, _liabilityShares);
         // locked ether can only be increased asynchronously once the oracle settled the new floor value
@@ -487,10 +500,25 @@ contract VaultHub is PausableUntilWithRoles {
         socket.report.inOutDelta = int128(_inOutDelta);
         socket.report.timestamp = uint64($.vaultsDataTimestamp);
         socket.locked = uint128(lockedEther);
+        socket.liabilityShares = uint96(newLiabilityShares);
+        socket.outstandingTreasuryFee = uint96(_feeCharged - socket.settledTreasuryFees);
+
+        // TODO: emit event
 
         if (socket.pendingDisconnect) {
             _releaseVault(vaultIndex);
         }
+    }
+
+    function setOutstandingWithdrawal(address _vault, uint256 _withdrawalAmount) external onlyRole(ACCRUE_WITHDRAWALS_ROLE) {
+        VaultSocket storage socket = _socket(_vault);
+        if (_withdrawalAmount > socket.locked) {
+            revert WithdrawalsInsufficientLocked(_vault, _withdrawalAmount, socket.locked);
+        }
+
+        socket.outstandingWithdrawal = uint96(_withdrawalAmount);
+
+        emit OutstandingWithdrawalSet(_vault, _withdrawalAmount);
     }
 
     function mintVaultsTreasuryFeeShares(uint256 _amountOfShares) external {
@@ -554,6 +582,7 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
+    event OutstandingWithdrawalSet(address indexed vault, uint256 amount);
 
     error AlreadyHealthy(address vault);
     error VaultMintingCapacityExceeded(
@@ -592,6 +621,7 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultReportStaled(address vault);
     error VaultHubMustBeOwner(address vault);
     error VaultProxyZeroCodehash();
+    error WithdrawalsInsufficientLocked(address vault, uint256 amountToWithdraw, uint256 locked);
     error InvalidOperator();
     error NotPendingConnect();
 }
