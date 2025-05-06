@@ -52,7 +52,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
       stuckValidatorsCount: 0n,
       refundedValidatorsCount: 0n,
       stuckPenaltyEndAt: 0n,
-    }
+    },
   ];
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
@@ -65,8 +65,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
   const exitType = 1n;
 
   before(async () => {
-    [deployer, user, stakingRouter, nodeOperatorsManager, signingKeysManager, stranger] =
-      await ethers.getSigners();
+    [deployer, user, stakingRouter, nodeOperatorsManager, signingKeysManager, stranger] = await ethers.getSigners();
 
     ({ lido, dao, acl } = await deployLidoDao({
       rootAccount: deployer,
@@ -125,12 +124,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         .false;
 
       await expect(
-        nor.connect(stranger).reportValidatorExitDelay(
-          firstNodeOperatorId,
-          proofSlotTimestamp,
-          testPublicKey,
-          eligibleToExitInSec
-        )
+        nor
+          .connect(stranger)
+          .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec),
       ).to.be.revertedWith("APP_AUTH_FAILED");
     });
 
@@ -139,12 +135,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         .to.be.true;
 
       await expect(
-        nor.connect(stakingRouter).reportValidatorExitDelay(
-          firstNodeOperatorId,
-          proofSlotTimestamp,
-          testPublicKey,
-          eligibleToExitInSec
-        )
+        nor
+          .connect(stakingRouter)
+          .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec),
       )
         .and.to.emit(nor, "ValidatorExitStatusUpdated")
         .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, proofSlotTimestamp);
@@ -152,12 +145,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
     it("reverts when public key is empty", async () => {
       await expect(
-        nor.connect(stakingRouter).reportValidatorExitDelay(
-          firstNodeOperatorId,
-          proofSlotTimestamp,
-          "0x",
-          eligibleToExitInSec
-        )
+        nor
+          .connect(stakingRouter)
+          .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, "0x", eligibleToExitInSec),
       ).to.be.revertedWith("INVALID_PUBLIC_KEY");
     });
   });
@@ -168,12 +158,17 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         .false;
 
       await expect(
-        nor.connect(stranger).onValidatorExitTriggered(
-          firstNodeOperatorId,
-          testPublicKey,
-          withdrawalRequestPaidFee,
-          exitType
-        )
+        nor
+          .connect(stakingRouter)
+          .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec),
+      )
+        .and.to.emit(nor, "ValidatorExitStatusUpdated")
+        .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, proofSlotTimestamp);
+
+      await expect(
+        nor
+          .connect(stranger)
+          .onValidatorExitTriggered(firstNodeOperatorId, testPublicKey, withdrawalRequestPaidFee, exitType),
       ).to.be.revertedWith("APP_AUTH_FAILED");
     });
 
@@ -182,12 +177,17 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         .to.be.true;
 
       await expect(
-        nor.connect(stakingRouter).onValidatorExitTriggered(
-          firstNodeOperatorId,
-          testPublicKey,
-          withdrawalRequestPaidFee,
-          exitType
-        )
+        nor
+          .connect(stakingRouter)
+          .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec),
+      )
+        .and.to.emit(nor, "ValidatorExitStatusUpdated")
+        .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, proofSlotTimestamp);
+
+      await expect(
+        nor
+          .connect(stakingRouter)
+          .onValidatorExitTriggered(firstNodeOperatorId, testPublicKey, withdrawalRequestPaidFee, exitType),
       )
         .to.emit(nor, "ValidatorExitTriggered")
         .withArgs(firstNodeOperatorId, testPublicKey, withdrawalRequestPaidFee, exitType);
@@ -207,7 +207,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         firstNodeOperatorId,
         proofSlotTimestamp,
         testPublicKey,
-        172800n // Equal to the threshold
+        172800n, // Equal to the threshold
       );
       expect(shouldPenalize).to.be.true;
 
@@ -215,7 +215,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         firstNodeOperatorId,
         proofSlotTimestamp,
         testPublicKey,
-        172801n // Greater than the threshold
+        172801n, // Greater than the threshold
       );
       expect(shouldPenalizeMore).to.be.true;
     });
@@ -225,7 +225,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         firstNodeOperatorId,
         proofSlotTimestamp,
         testPublicKey,
-        1n // Less than the threshold
+        1n, // Less than the threshold
       );
       expect(shouldPenalize).to.be.false;
     });

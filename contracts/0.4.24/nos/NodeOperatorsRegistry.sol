@@ -84,6 +84,13 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         Distributed               // Reward distributed among operators
     }
 
+    /// @notice Enum to represent the state of a validator exit process
+    enum ValidatorExitProcessStatus {
+        NotProcessed,   // Default state, validator exit not yet started
+        Reported,       // Exit delay reported but not yet triggered
+        Triggered       // Exit has been triggered
+    }
+
     //
     // ACL
     //
@@ -233,6 +240,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @dev Mapping of all node operators. Mapping is used to be able to extend the struct.
     mapping(uint256 => NodeOperator) internal _nodeOperators;
     NodeOperatorSummary internal _nodeOperatorSummary;
+
+    /// @dev Mapping of Node Operator exit delay keys
+    mapping(bytes32 => ValidatorExitProcessStatus) internal _validatorExitProcessedKeys;
 
     //
     // METHODS
@@ -1052,6 +1062,24 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _removeUnusedSigningKeys(_nodeOperatorId, _fromIndex, _keysCount);
     }
 
+    function _getValidatorExitingKeyProcessStatus(bytes32 _keyHash) internal view returns (ValidatorExitProcessStatus) {
+        return _validatorExitProcessedKeys[_keyHash];
+    }
+
+    function _markValidatorExitingKeyAsReported(bytes32 _keyHash) internal {
+        // Require that key is currently NotProcessed
+        require(_validatorExitProcessedKeys[_keyHash] == ValidatorExitProcessStatus.NotProcessed,
+            "VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+        _validatorExitProcessedKeys[_keyHash] = ValidatorExitProcessStatus.Reported;
+    }
+
+    function _markValidatorExitingKeyAsTriggered(bytes32 _keyHash) internal {
+        // Require that key is currently Reported
+        require(_validatorExitProcessedKeys[_keyHash] == ValidatorExitProcessStatus.Reported,
+            "VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+        _validatorExitProcessedKeys[_keyHash] = ValidatorExitProcessStatus.Triggered;
+    }
+
     function exitDeadlineThreshold() public view returns (uint256) {
         return EXIT_DELAY_THRESHOLD_SECONDS.getStorageUint256();
     }
@@ -1071,15 +1099,23 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     ) external {
         _auth(STAKING_ROUTER_ROLE);
 
+        bytes32 processedKeyHash = keccak256(abi.encode(_publicKey));
+        _markValidatorExitingKeyAsTriggered(processedKeyHash);
+
         emit ValidatorExitTriggered(_nodeOperatorId, _publicKey, _withdrawalRequestPaidFee, _exitType);
     }
 
     function isValidatorExitDelayPenaltyApplicable(
         uint256, // _nodeOperatorId
         uint256, // _proofSlotTimestamp
-        bytes, // _publicKey
+        bytes _publicKey,
         uint256 _eligibleToExitInSec
     ) external view returns (bool) {
+        bytes32 processedKeyHash = keccak256(abi.encode(_publicKey));
+        ValidatorExitProcessStatus status = _getValidatorExitingKeyProcessStatus(processedKeyHash);
+        if (status != ValidatorExitProcessStatus.NotProcessed) {
+            return false;
+        }
         return _eligibleToExitInSec >= exitDeadlineThreshold();
     }
 
@@ -1094,6 +1130,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
         // Check if exit delay exceeds the threshold
         require(_eligibleToExitInSec >= exitDeadlineThreshold(), "EXIT_DELAY_BELOW_THRESHOLD");
+
+        bytes32 processedKeyHash = keccak256(abi.encode(_publicKey));
+        _markValidatorExitingKeyAsReported(processedKeyHash);
 
         emit ValidatorExitStatusUpdated(_nodeOperatorId, _publicKey, _eligibleToExitInSec, _proofSlotTimestamp);
     }
