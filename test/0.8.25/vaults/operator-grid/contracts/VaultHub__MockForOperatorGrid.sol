@@ -17,8 +17,12 @@ contract VaultHub__MockForOperatorGrid {
         uint16 reserveRatioBP;
         /// @notice if vault's reserve decreases to this threshold, it should be force rebalanced
         uint16 forcedRebalanceThresholdBP;
-        /// @notice treasury fee in basis points
-        uint16 treasuryFeeBP;
+        /// @notice infrastructure fee in basis points
+        uint16 infraFeeBP;
+        /// @notice liquidity fee in basis points
+        uint16 liquidityFeeBP;
+        /// @notice reservation fee in basis points
+        uint16 reservationFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
         /// @notice last fees accrued on the vault
@@ -42,9 +46,19 @@ contract VaultHub__MockForOperatorGrid {
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
-        uint256 _treasuryFeeBP
+        uint256 _infraFeeBP,
+        uint256 _liquidityFeeBP,
+        uint256 _reservationFeeBP
     ) external {
-        emit VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
+        emit VaultConnectionUpdated(
+            _vault,
+            _shareLimit,
+            _reserveRatioBP,
+            _forcedRebalanceThresholdBP,
+            _infraFeeBP,
+            _liquidityFeeBP,
+            _reservationFeeBP
+        );
     }
 
     event VaultConnectionUpdated(
@@ -52,6 +66,8 @@ contract VaultHub__MockForOperatorGrid {
         uint256 shareLimit,
         uint256 reserveRatioBP,
         uint256 forcedRebalanceThresholdBP,
-        uint256 treasuryFeeBP
+        uint256 infraFeeBP,
+        uint256 liquidityFeeBP,
+        uint256 reservationFeeBP
     );
 }

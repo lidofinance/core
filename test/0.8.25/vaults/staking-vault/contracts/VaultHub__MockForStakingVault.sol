@@ -24,13 +24,15 @@ contract VaultHub__MockForStakingVault {
     function addVaultSocket(address vault) external {
         sockets[vault] = VaultHub.VaultSocket({
             vault: vault,
-            liabilityShares: 0,
             shareLimit: 0,
+            liabilityShares: 0,
+            feeSharesCharged: 0,
             reserveRatioBP: 0,
             forcedRebalanceThresholdBP: 0,
-            treasuryFeeBP: 0,
-            pendingDisconnect: false,
-            feeSharesCharged: 0
+            infraFeeBP: 0,
+            liquidityFeeBP: 0,
+            reservationFeeBP: 0,
+            pendingDisconnect: false
         });
     }
 
