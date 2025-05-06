@@ -392,7 +392,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         Tier storage requestedTier = $.tiers[requestedTierId];
 
-        VaultHub vaultHub = VaultHub(LIDO_LOCATOR.vaultHub());
+        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
         VaultHub.VaultSocket memory vaultSocket = vaultHub.vaultSocket(_vault);
         uint256 vaultLiabilityShares = vaultSocket.liabilityShares;
 
@@ -418,7 +418,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         $.pendingRequests[nodeOperator].remove(_vault);
 
-        VaultHub(LIDO_LOCATOR.vaultHub()).updateConnection(
+        VaultHub(payable(LIDO_LOCATOR.vaultHub())).updateConnection(
             _vault,
             requestedTier.shareLimit,
             requestedTier.reserveRatioBP,

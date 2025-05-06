@@ -452,7 +452,7 @@ contract Accounting {
                 IWithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
                 IStakingRouter(stakingRouter),
-                VaultHub(vaultHub)
+                VaultHub(payable(vaultHub))
             );
     }
 
