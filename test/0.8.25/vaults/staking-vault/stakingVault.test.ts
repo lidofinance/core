@@ -14,6 +14,7 @@ import {
 } from "typechain-types";
 
 import {
+  advanceChainTime,
   computeDepositDataRoot,
   de0x,
   deployEIP7002WithdrawalRequestContract,
@@ -22,6 +23,7 @@ import {
   generatePostDeposit,
   generateValidator,
   getCurrentBlockTimestamp,
+  hours,
   impersonate,
   MAX_UINT256,
   proxify,
@@ -1278,6 +1280,29 @@ describe("StakingVault.sol", () => {
       )
         .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
         .withArgs("triggerValidatorWithdrawal", vaultHubSigner);
+    });
+  });
+  context("reporting", () => {
+    it("updates report data and keep it fresh for no more than 2 days", async () => {
+      await stakingVault.authorizeLidoVaultHub(); // needed for the report
+
+      await reportVaultWithMockedVaultHub(stakingVault);
+      await advanceChainTime(hours(23n));
+      expect(await stakingVault.isReportFresh()).to.equal(true);
+      await advanceChainTime(hours(8n));
+      expect(await stakingVault.isReportFresh()).to.equal(true);
+      await advanceChainTime(hours(17n));
+      expect(await stakingVault.isReportFresh()).to.equal(false);
+    });
+
+    it("updates report data and keep it fresh for no more than 2 days but stale if new report is available", async () => {
+      await stakingVault.authorizeLidoVaultHub(); // needed for the report
+
+      await reportVaultWithMockedVaultHub(stakingVault);
+      await advanceChainTime(hours(25n));
+      expect(await stakingVault.isReportFresh()).to.equal(true);
+      await vaultHub.updateReportData(await getCurrentBlockTimestamp(), ethers.ZeroHash, "");
+      expect(await stakingVault.isReportFresh()).to.equal(false);
     });
   });
 });

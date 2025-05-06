@@ -7,7 +7,7 @@ import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 
 contract VaultHub__MockForStakingVault {
     address public immutable LIDO_LOCATOR;
-    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
     uint64 public latestReportDataTimestamp;
 
     mapping(address => VaultHub.VaultSocket) public sockets;
