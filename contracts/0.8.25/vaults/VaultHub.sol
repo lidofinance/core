@@ -100,8 +100,8 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
     /// @notice role that allows to add factories and vault implementations to hub
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
-    /// @notice role that allows to accrue withdrawal requests
-    bytes32 public constant ACCRUE_WITHDRAWALS_ROLE = keccak256("Vaults.VaultHub.AccrueWithdrawalsRole");
+    /// @notice role that allows to set outstanding withdrawal requests
+    bytes32 public constant SET_OUTSTANDING_WITHDRAWALS_ROLE = keccak256("Vaults.VaultHub.SetOutstandingWithdrawalsRole");
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
     /// @notice length of the validator pubkey in bytes
@@ -510,7 +510,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    function setOutstandingWithdrawal(address _vault, uint256 _withdrawalAmount) external onlyRole(ACCRUE_WITHDRAWALS_ROLE) {
+    function setOutstandingWithdrawal(address _vault, uint256 _withdrawalAmount) external onlyRole(SET_OUTSTANDING_WITHDRAWALS_ROLE) {
         VaultSocket storage socket = _socket(_vault);
         if (_withdrawalAmount > socket.locked) {
             revert WithdrawalsInsufficientLocked(_vault, _withdrawalAmount, socket.locked);
