@@ -21,7 +21,7 @@ import { DeploymentState, readNetworkState, Sk } from "lib/state-file";
 import { readUpgradeParameters } from "../upgrade-utils";
 
 const CS_STAKING_MODULE_ID = 3;
-const TX_GAS_LIMIT = 1_000_000;
+const TX_GAS_LIMIT = 1_000_000n;
 
 async function getCSAccountingAddress(state: DeploymentState) {
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;

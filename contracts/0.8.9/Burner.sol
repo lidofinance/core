@@ -137,9 +137,8 @@ contract Burner is IBurner, AccessControlEnumerable {
 
     /**
      * @param _oldBurner The address of the old Burner contract
-     * @dev The migration besides setting the shares related state requires transferring the stETH balance
-     *      from the old Burner contract to the new one which is to be performed by the Lido contract
-     *      along with the call of this function.
+     * @dev Can be called only by Lido contract. Migrates state from the old Burner. Can be run only once.
+     *      Cannot be run if migration is disabled upon deployment.
      */
     function migrate(address _oldBurner) external {
         if (msg.sender != address(LIDO)) revert OnlyLidoCanMigrate();

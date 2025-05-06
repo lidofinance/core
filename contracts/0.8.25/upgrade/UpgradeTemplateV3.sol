@@ -177,57 +177,57 @@ contract UpgradeTemplateV3 {
     //
 
     uint256 internal constant ACCOUNTING_ORACLE_CONSENSUS_VERSION = 4;
-
     uint256 internal constant EXPECTED_FINAL_LIDO_VERSION = 3;
     uint256 internal constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
 
-    // Old upgraded non-proxy contracts
+    //
+    // -------- Pre-upgrade old contracts --------
+    //
+    address public immutable OLD_LOCATOR_IMPLEMENTATION;
     IBurner public immutable OLD_BURNER;
-    IOracleReportSanityChecker public immutable OLD_ORACLE_REPORT_SANITY_CHECKER;
+    address public immutable OLD_ACCOUNTING_ORACLE_IMPLEMENTATION;
+    address public immutable OLD_LIDO_IMPLEMENTATION;
 
-    // New proxy contracts
+    //
+    // -------- Upgraded contracts --------
+    //
+    ILidoLocator public immutable LOCATOR;
+    address public immutable NEW_LOCATOR_IMPLEMENTATION;
+    ILidoWithFinalizeUpgrade public immutable LIDO;
+    IAccountingOracle public immutable ACCOUNTING_ORACLE;
+    IBurner public immutable BURNER;
+    IOracleReportSanityChecker public immutable ORACLE_REPORT_SANITY_CHECKER;
+
+    //
+    // -------- New V3 contracts --------
+    //
     address public immutable ACCOUNTING;
     IVaultHub public immutable VAULT_HUB;
     address public immutable PREDEPOSIT_GUARANTEE;
-
-    // New non-proxy contracts
-    IBurner public immutable BURNER;
-    IOracleReportSanityChecker public immutable ORACLE_REPORT_SANITY_CHECKER;
+    IOperatorGrid public immutable OPERATOR_GRID;
     IVaultFactory public immutable VAULT_FACTORY;
-
-    // New fancy proxy contracts
     IUpgradeableBeacon public immutable UPGRADEABLE_BEACON;
     address public immutable STAKING_VAULT_IMPLEMENTATION;
     address public immutable DASHBOARD_IMPLEMENTATION;
 
-    // Old implementations
-    address public immutable OLD_ACCOUNTING_ORACLE_IMPLEMENTATION;
-    address public immutable OLD_LOCATOR_IMPLEMENTATION;
-
-    // Aragon Apps new implementations
-    address public immutable OLD_LIDO_IMPLEMENTATION;
-
-    // New non-aragon implementations
-    address public immutable NEW_LOCATOR_IMPLEMENTATION;
-
-    // Existing proxies and contracts
+    //
+    // -------- Intact contracts --------
+    //
     address public immutable AGENT;
     IAragonAppRepo public immutable ARAGON_APP_LIDO_REPO;
-    IAccountingOracle public immutable ACCOUNTING_ORACLE;
-    address public immutable CSM_ACCOUNTING;
+    address public immutable VOTING;
     address public immutable EL_REWARDS_VAULT;
-    ILidoWithFinalizeUpgrade public immutable LIDO;
-    ILidoLocator public immutable LOCATOR;
-    address public immutable NODE_OPERATORS_REGISTRY;
-    IOperatorGrid public immutable OPERATOR_GRID;
-    address public immutable SIMPLE_DVT;
     IStakingRouter public immutable STAKING_ROUTER;
     address public immutable VALIDATORS_EXIT_BUS_ORACLE;
-    address public immutable VOTING;
     address public immutable WITHDRAWAL_QUEUE;
     address public immutable WSTETH;
+    address public immutable NODE_OPERATORS_REGISTRY;
+    address public immutable SIMPLE_DVT;
+    address public immutable CSM_ACCOUNTING;
 
-    // Roles
+    //
+    // -------- Roles --------
+    //
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
     // Burner
     bytes32 public immutable REQUEST_BURN_SHARES_ROLE;
@@ -256,6 +256,10 @@ contract UpgradeTemplateV3 {
     // OperatorGrid
     bytes32 public immutable REGISTRY_ROLE;
 
+    //
+    // -------- Constants --------
+    //
+
     // Timestamp since startUpgrade() and finishUpgrade() revert with Expired()
     // This behavior is introduced to disarm the template if the upgrade voting creation or enactment didn't
     // happen in proper time period
@@ -282,60 +286,73 @@ contract UpgradeTemplateV3 {
         if (params.newLocatorImplementation == params.oldLocatorImplementation) {
             revert NewAndOldLocatorImplementationsMustBeDifferent();
         }
-
-        NEW_LOCATOR_IMPLEMENTATION = params.newLocatorImplementation;
-        LOCATOR = ILidoLocator(params.locator);
-        OLD_LOCATOR_IMPLEMENTATION = params.oldLocatorImplementation;
-
-        ILidoLocatorOld oldLocatorImpl = ILidoLocatorOld(params.oldLocatorImplementation);
-        OLD_ACCOUNTING_ORACLE_IMPLEMENTATION = params.oldAccountingOracleImplementation;
-        OLD_BURNER = IBurner(oldLocatorImpl.burner());
-        OLD_ORACLE_REPORT_SANITY_CHECKER = IOracleReportSanityChecker(oldLocatorImpl.oracleReportSanityChecker());
-        ACCOUNTING_ORACLE = IAccountingOracle(oldLocatorImpl.accountingOracle());
-        EL_REWARDS_VAULT = oldLocatorImpl.elRewardsVault();
-        STAKING_ROUTER = IStakingRouter(oldLocatorImpl.stakingRouter());
-        LIDO = ILidoWithFinalizeUpgrade(oldLocatorImpl.lido());
-        VALIDATORS_EXIT_BUS_ORACLE = oldLocatorImpl.validatorsExitBusOracle();
-        WITHDRAWAL_QUEUE = oldLocatorImpl.withdrawalQueue();
-
         ILidoLocator newLocatorImpl = ILidoLocator(params.newLocatorImplementation);
+
+        //
+        // -------- Pre-upgrade old contracts --------
+        //
+        OLD_LOCATOR_IMPLEMENTATION = params.oldLocatorImplementation;
+        OLD_BURNER = IBurner(ILidoLocatorOld(params.oldLocatorImplementation).burner());
+        OLD_ACCOUNTING_ORACLE_IMPLEMENTATION = params.oldAccountingOracleImplementation;
+        OLD_LIDO_IMPLEMENTATION = params.oldLidoImplementation;
+
+        //
+        // -------- Upgraded contracts --------
+        //
+        LOCATOR = ILidoLocator(params.locator);
+        NEW_LOCATOR_IMPLEMENTATION = params.newLocatorImplementation;
+        LIDO = ILidoWithFinalizeUpgrade(newLocatorImpl.lido());
+        ACCOUNTING_ORACLE = IAccountingOracle(newLocatorImpl.accountingOracle());
+        BURNER = IBurner(newLocatorImpl.burner());
+        ORACLE_REPORT_SANITY_CHECKER = IOracleReportSanityChecker(newLocatorImpl.oracleReportSanityChecker());
+
+        //
+        // -------- New V3 contracts --------
+        //
         ACCOUNTING = newLocatorImpl.accounting();
         VAULT_HUB = IVaultHub(newLocatorImpl.vaultHub());
         PREDEPOSIT_GUARANTEE = newLocatorImpl.predepositGuarantee();
-        BURNER = IBurner(newLocatorImpl.burner());
-        WSTETH = newLocatorImpl.wstETH();
-        ORACLE_REPORT_SANITY_CHECKER = IOracleReportSanityChecker(newLocatorImpl.oracleReportSanityChecker());
         OPERATOR_GRID = IOperatorGrid(newLocatorImpl.operatorGrid());
-
-        // Retrieve contracts with burner allowances to migrate
-        IStakingRouter.StakingModule[] memory stakingModules = STAKING_ROUTER.getStakingModules();
-        IStakingRouter.StakingModule memory curated = stakingModules[0];
-        if (keccak256(abi.encodePacked(curated.name)) != keccak256("curated-onchain-v1")) revert IncorrectStakingModuleName(curated.name);
-        NODE_OPERATORS_REGISTRY = curated.stakingModuleAddress;
-        IStakingRouter.StakingModule memory simpleDvt = stakingModules[1];
-        if (keccak256(abi.encodePacked(simpleDvt.name)) != keccak256("SimpleDVT")) revert IncorrectStakingModuleName(simpleDvt.name);
-        SIMPLE_DVT = simpleDvt.stakingModuleAddress;
-        IStakingRouter.StakingModule memory csm = stakingModules[2];
-        if (keccak256(abi.encodePacked(csm.name)) != keccak256("Community Staking")) revert IncorrectStakingModuleName(csm.name);
-        CSM_ACCOUNTING = ICSModule(csm.stakingModuleAddress).accounting();
-
         VAULT_FACTORY = IVaultFactory(params.vaultFactory);
         UPGRADEABLE_BEACON = IUpgradeableBeacon(params.upgradeableBeacon);
         STAKING_VAULT_IMPLEMENTATION = params.stakingVaultImplementation;
         DASHBOARD_IMPLEMENTATION = params.dashboardImplementation;
+
+        //
+        // -------- Intact contracts --------
+        //
         AGENT = params.agent;
         ARAGON_APP_LIDO_REPO = IAragonAppRepo(params.aragonAppLidoRepo);
         VOTING = params.voting;
-        OLD_LIDO_IMPLEMENTATION = params.oldLidoImplementation;
+        EL_REWARDS_VAULT = newLocatorImpl.elRewardsVault();
+        STAKING_ROUTER = IStakingRouter(newLocatorImpl.stakingRouter());
+        VALIDATORS_EXIT_BUS_ORACLE = newLocatorImpl.validatorsExitBusOracle();
+        WITHDRAWAL_QUEUE = newLocatorImpl.withdrawalQueue();
+        WSTETH = newLocatorImpl.wstETH();
+        {
+            // Retrieve contracts with burner allowances to migrate: NOR, SDVT and CSM ACCOUNTING
+            IStakingRouter.StakingModule[] memory stakingModules = STAKING_ROUTER.getStakingModules();
+            IStakingRouter.StakingModule memory curated = stakingModules[0];
+            if (keccak256(abi.encodePacked(curated.name)) != keccak256("curated-onchain-v1")) revert IncorrectStakingModuleName(curated.name);
+            NODE_OPERATORS_REGISTRY = curated.stakingModuleAddress;
+            IStakingRouter.StakingModule memory simpleDvt = stakingModules[1];
+            if (keccak256(abi.encodePacked(simpleDvt.name)) != keccak256("SimpleDVT")) revert IncorrectStakingModuleName(simpleDvt.name);
+            SIMPLE_DVT = simpleDvt.stakingModuleAddress;
+            IStakingRouter.StakingModule memory csm = stakingModules[2];
+            if (keccak256(abi.encodePacked(csm.name)) != keccak256("Community Staking")) revert IncorrectStakingModuleName(csm.name);
+            CSM_ACCOUNTING = ICSModule(csm.stakingModuleAddress).accounting();
+        }
 
+
+        //
+        // -------- Initialize Roles --------
+        //
         // Initialize Burner roles
         REQUEST_BURN_SHARES_ROLE = BURNER.REQUEST_BURN_SHARES_ROLE();
         REQUEST_BURN_MY_STETH_ROLE = BURNER.REQUEST_BURN_MY_STETH_ROLE();
-
         // Initialize PauseUntilWithRoles roles
         RESUME_ROLE = VAULT_HUB.RESUME_ROLE();
         PAUSE_ROLE = VAULT_HUB.PAUSE_ROLE();
-
         // Initialize OracleReportSanityChecker roles
         ALL_LIMITS_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.ALL_LIMITS_MANAGER_ROLE();
         EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE();
@@ -349,14 +366,11 @@ contract UpgradeTemplateV3 {
         MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE();
         SECOND_OPINION_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.SECOND_OPINION_MANAGER_ROLE();
         INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE = ORACLE_REPORT_SANITY_CHECKER.INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE();
-
         // Initialize StakingRouter roles
         REPORT_REWARDS_MINTED_ROLE = STAKING_ROUTER.REPORT_REWARDS_MINTED_ROLE();
-
         // Initialize VaultHub roles
         VAULT_MASTER_ROLE = VAULT_HUB.VAULT_MASTER_ROLE();
         VAULT_REGISTRY_ROLE = VAULT_HUB.VAULT_REGISTRY_ROLE();
-
         // Initialize OperatorGrid roles
         REGISTRY_ROLE = OPERATOR_GRID.REGISTRY_ROLE();
     }
