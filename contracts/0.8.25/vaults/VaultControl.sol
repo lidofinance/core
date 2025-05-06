@@ -130,8 +130,7 @@ contract VaultControl is VaultHub {
     ) external payable {
         VaultSocket storage socket = _socket(_vault);
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
-
-        if (msg.sender != socket.manager && msg.sender != socket.operator) revert NotAuthorized();
+        if (msg.sender != socket.manager && msg.sender != IStakingVault(_vault).nodeOperator()) revert NotAuthorized();
 
         IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }

@@ -26,6 +26,8 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice vault sockets with vaults connected to the hub
         /// @dev    first socket is always zero. stone in the elevator
         VaultSocket[] sockets;
+        /// @notice mapping from vault address to its node operator
+        mapping(address => address) nodeOperators;
         /// @notice mapping from vault address to its socket
         /// @dev    if vault is not connected to the hub, its index is zero
         mapping(address => uint256) vaultIndex;
@@ -57,8 +59,6 @@ contract VaultHub is PausableUntilWithRoles {
         address vault;
         /// @notice vault manager address
         address manager;
-        /// @notice vault operator address
-        address operator;
         Report report;
         uint128 locked;
         int128 inOutDelta;
@@ -153,29 +153,13 @@ contract VaultHub is PausableUntilWithRoles {
 
         // the stone in the elevator
         _storage().sockets.push(
-            VaultSocket(
-                address(0),
-                address(0),
-                address(0),
-                Report(0, 0, 0),
-                0,
-                0,
-                false,
-                false,
-                0,
-                0,
-                0,
-                0,
-                0,
-                false,
-                0
-            )
+            VaultSocket(address(0), address(0), Report(0, 0, 0), 0, 0, false, false, 0, 0, 0, 0, 0, false, 0)
         );
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
-    function operatorGrid() external view returns (address) {
+    function operatorGrid() public view returns (address) {
         return LIDO_LOCATOR.operatorGrid();
     }
 
@@ -310,18 +294,24 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
     /// @param _vault vault address
-    function connectVault(address _vault, address _manager, address _operator) external {
+    function connectVault(address _vault, address _manager) external {
+        OperatorGrid operatorGrid_ = OperatorGrid(operatorGrid());
         (
-            address nodeOperator,
-            , // tierId
+            address nodeOperatorFixedInGrid, // tierId
+            ,
             uint256 shareLimit,
             uint256 reserveRatioBP,
             uint256 forcedRebalanceThresholdBP,
             uint256 treasuryFeeBP
-        ) = OperatorGrid(LIDO_LOCATOR.operatorGrid()).vaultInfo(_vault);
-        if (_operator != nodeOperator) revert NotAuthorized();
+        ) = operatorGrid_.vaultInfo(_vault);
 
-        _connectVault(_vault, _manager, _operator, shareLimit, reserveRatioBP, forcedRebalanceThresholdBP, treasuryFeeBP);
+        address nodeOperatorFixedInVault = IStakingVault(_vault).nodeOperator();
+        if (
+            nodeOperatorFixedInVault != operatorGrid_.DEFAULT_TIER_OPERATOR() &&
+            nodeOperatorFixedInVault != nodeOperatorFixedInGrid
+        ) revert InvalidOperator();
+
+        _connectVault(_vault, _manager, shareLimit, reserveRatioBP, forcedRebalanceThresholdBP, treasuryFeeBP);
     }
 
     function cancelPendingConnect(address _vault) external {
@@ -359,7 +349,6 @@ contract VaultHub is PausableUntilWithRoles {
     function _connectVault(
         address _vault,
         address _manager,
-        address _operator,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
@@ -395,7 +384,6 @@ contract VaultHub is PausableUntilWithRoles {
         VaultSocket memory vsocket = VaultSocket(
             _vault,
             _manager,
-            _operator,
             report,
             uint128(CONNECT_DEPOSIT), // locked
             int128(int256(_vault.balance)), // inOutDelta
@@ -751,4 +739,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultReportStaled(address vault);
     error VaultHubMustBeOwner(address vault);
     error VaultProxyZeroCodehash();
+    error InvalidOperator();
 }

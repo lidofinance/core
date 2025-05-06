@@ -58,6 +58,10 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  * and contains immutable references to the beacon chain deposit contract.
  */
 contract StakingVault is IStakingVault, OwnableUpgradeable {
+    struct ERC7201Storage {
+        address nodeOperator;
+    }
+
     /**
      * @notice Version of the contract on the implementation
      *         The implementation is petrified to this version
@@ -94,8 +98,11 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Initializes `StakingVault` with an owner, node operator, and optional parameters
      * @param _owner Address that will own the vault
      */
-    function initialize(address _owner) external initializer {
+    function initialize(address _owner, address _nodeOperator) external initializer {
+        if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
+
         __Ownable_init(_owner);
+        _storage().nodeOperator = _nodeOperator;
     }
 
     /**
@@ -118,6 +125,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      */
     function owner() public view override(IStakingVault, OwnableUpgradeable) returns (address) {
         return OwnableUpgradeable.owner();
+    }
+
+    function nodeOperator() public view returns (address) {
+        return _storage().nodeOperator;
     }
 
     /**
@@ -231,6 +242,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         }
 
         emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
+    }
+
+    function _storage() private pure returns (ERC7201Storage storage $) {
+        assembly {
+            $.slot := ERC7201_STORAGE_LOCATION
+        }
     }
 
     /**

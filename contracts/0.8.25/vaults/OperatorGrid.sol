@@ -314,6 +314,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         Tier memory requestedTier = $.tiers[_tierId];
         address requestedTierOperator = requestedTier.operator;
+        address nodeOperator = IStakingVault(_vault).nodeOperator();
+        if (nodeOperator != requestedTierOperator) revert TierNotInOperatorGroup();
 
         uint128 tierId = uint128(_tierId);
 
@@ -323,7 +325,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         vaultTier.requestedTierId = tierId;
 
-        $.pendingRequests[requestedTierOperator].add(_vault); //returns true if the vault was not in the set
+        $.pendingRequests[nodeOperator].add(_vault); //returns true if the vault was not in the set
 
         emit TierChangeRequested(_vault, vaultTier.currentTierId, _tierId);
     }
@@ -378,6 +380,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     */
     function confirmTierChange(address _vault, uint256 _tierIdToConfirm) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
+
+        address nodeOperator = IStakingVault(_vault).nodeOperator();
+        if (msg.sender != nodeOperator) revert NotAuthorized("confirmTierChange", msg.sender);
         if (_tierIdToConfirm == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
         ERC7201Storage storage $ = _getStorage();
@@ -386,8 +391,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         if (requestedTierId != _tierIdToConfirm) revert InvalidTierId(requestedTierId, _tierIdToConfirm);
 
         Tier storage requestedTier = $.tiers[requestedTierId];
-        address nodeOperator = requestedTier.operator;
-        if (msg.sender != nodeOperator) revert NotAuthorized("confirmTierChange", msg.sender);
 
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
         VaultHub.VaultSocket memory vaultSocket = vaultHub.vaultSocket(_vault);
