@@ -10,7 +10,7 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
-import {VaultHub} from "../VaultHub.sol";
+import {VaultControl} from "../VaultControl.sol";
 import {OperatorGrid} from "../OperatorGrid.sol";
 
 /**
@@ -137,7 +137,8 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     address private immutable _SELF;
 
-    VaultHub public immutable VAULT_HUB;
+    VaultControl public immutable VAULT_CONTROL;
+    IPredepositGuarantee public immutable PREDEPOSIT_GUARANTEE;
 
     /**
      * @notice Indicates whether the contract has been initialized
@@ -147,11 +148,13 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Constructor sets the address of the implementation contract.
      */
-    constructor(address _vaultHub) {
-        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+    constructor(address _vaultControl, address _predepositGuarantee) {
+        if (_vaultControl == address(0)) revert ZeroArgument("_vaultControl");
+        if (_predepositGuarantee == address(0)) revert ZeroArgument("_predepositGuarantee");
 
         _SELF = address(this);
-        VAULT_HUB = VaultHub(_vaultHub);
+        VAULT_CONTROL = VaultControl(payable(_vaultControl));
+        PREDEPOSIT_GUARANTEE = IPredepositGuarantee(payable(_predepositGuarantee));
     }
 
     /**
@@ -233,7 +236,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _ether The amount of ether to fund the StakingVault with.
      */
     function _fund(uint256 _ether) internal onlyRole(FUND_ROLE) {
-        _stakingVault().fund{value: _ether}();
+        VAULT_CONTROL.fund{value: _ether}(address(_stakingVault()));
     }
 
     /**
@@ -243,15 +246,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero checks for recipient and ether are performed in the StakingVault contract.
      */
     function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRole(WITHDRAW_ROLE) {
-        _stakingVault().withdraw(_recipient, _ether);
-    }
-
-    /**
-     * @dev Checks the LOCK_ROLE and increases the locked amount on the StakingVault.
-     * @param _locked The amount of locked ether, must be greater or equal to the current locked amount.
-     */
-    function _lock(uint256 _locked) internal onlyRole(LOCK_ROLE) {
-        _stakingVault().lock(_locked);
+        VAULT_CONTROL.withdraw(address(_stakingVault()), _recipient, _ether);
     }
 
     /**
@@ -261,7 +256,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero checks for parameters are performed in the VaultHub contract.
      */
     function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
-        VAULT_HUB.mintShares(address(_stakingVault()), _recipient, _shares);
+        VAULT_CONTROL.mintShares(address(_stakingVault()), _recipient, _shares);
     }
 
     /**
@@ -270,7 +265,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero check for parameters is performed in the VaultHub contract.
      */
     function _burnShares(uint256 _shares) internal onlyRole(BURN_ROLE) {
-        VAULT_HUB.burnShares(address(_stakingVault()), _shares);
+        VAULT_CONTROL.burnShares(address(_stakingVault()), _shares);
     }
 
     /**
@@ -279,21 +274,21 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero check for parameters is performed in the StakingVault contract.
      */
     function _rebalanceVault(uint256 _ether) internal onlyRole(REBALANCE_ROLE) {
-        _stakingVault().rebalance(_ether);
+        VAULT_CONTROL.rebalance(address(_stakingVault()), _ether);
     }
 
     /**
      * @dev Checks the PAUSE_BEACON_CHAIN_DEPOSITS_ROLE and pauses beacon chain deposits on the StakingVault.
      */
     function _pauseBeaconChainDeposits() internal onlyRole(PAUSE_BEACON_CHAIN_DEPOSITS_ROLE) {
-        _stakingVault().pauseBeaconChainDeposits();
+        VAULT_CONTROL.pauseBeaconChainDeposits(address(_stakingVault()));
     }
 
     /**
      * @dev Checks the RESUME_BEACON_CHAIN_DEPOSITS_ROLE and resumes beacon chain deposits on the StakingVault.
      */
     function _resumeBeaconChainDeposits() internal onlyRole(RESUME_BEACON_CHAIN_DEPOSITS_ROLE) {
-        _stakingVault().resumeBeaconChainDeposits();
+        VAULT_CONTROL.resumeBeaconChainDeposits(address(_stakingVault()));
     }
 
     /**
@@ -301,7 +296,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev The zero check for _pubkeys is performed in the StakingVault contract.
      */
     function _requestValidatorExit(bytes calldata _pubkeys) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
-        _stakingVault().requestValidatorExit(_pubkeys);
+        VAULT_CONTROL.requestValidatorExit(address(_stakingVault()), _pubkeys);
     }
 
     /**
@@ -313,14 +308,14 @@ abstract contract Permissions is AccessControlConfirmable {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) internal onlyRole(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
-        _stakingVault().triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
+        VAULT_CONTROL.triggerValidatorWithdrawal{value: msg.value}(address(_stakingVault()), _pubkeys, _amounts, _refundRecipient);
     }
 
     /**
      * @dev Checks the VOLUNTARY_DISCONNECT_ROLE and voluntarily disconnects the StakingVault.
      */
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
-        VAULT_HUB.voluntaryDisconnect(address(_stakingVault()));
+        VAULT_CONTROL.voluntaryDisconnect(address(_stakingVault()));
     }
 
     /**
@@ -333,7 +328,7 @@ abstract contract Permissions is AccessControlConfirmable {
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
-        return IPredepositGuarantee(_stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
+        return PREDEPOSIT_GUARANTEE.compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     /**
@@ -342,10 +337,8 @@ abstract contract Permissions is AccessControlConfirmable {
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
     ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
-        IStakingVault vault = _stakingVault();
-        IPredepositGuarantee pdg = IPredepositGuarantee(vault.depositor());
         for (uint256 i = 0; i < _witnesses.length; i++) {
-            pdg.proveUnknownValidator(_witnesses[i], vault);
+            PREDEPOSIT_GUARANTEE.proveUnknownValidator(_witnesses[i], _stakingVault());
         }
     }
 
@@ -355,51 +348,22 @@ abstract contract Permissions is AccessControlConfirmable {
     function _withdrawForUnguaranteedDepositToBeaconChain(
         uint256 _ether
     ) internal onlyRole(UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE) {
-        _stakingVault().withdraw(address(this), _ether);
+        VAULT_CONTROL.withdraw(address(_stakingVault()), address(this), _ether);
     }
 
     /**
-     * @dev Checks the confirming roles and transfers the StakingVault ownership.
-     * @param _newOwner The address to transfer the StakingVault ownership to.
+     * @dev Checks the confirming roles and sets the manager on the StakingVault.
+     * @param _newManager The address to set the manager to.
      */
-    function _transferStakingVaultOwnership(address _newOwner) internal onlyConfirmed(confirmingRoles()) {
-        OwnableUpgradeable(address(_stakingVault())).transferOwnership(_newOwner);
-    }
-
-    /**
-     * @dev Checks the LIDO_VAULTHUB_AUTHORIZATION_ROLE and authorizes Lido VaultHub on the StakingVault.
-     */
-    function _authorizeLidoVaultHub() internal onlyRole(LIDO_VAULTHUB_AUTHORIZATION_ROLE) {
-        _stakingVault().authorizeLidoVaultHub();
-    }
-
-    /**
-     * @dev Checks the LIDO_VAULTHUB_DEAUTHORIZATION_ROLE and deauthorizes Lido VaultHub from the StakingVault.
-     */
-    function _deauthorizeLidoVaultHub() internal onlyRole(LIDO_VAULTHUB_DEAUTHORIZATION_ROLE) {
-        _stakingVault().deauthorizeLidoVaultHub();
+    function _setManager(address _newManager) internal onlyConfirmed(confirmingRoles()) {
+        VAULT_CONTROL.setManager(address(_stakingVault()), _newManager);
     }
 
     /**
      * @dev Checks the OSSIFY_ROLE and ossifies the StakingVault.
      */
     function _ossifyStakingVault() internal onlyRole(OSSIFY_ROLE) {
-        _stakingVault().ossifyStakingVault();
-    }
-
-    /**
-     * @dev Checks the SET_DEPOSITOR_ROLE and sets the depositor on the StakingVault.
-     * @param _depositor The address to set the depositor to.
-     */
-    function _setDepositor(address _depositor) internal onlyRole(SET_DEPOSITOR_ROLE) {
-        _stakingVault().setDepositor(_depositor);
-    }
-
-    /**
-     * @dev Checks the RESET_LOCKED_ROLE and resets the locked amount on the disconnected StakingVault.
-     */
-    function _resetLocked() internal onlyRole(RESET_LOCKED_ROLE) {
-        _stakingVault().resetLocked();
+        _stakingVault().ossify();
     }
 
     /**
@@ -407,7 +371,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _tierId The tier to change to.
      */
     function _requestTierChange(uint256 _tierId) internal onlyRole(REQUEST_TIER_CHANGE_ROLE) {
-        OperatorGrid(VAULT_HUB.operatorGrid()).requestTierChange(address(_stakingVault()), _tierId);
+        OperatorGrid(VAULT_CONTROL.operatorGrid()).requestTierChange(address(_stakingVault()), _tierId);
     }
 
     /**

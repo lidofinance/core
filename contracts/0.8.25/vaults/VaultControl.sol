@@ -29,10 +29,6 @@ contract VaultControl is VaultHub {
         return totalValue_ - locked_;
     }
 
-    function latestReport(address _vault) public view returns (VaultHub.Report memory) {
-        return _socket(_vault).report;
-    }
-
     function fund(address _vault) external payable {
         if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
@@ -154,12 +150,27 @@ contract VaultControl is VaultHub {
         burnShares(_vault, _amountOfShares);
     }
 
+    function pauseBeaconChainDeposits(address _vault) external {
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
+        IStakingVault(_vault).pauseBeaconChainDeposits();
+    }
+
+    function resumeBeaconChainDeposits(address _vault) external {
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
+        IStakingVault(_vault).resumeBeaconChainDeposits();
+    }
+
     function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external {
         if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
         VaultSocket storage socket = _socket(_vault);
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
 
         IStakingVault(_vault).depositToBeaconChain(_deposits);
+    }
+
+    function requestValidatorExit(address _vault, bytes calldata _pubkeys) external {
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
+        IStakingVault(_vault).requestValidatorExit(_pubkeys);
     }
 
     function triggerValidatorWithdrawal(
@@ -191,6 +202,11 @@ contract VaultControl is VaultHub {
         IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, amounts, _refundRecipient);
 
         emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
+    }
+
+    function setManager(address _vault, address _manager) external {
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
+        _socket(_vault).manager = _manager;
     }
 
     function _rebalance(address _vault, uint256 _ether) internal {
@@ -246,6 +262,13 @@ contract VaultControl is VaultHub {
      * @notice Emitted when deposits are paused
      */
     event DepositedToBeaconChain(address indexed sender, uint256 numberOfDeposits, uint256 totalAmount);
+
+    /**
+     * @notice Emitted when the manager is set
+     * @param vault The address of the vault
+     * @param manager The address of the manager
+     */
+    event ManagerSet(address indexed vault, address indexed manager);
 
     /**
      * @notice Thrown when attempting to decrease the locked amount outside of a report

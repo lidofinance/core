@@ -27,6 +27,7 @@ struct StakingVaultDeposit {
  * @notice Interface for the `StakingVault` contract
  */
 interface IStakingVault {
+    function DEPOSIT_CONTRACT() external view returns (IDepositContract);
     function initialize(address _owner, address _nodeOperator) external;
     function version() external pure returns (uint64);
     function getInitializedVersion() external view returns (uint64);

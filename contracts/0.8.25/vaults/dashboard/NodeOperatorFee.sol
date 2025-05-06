@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {Permissions} from "./Permissions.sol";
+import {VaultHub} from "../VaultHub.sol";
 
 /**
  * @title NodeOperatorFee
@@ -69,7 +70,7 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice The last report for which node operator fee was claimed. Updated on each claim.
      */
-    IStakingVault.Report public nodeOperatorFeeClaimedReport;
+    VaultHub.Report public nodeOperatorFeeClaimedReport;
 
     /**
      * @notice Adjustment to allow fee correction during side deposits or consolidations.
@@ -84,9 +85,10 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Passes the address of the vault hub up the inheritance chain.
-     * @param _vaultHub The address of the vault hub.
+     * @param _vaultControl The address of the vault control.
+     * @param _predepositGuarantee The address of the predeposit guarantee.
      */
-    constructor(address _vaultHub) Permissions(_vaultHub) {}
+    constructor(address _vaultControl, address _predepositGuarantee) Permissions(_vaultControl, _predepositGuarantee) {}
 
     /**
      * @dev Calls the parent's initializer, sets the node operator fee, assigns the node operator manager role,
@@ -127,6 +129,10 @@ contract NodeOperatorFee is Permissions {
         roles[1] = NODE_OPERATOR_MANAGER_ROLE;
     }
 
+    function latestReport() public view returns (VaultHub.Report memory) {
+        return VAULT_CONTROL.vaultSocket(address(_stakingVault())).report;
+    }
+
     /**
      * @notice Returns the accumulated unclaimed node operator fee in ether,
      * calculated as: U = ((R - A) * F) / T
@@ -139,14 +145,14 @@ contract NodeOperatorFee is Permissions {
      * @return uint256: the amount of unclaimed fee in ether.
      */
     function nodeOperatorUnclaimedFee() public view returns (uint256) {
-        IStakingVault.Report memory latestReport = _stakingVault().latestReport();
-        IStakingVault.Report storage _lastClaimedReport = nodeOperatorFeeClaimedReport;
+        VaultHub.Report memory latestReport_ = latestReport();
+        VaultHub.Report storage _lastClaimedReport = nodeOperatorFeeClaimedReport;
 
         // cast down safely clamping to int128.max
         int128 adjustment = int128(int256(accruedRewardsAdjustment & ADJUSTMENT_CLAMP_MASK));
 
-        int128 rewardsAccrued = int128(latestReport.totalValue) - int128(_lastClaimedReport.totalValue) -
-            (latestReport.inOutDelta - _lastClaimedReport.inOutDelta) -
+        int128 rewardsAccrued = int128(latestReport_.totalValue) - int128(_lastClaimedReport.totalValue) -
+            (latestReport_.inOutDelta - _lastClaimedReport.inOutDelta) -
             adjustment;
 
         return rewardsAccrued > 0 ? (uint256(uint128(rewardsAccrued)) * nodeOperatorFeeBP) / TOTAL_BASIS_POINTS : 0;
@@ -187,9 +193,9 @@ contract NodeOperatorFee is Permissions {
         if (fee == 0) revert NoUnclaimedFee();
 
         if (accruedRewardsAdjustment != 0) _setAccruedRewardsAdjustment(0);
-        nodeOperatorFeeClaimedReport = _stakingVault().latestReport();
+        nodeOperatorFeeClaimedReport = latestReport();
 
-        _stakingVault().withdraw(_recipient, fee);
+        VAULT_CONTROL.withdraw(address(_stakingVault()), _recipient, fee);
     }
 
     /**
@@ -232,7 +238,7 @@ contract NodeOperatorFee is Permissions {
 
         // If fee is changing from 0, update the claimed report to current to prevent retroactive fees
         if (oldNodeOperatorFeeBP == 0 && _newNodeOperatorFeeBP > 0) {
-            nodeOperatorFeeClaimedReport = _stakingVault().latestReport();
+            nodeOperatorFeeClaimedReport = latestReport();
         }
 
         nodeOperatorFeeBP = _newNodeOperatorFeeBP;
