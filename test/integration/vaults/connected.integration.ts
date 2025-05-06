@@ -5,6 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
+import { advanceChainTime, days } from "lib";
 import {
   createVaultWithDashboard,
   disconnectFromHub,
@@ -122,6 +123,14 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
       await expect(dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub())
         .to.emit(stakingVault, "VaultHubAuthorizedSet")
         .withArgs(false);
+    });
+  });
+
+  describe("Reporting", () => {
+    it("updates report data and keep in fresh state for 1 day", async () => {
+      await reportVaultDataWithProof(stakingVault, ether("100"), ether("33"));
+      await advanceChainTime(days(1n));
+      expect(await stakingVault.isReportFresh()).to.equal(true);
     });
   });
 });
