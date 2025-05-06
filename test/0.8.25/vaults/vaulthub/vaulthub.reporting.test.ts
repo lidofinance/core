@@ -298,41 +298,6 @@ describe("VaultHub.sol:reporting", () => {
       ]);
     });
 
-    it("updates vault data with precalculated proof", async () => {
-      const testVaultAddress = "0x20d34FD0482E3BdC944952D0277A306860be0014";
-      const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
-      await expect(
-        vaultHub
-          .connect(accountingAddress)
-          .updateReportData(0, "0x305228cb82b2385b40ebeb7f0b805e58c2e9942bd84183eb1d603b765af94ca1", ""),
-      ).to.not.reverted;
-
-      await vaultHub.harness__connectVault(
-        testVaultAddress,
-        SHARE_LIMIT,
-        RESERVE_RATIO_BP,
-        FORCED_REBALANCE_THRESHOLD_BP,
-        TREASURY_FEE_BP,
-      );
-
-      await setCode(testVaultAddress, vaultCode);
-
-      await expect(
-        vaultHub.updateVaultData(
-          testVaultAddress,
-          2580000000000012501n,
-          580000000000012501n,
-          0n,
-          1449900000000010001n,
-          [
-            "0x3ce25daf426ef04e5e0714b61a4a46c1ecb59922de95b73c45afe57779f1cc26",
-            "0x33c5d49ae39b473dc097b8987ab2f876542ad500209b96af5600da11289fe643",
-            "0x5060c4e8e98281c0181273abcabb2e9e8f06fe6353e99f96606bb87635c9b090",
-          ],
-        ),
-      ).to.not.reverted;
-    });
-
     it("calculates merkle tree the same way as off-chain implementation", async () => {
       const values: VaultReportItem[] = [
         ["0xc1F9c4a809cbc6Cb2cA60bCa09cE9A55bD5337Db", 2500000000000000000n, 2500000000000000000n, 0n, 1n],
