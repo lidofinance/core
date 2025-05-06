@@ -6,11 +6,11 @@ pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
-import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "../interfaces/ILido.sol";
+import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
@@ -292,6 +292,44 @@ contract VaultHub is PausableUntilWithRoles {
         return (liabilityStETH * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio) / reserveRatioBP;
     }
 
+    function cancelPendingConnect(address _vault) external {
+        VaultHubStorage storage $ = _storage();
+        VaultSocket storage socket = _socket(_vault);
+
+        if (msg.sender != socket.manager) revert NotAuthorized();
+
+        if (socket.pendingConnect) {
+            address vaultAddress = socket.vault;
+            uint256 vaultIndex = $.vaultIndex[vaultAddress];
+            VaultSocket memory lastSocket = $.sockets[$.sockets.length - 1];
+            $.sockets[vaultIndex] = lastSocket;
+            $.vaultIndex[lastSocket.vault] = vaultIndex;
+            $.sockets.pop();
+            delete $.vaultIndex[vaultAddress];
+        }
+    }
+
+    /// @notice disconnects a vault from the hub
+    /// @param _vault vault address
+    /// @dev msg.sender should be vault's owner
+    /// @dev vault's `liabilityShares` should be zero
+    function voluntaryDisconnect(address _vault) external whenResumed {
+        if (_vault == address(0)) revert VaultZeroAddress();
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
+
+        _disconnect(_vault);
+    }
+
+
+    /// @notice returns the latest report data
+    /// @return timestamp of the report
+    /// @return treeRoot of the report
+    /// @return reportCid of the report
+    function latestReportData() external view returns (uint64 timestamp, bytes32 treeRoot, string memory reportCid) {
+        VaultHubStorage storage $ = _storage();
+        return ($.vaultsDataTimestamp, $.vaultsDataTreeRoot, $.vaultsDataReportCid);
+    }
+
     /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
     /// @param _vault vault address
     function connectVault(address _vault, address _manager) external {
@@ -312,32 +350,6 @@ contract VaultHub is PausableUntilWithRoles {
         ) revert InvalidOperator();
 
         _connectVault(_vault, _manager, shareLimit, reserveRatioBP, forcedRebalanceThresholdBP, treasuryFeeBP);
-    }
-
-    function cancelPendingConnect(address _vault) external {
-        VaultHubStorage storage $ = _storage();
-        VaultSocket storage socket = _socket(_vault);
-
-        if (msg.sender != socket.manager) revert NotAuthorized();
-
-        if (socket.pendingConnect) {
-            address vaultAddress = socket.vault;
-            uint256 vaultIndex = $.vaultIndex[vaultAddress];
-            VaultSocket memory lastSocket = $.sockets[$.sockets.length - 1];
-            $.sockets[vaultIndex] = lastSocket;
-            $.vaultIndex[lastSocket.vault] = vaultIndex;
-            $.sockets.pop();
-            delete $.vaultIndex[vaultAddress];
-        }
-    }
-
-    /// @notice returns the latest report data
-    /// @return timestamp of the report
-    /// @return treeRoot of the report
-    /// @return reportCid of the report
-    function latestReportData() external view returns (uint64 timestamp, bytes32 treeRoot, string memory reportCid) {
-        VaultHubStorage storage $ = _storage();
-        return ($.vaultsDataTimestamp, $.vaultsDataTreeRoot, $.vaultsDataReportCid);
     }
 
     /// @notice connects a vault to the hub
@@ -477,110 +489,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (_vault == address(0)) revert VaultZeroAddress();
 
         _disconnect(_vault);
-    }
-
-    /// @notice disconnects a vault from the hub
-    /// @param _vault vault address
-    /// @dev msg.sender should be vault's owner
-    /// @dev vault's `liabilityShares` should be zero
-    function voluntaryDisconnect(address _vault) external whenResumed {
-        if (_vault == address(0)) revert VaultZeroAddress();
-        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
-
-        _disconnect(_vault);
-    }
-
-    /// @notice mint StETH shares backed by vault external balance to the receiver address
-    /// @param _vault vault address
-    /// @param _recipient address of the receiver
-    /// @param _amountOfShares amount of stETH shares to mint
-    /// @dev msg.sender should be vault's owner
-    function mintShares(address _vault, address _recipient, uint256 _amountOfShares) external whenResumed {
-        if (_vault == address(0)) revert VaultZeroAddress();
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
-        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
-
-        VaultSocket storage socket = _socket(_vault);
-
-        uint256 vaultSharesAfterMint = socket.liabilityShares + _amountOfShares;
-        uint256 shareLimit = socket.shareLimit;
-        if (vaultSharesAfterMint > shareLimit) revert ShareLimitExceeded(_vault, shareLimit);
-
-        if (!isReportFresh(_vault)) revert VaultReportStaled(_vault);
-
-        uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - socket.reserveRatioBP;
-        uint256 maxMintableEther = (totalValue(_vault) * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
-        uint256 stETHAfterMint = LIDO.getPooledEthBySharesRoundUp(vaultSharesAfterMint);
-        if (stETHAfterMint > maxMintableEther) {
-            revert InsufficientTotalValueToMint(_vault, totalValue(_vault));
-        }
-
-        // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
-        uint256 etherToLock = (stETHAfterMint * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
-
-        if (etherToLock > socket.locked) {
-            socket.locked = uint128(etherToLock);
-        }
-
-        socket.liabilityShares = uint96(vaultSharesAfterMint);
-        LIDO.mintExternalShares(_recipient, _amountOfShares);
-        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onMintedShares(_vault, _amountOfShares);
-
-        emit MintedSharesOnVault(_vault, _amountOfShares);
-    }
-
-    /// @notice burn steth shares from the balance of the VaultHub contract
-    /// @param _vault vault address
-    /// @param _amountOfShares amount of shares to burn
-    /// @dev msg.sender should be vault's owner
-    /// @dev VaultHub must have all the stETH on its balance
-    function burnShares(address _vault, uint256 _amountOfShares) public whenResumed {
-        if (_vault == address(0)) revert VaultZeroAddress();
-        if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
-        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
-
-        VaultSocket storage socket = _socket(_vault);
-
-        uint256 liabilityShares = socket.liabilityShares;
-        if (liabilityShares < _amountOfShares) revert InsufficientSharesToBurn(_vault, liabilityShares);
-
-        socket.liabilityShares = uint96(liabilityShares - _amountOfShares);
-
-        LIDO.burnExternalShares(_amountOfShares);
-        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onBurnedShares(_vault, _amountOfShares);
-
-        emit BurnedSharesOnVault(_vault, _amountOfShares);
-    }
-
-    /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
-    /// @dev msg.sender should be vault's owner
-    function transferAndBurnShares(address _vault, uint256 _amountOfShares) external {
-        LIDO.transferSharesFrom(msg.sender, address(this), _amountOfShares);
-
-        burnShares(_vault, _amountOfShares);
-    }
-
-    /// @notice Forces validator exit from the beacon chain when vault is unhealthy
-    /// @param _vault The address of the vault to exit validators from
-    /// @param _pubkeys The public keys of the validators to exit
-    /// @param _refundRecipient The address that will receive the refund for transaction costs
-    /// @dev    When the vault becomes unhealthy, anyone can force its validators to exit the beacon chain
-    ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
-    function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _refundRecipient) external payable {
-        if (msg.value == 0) revert ZeroArgument("msg.value");
-        if (_vault == address(0)) revert VaultZeroAddress();
-        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
-        if (_refundRecipient == address(0)) revert ZeroArgument("_refundRecipient");
-        if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
-        if (isVaultHealthyAsOfLatestReport(_vault)) revert AlreadyHealthy(_vault);
-
-        uint256 numValidators = _pubkeys.length / PUBLIC_KEY_LENGTH;
-        uint64[] memory amounts = new uint64[](numValidators);
-
-        IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, amounts, _refundRecipient);
-
-        emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
     function _disconnect(address _vault) internal {

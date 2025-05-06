@@ -11,6 +11,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
+import {OperatorGrid} from "./OperatorGrid.sol";
 
 contract VaultControl is VaultHub {
     IDepositContract public immutable DEPOSIT_CONTRACT;
@@ -89,6 +90,77 @@ contract VaultControl is VaultHub {
         _rebalance(_vault, _ether);
     }
 
+    /// @notice mint StETH shares backed by vault external balance to the receiver address
+    /// @param _vault vault address
+    /// @param _recipient address of the receiver
+    /// @param _amountOfShares amount of stETH shares to mint
+    /// @dev msg.sender should be vault's owner
+    function mintShares(address _vault, address _recipient, uint256 _amountOfShares) external whenResumed {
+        if (_vault == address(0)) revert VaultZeroAddress();
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+        if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
+
+        VaultSocket storage socket = _socket(_vault);
+
+        uint256 vaultSharesAfterMint = socket.liabilityShares + _amountOfShares;
+        uint256 shareLimit = socket.shareLimit;
+        if (vaultSharesAfterMint > shareLimit) revert ShareLimitExceeded(_vault, shareLimit);
+
+        if (!isReportFresh(_vault)) revert VaultReportStaled(_vault);
+
+        uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - socket.reserveRatioBP;
+        uint256 maxMintableEther = (totalValue(_vault) * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 stETHAfterMint = LIDO.getPooledEthBySharesRoundUp(vaultSharesAfterMint);
+        if (stETHAfterMint > maxMintableEther) {
+            revert InsufficientTotalValueToMint(_vault, totalValue(_vault));
+        }
+
+        // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
+        uint256 etherToLock = (stETHAfterMint * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
+
+        if (etherToLock > socket.locked) {
+            socket.locked = uint128(etherToLock);
+        }
+
+        socket.liabilityShares = uint96(vaultSharesAfterMint);
+        LIDO.mintExternalShares(_recipient, _amountOfShares);
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onMintedShares(_vault, _amountOfShares);
+
+        emit MintedSharesOnVault(_vault, _amountOfShares);
+    }
+
+    /// @notice burn steth shares from the balance of the VaultHub contract
+    /// @param _vault vault address
+    /// @param _amountOfShares amount of shares to burn
+    /// @dev msg.sender should be vault's owner
+    /// @dev VaultHub must have all the stETH on its balance
+    function burnShares(address _vault, uint256 _amountOfShares) public whenResumed {
+        if (_vault == address(0)) revert VaultZeroAddress();
+        if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
+
+        VaultSocket storage socket = _socket(_vault);
+
+        uint256 liabilityShares = socket.liabilityShares;
+        if (liabilityShares < _amountOfShares) revert InsufficientSharesToBurn(_vault, liabilityShares);
+
+        socket.liabilityShares = uint96(liabilityShares - _amountOfShares);
+
+        LIDO.burnExternalShares(_amountOfShares);
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onBurnedShares(_vault, _amountOfShares);
+
+        emit BurnedSharesOnVault(_vault, _amountOfShares);
+    }
+
+    /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
+    /// @dev msg.sender should be vault's owner
+    function transferAndBurnShares(address _vault, uint256 _amountOfShares) external {
+        LIDO.transferSharesFrom(msg.sender, address(this), _amountOfShares);
+
+        burnShares(_vault, _amountOfShares);
+    }
+
     function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
 
@@ -133,6 +205,28 @@ contract VaultControl is VaultHub {
         if (msg.sender != socket.manager && msg.sender != IStakingVault(_vault).nodeOperator()) revert NotAuthorized();
 
         IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
+    }
+
+    /// @notice Forces validator exit from the beacon chain when vault is unhealthy
+    /// @param _vault The address of the vault to exit validators from
+    /// @param _pubkeys The public keys of the validators to exit
+    /// @param _refundRecipient The address that will receive the refund for transaction costs
+    /// @dev    When the vault becomes unhealthy, anyone can force its validators to exit the beacon chain
+    ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
+    function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _refundRecipient) external payable {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+        if (_vault == address(0)) revert VaultZeroAddress();
+        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
+        if (_refundRecipient == address(0)) revert ZeroArgument("_refundRecipient");
+        if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
+        if (isVaultHealthyAsOfLatestReport(_vault)) revert AlreadyHealthy(_vault);
+
+        uint256 numValidators = _pubkeys.length / PUBLIC_KEY_LENGTH;
+        uint64[] memory amounts = new uint64[](numValidators);
+
+        IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, amounts, _refundRecipient);
+
+        emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
     function _rebalance(address _vault, uint256 _ether) internal {
