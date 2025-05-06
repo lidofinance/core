@@ -64,8 +64,6 @@ contract VaultHub is PausableUntilWithRoles {
         int128 inOutDelta;
         /// @notice true if connection not confirmed by the report
         bool pendingConnect;
-        /// @notice true if deposits are paused
-        bool depositsPaused;
         /// @notice total number of stETH shares that the vault owes to Lido
         uint96 liabilityShares;
         // ### 2nd slot
@@ -153,7 +151,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // the stone in the elevator
         _storage().sockets.push(
-            VaultSocket(address(0), address(0), Report(0, 0, 0), 0, 0, false, false, 0, 0, 0, 0, 0, false, 0)
+            VaultSocket(address(0), address(0), Report(0, 0, 0), 0, 0, false, 0, 0, 0, 0, 0, false, 0)
         );
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
@@ -400,7 +398,6 @@ contract VaultHub is PausableUntilWithRoles {
             uint128(CONNECT_DEPOSIT), // locked
             int128(int256(_vault.balance)), // inOutDelta
             true, // pendingConnect
-            false, // depositsPaused
             0, // liabilityShares
             uint96(_shareLimit),
             uint16(_reserveRatioBP),

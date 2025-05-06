@@ -162,36 +162,11 @@ contract VaultControl is VaultHub {
     }
 
     function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external {
-        if (_deposits.length == 0) revert ZeroArgument("_deposits");
-
-        VaultSocket storage socket = _socket(_vault);
-        if (socket.depositsPaused) revert BeaconChainDepositsArePaused();
         if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
+        VaultSocket storage socket = _socket(_vault);
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
 
-        uint256 numberOfDeposits = _deposits.length;
-
-        uint256 totalAmount;
-        for (uint256 i = 0; i < numberOfDeposits; i++) {
-            totalAmount += _deposits[i].amount;
-        }
-        if (totalAmount > _vault.balance) revert InsufficientBalance(_vault.balance);
-        _withdrawFromVault(_vault, address(this), totalAmount);
-
-        bytes memory withdrawalCredentials_ = bytes.concat(IStakingVault(_vault).withdrawalCredentials());
-
-        for (uint256 i = 0; i < numberOfDeposits; i++) {
-            StakingVaultDeposit calldata deposit = _deposits[i];
-
-            DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
-                deposit.pubkey,
-                withdrawalCredentials_,
-                deposit.signature,
-                deposit.depositDataRoot
-            );
-        }
-
-        emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
+        IStakingVault(_vault).depositToBeaconChain(_deposits);
     }
 
     function triggerValidatorWithdrawal(
@@ -201,8 +176,8 @@ contract VaultControl is VaultHub {
         address _refundRecipient
     ) external payable {
         VaultSocket storage socket = _socket(_vault);
-        if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
         if (msg.sender != socket.manager && msg.sender != IStakingVault(_vault).nodeOperator()) revert NotAuthorized();
+        if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
 
         IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
@@ -214,11 +189,7 @@ contract VaultControl is VaultHub {
     /// @dev    When the vault becomes unhealthy, anyone can force its validators to exit the beacon chain
     ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
     function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _refundRecipient) external payable {
-        if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_vault == address(0)) revert VaultZeroAddress();
-        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
-        if (_refundRecipient == address(0)) revert ZeroArgument("_refundRecipient");
-        if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
         if (isVaultHealthyAsOfLatestReport(_vault)) revert AlreadyHealthy(_vault);
 
         uint256 numValidators = _pubkeys.length / PUBLIC_KEY_LENGTH;
