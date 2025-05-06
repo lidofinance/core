@@ -265,16 +265,9 @@ contract VaultHub is PausableUntilWithRoles {
         VaultSocket storage socket = _socket(_vault);
 
         if (msg.sender != socket.manager) revert NotAuthorized();
+        if (!socket.pendingConnect) revert NotPendingConnect();
 
-        if (socket.pendingConnect) {
-            address vaultAddress = socket.vault;
-            uint256 vaultIndex = $.vaultIndex[vaultAddress];
-            VaultSocket memory lastSocket = $.sockets[$.sockets.length - 1];
-            $.sockets[vaultIndex] = lastSocket;
-            $.vaultIndex[lastSocket.vault] = vaultIndex;
-            $.sockets.pop();
-            delete $.vaultIndex[vaultAddress];
-        }
+        _releaseVault($.vaultIndex[_vault]);
     }
 
     /// @notice disconnects a vault from the hub
@@ -495,15 +488,8 @@ contract VaultHub is PausableUntilWithRoles {
         socket.report.timestamp = uint64($.vaultsDataTimestamp);
         socket.locked = uint128(lockedEther);
 
-        uint256 length = $.sockets.length;
         if (socket.pendingDisconnect) {
-            // remove disconnected vault from the list
-            address vaultAddress = socket.vault;
-            VaultSocket memory lastSocket = $.sockets[length - 1];
-            $.sockets[vaultIndex] = lastSocket;
-            $.vaultIndex[lastSocket.vault] = vaultIndex;
-            $.sockets.pop();
-            delete $.vaultIndex[vaultAddress];
+            _releaseVault(vaultIndex);
         }
     }
 
@@ -535,6 +521,21 @@ contract VaultHub is PausableUntilWithRoles {
         if (_shareLimit > relativeMaxShareLimitPerVault) {
             revert ShareLimitTooHigh(_vault, _shareLimit, relativeMaxShareLimitPerVault);
         }
+    }
+
+    function _releaseVault(uint256 _vaultIndex) internal {
+        VaultHubStorage storage $ = _storage();
+        VaultSocket storage socket = $.sockets[_vaultIndex];
+        address vaultAddress = socket.vault;
+
+        VaultSocket memory lastSocket = $.sockets[$.sockets.length - 1];
+        $.sockets[_vaultIndex] = lastSocket;
+        $.vaultIndex[lastSocket.vault] = _vaultIndex;
+        $.sockets.pop();
+
+        delete $.vaultIndex[vaultAddress];
+
+        OwnableUpgradeable(payable(vaultAddress)).transferOwnership(socket.manager);
     }
 
     event VaultConnectionSet(
@@ -592,4 +593,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultHubMustBeOwner(address vault);
     error VaultProxyZeroCodehash();
     error InvalidOperator();
+    error NotPendingConnect();
 }
