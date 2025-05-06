@@ -225,7 +225,7 @@
       "constructorArgs": [
         "0xf5591B4CA4De7f3e339248bbA35b0A02Ef9939c2",
         "0xddbcfd564f642ab5627cf68b9b7d374fb4f8a36e941a75d89c87998cef03bd61",
-        "0x00"
+        "0x8129fc1c"
       ],
       "contract": "@aragon/os/contracts/apps/AppProxyPinned.sol"
     },
