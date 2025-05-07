@@ -8,16 +8,17 @@ contract VaultHub__MockForOperatorGrid {
         // ### 1st slot
         /// @notice vault address
         address vault;
-        /// @notice total number of stETH shares minted by the vault
+        /// @notice total number of stETH shares that the vault owes to Lido
         uint96 liabilityShares;
         // ### 2nd slot
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 shareLimit;
-        /// @notice minimal share of ether that is reserved for each stETH minted
+        /// @notice share of ether that is locked on the vault as an additional reserve
+        /// e.g RR=30% means that for 1stETH minted 1/(1-0.3)=1.428571428571428571 ETH is locked on the vault
         uint16 reserveRatioBP;
         /// @notice if vault's reserve decreases to this threshold, it should be force rebalanced
         uint16 forcedRebalanceThresholdBP;
-        /// @notice infrastructure fee in basis points
+        /// @notice infra fee in basis points
         uint16 infraFeeBP;
         /// @notice liquidity fee in basis points
         uint16 liquidityFeeBP;
@@ -25,10 +26,13 @@ contract VaultHub__MockForOperatorGrid {
         uint16 reservationFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
-        /// @notice last fees accrued on the vault
-        uint96 feeSharesCharged;
         /// @notice unused gap in the slot 2
-        /// uint8 _unused_gap_;
+        /// uint72 _unused_gap_;
+        // ### 3rd slot
+        /// @notice cumulative amount of shares charged as fees for the vault
+        uint96 feeSharesCharged;
+        /// @notice unused gap in the slot 3
+        /// uint160 _unused_gap_;
     }
 
     mapping(address => VaultSocket) public vaultSockets;

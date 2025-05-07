@@ -37,7 +37,9 @@ const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_LIMIT = ether("1");
 const RESERVE_RATIO_BP = 10_00n;
 const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
-const TREASURY_FEE_BP = 5_00n;
+const INFRA_FEE_BP = 5_00n;
+const LIQUIDITY_FEE_BP = 4_00n;
+const RESERVATION_FEE_BP = 1_00n;
 
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
 const CONNECT_DEPOSIT = ether("1");
@@ -80,7 +82,9 @@ describe("VaultHub.sol:hub", () => {
       shareLimit?: bigint;
       reserveRatioBP?: bigint;
       forcedRebalanceThresholdBP?: bigint;
-      treasuryFeeBP?: bigint;
+      infraFeeBP?: bigint;
+      liquidityFeeBP?: bigint;
+      reservationFeeBP?: bigint;
     },
   ) {
     const vault = await createVault(factory);
@@ -90,7 +94,9 @@ describe("VaultHub.sol:hub", () => {
       shareLimit: options?.shareLimit ?? SHARE_LIMIT,
       reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
       forcedRebalanceThresholdBP: options?.forcedRebalanceThresholdBP ?? FORCED_REBALANCE_THRESHOLD_BP,
-      treasuryFeeBP: options?.treasuryFeeBP ?? TREASURY_FEE_BP,
+      infraFeeBP: options?.infraFeeBP ?? INFRA_FEE_BP,
+      liquidityFeeBP: options?.liquidityFeeBP ?? LIQUIDITY_FEE_BP,
+      reservationFeeBP: options?.reservationFeeBP ?? RESERVATION_FEE_BP,
     });
     const tx = await vaultHub.connect(user).connectVault(vault);
 
@@ -243,7 +249,9 @@ describe("VaultHub.sol:hub", () => {
       expect(lastVaultSocket.shareLimit).to.equal(SHARE_LIMIT);
       expect(lastVaultSocket.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
       expect(lastVaultSocket.forcedRebalanceThresholdBP).to.equal(FORCED_REBALANCE_THRESHOLD_BP);
-      expect(lastVaultSocket.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
+      expect(lastVaultSocket.infraFeeBP).to.equal(INFRA_FEE_BP);
+      expect(lastVaultSocket.liquidityFeeBP).to.equal(LIQUIDITY_FEE_BP);
+      expect(lastVaultSocket.reservationFeeBP).to.equal(RESERVATION_FEE_BP);
       expect(lastVaultSocket.pendingDisconnect).to.equal(false);
     });
   });
@@ -258,7 +266,9 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket.shareLimit).to.equal(0n);
       expect(vaultSocket.reserveRatioBP).to.equal(0n);
       expect(vaultSocket.forcedRebalanceThresholdBP).to.equal(0n);
-      expect(vaultSocket.treasuryFeeBP).to.equal(0n);
+      expect(vaultSocket.infraFeeBP).to.equal(0n);
+      expect(vaultSocket.liquidityFeeBP).to.equal(0n);
+      expect(vaultSocket.reservationFeeBP).to.equal(0n);
       expect(vaultSocket.pendingDisconnect).to.equal(false);
     });
 
@@ -272,7 +282,9 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket.shareLimit).to.equal(SHARE_LIMIT);
       expect(vaultSocket.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
       expect(vaultSocket.forcedRebalanceThresholdBP).to.equal(FORCED_REBALANCE_THRESHOLD_BP);
-      expect(vaultSocket.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
+      expect(vaultSocket.infraFeeBP).to.equal(INFRA_FEE_BP);
+      expect(vaultSocket.liquidityFeeBP).to.equal(LIQUIDITY_FEE_BP);
+      expect(vaultSocket.reservationFeeBP).to.equal(RESERVATION_FEE_BP);
       expect(vaultSocket.pendingDisconnect).to.equal(false);
     });
   });
@@ -711,7 +723,9 @@ describe("VaultHub.sol:hub", () => {
         shareLimit: 0n,
         reserveRatioBP: 0n,
         forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        treasuryFeeBP: TREASURY_FEE_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
       });
 
       await expect(vaultHub.connect(user).connectVault(vaultAddress)).to.be.revertedWithCustomError(
@@ -727,7 +741,9 @@ describe("VaultHub.sol:hub", () => {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: tooHighReserveRatioBP,
         forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        treasuryFeeBP: TREASURY_FEE_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
       });
 
       await expect(vaultHub.connect(user).connectVault(vaultAddress))
@@ -740,7 +756,9 @@ describe("VaultHub.sol:hub", () => {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO_BP,
         forcedRebalanceThresholdBP: 0n,
-        treasuryFeeBP: TREASURY_FEE_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
       });
 
       await expect(vaultHub.connect(user).connectVault(vaultAddress)).to.be.revertedWithCustomError(
@@ -754,7 +772,9 @@ describe("VaultHub.sol:hub", () => {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO_BP,
         forcedRebalanceThresholdBP: RESERVE_RATIO_BP + 1n,
-        treasuryFeeBP: TREASURY_FEE_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
       });
 
       await expect(vaultHub.connect(user).connectVault(vaultAddress))
@@ -762,20 +782,55 @@ describe("VaultHub.sol:hub", () => {
         .withArgs(vaultAddress, RESERVE_RATIO_BP + 1n, RESERVE_RATIO_BP);
     });
 
-    it("reverts if treasury fee is too high", async () => {
-      const tooHighTreasuryFeeBP = TOTAL_BASIS_POINTS + 1n;
+    it("reverts if infra fee is too high", async () => {
+      const tooHighInfraFeeBP = TOTAL_BASIS_POINTS + 1n;
 
       await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO_BP,
         forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        treasuryFeeBP: tooHighTreasuryFeeBP,
+        infraFeeBP: tooHighInfraFeeBP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
       });
 
-      await expect(vaultHub.connect(user).connectVault(vaultAddress)).to.be.revertedWithCustomError(
-        vaultHub,
-        "TreasuryFeeTooHigh",
-      );
+      await expect(vaultHub.connect(user).connectVault(vaultAddress))
+        .to.be.revertedWithCustomError(vaultHub, "InfraFeeTooHigh")
+        .withArgs(vaultAddress, tooHighInfraFeeBP, TOTAL_BASIS_POINTS);
+    });
+
+    it("reverts if liquidity fee is too high", async () => {
+      const tooHighLiquidityFeeBP = TOTAL_BASIS_POINTS + 1n;
+
+      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
+        shareLimit: SHARE_LIMIT,
+        reserveRatioBP: RESERVE_RATIO_BP,
+        forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: tooHighLiquidityFeeBP,
+        reservationFeeBP: RESERVATION_FEE_BP,
+      });
+
+      await expect(vaultHub.connect(user).connectVault(vaultAddress))
+        .to.be.revertedWithCustomError(vaultHub, "LiquidityFeeTooHigh")
+        .withArgs(vaultAddress, tooHighLiquidityFeeBP, TOTAL_BASIS_POINTS);
+    });
+
+    it("reverts if reservation fee is too high", async () => {
+      const tooHighReservationFeeBP = TOTAL_BASIS_POINTS + 1n;
+
+      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
+        shareLimit: SHARE_LIMIT,
+        reserveRatioBP: RESERVE_RATIO_BP,
+        forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: tooHighReservationFeeBP,
+      });
+
+      await expect(vaultHub.connect(user).connectVault(vaultAddress))
+        .to.be.revertedWithCustomError(vaultHub, "ReservationFeeTooHigh")
+        .withArgs(vaultAddress, tooHighReservationFeeBP, TOTAL_BASIS_POINTS);
     });
 
     it("reverts if vault is already connected", async () => {
@@ -802,7 +857,9 @@ describe("VaultHub.sol:hub", () => {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO_BP,
         forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        treasuryFeeBP: TREASURY_FEE_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
       });
 
       await expect(vaultHub.connect(user).connectVault(vault2)).to.be.revertedWithCustomError(
@@ -825,12 +882,22 @@ describe("VaultHub.sol:hub", () => {
         shareLimit: SHARE_LIMIT, // just to bypass the share limit check
         reserveRatioBP: RESERVE_RATIO_BP,
         forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        treasuryFeeBP: TREASURY_FEE_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
       });
 
       await expect(tx)
         .to.emit(vaultHub, "VaultConnectionSet")
-        .withArgs(_vault, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP, TREASURY_FEE_BP);
+        .withArgs(
+          _vault,
+          SHARE_LIMIT,
+          RESERVE_RATIO_BP,
+          FORCED_REBALANCE_THRESHOLD_BP,
+          INFRA_FEE_BP,
+          LIQUIDITY_FEE_BP,
+          RESERVATION_FEE_BP,
+        );
 
       expect(await vaultHub.vaultsCount()).to.equal(vaultCountBefore + 1n);
 
@@ -849,7 +916,9 @@ describe("VaultHub.sol:hub", () => {
         shareLimit: 0n,
         reserveRatioBP: RESERVE_RATIO_BP,
         forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        treasuryFeeBP: TREASURY_FEE_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
       });
 
       await expect(vaultHub.connect(user).connectVault(vaultAddress));
@@ -857,12 +926,22 @@ describe("VaultHub.sol:hub", () => {
         shareLimit: 0n, // just to bypass the share limit check
         reserveRatioBP: RESERVE_RATIO_BP,
         forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        treasuryFeeBP: TREASURY_FEE_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
       });
 
       await expect(tx)
         .to.emit(vaultHub, "VaultConnectionSet")
-        .withArgs(_vault, 0n, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP, TREASURY_FEE_BP);
+        .withArgs(
+          _vault,
+          0n,
+          RESERVE_RATIO_BP,
+          FORCED_REBALANCE_THRESHOLD_BP,
+          INFRA_FEE_BP,
+          LIQUIDITY_FEE_BP,
+          RESERVATION_FEE_BP,
+        );
     });
 
     it("allows to connect the vault with 0 treasury fee", async () => {
@@ -873,7 +952,9 @@ describe("VaultHub.sol:hub", () => {
         shareLimit: SHARE_LIMIT,
         reserveRatioBP: RESERVE_RATIO_BP,
         forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        treasuryFeeBP: 0n,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
       });
 
       await expect(vaultHub.connect(user).connectVault(vaultAddress));
@@ -881,12 +962,22 @@ describe("VaultHub.sol:hub", () => {
         shareLimit: SHARE_LIMIT, // just to bypass the share limit check
         reserveRatioBP: RESERVE_RATIO_BP,
         forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        treasuryFeeBP: 0n,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
       });
 
       await expect(tx)
         .to.emit(vaultHub, "VaultConnectionSet")
-        .withArgs(_vault, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP, 0n);
+        .withArgs(
+          _vault,
+          SHARE_LIMIT,
+          RESERVE_RATIO_BP,
+          FORCED_REBALANCE_THRESHOLD_BP,
+          INFRA_FEE_BP,
+          LIQUIDITY_FEE_BP,
+          RESERVATION_FEE_BP,
+        );
     });
   });
 
