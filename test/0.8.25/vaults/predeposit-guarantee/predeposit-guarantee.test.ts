@@ -793,14 +793,17 @@ describe("PredepositGuarantee.sol", () => {
         const validator = generateValidator(wc);
         await sszMerkleTree.addValidatorLeaf(validator.container);
         const childBlockTimestamp = await setBeaconBlockRoot(await sszMerkleTree.getMerkleRoot());
+        const beaconHeader = generateBeaconHeader(await sszMerkleTree.getMerkleRoot());
 
         await expect(
           pdg.validatePubKeyWCProof(
             {
+              slot: beaconHeader.slot,
               pubkey: validator.container.pubkey,
               validatorIndex: 0n,
               proof: [],
               childBlockTimestamp,
+              proposerIndex: beaconHeader.proposerIndex,
             },
             wc,
           ),
@@ -825,6 +828,8 @@ describe("PredepositGuarantee.sol", () => {
           pubkey: validator.container.pubkey,
           proof,
           childBlockTimestamp,
+          proposerIndex: beaconHeader.proposerIndex,
+          slot: beaconHeader.slot,
         };
 
         await expect(pdg.validatePubKeyWCProof(witness, wc)).not.to.be.reverted;
