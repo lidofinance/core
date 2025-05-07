@@ -271,6 +271,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const withdrawalCredentials = await stakingVault.withdrawalCredentials();
     const predepositAmount = await ctx.contracts.predepositGuarantee.PREDEPOSIT_AMOUNT();
+    const depositDomain = await ctx.contracts.predepositGuarantee.DEPOSIT_DOMAIN();
 
     const validators: {
       container: SSZHelpers.ValidatorStruct;
@@ -285,7 +286,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const predeposits = await Promise.all(
       validators.map((validator) => {
-        return generatePredeposit(validator);
+        return generatePredeposit(validator, { depositDomain });
       }),
     );
 
@@ -301,9 +302,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       predeposits.map((p) => p.depositY),
     );
 
-    const slot = await pdg.SLOT_CHANGE_GI_FIRST_VALIDATOR();
+    const slot = await pdg.PIVOT_SLOT();
 
-    const mockCLtree = await prepareLocalMerkleTree(await pdg.GI_FIRST_VALIDATOR_AFTER_CHANGE());
+    const mockCLtree = await prepareLocalMerkleTree(await pdg.GI_FIRST_VALIDATOR_CURR());
 
     for (let index = 0; index < validators.length; index++) {
       const validator = validators[index];
@@ -322,6 +323,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       pubkey: hexlify(validator.container.pubkey),
       validatorIndex: validator.index,
       childBlockTimestamp,
+      slot: beaconBlockHeader.slot,
+      proposerIndex: beaconBlockHeader.proposerIndex,
     }));
 
     const postDepositAmount = VALIDATOR_DEPOSIT_SIZE - predepositAmount;

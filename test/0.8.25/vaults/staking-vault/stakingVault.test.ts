@@ -27,6 +27,7 @@ import {
   proxify,
   streccak,
 } from "lib";
+import { getPubkeys } from "lib/protocol/helpers/vaults";
 
 import { deployStakingVaultBehindBeaconProxy } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -36,18 +37,6 @@ const MAX_INT128 = 2n ** 127n - 1n;
 const PUBLIC_KEY_LENGTH = 48;
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const INVALID_PUBKEY = "0x" + "ab".repeat(47);
-
-const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
-  const pubkeys = Array.from({ length: num }, (_, i) => {
-    const paddedIndex = (i + 1).toString().padStart(8, "0");
-    return `0x${paddedIndex.repeat(12)}`;
-  });
-
-  return {
-    pubkeys,
-    stringified: `0x${pubkeys.map(de0x).join("")}`,
-  };
-};
 
 const encodeEip7002Input = (pubkey: string, amount: bigint): string => {
   return `${pubkey}${amount.toString(16).padStart(16, "0")}`;
@@ -855,6 +844,20 @@ describe("StakingVault.sol", () => {
             { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
           ]),
       ).to.be.revertedWithCustomError(stakingVault, "TotalValueBelowLockedAmount");
+    });
+
+    it("reverts if the total amount of deposits exceeds the vault's balance", async () => {
+      await stakingVault.fund({ value: ether("1") });
+
+      await expect(
+        stakingVault
+          .connect(depositor)
+          .depositToBeaconChain([
+            { pubkey: "0x", signature: "0x", amount: ether("2"), depositDataRoot: streccak("random-root") },
+          ]),
+      )
+        .to.be.revertedWithCustomError(stakingVault, "InsufficientBalance")
+        .withArgs(ether("1"));
     });
 
     it("reverts if the deposits are paused", async () => {

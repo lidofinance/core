@@ -1,6 +1,8 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
+import { mine } from "@nomicfoundation/hardhat-network-helpers";
+
 import { CLProofVerifier__Harness, SSZMerkleTree } from "typechain-types";
 
 import {
@@ -94,7 +96,6 @@ const STATIC_VALIDATOR = {
 describe("CLProofVerifier.sol", () => {
   let CLProofVerifier: CLProofVerifier__Harness;
   let sszMerkleTree: SSZMerkleTree;
-
   let firstValidatorLeafIndex: bigint;
   let lastValidatorIndex: bigint;
 
@@ -103,6 +104,7 @@ describe("CLProofVerifier.sol", () => {
   before(async () => {
     const localTree = await prepareLocalMerkleTree();
     sszMerkleTree = localTree.sszMerkleTree;
+    firstValidatorLeafIndex = localTree.firstValidatorLeafIndex;
 
     firstValidatorLeafIndex = localTree.firstValidatorLeafIndex;
 
@@ -143,7 +145,8 @@ describe("CLProofVerifier.sol", () => {
 
     const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(STATIC_VALIDATOR.witness.validator);
     const beaconHeaderMerkle = await sszMerkleTree.getBeaconBlockHeaderProof(STATIC_VALIDATOR.beaconBlockHeader);
-    const validatorGIndex = await StaticCLProofVerifier.TEST_getValidatorGI(STATIC_VALIDATOR.witness.validatorIndex);
+    const validatorGIndex = await StaticCLProofVerifier.TEST_getValidatorGI(STATIC_VALIDATOR.witness.validatorIndex, 0);
+
     // raw proof verification with same input as CSM
     await sszMerkleTree.verifyProof(
       STATIC_VALIDATOR.witness.proof,
@@ -168,6 +171,8 @@ describe("CLProofVerifier.sol", () => {
         pubkey: STATIC_VALIDATOR.witness.validator.pubkey,
         validatorIndex: STATIC_VALIDATOR.witness.validatorIndex,
         childBlockTimestamp: timestamp,
+        slot: STATIC_VALIDATOR.beaconBlockHeader.slot,
+        proposerIndex: STATIC_VALIDATOR.beaconBlockHeader.proposerIndex,
       },
       STATIC_VALIDATOR.witness.validator.withdrawalCredentials,
     );
@@ -194,7 +199,7 @@ describe("CLProofVerifier.sol", () => {
     const stateProof = await sszMerkleTree.getMerkleProof(validatorLeafIndex);
     const validatorGIndex = await sszMerkleTree.getGeneralizedIndex(validatorLeafIndex);
 
-    expect(await CLProofVerifier.TEST_getValidatorGI(validatorIndex)).to.equal(validatorGIndex);
+    expect(await CLProofVerifier.TEST_getValidatorGI(validatorIndex, 0)).to.equal(validatorGIndex);
 
     // verify just the state tree
     await sszMerkleTree.verifyProof([...stateProof], stateRoot, validatorMerkle.root, validatorGIndex);
@@ -207,18 +212,127 @@ describe("CLProofVerifier.sol", () => {
     const timestamp = await setBeaconBlockRoot(beaconMerkle.root);
 
     const proof = [...validatorMerkle.proof, ...stateProof, ...beaconMerkle.proof];
+
     await CLProofVerifier.TEST_validatePubKeyWCProof(
       {
         validatorIndex,
         proof: [...proof],
         pubkey: validator.container.pubkey,
         childBlockTimestamp: timestamp,
+        slot: beaconHeader.slot,
+        proposerIndex: beaconHeader.proposerIndex,
       },
       validator.container.withdrawalCredentials,
     );
   });
 
-  /*
-    TODO: negative tests
-  */
+  it("should change gIndex on pivot slot", async () => {
+    const pivotSlot = 1000;
+    const giPrev = randomBytes32();
+    const giCurr = randomBytes32();
+    const clProofVerifier: CLProofVerifier__Harness = await ethers.deployContract(
+      "CLProofVerifier__Harness",
+      [giPrev, giCurr, pivotSlot],
+      {},
+    );
+
+    expect(await clProofVerifier.TEST_getValidatorGI(0n, pivotSlot - 1)).to.equal(giPrev);
+    expect(await clProofVerifier.TEST_getValidatorGI(0n, pivotSlot)).to.equal(giCurr);
+    expect(await clProofVerifier.TEST_getValidatorGI(0n, pivotSlot + 1)).to.equal(giCurr);
+  });
+
+  it("should validate proof with different gIndex", async () => {
+    const provenValidator = generateValidator();
+    const validatorMerkle = await sszMerkleTree.getValidatorPubkeyWCParentProof(provenValidator.container);
+    const pivotSlot = 1000;
+
+    const prepareCLState = async (gIndex: string, slot: number) => {
+      const {
+        sszMerkleTree: localTree,
+        gIFirstValidator,
+        firstValidatorLeafIndex: localFirstValidatorLeafIndex,
+      } = await prepareLocalMerkleTree(gIndex);
+      await localTree.addValidatorLeaf(provenValidator.container);
+
+      const gIndexProven = await localTree.getGeneralizedIndex(localFirstValidatorLeafIndex + 1n);
+      const stateProof = await localTree.getMerkleProof(localFirstValidatorLeafIndex + 1n);
+      const beaconHeader = generateBeaconHeader(await localTree.getMerkleRoot(), slot);
+      const beaconMerkle = await localTree.getBeaconBlockHeaderProof(beaconHeader);
+      const proof = [...validatorMerkle.proof, ...stateProof, ...beaconMerkle.proof];
+
+      return {
+        localTree,
+        gIFirstValidator,
+        gIndexProven,
+        proof: [...proof],
+        beaconHeader,
+        beaconRoot: beaconMerkle.root,
+      };
+    };
+
+    const [prev, curr] = await Promise.all([
+      prepareCLState("0x0000000000000000000000000000000000000000000000000056000000000028", pivotSlot - 1),
+      prepareCLState("0x0000000000000000000000000000000000000000000000000096000000000028", pivotSlot + 1),
+    ]);
+
+    // current CL state
+
+    const clProofVerifier: CLProofVerifier__Harness = await ethers.deployContract(
+      "CLProofVerifier__Harness",
+      [prev.gIFirstValidator, curr.gIFirstValidator, pivotSlot],
+      {},
+    );
+
+    //
+
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, pivotSlot - 1)).to.equal(prev.gIndexProven);
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, pivotSlot)).to.equal(curr.gIndexProven);
+    expect(await clProofVerifier.TEST_getValidatorGI(1n, pivotSlot + 1)).to.equal(curr.gIndexProven);
+
+    // prev works
+    const timestampPrev = await setBeaconBlockRoot(prev.beaconRoot);
+    await clProofVerifier.TEST_validatePubKeyWCProof(
+      {
+        proof: prev.proof,
+        validatorIndex: 1n,
+        pubkey: provenValidator.container.pubkey,
+        childBlockTimestamp: timestampPrev,
+        slot: prev.beaconHeader.slot,
+        proposerIndex: prev.beaconHeader.proposerIndex,
+      },
+      provenValidator.container.withdrawalCredentials,
+    );
+
+    await mine(1);
+
+    // curr works
+    const timestampCurr = await setBeaconBlockRoot(curr.beaconRoot);
+    await clProofVerifier.TEST_validatePubKeyWCProof(
+      {
+        proof: [...curr.proof],
+        validatorIndex: 1n,
+        pubkey: provenValidator.container.pubkey,
+        childBlockTimestamp: timestampCurr,
+        slot: curr.beaconHeader.slot,
+        proposerIndex: curr.beaconHeader.proposerIndex,
+      },
+      provenValidator.container.withdrawalCredentials,
+    );
+
+    // prev fails on curr slot
+    await expect(
+      clProofVerifier.TEST_validatePubKeyWCProof(
+        {
+          proof: [...prev.proof],
+          validatorIndex: 1n,
+          pubkey: provenValidator.container.pubkey,
+          childBlockTimestamp: timestampCurr,
+          // invalid slot to get wrong GIndex
+          slot: curr.beaconHeader.slot,
+          proposerIndex: curr.beaconHeader.proposerIndex,
+        },
+        provenValidator.container.withdrawalCredentials,
+      ),
+    ).to.be.revertedWithCustomError(CLProofVerifier, "InvalidSlot");
+  });
 });

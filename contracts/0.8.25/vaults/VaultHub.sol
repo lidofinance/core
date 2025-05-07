@@ -69,6 +69,11 @@ contract VaultHub is PausableUntilWithRoles {
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
+        uint96 shareLimit;
+        uint16 reserveRatioBP;
+        uint16 forcedRebalanceThresholdBP;
+        uint16 treasuryFeeBP;
+        bool pendingDisconnect;
     }
 
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
@@ -178,22 +183,27 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _offset offset of the vault in the batch (indexes start from 0)
     /// @param _limit limit of the batch
     /// @return batch of vaults info
-    function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory) {
+    function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory batch) {
         VaultHubStorage storage $ = _getVaultHubStorage();
         uint256 limit = _offset + _limit > $.sockets.length - 1 ? $.sockets.length - 1 - _offset : _limit;
-        VaultInfo[] memory batch = new VaultInfo[](limit);
+        batch = new VaultInfo[](limit);
+        uint256 startIndex = _offset + 1;
         for (uint256 i = 0; i < limit; i++) {
-            VaultSocket storage socket = $.sockets[i + 1 + _offset];
+            VaultSocket memory socket = $.sockets[startIndex + i];
             IStakingVault currentVault = IStakingVault(socket.vault);
             batch[i] = VaultInfo(
                 address(currentVault),
                 address(currentVault).balance,
                 currentVault.inOutDelta(),
                 currentVault.withdrawalCredentials(),
-                socket.liabilityShares
+                socket.liabilityShares,
+                socket.shareLimit,
+                socket.reserveRatioBP,
+                socket.forcedRebalanceThresholdBP,
+                socket.treasuryFeeBP,
+                socket.pendingDisconnect
             );
         }
-        return batch;
     }
 
     /// @notice checks if the vault is healthy by comparing its total value after applying rebalance threshold
@@ -574,7 +584,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         socket.pendingDisconnect = true;
 
-        emit VaultDisconnected(_vault);
+        emit VaultDisconnectInitiated(_vault);
     }
 
     /// @notice Permissionless update of the vault data
@@ -627,6 +637,8 @@ contract VaultHub is PausableUntilWithRoles {
             $.vaultIndex[lastSocket.vault] = vaultIndex;
             $.sockets.pop();
             delete $.vaultIndex[vaultAddress];
+
+            emit VaultDisconnectCompleted(vaultAddress);
         }
     }
 
@@ -670,7 +682,8 @@ contract VaultHub is PausableUntilWithRoles {
 
     event VaultsReportDataUpdated(uint64 indexed timestamp, bytes32 root, string cid);
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
-    event VaultDisconnected(address indexed vault);
+    event VaultDisconnectInitiated(address indexed vault);
+    event VaultDisconnectCompleted(address indexed vault);
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
