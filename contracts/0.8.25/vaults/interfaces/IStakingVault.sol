@@ -40,8 +40,9 @@ interface IStakingVault {
     function withdraw(address _recipient, uint256 _ether) external;
     function pauseBeaconChainDeposits() external;
     function resumeBeaconChainDeposits() external;
-    function ossify() external;
     function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external;
     function requestValidatorExit(bytes calldata _pubkeys) external;
     function triggerValidatorWithdrawal(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable;
+    function setDepositor(address _depositor) external;
+    function ossify() external;
 }
