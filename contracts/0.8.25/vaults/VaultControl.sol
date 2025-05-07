@@ -179,11 +179,11 @@ contract VaultControl is VaultHub {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
+        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
         VaultSocket storage socket = _connectedSocket(_vault);
-        if (msg.sender != socket.manager && msg.sender != IStakingVault(_vault).nodeOperator()) revert NotAuthorized();
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
 
-        IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
+        IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
     /// @notice Forces validator exit from the beacon chain when vault is unhealthy
@@ -196,10 +196,7 @@ contract VaultControl is VaultHub {
         if (_vault == address(0)) revert VaultZeroAddress();
         if (isVaultHealthyAsOfLatestReport(_vault)) revert AlreadyHealthy(_vault);
 
-        uint256 numValidators = _pubkeys.length / PUBLIC_KEY_LENGTH;
-        uint64[] memory amounts = new uint64[](numValidators);
-
-        IStakingVault(_vault).triggerValidatorWithdrawal{value: msg.value}(_pubkeys, amounts, _refundRecipient);
+        IStakingVault(_vault).triggerValidatorExits{value: msg.value}(_pubkeys, _refundRecipient);
 
         emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }

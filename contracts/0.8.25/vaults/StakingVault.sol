@@ -85,7 +85,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         bool beaconChainDepositsPaused;
     }
 
-
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
@@ -189,7 +188,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
         return _numberOfKeys * TriggerableWithdrawals.getWithdrawalRequestFee();
     }
-    
+
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
@@ -224,8 +223,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance, _ether);
 
-        (bool success, ) = _recipient.call{value: _ether}("");
-        if (!success) revert TransferFailed(_recipient, _ether);
+        _transferEther("withdraw", _recipient, _ether);
 
         emit EtherWithdrawn(msg.sender, _recipient, _ether);
     }
@@ -297,7 +295,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
     }
 
-
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
@@ -331,7 +328,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
      */
-    function triggerValidatorWithdrawal(
+    function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
         address _refundRecipient
@@ -352,13 +349,31 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
         TriggerableWithdrawals.addWithdrawalRequests(_pubkeys, _amounts, feePerRequest);
 
-        uint256 excess = msg.value - totalFee;
-        if (excess > 0) {
-            (bool success, ) = _refundRecipient.call{value: excess}("");
-            if (!success) revert WithdrawalFeeRefundFailed(_refundRecipient, excess);
+        uint256 excess = _refundExcess(totalFee, _refundRecipient);
+
+        emit ValidatorWithdrawalsTriggered(msg.sender, _refundRecipient, _pubkeys, _amounts, excess);
+    }
+
+    function triggerValidatorExits(bytes calldata _pubkeys, address _refundRecipient) external payable {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
+        if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
+        if (msg.sender != owner() && msg.sender != _storage().nodeOperator) revert SenderNotNodeOperator();
+
+        // If the refund recipient is not set, use the sender as the refund recipient
+        if (_refundRecipient == address(0)) {
+            _refundRecipient = msg.sender;
         }
 
-        emit ValidatorWithdrawalTriggered(msg.sender, _refundRecipient, _pubkeys, _amounts, excess);
+        uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
+        uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
+        if (msg.value < totalFee) revert InsufficientValidatorWithdrawalFee(msg.value, totalFee);
+
+        TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, feePerRequest);
+
+        uint256 excess = _refundExcess(totalFee, _refundRecipient);
+
+        emit ValidatorExitsTriggered(msg.sender, _refundRecipient, _pubkeys, excess);
     }
 
     /*
@@ -376,7 +391,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     function setDepositor(address _depositor) external onlyOwner {
         _setDepositor(_depositor);
     }
-
 
     /**
      * @notice Ossifies the current implementation. WARNING: This operation is irreversible,
@@ -411,6 +425,11 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         }
     }
 
+    function _transferEther(string memory _operation, address _recipient, uint256 _amount) internal {
+        (bool success, ) = _recipient.call{value: _amount}("");
+        if (!success) revert TransferFailed(_operation, _recipient, _amount);
+    }
+
     /**
      * @dev Fixes the node operator address in the `StakingVault`
      * @param _nodeOperator Address of the node operator
@@ -431,6 +450,11 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address previousDepositor = _storage().depositor;
         _storage().depositor = _depositor;
         emit DepositorSet(msg.sender, previousDepositor, _depositor);
+    }
+
+    function _refundExcess(uint256 _totalFee, address _refundRecipient) internal returns (uint256 excess) {
+        excess = msg.value - _totalFee;
+        if (excess > 0) _transferEther("refund", _refundRecipient, excess);
     }
 
     /*
@@ -506,11 +530,18 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param refundRecipient Address to receive any excess withdrawal fee
      * @param excess Amount of excess fee refunded to recipient
      */
-    event ValidatorWithdrawalTriggered(
+    event ValidatorWithdrawalsTriggered(
         address indexed sender,
         address indexed refundRecipient,
         bytes pubkeys,
         uint64[] amounts,
+        uint256 excess
+    );
+
+    event ValidatorExitsTriggered(
+        address indexed sender,
+        address indexed refundRecipient,
+        bytes pubkeys,
         uint256 excess
     );
 
@@ -540,7 +571,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param recipient Address that was supposed to receive the transfer
      * @param amount Amount that failed to transfer
      */
-    error TransferFailed(address recipient, uint256 amount);
+    error TransferFailed(string operation, address recipient, uint256 amount);
 
     /**
      * @notice Thrown when the new depositor is the same as the previous depositor
@@ -566,6 +597,11 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Thrown when the sender is not set as the depositor
      */
     error SenderNotDepositor();
+
+    /**
+     * @notice Thrown when the sender is not the node operator
+     */
+    error SenderNotNodeOperator();
 
     /**
      * @notice Thrown when the length of the validator public keys is invalid
