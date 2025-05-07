@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -64,8 +64,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint128 locked;
         /// @notice net difference between ether funded and withdrawn from the vault
         int128 inOutDelta;
-        /// @notice true if connection not confirmed by the report
-        bool pendingConnect;
         /// @notice total number of stETH shares that the vault owes to Lido
         uint96 liabilityShares;
         // ### 2nd slot
@@ -144,7 +142,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // the stone in the elevator
         _getVaultHubStorage().sockets.push(
-            VaultSocket(address(0), address(0), Report(0, 0, 0), 0, 0, false, 0, 0, 0, 0, 0, false, 0)
+            VaultSocket(address(0), address(0), Report(0, 0, 0), 0, 0, 0, 0, 0, 0, 0, false, 0)
         );
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
@@ -261,16 +259,6 @@ contract VaultHub is PausableUntilWithRoles {
         return (liabilityStETH * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio) / reserveRatioBP;
     }
 
-    function cancelPendingConnect(address _vault) external {
-        VaultHubStorage storage $ = _getVaultHubStorage();
-        VaultSocket storage socket = _connectedSocket(_vault);
-
-        if (msg.sender != socket.manager) revert NotAuthorized();
-        if (!socket.pendingConnect) revert NotPendingConnect();
-
-        _releaseVault($.vaultIndex[_vault]);
-    }
-
     /// @notice disconnects a vault from the hub
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
@@ -294,6 +282,11 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
     /// @param _vault vault address
     function connectVault(address _vault, address _manager) external {
+        if (address(this) != Ownable2StepUpgradeable(_vault).pendingOwner()) revert VaultHubNotPendingOwner(_vault);
+        IStakingVault vault_ = IStakingVault(_vault);
+        if (vault_.isOssified()) revert VaultOssified(_vault);
+        if (vault_.depositor() != address(this)) revert VaultHubMustBeDepositor(_vault);
+
         OperatorGrid operatorGrid_ = OperatorGrid(operatorGrid());
         (
             address nodeOperatorFixedInGrid, // tierId
@@ -335,10 +328,6 @@ contract VaultHub is PausableUntilWithRoles {
             revert ForcedRebalanceThresholdTooHigh(_vault, _forcedRebalanceThresholdBP, _reserveRatioBP);
         if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
 
-        IStakingVault vault_ = IStakingVault(_vault);
-        if (vault_.isOssified()) revert VaultOssified(_vault);
-        if (vault_.owner() != address(this)) revert VaultHubMustBeOwner(_vault);
-        if (vault_.depositor() != address(this)) revert VaultHubMustBeDepositor(_vault);
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _getVaultHubStorage();
@@ -361,7 +350,6 @@ contract VaultHub is PausableUntilWithRoles {
             report,
             uint128(CONNECT_DEPOSIT), // locked
             int128(int256(_vault.balance)), // inOutDelta
-            true, // pendingConnect
             0, // liabilityShares
             uint96(_shareLimit),
             uint16(_reserveRatioBP),
@@ -372,6 +360,8 @@ contract VaultHub is PausableUntilWithRoles {
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
+
+        Ownable2StepUpgradeable(_vault).acceptOwnership();
 
         emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
@@ -537,7 +527,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         delete $.vaultIndex[vaultAddress];
 
-        OwnableUpgradeable(payable(vaultAddress)).transferOwnership(socket.manager);
+        Ownable2StepUpgradeable(vaultAddress).transferOwnership(socket.manager);
     }
 
     event VaultConnectionSet(
@@ -596,5 +586,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultHubMustBeDepositor(address vault);
     error VaultProxyZeroCodehash();
     error InvalidOperator();
-    error NotPendingConnect();
+    error VaultHubNotPendingOwner(address vault);
 }

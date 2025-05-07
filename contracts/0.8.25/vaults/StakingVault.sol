@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
 
 import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
@@ -29,7 +30,7 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  * to be ossified (pinned) to prevent future upgrades. The implementation is petrified (non-initializable)
  * and contains immutable references to the beacon chain deposit contract.
  */
-contract StakingVault is IStakingVault, OwnableUpgradeable {
+contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
