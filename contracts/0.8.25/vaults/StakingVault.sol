@@ -7,9 +7,7 @@ pragma solidity 0.8.25;
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
 
-import {VaultHub} from "./VaultHub.sol";
 import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
-
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
 
@@ -26,31 +24,7 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  * total value as locked, which cannot be withdrawn by the owner. This locked portion represents the
  * collateral for the minted stETH.
  *
- * Access Control:
- * - Owner:
- *   - `fund()`
- *   - `withdraw()`
- *   - `rebalance()`
- *   - `lock()`
- *   - `pauseBeaconChainDeposits()`
- *   - `resumeBeaconChainDeposits()`
- *   - `requestValidatorExit()`
- *   - `triggerValidatorWithdrawal()`
- *   - `authorizeLidoVaultHub()`
- *   - `deauthorizeLidoVaultHub()`
- *   - `ossifyStakingVault()`
- *   - `setDepositor()`
- *   - `resetLocked()`
- * - Operator:
- *   - `triggerValidatorWithdrawal()`
- * - Depositor:
- *   - `depositToBeaconChain()`
- * - VaultHub:
- *   - `report()`
- *   - `rebalance()`
- *   - `triggerValidatorWithdrawal()`
- * - Anyone:
- *   - Can send ETH directly to the vault (treated as rewards)
+ * TODO: update comments
  *
  * PinnedBeaconProxy
  * The contract is designed as an extended beacon proxy implementation, allowing individual StakingVault instances
@@ -62,8 +36,8 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     struct ERC7201Storage {
         address nodeOperator;
-        bool beaconChainDepositsPaused;
         address depositor;
+        bool beaconChainDepositsPaused;
     }
 
     /**
@@ -93,8 +67,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Constructs the implementation of `StakingVault`
      */
-    constructor(address _depositContract) {
-        DEPOSIT_CONTRACT = IDepositContract(_depositContract);
+    constructor(address _beaconChainDepositContract) {
+        if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
+
+        DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
 
         // Prevents reinitialization of the implementation
         _disableInitializers();
@@ -200,7 +176,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @dev Reverts if vaultHub is authorized at the vault
      */
     function ossify() external onlyOwner {
-        if (isOssified()) revert AlreadyOssified();
+        if (isOssified()) revert VaultOssified();
 
         PinnedBeaconUtils.ossify();
     }
@@ -428,7 +404,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Thrown when the vault is already ossified
      */
-    error AlreadyOssified();
+    error VaultOssified();
 
     /**
      * @notice Thrown when the caller is not authorized
