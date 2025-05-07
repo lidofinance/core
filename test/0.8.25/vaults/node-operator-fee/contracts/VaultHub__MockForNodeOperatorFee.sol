@@ -8,7 +8,7 @@ import {StETH__MockForNodeOperatorFee} from "./StETH__MockForNodeOperatorFee.sol
 
 contract VaultHub__MockForNodeOperatorFee {
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
-    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
 
     address public immutable LIDO_LOCATOR;
     StETH__MockForNodeOperatorFee public immutable steth;

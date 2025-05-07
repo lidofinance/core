@@ -5,6 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
+import { advanceChainTime, days } from "lib";
 import {
   createVaultWithDashboard,
   disconnectFromHub,
@@ -67,6 +68,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
     // add some stETH to the vault to have totalValue
     await dashboard.connect(roles.funder).fund({ value: ether("1") });
     const sharesAmount = await ctx.contracts.lido.getSharesByPooledEth(TEST_STETH_AMOUNT_WEI);
+    await reportVaultDataWithProof(stakingVault);
 
     await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
       .to.emit(vaultHub, "MintedSharesOnVault")
@@ -79,6 +81,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
 
     // add some stETH to the vault to have totalValue, mint shares and approve stETH
     await dashboard.connect(roles.funder).fund({ value: ether("1") });
+    await reportVaultDataWithProof(stakingVault);
     await dashboard.connect(roles.minter).mintStETH(roles.burner, TEST_STETH_AMOUNT_WEI);
     await lido.connect(roles.burner).approve(dashboard, TEST_STETH_AMOUNT_WEI);
 
@@ -88,6 +91,8 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
   });
 
   it("Allows trigger validator withdrawal", async () => {
+    await reportVaultDataWithProof(stakingVault);
+
     await expect(
       dashboard
         .connect(roles.validatorWithdrawalTriggerer)
@@ -114,13 +119,21 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
       ).to.be.revertedWithCustomError(stakingVault, "VaultConnected");
     });
 
-    it("Can deauthorize Lido VaultHub if dicsconnected from Hub", async () => {
+    it("Can deauthorize Lido VaultHub if disconnected from Hub", async () => {
       await disconnectFromHub(ctx, stakingVault);
       await reportVaultDataWithProof(stakingVault);
 
       await expect(dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub())
         .to.emit(stakingVault, "VaultHubAuthorizedSet")
         .withArgs(false);
+    });
+  });
+
+  describe("Reporting", () => {
+    it("updates report data and keep in fresh state for 1 day", async () => {
+      await reportVaultDataWithProof(stakingVault, ether("100"), ether("33"));
+      await advanceChainTime(days(1n));
+      expect(await stakingVault.isReportFresh()).to.equal(true);
     });
   });
 });
