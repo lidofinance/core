@@ -28,12 +28,13 @@ struct StakingVaultDeposit {
  */
 interface IStakingVault {
     function DEPOSIT_CONTRACT() external view returns (IDepositContract);
-    function initialize(address _owner, address _nodeOperator) external;
+    function initialize(address _owner, address _nodeOperator, address _depositor) external;
     function version() external pure returns (uint64);
     function getInitializedVersion() external view returns (uint64);
     function withdrawalCredentials() external view returns (bytes32);
     function owner() external view returns (address);
     function nodeOperator() external view returns (address);
+    function depositor() external view returns (address);
     function isOssified() external view returns (bool);
     function calculateValidatorWithdrawalFee(uint256 _keysCount) external view returns (uint256);
     function withdraw(address _recipient, uint256 _ether) external;

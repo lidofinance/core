@@ -63,6 +63,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     struct ERC7201Storage {
         address nodeOperator;
         bool beaconChainDepositsPaused;
+        address depositor;
     }
 
     /**
@@ -103,13 +104,16 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Initializes `StakingVault` with an owner, node operator, and optional parameters
      * @param _owner Address that will own the vault
      */
-    function initialize(address _owner, address _nodeOperator) external initializer {
+    function initialize(address _owner, address _nodeOperator, address _depositor) external initializer {
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
 
         __Ownable_init(_owner);
         _storage().nodeOperator = _nodeOperator;
+        _storage().depositor = _depositor;
 
         emit NodeOperatorSet(_nodeOperator);
+        emit DepositorSet(_depositor);
     }
 
     /**
@@ -136,6 +140,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     function nodeOperator() public view returns (address) {
         return _storage().nodeOperator;
+    }
+
+    function depositor() public view returns (address) {
+        return _storage().depositor;
     }
 
     /**
@@ -197,6 +205,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         PinnedBeaconUtils.ossify();
     }
 
+    function setDepositor(address _depositor) external onlyOwner {
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
+
+        _storage().depositor = _depositor;
+
+        emit DepositorSet(_depositor);
+    }
+
     function pauseBeaconChainDeposits() external onlyOwner {
         ERC7201Storage storage $ = _storage();
 
@@ -224,9 +240,10 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         emit BeaconChainDepositsResumed();
     }
 
-    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external onlyOwner {
+    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
         if (_storage().beaconChainDepositsPaused) revert BeaconChainDepositsResumeExpected();
+        if (msg.sender != _storage().depositor) revert NotAuthorized();
 
         uint256 numberOfDeposits = _deposits.length;
 
@@ -316,6 +333,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     event NodeOperatorSet(address indexed nodeOperator);
+    event DepositorSet(address indexed depositor);
 
     /**
      * @notice Emitted when ether is received by `StakingVault`
@@ -411,4 +429,9 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @notice Thrown when the vault is already ossified
      */
     error AlreadyOssified();
+
+    /**
+     * @notice Thrown when the caller is not authorized
+     */
+    error NotAuthorized();
 }

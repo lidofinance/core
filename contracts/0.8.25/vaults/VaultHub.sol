@@ -337,6 +337,7 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault vault_ = IStakingVault(_vault);
         if (vault_.isOssified()) revert VaultOssified(_vault);
         if (vault_.owner() != address(this)) revert VaultHubMustBeOwner(_vault);
+        if (vault_.depositor() != address(this)) revert VaultHubMustBeDepositor(_vault);
         _checkShareLimitUpperBound(_vault, _shareLimit);
 
         VaultHubStorage storage $ = _storage();
@@ -591,6 +592,7 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
     error VaultReportStaled(address vault);
     error VaultHubMustBeOwner(address vault);
+    error VaultHubMustBeDepositor(address vault);
     error VaultProxyZeroCodehash();
     error InvalidOperator();
     error NotPendingConnect();
