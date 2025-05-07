@@ -187,8 +187,9 @@ contract VaultHub is PausableUntilWithRoles {
         VaultHubStorage storage $ = _getVaultHubStorage();
         uint256 limit = _offset + _limit > $.sockets.length - 1 ? $.sockets.length - 1 - _offset : _limit;
         VaultInfo[] memory batch = new VaultInfo[](limit);
+        uint256 startIndex = _offset + 1;
         for (uint256 i = 0; i < limit; i++) {
-            VaultSocket storage socket = $.sockets[i + 1 + _offset];
+            VaultSocket memory socket = $.sockets[startIndex + i];
             IStakingVault currentVault = IStakingVault(socket.vault);
             batch[i] = VaultInfo(
                 address(currentVault),
