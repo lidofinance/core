@@ -66,7 +66,7 @@ contract LazyOracle {
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataReportCid
     ) external {
-        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized();
+        if (msg.sender != LIDO_LOCATOR.accountingOracle()) revert NotAuthorized();
 
         Storage storage $ = _storage();
         $.vaultsDataTimestamp = _vaultsDataTimestamp;

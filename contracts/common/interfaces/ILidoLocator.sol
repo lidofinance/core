@@ -45,7 +45,6 @@ interface ILidoLocator {
         address withdrawalQueue,
         address postTokenRebaseReceiver,
         address stakingRouter,
-        address vaultHub,
-        address lazyOracle
+        address vaultHub
     );
 }

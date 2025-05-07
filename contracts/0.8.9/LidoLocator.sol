@@ -111,7 +111,6 @@ contract LidoLocator is ILidoLocator {
         address,
         address,
         address,
-        address,
         address
     ) {
         return (
@@ -121,8 +120,7 @@ contract LidoLocator is ILidoLocator {
             withdrawalQueue,
             postTokenRebaseReceiver,
             stakingRouter,
-            vaultHub,
-            lazyOracle
+            vaultHub
         );
     }
 
