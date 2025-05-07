@@ -43,13 +43,11 @@ contract VaultHub is PausableUntilWithRoles {
         // ### 1st slot
         /// @notice vault address
         address vault;
+        /// @notice total number of stETH shares that the vault owes to Lido
+        uint96 liabilityShares;
+        // ### 2nd slot
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 shareLimit;
-        // ### 2nd slot
-         /// @notice total number of stETH shares that the vault owes to Lido
-        uint96 liabilityShares;
-        /// @notice cumulative amount of shares charged as fees for the vault
-        uint96 feeSharesCharged;
         /// @notice share of ether that is locked on the vault as an additional reserve
         /// e.g RR=30% means that for 1stETH minted 1/(1-0.3)=1.428571428571428571 ETH is locked on the vault
         uint16 reserveRatioBP;
@@ -59,13 +57,17 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 infraFeeBP;
         /// @notice liquidity fee in basis points
         uint16 liquidityFeeBP;
-        // ### 3rd slot
         /// @notice reservation fee in basis points
         uint16 reservationFeeBP;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
+        /// @notice unused gap in the slot 2
+        /// uint72 _unused_gap_;
+        // ### 3rd slot
+        /// @notice cumulative amount of shares charged as fees for the vault
+        uint96 feeSharesCharged;
         /// @notice unused gap in the slot 3
-        /// uint232 _unused_gap_;
+        /// uint160 _unused_gap_;
     }
 
     struct VaultInfo {
@@ -139,7 +141,7 @@ contract VaultHub is PausableUntilWithRoles {
         __AccessControlEnumerable_init();
 
         // the stone in the elevator
-        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, 0, 0, 0, false));
+        _getVaultHubStorage().sockets.push(VaultSocket(address(0), 0, 0, 0, 0, 0, 0, 0, false, 0));
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -355,15 +357,15 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultSocket memory vsocket = VaultSocket(
             _vault,
-            uint96(_shareLimit),
             0, // liabilityShares
-            0, // feeSharesCharged
+            uint96(_shareLimit),
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
             uint16(_infraFeeBP),
             uint16(_liquidityFeeBP),
             uint16(_reservationFeeBP),
-            false // pendingDisconnect
+            false, // pendingDisconnect
+            0 // feeSharesCharged
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);

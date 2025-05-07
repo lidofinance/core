@@ -46,15 +46,15 @@ contract VaultHub__HarnessForReporting is VaultHub {
 
         VaultSocket memory vsocket = VaultSocket(
             _vault,
-            uint96(_shareLimit),
             0, // liabilityShares
-            0, // feeSharesCharged
+            uint96(_shareLimit),
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
             uint16(_infraFeeBP),
             uint16(_liquidityFeeBP),
             uint16(_reservationFeeBP),
-            false // pendingDisconnect
+            false, // pendingDisconnect
+            0 // feeSharesCharged
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
