@@ -20,7 +20,7 @@ const VAULT_CONNECTION_DEPOSIT = ether("1");
 
 type Methods<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [K in keyof T]: T[K] extends (...args: any) => any ? K : never; // gdfg
+  [K in keyof T]: T[K] extends (...args: any) => any ? K : never;
 }[keyof T];
 
 type DashboardMethods = Methods<Dashboard>; // "foo" | "bar"

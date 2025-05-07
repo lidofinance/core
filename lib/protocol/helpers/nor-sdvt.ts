@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ethers } from "ethers";
+import { CallExceptionError, ethers } from "ethers";
 
 import { NodeOperatorsRegistry } from "typechain-types";
 
@@ -173,7 +173,6 @@ export const norSdvtAddOperatorKeys = async (
   const unusedKeysBefore = await module.getUnusedSigningKeyCount(operatorId);
 
   const votingSigner = await ctx.getSigner("voting");
-
   await module
     .connect(votingSigner)
     .addSigningKeys(operatorId, keysToAdd, randomPubkeys(Number(keysToAdd)), randomSignatures(Number(keysToAdd)));
@@ -214,8 +213,18 @@ export const norSdvtSetOperatorStakingLimit = async (
     "Limit": ethers.formatEther(limit),
   });
 
-  const votingSigner = await ctx.getSigner("voting");
-  await module.connect(votingSigner).setNodeOperatorStakingLimit(operatorId, limit);
+  try {
+    // For SDVT scratch deployment and for NOR
+    const votingSigner = await ctx.getSigner("voting");
+    await module.connect(votingSigner).setNodeOperatorStakingLimit(operatorId, limit);
+  } catch (error: unknown) {
+    if ((error as CallExceptionError).message.includes("APP_AUTH_FAILED")) {
+      const easyTrackSigner = await ctx.getSigner("easyTrack");
+      await module.connect(easyTrackSigner).setNodeOperatorStakingLimit(operatorId, limit);
+    } else {
+      throw error;
+    }
+  }
 
   log.success(`Set NOR operator ${operatorId} staking limit`);
 };

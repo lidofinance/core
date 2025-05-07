@@ -6,8 +6,11 @@ pragma solidity 0.8.25;
 
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
+import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 
-interface ILido is IERC20, IERC20Permit {
+interface ILido is IERC20, IERC20Permit, IVersioned {
+    function sharesOf(address) external view returns (uint256);
+
     function getSharesByPooledEth(uint256) external view returns (uint256);
 
     function getPooledEthByShares(uint256) external view returns (uint256);

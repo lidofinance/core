@@ -1,7 +1,9 @@
 import { ContractTransactionReceipt, Interface } from "ethers";
 import hre from "hardhat";
+import { getMode } from "hardhat.helpers";
 
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
+import { deployEIP7002WithdrawalRequestContract, EIP7002_MIN_WITHDRAWAL_REQUEST_FEE } from "lib/eips";
 
 import { discover } from "./discover";
 import { provision } from "./provision";
@@ -16,17 +18,19 @@ export const withCSM = () => {
   return process.env.INTEGRATION_WITH_CSM !== "off";
 };
 
-export const getProtocolContext = async (): Promise<ProtocolContext> => {
-  if (hre.network.name === "hardhat") {
-    const networkConfig = hre.config.networks[hre.network.name];
-    if (!networkConfig.forking?.enabled) {
-      await deployScratchProtocol(hre.network.name);
-    }
-  } else {
-    await deployUpgrade(hre.network.name);
+export const getProtocolContext = async (skipV3Contracts: boolean = false): Promise<ProtocolContext> => {
+  const isScratch = getMode() === "scratch";
+
+  if (isScratch) {
+    await deployScratchProtocol(hre.network.name);
+  } else if (process.env.UPGRADE) {
+    await deployUpgrade(hre.network.name, "upgrade/steps-upgrade-for-tests.json");
   }
 
-  const { contracts, signers } = await discover();
+  // TODO: revisit this when Pectra is live
+  await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
+
+  const { contracts, signers } = await discover(skipV3Contracts);
   const interfaces = Object.values(contracts).map((contract) => contract.interface);
 
   // By default, all flags are "on"
@@ -43,13 +47,15 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
     signers,
     interfaces,
     flags,
-    isScratch: true, // NB: gonna be updated upon merge of upgrade PR
+    isScratch,
     getSigner: async (signer: Signer, balance?: bigint) => getSigner(signer, balance, signers),
     getEvents: (receipt: ContractTransactionReceipt, eventName: string, extraInterfaces: Interface[] = []) =>
       findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),
   } as ProtocolContext;
 
-  await provision(context);
+  if (isScratch) {
+    await provision(context);
+  }
 
   return context;
 };

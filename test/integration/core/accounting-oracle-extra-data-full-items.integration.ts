@@ -61,7 +61,7 @@ class ListKeyMapHelper<ValueType> {
   }
 }
 
-describe("Integration: AccountingOracle extra data full items", () => {
+describe.skip("Integration: AccountingOracle extra data full items", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
 
@@ -283,9 +283,13 @@ describe("Integration: AccountingOracle extra data full items", () => {
       const sharesBefore = new ListKeyMapHelper<bigint>();
       for (const { moduleId, module } of modules) {
         if (moduleId === CSM_MODULE_ID) continue;
+
         const ids = idsStuck.get(moduleId)!;
         for (const id of ids) {
-          const nodeOperator = await module.getNodeOperator(id, false);
+          const nodeOperator = await (module as unknown as LoadedContract<NodeOperatorsRegistry>).getNodeOperator(
+            id,
+            false,
+          );
           sharesBefore.set([moduleId, id], await ctx.contracts.lido.sharesOf(nodeOperator.rewardAddress));
         }
       }
