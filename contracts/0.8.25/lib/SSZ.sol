@@ -333,7 +333,7 @@ library SSZ {
     }
 
     // See https://github.com/succinctlabs/telepathy-contracts/blob/5aa4bb7/src/libraries/SimpleSerialize.sol#L17-L28
-    function toLittleEndian(uint256 v) public pure returns (bytes32) {
+    function toLittleEndian(uint256 v) internal pure returns (bytes32) {
         v =
             ((v & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >> 8) |
             ((v & 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) << 8);

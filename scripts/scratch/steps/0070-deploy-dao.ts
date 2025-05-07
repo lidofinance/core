@@ -208,6 +208,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
       },
     };
     if (appName === Sk.aragonEvmScriptRegistry) {
+      state[appName].proxy.constructorArgs[2] = "0x8129fc1c"; // `initialize()` function selector
       state[appName].implementation = {
         address: await proxy.getFunction("implementation")(),
         contract: await getContractPath("EVMScriptRegistry"),
