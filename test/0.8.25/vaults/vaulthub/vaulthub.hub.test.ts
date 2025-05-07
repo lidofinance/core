@@ -307,7 +307,9 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultInfo.shareLimit).to.equal(SHARE_LIMIT);
       expect(vaultInfo.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
       expect(vaultInfo.forcedRebalanceThresholdBP).to.equal(FORCED_REBALANCE_THRESHOLD_BP);
-      expect(vaultInfo.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
+      expect(vaultInfo.infraFeeBP).to.equal(INFRA_FEE_BP);
+      expect(vaultInfo.liquidityFeeBP).to.equal(LIQUIDITY_FEE_BP);
+      expect(vaultInfo.reservationFeeBP).to.equal(RESERVATION_FEE_BP);
       expect(vaultInfo.pendingDisconnect).to.equal(false);
 
       const vaultInfo2 = vaults[1];
@@ -318,7 +320,9 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultInfo2.shareLimit).to.equal(SHARE_LIMIT);
       expect(vaultInfo2.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
       expect(vaultInfo2.forcedRebalanceThresholdBP).to.equal(FORCED_REBALANCE_THRESHOLD_BP);
-      expect(vaultInfo2.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
+      expect(vaultInfo2.infraFeeBP).to.equal(INFRA_FEE_BP);
+      expect(vaultInfo2.liquidityFeeBP).to.equal(LIQUIDITY_FEE_BP);
+      expect(vaultInfo2.reservationFeeBP).to.equal(RESERVATION_FEE_BP);
       expect(vaultInfo2.pendingDisconnect).to.equal(false);
     });
 

@@ -79,7 +79,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint96 shareLimit;
         uint16 reserveRatioBP;
         uint16 forcedRebalanceThresholdBP;
-        uint16 treasuryFeeBP;
+        uint16 infraFeeBP;
+        uint16 liquidityFeeBP;
+        uint16 reservationFeeBP;
         bool pendingDisconnect;
     }
 
@@ -207,7 +209,9 @@ contract VaultHub is PausableUntilWithRoles {
                 socket.shareLimit,
                 socket.reserveRatioBP,
                 socket.forcedRebalanceThresholdBP,
-                socket.treasuryFeeBP,
+                socket.infraFeeBP,
+                socket.liquidityFeeBP,
+                socket.reservationFeeBP,
                 socket.pendingDisconnect
             );
         }
