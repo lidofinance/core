@@ -22,7 +22,7 @@ contract VaultControl is VaultHub {
 
     function unlocked(address _vault) public view returns (uint256) {
         uint256 totalValue_ = totalValue(_vault);
-        uint256 locked_ = _socket(_vault).locked;
+        uint256 locked_ = _connectedSocket(_vault).locked;
 
         if (locked_ > totalValue_) return 0;
 
@@ -32,7 +32,7 @@ contract VaultControl is VaultHub {
     function fund(address _vault) external payable {
         if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
-        _socket(_vault).inOutDelta += int128(int256(msg.value));
+        _connectedSocket(_vault).inOutDelta += int128(int256(msg.value));
 
         (bool success, ) = _vault.call{value: msg.value}("");
         if (!success) revert TransferFailed(_vault, msg.value);
@@ -51,9 +51,9 @@ contract VaultControl is VaultHub {
         uint256 totalValueAfterWithdraw = totalValue(_vault);
 
         if (isReportFresh(_vault)) {
-            if (totalValueAfterWithdraw < _socket(_vault).locked) revert TotalValueBelowLockedAmount();
+            if (totalValueAfterWithdraw < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
         } else {
-            if (_vault.balance < _socket(_vault).locked) revert TotalValueBelowLockedAmount();
+            if (_vault.balance < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
         }
     }
 
@@ -90,7 +90,7 @@ contract VaultControl is VaultHub {
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
         if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
-        VaultSocket storage socket = _socket(_vault);
+        VaultSocket storage socket = _connectedSocket(_vault);
 
         uint256 vaultSharesAfterMint = socket.liabilityShares + _amountOfShares;
         uint256 shareLimit = socket.shareLimit;
@@ -129,7 +129,7 @@ contract VaultControl is VaultHub {
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
         if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
-        VaultSocket storage socket = _socket(_vault);
+        VaultSocket storage socket = _connectedSocket(_vault);
 
         uint256 liabilityShares = socket.liabilityShares;
         if (liabilityShares < _amountOfShares) revert InsufficientSharesToBurn(_vault, liabilityShares);
@@ -162,7 +162,7 @@ contract VaultControl is VaultHub {
 
     function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external {
         if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
-        VaultSocket storage socket = _socket(_vault);
+        VaultSocket storage socket = _connectedSocket(_vault);
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
 
         IStakingVault(_vault).depositToBeaconChain(_deposits);
@@ -179,7 +179,7 @@ contract VaultControl is VaultHub {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        VaultSocket storage socket = _socket(_vault);
+        VaultSocket storage socket = _connectedSocket(_vault);
         if (msg.sender != socket.manager && msg.sender != IStakingVault(_vault).nodeOperator()) revert NotAuthorized();
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
 
@@ -206,7 +206,7 @@ contract VaultControl is VaultHub {
 
     function setManager(address _vault, address _manager) external {
         if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
-        _socket(_vault).manager = _manager;
+        _connectedSocket(_vault).manager = _manager;
     }
 
     function _rebalance(address _vault, uint256 _ether) internal {
@@ -216,7 +216,7 @@ contract VaultControl is VaultHub {
         uint256 totalValue_ = totalValue(_vault);
         if (_ether > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, _ether);
 
-        VaultSocket storage socket = _socket(_vault);
+        VaultSocket storage socket = _connectedSocket(_vault);
 
         uint256 sharesToBurn = LIDO.getSharesByPooledEth(_ether);
         uint256 liabilityShares = socket.liabilityShares;
@@ -230,7 +230,7 @@ contract VaultControl is VaultHub {
     }
 
     function _withdrawFromVault(address _vault, address _recipient, uint256 _amount) internal {
-        _socket(_vault).inOutDelta -= int128(int256(_amount));
+        _connectedSocket(_vault).inOutDelta -= int128(int256(_amount));
         IStakingVault(_vault).withdraw(_recipient, _amount);
         emit VaultWithdrawn(_vault, msg.sender, _recipient, _amount);
     }
