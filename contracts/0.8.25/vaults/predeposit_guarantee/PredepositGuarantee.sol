@@ -216,8 +216,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _deposit staking vault deposit to verify
      * @param _depositsY Y coordinates of the two BLS12-381 points (uncompressed pubkey and signature)
      * @param _withdrawalCredentials missing part of deposit message
-     * @dev will revert with `InvalidSignature` if the signature is invalid
-     * @dev will revert with `InputHasInfinityPoints` if the input contains infinity points(zero values)
+     * @dev reverts with `InvalidSignature` if the signature is invalid
+     * @dev reverts with `InputHasInfinityPoints` if the input contains infinity points(zero values)
      */
     function verifyDepositMessage(StakingVaultDeposit calldata _deposit, BLS12_381.DepositY calldata _depositsY, bytes32 _withdrawalCredentials) public view {
         BLS12_381.verifyDepositMessage(_deposit, _depositsY, _withdrawalCredentials, DEPOSIT_DOMAIN);
