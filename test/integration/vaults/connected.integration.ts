@@ -5,6 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
+import { advanceChainTime, days } from "lib";
 import {
   createVaultWithDashboard,
   disconnectFromHub,
@@ -65,6 +66,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
 
     // add some stETH to the vault to have totalValue
     await dashboard.connect(roles.funder).fund({ value: ether("1") });
+    await reportVaultDataWithProof(stakingVault);
 
     await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
       .to.emit(vaultHub, "MintedSharesOnVault")
@@ -76,6 +78,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
 
     // add some stETH to the vault to have totalValue, mint shares and approve stETH
     await dashboard.connect(roles.funder).fund({ value: ether("1") });
+    await reportVaultDataWithProof(stakingVault);
     await dashboard.connect(roles.minter).mintStETH(roles.burner, 1n);
     await lido.connect(roles.burner).approve(dashboard, 1n);
 
@@ -85,6 +88,8 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
   });
 
   it("Allows trigger validator withdrawal", async () => {
+    await reportVaultDataWithProof(stakingVault);
+
     await expect(
       dashboard
         .connect(roles.validatorWithdrawalTriggerer)
@@ -118,6 +123,14 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
       await expect(dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub())
         .to.emit(stakingVault, "VaultHubAuthorizedSet")
         .withArgs(false);
+    });
+  });
+
+  describe("Reporting", () => {
+    it("updates report data and keep in fresh state for 1 day", async () => {
+      await reportVaultDataWithProof(stakingVault, ether("100"), ether("33"));
+      await advanceChainTime(days(1n));
+      expect(await stakingVault.isReportFresh()).to.equal(true);
     });
   });
 });

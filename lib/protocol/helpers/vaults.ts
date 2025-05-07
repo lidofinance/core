@@ -230,28 +230,60 @@ export function createVaultsReportTree(vaults: VaultReportItem[]) {
   return StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256", "uint256"]);
 }
 
-export async function reportVaultDataWithProof(stakingVault: StakingVault) {
+export async function reportVaultDataWithProof(
+  stakingVault: StakingVault,
+  totalValue: bigint | null = null,
+  inOutDelta: bigint | null = null,
+) {
   const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
   const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
-  const vaultReport: VaultReportItem = [
-    await stakingVault.getAddress(),
-    await stakingVault.totalValue(),
-    await stakingVault.inOutDelta(),
-    0n,
-    0n,
-  ];
+  const totalValueArg = totalValue ?? (await stakingVault.totalValue());
+  const inOutDeltaArg = inOutDelta ?? (await stakingVault.inOutDelta());
+  const vaultReport: VaultReportItem = [await stakingVault.getAddress(), totalValueArg, inOutDeltaArg, 0n, 0n];
   const reportTree = createVaultsReportTree([vaultReport]);
 
   const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
   await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
   await vaultHub.updateVaultData(
     await stakingVault.getAddress(),
-    await stakingVault.totalValue(),
-    await stakingVault.inOutDelta(),
+    totalValueArg,
+    inOutDeltaArg,
     0n,
     0n,
     reportTree.getProof(0),
   );
+}
+
+export async function reportVaultWithoutProof(stakingVault: StakingVault) {
+  const reportTimestamp = await getCurrentBlockTimestamp();
+  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
+  const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
+  const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+  const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+  await vaultHub.connect(accountingSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
+  await stakingVault
+    .connect(vaultHubSigner)
+    .report(
+      reportTimestamp,
+      await stakingVault.totalValue(),
+      await stakingVault.inOutDelta(),
+      await stakingVault.locked(),
+    );
+}
+
+export async function reportVaultWithMockedVaultHub(stakingVault: StakingVault) {
+  const reportTimestamp = await getCurrentBlockTimestamp();
+  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
+  const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+  await vaultHub.updateReportData(reportTimestamp, ethers.ZeroHash, "");
+  await stakingVault
+    .connect(vaultHubSigner)
+    .report(
+      reportTimestamp,
+      await stakingVault.totalValue(),
+      await stakingVault.inOutDelta(),
+      await stakingVault.locked(),
+    );
 }
 
 interface CreateVaultResponse {

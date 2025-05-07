@@ -14,6 +14,7 @@ import {
 } from "typechain-types";
 
 import {
+  advanceChainTime,
   computeDepositDataRoot,
   de0x,
   deployEIP7002WithdrawalRequestContract,
@@ -22,12 +23,13 @@ import {
   generatePostDeposit,
   generateValidator,
   getCurrentBlockTimestamp,
+  hours,
   impersonate,
   MAX_UINT256,
   proxify,
   streccak,
 } from "lib";
-import { getPubkeys } from "lib/protocol/helpers/vaults";
+import { getPubkeys, reportVaultWithMockedVaultHub } from "lib/protocol/helpers/vaults";
 
 import { deployStakingVaultBehindBeaconProxy } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -559,6 +561,7 @@ describe("StakingVault.sol", () => {
 
       const elRewardsAmount = ether("1");
       await elRewardsSender.sendTransaction({ to: stakingVaultAddress, value: elRewardsAmount });
+      await reportVaultWithMockedVaultHub(stakingVault);
 
       await expect(stakingVault.withdraw(vaultOwnerAddress, elRewardsAmount))
         .to.emit(stakingVault, "Withdrawn")
@@ -1008,9 +1011,7 @@ describe("StakingVault.sol", () => {
 
     it("reverts if the invalid pubkey is provided", async () => {
       await stakingVault.authorizeLidoVaultHub(); // needed for the report
-      await stakingVault
-        .connect(vaultHubSigner)
-        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
+      await reportVaultWithMockedVaultHub(stakingVault);
 
       await expect(
         stakingVault
@@ -1076,10 +1077,7 @@ describe("StakingVault.sol", () => {
       const value = baseFee * BigInt(numberOfKeys) - 1n;
 
       await stakingVault.authorizeLidoVaultHub(); // needed for the report
-      await stakingVault
-        .connect(vaultHubSigner)
-        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
-
+      await reportVaultWithMockedVaultHub(stakingVault);
       await expect(
         stakingVault
           .connect(vaultOwner)
@@ -1096,9 +1094,7 @@ describe("StakingVault.sol", () => {
       const value = baseFee * BigInt(numberOfKeys) + overpaid;
 
       await stakingVault.authorizeLidoVaultHub(); // needed for the report
-      await stakingVault
-        .connect(vaultHubSigner)
-        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
+      await reportVaultWithMockedVaultHub(stakingVault);
 
       await expect(
         stakingVault
@@ -1163,9 +1159,7 @@ describe("StakingVault.sol", () => {
       const amount = ether("0.1");
 
       await stakingVault.authorizeLidoVaultHub(); // needed for the report
-      await stakingVault
-        .connect(vaultHubSigner)
-        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
+      await reportVaultWithMockedVaultHub(stakingVault);
 
       await expect(
         stakingVault
@@ -1183,9 +1177,7 @@ describe("StakingVault.sol", () => {
       const overpaid = 100n;
 
       await stakingVault.authorizeLidoVaultHub(); // needed for the report
-      await stakingVault
-        .connect(vaultHubSigner)
-        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
+      await reportVaultWithMockedVaultHub(stakingVault);
 
       const ownerBalanceBefore = await ethers.provider.getBalance(vaultOwner);
 
@@ -1216,9 +1208,7 @@ describe("StakingVault.sol", () => {
         .map((_, i) => BigInt(i * 100)); // trigger full and partial withdrawals
 
       await stakingVault.authorizeLidoVaultHub(); // needed for the report
-      await stakingVault
-        .connect(vaultHubSigner)
-        .report(await getCurrentBlockTimestamp(), ether("1"), ether("2"), ether("3"));
+      await reportVaultWithMockedVaultHub(stakingVault);
 
       await expect(
         stakingVault
@@ -1290,6 +1280,29 @@ describe("StakingVault.sol", () => {
       )
         .to.be.revertedWithCustomError(stakingVault, "NotAuthorized")
         .withArgs("triggerValidatorWithdrawal", vaultHubSigner);
+    });
+  });
+  context("reporting", () => {
+    it("updates report data and keep it fresh for no more than 2 days", async () => {
+      await stakingVault.authorizeLidoVaultHub(); // needed for the report
+
+      await reportVaultWithMockedVaultHub(stakingVault);
+      await advanceChainTime(hours(23n));
+      expect(await stakingVault.isReportFresh()).to.equal(true);
+      await advanceChainTime(hours(8n));
+      expect(await stakingVault.isReportFresh()).to.equal(true);
+      await advanceChainTime(hours(17n));
+      expect(await stakingVault.isReportFresh()).to.equal(false);
+    });
+
+    it("updates report data and keep it fresh for no more than 2 days but stale if new report is available", async () => {
+      await stakingVault.authorizeLidoVaultHub(); // needed for the report
+
+      await reportVaultWithMockedVaultHub(stakingVault);
+      await advanceChainTime(hours(25n));
+      expect(await stakingVault.isReportFresh()).to.equal(true);
+      await vaultHub.updateReportData(await getCurrentBlockTimestamp(), ethers.ZeroHash, "");
+      expect(await stakingVault.isReportFresh()).to.equal(false);
     });
   });
 });

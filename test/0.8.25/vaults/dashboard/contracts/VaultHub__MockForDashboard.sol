@@ -17,7 +17,8 @@ contract VaultHub__MockForDashboard {
     IStETH public immutable steth;
     address public immutable LIDO_LOCATOR;
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
-    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
+    uint64 public latestReportDataTimestamp;
 
     constructor(IStETH _steth, address _lidoLocator) {
         steth = _steth;
@@ -78,6 +79,14 @@ contract VaultHub__MockForDashboard {
         vaultSockets[msg.sender].liabilityShares = 0;
 
         emit Mock__Rebalanced(msg.value);
+    }
+
+    function updateReportData(uint64 timestamp, bytes32, string calldata) external {
+        latestReportDataTimestamp = timestamp;
+    }
+
+    function latestReportData() external view returns (uint64 timestamp, bytes32 treeRoot, string memory reportCid) {
+        return (latestReportDataTimestamp, bytes32(0), "");
     }
 
     error ZeroArgument(string argument);

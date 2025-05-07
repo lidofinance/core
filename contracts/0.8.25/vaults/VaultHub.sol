@@ -94,7 +94,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     /// @notice The time delta for report freshness check
-    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
 
     /// @notice limit for a single vault share limit relative to Lido TVL in basis points
     uint256 private immutable RELATIVE_SHARE_LIMIT_BP;
