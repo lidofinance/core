@@ -787,6 +787,81 @@ describe("PredepositGuarantee.sol", () => {
       });
     });
 
+    context("validatePubKeyWCProof", () => {
+      it("revert if deposit proof is invalid", async () => {
+        const wc = await stakingVault.withdrawalCredentials();
+        const validator = generateValidator(wc);
+        await sszMerkleTree.addValidatorLeaf(validator.container);
+        const childBlockTimestamp = await setBeaconBlockRoot(await sszMerkleTree.getMerkleRoot());
+        const beaconHeader = generateBeaconHeader(await sszMerkleTree.getMerkleRoot());
+
+        await expect(
+          pdg.validatePubKeyWCProof(
+            {
+              slot: beaconHeader.slot,
+              pubkey: validator.container.pubkey,
+              validatorIndex: 0n,
+              proof: [],
+              childBlockTimestamp,
+              proposerIndex: beaconHeader.proposerIndex,
+            },
+            wc,
+          ),
+        ).to.be.reverted;
+      });
+
+      it("should not revert on valid proof", async () => {
+        const wc = await stakingVault.withdrawalCredentials();
+        const validator = generateValidator(wc);
+        await sszMerkleTree.addValidatorLeaf(validator.container);
+        const validatorIndex = 1n;
+        const beaconHeader = generateBeaconHeader(await sszMerkleTree.getMerkleRoot());
+        const { proof: beaconProof, root: beaconRoot } = await sszMerkleTree.getBeaconBlockHeaderProof(beaconHeader);
+        const childBlockTimestamp = await setBeaconBlockRoot(beaconRoot);
+        const proof = [
+          ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validator.container)).proof,
+          ...(await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + validatorIndex)),
+          ...beaconProof,
+        ];
+        const witness = {
+          validatorIndex,
+          pubkey: validator.container.pubkey,
+          proof,
+          childBlockTimestamp,
+          proposerIndex: beaconHeader.proposerIndex,
+          slot: beaconHeader.slot,
+        };
+
+        await expect(pdg.validatePubKeyWCProof(witness, wc)).not.to.be.reverted;
+      });
+    });
+
+    context("verifyDepositMessage", () => {
+      it("reverts on invalid signature", async () => {
+        const wc = await stakingVault.withdrawalCredentials();
+        const validator = generateValidator(wc);
+        const { deposit, depositY } = await generatePredeposit(validator);
+
+        const invalidDepositY = {
+          ...depositY,
+          signatureY: {
+            ...depositY.signatureY,
+            c0_a: "0x0000000000000000000000000000000000000000000000000000000000000000",
+          },
+        };
+
+        await expect(pdg.verifyDepositMessage(deposit, invalidDepositY, wc)).to.be.reverted;
+      });
+
+      it("should not revert on valid signature", async () => {
+        const wc = await stakingVault.withdrawalCredentials();
+        const validator = generateValidator(wc);
+        const { deposit, depositY } = await generatePredeposit(validator);
+
+        await expect(pdg.verifyDepositMessage(deposit, depositY, wc)).not.to.be.reverted;
+      });
+    });
+
     context("proveValidatorWC", () => {
       it("reverts on proving not predeposited validator", async () => {
         const balance = ether("200");
