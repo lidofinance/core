@@ -5,7 +5,7 @@ import { beforeEach } from "mocha";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-import { OssifiableProxy, UpgradeTemplateV3 } from "typechain-types";
+import { OssifiableProxy, V3Template } from "typechain-types";
 
 import { deployUpgrade, loadContract, readNetworkState, Sk } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -20,7 +20,7 @@ describe("Integration: Upgrade Template V3 tests", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
   let originalSnapshot: string;
-  let template: UpgradeTemplateV3;
+  let template: V3Template;
   let deployer: HardhatEthersSigner;
   let votingSigner: HardhatEthersSigner;
   let agentSigner: HardhatEthersSigner;
@@ -37,7 +37,7 @@ describe("Integration: Upgrade Template V3 tests", () => {
     await deployUpgrade(hre.network.name, "upgrade/steps-deploy.json");
     const state = readNetworkState();
 
-    template = await loadContract<UpgradeTemplateV3>("UpgradeTemplateV3", state[Sk.upgradeTemplateV3].address);
+    template = await loadContract<V3Template>("V3Template", state[Sk.v3Template].address);
 
     ctx = await getProtocolContext(true);
 

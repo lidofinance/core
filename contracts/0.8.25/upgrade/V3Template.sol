@@ -1,0 +1,465 @@
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
+// SPDX-License-Identifier: GPL-3.0
+
+// See contracts/COMPILERS.md
+pragma solidity 0.8.25;
+
+import {IAccessControlEnumerable} from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
+import {IBurner as IBurnerWithoutAccessControl} from "contracts/common/interfaces/IBurner.sol";
+import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
+import {IOssifiableProxy} from "./interfaces/IOssifiableProxy.sol";
+import {V3Addresses} from "./V3Addresses.sol";
+
+
+interface IPausableUntil {
+    function isPaused() external view returns (bool);
+    function getResumeSinceTimestamp() external view returns (uint256);
+    function PAUSE_INFINITELY() external view returns (uint256);
+}
+
+interface IPausableUntilWithRoles is IPausableUntil, IAccessControlEnumerable {
+    function RESUME_ROLE() external view returns (bytes32);
+    function PAUSE_ROLE() external view returns (bytes32);
+}
+
+interface IOperatorGrid is IAccessControlEnumerable {
+    function REGISTRY_ROLE() external view returns (bytes32);
+}
+
+
+interface IBaseOracle is IAccessControlEnumerable, IVersioned {
+    function getConsensusContract() external view returns (address);
+}
+
+interface IStakingRouter is IAccessControlEnumerable {
+    function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
+}
+
+interface IBurner is IBurnerWithoutAccessControl, IAccessControlEnumerable {
+    function REQUEST_BURN_SHARES_ROLE() external view returns (bytes32);
+    function REQUEST_BURN_MY_STETH_ROLE() external view returns (bytes32);
+    function isMigrationAllowed() external view returns (bool);
+}
+
+interface ILidoWithFinalizeUpgrade is ILido {
+    function finalizeUpgrade_v3(address _oldBurner, address[4] calldata _contractsWithBurnerAllowances) external;
+}
+
+interface IAccountingOracle is IBaseOracle {
+    function finalizeUpgrade_v3(uint256 consensusVersion) external;
+}
+
+interface IAragonAppRepo {
+    function getLatest() external view returns (uint16[3] memory, address, bytes memory);
+}
+
+interface IUpgradeableBeacon {
+    function implementation() external view returns (address);
+    function owner() external view returns (address);
+}
+
+interface IWithdrawalsManagerProxy {
+    function proxy_getAdmin() external view returns (address);
+    function implementation() external view returns (address);
+}
+
+interface IVaultFactory {
+    function BEACON() external view returns (address);
+    function DASHBOARD_IMPL() external view returns (address);
+}
+
+interface IVaultHub is IPausableUntilWithRoles {
+    function VAULT_MASTER_ROLE() external view returns (bytes32);
+    function VAULT_REGISTRY_ROLE() external view returns (bytes32);
+}
+
+interface IOracleReportSanityChecker is IAccessControlEnumerable {
+    function ALL_LIMITS_MANAGER_ROLE() external view returns (bytes32);
+    function EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE() external view returns (bytes32);
+    function APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE() external view returns (bytes32);
+    function ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE() external view returns (bytes32);
+    function SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE() external view returns (bytes32);
+    function MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE() external view returns (bytes32);
+    function MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE() external view returns (bytes32);
+    function MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE() external view returns (bytes32);
+    function REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE() external view returns (bytes32);
+    function MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE() external view returns (bytes32);
+    function SECOND_OPINION_MANAGER_ROLE() external view returns (bytes32);
+    function INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE() external view returns (bytes32);
+}
+
+
+/**
+* @title Lido V3 Upgrade Template
+*
+* @dev Must be used by means of two calls:
+*   - `startUpgrade()` after upgrading LidoLocator and before everything else
+*   - `finishUpgrade()` as the last step of the upgrade
+*/
+contract V3Template {
+    //
+    // Events
+    //
+
+    event UpgradeFinished();
+
+    //
+    // Constants and immutables
+    //
+
+    uint256 internal constant ACCOUNTING_ORACLE_CONSENSUS_VERSION = 4;
+    uint256 internal constant EXPECTED_FINAL_LIDO_VERSION = 3;
+    uint256 internal constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
+
+    V3Addresses public immutable ADDRESSES;
+
+    //
+    // -------- Roles --------
+    //
+    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
+    // Burner
+    bytes32 public immutable REQUEST_BURN_SHARES_ROLE;
+    bytes32 public immutable REQUEST_BURN_MY_STETH_ROLE;
+    // PauseUntilWithRoles
+    bytes32 public immutable RESUME_ROLE;
+    bytes32 public immutable PAUSE_ROLE;
+    // OracleReportSanityChecker
+    bytes32 public immutable ALL_LIMITS_MANAGER_ROLE;
+    bytes32 public immutable EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE;
+    bytes32 public immutable APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE;
+    bytes32 public immutable ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE;
+    bytes32 public immutable SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE;
+    bytes32 public immutable MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE;
+    bytes32 public immutable MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE;
+    bytes32 public immutable MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE;
+    bytes32 public immutable REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE;
+    bytes32 public immutable MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE;
+    bytes32 public immutable SECOND_OPINION_MANAGER_ROLE;
+    bytes32 public immutable INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE;
+    // StakingRouter
+    bytes32 public immutable REPORT_REWARDS_MINTED_ROLE;
+    // VaultHub
+    bytes32 public immutable VAULT_MASTER_ROLE;
+    bytes32 public immutable VAULT_REGISTRY_ROLE;
+    // OperatorGrid
+    bytes32 public immutable REGISTRY_ROLE;
+
+    //
+    // -------- Constants --------
+    //
+
+    // Timestamp since startUpgrade() and finishUpgrade() revert with Expired()
+    // This behavior is introduced to disarm the template if the upgrade voting creation or enactment didn't
+    // happen in proper time period
+    uint256 public constant EXPIRE_SINCE_INCLUSIVE = 1754006400; // 2025-08-01 00:00:00 UTC
+
+    // Initial value of _upgradeBlockNumber
+    uint256 internal constant UPGRADE_NOT_STARTED = 0;
+
+    uint256 internal constant INFINITE_ALLOWANCE = type(uint256).max;
+
+    //
+    // Structured storage
+    //
+
+    uint256 public upgradeBlockNumber = UPGRADE_NOT_STARTED;
+    bool public isUpgradeFinished;
+    uint256 internal initialOldBurnerStethSharesBalance;
+    uint256 internal initialTotalShares;
+    uint256 internal initialTotalPooledEther;
+
+
+    /// @param _addresses Addresses for the upgrade template
+    constructor(address _addresses) {
+        ADDRESSES = V3Addresses(_addresses);
+
+        //
+        // -------- Initialize Roles --------
+        //
+        // Initialize Burner roles
+        REQUEST_BURN_SHARES_ROLE = IBurner(ADDRESSES.BURNER()).REQUEST_BURN_SHARES_ROLE();
+        REQUEST_BURN_MY_STETH_ROLE = IBurner(ADDRESSES.BURNER()).REQUEST_BURN_MY_STETH_ROLE();
+        // Initialize PauseUntilWithRoles roles
+        RESUME_ROLE = IVaultHub(ADDRESSES.VAULT_HUB()).RESUME_ROLE();
+        PAUSE_ROLE = IVaultHub(ADDRESSES.VAULT_HUB()).PAUSE_ROLE();
+        // Initialize OracleReportSanityChecker roles
+        ALL_LIMITS_MANAGER_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).ALL_LIMITS_MANAGER_ROLE();
+        EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE();
+        APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE();
+        ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE();
+        SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE();
+        MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE();
+        MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE();
+        MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE();
+        REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE();
+        MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE();
+        SECOND_OPINION_MANAGER_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).SECOND_OPINION_MANAGER_ROLE();
+        INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE();
+        // Initialize StakingRouter roles
+        REPORT_REWARDS_MINTED_ROLE = IStakingRouter(ADDRESSES.STAKING_ROUTER()).REPORT_REWARDS_MINTED_ROLE();
+        // Initialize VaultHub roles
+        VAULT_MASTER_ROLE = IVaultHub(ADDRESSES.VAULT_HUB()).VAULT_MASTER_ROLE();
+        VAULT_REGISTRY_ROLE = IVaultHub(ADDRESSES.VAULT_HUB()).VAULT_REGISTRY_ROLE();
+        // Initialize OperatorGrid roles
+        REGISTRY_ROLE = IOperatorGrid(ADDRESSES.OPERATOR_GRID()).REGISTRY_ROLE();
+    }
+
+    /// @notice Must be called after LidoLocator is upgraded
+    function startUpgrade() external {
+        if (msg.sender != ADDRESSES.VOTING()) revert OnlyVotingCanUpgrade();
+        if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
+        if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
+
+        upgradeBlockNumber = block.number;
+
+        initialTotalShares = ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).getTotalShares();
+        initialTotalPooledEther = ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).getTotalPooledEther();
+
+        _assertPreUpgradeState();
+
+        // Save initial state for the check after burner migration
+        initialOldBurnerStethSharesBalance = ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).sharesOf(ADDRESSES.OLD_BURNER());
+    }
+
+    function finishUpgrade() external {
+        if (msg.sender != ADDRESSES.VOTING()) revert OnlyVotingCanUpgrade();
+        if (upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
+        if (isUpgradeFinished) revert UpgradeAlreadyFinished();
+        if (ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).getTotalShares() != initialTotalShares || ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).getTotalPooledEther() != initialTotalPooledEther) {
+            revert TotalSharesOrPooledEtherChanged();
+        }
+
+        isUpgradeFinished = true;
+
+        ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).finalizeUpgrade_v3(ADDRESSES.OLD_BURNER(), [
+            ADDRESSES.WITHDRAWAL_QUEUE(),
+            ADDRESSES.NODE_OPERATORS_REGISTRY(),
+            ADDRESSES.SIMPLE_DVT(),
+            ADDRESSES.CSM_ACCOUNTING()
+        ]);
+
+        IAccountingOracle(ADDRESSES.ACCOUNTING_ORACLE()).finalizeUpgrade_v3(ACCOUNTING_ORACLE_CONSENSUS_VERSION);
+
+        _assertPostUpgradeState();
+
+        emit UpgradeFinished();
+    }
+
+    function _assertPreUpgradeState() internal view {
+        // Check initial implementations of the proxies to be upgraded
+        _assertProxyImplementation(IOssifiableProxy(ADDRESSES.LOCATOR()), ADDRESSES.OLD_LOCATOR_IMPLEMENTATION());
+        _assertProxyImplementation(IOssifiableProxy(ADDRESSES.ACCOUNTING_ORACLE()), ADDRESSES.OLD_ACCOUNTING_ORACLE_IMPLEMENTATION());
+        _assertAragonAppImplementation(IAragonAppRepo(ADDRESSES.ARAGON_APP_LIDO_REPO()), ADDRESSES.OLD_LIDO_IMPLEMENTATION());
+
+        // Check allowances of the old burner
+        address[4] memory contracts = [
+            ADDRESSES.WITHDRAWAL_QUEUE(),
+            ADDRESSES.NODE_OPERATORS_REGISTRY(),
+            ADDRESSES.SIMPLE_DVT(),
+            ADDRESSES.CSM_ACCOUNTING()
+        ];
+        for (uint256 i = 0; i < contracts.length; ++i) {
+            if (ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).allowance(contracts[i], ADDRESSES.OLD_BURNER()) != INFINITE_ALLOWANCE) {
+                revert IncorrectBurnerAllowance(contracts[i], ADDRESSES.OLD_BURNER());
+            }
+        }
+    }
+
+    function _assertPostUpgradeState() internal view {
+        // Check LidoLocator was upgraded
+        _assertProxyImplementation(IOssifiableProxy(ADDRESSES.LOCATOR()), ADDRESSES.NEW_LOCATOR_IMPLEMENTATION());
+
+        // Check contract versions
+        _assertContractVersion(IVersioned(ADDRESSES.LIDO()), EXPECTED_FINAL_LIDO_VERSION);
+        _assertContractVersion(IVersioned(ADDRESSES.ACCOUNTING_ORACLE()), EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
+
+        _assertFinalACL();
+
+        _checkBurnerMigratedCorrectly();
+
+        if (IVaultFactory(ADDRESSES.VAULT_FACTORY()).BEACON() != ADDRESSES.UPGRADEABLE_BEACON()) {
+            revert IncorrectVaultFactoryBeacon(ADDRESSES.VAULT_FACTORY(), ADDRESSES.UPGRADEABLE_BEACON());
+        }
+        if (IVaultFactory(ADDRESSES.VAULT_FACTORY()).DASHBOARD_IMPL() != ADDRESSES.DASHBOARD_IMPLEMENTATION()) {
+            revert IncorrectVaultFactoryDashboardImplementation(ADDRESSES.VAULT_FACTORY(), ADDRESSES.DASHBOARD_IMPLEMENTATION());
+        }
+        if (IUpgradeableBeacon(ADDRESSES.UPGRADEABLE_BEACON()).owner() != ADDRESSES.AGENT()) {
+            revert IncorrectUpgradeableBeaconOwner(ADDRESSES.UPGRADEABLE_BEACON(), ADDRESSES.AGENT());
+        }
+        if (IUpgradeableBeacon(ADDRESSES.UPGRADEABLE_BEACON()).implementation() != ADDRESSES.STAKING_VAULT_IMPLEMENTATION()) {
+            revert IncorrectUpgradeableBeaconImplementation(ADDRESSES.UPGRADEABLE_BEACON(), ADDRESSES.STAKING_VAULT_IMPLEMENTATION());
+        }
+    }
+
+    function _assertFinalACL() internal view {
+        address agent = ADDRESSES.AGENT();
+
+        // Burner
+        _assertSingleOZRoleHolder(IBurner(ADDRESSES.BURNER()), DEFAULT_ADMIN_ROLE, agent);
+        {
+            address[] memory holders = new address[](4);
+            holders[0] = ADDRESSES.LIDO();
+            holders[1] = ADDRESSES.NODE_OPERATORS_REGISTRY();
+            holders[2] = ADDRESSES.SIMPLE_DVT();
+            holders[3] = ADDRESSES.ACCOUNTING();
+            _assertOZRoleHolders(IBurner(ADDRESSES.BURNER()), REQUEST_BURN_SHARES_ROLE, holders);
+        }
+        _assertZeroOZRoleHolders(IBurner(ADDRESSES.OLD_BURNER()), REQUEST_BURN_SHARES_ROLE);
+
+        // VaultHub
+        _assertSingleOZRoleHolder(IVaultHub(ADDRESSES.VAULT_HUB()), DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(IVaultHub(ADDRESSES.VAULT_HUB()), VAULT_MASTER_ROLE, agent);
+        _assertZeroOZRoleHolders(IVaultHub(ADDRESSES.VAULT_HUB()), VAULT_REGISTRY_ROLE);
+        _assertProxyAdmin(IOssifiableProxy(ADDRESSES.VAULT_HUB()), agent);
+        // TODO: add PausableUntilWithRoles checks when gate seal is added
+
+        // AccountingOracle
+        _assertSingleOZRoleHolder(IAccountingOracle(ADDRESSES.ACCOUNTING_ORACLE()), DEFAULT_ADMIN_ROLE, agent);
+
+        // OracleReportSanityChecker
+        IOracleReportSanityChecker checker = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER());
+        _assertSingleOZRoleHolder(checker, DEFAULT_ADMIN_ROLE, ADDRESSES.AGENT());
+
+        bytes32[12] memory roles = [
+            ALL_LIMITS_MANAGER_ROLE,
+            EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
+            APPEARED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE,
+            ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE,
+            SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE,
+            MAX_VALIDATOR_EXIT_REQUESTS_PER_REPORT_ROLE,
+            MAX_ITEMS_PER_EXTRA_DATA_TRANSACTION_ROLE,
+            MAX_NODE_OPERATORS_PER_EXTRA_DATA_ITEM_ROLE,
+            REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE,
+            MAX_POSITIVE_TOKEN_REBASE_MANAGER_ROLE,
+            SECOND_OPINION_MANAGER_ROLE,
+            INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE
+        ];
+        for (uint256 i = 0; i < roles.length; ++i) {
+            _assertZeroOZRoleHolders(checker, roles[i]);
+        }
+
+        // Accounting
+        _assertProxyAdmin(IOssifiableProxy(ADDRESSES.ACCOUNTING()), agent);
+
+        // PredepositGuarantee
+        _assertProxyAdmin(IOssifiableProxy(ADDRESSES.PREDEPOSIT_GUARANTEE()), agent);
+
+        // StakingRouter
+        {
+            address[] memory holders = new address[](2);
+            holders[0] = ADDRESSES.LIDO();
+            holders[1] = ADDRESSES.ACCOUNTING();
+            _assertOZRoleHolders(IAccessControlEnumerable(ADDRESSES.STAKING_ROUTER()), REPORT_REWARDS_MINTED_ROLE, holders);
+        }
+
+        // OperatorGrid
+        _assertProxyAdmin(IOssifiableProxy(ADDRESSES.OPERATOR_GRID()), agent);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(ADDRESSES.OPERATOR_GRID()), DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(ADDRESSES.OPERATOR_GRID()), REGISTRY_ROLE, agent);
+    }
+
+    function _checkBurnerMigratedCorrectly() internal view {
+        (uint256 oldCoverShares, uint256 oldNonCoverShares) = IBurner(ADDRESSES.OLD_BURNER()).getSharesRequestedToBurn();
+        (uint256 newCoverShares, uint256 newNonCoverShares) = IBurner(ADDRESSES.BURNER()).getSharesRequestedToBurn();
+        if (
+            IBurner(ADDRESSES.OLD_BURNER()).getCoverSharesBurnt() != IBurner(ADDRESSES.BURNER()).getCoverSharesBurnt() ||
+            IBurner(ADDRESSES.OLD_BURNER()).getNonCoverSharesBurnt() != IBurner(ADDRESSES.BURNER()).getNonCoverSharesBurnt() ||
+            oldCoverShares != newCoverShares ||
+            oldNonCoverShares != newNonCoverShares ||
+            ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).balanceOf(ADDRESSES.OLD_BURNER()) != 0 ||
+            ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).balanceOf(ADDRESSES.BURNER()) != initialOldBurnerStethSharesBalance ||
+            IBurner(ADDRESSES.BURNER()).isMigrationAllowed()
+        ) {
+            revert IncorrectBurnerSharesMigration();
+        }
+
+        address[4] memory contracts = [
+            ADDRESSES.WITHDRAWAL_QUEUE(),
+            ADDRESSES.SIMPLE_DVT(),
+            ADDRESSES.NODE_OPERATORS_REGISTRY(),
+            ADDRESSES.CSM_ACCOUNTING()
+        ];
+        for (uint256 i = 0; i < contracts.length; i++) {
+            if (ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).allowance(contracts[i], ADDRESSES.OLD_BURNER()) != 0) {
+                revert IncorrectBurnerAllowance(contracts[i], ADDRESSES.OLD_BURNER());
+            }
+            if (ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).allowance(contracts[i], ADDRESSES.BURNER()) != INFINITE_ALLOWANCE) {
+                revert IncorrectBurnerAllowance(contracts[i], ADDRESSES.BURNER());
+            }
+        }
+    }
+
+    function _assertProxyAdmin(IOssifiableProxy proxy, address admin) internal view {
+        if (proxy.proxy__getAdmin() != admin) revert IncorrectProxyAdmin(address(proxy));
+    }
+
+    function _assertProxyImplementation(IOssifiableProxy proxy, address implementation) internal view {
+        address actualImplementation = proxy.proxy__getImplementation();
+        if (actualImplementation != implementation) {
+            revert IncorrectProxyImplementation(address(proxy), actualImplementation);
+        }
+    }
+
+    function _assertZeroOZRoleHolders(IAccessControlEnumerable accessControlled, bytes32 role) internal view {
+        if (accessControlled.getRoleMemberCount(role) != 0) {
+            revert NonZeroRoleHolders(address(accessControlled), role);
+        }
+    }
+
+    function _assertSingleOZRoleHolder(
+        IAccessControlEnumerable accessControlled, bytes32 role, address holder
+    ) internal view {
+        if (accessControlled.getRoleMemberCount(role) != 1
+         || accessControlled.getRoleMember(role, 0) != holder
+        ) {
+            revert IncorrectOZAccessControlRoleHolders(address(accessControlled), role);
+        }
+    }
+
+    function _assertOZRoleHolders(
+        IAccessControlEnumerable accessControlled, bytes32 role, address[] memory holders
+    ) internal view {
+        if (accessControlled.getRoleMemberCount(role) != holders.length) {
+            revert IncorrectOZAccessControlRoleHolders(address(accessControlled), role);
+        }
+        for (uint256 i = 0; i < holders.length; i++) {
+            if (accessControlled.getRoleMember(role, i) != holders[i]) {
+                revert IncorrectOZAccessControlRoleHolders(address(accessControlled), role);
+            }
+        }
+    }
+
+    function _assertAragonAppImplementation(IAragonAppRepo repo, address implementation) internal view {
+        (, address actualImplementation, ) = repo.getLatest();
+        if (actualImplementation != implementation) {
+            revert IncorrectAragonAppImplementation(address(repo), implementation);
+        }
+    }
+
+    function _assertContractVersion(IVersioned versioned, uint256 expectedVersion) internal view {
+        if (versioned.getContractVersion() != expectedVersion) {
+            revert InvalidContractVersion(address(versioned), expectedVersion);
+        }
+    }
+
+    error OnlyVotingCanUpgrade();
+    error UpgradeAlreadyStarted();
+    error UpgradeAlreadyFinished();
+    error IncorrectProxyAdmin(address proxy);
+    error IncorrectProxyImplementation(address proxy, address implementation);
+    error InvalidContractVersion(address contractAddress, uint256 actualVersion);
+    error IncorrectOZAccessControlRoleHolders(address contractAddress, bytes32 role);
+    error NonZeroRoleHolders(address contractAddress, bytes32 role);
+    error IncorrectAragonAppImplementation(address repo, address implementation);
+    error StartAndFinishMustBeInSameBlock();
+    error Expired();
+    error IncorrectBurnerSharesMigration();
+    error IncorrectBurnerAllowance(address contractAddress, address burner);
+    error IncorrectVaultFactoryBeacon(address factory, address beacon);
+    error IncorrectVaultFactoryDashboardImplementation(address factory, address delegation);
+    error IncorrectUpgradeableBeaconOwner(address beacon, address owner);
+    error IncorrectUpgradeableBeaconImplementation(address beacon, address implementation);
+    error TotalSharesOrPooledEtherChanged();
+}

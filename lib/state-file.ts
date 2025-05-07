@@ -93,7 +93,9 @@ export enum Sk {
   stakingVaultFactory = "stakingVaultFactory",
   dashboardImpl = "dashboardImpl",
   stakingVaultBeacon = "stakingVaultBeacon",
-  upgradeTemplateV3 = "upgradeTemplateV3",
+  v3Template = "upgradeTemplateV3",
+  v3Addresses = "v3Addresses",
+  v3VoteScript = "v3VoteScript",
   operatorGrid = "operatorGrid",
 }
 

@@ -7,6 +7,11 @@ pragma solidity >=0.4.24 <0.9.0;
 
 
 interface IBurner {
+
+    function REQUEST_BURN_MY_STETH_ROLE() external view returns (bytes32);
+
+    function REQUEST_BURN_SHARES_ROLE() external view returns (bytes32);
+
     /**
      * Commit cover/non-cover burning requests and logs cover/non-cover shares amount just burnt.
      *
