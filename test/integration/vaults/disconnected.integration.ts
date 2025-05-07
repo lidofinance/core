@@ -160,6 +160,28 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     });
   });
 
+  it.skip("Can change the tier", async () => {
+    const { operatorGrid } = ctx.contracts;
+    // need to add more tiers but how?
+    await operatorGrid.connect(owner).grantRole(await operatorGrid.REGISTRY_ROLE(), stranger);
+
+    await operatorGrid.connect(stranger).registerGroup(nodeOperator, 1000);
+    await operatorGrid.connect(stranger).registerTiers(nodeOperator, [
+      {
+        shareLimit: 1000,
+        reserveRatioBP: 2000,
+        forcedRebalanceThresholdBP: 1800,
+        treasuryFeeBP: 500,
+      },
+    ]);
+    await expect(dashboard.connect(roles.tierChanger).requestTierChange(1))
+      .to.emit(operatorGrid, "TierChangeRequested")
+      .withArgs(stakingVault, 1);
+    await expect(operatorGrid.connect(nodeOperator).confirmTierChange(stakingVault, 1))
+      .to.emit(operatorGrid, "TierChanged")
+      .withArgs(stakingVault, 1);
+  });
+
   describe("Locking", () => {
     it("Rejects to lock more than funded", async () => {
       const amount = ether("10");
@@ -211,6 +233,21 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       expect(await stakingVault.ossified()).to.equal(true);
     });
 
+    it.skip("Can withdraw rewards after ossification", async () => {
+      await dashboard.connect(roles.ossifier).ossifyStakingVault();
+      const reward = ether("3");
+
+      await stranger.sendTransaction({
+        to: stakingVault.getAddress(),
+        value: reward,
+      });
+
+      expect(await ethers.provider.getBalance(stakingVault.getAddress())).to.equal(VAULT_CONNECTION_DEPOSIT + reward);
+
+      expect(await dashboard.withdrawableEther()).to.equal(VAULT_CONNECTION_DEPOSIT);
+      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, reward)).to.emit(stakingVault, "Withdrawn");
+      expect(await ethers.provider.getBalance(stakingVault.getAddress())).to.equal(0);
+    });
     it("Can't ossify vault it's already ossified", async () => {
       await dashboard.connect(roles.ossifier).ossifyStakingVault();
       await expect(dashboard.connect(roles.ossifier).ossifyStakingVault()).to.be.revertedWithCustomError(
