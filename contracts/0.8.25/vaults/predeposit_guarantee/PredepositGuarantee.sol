@@ -215,7 +215,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @notice verifies the deposit message signature using BLS12-381 pairing check
      * @param _deposit staking vault deposit to verify
      * @param _depositsY Y coordinates of the two BLS12-381 points (uncompressed pubkey and signature)
-     * @param _withdrawalCredentials missing part of deposit message
+     * @param _withdrawalCredentials withdrawal credentials of the deposit message to verify
      * @dev reverts with `InvalidSignature` if the signature is invalid
      * @dev reverts with `InputHasInfinityPoints` if the input contains infinity points(zero values)
      */
