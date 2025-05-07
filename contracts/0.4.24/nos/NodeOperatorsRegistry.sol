@@ -84,13 +84,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         Distributed               // Reward distributed among operators
     }
 
-    /// @notice Enum to represent the state of a validator exit process
-    enum ValidatorExitProcessStatus {
-        NotProcessed,   // Default state, validator exit not yet started
-        Reported,       // Exit delay reported but not yet triggered
-        Triggered       // Exit has been triggered
-    }
-
     //
     // ACL
     //
@@ -242,7 +235,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     NodeOperatorSummary internal _nodeOperatorSummary;
 
     /// @dev Mapping of Node Operator exit delay keys
-    mapping(bytes32 => ValidatorExitProcessStatus) internal _validatorExitProcessedKeys;
+    mapping(bytes32 => bool) internal _validatorExitProcessedKeys;
 
     //
     // METHODS
@@ -1062,22 +1055,15 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _removeUnusedSigningKeys(_nodeOperatorId, _fromIndex, _keysCount);
     }
 
-    function _getValidatorExitingKeyProcessStatus(bytes32 _keyHash) internal view returns (ValidatorExitProcessStatus) {
+    function _isValidatorExitingKeyReported(bytes32 _keyHash) internal view returns (bool) {
         return _validatorExitProcessedKeys[_keyHash];
     }
 
     function _markValidatorExitingKeyAsReported(bytes32 _keyHash) internal {
         // Require that key is currently NotProcessed
-        require(_validatorExitProcessedKeys[_keyHash] == ValidatorExitProcessStatus.NotProcessed,
+        require(_validatorExitProcessedKeys[_keyHash] == false,
             "VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
-        _validatorExitProcessedKeys[_keyHash] = ValidatorExitProcessStatus.Reported;
-    }
-
-    function _markValidatorExitingKeyAsTriggered(bytes32 _keyHash) internal {
-        // Require that key is currently Reported
-        require(_validatorExitProcessedKeys[_keyHash] == ValidatorExitProcessStatus.Reported,
-            "VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
-        _validatorExitProcessedKeys[_keyHash] = ValidatorExitProcessStatus.Triggered;
+        _validatorExitProcessedKeys[_keyHash] = true;
     }
 
     function exitDeadlineThreshold() public view returns (uint256) {
@@ -1099,9 +1085,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     ) external {
         _auth(STAKING_ROUTER_ROLE);
 
-        bytes32 processedKeyHash = keccak256(abi.encode(_publicKey));
-        _markValidatorExitingKeyAsTriggered(processedKeyHash);
-
         emit ValidatorExitTriggered(_nodeOperatorId, _publicKey, _withdrawalRequestPaidFee, _exitType);
     }
 
@@ -1112,8 +1095,8 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         uint256 _eligibleToExitInSec
     ) external view returns (bool) {
         bytes32 processedKeyHash = keccak256(abi.encode(_publicKey));
-        ValidatorExitProcessStatus status = _getValidatorExitingKeyProcessStatus(processedKeyHash);
-        if (status != ValidatorExitProcessStatus.NotProcessed) {
+        // Check if the key is already reported
+        if (_isValidatorExitingKeyReported(processedKeyHash)) {
             return false;
         }
         return _eligibleToExitInSec >= exitDeadlineThreshold();
