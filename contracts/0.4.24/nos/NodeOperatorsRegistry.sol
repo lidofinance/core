@@ -1109,7 +1109,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         bytes _publicKey,
         uint256 _eligibleToExitInSec
     ) external view returns (bool) {
-        bytes32 processedKeyHash = keccak256(abi.encode(_publicKey));
+        bytes32 processedKeyHash = keccak256(_publicKey);
         // Check if the key is already reported
         if (_isValidatorExitingKeyReported(processedKeyHash)) {
             return false;
@@ -1136,7 +1136,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         // Check if exit delay exceeds the threshold
         require(_eligibleToExitInSec >= exitDeadlineThreshold(), "EXIT_DELAY_BELOW_THRESHOLD");
 
-        bytes32 processedKeyHash = keccak256(abi.encode(_publicKey));
+        bytes32 processedKeyHash = keccak256(_publicKey);
         _markValidatorExitingKeyAsReported(processedKeyHash);
 
         emit ValidatorExitStatusUpdated(_nodeOperatorId, _publicKey, _eligibleToExitInSec, _proofSlotTimestamp);
