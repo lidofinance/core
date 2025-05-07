@@ -150,7 +150,9 @@ export async function main() {
     shareLimit: ether("1000"),
     reserveRatioBP: 2000n,
     forcedRebalanceThresholdBP: 1800n,
-    treasuryFeeBP: 500n,
+    infraFeeBP: 500n,
+    liquidityFeeBP: 400n,
+    reservationFeeBP: 100n,
   };
   const operatorGrid = await loadContract("OperatorGrid", operatorGridAddress);
   await makeTx(operatorGrid, "initialize", [operatorGridAdmin, defaultTierParams], { from: deployer });

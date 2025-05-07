@@ -29,14 +29,18 @@ contract VaultHub__HarnessForReporting is VaultHub {
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
     /// @param _reserveRatioBP minimum reserve ratio in basis points
     /// @param _forcedRebalanceThresholdBP threshold to force rebalance on the vault in basis points
-    /// @param _treasuryFeeBP treasury fee in basis points
+    /// @param _infraFeeBP infra fee in basis points
+    /// @param _liquidityFeeBP liquidity fee in basis points
+    /// @param _reservationFeeBP reservation fee in basis points
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     function harness__connectVault(
         address _vault,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
-        uint256 _treasuryFeeBP
+        uint256 _infraFeeBP,
+        uint256 _liquidityFeeBP,
+        uint256 _reservationFeeBP
     ) external {
         VaultHubStorage storage $ = harness_getVaultHubStorage();
 
@@ -46,13 +50,23 @@ contract VaultHub__HarnessForReporting is VaultHub {
             uint96(_shareLimit),
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
-            uint16(_treasuryFeeBP),
+            uint16(_infraFeeBP),
+            uint16(_liquidityFeeBP),
+            uint16(_reservationFeeBP),
             false, // pendingDisconnect
-            0
+            0 // feeSharesCharged
         );
         $.vaultIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
 
-        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
+        emit VaultConnectionSet(
+            _vault,
+            _shareLimit,
+            _reserveRatioBP,
+            _forcedRebalanceThresholdBP,
+            _infraFeeBP,
+            _liquidityFeeBP,
+            _reservationFeeBP
+        );
     }
 }

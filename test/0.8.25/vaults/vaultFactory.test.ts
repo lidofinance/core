@@ -94,7 +94,9 @@ describe("VaultFactory.sol", () => {
       shareLimit: ether("1"),
       reserveRatioBP: 2000n,
       forcedRebalanceThresholdBP: 1800n,
-      treasuryFeeBP: 500n,
+      infraFeeBP: 500n,
+      liquidityFeeBP: 400n,
+      reservationFeeBP: 100n,
     };
     await operatorGrid.initialize(admin, defaultTierParams);
     await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
