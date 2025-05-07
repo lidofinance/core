@@ -1027,6 +1027,76 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
+  context("updateVaultFees", () => {
+    let vault: StakingVault__MockForVaultHub;
+    let vaultAddress: string;
+
+    before(async () => {
+      const { vault: _vault } = await createAndConnectVault(vaultFactory);
+      vault = _vault;
+      vaultAddress = await vault.getAddress();
+    });
+
+    it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
+      await expect(
+        vaultHub.connect(stranger).updateVaultFees(vaultAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
+      ).to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount");
+    });
+
+    it("reverts if vault address is zero", async () => {
+      await expect(
+        vaultHub.connect(user).updateVaultFees(ZeroAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
+      ).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
+    });
+
+    it("reverts if infra fee is too high", async () => {
+      const tooHighInfraFeeBP = TOTAL_BASIS_POINTS + 1n;
+
+      await expect(
+        vaultHub.connect(user).updateVaultFees(vaultAddress, tooHighInfraFeeBP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
+      )
+        .to.be.revertedWithCustomError(vaultHub, "InfraFeeTooHigh")
+        .withArgs(vaultAddress, tooHighInfraFeeBP, TOTAL_BASIS_POINTS);
+    });
+
+    it("reverts if liquidity fee is too high", async () => {
+      const tooHighLiquidityFeeBP = TOTAL_BASIS_POINTS + 1n;
+
+      await expect(
+        vaultHub.connect(user).updateVaultFees(vaultAddress, INFRA_FEE_BP, tooHighLiquidityFeeBP, RESERVATION_FEE_BP),
+      )
+        .to.be.revertedWithCustomError(vaultHub, "LiquidityFeeTooHigh")
+        .withArgs(vaultAddress, tooHighLiquidityFeeBP, TOTAL_BASIS_POINTS);
+    });
+
+    it("reverts if reservation fee is too high", async () => {
+      const tooHighReservationFeeBP = TOTAL_BASIS_POINTS + 1n;
+
+      await expect(
+        vaultHub.connect(user).updateVaultFees(vaultAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, tooHighReservationFeeBP),
+      )
+        .to.be.revertedWithCustomError(vaultHub, "ReservationFeeTooHigh")
+        .withArgs(vaultAddress, tooHighReservationFeeBP, TOTAL_BASIS_POINTS);
+    });
+
+    it("updates the vault fees", async () => {
+      const newInfraFeeBP = INFRA_FEE_BP * 2n;
+      const newLiquidityFeeBP = LIQUIDITY_FEE_BP * 2n;
+      const newReservationFeeBP = RESERVATION_FEE_BP * 2n;
+
+      await expect(
+        vaultHub.connect(user).updateVaultFees(vaultAddress, newInfraFeeBP, newLiquidityFeeBP, newReservationFeeBP),
+      )
+        .to.emit(vaultHub, "VaultFeesUpdated")
+        .withArgs(vaultAddress, newInfraFeeBP, newLiquidityFeeBP, newReservationFeeBP);
+
+      const vaultSocket = await vaultHub["vaultSocket(address)"](vaultAddress);
+      expect(vaultSocket.infraFeeBP).to.equal(newInfraFeeBP);
+      expect(vaultSocket.liquidityFeeBP).to.equal(newLiquidityFeeBP);
+      expect(vaultSocket.reservationFeeBP).to.equal(newReservationFeeBP);
+    });
+  });
+
   context("disconnect", () => {
     let vault: StakingVault__MockForVaultHub;
     let vaultAddress: string;
