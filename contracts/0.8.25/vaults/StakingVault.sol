@@ -32,8 +32,6 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  * and contains immutable references to the beacon chain deposit contract.
  */
 contract StakingVault is IStakingVault, OwnableUpgradeable {
-    IDepositContract public immutable DEPOSIT_CONTRACT;
-
     struct ERC7201Storage {
         address nodeOperator;
         address depositor;
@@ -45,6 +43,12 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      *         The implementation is petrified to this version
      */
     uint64 private constant _VERSION = 1;
+
+    /**	
+     * @notice Address of `BeaconChainDepositContract`	
+     *         Set immutably in the constructor to avoid storage costs	
+     */	
+    IDepositContract public immutable DEPOSIT_CONTRACT;
 
     /**
      * @notice The type of withdrawal credentials for the validators deposited from this `StakingVault`.
