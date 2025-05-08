@@ -242,7 +242,12 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
             .checkExitBusOracleReport(data.requestsCount);
 
         // Check VEB common limit
-        _checkAndUpdateDailyExitLimit(EXIT_REQUEST_LIMIT_POSITION, data.requestsCount);
+
+        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
+        exitRequestLimitData.checkLimit(data.requestsCount, _getTimestamp());
+        EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+            exitRequestLimitData.updateRequestsCounter(data.requestsCount, _getTimestamp())
+        );
 
         if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
             revert UnexpectedRequestsDataLength();

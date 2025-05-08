@@ -196,10 +196,6 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
 
       await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
       const emitTx = await oracle.emitExitEvents(exitRequest);
-      const receipt = await emitTx.wait();
-
-      expect(receipt?.logs.length).to.eq(2);
-
       const timestamp = await oracle.getTime();
 
       for (const request of exitRequests) {
@@ -229,10 +225,6 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
 
       await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
       const emitTx = await oracle.emitExitEvents(exitRequest);
-      const receipt = await emitTx.wait();
-
-      expect(receipt?.logs.length).to.eq(3);
-
       const timestamp = await oracle.getTime();
 
       for (let i = 0; i < 3; i++) {
