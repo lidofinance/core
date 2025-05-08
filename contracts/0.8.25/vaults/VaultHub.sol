@@ -155,7 +155,16 @@ contract VaultHub is PausableUntilWithRoles {
         VaultHubStorage storage $ = _getVaultHubStorage();
         if ($.vaultProxyCodehash[_codehash]) revert AlreadyExists(_codehash);
         $.vaultProxyCodehash[_codehash] = true;
+
         emit VaultProxyCodehashAdded(_codehash);
+    }
+
+    function removeVaultProxyCodehash(bytes32 _codehash) public onlyRole(VAULT_REGISTRY_ROLE) {
+        VaultHubStorage storage $ = _getVaultHubStorage();
+        if (!$.vaultProxyCodehash[_codehash]) revert NotFound(_codehash);
+        delete $.vaultProxyCodehash[_codehash];
+
+        emit VaultProxyCodehashRemoved(_codehash);
     }
 
     /// @notice returns the number of vaults connected to the hub
@@ -533,6 +542,7 @@ contract VaultHub is PausableUntilWithRoles {
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
+    event VaultProxyCodehashRemoved(bytes32 indexed codehash);
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     error AlreadyHealthy(address vault);
@@ -559,6 +569,7 @@ contract VaultHub is PausableUntilWithRoles {
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
     error InsufficientTotalValueToMint(address vault, uint256 totalValue);
     error AlreadyExists(bytes32 codehash);
+    error NotFound(bytes32 codehash);
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
     error VaultProxyNotAllowed(address beacon, bytes32 codehash);
     error InvalidPubkeysLength();
