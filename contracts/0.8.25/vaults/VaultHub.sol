@@ -32,12 +32,6 @@ contract VaultHub is PausableUntilWithRoles {
         mapping(address => uint256) vaultIndex;
         /// @notice allowed beacon addresses
         mapping(bytes32 => bool) vaultProxyCodehash;
-        /// @notice root of the vaults data tree
-        bytes32 vaultsDataTreeRoot;
-        /// @notice CID of the vaults data tree
-        string vaultsDataReportCid;
-        /// @notice timestamp of the vaults data
-        uint64 vaultsDataTimestamp;
     }
 
     /**
@@ -270,14 +264,7 @@ contract VaultHub is PausableUntilWithRoles {
         _disconnect(_vault);
     }
 
-    /// @notice returns the latest report data
-    /// @return timestamp of the report
-    /// @return treeRoot of the report
-    /// @return reportCid of the report
-    function latestReportData() external view returns (uint64 timestamp, bytes32 treeRoot, string memory reportCid) {
-        VaultHubStorage storage $ = _getVaultHubStorage();
-        return ($.vaultsDataTimestamp, $.vaultsDataTreeRoot, $.vaultsDataReportCid);
-    }
+
 
     /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
     /// @param _vault vault address
@@ -449,6 +436,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _liabilityShares the liabilityShares of the vault
     function updateSocket(
         address _vault,
+        uint64 _timestamp,
         uint256 _totalValue,
         int256 _inOutDelta,
         uint256 _feeSharesCharged,
@@ -477,7 +465,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         socket.report.totalValue = uint128(_totalValue);
         socket.report.inOutDelta = int128(_inOutDelta);
-        socket.report.timestamp = uint64($.vaultsDataTimestamp);
+        socket.report.timestamp = _timestamp;
         socket.locked = uint128(lockedEther);
 
         if (socket.pendingDisconnect) {

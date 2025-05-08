@@ -38,6 +38,15 @@ contract LazyOracle {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
     }
 
+    /// @notice returns the latest report data
+    /// @return timestamp of the report
+    /// @return treeRoot of the report
+    /// @return reportCid of the report
+    function latestReportData() external view returns (uint64 timestamp, bytes32 treeRoot, string memory reportCid) {
+        Storage storage $ = _storage();
+        return ($.vaultsDataTimestamp, $.vaultsDataTreeRoot, $.vaultsDataReportCid);
+    }
+
     /// @notice returns batch of vaults info
     /// @param _offset offset of the vault in the batch (indexes start from 0)
     /// @param _limit limit of the batch
@@ -95,7 +104,15 @@ contract LazyOracle {
         );
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
-        VaultHub(payable(LIDO_LOCATOR.vaultHub())).updateSocket(_vault, _totalValue, _inOutDelta, _feeSharesCharged, _liabilityShares);
+        VaultHub(payable(LIDO_LOCATOR.vaultHub()))
+            .updateSocket(
+                _vault,
+                _storage().vaultsDataTimestamp,
+                _totalValue,
+                _inOutDelta,
+                _feeSharesCharged,
+                _liabilityShares
+            );
     }
 
     function _storage() internal pure returns (Storage storage $) {
