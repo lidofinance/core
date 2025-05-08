@@ -71,7 +71,7 @@ describe("NodeOperatorsRegistry.sol:auxiliary", () => {
   ];
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
-  const penaltyDelay = 86400n;
+  const exitDeadlineThreshold = 86400n;
   const contractVersionV2 = 2n;
   const contractVersionV3 = 3n;
 
@@ -119,7 +119,7 @@ describe("NodeOperatorsRegistry.sol:auxiliary", () => {
     locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy.
-    await expect(nor.initialize(locator, moduleType, penaltyDelay))
+    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold))
       .to.emit(nor, "ContractVersionSet")
       .withArgs(contractVersionV2)
       .to.emit(nor, "ContractVersionSet")
@@ -156,41 +156,6 @@ describe("NodeOperatorsRegistry.sol:auxiliary", () => {
       await expect(nor.connect(stranger).unsafeUpdateValidatorsCount(firstNodeOperatorId, 0n, 0n)).to.be.revertedWith(
         "APP_AUTH_FAILED",
       );
-    });
-
-    it("Can change stuck and exited keys arbitrary (even decreasing exited)", async () => {
-      const nonce = await nor.getNonce();
-
-      const beforeNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
-      expect(beforeNOSummary.stuckValidatorsCount).to.equal(0n);
-      expect(beforeNOSummary.totalExitedValidators).to.equal(1n);
-
-      await expect(nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperatorId, 3n, 2n))
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 2n, 0n, 0n) // doesn't affect stuck penalty deadline
-        .to.emit(nor, "ExitedSigningKeysCountChanged")
-        .withArgs(firstNodeOperatorId, 3n)
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n);
-
-      const middleNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
-      expect(middleNOSummary.stuckValidatorsCount).to.equal(2n);
-      expect(middleNOSummary.totalExitedValidators).to.equal(3n);
-
-      await expect(nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperatorId, 1n, 2n))
-        .to.emit(nor, "ExitedSigningKeysCountChanged")
-        .withArgs(firstNodeOperatorId, 1n)
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 2n)
-        .to.not.emit(nor, "StuckPenaltyStateChanged");
-
-      const lastNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
-      expect(lastNOSummary.stuckValidatorsCount).to.equal(2n);
-      expect(lastNOSummary.totalExitedValidators).to.equal(1n);
     });
   });
 

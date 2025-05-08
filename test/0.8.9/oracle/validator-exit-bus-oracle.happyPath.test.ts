@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
+import { HashConsensus__Harness, ValidatorsExitBus__Harness, WithdrawalVault__MockForVebo } from "typechain-types";
 
 import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
@@ -29,11 +29,11 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
+  let withdrawalVault: WithdrawalVault__MockForVebo;
 
   let oracleVersion: bigint;
   let exitRequests: ExitRequest[];
   let reportFields: ReportFields;
-  let reportItems: ReturnType<typeof getValidatorsExitBusReportDataItems>;
   let reportHash: string;
 
   let member1: HardhatEthersSigner;
@@ -58,13 +58,12 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     data: string;
   }
 
-  const calcValidatorsExitBusReportDataHash = (items: ReturnType<typeof getValidatorsExitBusReportDataItems>) => {
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [items]);
-    return ethers.keccak256(data);
-  };
-
-  const getValidatorsExitBusReportDataItems = (r: ReportFields) => {
-    return [r.consensusVersion, r.refSlot, r.requestsCount, r.dataFormat, r.data];
+  const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
+    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
+    const reportDataHash = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
+    );
+    return reportDataHash;
   };
 
   const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
@@ -81,11 +80,13 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
+    withdrawalVault = deployed.withdrawalVault;
 
     await initVEBO({
       admin: admin.address,
       oracle,
       consensus,
+      withdrawalVault,
       resumeAfterDeploy: true,
       lastProcessingRefSlot: LAST_PROCESSING_REF_SLOT,
     });
@@ -151,8 +152,7 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
       data: encodeExitRequestsDataList(exitRequests),
     };
 
-    reportItems = getValidatorsExitBusReportDataItems(reportFields);
-    reportHash = calcValidatorsExitBusReportDataHash(reportItems);
+    reportHash = calcValidatorsExitBusReportDataHash(reportFields);
 
     await triggerConsensusOnHash(reportHash);
   });
@@ -202,9 +202,11 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
   });
 
   it("a data not matching the consensus hash cannot be submitted", async () => {
-    const invalidReport = { ...reportFields, requestsCount: reportFields.requestsCount + 1 };
-    const invalidReportItems = getValidatorsExitBusReportDataItems(invalidReport);
-    const invalidReportHash = calcValidatorsExitBusReportDataHash(invalidReportItems);
+    const invalidReport = {
+      ...reportFields,
+      requestsCount: reportFields.requestsCount + 1,
+    };
+    const invalidReportHash = calcValidatorsExitBusReportDataHash(invalidReport);
 
     await expect(oracle.connect(member1).submitReportData(invalidReport, oracleVersion))
       .to.be.revertedWithCustomError(oracle, "UnexpectedDataHash")
@@ -237,14 +239,6 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     expect(procState.dataFormat).to.equal(DATA_FORMAT_LIST);
     expect(procState.requestsCount).to.equal(exitRequests.length);
     expect(procState.requestsSubmitted).to.equal(exitRequests.length);
-  });
-
-  it("last requested validator indices are updated", async () => {
-    const indices1 = await oracle.getLastRequestedValidatorIndices(1n, [0n, 1n, 2n]);
-    const indices2 = await oracle.getLastRequestedValidatorIndices(2n, [0n, 1n, 2n]);
-
-    expect([...indices1]).to.have.ordered.members([2n, -1n, -1n]);
-    expect([...indices2]).to.have.ordered.members([1n, -1n, -1n]);
   });
 
   it("no data can be submitted for the same reference slot again", async () => {
