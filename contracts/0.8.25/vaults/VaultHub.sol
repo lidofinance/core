@@ -314,7 +314,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_amountToWithdraw > locked) {
             revert LockedAmountTooLow(_vault, _amountToWithdraw, locked);
         }
-        
+
         ObligationCategory category = ObligationCategory.Withdrawal;
         socket.outstandingObligations[category] += _amountToWithdraw;
 
@@ -433,7 +433,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultSocket storage socket = _connectedSocket(_vault);
         if (!_isVaultOwner(msg.sender, socket)) revert NotAuthorized();
         if (!_isReportFresh(socket)) revert VaultReportStaled(_vault);
-        
+
         uint256 unlocked_ = _unlocked(socket);
         if (_ether > unlocked_) revert InsufficientUnlocked(unlocked_, _ether);
 
@@ -806,13 +806,13 @@ contract VaultHub is PausableUntilWithRoles {
         VaultSocket storage _socket,
         ObligationCategory _category
     ) internal view returns (uint256) {
-        return uint256(_socket.outstandingObligations[_category]) - uint256(_socket.settledObligations[_category]);
+        return _socket.outstandingObligations[_category] - _socket.settledObligations[_category];
     }
 
     function _vaultTotalObligations(VaultSocket storage _socket) internal view returns (uint256 total) {
         uint8 totalCategories = uint8(type(ObligationCategory).max) + 1;
         for (uint8 i = 0; i < totalCategories; i++) {
-            total += uint256(_socket.outstandingObligations[i]) - uint256(_socket.settledObligations[i]);
+            total += _socket.outstandingObligations[i] - _socket.settledObligations[i];
         }
     }
 
@@ -845,7 +845,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 feesSettled = socket.settledObligations[category];
         if (_chargedFees < feesSettled) revert InvalidFees(socket.vault, _chargedFees, feesSettled);
 
-        socket.outstandingObligations[category] = uint96(_chargedFees);
+        socket.outstandingObligations[category] = _chargedFees;
         emit ObligationAccrued(socket.vault, "TreasuryFees", _chargedFees);
 
         uint256 feesToSettle = _chargedFees - feesSettled;
@@ -859,7 +859,7 @@ contract VaultHub is PausableUntilWithRoles {
             _withdrawFromVault(socket.vault, treasury, valueToTransfer);
 
             uint256 newSettledAmount = feesSettled + valueToTransfer;
-            socket.settledObligations[category] = uint96(newSettledAmount);
+            socket.settledObligations[category] = newSettledAmount;
             emit ObligationSettled(socket.vault, "TreasuryFees", newSettledAmount);
         }
     }
