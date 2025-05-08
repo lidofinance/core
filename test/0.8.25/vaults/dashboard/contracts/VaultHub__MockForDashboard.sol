@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {IVaultControl} from "contracts/0.8.25/vaults/interfaces/IVaultControl.sol";
+import {StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract IStETH {
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {}
@@ -109,4 +110,6 @@ contract VaultHub__MockForDashboard is IVaultControl {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable override {}
+
+    function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external override {}
 }
