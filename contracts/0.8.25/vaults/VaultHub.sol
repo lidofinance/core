@@ -411,12 +411,6 @@ contract VaultHub is PausableUntilWithRoles {
         _processTreasuryFeesObligation(socket, _reportChargedFees);
     }
 
-    function mintVaultsTreasuryFeeShares(uint256 _amountOfShares) external {
-        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized();
-
-        LIDO.mintExternalShares(LIDO_LOCATOR.treasury(), _amountOfShares);
-    }
-
     function fund(address _vault) external payable {
         VaultSocket storage socket = _connectedSocket(_vault);
         if (!_isVaultOwner(msg.sender, socket)) revert NotAuthorized();
@@ -576,17 +570,26 @@ contract VaultHub is PausableUntilWithRoles {
         address _refundRecipient
     ) external payable {
         VaultSocket storage socket = _connectedSocket(_vault);
-        bool isAuthorized = _isVaultOwner(msg.sender, socket);
-        if (_vaultObligationsForCategory(socket, ObligationCategory.Withdrawal) > 0) {
-            // Allow trigger validator withdrawals when vault has outstanding withdrawal obligation
-            isAuthorized = isAuthorized || hasRole(WITHDRAWAL_OBLIGATION_FULFILLER_ROLE, msg.sender);
-        }
-        if (!isAuthorized) revert NotAuthorized();
-
         // todo: separate logic for partial and full withdrawals
         if (_totalValue(socket) < socket.locked) revert TotalValueBelowLockedAmount();
 
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
+    }
+
+    function triggerValidatorExit(
+        address _vault,
+        bytes calldata _pubkeys,
+        address _refundRecipient
+    ) external payable onlyRole(WITHDRAWAL_OBLIGATION_FULFILLER_ROLE) {
+        VaultSocket storage socket = _connectedSocket(_vault);
+
+        if (_vaultObligationsForCategory(socket, ObligationCategory.Withdrawal) == 0) {
+            revert VaultHasNoWithdrawalObligation();
+        }
+
+        IStakingVault(_vault).triggerValidatorExits{value: msg.value}(_pubkeys, _refundRecipient);
+
+        emit ValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
     /// @notice Forces validator exit from the beacon chain when vault is unhealthy
@@ -886,6 +889,7 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event VaultProxyCodehashRemoved(bytes32 indexed codehash);
+    event ValidatorExitTriggered(bytes32 indexed vault, bytes pubkeys, address refundRecipient);
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     /**
@@ -1012,5 +1016,6 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultHubNotPendingOwner(address vault);
     error UnhealthyVaultCannotDeposit(address vault);
     error LockedAmountTooLow(address vault, uint256 withdrawalAmount, uint256 lockedAmount);
+    error VaultHasNoWithdrawalObligation(address vault);
     error NotAllObligationsSettled(address vault, uint256 obligations, uint256 vaultBalance);
 }

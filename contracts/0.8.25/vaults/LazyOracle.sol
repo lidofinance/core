@@ -51,11 +51,11 @@ contract LazyOracle {
     /// @param _offset offset of the vault in the batch (indexes start from 0)
     /// @param _limit limit of the batch
     /// @return batch of vaults info
-    function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory) {
+    function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory batch) {
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
         uint256 vaultCount = vaultHub.vaultsCount();
         uint256 limit = _offset + _limit > vaultCount - 1 ? vaultCount - 1 - _offset : _limit;
-        VaultInfo[] memory batch = new VaultInfo[](limit);
+        batch = new VaultInfo[](limit);
         for (uint256 i = 0; i < limit; i++) {
             VaultHub.VaultSocket memory socket = vaultHub.vaultSocket(i + 1 + _offset);
             IStakingVault currentVault = IStakingVault(socket.vault);
@@ -67,7 +67,6 @@ contract LazyOracle {
                 socket.liabilityShares
             );
         }
-        return batch;
     }
 
     function updateReportData(
