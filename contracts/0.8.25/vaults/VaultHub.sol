@@ -8,7 +8,6 @@ import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/ac
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {LazyOracle} from "./LazyOracle.sol";
 import {OperatorGrid} from "./OperatorGrid.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILido} from "../interfaces/ILido.sol";
@@ -16,7 +15,6 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
 import {StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
 import {IVaultControl} from "./interfaces/IVaultControl.sol";
-import {IDepositContract} from "../interfaces/IDepositContract.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral

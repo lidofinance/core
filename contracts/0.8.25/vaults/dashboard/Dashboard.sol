@@ -9,7 +9,6 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
-import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 
 import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
