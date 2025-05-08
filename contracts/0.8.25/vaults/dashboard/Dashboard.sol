@@ -207,11 +207,11 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Sets the manager of the staking vault.
-     * @param _newManager Address of the new manager.
+     * @notice Sets the owner of the staking vault.
+     * @param _newOwner Address of the new owner.
      */
-    function setManager(address _newManager) external {
-        _setManager(_newManager);
+    function setVaultOwner(address _newOwner) external {
+        _setVaultOwner(_newOwner);
     }
 
     /**
