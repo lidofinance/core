@@ -5,11 +5,10 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
 
-import {VaultHub} from "./VaultHub.sol";
 import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
-
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
 
@@ -26,44 +25,19 @@ import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol
  * total value as locked, which cannot be withdrawn by the owner. This locked portion represents the
  * collateral for the minted stETH.
  *
- * Access Control:
- * - Owner:
- *   - `fund()`
- *   - `withdraw()`
- *   - `rebalance()`
- *   - `lock()`
- *   - `pauseBeaconChainDeposits()`
- *   - `resumeBeaconChainDeposits()`
- *   - `requestValidatorExit()`
- *   - `triggerValidatorWithdrawal()`
- *   - `authorizeLidoVaultHub()`
- *   - `deauthorizeLidoVaultHub()`
- *   - `ossifyStakingVault()`
- *   - `setDepositor()`
- *   - `resetLocked()`
- * - Operator:
- *   - `triggerValidatorWithdrawal()`
- * - Depositor:
- *   - `depositToBeaconChain()`
- * - VaultHub:
- *   - `report()`
- *   - `rebalance()`
- *   - `triggerValidatorWithdrawal()`
- * - Anyone:
- *   - Can send ETH directly to the vault (treated as rewards)
- *
  * PinnedBeaconProxy
  * The contract is designed as an extended beacon proxy implementation, allowing individual StakingVault instances
  * to be ossified (pinned) to prevent future upgrades. The implementation is petrified (non-initializable)
  * and contains immutable references to the beacon chain deposit contract.
  */
-contract StakingVault is IStakingVault, OwnableUpgradeable {
-    IDepositContract public immutable DEPOSIT_CONTRACT;
-
-    struct ERC7201Storage {
-        address nodeOperator;
-        bool beaconChainDepositsPaused;
-    }
+contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
+    /*
+     * ╔══════════════════════════════════════════════════╗
+     * ║ ┌──────────────────────────────────────────────┐ ║
+     * ║ │            CONSTANTS                         │ ║
+     * ║ └──────────────────────────────────────────────┘ ║
+     * ╚══════════════════════════════════════════════════╝
+     */
 
     /**
      * @notice Version of the contract on the implementation
@@ -79,38 +53,74 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice The length of the public key in bytes
      */
-    uint256 public constant PUBLIC_KEY_LENGTH = 48;
+    uint256 private constant PUBLIC_KEY_LENGTH = 48;
 
     /**
      * @notice Storage offset slot for ERC-7201 namespace
      *         The storage namespace is used to prevent upgrade collisions
      *         `keccak256(abi.encode(uint256(keccak256("Lido.Vaults.StakingVault")) - 1)) & ~bytes32(uint256(0xff))`
      */
-    bytes32 private constant ERC7201_STORAGE_LOCATION =
-        0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
+    bytes32 private constant ERC7201_SLOT = 0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
 
     /**
-     * @notice Constructs the implementation of `StakingVault`
+     * @notice Address of `BeaconChainDepositContract`
+     *         Set immutably in the constructor to avoid storage costs
      */
-    constructor(address _depositContract) {
-        DEPOSIT_CONTRACT = IDepositContract(_depositContract);
+    IDepositContract public immutable DEPOSIT_CONTRACT;
 
-        // Prevents reinitialization of the implementation
+    /*
+     * ╔══════════════════════════════════════════════════╗
+     * ║ ┌──────────────────────────────────────────────┐ ║
+     * ║ │            STATE                             │ ║
+     * ║ └──────────────────────────────────────────────┘ ║
+     * ╚══════════════════════════════════════════════════╝
+     */
+
+    /**
+     * @dev ERC-7201: Namespaced Storage Layout
+     */
+    struct ERC7201Storage {
+        address nodeOperator;
+        address depositor;
+        bool beaconChainDepositsPaused;
+    }
+
+    /*
+     * ╔══════════════════════════════════════════════════╗
+     * ║ ┌──────────────────────────────────────────────┐ ║
+     * ║ │            INITIALIZATION                    │ ║
+     * ║ └──────────────────────────────────────────────┘ ║
+     * ╚══════════════════════════════════════════════════╝
+     */
+
+    /**
+     * @dev Fixes the deposit contract address. Disables reinitialization of the implementation.
+     */
+    constructor(address _beaconChainDepositContract) {
+        if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
+        DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
         _disableInitializers();
     }
 
     /**
-     * @notice Initializes `StakingVault` with an owner, node operator, and optional parameters
-     * @param _owner Address that will own the vault
+     * @notice Initializes `StakingVault` with an owner, node operator, and depositor
+     * @param _owner Address of the owner
+     * @param _nodeOperator Address of the node operator
+     * @param _depositor Address of the depositor
      */
-    function initialize(address _owner, address _nodeOperator) external initializer {
-        if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
-
+    function initialize(address _owner, address _nodeOperator, address _depositor) external initializer {
         __Ownable_init(_owner);
-        _storage().nodeOperator = _nodeOperator;
-
-        emit NodeOperatorSet(_nodeOperator);
+        _fixNodeOperator(_nodeOperator);
+        _setDepositor(_depositor);
     }
+
+    /*
+     * ╔══════════════════════════════════════════════════╗
+     * ║ ┌──────────────────────────────────────────────┐ ║
+     * ║ │            VIEW FUNCTIONS                    │ ║
+     * ║ └──────────────────────────────────────────────┘ ║
+     * ╚══════════════════════════════════════════════════╝
+     */
 
     /**
      * @notice Returns the highest version that has been initialized as uint64
@@ -127,19 +137,31 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     }
 
     /**
-     * @notice returns owner of the contract
-     * @dev fixes solidity interface inference
+     * @notice Returns owner of the contract
+     * @dev Fixes solidity interface inference
      */
     function owner() public view override(IStakingVault, OwnableUpgradeable) returns (address) {
         return OwnableUpgradeable.owner();
     }
 
+    /**
+     * @notice Returns the node operator address
+     * @return Address of the node operator
+     */
     function nodeOperator() public view returns (address) {
         return _storage().nodeOperator;
     }
 
     /**
-     * @notice Returns true if the vault is ossified
+     * @notice Returns the depositor address
+     * @return Address of the depositor
+     */
+    function depositor() public view returns (address) {
+        return _storage().depositor;
+    }
+
+    /**
+     * @notice Returns whether the vault is ossified
      * @return True if the vault is ossified, false otherwise
      */
     function isOssified() public view returns (bool) {
@@ -149,6 +171,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Returns the 0x02-type withdrawal credentials for the validators deposited from this `StakingVault`
      *         All consensus layer rewards are sent to this contract. Only 0x02-type withdrawal credentials are supported
+     * @return Bytes32 value of the withdrawal credentials
      */
     function withdrawalCredentials() public view returns (bytes32) {
         return bytes32(WC_0X02_PREFIX | uint160(address(this)));
@@ -166,43 +189,59 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
         return _numberOfKeys * TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
+    /*
+     * ╔══════════════════════════════════════════════════╗
+     * ║ ┌──────────────────────────────────────────────┐ ║
+     * ║ │            BALANCE OPERATIONS                │ ║
+     * ║ └──────────────────────────────────────────────┘ ║
+     * ╚══════════════════════════════════════════════════╝
+     */
+
+    /**
+     * @dev Transfers ether directly to the `StakingVault`
+     */
     receive() external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
-
-        emit EtherReceived(msg.sender, msg.value);
     }
 
+    /**
+     * @notice Funds the `StakingVault` with ether
+     */
+    function fund() external payable onlyOwner {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+
+        emit EtherFunded(msg.sender, msg.value);
+    }
+
+    /**
+     * @notice Withdraws ether from the vault
+     * @param _recipient Address to send the ether to
+     * @param _ether Amount of ether to withdraw
+     */
     function withdraw(address _recipient, uint256 _ether) external onlyOwner {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_ether == 0) revert ZeroArgument("_ether");
+        if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance, _ether);
 
-        (bool success, ) = _recipient.call{value: _ether}("");
-        if (!success) revert TransferFailed(_recipient, _ether);
+        _transferEther("withdraw", _recipient, _ether);
 
         emit EtherWithdrawn(msg.sender, _recipient, _ether);
     }
 
-    /**
-     * @notice Ossifies the current implementation. WARNING: This operation is irreversible,
-     *         once ossified, the vault cannot be upgraded or attached to VaultHub.
-     * @dev Can only be called by the owner.
-     *      Pins the current vault implementation to prevent further upgrades.
-     *      Emits an event `PinnedImplementationUpdated` with the current implementation address.
-     * @dev Reverts if already ossified.
-     * @dev Reverts if vaultHub is authorized at the vault
+    /*
+     * ╔══════════════════════════════════════════════════╗
+     * ║ ┌──────────────────────────────────────────────┐ ║
+     * ║ │            BEACON CHAIN DEPOSITS             │ ║
+     * ║ └──────────────────────────────────────────────┘ ║
+     * ╚══════════════════════════════════════════════════╝
      */
-    function ossify() external onlyOwner {
-        if (isOssified()) revert AlreadyOssified();
 
-        PinnedBeaconUtils.ossify();
-    }
-
+    /**
+     * @notice Pauses deposits to beacon chain
+     */
     function pauseBeaconChainDeposits() external onlyOwner {
         ERC7201Storage storage $ = _storage();
-
-        if ($.beaconChainDepositsPaused) {
-            revert BeaconChainDepositsResumeExpected();
-        }
+        if ($.beaconChainDepositsPaused) revert BeaconChainDepositsAlreadyPaused();
 
         $.beaconChainDepositsPaused = true;
 
@@ -211,22 +250,25 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
     /**
      * @notice Resumes deposits to beacon chain
-     * @dev    Can only be called by the vault owner
      */
     function resumeBeaconChainDeposits() external onlyOwner {
         ERC7201Storage storage $ = _storage();
-        if (!$.beaconChainDepositsPaused) {
-            revert BeaconChainDepositsPauseExpected();
-        }
+        if (!$.beaconChainDepositsPaused) revert BeaconChainDepositsAlreadyResumed();
 
         $.beaconChainDepositsPaused = false;
 
         emit BeaconChainDepositsResumed();
     }
 
-    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external onlyOwner {
+    /**
+     * @notice Performs deposits to the beacon chain
+     * @param _deposits Array of validator deposits
+     */
+    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
-        if (_storage().beaconChainDepositsPaused) revert BeaconChainDepositsResumeExpected();
+        ERC7201Storage storage $ = _storage();
+        if ($.beaconChainDepositsPaused) revert BeaconChainDepositsOnPause();
+        if (msg.sender != $.depositor) revert SenderNotDepositor();
 
         uint256 numberOfDeposits = _deposits.length;
 
@@ -235,8 +277,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
             totalAmount += _deposits[i].amount;
         }
 
-        uint256 contractBalance = address(this).balance;
-        if (totalAmount > contractBalance) revert InsufficientBalance(contractBalance, totalAmount);
+        if (totalAmount > address(this).balance) revert InsufficientBalance(address(this).balance, totalAmount);
 
         bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
 
@@ -253,6 +294,14 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
     }
+
+    /*
+     * ╔══════════════════════════════════════════════════╗
+     * ║ ┌──────────────────────────────────────────────┐ ║
+     * ║ │          BEACON CHAIN WITHDRAWALS            │ ║
+     * ║ └──────────────────────────────────────────────┘ ║
+     * ╚══════════════════════════════════════════════════╝
+     */
 
     /**
      * @notice Requests node operator to exit validators from the beacon chain
@@ -279,7 +328,7 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
      * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
      */
-    function triggerValidatorWithdrawal(
+    function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
         address _refundRecipient
@@ -300,67 +349,209 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
 
         TriggerableWithdrawals.addWithdrawalRequests(_pubkeys, _amounts, feePerRequest);
 
-        uint256 excess = msg.value - totalFee;
-        if (excess > 0) {
-            (bool success, ) = _refundRecipient.call{value: excess}("");
-            if (!success) revert WithdrawalFeeRefundFailed(_refundRecipient, excess);
-        }
+        uint256 excess = _refundExcess(totalFee, _refundRecipient);
 
-        emit ValidatorWithdrawalTriggered(msg.sender, _pubkeys, _amounts, _refundRecipient, excess);
+        emit ValidatorWithdrawalsTriggered(msg.sender, _refundRecipient, _pubkeys, _amounts, excess);
     }
 
+    function triggerValidatorExits(bytes calldata _pubkeys, address _refundRecipient) external payable {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
+        if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
+        if (msg.sender != owner() && msg.sender != _storage().nodeOperator) revert SenderNotNodeOperator();
+
+        // If the refund recipient is not set, use the sender as the refund recipient
+        if (_refundRecipient == address(0)) {
+            _refundRecipient = msg.sender;
+        }
+
+        uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
+        uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
+        if (msg.value < totalFee) revert InsufficientValidatorWithdrawalFee(msg.value, totalFee);
+
+        TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, feePerRequest);
+
+        uint256 excess = _refundExcess(totalFee, _refundRecipient);
+
+        emit ValidatorExitsTriggered(msg.sender, _refundRecipient, _pubkeys, excess);
+    }
+
+    /*
+     * ╔══════════════════════════════════════════════════╗
+     * ║ ┌──────────────────────────────────────────────┐ ║
+     * ║ │           ADMINISTRATIVE FUNCTIONS           │ ║
+     * ║ └──────────────────────────────────────────────┘ ║
+     * ╚══════════════════════════════════════════════════╝
+     */
+
+    /**
+     * @notice Sets the depositor address
+     * @param _depositor Address of the new depositor
+     */
+    function setDepositor(address _depositor) external onlyOwner {
+        _setDepositor(_depositor);
+    }
+
+    /**
+     * @notice Ossifies the current implementation. WARNING: This operation is irreversible,
+     *         once ossified, the vault cannot be upgraded or attached to VaultHub.
+     * @dev Can only be called by the owner.
+     *      Pins the current vault implementation to prevent further upgrades.
+     *      Emits an event `PinnedImplementationUpdated` with the current implementation address.
+     * @dev Reverts if already ossified.
+     * @dev Reverts if vaultHub is authorized at the vault
+     */
+    function ossify() external onlyOwner {
+        if (isOssified()) revert VaultOssified();
+
+        PinnedBeaconUtils.ossify();
+    }
+
+    /*
+     * ╔══════════════════════════════════════════════════╗
+     * ║ ┌──────────────────────────────────────────────┐ ║
+     * ║ │            INTERNAL FUNCTIONS                │ ║
+     * ║ └──────────────────────────────────────────────┘ ║
+     * ╚══════════════════════════════════════════════════╝
+     */
+
+    /**
+     * @dev Returns the storage struct for the ERC-7201 namespace
+     * @return $ storage struct for the ERC-7201 namespace
+     */
     function _storage() private pure returns (ERC7201Storage storage $) {
         assembly {
-            $.slot := ERC7201_STORAGE_LOCATION
+            $.slot := ERC7201_SLOT
         }
     }
 
-    event NodeOperatorSet(address indexed nodeOperator);
+    function _transferEther(string memory _operation, address _recipient, uint256 _amount) internal {
+        (bool success, ) = _recipient.call{value: _amount}("");
+        if (!success) revert TransferFailed(_operation, _recipient, _amount);
+    }
 
     /**
-     * @notice Emitted when ether is received by `StakingVault`
-     * @param sender Address that sent the ether
-     * @param amount Amount of ether received
+     * @dev Fixes the node operator address in the `StakingVault`
+     * @param _nodeOperator Address of the node operator
      */
-    event EtherReceived(address indexed sender, uint256 amount);
+    function _fixNodeOperator(address _nodeOperator) internal {
+        if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
+        _storage().nodeOperator = _nodeOperator;
+        emit NodeOperatorFixed(msg.sender, _nodeOperator);
+    }
 
     /**
-     * @notice Emitted when ether is transferred from `StakingVault` to a recipient
-     * @param sender Address that initiated the transfer
-     * @param recipient Address that received the transfer
-     * @param amount Amount of ether transferred
+     * @dev Sets the depositor address in the `StakingVault`
+     * @param _depositor Address of the new depositor
+     */
+    function _setDepositor(address _depositor) internal {
+        if (_depositor == address(0)) revert ZeroArgument("_depositor");
+        if (_depositor == _storage().depositor) revert NewDepositorSameAsPrevious();
+        address previousDepositor = _storage().depositor;
+        _storage().depositor = _depositor;
+        emit DepositorSet(msg.sender, previousDepositor, _depositor);
+    }
+
+    function _refundExcess(uint256 _totalFee, address _refundRecipient) internal returns (uint256 excess) {
+        excess = msg.value - _totalFee;
+        if (excess > 0) _transferEther("refund", _refundRecipient, excess);
+    }
+
+    /*
+     * ╔══════════════════════════════════════════════════╗
+     * ║ ┌──────────────────────────────────────────────┐ ║
+     * ║ │                EVENTS                        │ ║
+     * ║ └──────────────────────────────────────────────┘ ║
+     * ╚══════════════════════════════════════════════════╝
+     */
+
+    /**
+     * @notice Emitted when ether is funded to the `StakingVault`
+     * @param sender Address that funded the `StakingVault`
+     * @param amount Amount of ether funded
+     */
+    event EtherFunded(address indexed sender, uint256 amount);
+
+    /**
+     * @notice Emitted when ether is withdrawn from the `StakingVault`
+     * @param sender Address that withdrew the ether
+     * @param recipient Address that received the ether
+     * @param amount Amount of ether withdrawn
      */
     event EtherWithdrawn(address indexed sender, address indexed recipient, uint256 amount);
 
+    /**
+     * @notice Emitted when the node operator is fixed in the `StakingVault` upon initialization
+     * @param sender Address that fixed the node operator
+     * @param nodeOperator Address of the node operator
+     */
+    event NodeOperatorFixed(address indexed sender, address indexed nodeOperator);
+
+    /**
+     * @notice Emitted when the depositor is set in the `StakingVault`
+     * @param sender Address that set the depositor
+     * @param previousDepositor Previous depositor
+     * @param newDepositor New depositor
+     */
+    event DepositorSet(address indexed sender, address indexed previousDepositor, address indexed newDepositor);
+
+    /**
+     * @notice Emitted when the beacon chain deposits are paused
+     */
     event BeaconChainDepositsPaused();
+
+    /**
+     * @notice Emitted when the beacon chain deposits are resumed
+     */
     event BeaconChainDepositsResumed();
 
-    event DepositedToBeaconChain(address indexed sender, uint256 numberOfDeposits, uint256 totalAmount);
+    /**
+     * @notice Emitted when ether is deposited to `DepositContract`.
+     * @param _sender Address that initiated the deposit.
+     * @param _deposits Number of validator deposits made.
+     * @param _totalAmount Total amount of ether deposited.
+     */
+    event DepositedToBeaconChain(address indexed _sender, uint256 _deposits, uint256 _totalAmount);
 
     /**
      * @notice Emitted when vault owner requests node operator to exit validators from the beacon chain
-     * @param _sender Address that requested the exit
-     * @param _pubkey Indexed public key of the validator to exit
-     * @param _pubkeyRaw Raw public key of the validator to exit
+     * @param sender Address that requested the exit
+     * @param pubkey Indexed public key of the validator to exit
+     * @param pubkeyRaw Raw public key of the validator to exit
      * @dev    Signals to node operators that they should exit this validator from the beacon chain
      */
-    event ValidatorExitRequested(address _sender, bytes indexed _pubkey, bytes _pubkeyRaw);
+    event ValidatorExitRequested(address indexed sender, bytes pubkey, bytes pubkeyRaw);
 
     /**
      * @notice Emitted when validator withdrawals are requested via EIP-7002
-     * @param _sender Address that requested the withdrawals
-     * @param _pubkeys Concatenated public keys of the validators to withdraw
-     * @param _amounts Amounts of ether to withdraw per validator
-     * @param _refundRecipient Address to receive any excess withdrawal fee
-     * @param _excess Amount of excess fee refunded to recipient
+     * @param sender Address that requested the withdrawals
+     * @param pubkeys Concatenated public keys of the validators to withdraw
+     * @param amounts Amounts of ether to withdraw per validator
+     * @param refundRecipient Address to receive any excess withdrawal fee
+     * @param excess Amount of excess fee refunded to recipient
      */
-    event ValidatorWithdrawalTriggered(
-        address indexed _sender,
-        bytes _pubkeys,
-        uint64[] _amounts,
-        address _refundRecipient,
-        uint256 _excess
+    event ValidatorWithdrawalsTriggered(
+        address indexed sender,
+        address indexed refundRecipient,
+        bytes pubkeys,
+        uint64[] amounts,
+        uint256 excess
     );
+
+    event ValidatorExitsTriggered(
+        address indexed sender,
+        address indexed refundRecipient,
+        bytes pubkeys,
+        uint256 excess
+    );
+
+    /*
+     * ╔══════════════════════════════════════════════════╗
+     * ║ ┌──────────────────────────────────────────────┐ ║
+     * ║ │                ERRORS                        │ ║
+     * ║ └──────────────────────────────────────────────┘ ║
+     * ╚══════════════════════════════════════════════════╝
+     */
 
     /**
      * @notice Thrown when an invalid zero value is passed
@@ -369,29 +560,53 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     error ZeroArgument(string name);
 
     /**
-     * @notice Thrown when the transfer of ether to a recipient fails
-     * @param recipient Address that was supposed to receive the transfer
-     * @param amount Amount that failed to transfer
-     */
-    error TransferFailed(address recipient, uint256 amount);
-
-    /**
-     * @notice Thrown when the length of the validator public keys is invalid
-     */
-    error InvalidPubkeysLength();
-
-    /**
-     * @notice Thrown when the beacon chain deposits are paused
-     */
-    error BeaconChainDepositsPauseExpected();
-    error BeaconChainDepositsResumeExpected();
-
-    /**
      * @notice Thrown when the balance of the vault is insufficient
      * @param _balance Balance of the vault
      * @param _required Amount of ether required
      */
     error InsufficientBalance(uint256 _balance, uint256 _required);
+
+    /**
+     * @notice Thrown when the transfer of ether to a recipient fails
+     * @param recipient Address that was supposed to receive the transfer
+     * @param amount Amount that failed to transfer
+     */
+    error TransferFailed(string operation, address recipient, uint256 amount);
+
+    /**
+     * @notice Thrown when the new depositor is the same as the previous depositor
+     */
+    error NewDepositorSameAsPrevious();
+
+    /**
+     * @notice Thrown when the beacon chain deposits are already paused
+     */
+    error BeaconChainDepositsAlreadyPaused();
+
+    /**
+     * @notice Thrown when the beacon chain deposits are already resumed
+     */
+    error BeaconChainDepositsAlreadyResumed();
+
+    /**
+     * @notice Thrown when the beacon chain deposits are on pause
+     */
+    error BeaconChainDepositsOnPause();
+
+    /**
+     * @notice Thrown when the sender is not set as the depositor
+     */
+    error SenderNotDepositor();
+
+    /**
+     * @notice Thrown when the sender is not the node operator
+     */
+    error SenderNotNodeOperator();
+
+    /**
+     * @notice Thrown when the length of the validator public keys is invalid
+     */
+    error InvalidPubkeysLength();
 
     /**
      * @notice Thrown when the validator withdrawal fee is insufficient
@@ -410,5 +625,5 @@ contract StakingVault is IStakingVault, OwnableUpgradeable {
     /**
      * @notice Thrown when the vault is already ossified
      */
-    error AlreadyOssified();
+    error VaultOssified();
 }
