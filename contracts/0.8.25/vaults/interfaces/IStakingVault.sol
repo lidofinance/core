@@ -37,6 +37,7 @@ interface IStakingVault {
     function depositor() external view returns (address);
     function isOssified() external view returns (bool);
     function calculateValidatorWithdrawalFee(uint256 _keysCount) external view returns (uint256);
+    function fund() external payable;
     function withdraw(address _recipient, uint256 _ether) external;
     function pauseBeaconChainDeposits() external;
     function resumeBeaconChainDeposits() external;
