@@ -94,8 +94,10 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("Vaults.VaultHub.VaultMasterRole");
     /// @notice role that allows to add factories and vault implementations to hub
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("Vaults.VaultHub.VaultRegistryRole");
-    /// @notice role that allows to set outstanding obligations
-    bytes32 public constant SET_WITHDRAWAL_OBLIGATIONS_ROLE = keccak256("Vaults.VaultHub.SetWithdrawalObligationsRole");
+    /// @notice role that allows to set withdrawals obligation
+    bytes32 public constant SET_WITHDRAWALS_OBLIGATION_ROLE = keccak256("Vaults.VaultHub.SetWithdrawalsObligationRole");
+    /// @notice role that allows to trigger withdrawals obligation fulfillment via validator exits
+    bytes32 public constant FULFILL_WITHDRAWALS_OBLIGATION_ROLE = keccak256("Vaults.VaultHub.FulfillWithdrawalsObligationRole");
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
     /// @notice length of the validator pubkey in bytes
@@ -204,10 +206,9 @@ contract VaultHub is PausableUntilWithRoles {
         return uint256(int256(int128(socket.report.totalValue) + socket.inOutDelta - socket.report.inOutDelta));
     }
 
-    function obligationsValue(address _vault) public view returns (uint256) {
+    function obligations(address _vault) public view returns (Obligations memory) {
         VaultHubStorage storage $ = _getVaultHubStorage();
-        Obligations storage obligations = $.sockets[$.vaultIndex[_vault]].obligations;
-        return uint256(int256(int96(obligations.withdrawals) + int96(obligations.treasuryFees)));
+        return $.sockets[$.vaultIndex[_vault]].obligations;
     }
 
     function isReportFresh(address _vault) public view returns (bool) {
@@ -436,7 +437,7 @@ contract VaultHub is PausableUntilWithRoles {
         _disconnect(_vault);
     }
 
-    function _disconnect(address _vault) internal {
+    function _disconnect(address _vault) internal withObligationsFulfilled(_vault) {
         VaultSocket storage socket = _connectedSocket(_vault);
 
         uint256 liabilityShares = socket.liabilityShares;
@@ -496,14 +497,14 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    function setWithdrawalObligations(address _vault, uint256 _amountToWithdraw) external onlyRole(SET_WITHDRAWAL_OBLIGATIONS_ROLE) {
+    function setWithdrawalsObligation(address _vault, uint256 _amount) external onlyRole(SET_WITHDRAWALS_OBLIGATION_ROLE) {
         VaultSocket storage socket = _connectedSocket(_vault);
-        if (_amountToWithdraw > socket.locked) {
-            revert WithdrawalsInsufficientLocked(_vault, _amountToWithdraw, socket.locked);
+        if (_amount > socket.locked) {
+            revert InsufficientLockForWithdrawals(_vault, _amount, socket.locked);
         }
 
-        socket.obligations.withdrawals = uint96(_amountToWithdraw);
-        emit WithdrawalObligationsSet(_vault, _amountToWithdraw);
+        socket.obligations.withdrawals = uint96(_amount);
+        emit WithdrawalsObligationSet(_vault, _amount);
     }
 
     function mintVaultsTreasuryFeeShares(uint256 _amountOfShares) external {
@@ -534,6 +535,18 @@ contract VaultHub is PausableUntilWithRoles {
         if (_shareLimit > relativeMaxShareLimitPerVault) {
             revert ShareLimitTooHigh(_vault, _shareLimit, relativeMaxShareLimitPerVault);
         }
+    }
+
+    modifier withObligationsFulfilled(address _vault) {
+        VaultSocket storage socket = _connectedSocket(_vault);
+        Obligations memory obligations_ = socket.obligations;
+
+        uint256 valutBalance = address(socket.vault).balance;
+        uint256 valutObligations = uint256(int256(int96(obligations_.treasuryFees) + int96(obligations_.withdrawals)));
+        if (valutBalance < valutObligations) {
+            revert ObligationsNotFulfilled(socket.vault, valutObligations, valutBalance);
+        }
+        _;
     }
 
     function _releaseVault(uint256 _vaultIndex) internal {
@@ -568,7 +581,7 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event VaultProxyCodehashRemoved(bytes32 indexed codehash);
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
-    event WithdrawalObligationsSet(address indexed vault, uint256 amount);
+    event WithdrawalsObligationSet(address indexed vault, uint256 amount);
 
     error AlreadyHealthy(address vault);
     error VaultMintingCapacityExceeded(
@@ -609,7 +622,9 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultHubMustBeOwner(address vault);
     error VaultHubMustBeDepositor(address vault);
     error VaultProxyZeroCodehash();
-    error WithdrawalsInsufficientLocked(address vault, uint256 amountToWithdraw, uint256 locked);
     error InvalidOperator();
     error VaultHubNotPendingOwner(address vault);
+
+    error InsufficientLockForWithdrawals(address vault, uint256 amountToWithdraw, uint256 locked);
+    error ObligationsNotFulfilled(address vault, uint256 obligations, uint256 balance);
 }

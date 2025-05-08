@@ -40,7 +40,7 @@ contract VaultControl is VaultHub {
         emit VaultFunded(_vault, msg.sender, msg.value);
     }
 
-    function withdraw(address _vault, address _recipient, uint256 _ether) external {
+    function withdraw(address _vault, address _recipient, uint256 _ether) external withObligationsFulfilled(_vault) {
         if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
         uint256 unlocked_ = unlocked(_vault);
@@ -49,13 +49,6 @@ contract VaultControl is VaultHub {
         _withdrawFromVault(_vault, _recipient, _ether);
 
         uint256 totalValueAfterWithdraw = totalValue(_vault);
-        uint256 obligationsValue_ = obligationsValue(_vault);
-        uint256 balance = address(_vault).balance;
-
-        if (balance < obligationsValue_) {
-            revert ObligationsValueExceedsBalance(balance, obligationsValue_);
-        }
-
         if (isReportFresh(_vault)) {
             if (totalValueAfterWithdraw < _connectedSocket(_vault).locked) revert TotalValueBelowLockedAmount();
         } else {
@@ -166,7 +159,7 @@ contract VaultControl is VaultHub {
         IStakingVault(_vault).resumeBeaconChainDeposits();
     }
 
-    function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external {
+    function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external withObligationsFulfilled(_vault) {
         if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
         VaultSocket storage socket = _connectedSocket(_vault);
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
@@ -174,12 +167,6 @@ contract VaultControl is VaultHub {
         uint256 totalAmount;
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
-        }
-
-        uint256 contractBalance = address(this).balance;
-        uint256 obligationsValue_ = obligationsValue(_vault);
-        if (contractBalance - totalAmount < obligationsValue_) {
-            revert ObligationsValueExceedsBalance(contractBalance - totalAmount, obligationsValue_);
         }
 
         IStakingVault(_vault).depositToBeaconChain(_deposits);
@@ -196,8 +183,14 @@ contract VaultControl is VaultHub {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
         VaultSocket storage socket = _connectedSocket(_vault);
+        bool isAuthorized = _isManager(msg.sender, _vault);
+        if (socket.obligations.withdrawals > 0) {
+            isAuthorized = isAuthorized || hasRole(FULFILL_WITHDRAWALS_OBLIGATION_ROLE, msg.sender);
+        }
+        if (!isAuthorized) revert NotAuthorized();
+
+        // TODO: this looks suspicious, we can't block exits, but we may want to block partial withdrawals when vault is unhealthy
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
 
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
