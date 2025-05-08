@@ -5,8 +5,8 @@
 pragma solidity 0.8.25;
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
+import {IVaultControl} from "../interfaces/IVaultControl.sol";
 import {Permissions} from "./Permissions.sol";
-import {VaultHub} from "../VaultHub.sol";
 
 /**
  * @title NodeOperatorFee
@@ -70,7 +70,7 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice The last report for which node operator fee was claimed. Updated on each claim.
      */
-    VaultHub.Report public nodeOperatorFeeClaimedReport;
+    IVaultControl.Report public nodeOperatorFeeClaimedReport;
 
     /**
      * @notice Adjustment to allow fee correction during side deposits or consolidations.
@@ -129,7 +129,7 @@ contract NodeOperatorFee is Permissions {
         roles[1] = NODE_OPERATOR_MANAGER_ROLE;
     }
 
-    function latestReport() public view returns (VaultHub.Report memory) {
+    function latestReport() public view returns (IVaultControl.Report memory) {
         return VAULT_CONTROL.vaultSocket(address(_stakingVault())).report;
     }
 
@@ -145,8 +145,8 @@ contract NodeOperatorFee is Permissions {
      * @return uint256: the amount of unclaimed fee in ether.
      */
     function nodeOperatorUnclaimedFee() public view returns (uint256) {
-        VaultHub.Report memory latestReport_ = latestReport();
-        VaultHub.Report storage _lastClaimedReport = nodeOperatorFeeClaimedReport;
+        IVaultControl.Report memory latestReport_ = latestReport();
+        IVaultControl.Report storage _lastClaimedReport = nodeOperatorFeeClaimedReport;
 
         // cast down safely clamping to int128.max
         int128 adjustment = int128(int256(accruedRewardsAdjustment & ADJUSTMENT_CLAMP_MASK));

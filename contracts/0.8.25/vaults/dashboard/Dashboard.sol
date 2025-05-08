@@ -10,11 +10,12 @@ import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
-import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
-import {NodeOperatorFee} from "./NodeOperatorFee.sol";
-import {VaultHub} from "../VaultHub.sol";
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
+
+import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
+import {IVaultControl} from "../interfaces/IVaultControl.sol";
+import {NodeOperatorFee} from "./NodeOperatorFee.sol";
 
 interface IWstETH is IERC20 {
     function wrap(uint256) external returns (uint256);
@@ -94,7 +95,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the vault socket data for the staking vault.
      * @return VaultSocket struct containing vault data
      */
-    function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
+    function vaultSocket() public view returns (IVaultControl.VaultSocket memory) {
         return VAULT_CONTROL.vaultSocket(address(_stakingVault()));
     }
 

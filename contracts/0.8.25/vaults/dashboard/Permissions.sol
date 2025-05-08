@@ -9,8 +9,8 @@ import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConf
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
+import {IVaultControl} from "../interfaces/IVaultControl.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
-import {VaultHub} from "../VaultHub.sol";
 import {OperatorGrid} from "../OperatorGrid.sol";
 
 /**
@@ -137,7 +137,7 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     address private immutable _SELF;
 
-    VaultHub public immutable VAULT_CONTROL;
+    IVaultControl public immutable VAULT_CONTROL;
     IPredepositGuarantee public immutable PREDEPOSIT_GUARANTEE;
 
     /**
@@ -153,7 +153,7 @@ abstract contract Permissions is AccessControlConfirmable {
         if (_predepositGuarantee == address(0)) revert ZeroArgument("_predepositGuarantee");
 
         _SELF = address(this);
-        VAULT_CONTROL = VaultHub(payable(_vaultControl));
+        VAULT_CONTROL = IVaultControl(payable(_vaultControl));
         PREDEPOSIT_GUARANTEE = IPredepositGuarantee(payable(_predepositGuarantee));
     }
 
