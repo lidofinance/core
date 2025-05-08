@@ -146,12 +146,12 @@ contract Dashboard is NodeOperatorFee {
         return VAULT_CONTROL.totalValue(address(_stakingVault()));
     }
 
-    function locked() public view returns (uint256) {
-        return VAULT_CONTROL.vaultSocket(address(_stakingVault())).locked;
+    function totalObligations() public view returns (uint256) {
+        return VAULT_CONTROL.totalObligations(address(_stakingVault()));
     }
 
-    function obligationsValue() public view returns (uint256) {
-        return VAULT_CONTROL.obligationsValue(address(_stakingVault()));
+    function locked() public view returns (uint256) {
+        return VAULT_CONTROL.vaultSocket(address(_stakingVault())).locked;
     }
 
     /**
@@ -185,7 +185,7 @@ contract Dashboard is NodeOperatorFee {
      * @return uint256: the amount of unreserved ether.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = locked() + nodeOperatorUnclaimedFee() + obligationsValue();
+        uint256 reserved = locked() + nodeOperatorUnclaimedFee() + totalObligations();
         uint256 totalValue_ = totalValue();
 
         return reserved > totalValue_ ? 0 : totalValue_ - reserved;

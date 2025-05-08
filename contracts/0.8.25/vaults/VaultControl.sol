@@ -40,7 +40,7 @@ contract VaultControl is VaultHub {
         emit VaultFunded(_vault, msg.sender, msg.value);
     }
 
-    function withdraw(address _vault, address _recipient, uint256 _ether) external withObligationsFulfilled(_vault) {
+    function withdraw(address _vault, address _recipient, uint256 _ether) external withAllObligationsSettled(_vault) {
         if (!_isManager(msg.sender, _vault)) revert NotAuthorized();
 
         uint256 unlocked_ = unlocked(_vault);
@@ -159,7 +159,7 @@ contract VaultControl is VaultHub {
         IStakingVault(_vault).resumeBeaconChainDeposits();
     }
 
-    function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external withObligationsFulfilled(_vault) {
+    function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external withAllObligationsSettled(_vault) {
         if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
         VaultSocket storage socket = _connectedSocket(_vault);
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
@@ -186,7 +186,7 @@ contract VaultControl is VaultHub {
         VaultSocket storage socket = _connectedSocket(_vault);
         bool isAuthorized = _isManager(msg.sender, _vault);
         if (socket.obligations.withdrawals > 0) {
-            isAuthorized = isAuthorized || hasRole(FULFILL_WITHDRAWALS_OBLIGATION_ROLE, msg.sender);
+            isAuthorized = isAuthorized || hasRole(WITHDRAWALS_OBLIGATION_FULFILLER_ROLE, msg.sender);
         }
         if (!isAuthorized) revert NotAuthorized();
 
