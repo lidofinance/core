@@ -6,7 +6,7 @@ pragma solidity ^0.8.0;
 import {Permissions} from "contracts/0.8.25/vaults/dashboard/Permissions.sol";
 
 contract Permissions__Harness is Permissions {
-    constructor(address _vaultHub) Permissions(_vaultHub) {}
+    constructor(address _vaultControl, address _predepositGuarantee) Permissions(_vaultControl, _predepositGuarantee) {}
 
     function initialize(address _defaultAdmin, uint256 _confirmExpiry) external {
         super._initialize(_defaultAdmin, _confirmExpiry);
@@ -29,10 +29,6 @@ contract Permissions__Harness is Permissions {
 
     function withdraw(address _recipient, uint256 _ether) external {
         _withdraw(_recipient, _ether);
-    }
-
-    function lock(uint256 _locked) external {
-        _lock(_locked);
     }
 
     function mintShares(address _recipient, uint256 _shares) external {
@@ -71,10 +67,6 @@ contract Permissions__Harness is Permissions {
         _voluntaryDisconnect();
     }
 
-    function transferStakingVaultOwnership(address _newOwner) external {
-        _transferStakingVaultOwnership(_newOwner);
-    }
-
     function compensateDisprovenPredepositFromPDG(
         bytes calldata _pubkey,
         address _recipient
@@ -82,20 +74,8 @@ contract Permissions__Harness is Permissions {
         return _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);
     }
 
-    function authorizeLidoVaultHub() external {
-        _authorizeLidoVaultHub();
-    }
-
     function ossifyStakingVault() external {
         _ossifyStakingVault();
-    }
-
-    function setDepositor(address _depositor) external {
-        _setDepositor(_depositor);
-    }
-
-    function resetLocked() external {
-        _resetLocked();
     }
 
     function setConfirmExpiry(uint256 _newConfirmExpiry) external {

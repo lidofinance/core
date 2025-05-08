@@ -6,11 +6,10 @@ pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
+import {IVaultControl} from "../interfaces/IVaultControl.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
-import {VaultControl} from "../VaultControl.sol";
 import {OperatorGrid} from "../OperatorGrid.sol";
 
 /**
@@ -137,7 +136,7 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     address private immutable _SELF;
 
-    VaultControl public immutable VAULT_CONTROL;
+    IVaultControl public immutable VAULT_CONTROL;
     IPredepositGuarantee public immutable PREDEPOSIT_GUARANTEE;
 
     /**
@@ -153,7 +152,7 @@ abstract contract Permissions is AccessControlConfirmable {
         if (_predepositGuarantee == address(0)) revert ZeroArgument("_predepositGuarantee");
 
         _SELF = address(this);
-        VAULT_CONTROL = VaultControl(payable(_vaultControl));
+        VAULT_CONTROL = IVaultControl(payable(_vaultControl));
         PREDEPOSIT_GUARANTEE = IPredepositGuarantee(payable(_predepositGuarantee));
     }
 
@@ -352,11 +351,11 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the confirming roles and sets the manager on the StakingVault.
-     * @param _newManager The address to set the manager to.
+     * @dev Checks the confirming roles and sets the owner on the StakingVault.
+     * @param _newOwner The address to set the owner to.
      */
-    function _setManager(address _newManager) internal onlyConfirmed(confirmingRoles()) {
-        VAULT_CONTROL.setManager(address(_stakingVault()), _newManager);
+    function _setVaultOwner(address _newOwner) internal onlyConfirmed(confirmingRoles()) {
+        VAULT_CONTROL.setVaultOwner(address(_stakingVault()), _newOwner);
     }
 
     /**

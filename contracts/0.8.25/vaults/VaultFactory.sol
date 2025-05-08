@@ -5,7 +5,6 @@
 pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 
 import {VaultHub} from "./VaultHub.sol";
@@ -47,7 +46,6 @@ contract VaultFactory {
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry in seconds
      * @param _roleAssignments The optional role assignments to be made
-     * @param _extraParams The extra params for the StakingVault
      */
     function createVaultWithDashboard(
         address _defaultAdmin,
@@ -55,12 +53,13 @@ contract VaultFactory {
         address _nodeOperatorManager,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry,
-        Permissions.RoleAssignment[] calldata _roleAssignments,
-        bytes calldata _extraParams
+        Permissions.RoleAssignment[] calldata _roleAssignments
     ) external payable returns (IStakingVault vault, Dashboard dashboard) {
         vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+        ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
+        VaultHub vaultHub = VaultHub(payable(locator.vaultHub()));
 
-        uint256 connectDeposit = VaultHub(vault.vaultHub()).CONNECT_DEPOSIT();
+        uint256 connectDeposit = vaultHub.CONNECT_DEPOSIT();
         if (msg.value < connectDeposit) revert InsufficientFunds();
 
         bytes memory immutableArgs = abi.encode(vault);
@@ -68,21 +67,14 @@ contract VaultFactory {
 
         // initialize StakingVault
         vault.initialize(
-            address(this),
+            address(dashboard),
             _nodeOperator,
-            ILidoLocator(LIDO_LOCATOR).predepositGuarantee(),
-            _extraParams
+            locator.predepositGuarantee()
         );
 
         vault.fund{value: msg.value}();
-        vault.lock(connectDeposit);
-        vault.authorizeLidoVaultHub();
 
-        // connect to hub
-        VaultHub(vault.vaultHub()).connectVault(address(vault));
-
-        // transfer ownership of the vault back to the dashboard
-        OwnableUpgradeable(address(vault)).transferOwnership(address(dashboard));
+        vaultHub.connectVault(address(vault));
 
         // If there are extra role assignments to be made,
         // we initialize the dashboard with the VaultFactory as the default admin,
