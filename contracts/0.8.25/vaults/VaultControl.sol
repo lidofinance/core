@@ -164,11 +164,6 @@ contract VaultControl is VaultHub {
         VaultSocket storage socket = _connectedSocket(_vault);
         if (totalValue(_vault) < socket.locked) revert TotalValueBelowLockedAmount();
 
-        uint256 totalAmount;
-        for (uint256 i = 0; i < _deposits.length; i++) {
-            totalAmount += _deposits[i].amount;
-        }
-
         IStakingVault(_vault).depositToBeaconChain(_deposits);
     }
 
@@ -185,7 +180,7 @@ contract VaultControl is VaultHub {
     ) external payable {
         VaultSocket storage socket = _connectedSocket(_vault);
         bool isAuthorized = _isManager(msg.sender, _vault);
-        if (socket.obligations.withdrawals > 0) {
+        if (vaultObligationsForCategory(_vault, ObligationCategory.Withdrawals) > 0) {
             isAuthorized = isAuthorized || hasRole(WITHDRAWALS_OBLIGATION_FULFILLER_ROLE, msg.sender);
         }
         if (!isAuthorized) revert NotAuthorized();
@@ -216,32 +211,6 @@ contract VaultControl is VaultHub {
         _connectedSocket(_vault).manager = _manager;
     }
 
-    function _rebalance(address _vault, uint256 _ether) internal {
-        if (_ether == 0) revert ZeroArgument("_ether");
-        if (_ether > _vault.balance) revert InsufficientBalance(_vault.balance);
-
-        uint256 totalValue_ = totalValue(_vault);
-        if (_ether > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, _ether);
-
-        VaultSocket storage socket = _connectedSocket(_vault);
-
-        uint256 sharesToBurn = LIDO.getSharesByPooledEth(_ether);
-        uint256 liabilityShares = socket.liabilityShares;
-        if (liabilityShares < sharesToBurn) revert InsufficientSharesToBurn(msg.sender, liabilityShares);
-        socket.liabilityShares = uint96(liabilityShares - sharesToBurn);
-
-        _withdrawFromVault(_vault, address(this), _ether);
-
-        LIDO.rebalanceExternalEtherToInternal{value: _ether}();
-        emit VaultRebalanced(msg.sender, sharesToBurn);
-    }
-
-    function _withdrawFromVault(address _vault, address _recipient, uint256 _amount) internal {
-        _connectedSocket(_vault).inOutDelta -= int128(int256(_amount));
-        IStakingVault(_vault).withdraw(_recipient, _amount);
-        emit VaultWithdrawn(_vault, msg.sender, _recipient, _amount);
-    }
-
     /**
      * @notice Emitted when `StakingVault` is funded with ether
      * @dev Event is not emitted upon direct transfers through `receive()`
@@ -249,15 +218,6 @@ contract VaultControl is VaultHub {
      * @param amount Amount of ether funded
      */
     event VaultFunded(address indexed vault, address indexed sender, uint256 amount);
-
-    /**
-     * @notice Emitted when ether is withdrawn from `StakingVault`
-     * @dev Also emitted upon rebalancing in favor of `VaultHub`
-     * @param sender Address that initiated the withdrawal
-     * @param recipient Address that received the withdrawn ether
-     * @param amount Amount of ether withdrawn
-     */
-    event VaultWithdrawn(address indexed vault, address indexed sender, address indexed recipient, uint256 amount);
 
     /**
      * @notice Emitted when the locked amount is increased
@@ -295,12 +255,6 @@ contract VaultControl is VaultHub {
     error TransferFailed(address recipient, uint256 amount);
 
     /**
-     * @notice Thrown when trying to withdraw more ether than the balance of `StakingVault`
-     * @param balance Current balance
-     */
-    error InsufficientBalance(uint256 balance);
-
-    /**
      * @notice Thrown when trying to withdraw more than the unlocked amount
      * @param unlocked Current unlocked amount
      */
@@ -311,19 +265,5 @@ contract VaultControl is VaultHub {
      */
     error TotalValueBelowLockedAmount();
 
-    /**
-     * @notice Thrown when attempting to rebalance more ether than the current total value of the vault
-     * @param totalValue Current total value of the vault
-     * @param rebalanceAmount Amount attempting to rebalance
-     */
-    error RebalanceAmountExceedsTotalValue(uint256 totalValue, uint256 rebalanceAmount);
-
     error BeaconChainDepositsArePaused();
-
-    /**
-     * @notice Thrown when the balance of the vault is less than the vault's obligations value
-     * @param balance Current balance of the vault
-     * @param obligationsValue Current obligations value of the vault
-     */
-    error ObligationsValueExceedsBalance(uint256 balance, uint256 obligationsValue);
 }

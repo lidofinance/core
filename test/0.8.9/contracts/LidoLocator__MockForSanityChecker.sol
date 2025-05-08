@@ -25,6 +25,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address predepositGuarantee;
         address wstETH;
         address vaultHub;
+        address lazyOracle;
         address operatorGrid;
     }
 
@@ -45,6 +46,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable predepositGuarantee;
     address public immutable wstETH;
     address public immutable vaultHub;
+    address public immutable lazyOracle;
     address public immutable operatorGrid;
 
     constructor(ContractAddresses memory addresses) {
@@ -65,6 +67,7 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         wstETH = addresses.wstETH;
         predepositGuarantee = addresses.predepositGuarantee;
         vaultHub = addresses.vaultHub;
+        lazyOracle = addresses.lazyOracle;
         operatorGrid = addresses.operatorGrid;
     }
 

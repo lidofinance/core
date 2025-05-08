@@ -24,6 +24,7 @@ contract LidoLocator__MockMutable is ILidoLocator {
         address predepositGuarantee;
         address wstETH;
         address vaultHub;
+        address lazyOracle;
         address operatorGrid;
     }
 
@@ -46,7 +47,9 @@ contract LidoLocator__MockMutable is ILidoLocator {
     address public immutable predepositGuarantee;
     address public immutable wstETH;
     address public immutable vaultHub;
+    address public immutable lazyOracle;
     address public immutable operatorGrid;
+
     /**
      * @notice declare service locations
      * @dev accepts a struct to avoid the "stack-too-deep" error
@@ -70,6 +73,7 @@ contract LidoLocator__MockMutable is ILidoLocator {
         wstETH = _assertNonZero(_config.wstETH);
         predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
         vaultHub = _assertNonZero(_config.vaultHub);
+        lazyOracle = _assertNonZero(_config.lazyOracle);
         operatorGrid = _assertNonZero(_config.operatorGrid);
     }
 
