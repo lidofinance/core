@@ -50,11 +50,6 @@ contract LidoLocator__MockMutable is ILidoLocator {
     address public immutable lazyOracle;
     address public immutable operatorGrid;
 
-    /**
-     * @notice declare service locations
-     * @dev accepts a struct to avoid the "stack-too-deep" error
-     * @param _config struct of addresses
-     */
     constructor(Config memory _config) {
         accountingOracle = _assertNonZero(_config.accountingOracle);
         depositSecurityModule = _assertNonZero(_config.depositSecurityModule);

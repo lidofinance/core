@@ -32,7 +32,7 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
         bytes memory immutableArgs = abi.encode(vault);
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
-        vault.initialize(address(dashboard), _operator, PREDEPOSIT_GUARANTEE, "");
+        vault.initialize(address(dashboard), _operator, PREDEPOSIT_GUARANTEE);
 
         dashboard.initialize(address(this), _operator, 0, 7 days);
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), msg.sender);

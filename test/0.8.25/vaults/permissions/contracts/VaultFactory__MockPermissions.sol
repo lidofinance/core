@@ -54,10 +54,8 @@ contract VaultFactory__MockPermissions {
 
     /// @notice Creates a new StakingVault and Permissions contracts
     /// @param _permissionsConfig The params of permissions initialization
-    /// @param _stakingVaultInitializerExtraParams The params of vault initialization
     function createVaultWithPermissions(
-        PermissionsConfig calldata _permissionsConfig,
-        bytes calldata _stakingVaultInitializerExtraParams
+        PermissionsConfig calldata _permissionsConfig
     ) external returns (IStakingVault vault, Permissions__Harness permissions) {
         // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
@@ -67,12 +65,7 @@ contract VaultFactory__MockPermissions {
         permissions = Permissions__Harness(payable(Clones.cloneWithImmutableArgs(PERMISSIONS_IMPL, immutableArgs)));
 
         // initialize StakingVault
-        vault.initialize(
-            address(permissions),
-            _permissionsConfig.nodeOperator,
-            PREDEPOSIT_GUARANTEE,
-            _stakingVaultInitializerExtraParams
-        );
+        vault.initialize(address(permissions), _permissionsConfig.nodeOperator, PREDEPOSIT_GUARANTEE);
 
         // initialize Permissions
         permissions.initialize(address(this), _permissionsConfig.confirmExpiry);
@@ -87,8 +80,7 @@ contract VaultFactory__MockPermissions {
     }
 
     function revertCreateVaultWithPermissionsWithDoubleInitialize(
-        PermissionsConfig calldata _permissionsConfig,
-        bytes calldata _stakingVaultInitializerExtraParams
+        PermissionsConfig calldata _permissionsConfig
     ) external returns (IStakingVault vault, Permissions__Harness permissions) {
         // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
@@ -98,12 +90,7 @@ contract VaultFactory__MockPermissions {
         permissions = Permissions__Harness(payable(Clones.cloneWithImmutableArgs(PERMISSIONS_IMPL, immutableArgs)));
 
         // initialize StakingVault
-        vault.initialize(
-            address(permissions),
-            _permissionsConfig.nodeOperator,
-            PREDEPOSIT_GUARANTEE,
-            _stakingVaultInitializerExtraParams
-        );
+        vault.initialize(address(permissions), _permissionsConfig.nodeOperator, PREDEPOSIT_GUARANTEE);
 
         // initialize Permissions
         permissions.initialize(address(this), _permissionsConfig.confirmExpiry);
@@ -120,8 +107,7 @@ contract VaultFactory__MockPermissions {
     }
 
     function revertCreateVaultWithPermissionsWithZeroDefaultAdmin(
-        PermissionsConfig calldata _permissionsConfig,
-        bytes calldata _stakingVaultInitializerExtraParams
+        PermissionsConfig calldata _permissionsConfig
     ) external returns (IStakingVault vault, Permissions__Harness permissions) {
         // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
@@ -131,12 +117,7 @@ contract VaultFactory__MockPermissions {
         permissions = Permissions__Harness(payable(Clones.cloneWithImmutableArgs(PERMISSIONS_IMPL, immutableArgs)));
 
         // initialize StakingVault
-        vault.initialize(
-            address(permissions),
-            _permissionsConfig.nodeOperator,
-            PREDEPOSIT_GUARANTEE,
-            _stakingVaultInitializerExtraParams
-        );
+        vault.initialize(address(permissions), _permissionsConfig.nodeOperator, PREDEPOSIT_GUARANTEE);
 
         // should revert here
         permissions.initialize(address(0), _permissionsConfig.confirmExpiry);

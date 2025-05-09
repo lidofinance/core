@@ -4,7 +4,6 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IVaultControl} from "../interfaces/IVaultControl.sol";
 import {Permissions} from "./Permissions.sol";
 

@@ -5,6 +5,8 @@ pragma solidity 0.8.25;
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {IVaultControl} from "contracts/0.8.25/vaults/interfaces/IVaultControl.sol";
+import {StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract IStETH {
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {}
@@ -12,7 +14,7 @@ contract IStETH {
     function burnExternalShares(uint256 _amountOfShares) external {}
 }
 
-contract VaultHub__MockForDashboard {
+contract VaultHub__MockForDashboard is IVaultControl {
     uint256 internal constant BPS_BASE = 100_00;
     IStETH public immutable steth;
     address public immutable LIDO_LOCATOR;
@@ -32,10 +34,6 @@ contract VaultHub__MockForDashboard {
 
     function mock__setVaultSocket(address vault, VaultHub.VaultSocket memory socket) external {
         vaultSockets[vault] = socket;
-    }
-
-    function mock_vaultLock(address vault, uint256 amount) external {
-        IStakingVault(vault).lock(amount);
     }
 
     function vaultSocket(address vault) external view returns (VaultHub.VaultSocket memory) {
@@ -81,4 +79,37 @@ contract VaultHub__MockForDashboard {
     }
 
     error ZeroArgument(string argument);
+
+    function operatorGrid() external view override returns (address) {}
+
+    function rebalanceShortfall(address _vault) external view override returns (uint256) {}
+
+    function isReportFresh(address _vault) external view override returns (bool) {}
+
+    function unlocked(address _vault) external view override returns (uint256) {}
+
+    function totalValue(address _vault) external view override returns (uint256) {}
+
+    function setVaultOwner(address _vault, address _owner) external override {}
+
+    function fund(address _vault) external payable override {}
+
+    function withdraw(address _vault, address _recipient, uint256 _ether) external override {}
+
+    function rebalance(address _vault, uint256 _ether) external override {}
+
+    function pauseBeaconChainDeposits(address _vault) external override {}
+
+    function resumeBeaconChainDeposits(address _vault) external override {}
+
+    function requestValidatorExit(address _vault, bytes calldata _pubkeys) external override {}
+
+    function triggerValidatorWithdrawal(
+        address _vault,
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) external payable override {}
+
+    function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external override {}
 }

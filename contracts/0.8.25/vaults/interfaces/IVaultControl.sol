@@ -4,6 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import { StakingVaultDeposit } from "./IStakingVault.sol";
+
 interface IVaultControl {
 
     struct Report {
@@ -86,6 +88,8 @@ interface IVaultControl {
     function mintShares(address _vault, address _recipient, uint256 _amountOfShares) external;
 
     function burnShares(address _vault, uint256 _amountOfShares) external;
+
+    function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external;
 
     function pauseBeaconChainDeposits(address _vault) external;
 
