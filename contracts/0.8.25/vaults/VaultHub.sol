@@ -245,7 +245,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         }
 
         socket.obligations.outstandingWithdrawal = SafeCast.toUint64(_amount);
-        emit WithdrawalObligationAccrued(_vault, _amount);
+        emit ObligationAccrued(_vault, ObligationCategory.Withdrawal, _amount);
     }
 
     /// @notice updates the vault's connection parameters
@@ -365,10 +365,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
 
         socket.inOutDelta += int128(int256(msg.value));
 
-        (bool success,) = _vault.call{value: msg.value}("");
-        if (!success) revert TransferFailed(_vault, msg.value);
-
-        emit VaultFunded(_vault, msg.value);
+        IStakingVault(_vault).fund{value: msg.value}();
     }
 
     function withdraw(address _vault, address _recipient, uint256 _ether) external {
@@ -385,8 +382,6 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         _withdrawFromVault(socket, _recipient, _ether);
 
         if (_totalValue(socket) < socket.locked) revert TotalValueBelowLockedAmount();
-
-        emit VaultWithdrawn(_vault, _recipient, _ether);
     }
 
     /**
@@ -515,6 +510,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         address _refundRecipient
     ) external payable {
         VaultSocket storage socket = _connectedSocket(_vault);
+        if (!_isVaultOwner(msg.sender, socket)) revert NotAuthorized();
         // todo: separate logic for partial and full withdrawals
         if (_totalValue(socket) < socket.locked) revert TotalValueBelowLockedAmount();
 
@@ -534,7 +530,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
 
         IStakingVault(_vault).triggerValidatorExits{value: msg.value}(_pubkeys, _refundRecipient);
 
-        emit ValidatorExitTriggered(socket.vault, _pubkeys, _refundRecipient);
+        emit ValidatorExitTriggered(socket.vault, _pubkeys, _refundRecipient, false);
     }
 
     /// @notice Forces validator exit from the beacon chain when vault is unhealthy
@@ -553,7 +549,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
 
         IStakingVault(_vault).triggerValidatorExits{value: msg.value}(_pubkeys, _refundRecipient);
 
-        emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
+        emit ValidatorExitTriggered(_vault, _pubkeys, _refundRecipient, true);
     }
 
     /// @notice permissionless rebalance for unhealthy vaults
@@ -655,6 +651,8 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         _socket.liabilityShares = uint96(liabilityShares - sharesToBurn);
         _withdrawFromVault(_socket, address(this), _ether);
         LIDO.rebalanceExternalEtherToInternal{value: _ether}();
+
+        // TODO: decrease withdrawal obligations
 
         emit VaultRebalanced(vaultAddress, sharesToBurn);
     }
@@ -777,7 +775,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         uint256 liability = LIDO.getPooledEthBySharesRoundUp(socket.liabilityShares);
         if (liability < initialObligation) {
             obligations.outstandingWithdrawal = SafeCast.toUint64(liability);
-            emit WithdrawalObligationDecreased(socket.vault, liability, initialObligation);
+            emit ObligationDecreased(socket.vault, ObligationCategory.Withdrawal, liability, initialObligation);
         }
 
         uint256 valueToRebalance = Math256.min(obligations.outstandingWithdrawal, vaultBalance);
@@ -786,7 +784,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         _rebalance(socket, valueToRebalance);
         obligations.outstandingWithdrawal -= SafeCast.toUint64(valueToRebalance);
 
-        emit WithdrawalObligationSettled(socket.vault, valueToRebalance, obligations.outstandingWithdrawal);
+        emit ObligationSettled(socket.vault, ObligationCategory.Withdrawal, valueToRebalance);
     }
 
     function _processTreasuryFeesObligation(VaultSocket storage socket, uint256 _chargedFees) internal {
@@ -805,7 +803,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
 
         // override the previous settled fees with the new amount because it's calculated from the cummulative amount
         obligations.outstandingTreasuryFee = SafeCast.toUint64(feesToSettle);
-        emit TreasuryFeesObligationAccrued(socket.vault, feesToSettle);
+        emit ObligationAccrued(socket.vault, ObligationCategory.TreasuryFees, feesToSettle);
 
         uint256 amountToTransfer = Math256.min(feesToSettle, vaultBalance);
         _withdrawFromVault(socket, LIDO_LOCATOR.treasury(), amountToTransfer);
@@ -813,7 +811,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         uint256 updatedSettled = uint256(feesSettled) + amountToTransfer;
         obligations.settledTreasuryFee = SafeCast.toUint64(updatedSettled);
 
-        emit TreasuryFeesObligationSettled(socket.vault, amountToTransfer, updatedSettled);
+        emit ObligationSettled(socket.vault, ObligationCategory.TreasuryFees, amountToTransfer);
     }
 
     function _storage() internal pure returns (Storage storage $) {
@@ -837,23 +835,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event VaultProxyCodehashAdded(bytes32 indexed codehash);
     event VaultProxyCodehashRemoved(bytes32 indexed codehash);
-    event ValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
-    event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
-
-    /**
-     * @notice Emitted when `StakingVault` is funded with ether
-     * @dev Event is not emitted upon direct transfers through `receive()`
-     * @param amount Amount of ether funded
-     */
-    event VaultFunded(address indexed vault, uint256 amount);
-
-    /**
-     * @notice Emitted when ether is withdrawn from `StakingVault`
-     * @dev Also emitted upon rebalancing in favor of `VaultHub`
-     * @param recipient Address that received the withdrawn ether
-     * @param amount Amount of ether withdrawn
-     */
-    event VaultWithdrawn(address indexed vault, address indexed recipient, uint256 amount);
+    event ValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient, bool forced);
 
     /**
      * @notice Emitted when the manager is set
@@ -861,13 +843,6 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
      * @param owner The address of the owner
      */
     event VaultOwnerSet(address indexed vault, address indexed owner);
-
-    /**
-     * @notice Thrown when the transfer of ether to a recipient fails
-     * @param recipient Address that was supposed to receive the transfer
-     * @param amount Amount that failed to transfer
-     */
-    error TransferFailed(address recipient, uint256 amount);
 
     /**
      * @notice Thrown when trying to withdraw more ether than the balance of `StakingVault`
@@ -891,13 +866,22 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
     error RebalanceAmountExceedsTotalValue(uint256 totalValue, uint256 rebalanceAmount);
     error AlreadyHealthy(address vault);
     error AlreadyConnected(address vault, uint256 index);
+
+    error AlreadyExists(bytes32 codehash);
+    error NotFound(bytes32 codehash);
+    error VaultProxyNotAllowed(address beacon, bytes32 codehash);
+    error VaultProxyZeroCodehash();
+
     error VaultMintingCapacityExceeded(
         address vault,
         uint256 totalValue,
         uint256 liabilityShares,
         uint256 newRebalanceThresholdBP
     );
+
+    error InsufficientTotalValueToMint(address vault, uint256 totalValue);
     error InsufficientSharesToBurn(address vault, uint256 amount);
+
     error ShareLimitExceeded(address vault, uint256 shareLimit);
 
     error NotConnectedToHub(address vault);
@@ -912,30 +896,25 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         uint256 maxForcedRebalanceThresholdBP
     );
     error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
-    error InsufficientTotalValueToMint(address vault, uint256 totalValue);
-    error AlreadyExists(bytes32 codehash);
-    error NotFound(bytes32 codehash);
+
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
-    error VaultProxyNotAllowed(address beacon, bytes32 codehash);
+
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
     error VaultOssified(address vault);
     error VaultReportStaled(address vault);
     error VaultHubMustBeDepositor(address vault);
-    error VaultProxyZeroCodehash();
+
     error InvalidOperator();
     error VaultHubNotPendingOwner(address vault);
     error UnhealthyVaultCannotDeposit(address vault);
 
     /** Obligations events and errors */
+
+    event ObligationAccrued(address indexed vault, ObligationCategory obligation, uint256 amount);
+    event ObligationDecreased(address indexed vault, ObligationCategory obligation, uint256 newAmount, uint256 oldAmount);
+    event ObligationSettled(address indexed vault, ObligationCategory obligation, uint256 amount);
+
     error NoWithdrawalObligation(address vault);
-    event WithdrawalObligationAccrued(address _vault, uint256 _amount);
-    event TreasuryFeesObligationAccrued(address _vault, uint256 _amount);
-
-    event WithdrawalObligationDecreased(address _vault, uint256 _newAmount, uint256 _oldAmount);
-
-    event WithdrawalObligationSettled(address _vault, uint256 _amount, uint256 _left);
-    event TreasuryFeesObligationSettled(address _vault, uint256 _amount, uint256 _left);
-
     error WithdrawalObligationTooHigh(address _vault, uint256 _amount, uint256 _currentLiability);
 }
