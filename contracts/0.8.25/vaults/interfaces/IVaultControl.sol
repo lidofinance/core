@@ -13,6 +13,18 @@ interface IVaultControl {
         int128 inOutDelta;
     }
 
+    /// @notice Obligations categories
+    enum ObligationCategory {
+        Withdrawal,
+        TreasuryFees
+    }
+
+    struct Obligations {
+        uint64 outstandingWithdrawal;
+        uint64 outstandingTreasuryFee;
+        uint128 settledTreasuryFee;
+    }
+
     // todo: optimize storage layout
     struct VaultSocket {
         // ### 1st slot
@@ -34,6 +46,9 @@ interface IVaultControl {
         /// @notice the latest oracle report data for the vault
         Report report;
         // ### 5th slot
+        /// @notice obligations accrued on the vault
+        Obligations obligations;
+        // ### 6th slot
         /// @notice the timestamp of the report
         uint64 reportTimestamp;
         /// @notice share of ether that is locked on the vault as an additional reserve
@@ -62,7 +77,7 @@ interface IVaultControl {
 
     function totalValue(address _vault) external view returns (uint256);
 
-    function vaultTotalObligations(address _vault) external view returns (uint256);
+    function availableBalance(address _vault) external view returns (uint256);
 
     function setVaultOwner(address _vault, address _owner) external;
 

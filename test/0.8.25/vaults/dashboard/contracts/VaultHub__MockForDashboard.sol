@@ -96,7 +96,7 @@ contract VaultHub__MockForDashboard is IVaultControl {
 
     function totalValue(address _vault) external view override returns (uint256) {}
 
-    function vaultTotalObligations(address _vault) external view override returns (uint256) {}
+    function availableBalance(address _vault) external view override returns (uint256) {}
 
     function setVaultOwner(address _vault, address _owner) external override {}
 

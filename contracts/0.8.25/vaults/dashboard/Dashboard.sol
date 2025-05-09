@@ -146,12 +146,35 @@ contract Dashboard is NodeOperatorFee {
         return VAULT_CONTROL.totalValue(address(_stakingVault()));
     }
 
-    function totalObligations() public view returns (uint256) {
-        return VAULT_CONTROL.vaultTotalObligations(address(_stakingVault()));
+    /**
+     * @notice Returns the available balance of the vault after deducting the node operator unclaimed fee and
+     *         the total outstanding obligations applied to the vault.
+     * @return The available balance as a uint256.
+     */
+    function availableBalance() public view returns (uint256) {
+        uint256 unclaimedFee = nodeOperatorUnclaimedFee();
+        uint256 availableBalance_ = VAULT_CONTROL.availableBalance(address(_stakingVault()));
+
+        if (availableBalance_ < unclaimedFee) return 0;
+
+        return availableBalance_ - unclaimedFee;
     }
 
     function locked() public view returns (uint256) {
         return VAULT_CONTROL.vaultSocket(address(_stakingVault())).locked;
+    }
+
+    /**
+     * @notice Returns the unlocked balance of the vault taking into account the node operator unclaimed fee.
+     * @return The unlocked balance as a uint256.
+     */
+    function unlocked() public view returns (uint256) {
+        uint256 unclaimedFee = nodeOperatorUnclaimedFee();
+        uint256 unlocked_ = VAULT_CONTROL.unlocked(address(_stakingVault()));
+
+        if (unlocked_ < unclaimedFee) return 0;
+
+        return unlocked_ - unclaimedFee;
     }
 
     /**
@@ -177,28 +200,12 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the unreserved amount of ether,
-     * i.e. the amount of total value that is not locked in the StakingVault
-     * and not reserved for node operator or treasury fees or protocol withdrawals.
-     * This amount does not account for the current balance of the StakingVault and
-     * can return a value greater than the actual balance of the StakingVault.
-     * @return uint256: the amount of unreserved ether.
-     */
-    function unreserved() public view returns (uint256) {
-        uint256 reserved = locked() + nodeOperatorUnclaimedFee() + totalObligations();
-        uint256 totalValue_ = totalValue();
-
-        return reserved > totalValue_ ? 0 : totalValue_ - reserved;
-    }
-
-    /**
      * @notice Returns the amount of ether that can be instantly withdrawn from the staking vault.
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
-     * @dev This method overrides the Dashboard's withdrawableEther() method
      * @return The amount of ether that can be withdrawn.
      */
-    function withdrawableEther() external view returns (uint256) {
-        return Math256.min(address(_stakingVault()).balance, unreserved());
+    function withdrawableEther() public view returns (uint256) {
+        return Math256.min(unlocked(), availableBalance());
     }
 
     // ==================== Vault Management Functions ====================
@@ -238,10 +245,10 @@ contract Dashboard is NodeOperatorFee {
      * @param _ether Amount of ether to withdraw
      */
     function withdraw(address _recipient, uint256 _ether) external {
-        uint256 unreserved_ = unreserved();
+        uint256 withdrawable = withdrawableEther();
 
-        if (_ether > unreserved_) {
-            revert WithdrawalAmountExceedsUnreserved(_ether, unreserved_);
+        if (_ether > withdrawable) {
+            revert WithdrawalAmountExceedsAvailableBalance(_ether, withdrawable);
         }
 
         _withdraw(_recipient, _ether);
@@ -334,8 +341,9 @@ contract Dashboard is NodeOperatorFee {
             totalAmount += _deposits[i].amount;
         }
 
-        if (totalAmount > unreserved()) {
-            revert WithdrawalAmountExceedsUnreserved(totalAmount, unreserved());
+        uint256 withdrawable = withdrawableEther();
+        if (totalAmount > withdrawable) {
+            revert WithdrawalAmountExceedsAvailableBalance(totalAmount, withdrawable);
         }
 
         _withdrawForUnguaranteedDepositToBeaconChain(totalAmount);
@@ -583,11 +591,11 @@ contract Dashboard is NodeOperatorFee {
     // ==================== Errors ====================
 
     /**
-     * @notice Emitted when the unreserved amount of ether is exceeded
+     * @notice Emitted when the withdrawable amount of ether is exceeded
      * @param amount The amount of ether that was attempted to be withdrawn
-     * @param unreserved The amount of unreserved ether available
+     * @param availableBalance The amount of available balance
      */
-    error WithdrawalAmountExceedsUnreserved(uint256 amount, uint256 unreserved);
+    error WithdrawalAmountExceedsAvailableBalance(uint256 amount, uint256 availableBalance);
 
     /**
      * @notice Error thrown when recovery of ETH fails on transfer to recipient

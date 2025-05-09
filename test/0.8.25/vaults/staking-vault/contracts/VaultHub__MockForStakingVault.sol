@@ -31,6 +31,7 @@ contract VaultHub__MockForStakingVault {
             locked: 0,
             inOutDelta: 0,
             report: IVaultControl.Report(0, 0),
+            obligations: IVaultControl.Obligations(0, 0, 0),
             reportTimestamp: 0,
             reserveRatioBP: 0,
             forcedRebalanceThresholdBP: 0,

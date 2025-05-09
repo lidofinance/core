@@ -49,6 +49,7 @@ contract VaultHub__HarnessForReporting is VaultHub {
             0, // locked
             0, // inOutDelta
             IVaultControl.Report(0, 0), // report
+            IVaultControl.Obligations(0, 0, 0), // obligations
             0, // reportTimestamp
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),

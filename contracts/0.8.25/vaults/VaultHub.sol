@@ -4,6 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
 import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
@@ -21,20 +22,6 @@ import {IVaultControl} from "./interfaces/IVaultControl.sol";
 /// Also, it passes the report from the accounting oracle to the vaults and charges fees
 /// @author folkyatina
 contract VaultHub is PausableUntilWithRoles, IVaultControl {
-        /// @notice Obligations categories
-    enum ObligationCategory {
-        Withdrawal,
-        TreasuryFees,
-        NodeOperatorFees
-    }
-
-    struct VaultObligations {
-        /// @notice obligations accrued on the vault
-        mapping(ObligationCategory => uint256) outstanding;
-        /// @notice already settled obligations
-        mapping(ObligationCategory => uint256) settled;
-    }
-
     /// @custom:storage-location erc7201:Vaults
     struct Storage {
         /// @notice vault proxy contract codehashes allowed for connecting
@@ -45,8 +32,6 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         /// @notice array of sockets with vaults connected to the hub
         /// @dev    first socket is always zero. A stone in the elevator
         VaultSocket[] sockets;
-        /// @notice array of obligations with vaults connected to the hub
-        mapping(address vault => VaultObligations obligations) obligations;
     }
 
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
@@ -56,8 +41,8 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("vaults.VaultHub.VaultMasterRole");
     /// @notice role that allows to add factories and vault implementations to hub
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("vaults.VaultHub.VaultRegistryRole");
-    /// @notice role that allows to increase a withdrawals obligation
-    bytes32 public constant WITHDRAWAL_OBLIGATION_INCREASER_ROLE = keccak256("vaults.VaultHub.WithdrawalObligationIncreaserRole");
+    /// @notice role that allows to update a withdrawals obligation
+    bytes32 public constant WITHDRAWAL_OBLIGATION_UPDATER_ROLE = keccak256("vaults.VaultHub.WithdrawalObligationUpdaterRole");
     /// @notice role that allows to trigger validator exit to fulfill withdrawals obligation
     bytes32 public constant WITHDRAWAL_OBLIGATION_FULFILLER_ROLE = keccak256("vaults.VaultHub.WithdrawalObligationFulfillerRole");
 
@@ -68,8 +53,6 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
 
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
-    /// @notice length of the validator pubkey in bytes
-    uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
     /// @notice codehash of the account with no code
     bytes32 private constant EMPTY_CODEHASH = keccak256("");
@@ -103,11 +86,11 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
     function initialize(address _admin) external initializer {
         if (_admin == address(0)) revert ZeroArgument("_admin");
 
-         __AccessControlEnumerable_init();
+        __AccessControlEnumerable_init();
 
         // the stone in the elevator
         _storage().sockets.push(
-            VaultSocket(address(0), 0, address(0), 0, 0, 0, Report(0, 0), 0, 0, 0, 0, false)
+            VaultSocket(address(0), 0, address(0), 0, 0, 0, Report(0, 0), Obligations(0, 0, 0), 0, 0, 0, 0, false)
         );
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
@@ -158,53 +141,45 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
 
     /// @return total value of the vault (as of the latest report received)
     function totalValue(address _vault) external view returns (uint256) {
-        VaultSocket storage socket = _connectedSocket(_vault);
-        return _totalValue(socket);
+        return _totalValue(_connectedSocket(_vault));
     }
 
     /// @return amount of ether that is part of the vault's total value and is not locked as a collateral
     function unlocked(address _vault) external view returns (uint256) {
-        VaultSocket storage socket = _connectedSocket(_vault);
-        return _unlocked(socket);
+        return _unlocked(_connectedSocket(_vault));
     }
 
     /// @return true if the report for the vault is fresh, false otherwise
     function isReportFresh(address _vault) external view returns (bool) {
-        VaultSocket storage socket = _connectedSocket(_vault);
-        return _isReportFresh(socket);
+        return _isReportFresh(_connectedSocket(_vault));
     }
 
     /// @notice checks if the vault is healthy by comparing its total value after applying rebalance threshold
     ///         against current liability shares
     /// @param _vault vault address
     /// @return true if vault is healthy, false otherwise
-    function isVaultHealthyAsOfLatestReport(address _vault) external view returns (bool) {
+    function isVaultHealthy(address _vault) external view returns (bool) {
         VaultSocket storage socket = _connectedSocket(_vault);
-        return
-            _isVaultHealthyByThreshold(_totalValue(socket), socket.liabilityShares, socket.forcedRebalanceThresholdBP);
+        return _isVaultHealthy(
+            _totalValue(socket),
+            socket.liabilityShares,
+            socket.forcedRebalanceThresholdBP
+        );
     }
 
     /// @notice calculate ether amount to make the vault healthy using rebalance
     /// @param _vault vault address
     /// @return amount to rebalance  or UINT256_MAX if it's impossible to make the vault healthy using rebalance
     function rebalanceShortfall(address _vault) external view returns (uint256) {
-        VaultSocket storage socket = _connectedSocket(_vault);
-        return _rebalanceShortfall(socket);
+        return _rebalanceShortfall(_connectedSocket(_vault));
     }
 
-    /// @notice returns the total obligations accrued on the vault for the given category
+    /// @notice returns the balance of the vault
     /// @param _vault vault address
-    /// @param _category obligation category
-    /// @return obligations accrued on the vault for the given category
-    function vaultObligationsForCategory(address _vault, ObligationCategory _category) public view returns (uint256) {
-        return _vaultObligationsForCategory(_vault, _category);
-    }
-
-    /// @notice returns the total obligations accrued on the vault
-    /// @param _vault vault address
-    /// @return total obligations accrued on the vault
-    function vaultTotalObligations(address _vault) public view returns (uint256) {
-        return _vaultTotalObligations(_vault);
+    /// @return balance of the vault
+    /// @dev balance is the balance of the vault minus the outstanding obligations
+    function availableBalance(address _vault) public view returns (uint256) {
+        return _availableBalance(_connectedSocket(_vault));
     }
 
     /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
@@ -257,15 +232,20 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         emit ShareLimitUpdated(_vault, _shareLimit);
     }
 
-    function updateWithdrawalObligation(address _vault, uint256 _amountToWithdraw) external onlyRole(WITHDRAWAL_OBLIGATION_INCREASER_ROLE) {
+    /// @notice sets the withdrawal obligation for the vault
+    /// @param _vault vault address
+    /// @param _amount amount to withdraw
+    /// @dev msg.sender must have WITHDRAWAL_OBLIGATION_UPDATER_ROLE
+    /// @dev new obligation will replace the existing one, it's not and addition to the existing obligation
+    function updateWithdrawalObligation(address _vault, uint256 _amount) external onlyRole(WITHDRAWAL_OBLIGATION_UPDATER_ROLE) {
         VaultSocket storage socket = _connectedSocket(_vault);
-        uint128 locked = socket.locked;
-        if (_amountToWithdraw > locked) {
-            revert LockedAmountTooLow(_vault, _amountToWithdraw, locked);
+        uint256 currentLiability = LIDO.getPooledEthBySharesRoundUp(socket.liabilityShares);
+        if (_amount > currentLiability) {
+            revert WithdrawalObligationTooHigh(_vault, _amount, currentLiability);
         }
 
-        _increaseObligation(_vault, ObligationCategory.Withdrawal, _amountToWithdraw);
-        emit ObligationAccrued(_vault, "Withdrawal", _amountToWithdraw, _vaultObligationsForCategory(_vault, ObligationCategory.Withdrawal));
+        socket.obligations.outstandingWithdrawal = SafeCast.toUint64(_amount);
+        emit WithdrawalObligationAccrued(_vault, _amount);
     }
 
     /// @notice updates the vault's connection parameters
@@ -292,8 +272,9 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         uint256 liabilityShares = socket.liabilityShares;
 
         // check healthy with new rebalance threshold
-        if (!_isVaultHealthyByThreshold(totalValue_, liabilityShares, _reserveRatioBP))
+        if (!_isVaultHealthy(totalValue_, liabilityShares, _reserveRatioBP)) {
             revert VaultMintingCapacityExceeded(_vault, totalValue_, liabilityShares, _reserveRatioBP);
+        }
 
         socket.shareLimit = uint96(_shareLimit);
         socket.reserveRatioBP = uint16(_reserveRatioBP);
@@ -384,7 +365,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
 
         socket.inOutDelta += int128(int256(msg.value));
 
-        (bool success, ) = _vault.call{value: msg.value}("");
+        (bool success,) = _vault.call{value: msg.value}("");
         if (!success) revert TransferFailed(_vault, msg.value);
 
         emit VaultFunded(_vault, msg.value);
@@ -398,7 +379,8 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         uint256 unlocked_ = _unlocked(socket);
         if (_ether > unlocked_) revert InsufficientUnlocked(unlocked_, _ether);
 
-        _ensuresAllObligationsSettled(socket.vault);
+        uint256 availableBalance_ = _availableBalance(socket);
+        if (_ether > availableBalance_) revert InsufficientBalance(_vault, availableBalance_, _ether);
 
         _withdrawFromVault(socket, _recipient, _ether);
 
@@ -503,13 +485,19 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
 
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        if (!_isVaultHealthyByThreshold(
+        if (!_isVaultHealthy(
             _totalValue(socket),
             socket.liabilityShares,
             socket.forcedRebalanceThresholdBP
         )) revert UnhealthyVaultCannotDeposit(_vault);
 
-        _ensuresAllObligationsSettled(socket.vault);
+        // Ensure the vault has sufficient balance to cover all deposits
+        uint256 availableBalance_ = _availableBalance(socket);
+        uint256 totalDepositsAmount = 0;
+        for (uint256 i = 0; i < _deposits.length; i++) {
+            totalDepositsAmount += _deposits[i].amount;
+        }
+        if (totalDepositsAmount > availableBalance_) revert InsufficientBalance(_vault, availableBalance_, totalDepositsAmount);
 
         IStakingVault(_vault).depositToBeaconChain(_deposits);
     }
@@ -540,8 +528,8 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
     ) external payable onlyRole(WITHDRAWAL_OBLIGATION_FULFILLER_ROLE) {
         VaultSocket storage socket = _connectedSocket(_vault);
 
-        if (_vaultObligationsForCategory(socket.vault, ObligationCategory.Withdrawal) == 0) {
-            revert VaultHasNoWithdrawalObligation(socket.vault);
+        if (socket.obligations.outstandingWithdrawal == 0) {
+            revert NoWithdrawalObligation(socket.vault);
         }
 
         IStakingVault(_vault).triggerValidatorExits{value: msg.value}(_pubkeys, _refundRecipient);
@@ -557,7 +545,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
     ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
     function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _refundRecipient) external payable {
         VaultSocket storage socket = _connectedSocket(_vault);
-        if (_isVaultHealthyByThreshold(
+        if (_isVaultHealthy(
             _totalValue(socket),
             socket.liabilityShares,
             socket.forcedRebalanceThresholdBP
@@ -604,7 +592,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         bytes32 vaultProxyCodehash = address(_vault).codehash;
         if (!$.vaultProxyCodehash[vaultProxyCodehash]) revert VaultProxyNotAllowed(_vault, vaultProxyCodehash);
 
-        if (_vault.balance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
+        if (_vault.balance < CONNECT_DEPOSIT) revert InsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
 
         Report memory report = Report(
             uint128(_vault.balance), // totalValue
@@ -619,6 +607,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
             uint128(CONNECT_DEPOSIT), // locked
             int128(int256(_vault.balance)), // inOutDelta
             report,
+            Obligations(0, 0, 0),
             uint64(block.timestamp), // reportTimestamp
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
@@ -654,7 +643,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         if (_ether == 0) revert ZeroArgument("_ether");
         address vaultAddress = _socket.vault;
 
-        if (_ether > vaultAddress.balance) revert InsufficientBalance(vaultAddress.balance, _ether);
+        if (_ether > vaultAddress.balance) revert InsufficientBalance(vaultAddress, vaultAddress.balance, _ether);
 
         uint256 totalValue_ = _totalValue(_socket);
         if (_ether > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, _ether);
@@ -672,7 +661,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
 
     function _rebalanceShortfall(VaultSocket storage _socket) internal view returns (uint256) {
         uint256 totalValue_ = _totalValue(_socket);
-        bool isHealthy = _isVaultHealthyByThreshold(
+        bool isHealthy = _isVaultHealthy(
             totalValue_,
             _socket.liabilityShares,
             _socket.forcedRebalanceThresholdBP
@@ -731,25 +720,33 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         return totalValue_ - locked_;
     }
 
+    function _availableBalance(VaultSocket storage socket) internal view returns (uint256) {
+        uint256 obligations = _totalOutstandingObligations(socket.vault);
+        uint256 balance = address(socket.vault).balance;
+
+        if (obligations > balance) return 0;
+
+        return balance - obligations;
+    }
+
     function _totalValue(VaultSocket storage socket) internal view returns (uint256) {
         Report memory report = socket.report;
-        return uint256(int256(int128(report.totalValue) + report.inOutDelta - report.inOutDelta));
+        return uint256(int256(int128(report.totalValue) + socket.inOutDelta - report.inOutDelta));
     }
 
     function _isReportFresh(VaultSocket storage socket) internal view returns (bool) {
         return block.timestamp - socket.reportTimestamp < REPORT_FRESHNESS_DELTA;
     }
 
-    function _isVaultHealthyByThreshold(
+    function _isVaultHealthy(
         uint256 _vaultTotalValue,
         uint256 _vaultLiabilityShares,
         uint256 _checkThreshold
     ) internal view returns (bool) {
         if (_vaultLiabilityShares == 0) return true;
 
-        return
-            ((_vaultTotalValue * (TOTAL_BASIS_POINTS - _checkThreshold)) / TOTAL_BASIS_POINTS) >=
-            LIDO.getPooledEthBySharesRoundUp(_vaultLiabilityShares);
+        uint256 availableValue = (_vaultTotalValue * (TOTAL_BASIS_POINTS - _checkThreshold)) / TOTAL_BASIS_POINTS;
+        return availableValue >= LIDO.getPooledEthBySharesRoundUp(_vaultLiabilityShares);
     }
 
     function _isVaultOwner(address _account, VaultSocket storage socket) internal view returns (bool) {
@@ -764,75 +761,59 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         return $.sockets[index];
     }
 
-    function _vaultObligationsForCategory(address _vault,ObligationCategory _category) internal view returns (uint256) {
-        VaultObligations storage obligations = _storage().obligations[_vault];
-        return obligations.outstanding[_category] - obligations.settled[_category];
-    }
-
-    function _vaultTotalObligations(address _vault) internal view returns (uint256 total) {
-        VaultObligations storage obligations = _storage().obligations[_vault];
-        uint8 totalCategories = uint8(type(ObligationCategory).max) + 1;
-        for (uint8 i = 0; i < totalCategories; i++) {
-            ObligationCategory category = ObligationCategory(i);
-            total += obligations.outstanding[category] - obligations.settled[category];
-        }
-    }
-
-    function _increaseObligation(address _vault, ObligationCategory _category, uint256 _amount) internal {
-        _storage().obligations[_vault].outstanding[_category] += _amount;
-    }
-
-    function _decreaseObligation(address _vault, ObligationCategory _category, uint256 _amount) internal {
-        _storage().obligations[_vault].settled[_category] += _amount;
-    }
-
-    function _ensuresAllObligationsSettled(address _vault) internal view {
-        uint256 vaultBalance = address(_vault).balance;
-        uint256 obligations = _vaultTotalObligations(_vault);
-        if (vaultBalance < obligations) {
-            revert NotAllObligationsSettled(_vault, obligations, vaultBalance);
-        }
+    function _totalOutstandingObligations(address _vault) internal view returns (uint256 total) {
+        VaultSocket storage socket = _connectedSocket(_vault);
+        return uint256(socket.obligations.outstandingWithdrawal) + uint256(socket.obligations.outstandingTreasuryFee);
     }
 
     function _processWithdrawalsObligation(VaultSocket storage socket) internal {
-        // TODO: if locked decreses, we need to reset the obligation somehow
-        ObligationCategory category = ObligationCategory.Withdrawal;
-        uint256 withdrawalsToSettle = _vaultObligationsForCategory(socket.vault, category);
-        if (withdrawalsToSettle == 0) return;
+        Obligations storage obligations = socket.obligations;
+        uint256 initialObligation = obligations.outstandingWithdrawal;
+        if (initialObligation == 0) return;
 
         uint256 vaultBalance = address(socket.vault).balance;
         if (vaultBalance == 0) return;
 
-        uint256 valueToRebalance = Math256.min(withdrawalsToSettle, vaultBalance);
-        _rebalance(socket, valueToRebalance);
-        _decreaseObligation(socket.vault, category, valueToRebalance);
+        uint256 liability = LIDO.getPooledEthBySharesRoundUp(socket.liabilityShares);
+        if (liability < initialObligation) {
+            obligations.outstandingWithdrawal = SafeCast.toUint64(liability);
+            emit WithdrawalObligationDecreased(socket.vault, liability, initialObligation);
+        }
 
-        emit ObligationSettled(socket.vault, "Withdrawal", valueToRebalance, _vaultObligationsForCategory(socket.vault, category));
+        uint256 valueToRebalance = Math256.min(obligations.outstandingWithdrawal, vaultBalance);
+        if (valueToRebalance == 0) return;
+
+        _rebalance(socket, valueToRebalance);
+        obligations.outstandingWithdrawal -= SafeCast.toUint64(valueToRebalance);
+
+        emit WithdrawalObligationSettled(socket.vault, valueToRebalance, obligations.outstandingWithdrawal);
     }
 
     function _processTreasuryFeesObligation(VaultSocket storage socket, uint256 _chargedFees) internal {
-        ObligationCategory category = ObligationCategory.TreasuryFees;
-        uint256 feesSettled = _storage().obligations[socket.vault].settled[category];
-        if (_chargedFees < feesSettled) revert InvalidFees(socket.vault, _chargedFees, feesSettled);
+        Obligations storage obligations = socket.obligations;
 
-        // explicitly set the outstanding obligation to the charged fees because it's already cummulative amount
-        _storage().obligations[socket.vault].outstanding[category] = _chargedFees;
+        uint256 feesSettled = obligations.settledTreasuryFee;
+        if (_chargedFees < feesSettled) {
+            revert InvalidFees(socket.vault, _chargedFees, feesSettled);
+        }
+
+        uint256 vaultBalance = address(socket.vault).balance;
+        if (vaultBalance == 0) return;
+
         uint256 feesToSettle = _chargedFees - feesSettled;
         if (feesToSettle == 0) return;
 
-        emit ObligationAccrued(socket.vault, "TreasuryFees", feesToSettle, _vaultObligationsForCategory(socket.vault, category));
+        // override the previous settled fees with the new amount because it's calculated from the cummulative amount
+        obligations.outstandingTreasuryFee = SafeCast.toUint64(feesToSettle);
+        emit TreasuryFeesObligationAccrued(socket.vault, feesToSettle);
 
-        uint256 vaultBalance = address(socket.vault).balance;
-        uint256 valueToTransfer = feesToSettle < vaultBalance ? feesToSettle : vaultBalance;
+        uint256 amountToTransfer = Math256.min(feesToSettle, vaultBalance);
+        _withdrawFromVault(socket, LIDO_LOCATOR.treasury(), amountToTransfer);
 
-        if (valueToTransfer > 0) {
-            address treasury = LIDO_LOCATOR.treasury();
-            _withdrawFromVault(socket, treasury, valueToTransfer);
+        uint256 updatedSettled = uint256(feesSettled) + amountToTransfer;
+        obligations.settledTreasuryFee = SafeCast.toUint64(updatedSettled);
 
-            uint256 newSettledAmount = feesSettled + valueToTransfer;
-            _storage().obligations[socket.vault].settled[category] = newSettledAmount;
-            emit ObligationSettled(socket.vault, "TreasuryFees", newSettledAmount, _vaultObligationsForCategory(socket.vault, category));
-        }
+        emit TreasuryFeesObligationSettled(socket.vault, amountToTransfer, updatedSettled);
     }
 
     function _storage() internal pure returns (Storage storage $) {
@@ -849,7 +830,6 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         uint256 treasuryFeeBP
     );
 
-    event VaultsReportDataUpdated(uint64 indexed timestamp, bytes32 root, string cid);
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultDisconnected(address indexed vault);
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
@@ -876,50 +856,11 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
     event VaultWithdrawn(address indexed vault, address indexed recipient, uint256 amount);
 
     /**
-     * @notice Emitted when the locked amount is increased
-     * @param locked New amount of locked ether
-     */
-    event LockedIncreased(uint256 locked);
-
-    /**
-     * @notice Emitted when deposits are paused
-     */
-    event DepositedToBeaconChain(address indexed sender, uint256 numberOfDeposits, uint256 totalAmount);
-
-    /**
      * @notice Emitted when the manager is set
      * @param vault The address of the vault
      * @param owner The address of the owner
      */
     event VaultOwnerSet(address indexed vault, address indexed owner);
-
-    /**
-     * @notice Emitted when an obligation is settled on a vault
-     * @param vault The address of the vault
-     * @param obligationCategory The category of the obligation
-     * @param amount The cumulative amount of the obligation of the category that has been settled on the vault
-     * @param left The amount of the obligation of the category that is left to be settled on the vault
-     */
-    event ObligationSettled(address indexed vault, string obligationCategory, uint256 amount, uint256 left);
-
-    /**
-     * @notice Emitted when an obligation is accrued on a vault
-     * @param vault The address of the vault
-     * @param obligationCategory The category of the obligation
-     * @param amount The cumulative amount of the obligation of the category ever accrued on the vault
-     * @param left The amount of the obligation of the category that is left to be settled on the vault
-     */
-    event ObligationAccrued(address indexed vault, string obligationCategory, uint256 amount, uint256 left);
-
-    /**
-     * @notice Thrown when attempting to decrease the locked amount outside of a report
-     */
-    error NewLockedNotGreaterThanCurrent();
-
-    /**
-     * @notice Thrown when the locked amount exceeds the total value
-     */
-    error NewLockedExceedsTotalValue();
 
     /**
      * @notice Thrown when the transfer of ether to a recipient fails
@@ -932,7 +873,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
      * @notice Thrown when trying to withdraw more ether than the balance of `StakingVault`
      * @param balance Current balance
      */
-    error InsufficientBalance(uint256 balance, uint256 expectedBalance);
+    error InsufficientBalance(address vault, uint256 balance, uint256 expectedBalance);
 
     /**
      * @notice Thrown when trying to withdraw more than the unlocked amount
@@ -949,6 +890,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
      */
     error RebalanceAmountExceedsTotalValue(uint256 totalValue, uint256 rebalanceAmount);
     error AlreadyHealthy(address vault);
+    error AlreadyConnected(address vault, uint256 index);
     error VaultMintingCapacityExceeded(
         address vault,
         uint256 totalValue,
@@ -957,7 +899,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
     );
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 shareLimit);
-    error AlreadyConnected(address vault, uint256 index);
+
     error NotConnectedToHub(address vault);
     error NotAuthorized();
     error VaultZeroAddress();
@@ -978,14 +920,22 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
     error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
     error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
     error VaultOssified(address vault);
-    error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
     error VaultReportStaled(address vault);
     error VaultHubMustBeDepositor(address vault);
     error VaultProxyZeroCodehash();
     error InvalidOperator();
     error VaultHubNotPendingOwner(address vault);
     error UnhealthyVaultCannotDeposit(address vault);
-    error LockedAmountTooLow(address vault, uint256 withdrawalAmount, uint256 lockedAmount);
-    error VaultHasNoWithdrawalObligation(address vault);
-    error NotAllObligationsSettled(address vault, uint256 obligations, uint256 vaultBalance);
+
+    /** Obligations events and errors */
+    error NoWithdrawalObligation(address vault);
+    event WithdrawalObligationAccrued(address _vault, uint256 _amount);
+    event TreasuryFeesObligationAccrued(address _vault, uint256 _amount);
+
+    event WithdrawalObligationDecreased(address _vault, uint256 _newAmount, uint256 _oldAmount);
+
+    event WithdrawalObligationSettled(address _vault, uint256 _amount, uint256 _left);
+    event TreasuryFeesObligationSettled(address _vault, uint256 _amount, uint256 _left);
+
+    error WithdrawalObligationTooHigh(address _vault, uint256 _amount, uint256 _currentLiability);
 }
