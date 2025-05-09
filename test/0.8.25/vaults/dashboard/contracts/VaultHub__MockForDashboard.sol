@@ -31,13 +31,19 @@ contract VaultHub__MockForDashboard is IVaultControl {
     event Mock__Rebalanced(uint256 amount);
 
     mapping(address => VaultHub.VaultSocket) public vaultSockets;
+    address[] public vaultSocketsByIndex;
 
     function mock__setVaultSocket(address vault, VaultHub.VaultSocket memory socket) external {
         vaultSockets[vault] = socket;
+        vaultSocketsByIndex.push(vault);
     }
 
     function vaultSocket(address vault) external view returns (VaultHub.VaultSocket memory) {
         return vaultSockets[vault];
+    }
+
+    function vaultSocket(uint256 index) external view returns (VaultHub.VaultSocket memory) {
+        return vaultSockets[vaultSocketsByIndex[index]];
     }
 
     function disconnect(address vault) external {
@@ -89,6 +95,8 @@ contract VaultHub__MockForDashboard is IVaultControl {
     function unlocked(address _vault) external view override returns (uint256) {}
 
     function totalValue(address _vault) external view override returns (uint256) {}
+
+    function vaultTotalObligations(address _vault) external view override returns (uint256) {}
 
     function setVaultOwner(address _vault, address _owner) external override {}
 

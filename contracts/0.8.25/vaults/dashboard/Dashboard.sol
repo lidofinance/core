@@ -147,7 +147,7 @@ contract Dashboard is NodeOperatorFee {
     }
 
     function totalObligations() public view returns (uint256) {
-        return VAULT_CONTROL.totalObligations(address(_stakingVault()));
+        return VAULT_CONTROL.vaultTotalObligations(address(_stakingVault()));
     }
 
     function locked() public view returns (uint256) {

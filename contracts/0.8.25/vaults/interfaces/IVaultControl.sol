@@ -13,13 +13,6 @@ interface IVaultControl {
         int128 inOutDelta;
     }
 
-    /// @notice Obligations categories
-    enum ObligationCategory {
-        Withdrawal,
-        TreasuryFees,
-        NodeOperatorFees
-    }
-
     // todo: optimize storage layout
     struct VaultSocket {
         // ### 1st slot
@@ -53,12 +46,6 @@ interface IVaultControl {
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
         // UNUSED 143 bytes
-        // ### 6th slot
-        /// @notice obligations accrued on the vault
-        mapping(ObligationCategory => uint256) outstandingObligations;
-        // ### 7th slot
-        /// @notice already settled obligations
-        mapping(ObligationCategory => uint256) settledObligations;
     }
 
     function operatorGrid() external view returns (address);
@@ -74,6 +61,8 @@ interface IVaultControl {
     function unlocked(address _vault) external view returns (uint256);
 
     function totalValue(address _vault) external view returns (uint256);
+
+    function vaultTotalObligations(address _vault) external view returns (uint256);
 
     function setVaultOwner(address _vault, address _owner) external;
 

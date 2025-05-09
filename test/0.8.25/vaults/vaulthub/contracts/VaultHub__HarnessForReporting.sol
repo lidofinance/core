@@ -53,8 +53,7 @@ contract VaultHub__HarnessForReporting is VaultHub {
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
             uint16(_treasuryFeeBP),
-            false, // pendingDisconnect
-            0 // feeSharesCharged
+            false // pendingDisconnect
         );
         $.socketIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
