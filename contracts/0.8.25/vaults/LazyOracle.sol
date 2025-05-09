@@ -52,11 +52,11 @@ contract LazyOracle {
     /// @param _offset offset of the vault in the batch (indexes start from 0)
     /// @param _limit limit of the batch
     /// @return batch of vaults info
-    function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory) {
+    function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory batch) {
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
         uint256 vaultCount = vaultHub.vaultsCount();
         uint256 limit = _offset + _limit > vaultCount - 1 ? vaultCount - 1 - _offset : _limit;
-        VaultInfo[] memory batch = new VaultInfo[](limit);
+        batch = new VaultInfo[](limit);
         for (uint256 i = 0; i < limit; i++) {
             IVaultControl.VaultSocket memory socket = vaultHub.vaultSocket(i + 1 + _offset);
             IStakingVault currentVault = IStakingVault(socket.vault);
@@ -68,7 +68,6 @@ contract LazyOracle {
                 socket.liabilityShares
             );
         }
-        return batch;
     }
 
     function updateReportData(
@@ -89,19 +88,19 @@ contract LazyOracle {
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault
     /// @param _inOutDelta the inOutDelta of the vault
-    /// @param _feeSharesCharged the feeSharesCharged of the vault
+    /// @param _chargedFees the fees charged to the vault
     /// @param _liabilityShares the liabilityShares of the vault
     /// @param _proof the proof of the reported data
     function updateVaultData(
         address _vault,
         uint256 _totalValue,
         int256 _inOutDelta,
-        uint256 _feeSharesCharged,
+        uint256 _chargedFees,
         uint256 _liabilityShares,
         bytes32[] calldata _proof
     ) external {
         bytes32 leaf = keccak256(
-            bytes.concat(keccak256(abi.encode(_vault, _totalValue, _inOutDelta, _feeSharesCharged, _liabilityShares)))
+            bytes.concat(keccak256(abi.encode(_vault, _totalValue, _inOutDelta, _chargedFees, _liabilityShares)))
         );
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
@@ -111,7 +110,7 @@ contract LazyOracle {
                 _storage().vaultsDataTimestamp,
                 _totalValue,
                 _inOutDelta,
-                _feeSharesCharged,
+                _chargedFees,
                 _liabilityShares
             );
     }

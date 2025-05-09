@@ -13,5 +13,13 @@ contract PredepositGuarantee_HarnessForFactory is PredepositGuarantee {
         GIndex _gIFirstValidatorAfterChange,
         uint64 _changeSlot,
         address _lidoLocator
-    ) PredepositGuarantee(_genesisForkVersion, _gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot, _lidoLocator) {}
+    )
+        PredepositGuarantee(
+            _genesisForkVersion,
+            _gIFirstValidator,
+            _gIFirstValidatorAfterChange,
+            _changeSlot,
+            _lidoLocator
+        )
+    {}
 }

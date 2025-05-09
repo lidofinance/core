@@ -33,11 +33,9 @@ contract StakingVault__MockForVaultHub {
         nodeOperator = _no;
     }
 
-    function fund() external payable {
-    }
+    function fund() external payable {}
 
-    function withdraw(address, uint256 amount) external {
-    }
+    function withdraw(address, uint256 amount) external {}
 
     function depositor() external view returns (address) {
         return depositor_;

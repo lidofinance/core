@@ -200,8 +200,6 @@ contract AccountingOracle is BaseOracle {
         /// Liquid Staking Vaults
         ///
 
-        /// @dev The total vaults treasury fees as observed at the reference slot.
-        uint256 vaultsTotalTreasuryFeesShares;
         /// @dev The total vaults deficit as observed at the reference slot.
         uint256 vaultsTotalDeficit;
         /// @dev Merkle Tree root of the vaults data.
@@ -502,7 +500,6 @@ contract AccountingOracle is BaseOracle {
                 data.elRewardsVaultBalance,
                 data.sharesRequestedToBurn,
                 data.withdrawalFinalizationBatches,
-                data.vaultsTotalTreasuryFeesShares,
                 data.vaultsTotalDeficit
             )
         );

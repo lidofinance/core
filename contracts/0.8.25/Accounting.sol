@@ -215,10 +215,8 @@ contract Accounting {
 
         // Calculate the amount of shares to mint as fees to the treasury for vaults
 
-        uint256 externalShares = _pre.externalShares + _report.vaultsTotalTreasuryFeesShares;
-
-        update.postTotalShares = update.postInternalShares + externalShares;
-        update.postTotalPooledEther = update.postInternalEther + externalShares * update.postInternalEther / update.postInternalShares;
+        update.postTotalShares = update.postInternalShares + _pre.externalShares;
+        update.postTotalPooledEther = update.postInternalEther + _pre.externalShares * update.postInternalEther / update.postInternalShares;
     }
 
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
@@ -311,10 +309,6 @@ contract Accounting {
             _withdrawalShareRate,
             _update.etherToFinalizeWQ
         );
-
-        if (_report.vaultsTotalTreasuryFeesShares > 0) {
-            _contracts.vaultHub.mintVaultsTreasuryFeeShares(_report.vaultsTotalTreasuryFeesShares);
-        }
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
 
