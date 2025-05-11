@@ -675,7 +675,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
 
     function _totalValue(VaultSocket storage socket) internal view returns (uint256) {
         Report memory report = socket.report;
-        return uint256(int256(int128(report.totalValue) + report.inOutDelta - report.inOutDelta));
+        return uint256(int256(uint256(report.totalValue)) + report.inOutDelta - socket.inOutDelta);
     }
 
     function _isReportFresh(VaultSocket storage socket) internal view returns (bool) {
