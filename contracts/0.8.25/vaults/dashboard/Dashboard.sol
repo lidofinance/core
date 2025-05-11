@@ -49,18 +49,18 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Constructor sets the stETH, and WSTETH token addresses,
-     * and passes the address of the vault control up the inheritance chain.
+     * and passes the address of the vault hub up the inheritance chain.
      * @param _stETH Address of the stETH token contract.
      * @param _wstETH Address of the wstETH token contract.
-     * @param _vaultControl Address of the vault control contract.
+     * @param _vaultHub Address of the vault hub contract.
      * @param _predepositGuarantee Address of the predeposit guarantee contract.
      */
     constructor(
         address _stETH,
         address _wstETH,
-        address _vaultControl,
+        address _vaultHub,
         address _predepositGuarantee
-    ) NodeOperatorFee(_vaultControl, _predepositGuarantee) {
+    ) NodeOperatorFee(_vaultHub, _predepositGuarantee) {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 

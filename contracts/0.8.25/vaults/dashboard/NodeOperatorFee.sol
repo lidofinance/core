@@ -84,10 +84,10 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Passes the address of the vault hub up the inheritance chain.
-     * @param _vaultControl The address of the vault control.
+     * @param _vaultHub The address of the vault hub.
      * @param _predepositGuarantee The address of the predeposit guarantee.
      */
-    constructor(address _vaultControl, address _predepositGuarantee) Permissions(_vaultControl, _predepositGuarantee) {}
+    constructor(address _vaultHub, address _predepositGuarantee) Permissions(_vaultHub, _predepositGuarantee) {}
 
     /**
      * @dev Calls the parent's initializer, sets the node operator fee, assigns the node operator manager role,
