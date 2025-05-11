@@ -322,19 +322,20 @@ contract VaultHub is PausableUntilWithRoles {
         if (msg.sender != LIDO_LOCATOR.lazyOracle()) revert NotAuthorized();
 
         Storage storage $ = _storage();
-        // we don't use _connectedSocket(_vault) here because it does not include sockets with the pendingDisconnect flag
+        // we don't use _connectedSocket(_vault) here because it reverts on sockets with pendingDisconnect flag
         uint256 socketIndex = $.socketIndex[_vault];
         if (socketIndex == 0) revert NotConnectedToHub(_vault);
         VaultSocket storage socket = $.sockets[socketIndex];
 
         if (socket.pendingDisconnect) {
-            Ownable2StepUpgradeable(socket.vault).transferOwnership(socket.owner);
-            _deleteVaultSocket($, socket, socketIndex);
+            Ownable2StepUpgradeable(_vault).transferOwnership(socket.owner);
+            _deleteVaultSocket(_vault, socketIndex);
         } else {
-            if (_reportFeeSharesCharged < socket.feeSharesCharged) {
-                revert InvalidFees(_vault, _reportFeeSharesCharged, socket.feeSharesCharged);
+            uint256 currentFeeSharesCharged = socket.feeSharesCharged;
+            if (_reportFeeSharesCharged < currentFeeSharesCharged) {
+                revert InvalidFees(_vault, _reportFeeSharesCharged, currentFeeSharesCharged);
             }
-            socket.liabilityShares += uint96(_reportFeeSharesCharged - socket.feeSharesCharged);
+            socket.liabilityShares += uint96(_reportFeeSharesCharged - currentFeeSharesCharged);
             socket.feeSharesCharged = uint96(_reportFeeSharesCharged);
 
             uint256 newLiabilityShares = Math256.max(socket.liabilityShares, _reportLiabilityShares);
@@ -693,15 +694,15 @@ contract VaultHub is PausableUntilWithRoles {
         return (LIDO.getTotalShares() * RELATIVE_SHARE_LIMIT_BP) / TOTAL_BASIS_POINTS;
     }
 
-    function _deleteVaultSocket(Storage storage $, VaultSocket storage socket, uint256 _socketIndex) internal {
-        address vault = socket.vault;
+    function _deleteVaultSocket(address _vault, uint256 _socketIndex) internal {
+        Storage storage $ = _storage();
 
         VaultSocket memory lastSocket = $.sockets[$.sockets.length - 1];
         $.sockets[_socketIndex] = lastSocket;
         $.socketIndex[lastSocket.vault] = _socketIndex;
         $.sockets.pop();
 
-        delete $.socketIndex[vault];
+        delete $.socketIndex[_vault];
     }
 
     function _unlocked(VaultSocket storage _socket) internal view returns (uint256) {
