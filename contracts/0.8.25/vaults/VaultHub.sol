@@ -264,7 +264,7 @@ contract VaultHub is PausableUntilWithRoles, IVaultControl {
         _disconnect(_connectedSocket(_vault));
     }
 
-    /// @notice Permissionless update of the vault data
+    /// @notice update of the vault data by the lazy oracle report
     /// @param _vault the address of the vault
     /// @param _reportTimestamp the timestamp of the report
     /// @param _reportTotalValue the total value of the vault
