@@ -6,7 +6,6 @@ pragma solidity 0.8.25;
 
 import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IVaultControl} from "./interfaces/IVaultControl.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
@@ -58,7 +57,7 @@ contract LazyOracle {
         uint256 limit = _offset + _limit > vaultCount - 1 ? vaultCount - 1 - _offset : _limit;
         VaultInfo[] memory batch = new VaultInfo[](limit);
         for (uint256 i = 0; i < limit; i++) {
-            IVaultControl.VaultSocket memory socket = vaultHub.vaultSocket(i + 1 + _offset);
+            VaultHub.VaultSocket memory socket = vaultHub.vaultSocket(i + 1 + _offset);
             IStakingVault currentVault = IStakingVault(socket.vault);
             batch[i] = VaultInfo(
                 address(currentVault),

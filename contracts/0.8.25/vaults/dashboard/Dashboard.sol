@@ -13,9 +13,8 @@ import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 
 import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
-import {IVaultControl} from "../interfaces/IVaultControl.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";
-
+import {VaultHub} from "../VaultHub.sol";
 interface IWstETH is IERC20 {
     function wrap(uint256) external returns (uint256);
 
@@ -94,8 +93,8 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the vault socket data for the staking vault.
      * @return VaultSocket struct containing vault data
      */
-    function vaultSocket() public view returns (IVaultControl.VaultSocket memory) {
-        return VAULT_CONTROL.vaultSocket(address(_stakingVault()));
+    function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
+        return VAULT_HUB.vaultSocket(address(_stakingVault()));
     }
 
     /**
@@ -143,11 +142,11 @@ contract Dashboard is NodeOperatorFee {
      * @return The total value as a uint256.
      */
     function totalValue() public view returns (uint256) {
-        return VAULT_CONTROL.totalValue(address(_stakingVault()));
+        return VAULT_HUB.totalValue(address(_stakingVault()));
     }
 
     function locked() public view returns (uint256) {
-        return VAULT_CONTROL.vaultSocket(address(_stakingVault())).locked;
+        return VAULT_HUB.vaultSocket(address(_stakingVault())).locked;
     }
 
     /**
@@ -281,7 +280,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfShares Amount of stETH shares to burn
      */
     function burnShares(uint256 _amountOfShares) external {
-        STETH.transferSharesFrom(msg.sender, address(VAULT_CONTROL), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(VAULT_HUB), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -497,7 +496,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The amount of ether in wei that can be used to mint shares.
      */
     function _mintableValue() internal view returns (uint256) {
-        return VAULT_CONTROL.totalValue(address(_stakingVault())) - nodeOperatorUnclaimedFee();
+        return VAULT_HUB.totalValue(address(_stakingVault())) - nodeOperatorUnclaimedFee();
     }
 
     /**
@@ -523,7 +522,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function _burnStETH(uint256 _amountOfStETH) internal {
         uint256 _amountOfShares = STETH.getSharesByPooledEth(_amountOfStETH);
-        STETH.transferSharesFrom(msg.sender, address(VAULT_CONTROL), _amountOfShares);
+        STETH.transferSharesFrom(msg.sender, address(VAULT_HUB), _amountOfShares);
         _burnShares(_amountOfShares);
     }
 
@@ -536,7 +535,7 @@ contract Dashboard is NodeOperatorFee {
         uint256 unwrappedStETH = WSTETH.unwrap(_amountOfWstETH);
         uint256 unwrappedShares = STETH.getSharesByPooledEth(unwrappedStETH);
 
-        STETH.transferShares(address(VAULT_CONTROL), unwrappedShares);
+        STETH.transferShares(address(VAULT_HUB), unwrappedShares);
         _burnShares(unwrappedShares);
     }
 

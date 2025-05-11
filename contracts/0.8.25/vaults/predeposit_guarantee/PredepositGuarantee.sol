@@ -14,8 +14,7 @@ import {CLProofVerifier} from "./CLProofVerifier.sol";
 import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {IVaultControl} from "../interfaces/IVaultControl.sol";
-
+import {VaultHub} from "../VaultHub.sol";
 /**
  * @title PredepositGuarantee
  * @author Lido
@@ -352,7 +351,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         }
 
         balance.locked += totalDepositAmount;
-        IVaultControl(payable(LIDO_LOCATOR.vaultHub())).depositToBeaconChain(address(_stakingVault), _deposits);
+        VaultHub(payable(LIDO_LOCATOR.vaultHub())).depositToBeaconChain(address(_stakingVault), _deposits);
 
         emit BalanceLocked(nodeOperator, balance.total, balance.locked);
     }

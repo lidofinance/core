@@ -9,7 +9,6 @@ import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/Enumerab
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IVaultControl} from "./interfaces/IVaultControl.sol";
 import {VaultHub} from "./VaultHub.sol";
 
 struct TierParams {
@@ -394,7 +393,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         Tier storage requestedTier = $.tiers[requestedTierId];
 
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
-        IVaultControl.VaultSocket memory vaultSocket = vaultHub.vaultSocket(_vault);
+        VaultHub.VaultSocket memory vaultSocket = vaultHub.vaultSocket(_vault);
         uint256 vaultLiabilityShares = vaultSocket.liabilityShares;
 
         //check if tier limit is exceeded

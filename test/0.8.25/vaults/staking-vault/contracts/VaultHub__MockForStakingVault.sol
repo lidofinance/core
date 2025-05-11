@@ -4,7 +4,6 @@
 pragma solidity ^0.8.0;
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
-import {IVaultControl} from "contracts/0.8.25/vaults/interfaces/IVaultControl.sol";
 
 contract VaultHub__MockForStakingVault {
     address public immutable LIDO_LOCATOR;
@@ -23,14 +22,14 @@ contract VaultHub__MockForStakingVault {
     }
 
     function addVaultSocket(address vault) external {
-        sockets[vault] = IVaultControl.VaultSocket({
+        sockets[vault] = VaultHub.VaultSocket({
             vault: vault,
             shareLimit: 0,
             owner: address(0),
             liabilityShares: 0,
             locked: 0,
             inOutDelta: 0,
-            report: IVaultControl.Report(0, 0),
+            report: VaultHub.Report(0, 0),
             reportTimestamp: 0,
             reserveRatioBP: 0,
             forcedRebalanceThresholdBP: 0,
