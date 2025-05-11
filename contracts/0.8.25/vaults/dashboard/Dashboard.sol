@@ -15,6 +15,7 @@ import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.so
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";
 import {VaultHub} from "../VaultHub.sol";
+
 interface IWstETH is IERC20 {
     function wrap(uint256) external returns (uint256);
 

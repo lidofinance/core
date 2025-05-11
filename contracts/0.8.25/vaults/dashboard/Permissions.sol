@@ -11,6 +11,7 @@ import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {OperatorGrid} from "../OperatorGrid.sol";
 import {VaultHub} from "../VaultHub.sol";
+
 /**
  * @title Permissions
  * @author Lido
