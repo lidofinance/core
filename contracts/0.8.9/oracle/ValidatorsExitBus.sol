@@ -8,22 +8,15 @@ import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
 import {Versioned} from "../utils/Versioned.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
 import {PausableUntil} from "../utils/PausableUntil.sol";
-import {IValidatorsExitBus} from "../interfaces/IValidatorExitBus.sol";
+import {IValidatorsExitBus} from "../interfaces/IValidatorsExitBus.sol";
+import "hardhat/console.sol";
 
-interface IWithdrawalVault {
-    function addWithdrawalRequests(bytes calldata pubkeys, uint64[] calldata amounts) external payable;
-
-    function getWithdrawalRequestFee() external view returns (uint256);
-}
-
-interface IStakingRouter {
-    function onValidatorExitTriggered(
-        uint256 _stakingModuleId,
-        uint256 _nodeOperatorId,
-        bytes calldata _publicKey,
-        uint256 _withdrawalRequestPaidFee,
-        uint256 _exitType
-    ) external;
+interface ITriggerableWithdrawalGateway {
+    function triggerFullWithdrawals(
+        bytes calldata triggerableExitData,
+        address refundRecipient,
+        uint8 exitType
+    ) external payable;
 }
 
 contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, PausableUntil, Versioned {
@@ -67,22 +60,19 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     /**
      * Thrown when there are attempt to send exit events for request that was not submitted earlier by trusted entities
      */
-    error ExitHashWasNotSubmitted();
+    error ExitHashNotSubmitted();
 
     /**
-     * TODO: do we need this error ?
-     * @notice Throw when in emitExitEvents all requests were already delivered
+     * Thrown when there are attempt to store exit hash that was already submitted
+     */
+    error ExitHashAlreadySubmitted();
+
+    /**
+     * @notice Throw when in submitExitRequestsData all requests were already delivered
      */
     error RequestsAlreadyDelivered();
 
     error KeyWasNotDelivered(uint256 keyIndex, uint256 lastDeliveredKeyIndex);
-
-    /**
-     * @notice Thrown when a withdrawal fee insufficient
-     * @param feeRequired Amount of fee required to cover withdrawal request
-     * @param passedValue Amount of fee sent to cover withdrawal request
-     */
-    error InsufficientWithdrawalFee(uint256 feeRequired, uint256 passedValue);
 
     error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
 
@@ -92,7 +82,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     error TriggerableWithdrawalFeeRefundFailed();
 
     /// @dev Events
-    event MadeRefund(address sender, uint256 refundValue); // maybe we dont need it
     event StoredExitRequestHash(bytes32 exitRequestHash);
     event ValidatorExitRequest(
         uint256 indexed stakingModuleId,
@@ -140,6 +129,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
+    uint256 internal constant PACKED_TWG_EXIT_REQUEST_LENGTH = 56;
+
     ILidoLocator internal immutable LOCATOR;
 
     /// @notice The list format of the validator exit requests data. Used when all
@@ -163,37 +154,54 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     /// Hash constant for mapping exit requests storage
     bytes32 internal constant EXIT_REQUESTS_HASHES_POSITION = keccak256("lido.ValidatorsExitBus.reportHashes");
     bytes32 public constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.exitDailyLimit");
-    bytes32 public constant TW_EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.twExitDailyLimit");
-
-    /// @dev Ensures the contract’s ETH balance is unchanged.
-    modifier preservesEthBalance() {
-        uint256 balanceBeforeCall = address(this).balance - msg.value;
-        _;
-        assert(address(this).balance == balanceBeforeCall);
-    }
 
     constructor(address lidoLocator) {
         LOCATOR = ILidoLocator(lidoLocator);
     }
 
-    /// @notice Method for submitting request hash by trusted entities
-    /// @param exitReportHash Request hash
-    /// @dev After request was stored anyone can deliver it via emitExitEvents method below
-    function submitReportHash(bytes32 exitReportHash) external whenResumed onlyRole(SUBMIT_REPORT_HASH_ROLE) {
+    /**
+     * @notice Submit a hash of the exit requests data.
+     *
+     * @dev Reverts if:
+     * - The contract is paused.
+     * - The caller does not have the `SUBMIT_REPORT_HASH_ROLE`.
+     * - The hash has already been submitted.
+     *
+     * Emits `RequestsHashSubmitted` event;
+     *
+     * @param exitRequestsHash - keccak256 hash of the encoded validators list
+     */
+    function submitExitRequestsHash(bytes32 exitRequestsHash) external whenResumed onlyRole(SUBMIT_REPORT_HASH_ROLE) {
+        RequestStatus storage requestStatus = _storageExitRequestsHashes()[exitRequestsHash];
+        _checkExitNotSubmitted(requestStatus);
+
         uint256 contractVersion = getContractVersion();
-        _storeExitRequestHash(exitReportHash, type(uint256).max, 0, contractVersion, DeliveryHistory(0, 0));
+        _storeExitRequestHash(exitRequestsHash, type(uint256).max, 0, contractVersion, DeliveryHistory(0, 0));
     }
 
-    /// @notice Method to emit exit events by providing report data, the hash of which was previously stored
-    /// @param request Exit request data struct
-    function emitExitEvents(ExitRequestData calldata request) external whenResumed {
+    /**
+     * @notice Method for submitting exit requests data
+     *
+     * @dev Reverts if:
+     * - The contract is paused.
+     * - The keccak256 hash of `requestsData` does not exist in storage (i.e., was not submitted).
+     * - The provided Exit Requests Data has already been fully unpacked.
+     * - The contract version does not match the version at the time of report submission.
+     * - The data format is not supported.
+     * - There is no remaining quota available for the current limits.
+     *
+     * Emits `ValidatorExitRequest` events;
+     *
+     * @param request - The exit requests structure.
+     */
+    function submitExitRequestsData(ExitRequestData calldata request) external whenResumed {
         bytes calldata data = request.data;
 
         RequestStatus storage requestStatus = _storageExitRequestsHashes()[
             keccak256(abi.encode(data, request.dataFormat))
         ];
 
-        _checkExitWasSubmitted(requestStatus);
+        _checkExitSubmitted(requestStatus);
         _checkExitRequestData(request);
         _checkContractVersion(requestStatus.contractVersion);
 
@@ -230,20 +238,25 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         requestStatus.deliveredItemsCount += requestsToDeliver;
     }
 
-    /// @notice Triggers exits on the EL via the Withdrawal Vault contract
-    /// @param request Exit request data struct
-    /// @param keyIndexes Array of indexes of requests in request.data
-    /// @param refundRecipient Address to return extra fee on TW (eip-7002) exit
-    /// @param exitType type of request. 0 - non-refundable, 1 - require refund
-    /// @dev This function verifies that the hash of the provided exit request data exists in storage
-    // and ensures that the events for the requests specified in the `keyIndexes` array have already been delivered.
-    // Verify that keyIndexes amount fits within the limits
+    /**
+     * @notice Submits Triggerable Withdrawal Requests to the Triggerable Withdrawals Gateway.
+     *
+     * @param requestsData The report data previously unpacked and emitted by the VEB.
+     * @param keyIndexes Array of indexes pointing to validators in `requestsData.data`
+     *                   to be exited via TWR.
+     * @param refundRecipient Address to return extra fee on TW (eip-7002) exit
+     * @param exitType type of request. 0 - non-refundable, 1 - require refund
+     *
+     * @dev Reverts if:
+     *     - The hash of `requestsData` was not previously submitted in the VEB.
+     *     - Any of the provided `keyIndexes` refers to a validator that was not yet unpacked (i.e., exit requiest not emitted).
+     */
     function triggerExits(
-        ExitRequestData calldata request,
+        ExitRequestData calldata requestsData,
         uint256[] calldata keyIndexes,
         address refundRecipient,
         uint8 exitType
-    ) external payable whenResumed preservesEthBalance {
+    ) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
         // If the refund recipient is not set, use the sender as the refund recipient
@@ -253,27 +266,14 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         // bytes calldata data = request.data;
         RequestStatus storage requestStatus = _storageExitRequestsHashes()[
-            keccak256(abi.encode(request.data, request.dataFormat))
+            keccak256(abi.encode(requestsData.data, requestsData.dataFormat))
         ];
 
-        _checkExitWasSubmitted(requestStatus);
-        _checkExitRequestData(request);
+        _checkExitSubmitted(requestStatus);
+        _checkExitRequestData(requestsData);
         _checkContractVersion(requestStatus.contractVersion);
 
-        uint256 withdrawalFee = IWithdrawalVault(LOCATOR.withdrawalVault()).getWithdrawalRequestFee();
-
-        if (msg.value < keyIndexes.length * withdrawalFee) {
-            revert InsufficientWithdrawalFee(keyIndexes.length * withdrawalFee, msg.value);
-        }
-
-        ExitRequestLimitData memory exitRequestLimitData = TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        exitRequestLimitData.checkLimit(keyIndexes.length, _getTimestamp());
-        TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            exitRequestLimitData.updateRequestsCounter(keyIndexes.length, _getTimestamp())
-        );
-
-        bytes memory pubkeys = new bytes(keyIndexes.length * PUBLIC_KEY_LENGTH);
-        bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
+        bytes memory exits = new bytes(keyIndexes.length * PACKED_TWG_EXIT_REQUEST_LENGTH);
 
         for (uint256 i = 0; i < keyIndexes.length; i++) {
             if (keyIndexes[i] >= requestStatus.totalItemsCount) {
@@ -284,101 +284,17 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
                 revert KeyWasNotDelivered(keyIndexes[i], requestStatus.deliveredItemsCount - 1);
             }
 
-            ValidatorData memory validatorData = _getValidatorData(request.data, keyIndexes[i]);
+            ValidatorData memory validatorData = _getValidatorData(requestsData.data, keyIndexes[i]);
             if (validatorData.moduleId == 0) revert InvalidRequestsData();
-            pubkey = validatorData.pubkey;
 
-            assembly {
-                let pubkeyMemPtr := add(pubkey, 32)
-                let dest := add(pubkeys, add(32, mul(PUBLIC_KEY_LENGTH, i)))
-                mstore(dest, mload(pubkeyMemPtr))
-                mstore(add(dest, 32), mload(add(pubkeyMemPtr, 32)))
-            }
-
-            IStakingRouter(LOCATOR.stakingRouter()).onValidatorExitTriggered(
-                validatorData.moduleId,
-                validatorData.nodeOpId,
-                pubkey,
-                withdrawalFee,
-                exitType
-            );
+            _copyValidatorData(validatorData, exits, i);
         }
 
-        IWithdrawalVault(LOCATOR.withdrawalVault()).addWithdrawalRequests{value: keyIndexes.length * withdrawalFee}(
-            pubkeys,
-            new uint64[](keyIndexes.length)
+        ITriggerableWithdrawalGateway(LOCATOR.triggerableWithdrawalGateway()).triggerFullWithdrawals{value: msg.value}(
+            exits,
+            refundRecipient,
+            exitType
         );
-
-        _refundFee(keyIndexes.length * withdrawalFee, refundRecipient);
-    }
-
-    /// @notice Directly emit exit events and request validators through the TW to exit them without delivering hashes and any proving
-    /// @param exitData Direct exit request data struct
-    /// @param refundRecipient Address to return extra fee on TW (eip-7002) exit
-    /// @param exitType type of request. 0 - non-refundable, 1 - require refund
-    /// @dev  Verify that requests amount fits within the limits
-    function triggerExitsDirectly(
-        DirectExitData calldata exitData,
-        address refundRecipient,
-        uint8 exitType
-    ) external payable whenResumed onlyRole(DIRECT_EXIT_ROLE) preservesEthBalance {
-        if (msg.value == 0) revert ZeroArgument("msg.value");
-
-        // If the refund recipient is not set, use the sender as the refund recipient
-        if (refundRecipient == address(0)) {
-            refundRecipient = msg.sender;
-        }
-
-        if (exitData.validatorsPubkeys.length == 0) {
-            revert ZeroArgument("exitData.validatorsPubkeys");
-        }
-
-        if (exitData.validatorsPubkeys.length % PUBLIC_KEY_LENGTH != 0) {
-            revert InvalidPubkeysArray();
-        }
-
-        uint256 requestsCount = exitData.validatorsPubkeys.length / PUBLIC_KEY_LENGTH;
-        uint256 withdrawalFee = IWithdrawalVault(LOCATOR.withdrawalVault()).getWithdrawalRequestFee();
-
-        if (msg.value < withdrawalFee * requestsCount) {
-            revert InsufficientWithdrawalFee(withdrawalFee * requestsCount, msg.value);
-        }
-
-        ExitRequestLimitData memory exitRequestLimitData = TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        exitRequestLimitData.checkLimit(requestsCount, _getTimestamp());
-        TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            exitRequestLimitData.updateRequestsCounter(requestsCount, _getTimestamp())
-        );
-
-        for (uint256 i = 0; i < requestsCount; i++) {
-            bytes memory pubkey = new bytes(PUBLIC_KEY_LENGTH);
-
-            pubkey = _getPubkey(exitData.validatorsPubkeys, i);
-
-            IStakingRouter(LOCATOR.stakingRouter()).onValidatorExitTriggered(
-                exitData.stakingModuleId,
-                exitData.nodeOperatorId,
-                pubkey,
-                withdrawalFee,
-                exitType
-            );
-
-            emit DirectExitRequest(
-                exitData.stakingModuleId,
-                exitData.nodeOperatorId,
-                pubkey,
-                _getTimestamp(),
-                refundRecipient
-            );
-        }
-
-        uint64[] memory amount = new uint64[](requestsCount);
-        IWithdrawalVault(LOCATOR.withdrawalVault()).addWithdrawalRequests{value: withdrawalFee * requestsCount}(
-            exitData.validatorsPubkeys,
-            amount
-        );
-
-        _refundFee(requestsCount * withdrawalFee, refundRecipient);
     }
 
     function setExitRequestLimit(
@@ -395,19 +311,22 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitDailyLimit(exitsDailyLimit, timestamp)
         );
 
-        TW_EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            TW_EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitDailyLimit(twExitsDailyLimit, timestamp)
-        );
-
         emit ExitRequestsLimitSet(exitsDailyLimit, twExitsDailyLimit);
     }
 
+    /**
+     * @notice Returns unpacking history and current status for specific exitRequestsData
+     *
+     * @dev Reverts if such exitRequestsHash was not submited.
+     *
+     * @param exitRequestsHash - The exit requests hash.
+     */
     function getExitRequestsDeliveryHistory(
         bytes32 exitRequestsHash
     ) external view returns (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history) {
         RequestStatus storage requestStatus = _storageExitRequestsHashes()[exitRequestsHash];
 
-        _checkExitWasSubmitted(requestStatus);
+        _checkExitSubmitted(requestStatus);
 
         return (requestStatus.totalItemsCount, requestStatus.deliveredItemsCount, requestStatus.deliverHistory);
     }
@@ -481,26 +400,16 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
     }
 
-    function _checkExitWasSubmitted(RequestStatus storage requestStatus) internal view {
+    function _checkExitSubmitted(RequestStatus storage requestStatus) internal view {
         if (requestStatus.contractVersion == 0) {
-            revert ExitHashWasNotSubmitted();
+            revert ExitHashNotSubmitted();
         }
     }
 
-    function _refundFee(uint256 fee, address recipient) internal returns (uint256) {
-        uint256 refund = msg.value - fee;
-
-        if (refund > 0) {
-            (bool success, ) = recipient.call{value: refund}("");
-
-            if (!success) {
-                revert TriggerableWithdrawalFeeRefundFailed();
-            }
-
-            emit MadeRefund(msg.sender, refund);
+    function _checkExitNotSubmitted(RequestStatus storage requestStatus) internal view {
+        if (requestStatus.contractVersion != 0) {
+            revert ExitHashAlreadySubmitted();
         }
-
-        return refund;
     }
 
     function _getTimestamp() internal view virtual returns (uint256) {
@@ -574,22 +483,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     }
 
     /**
-     * @notice Method for reading public key value from pubkeys list
-     * @param pubkeys Concatenated list of pubkeys
-     * @param index index of pubkey in array above
-     * @return pubkey Validator public key
-     */
-    function _getPubkey(bytes calldata pubkeys, uint256 index) internal pure returns (bytes memory pubkey) {
-        pubkey = new bytes(PUBLIC_KEY_LENGTH);
-
-        assembly {
-            let offset := add(pubkeys.offset, mul(index, PUBLIC_KEY_LENGTH))
-            let dest := add(pubkey, 0x20)
-            calldatacopy(dest, offset, PUBLIC_KEY_LENGTH)
-        }
-    }
-
-    /**
      * This method read report data (DATA_FORMAT=1) within a range
      * check dataWithoutPubkey <= lastDataWithoutPubkey needs to prevent duplicates
      * However, it seems that duplicates are no longer an issue.
@@ -641,6 +534,30 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
+        }
+    }
+
+    /// Methods for working with TWG exit data type
+    /// | MSB <------------------------------------------------ LSB
+    /// |       3 bytes     |     5 bytes      |    48 bytes     |
+    /// |  stakingModuleId  |  nodeOperatorId  | validatorPubkey |
+
+    function _copyValidatorData(
+        ValidatorData memory validatorData,
+        bytes memory exitData,
+        uint256 index
+    ) internal pure {
+        uint256 nodeOpId = validatorData.nodeOpId;
+        uint256 moduleId = validatorData.moduleId;
+        bytes memory pubkey = validatorData.pubkey;
+
+        assembly {
+            let exitDataOffset := add(exitData, add(32, mul(56, index)))
+            let id := or(shl(40, moduleId), nodeOpId)
+            mstore(exitDataOffset, shl(192, id))
+            let pubkeyOffset := add(pubkey, 32)
+            mstore(add(exitDataOffset, 8), mload(pubkeyOffset))
+            mstore(add(exitDataOffset, 40), mload(add(pubkeyOffset, 32)))
         }
     }
 

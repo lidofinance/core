@@ -133,7 +133,7 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
 
       await expect(oracle.getExitRequestsDeliveryHistory(fakeHash)).to.be.revertedWithCustomError(
         oracle,
-        "ExitHashWasNotSubmitted",
+        "ExitHashNotSubmitted",
       );
     });
 

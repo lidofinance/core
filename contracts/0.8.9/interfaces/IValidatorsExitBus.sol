@@ -20,19 +20,13 @@ interface IValidatorsExitBus {
         uint256 timestamp;
     }
 
-    function submitReportHash(bytes32 exitReportHash) external;
+    function submitExitRequestsHash(bytes32 exitReportHash) external;
 
-    function emitExitEvents(ExitRequestData calldata request) external;
+    function submitExitRequestsData(ExitRequestData calldata request) external;
 
     function triggerExits(
         ExitRequestData calldata request,
         uint256[] calldata keyIndexes,
-        address refundRecipient,
-        uint8 exitType
-    ) external payable;
-
-    function triggerExitsDirectly(
-        DirectExitData calldata exitData,
         address refundRecipient,
         uint8 exitType
     ) external payable;

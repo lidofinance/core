@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness, WithdrawalVault__MockForVebo } from "typechain-types";
+import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
 
 import { de0x, numberToHex } from "lib";
 
@@ -17,11 +17,10 @@ const PUBKEYS = [
   "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 ];
 
-describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
+describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
-  let withdrawalVault: WithdrawalVault__MockForVebo;
 
   let exitRequests: ExitRequest[];
   let exitRequestHash: string;
@@ -57,13 +56,11 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
-    withdrawalVault = deployed.withdrawalVault;
 
     await initVEBO({
       admin: admin.address,
       oracle,
       consensus,
-      withdrawalVault,
       resumeAfterDeploy: true,
       lastProcessingRefSlot: LAST_PROCESSING_REF_SLOT,
     });
@@ -85,8 +82,8 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
 
     exitRequest = { dataFormat: DATA_FORMAT_LIST, data: encodeExitRequestsDataList(exitRequests) };
 
-    await expect(oracle.emitExitEvents(exitRequest))
-      .to.be.revertedWithCustomError(oracle, "ExitHashWasNotSubmitted")
+    await expect(oracle.submitExitRequestsData(exitRequest))
+      .to.be.revertedWithCustomError(oracle, "ExitHashNotSubmitted")
       .withArgs();
   });
 
@@ -94,7 +91,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
     const request = [exitRequest.data, exitRequest.dataFormat];
     const hash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["(bytes, uint256)"], [request]));
 
-    await expect(oracle.connect(stranger).submitReportHash(hash)).to.be.revertedWithOZAccessControlError(
+    await expect(oracle.connect(stranger).submitExitRequestsHash(hash)).to.be.revertedWithOZAccessControlError(
       await stranger.getAddress(),
       await oracle.SUBMIT_REPORT_HASH_ROLE(),
     );
@@ -109,13 +106,13 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
       ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [exitRequest.data, exitRequest.dataFormat]),
     );
 
-    const submitTx = await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
+    const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
 
     await expect(submitTx).to.emit(oracle, "StoredExitRequestHash").withArgs(exitRequestHash);
   });
 
   it("Emit ValidatorExit event", async () => {
-    const emitTx = await oracle.emitExitEvents(exitRequest);
+    const emitTx = await oracle.submitExitRequestsData(exitRequest);
     const timestamp = await oracle.getTime();
 
     await expect(emitTx)
@@ -162,10 +159,10 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
   it("Should revert if wrong DATA_FORMAT", async () => {
     const request = [exitRequest.data, 2];
     const hash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], request));
-    const submitTx = await oracle.connect(authorizedEntity).submitReportHash(hash);
+    const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
     await expect(submitTx).to.emit(oracle, "StoredExitRequestHash").withArgs(hash);
     exitRequest = { dataFormat: 2, data: encodeExitRequestsDataList(exitRequests) };
-    await expect(oracle.emitExitEvents(exitRequest))
+    await expect(oracle.submitExitRequestsData(exitRequest))
       .to.be.revertedWithCustomError(oracle, "UnsupportedRequestsDataFormat")
       .withArgs(2);
   });
@@ -194,8 +191,8 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [exitRequest.data, exitRequest.dataFormat]),
       );
 
-      await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
-      const emitTx = await oracle.emitExitEvents(exitRequest);
+      await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
+      const emitTx = await oracle.submitExitRequestsData(exitRequest);
       const timestamp = await oracle.getTime();
 
       for (const request of exitRequests) {
@@ -223,8 +220,8 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [exitRequest.data, exitRequest.dataFormat]),
       );
 
-      await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
-      const emitTx = await oracle.emitExitEvents(exitRequest);
+      await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
+      const emitTx = await oracle.submitExitRequestsData(exitRequest);
       const timestamp = await oracle.getTime();
 
       for (let i = 0; i < 3; i++) {
@@ -249,7 +246,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         data: encodeExitRequestsDataList(exitRequests),
       };
 
-      await expect(oracle.emitExitEvents(exitRequest))
+      await expect(oracle.submitExitRequestsData(exitRequest))
         .to.be.revertedWithCustomError(oracle, "ExitRequestsLimit")
         .withArgs(2, 0);
     });
@@ -270,7 +267,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         data: encodeExitRequestsDataList(exitRequests),
       };
 
-      const emitTx = await oracle.emitExitEvents(exitRequest);
+      const emitTx = await oracle.submitExitRequestsData(exitRequest);
       const timestamp = await oracle.getTime();
 
       for (let i = 3; i < 5; i++) {
@@ -290,7 +287,7 @@ describe("ValidatorsExitBusOracle.sol:emitExitEvents", () => {
         { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] },
       ];
 
-      await expect(oracle.emitExitEvents(exitRequest)).to.be.revertedWithCustomError(
+      await expect(oracle.submitExitRequestsData(exitRequest)).to.be.revertedWithCustomError(
         oracle,
         "RequestsAlreadyDelivered",
       );

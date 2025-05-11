@@ -4,12 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  HashConsensus__Harness,
-  OracleReportSanityChecker,
-  ValidatorsExitBus__Harness,
-  WithdrawalVault__MockForVebo,
-} from "typechain-types";
+import { HashConsensus__Harness, OracleReportSanityChecker, ValidatorsExitBus__Harness } from "typechain-types";
 
 import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
@@ -30,7 +25,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
   let oracleReportSanityChecker: OracleReportSanityChecker;
-  let withdrawalVault: WithdrawalVault__MockForVebo;
 
   let oracleVersion: bigint;
 
@@ -108,13 +102,11 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     oracle = deployed.oracle;
     consensus = deployed.consensus;
     oracleReportSanityChecker = deployed.oracleReportSanityChecker;
-    withdrawalVault = deployed.withdrawalVault;
 
     await initVEBO({
       admin: admin.address,
       oracle,
       consensus,
-      withdrawalVault,
       resumeAfterDeploy: true,
       lastProcessingRefSlot: LAST_PROCESSING_REF_SLOT,
     });
@@ -636,7 +628,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
       await oracle.grantRole(role, authorizedEntity);
 
-      const submitTx = await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
       await expect(submitTx).to.emit(oracle, "StoredExitRequestHash").withArgs(exitRequestHash);
 
       const exitRequest = {
@@ -644,7 +636,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         data: reportData.data,
       };
 
-      const emitTx = await oracle.emitExitEvents(exitRequest);
+      const emitTx = await oracle.submitExitRequestsData(exitRequest);
 
       const timestamp = await oracle.getTime();
 

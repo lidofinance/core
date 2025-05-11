@@ -1,12 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import {
-  HashConsensus__Harness,
-  ReportProcessor__Mock,
-  ValidatorsExitBusOracle,
-  WithdrawalVault__MockForVebo,
-} from "typechain-types";
+import { HashConsensus__Harness, ReportProcessor__Mock, ValidatorsExitBusOracle } from "typechain-types";
 
 import {
   CONSENSUS_VERSION,
@@ -39,12 +34,8 @@ async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, ad
   return await ethers.deployContract("OracleReportSanityChecker", [lidoLocator, admin, limitsList]);
 }
 
-async function deployWithdrawalVault() {
-  return await ethers.deployContract("WithdrawalVault__MockForVebo");
-}
-
-async function deploySR() {
-  return await ethers.deployContract("StakingRouter__MockForVebo");
+async function deployTWG() {
+  return await ethers.deployContract("TriggerableWithdrawalGateway__MockForVEB");
 }
 
 export async function deployVEBO(
@@ -71,14 +62,12 @@ export async function deployVEBO(
 
   const { ao, lido } = await deployMockAccountingOracle(secondsPerSlot, genesisTime);
 
-  const withdrawalVault = await deployWithdrawalVault();
-  const stakingRouter = await deploySR();
+  const triggerableWithdrawalGateway = await deployTWG();
 
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
     accountingOracle: await ao.getAddress(),
-    withdrawalVault,
-    stakingRouter,
+    triggerableWithdrawalGateway, //: await lido.getAddress(), // await triggerableWithdrawalGateway.getAddress(),
   });
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(locatorAddr, admin);
@@ -91,12 +80,12 @@ export async function deployVEBO(
   await consensus.setTime(genesisTime + initialEpoch * slotsPerEpoch * secondsPerSlot);
 
   return {
+    locator,
     locatorAddr,
     oracle,
     consensus,
     oracleReportSanityChecker,
-    withdrawalVault,
-    stakingRouter,
+    triggerableWithdrawalGateway,
   };
 }
 
@@ -104,7 +93,6 @@ interface VEBOConfig {
   admin: string;
   oracle: ValidatorsExitBusOracle;
   consensus: HashConsensus__Harness;
-  withdrawalVault: WithdrawalVault__MockForVebo;
   dataSubmitter?: string;
   consensusVersion?: bigint;
   lastProcessingRefSlot?: number;
