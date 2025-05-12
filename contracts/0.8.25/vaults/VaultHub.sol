@@ -4,7 +4,6 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -215,8 +214,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     function connectVault(address _vault) external whenResumed {
         if (_vault == address(0)) revert VaultZeroAddress();
-        if (address(this) != Ownable2StepUpgradeable(_vault).pendingOwner()) revert VaultHubNotPendingOwner(_vault);
+
         IStakingVault vault_ = IStakingVault(_vault);
+        if (address(this) != vault_.pendingOwner()) revert VaultHubNotPendingOwner(_vault);
         if (vault_.isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(this)) revert VaultHubMustBeDepositor(_vault);
 
@@ -237,7 +237,6 @@ contract VaultHub is PausableUntilWithRoles {
         ) revert InvalidOperator();
 
         _connectVault(_vault,
-            Ownable2StepUpgradeable(_vault).owner(),
             shareLimit,
             reserveRatioBP,
             forcedRebalanceThresholdBP,
@@ -330,7 +329,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultSocket storage socket = $.sockets[socketIndex];
 
         if (socket.pendingDisconnect) {
-            Ownable2StepUpgradeable(_vault).transferOwnership(socket.owner);
+            IStakingVault(_vault).transferOwnership(socket.owner);
             _deleteVaultSocket(_vault, socketIndex);
 
             emit VaultDisconnectCompleted(_vault);
@@ -570,7 +569,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _connectVault(
         address _vault,
-        address _owner,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
@@ -602,7 +600,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultSocket memory vsocket = VaultSocket(
             _vault,
             uint96(_shareLimit),
-            _owner,
+            IStakingVault(_vault).owner(),
             uint96(0), // liabilityShares
             uint128(CONNECT_DEPOSIT), // locked
             int128(int256(_vault.balance)), // inOutDelta
@@ -617,7 +615,7 @@ contract VaultHub is PausableUntilWithRoles {
         $.socketIndex[_vault] = $.sockets.length;
         $.sockets.push(vsocket);
 
-        Ownable2StepUpgradeable(_vault).acceptOwnership();
+        IStakingVault(_vault).acceptOwnership();
 
         emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }

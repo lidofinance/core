@@ -32,7 +32,12 @@ interface IStakingVault {
     function version() external pure returns (uint64);
     function getInitializedVersion() external view returns (uint64);
     function withdrawalCredentials() external view returns (bytes32);
+
     function owner() external view returns (address);
+    function pendingOwner() external view returns (address);
+    function acceptOwnership() external;
+    function transferOwnership(address _newOwner) external;
+
     function nodeOperator() external view returns (address);
     function depositor() external view returns (address);
     function isOssified() external view returns (bool);
