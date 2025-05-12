@@ -432,7 +432,7 @@ describe("OperatorGrid.sol", () => {
       ).to.be.revertedWithCustomError(operatorGrid, "TierAlreadySet");
     });
 
-    it("reverts if Tier already requested", async function () {
+    it("reverts if Tier already requested with the same share limit", async function () {
       const shareLimit = 1000;
       await operatorGrid.registerGroup(nodeOperator1, 1000);
       await operatorGrid.registerTiers(nodeOperator1, [
@@ -447,6 +447,22 @@ describe("OperatorGrid.sol", () => {
       await expect(
         operatorGrid.connect(vaultOwner).requestTierChange(vault_NO1_V1, 1, shareLimit),
       ).to.be.revertedWithCustomError(operatorGrid, "TierAlreadyRequested");
+    });
+
+    it("did not revert if Tier already requested with different share limit", async function () {
+      const shareLimit = 1000;
+      await operatorGrid.registerGroup(nodeOperator1, 1000);
+      await operatorGrid.registerTiers(nodeOperator1, [
+        {
+          shareLimit: shareLimit,
+          reserveRatioBP: 2000,
+          forcedRebalanceThresholdBP: 1800,
+          treasuryFeeBP: 500,
+        },
+      ]);
+      await operatorGrid.connect(vaultOwner).requestTierChange(vault_NO1_V1, 1, shareLimit);
+      await expect(operatorGrid.connect(vaultOwner).requestTierChange(vault_NO1_V1, 1, shareLimit - 1)).to.not.be
+        .reverted;
     });
   });
 

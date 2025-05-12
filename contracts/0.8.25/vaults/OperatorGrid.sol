@@ -330,7 +330,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         VaultTier storage vaultTier = $.vaultTier[_vault];
         if (vaultTier.currentTierId == tierId) revert TierAlreadySet();
-        if (vaultTier.requestedTierId == tierId) revert TierAlreadyRequested();
+        if (vaultTier.requestedTierId == tierId && vaultTier.requestedShareLimit == uint96(_requestedShareLimit)) {
+            revert TierAlreadyRequested();
+        }
 
         vaultTier.requestedTierId = tierId;
         vaultTier.requestedShareLimit = uint96(_requestedShareLimit);
