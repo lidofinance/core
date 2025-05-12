@@ -225,24 +225,25 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Transfers the ownership over the staking vault to a new owner.
-     * @param _newOwner The address to transfer the ownership to.
-     * @dev Reverts if connected to the VaultHub.
+     * @notice Accepts the ownership over the staking vault transferred from VaultHub on disconnect
+     * and immediately transfers it to a new pending owner. This new owner will have to accept the ownership
+     * on the staking vault contract.
+     * @param _newOwner The address to transfer the staking vault ownership to.
      */
-    function transferStakingVaultOwnership(address _newOwner) external {
+    function abandonDashboard(address _newOwner) external {
         address vaultAddress = address(_stakingVault());
         if (VAULT_HUB.vaultSocket(vaultAddress).vault == vaultAddress) revert ConnectedToVaultHub();
-        
+
+        _acceptOwnership();
         _transferOwnership(_newOwner);
     }
 
     /**
-     * @notice Accepts the ownership over the staking vault.
-     * @dev This function is called when the staking vault is disconnected from the VaultHub,
-     * and its ownership is transferred to the Dashboard contract.
+     * @notice Reclaims the Dashboard contract, transferring the staking vault ownership to the VaultHub.
+     * @dev This function is used when the Dashboard contract is no longer needed and the staking vault should be transferred to a new owner.
      */
-    function acceptStakingVaultOwnership() external {
-        _acceptOwnership();
+    function connectToVaultHub() external {
+        VAULT_HUB.connectVault(address(_stakingVault()));
     }
 
     /**
