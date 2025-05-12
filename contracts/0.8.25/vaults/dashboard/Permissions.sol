@@ -137,7 +137,6 @@ abstract contract Permissions is AccessControlConfirmable {
     address private immutable _SELF;
 
     VaultHub public immutable VAULT_HUB;
-    IPredepositGuarantee public immutable PREDEPOSIT_GUARANTEE;
 
     /**
      * @notice Indicates whether the contract has been initialized
@@ -147,13 +146,11 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @notice Constructor sets the address of the implementation contract.
      */
-    constructor(address _vaultHub, address _predepositGuarantee) {
+    constructor(address _vaultHub) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_predepositGuarantee == address(0)) revert ZeroArgument("_predepositGuarantee");
 
         _SELF = address(this);
         VAULT_HUB = VaultHub(payable(_vaultHub));
-        PREDEPOSIT_GUARANTEE = IPredepositGuarantee(payable(_predepositGuarantee));
     }
 
     /**
@@ -327,7 +324,7 @@ abstract contract Permissions is AccessControlConfirmable {
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
-        return PREDEPOSIT_GUARANTEE.compensateDisprovenPredeposit(_pubkey, _recipient);
+        return IPredepositGuarantee(_stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     /**
@@ -336,8 +333,9 @@ abstract contract Permissions is AccessControlConfirmable {
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
     ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
+        IPredepositGuarantee predepositGuarantee = IPredepositGuarantee(_stakingVault().depositor());
         for (uint256 i = 0; i < _witnesses.length; i++) {
-            PREDEPOSIT_GUARANTEE.proveUnknownValidator(_witnesses[i], _stakingVault());
+            predepositGuarantee.proveUnknownValidator(_witnesses[i], _stakingVault());
         }
     }
 

@@ -53,14 +53,8 @@ contract Dashboard is NodeOperatorFee {
      * @param _stETH Address of the stETH token contract.
      * @param _wstETH Address of the wstETH token contract.
      * @param _vaultHub Address of the vault hub contract.
-     * @param _predepositGuarantee Address of the predeposit guarantee contract.
      */
-    constructor(
-        address _stETH,
-        address _wstETH,
-        address _vaultHub,
-        address _predepositGuarantee
-    ) NodeOperatorFee(_vaultHub, _predepositGuarantee) {
+    constructor(address _stETH, address _wstETH, address _vaultHub) NodeOperatorFee(_vaultHub) {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
