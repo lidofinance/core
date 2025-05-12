@@ -225,7 +225,7 @@
       "constructorArgs": [
         "0xf5591B4CA4De7f3e339248bbA35b0A02Ef9939c2",
         "0xddbcfd564f642ab5627cf68b9b7d374fb4f8a36e941a75d89c87998cef03bd61",
-        "0x00"
+        "0x8129fc1c"
       ],
       "contract": "@aragon/os/contracts/apps/AppProxyPinned.sol"
     },
@@ -351,7 +351,7 @@
   },
   "ens": {
     "address": "0x5A8bF7fe99a69c2b34B540eA09d4a48c6ae78C21",
-    "constructorArgs": ["0x26EDb7f0f223A25EE390aCCccb577F3a31edDfC5"],
+    "constructorArgs": [],
     "contract": "@aragon/os/contracts/lib/ens/ENS.sol"
   },
   "ensFactory": {
@@ -509,6 +509,7 @@
   "miniMeTokenFactory": {
     "address": "0x4d0E05677c1005C4C808cb5e824abE99b2b39497",
     "contract": "@aragon/minime/contracts/MiniMeToken.sol",
+    "contractName": "MiniMeTokenFactory",
     "constructorArgs": []
   },
   "networkId": 560048,

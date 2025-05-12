@@ -18,7 +18,8 @@ contract VaultHub__MockForDashboard {
     IStETH public immutable steth;
     address public immutable LIDO_LOCATOR;
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
-    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
+    uint64 public latestReportDataTimestamp;
 
     constructor(IStETH _steth, address _lidoLocator) {
         steth = _steth;
@@ -26,7 +27,7 @@ contract VaultHub__MockForDashboard {
     }
 
     event VaultConnected(address vault);
-    event Mock__VaultDisconnected(address vault);
+    event Mock__VaultDisconnectInitiated(address vault);
     event Mock__Rebalanced(uint256 amount);
 
     mapping(address => VaultHub.VaultSocket) public vaultSockets;
@@ -40,7 +41,7 @@ contract VaultHub__MockForDashboard {
     }
 
     function disconnect(address vault) external {
-        emit Mock__VaultDisconnected(vault);
+        emit Mock__VaultDisconnectInitiated(vault);
     }
 
     function deleteVaultSocket(address vault) external {
@@ -68,13 +69,21 @@ contract VaultHub__MockForDashboard {
     }
 
     function voluntaryDisconnect(address _vault) external {
-        emit Mock__VaultDisconnected(_vault);
+        emit Mock__VaultDisconnectInitiated(_vault);
     }
 
     function rebalance() external payable {
         vaultSockets[msg.sender].liabilityShares = 0;
 
         emit Mock__Rebalanced(msg.value);
+    }
+
+    function updateReportData(uint64 timestamp, bytes32, string calldata) external {
+        latestReportDataTimestamp = timestamp;
+    }
+
+    function latestReportData() external view returns (uint64 timestamp, bytes32 treeRoot, string memory reportCid) {
+        return (latestReportDataTimestamp, bytes32(0), "");
     }
 
     error ZeroArgument(string argument);

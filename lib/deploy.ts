@@ -113,6 +113,7 @@ export async function deployWithoutProxy(
   constructorArgs: ConvertibleToString[] = [],
   addressFieldName = "address",
   withStateFile = true,
+  fields: Record<string, unknown> = {},
 ): Promise<DeployedContract> {
   logWithConstructorArgs(`Deploying: ${yl(artifactName)} (without proxy)`, constructorArgs);
 
@@ -124,6 +125,7 @@ export async function deployWithoutProxy(
       contract: contractPath,
       [addressFieldName]: contract.address,
       constructorArgs,
+      ...fields,
     });
   }
 

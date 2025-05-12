@@ -7,7 +7,8 @@ import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 
 contract VaultHub__MockForStakingVault {
     address public immutable LIDO_LOCATOR;
-    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
+    uint64 public latestReportDataTimestamp;
 
     mapping(address => VaultHub.VaultSocket) public sockets;
 
@@ -41,5 +42,13 @@ contract VaultHub__MockForStakingVault {
 
     function vaultSocket(address vault) external view returns (VaultHub.VaultSocket memory) {
         return sockets[vault];
+    }
+
+    function updateReportData(uint64 timestamp, bytes32, string calldata) external {
+        latestReportDataTimestamp = timestamp;
+    }
+
+    function latestReportData() external view returns (uint64 timestamp, bytes32 treeRoot, string memory reportCid) {
+        return (latestReportDataTimestamp, bytes32(0), "");
     }
 }

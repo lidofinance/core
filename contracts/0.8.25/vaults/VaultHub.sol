@@ -302,6 +302,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev vault's `liabilityShares` should be zero
     function disconnect(address _vault) external onlyRole(VAULT_MASTER_ROLE) {
         _disconnect(_connectedSocket(_vault));
+
+        emit VaultDisconnectInitiated(_vault);
     }
 
     /// @notice update of the vault data by the lazy oracle report
@@ -330,6 +332,8 @@ contract VaultHub is PausableUntilWithRoles {
         if (socket.pendingDisconnect) {
             Ownable2StepUpgradeable(_vault).transferOwnership(socket.owner);
             _deleteVaultSocket(_vault, socketIndex);
+
+            emit VaultDisconnectCompleted(_vault);
         } else {
             uint256 currentFeeSharesCharged = socket.feeSharesCharged;
             if (_reportFeeSharesCharged < currentFeeSharesCharged) {
@@ -377,6 +381,8 @@ contract VaultHub is PausableUntilWithRoles {
         if (!_isVaultOwner(msg.sender, socket)) revert NotAuthorized();
 
         _disconnect(socket);
+
+        emit VaultDisconnectInitiated(_vault);
     }
 
     function fund(address _vault) external payable {
@@ -616,15 +622,13 @@ contract VaultHub is PausableUntilWithRoles {
         emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
 
-    function _disconnect(VaultSocket storage socket) internal {
-        uint256 liabilityShares = socket.liabilityShares;
+    function _disconnect(VaultSocket storage _socket) internal {
+        uint256 liabilityShares = _socket.liabilityShares;
         if (liabilityShares > 0) {
-            revert NoLiabilitySharesShouldBeLeft(socket.vault, liabilityShares);
+            revert NoLiabilitySharesShouldBeLeft(_socket.vault, liabilityShares);
         }
 
-        socket.pendingDisconnect = true;
-
-        emit VaultDisconnected(socket.vault);
+        _socket.pendingDisconnect = true;
     }
 
     function _withdrawFromVault(VaultSocket storage _socket, address _recipient, uint256 _amount) internal {
@@ -714,13 +718,13 @@ contract VaultHub is PausableUntilWithRoles {
         return totalValue_ - locked_;
     }
 
-    function _totalValue(VaultSocket storage socket) internal view returns (uint256) {
-        Report memory report = socket.report;
-        return uint256(int256(uint256(report.totalValue)) + report.inOutDelta - socket.inOutDelta);
+    function _totalValue(VaultSocket storage _socket) internal view returns (uint256) {
+        Report memory report = _socket.report;
+        return uint256(int256(uint256(report.totalValue)) + report.inOutDelta - _socket.inOutDelta);
     }
 
-    function _isReportFresh(VaultSocket storage socket) internal view returns (bool) {
-        return block.timestamp - socket.reportTimestamp < REPORT_FRESHNESS_DELTA;
+    function _isReportFresh(VaultSocket storage _socket) internal view returns (bool) {
+        return block.timestamp - _socket.reportTimestamp < REPORT_FRESHNESS_DELTA;
     }
 
     function _isVaultHealthyByThreshold(
@@ -735,15 +739,16 @@ contract VaultHub is PausableUntilWithRoles {
             LIDO.getPooledEthBySharesRoundUp(_vaultLiabilityShares);
     }
 
-    function _isVaultOwner(address _account, VaultSocket storage socket) internal view returns (bool) {
-        return _account == socket.owner;
+    function _isVaultOwner(address _account, VaultSocket storage _socket) internal view returns (bool) {
+        return _account == _socket.owner;
     }
 
     function _connectedSocket(address _vault) internal view returns (VaultSocket storage) {
         if (_vault == address(0)) revert VaultZeroAddress();
         Storage storage $ = _storage();
         uint256 index = $.socketIndex[_vault];
-        if (index == 0 || $.sockets[index].pendingDisconnect) revert NotConnectedToHub(_vault);
+        if (index == 0) revert NotConnectedToHub(_vault);
+        if ($.sockets[index].pendingDisconnect) revert VaultIsDisconnecting(_vault);
         return $.sockets[index];
     }
 
@@ -763,7 +768,8 @@ contract VaultHub is PausableUntilWithRoles {
 
     event VaultsReportDataUpdated(uint64 indexed timestamp, bytes32 root, string cid);
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
-    event VaultDisconnected(address indexed vault);
+    event VaultDisconnectInitiated(address indexed vault);
+    event VaultDisconnectCompleted(address indexed vault);
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
@@ -878,4 +884,5 @@ contract VaultHub is PausableUntilWithRoles {
     error InvalidOperator();
     error VaultHubNotPendingOwner(address vault);
     error UnhealthyVaultCannotDeposit(address vault);
+    error VaultIsDisconnecting(address vault);
 }

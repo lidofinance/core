@@ -26,6 +26,11 @@ contract LazyOracle {
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
+        uint96 shareLimit;
+        uint16 reserveRatioBP;
+        uint16 forcedRebalanceThresholdBP;
+        uint16 treasuryFeeBP;
+        bool pendingDisconnect;
     }
 
     // keccak256(abi.encode(uint256(keccak256("LazyOracle")) - 1)) & ~bytes32(uint256(0xff))
@@ -64,7 +69,12 @@ contract LazyOracle {
                 address(currentVault).balance,
                 socket.inOutDelta,
                 currentVault.withdrawalCredentials(),
-                socket.liabilityShares
+                socket.liabilityShares,
+                socket.shareLimit,
+                socket.reserveRatioBP,
+                socket.forcedRebalanceThresholdBP,
+                socket.treasuryFeeBP,
+                socket.pendingDisconnect
             );
         }
         return batch;
