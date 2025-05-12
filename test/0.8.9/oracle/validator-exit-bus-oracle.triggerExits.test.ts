@@ -224,4 +224,32 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       .to.be.revertedWithCustomError(oracle, "KeyIndexOutOfRange")
       .withArgs(5, 4);
   });
+
+  it("should revert with an error if the key index array contains duplicates", async () => {
+    await expect(
+      oracle.triggerExits(
+        { data: reportFields.data, dataFormat: reportFields.dataFormat },
+        [1, 2, 2],
+        ZERO_ADDRESS,
+        0,
+        {
+          value: 2,
+        },
+      ),
+    ).to.be.revertedWithCustomError(oracle, "InvalidKeyIndexSortOrder");
+  });
+
+  it("should revert with an error if the key index array is not strictly increasing", async () => {
+    await expect(
+      oracle.triggerExits(
+        { data: reportFields.data, dataFormat: reportFields.dataFormat },
+        [1, 2, 2],
+        ZERO_ADDRESS,
+        0,
+        {
+          value: 2,
+        },
+      ),
+    ).to.be.revertedWithCustomError(oracle, "InvalidKeyIndexSortOrder");
+  });
 });

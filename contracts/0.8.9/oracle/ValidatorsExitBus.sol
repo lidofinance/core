@@ -70,10 +70,18 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      * @notice Throw when in submitExitRequestsData all requests were already delivered
      */
     error RequestsAlreadyDelivered();
-
+    /**
+     * @notice Thrown when triggerable withdrawal was requested for validator that was not delivered yet
+     */
     error KeyWasNotDelivered(uint256 keyIndex, uint256 lastDeliveredKeyIndex);
-
+    /**
+     * @notice Thrown when index of request in submitted data for triggerable withdrawal is out of range
+     */
     error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
+    /**
+     * @notice Thrown when array of indexes of requests in submitted data for triggerable withdrawal is not is not strictly increasing array
+     */
+    error InvalidKeyIndexSortOrder();
 
     /**
      * @notice Thrown when a withdrawal fee refund failed
@@ -99,7 +107,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         address indexed refundRecipient
     );
     struct RequestStatus {
-        // Total items count in report (by default type(uint32).max, update on first report delivery)
+        // Total items count in report (by default type(uint256).max, update on first report delivery)
         uint256 totalItemsCount;
         // Total processed items in report (by default 0)
         uint256 deliveredItemsCount;
@@ -249,6 +257,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      * @dev Reverts if:
      *     - The hash of `requestsData` was not previously submitted in the VEB.
      *     - Any of the provided `keyIndexes` refers to a validator that was not yet unpacked (i.e., exit requiest not emitted).
+     *     - `keyIndexes` is not strictly increasing array
      */
     function triggerExits(
         ExitRequestData calldata requestsData,
@@ -274,6 +283,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         bytes memory exits = new bytes(keyIndexes.length * PACKED_TWG_EXIT_REQUEST_LENGTH);
 
+        uint256 lastKeyIndex = type(uint256).max;
+
         for (uint256 i = 0; i < keyIndexes.length; i++) {
             if (keyIndexes[i] >= requestStatus.totalItemsCount) {
                 revert KeyIndexOutOfRange(keyIndexes[i], requestStatus.totalItemsCount);
@@ -282,6 +293,11 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             if (keyIndexes[i] > (requestStatus.deliveredItemsCount - 1)) {
                 revert KeyWasNotDelivered(keyIndexes[i], requestStatus.deliveredItemsCount - 1);
             }
+
+            if (i > 0 && keyIndexes[i] <= lastKeyIndex ) {
+                revert InvalidKeyIndexSortOrder();
+            }
+            lastKeyIndex = keyIndexes[i];
 
             ValidatorData memory validatorData = _getValidatorData(requestsData.data, keyIndexes[i]);
             if (validatorData.moduleId == 0) revert InvalidRequestsData();
