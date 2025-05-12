@@ -243,7 +243,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfShares Amount of stETH shares to mint
      */
     function mintShares(address _recipient, uint256 _amountOfShares) external payable fundable {
-        _mintShares(_recipient, _amountOfShares);
+        _mintSharesWithinMintingCapacity(_recipient, _amountOfShares);
     }
 
     /**
@@ -253,7 +253,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfStETH Amount of stETH to mint
      */
     function mintStETH(address _recipient, uint256 _amountOfStETH) external payable fundable {
-        _mintShares(_recipient, STETH.getSharesByPooledEth(_amountOfStETH));
+        _mintSharesWithinMintingCapacity(_recipient, STETH.getSharesByPooledEth(_amountOfStETH));
     }
 
     /**
@@ -262,7 +262,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfWstETH Amount of tokens to mint
      */
     function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundable {
-        _mintShares(address(this), _amountOfWstETH);
+        _mintSharesWithinMintingCapacity(_recipient, _amountOfWstETH);
 
         uint256 mintedStETH = STETH.getPooledEthBySharesRoundUp(_amountOfWstETH);
 
