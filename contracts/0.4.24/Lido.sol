@@ -224,6 +224,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      *
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
      * @param _oldBurner The address of the old Burner contract to migrate from
+     * @param _contractsWithBurnerAllowances Contracts that have allowances for the old burner to be migrated
      */
     function finalizeUpgrade_v3(address _oldBurner, address[4] _contractsWithBurnerAllowances) external {
         require(hasInitialized(), "NOT_INITIALIZED");

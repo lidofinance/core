@@ -32,6 +32,7 @@ describe("Integration: Withdrawal happy path", () => {
     const REQUESTS_SUM = REQUEST_AMOUNT * REQUESTS_COUNT;
 
     const { withdrawalQueue: wq, lido } = ctx.contracts;
+    const voting = await ctx.getSigner("voting");
 
     // Finalize any pending requests first
     while ((await wq.getLastRequestId()) !== (await wq.getLastFinalizedRequestId())) {
@@ -41,6 +42,7 @@ describe("Integration: Withdrawal happy path", () => {
     }
 
     // Get initial stETH holder balance
+    await lido.connect(voting).removeStakingLimit();
     await lido.connect(holder).submit(ethers.ZeroAddress, { value: ether("10000") });
     expect(await lido.balanceOf(holder.address)).to.be.gte(REQUESTS_SUM);
 
@@ -58,7 +60,7 @@ describe("Integration: Withdrawal happy path", () => {
 
     // Make withdrawal requests
     const stethBalanceBefore = await lido.balanceOf(holder.address);
-    await lido.approve(wq.target, REQUESTS_SUM);
+    await lido.connect(holder).approve(wq.target, REQUESTS_SUM);
     const requests = Array(parseInt(REQUESTS_COUNT.toString())).fill(REQUEST_AMOUNT);
     const requestTx = await wq.connect(holder).requestWithdrawals(requests, holder.address);
     const stethBalanceAfter = await lido.balanceOf(holder.address);

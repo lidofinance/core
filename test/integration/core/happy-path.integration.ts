@@ -35,6 +35,8 @@ describe("Scenario: Protocol Happy Path", () => {
     ctx = await getProtocolContext();
 
     [stEthHolder, stranger] = await ethers.getSigners();
+    await updateBalance(stranger.address, ether("100000000"));
+    await updateBalance(stEthHolder.address, ether("100000000"));
 
     snapshot = await Snapshot.take();
   });
@@ -88,8 +90,6 @@ describe("Scenario: Protocol Happy Path", () => {
   it("Should allow ETH holders to submit 100 ETH stake", async () => {
     const { lido } = ctx.contracts;
 
-    await updateBalance(stranger.address, ether("1000000"));
-
     const strangerBalancesBeforeSubmit = await getBalances(stranger);
 
     log.debug("Stranger before submit", {
@@ -99,7 +99,7 @@ describe("Scenario: Protocol Happy Path", () => {
     });
 
     expect(strangerBalancesBeforeSubmit.stETH).to.equal(0n, "stETH balance before submit");
-    expect(strangerBalancesBeforeSubmit.ETH).to.equal(ether("1000000"), "ETH balance before submit");
+    expect(strangerBalancesBeforeSubmit.ETH).to.equal(ether("100000000"), "ETH balance before submit");
 
     const stakeLimitInfoBefore = await lido.getStakeLimitFullInfo();
 

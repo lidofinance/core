@@ -1,4 +1,4 @@
-import { OssifiableProxy, TokenManager, V3VoteScript, Voting } from "typechain-types";
+import { TokenManager, V3VoteScript, Voting } from "typechain-types";
 
 import { advanceChainTime, ether, log } from "lib";
 import { impersonate } from "lib/account";
@@ -7,14 +7,11 @@ import { readNetworkState, Sk } from "lib/state-file";
 
 export async function main(): Promise<void> {
   const state = readNetworkState();
-  const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const agentAddress = state[Sk.appAgent].proxy.address;
   const votingAddress = state[Sk.appVoting].proxy.address;
   const tokenManagerAddress = state[Sk.appTokenManager].proxy.address;
 
   const deployer = await impersonate(agentAddress, ether("100"));
-  const locatorProxy0 = await loadContract<OssifiableProxy>("OssifiableProxy", locatorAddress);
-  console.debug({ locatorImpl: await locatorProxy0.proxy__getImplementation() });
 
   const voteScript = await loadContract<V3VoteScript>("V3VoteScript", state[Sk.v3VoteScript].address);
   const tokenManager = await loadContract<TokenManager>("TokenManager", tokenManagerAddress);
