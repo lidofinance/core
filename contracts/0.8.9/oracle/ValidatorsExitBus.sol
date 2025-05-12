@@ -9,7 +9,6 @@ import {Versioned} from "../utils/Versioned.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
 import {PausableUntil} from "../utils/PausableUntil.sol";
 import {IValidatorsExitBus} from "../interfaces/IValidatorsExitBus.sol";
-import "hardhat/console.sol";
 
 interface ITriggerableWithdrawalGateway {
     function triggerFullWithdrawals(
