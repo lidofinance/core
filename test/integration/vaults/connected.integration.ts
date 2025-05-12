@@ -1,12 +1,11 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { beforeEach } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault, VaultHub } from "typechain-types";
 
-import { advanceChainTime, generateValidator, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
+import { advanceChainTime, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
 import {
   createVaultWithDashboard,
   disconnectFromHub,
@@ -17,29 +16,28 @@ import {
   setupLido,
   VaultRoles,
 } from "lib/protocol";
-import { ether } from "lib/units";
 
 import { Snapshot } from "test/suite";
 
-import { getProofAndDepositData } from "../../../lib/protocol/helpers/vaults";
-
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
-describe("Integration: Actions with vault is connected to VaultHub", () => {
+describe("Integration: Actions with vault connected to VaultHub", () => {
   let ctx: ProtocolContext;
 
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
+  let vaultHub: VaultHub;
+
   let roles: VaultRoles;
 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let pauser: HardhatEthersSigner;
   let agent: HardhatEthersSigner;
 
   let snapshot: string;
   let originalSnapshot: string;
-  let vaultHub: VaultHub;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -48,9 +46,11 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
 
     await setupLido(ctx);
 
-    [owner, nodeOperator, stranger] = await ethers.getSigners();
+    ({ vaultHub } = ctx.contracts);
 
-    // Owner can create a vault with operator as a node operator
+    [owner, nodeOperator, stranger, pauser] = await ethers.getSigners();
+
+    // Owner can create a vault with an operator as a node operator
     ({ stakingVault, dashboard, roles } = await createVaultWithDashboard(
       ctx,
       ctx.contracts.stakingVaultFactory,
@@ -59,7 +59,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
       nodeOperator,
       [],
     ));
-    ({ vaultHub } = ctx.contracts);
+
     agent = await ctx.getSigner("agent");
   });
 
@@ -73,117 +73,126 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
     expect(await vaultHub.isVaultHealthyAsOfLatestReport(stakingVault)).to.equal(true);
   });
 
-  it("Vault is pausable and resumable", async () => {
-    const pdg = ctx.contracts.predepositGuarantee.connect(agent);
+  it("VaultHub is pausable and resumable", async () => {
+    await vaultHub.connect(agent).grantRole(await vaultHub.PAUSE_ROLE(), pauser);
+    await vaultHub.connect(agent).grantRole(await vaultHub.RESUME_ROLE(), pauser);
 
-    await pdg.grantRole(await vaultHub.PAUSE_ROLE(), stranger);
-    await pdg.grantRole(await vaultHub.RESUME_ROLE(), stranger);
+    expect(await vaultHub.isPaused()).to.equal(false);
 
-    expect(await pdg.isPaused()).to.equal(false);
-    await expect(pdg.connect(stranger).pauseFor(10n)).to.emit(pdg, "Paused");
-    expect(await pdg.isPaused()).to.equal(true);
-    await expect(pdg.connect(stranger).resume()).to.emit(pdg, "Resumed");
-    expect(await pdg.isPaused()).to.equal(false);
-  });
+    await expect(vaultHub.connect(pauser).pauseFor(100000n)).to.emit(vaultHub, "Paused");
+    expect(await vaultHub.isPaused()).to.equal(true);
 
-  it("Can not deposit if paused", async () => {
-    const { predepositGuarantee } = ctx.contracts;
-
-    const pdg = predepositGuarantee.connect(agent);
-
-    await predepositGuarantee.connect(agent).grantRole(await vaultHub.PAUSE_ROLE(), stranger);
-    await predepositGuarantee.connect(stranger).pauseFor(10n);
-
-    const withdrawalCredentials = await stakingVault.withdrawalCredentials();
-    const validator = generateValidator(withdrawalCredentials);
-
-    const { witnesses, postdeposit } = await getProofAndDepositData(
-      predepositGuarantee,
-      validator,
-      withdrawalCredentials,
+    // check that minting is paused
+    await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n)).to.be.revertedWithCustomError(
+      vaultHub,
+      "ResumedExpected",
     );
 
-    await expect(
-      predepositGuarantee.connect(nodeOperator).proveAndDeposit(witnesses, [postdeposit], stakingVault),
-    ).to.be.revertedWithCustomError(pdg, "ResumedExpected");
-  });
+    await expect(vaultHub.connect(pauser).resume()).to.emit(vaultHub, "Resumed");
+    expect(await vaultHub.isPaused()).to.equal(false);
 
-  it("Allows minting stETH", async () => {
-    // add some stETH to the vault to have totalValue
-    await dashboard.connect(roles.funder).fund({ value: ether("1") });
-
+    // check that minting is resumed
     await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
       .to.emit(vaultHub, "MintedSharesOnVault")
       .withArgs(stakingVault, 1n);
   });
 
-  it("Allows burning stETH", async () => {
-    const { lido } = ctx.contracts;
+  context("stETH minting", () => {
+    it("Allows minting stETH", async () => {
+      // add some stETH to the vault to have totalValue
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
-    // add some stETH to the vault to have totalValue, mint shares and approve stETH
-    await dashboard.connect(roles.funder).fund({ value: ether("1") });
-    await dashboard.connect(roles.minter).mintStETH(roles.burner, 1n);
-    await lido.connect(roles.burner).approve(dashboard, 1n);
+      await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
+        .to.emit(vaultHub, "MintedSharesOnVault")
+        .withArgs(stakingVault, 1n);
+    });
 
-    await expect(dashboard.connect(roles.burner).burnStETH(1n))
-      .to.emit(vaultHub, "BurnedSharesOnVault")
-      .withArgs(stakingVault, 1n);
+    // TODO: can mint within share limits of the vault
+    // Need to check VaultHub.shareLimit for the vault and try to mint more than that
+
+    // can mint over Lido Core share limit
+    it("Can mint stETH over v2 limit", async () => {
+      const { lido } = ctx.contracts;
+      const maxStakeLimit = await lido.getCurrentStakeLimit();
+      const sender = await impersonate(randomAddress(), maxStakeLimit + ether("1"));
+
+      await lido.connect(sender).submit(sender, { value: maxStakeLimit });
+
+      expect(await lido.getCurrentStakeLimit()).to.equal(0); // <-- no more limit
+
+      await dashboard.connect(roles.funder).fund({ value: ether("2") }); // try to fund to go healthy
+      await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
+        .to.emit(vaultHub, "MintedSharesOnVault")
+        .withArgs(stakingVault, 1n);
+    });
   });
 
-  it("Allows trigger validator withdrawal", async () => {
-    await expect(
-      dashboard
-        .connect(roles.validatorWithdrawalTriggerer)
-        .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
-    )
-      .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
-      .withArgs(dashboard, SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, 0);
+  context("stETH burning", () => {
+    it("Allows burning stETH", async () => {
+      const { lido } = ctx.contracts;
 
-    await expect(
-      stakingVault
-        .connect(nodeOperator)
-        .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
-    ).to.emit(stakingVault, "ValidatorWithdrawalTriggered");
+      // add some stETH to the vault to have totalValue, mint shares and approve stETH
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.connect(roles.minter).mintStETH(roles.burner, 1n);
+      await lido.connect(roles.burner).approve(dashboard, 1n);
+
+      await expect(dashboard.connect(roles.burner).burnStETH(1n))
+        .to.emit(vaultHub, "BurnedSharesOnVault")
+        .withArgs(stakingVault, 1n);
+    });
+
+    // Can burn steth from the lido v2 core protocol
+    // 1. Mint some stETH
+    // 2. transfer stETH to some other address
+    // 3. try to burn stETH, get reject that nothing to burn
+    // 4. submit some ethe to lido (v2 core protocol) lido.submit(sender, { value: amount })
+    // 5. try to burn stETH again, now it should work
   });
 
-  it("Vault owner can request validator(s) exit", async () => {
-    const keys = getPubkeys(2);
-    await expect(dashboard.connect(roles.validatorExitRequester).requestValidatorExit(keys.stringified))
-      .to.emit(stakingVault, "ValidatorExitRequested")
-      .withArgs(dashboard, keys.pubkeys[0], keys.pubkeys[0])
-      .to.emit(stakingVault, "ValidatorExitRequested")
-      .withArgs(dashboard, keys.pubkeys[1], keys.pubkeys[1]);
+  context("validator withdrawal", () => {
+    it("Vault owner can request validator(s) exit", async () => {
+      const keys = getPubkeys(2);
+      await expect(dashboard.connect(roles.validatorExitRequester).requestValidatorExit(keys.stringified))
+        .to.emit(stakingVault, "ValidatorExitRequested")
+        .withArgs(dashboard, keys.pubkeys[0], keys.pubkeys[0])
+        .to.emit(stakingVault, "ValidatorExitRequested")
+        .withArgs(dashboard, keys.pubkeys[1], keys.pubkeys[1]);
+    });
+
+    it("Allows trigger validator withdrawal", async () => {
+      await expect(
+        dashboard
+          .connect(roles.validatorWithdrawalTriggerer)
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
+      )
+        .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
+        .withArgs(dashboard, SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, 0);
+
+      await expect(
+        stakingVault
+          .connect(nodeOperator)
+          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
+      ).to.emit(stakingVault, "ValidatorWithdrawalTriggered");
+    });
   });
 
-  it("May rebalance debt to the protocol", async () => {
-    await dashboard.connect(roles.funder).fund({ value: ether("1") }); // total value is 2 ether
-    await dashboard.connect(roles.locker).lock(ether("2")); // raise cap full capacity
-    await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
+  context("rebalancing", () => {
+    it("May rebalance debt to the protocol", async () => {
+      await dashboard.connect(roles.funder).fund({ value: ether("1") }); // total value is 2 ether
+      await dashboard.connect(roles.locker).lock(ether("2")); // raise cap full capacity
+      await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
 
-    await expect(dashboard.connect(roles.rebalancer).rebalanceVault(ether(".5")))
-      .to.emit(stakingVault, "Withdrawn")
-      .withArgs(dashboard, vaultHub, ether(".5"))
-      .to.emit(vaultHub, "VaultRebalanced")
-      .withArgs(stakingVault, ether(".5"));
-    expect(await stakingVault.totalValue()).to.equal(ether("1.5"));
+      await expect(dashboard.connect(roles.rebalancer).rebalanceVault(ether(".5")))
+        .to.emit(stakingVault, "Withdrawn")
+        .withArgs(dashboard, vaultHub, ether(".5"))
+        .to.emit(vaultHub, "VaultRebalanced")
+        .withArgs(stakingVault, ether(".5"));
+
+      expect(await stakingVault.totalValue()).to.equal(ether("1.5"));
+    });
   });
 
-  it.skip("Can mint stETH over v2 limit", async () => {
-    const { lido } = ctx.contracts;
-    const maxStakeLimit = await lido.getCurrentStakeLimit();
-    const sender = await impersonate(randomAddress(), maxStakeLimit + ether("1"));
-
-    await lido.connect(sender).submit(sender, { value: maxStakeLimit });
-
-    expect(await lido.getCurrentStakeLimit()).to.equal(0); // <-- no more limit
-
-    await dashboard.connect(roles.funder).fund({ value: ether("2") }); // try to fund to go healthy
-    await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
-      .to.emit(vaultHub, "MintedSharesOnVault")
-      .withArgs(stakingVault, 1n);
-  });
-
-  describe("With old report", () => {
+  describe("Outdated report", () => {
     beforeEach(async () => {
       await reportVaultDataWithProof(stakingVault);
       await advanceChainTime((await vaultHub.REPORT_FRESHNESS_DELTA()) + 100n);
@@ -235,6 +244,7 @@ describe("Integration: Actions with vault is connected to VaultHub", () => {
         "TotalValueBelowLockedAmount",
       );
     });
+
     // todo: add later
     it.skip("Can't triggerValidatorWithdrawal", () => {});
 
