@@ -237,7 +237,7 @@ export async function reportVaultDataWithProof(
 
   const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
   await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
-  await vaultHub.updateVaultData(
+  return await vaultHub.updateVaultData(
     await stakingVault.getAddress(),
     totalValueArg,
     inOutDeltaArg,
