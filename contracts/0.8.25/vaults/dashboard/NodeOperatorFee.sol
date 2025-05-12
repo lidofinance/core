@@ -128,7 +128,7 @@ contract NodeOperatorFee is Permissions {
     }
 
     function latestReport() public view returns (VaultHub.Report memory) {
-        return VAULT_HUB.vaultSocket(address(_stakingVault())).report;
+        return VAULT_HUB.latestReport(address(_stakingVault()));
     }
 
     /**
