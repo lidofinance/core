@@ -12,7 +12,7 @@ import {OperatorGrid} from "./OperatorGrid.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILido} from "../interfaces/ILido.sol";
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
-
+import {LazyOracle} from "./LazyOracle.sol";
 import {StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
@@ -83,7 +83,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     /// @notice The time delta for report freshness check
-    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
 
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
@@ -724,7 +724,10 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _isReportFresh(VaultSocket storage _socket) internal view returns (bool) {
-        return block.timestamp - _socket.reportTimestamp < REPORT_FRESHNESS_DELTA;
+        uint256 latestReportTimestamp = LazyOracle(LIDO_LOCATOR.lazyOracle()).latestReportTimestamp();
+        return
+            latestReportTimestamp == _socket.reportTimestamp &&
+            block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }
 
     function _isVaultHealthyByThreshold(

@@ -45,11 +45,16 @@ contract LazyOracle {
 
     /// @notice returns the latest report data
     /// @return timestamp of the report
-    /// @return treeRoot of the report
-    /// @return reportCid of the report
+    /// @return treeRoot merkle root of the report
+    /// @return reportCid IPFS CID for the report JSON file
     function latestReportData() external view returns (uint64 timestamp, bytes32 treeRoot, string memory reportCid) {
         Storage storage $ = _storage();
         return ($.vaultsDataTimestamp, $.vaultsDataTreeRoot, $.vaultsDataReportCid);
+    }
+
+    /// @notice returns the latest report timestamp
+    function latestReportTimestamp() external view returns (uint64) {
+        return _storage().vaultsDataTimestamp;
     }
 
     /// @notice returns batch of vaults info
