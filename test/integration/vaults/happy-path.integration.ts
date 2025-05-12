@@ -158,14 +158,19 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const agentSigner = await ctx.getSigner("agent");
 
     const defaultGroupId = await operatorGrid.DEFAULT_TIER_ID();
-    await operatorGrid.connect(agentSigner).alterTier(defaultGroupId, {
-      shareLimit,
-      reserveRatioBP: reserveRatio,
-      forcedRebalanceThresholdBP: forcedRebalanceThreshold,
-      infraFeeBP: infraFeeBP,
-      liquidityFeeBP: liquidityFeeBP,
-      reservationFeeBP: reservationFeeBP,
-    });
+    await operatorGrid.connect(agentSigner).alterTiers(
+      [defaultGroupId],
+      [
+        {
+          shareLimit,
+          reserveRatioBP: reserveRatio,
+          forcedRebalanceThresholdBP: forcedRebalanceThreshold,
+          infraFeeBP: infraFeeBP,
+          liquidityFeeBP: liquidityFeeBP,
+          reservationFeeBP: reservationFeeBP,
+        },
+      ],
+    );
 
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory

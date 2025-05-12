@@ -380,42 +380,55 @@ contract VaultHub is PausableUntilWithRoles {
         emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _infraFeeBP, _liquidityFeeBP, _reservationFeeBP);
     }
 
-    /// @notice updates share limit for the vault
+    /// @notice updates share limits for multiple vaults at once
     /// Setting share limit to zero actually pause the vault's ability to mint
     /// and stops charging fees from the vault
-    /// @param _vault vault address
-    /// @param _shareLimit new share limit
+    /// @param _vaults array of vault addresses
+    /// @param _shareLimits array of new share limits
     /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function updateShareLimit(address _vault, uint256 _shareLimit) external onlyRole(VAULT_MASTER_ROLE) {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
-        _checkShareLimitUpperBound(_vault, _shareLimit);
+    function updateShareLimits(address[] calldata _vaults, uint256[] calldata _shareLimits) external onlyRole(VAULT_MASTER_ROLE) {
+        if (_vaults.length != _shareLimits.length) revert ArrayLengthMismatch();
+        
+        for (uint256 i = 0; i < _vaults.length; i++) {
+            if (_vaults[i] == address(0)) revert ZeroArgument("_vault");
+            _checkShareLimitUpperBound(_vaults[i], _shareLimits[i]);
 
-        VaultSocket storage socket = _connectedSocket(_vault);
+            VaultSocket storage socket = _connectedSocket(_vaults[i]);
+            socket.shareLimit = uint96(_shareLimits[i]);
 
-        socket.shareLimit = uint96(_shareLimit);
-
-        emit ShareLimitUpdated(_vault, _shareLimit);
+            emit ShareLimitUpdated(_vaults[i], _shareLimits[i]);
+        }
     }
 
-    /// @notice updates fees for the vault
-    /// @param _vault vault address
-    /// @param _infraFeeBP new infra fee
-    /// @param _liquidityFeeBP new liquidity fee
-    /// @param _reservationFeeBP new reservation fee
+    /// @notice updates fees for multiple vaults at once
+    /// @param _vaults array of vault addresses
+    /// @param _infraFeesBP array of new infra fees
+    /// @param _liquidityFeesBP array of new liquidity fees
+    /// @param _reservationFeesBP array of new reservation fees
     /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function updateVaultFees(address _vault, uint256 _infraFeeBP, uint256 _liquidityFeeBP, uint256 _reservationFeeBP) external onlyRole(VAULT_MASTER_ROLE) {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
-        if (_infraFeeBP > TOTAL_BASIS_POINTS) revert InfraFeeTooHigh(_vault, _infraFeeBP, TOTAL_BASIS_POINTS);
-        if (_liquidityFeeBP > TOTAL_BASIS_POINTS) revert LiquidityFeeTooHigh(_vault, _liquidityFeeBP, TOTAL_BASIS_POINTS);
-        if (_reservationFeeBP > TOTAL_BASIS_POINTS) revert ReservationFeeTooHigh(_vault, _reservationFeeBP, TOTAL_BASIS_POINTS);
+    function updateVaultsFees(
+        address[] calldata _vaults,
+        uint256[] calldata _infraFeesBP,
+        uint256[] calldata _liquidityFeesBP,
+        uint256[] calldata _reservationFeesBP
+    ) external onlyRole(VAULT_MASTER_ROLE) {
+        if (_vaults.length != _infraFeesBP.length ||
+            _vaults.length != _liquidityFeesBP.length ||
+            _vaults.length != _reservationFeesBP.length) revert ArrayLengthMismatch();
+        
+        for (uint256 i = 0; i < _vaults.length; i++) {        
+            if (_vaults[i] == address(0)) revert ZeroArgument("_vault");
+            if (_infraFeesBP[i] > TOTAL_BASIS_POINTS) revert InfraFeeTooHigh(_vaults[i], _infraFeesBP[i], TOTAL_BASIS_POINTS);
+            if (_liquidityFeesBP[i] > TOTAL_BASIS_POINTS) revert LiquidityFeeTooHigh(_vaults[i], _liquidityFeesBP[i], TOTAL_BASIS_POINTS);
+            if (_reservationFeesBP[i] > TOTAL_BASIS_POINTS) revert ReservationFeeTooHigh(_vaults[i], _reservationFeesBP[i], TOTAL_BASIS_POINTS);
 
-        VaultSocket storage socket = _connectedSocket(_vault);
+            VaultSocket storage socket = _connectedSocket(_vaults[i]);
+            socket.infraFeeBP = uint16(_infraFeesBP[i]);
+            socket.liquidityFeeBP = uint16(_liquidityFeesBP[i]);
+            socket.reservationFeeBP = uint16(_reservationFeesBP[i]);
 
-        socket.infraFeeBP = uint16(_infraFeeBP);
-        socket.liquidityFeeBP = uint16(_liquidityFeeBP);
-        socket.reservationFeeBP = uint16(_reservationFeeBP);
-
-        emit VaultFeesUpdated(_vault, _infraFeeBP, _liquidityFeeBP, _reservationFeeBP);
+            emit VaultFeesUpdated(_vaults[i], _infraFeesBP[i], _liquidityFeesBP[i], _reservationFeesBP[i]);
+        }
     }
 
     /// @notice updates the vault's connection parameters
@@ -770,4 +783,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultReportStaled(address vault);
     error VaultDeauthorized(address vault);
     error VaultProxyZeroCodehash();
+    error ArrayLengthMismatch();
 }

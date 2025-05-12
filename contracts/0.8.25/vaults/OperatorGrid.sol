@@ -293,26 +293,48 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         return $.tiers[_tierId];
     }
 
-    /// @notice Alters a tier
+    /// @notice Alters multiple tiers
     /// @dev We do not enforce to update old vaults with the new tier params, only new ones.
-    /// @param _tierId id of the tier
-    /// @param _tierParams new tier params
-    function alterTier(uint256 _tierId, TierParams calldata _tierParams) external onlyRole(REGISTRY_ROLE) {
+    /// @param _tierIds array of tier ids to alter
+    /// @param _tierParams array of new tier params
+    function alterTiers(uint256[] calldata _tierIds, TierParams[] calldata _tierParams) external onlyRole(REGISTRY_ROLE) {
+        if (_tierIds.length != _tierParams.length) revert ArrayLengthMismatch();
+        
         ERC7201Storage storage $ = _getStorage();
-        if (_tierId >= $.tiers.length) revert TierNotExists();
+        uint256 length = _tierIds.length;
+        uint256 tiersLength = $.tiers.length;
+        
+        for (uint256 i = 0; i < length; i++) {
+            if (_tierIds[i] >= tiersLength) revert TierNotExists();
 
-        _validateParams(_tierId, _tierParams.reserveRatioBP, _tierParams.forcedRebalanceThresholdBP, _tierParams.infraFeeBP, _tierParams.liquidityFeeBP, _tierParams.reservationFeeBP);
+            _validateParams(
+                _tierIds[i],
+                _tierParams[i].reserveRatioBP,
+                _tierParams[i].forcedRebalanceThresholdBP,
+                _tierParams[i].infraFeeBP,
+                _tierParams[i].liquidityFeeBP,
+                _tierParams[i].reservationFeeBP
+            );
 
-        Tier storage tier_ = $.tiers[_tierId];
+            Tier storage tier_ = $.tiers[_tierIds[i]];
 
-        tier_.shareLimit = uint96(_tierParams.shareLimit);
-        tier_.reserveRatioBP = uint16(_tierParams.reserveRatioBP);
-        tier_.forcedRebalanceThresholdBP = uint16(_tierParams.forcedRebalanceThresholdBP);
-        tier_.infraFeeBP = uint16(_tierParams.infraFeeBP);
-        tier_.liquidityFeeBP = uint16(_tierParams.liquidityFeeBP);
-        tier_.reservationFeeBP = uint16(_tierParams.reservationFeeBP);
+            tier_.shareLimit = uint96(_tierParams[i].shareLimit);
+            tier_.reserveRatioBP = uint16(_tierParams[i].reserveRatioBP);
+            tier_.forcedRebalanceThresholdBP = uint16(_tierParams[i].forcedRebalanceThresholdBP);
+            tier_.infraFeeBP = uint16(_tierParams[i].infraFeeBP);
+            tier_.liquidityFeeBP = uint16(_tierParams[i].liquidityFeeBP);
+            tier_.reservationFeeBP = uint16(_tierParams[i].reservationFeeBP);
 
-        emit TierUpdated(_tierId, tier_.shareLimit, tier_.reserveRatioBP, tier_.forcedRebalanceThresholdBP, tier_.infraFeeBP, tier_.liquidityFeeBP, tier_.reservationFeeBP);
+            emit TierUpdated(
+                _tierIds[i],
+                tier_.shareLimit,
+                tier_.reserveRatioBP,
+                tier_.forcedRebalanceThresholdBP,
+                tier_.infraFeeBP,
+                tier_.liquidityFeeBP,
+                tier_.reservationFeeBP
+            );
+        }
     }
 
     /// @notice Request to change tier
@@ -647,4 +669,5 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     error InfraFeeTooHigh(uint256 tierId, uint256 infraFeeBP, uint256 maxInfraFeeBP);
     error LiquidityFeeTooHigh(uint256 tierId, uint256 liquidityFeeBP, uint256 maxLiquidityFeeBP);
     error ReservationFeeTooHigh(uint256 tierId, uint256 reservationFeeBP, uint256 maxReservationFeeBP);
+    error ArrayLengthMismatch();
 }

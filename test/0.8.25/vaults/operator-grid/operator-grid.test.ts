@@ -279,14 +279,14 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("reverts if not authorized", async function () {
-      await expect(operatorGrid.connect(stranger).alterTier(0, tiers[0])).to.be.revertedWithCustomError(
+      await expect(operatorGrid.connect(stranger).alterTiers([0], [tiers[0]])).to.be.revertedWithCustomError(
         operatorGrid,
         "AccessControlUnauthorizedAccount",
       );
     });
 
     it("works", async function () {
-      await expect(operatorGrid.alterTier(0, tiers[0]))
+      await expect(operatorGrid.alterTiers([0], [tiers[0]]))
         .to.emit(operatorGrid, "TierUpdated")
         .withArgs(0, tierShareLimit, reserveRatio, forcedRebalanceThreshold, infraFee, liquidityFee, reservationFee);
     });
@@ -310,66 +310,149 @@ describe("OperatorGrid.sol", () => {
       },
     ];
 
-    it("alterTier - reverts if tier id is not exists", async function () {
-      await expect(operatorGrid.alterTier(2, tiers[0])).to.be.revertedWithCustomError(operatorGrid, "TierNotExists");
+    it("alterTiers - reverts if tier id is not exists", async function () {
+      await expect(operatorGrid.alterTiers([2], [tiers[0]])).to.be.revertedWithCustomError(
+        operatorGrid,
+        "TierNotExists",
+      );
     });
 
-    it("alterTier - validateParams - reverts if reserveRatioBP is less than 0", async function () {
-      await expect(operatorGrid.alterTier(0, { ...tiers[0], reserveRatioBP: 0 }))
+    it("alterTiers - validateParams - reverts if reserveRatioBP is less than 0", async function () {
+      await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], reserveRatioBP: 0 }]))
         .to.be.revertedWithCustomError(operatorGrid, "ZeroArgument")
         .withArgs("_reserveRatioBP");
     });
 
-    it("alterTier - validateParams - reverts if reserveRatioBP is greater than 100_00", async function () {
+    it("alterTiers - validateParams - reverts if reserveRatioBP is greater than 100_00", async function () {
       const _reserveRatioBP = 100_01;
       const totalBasisPoints = 100_00;
-      await expect(operatorGrid.alterTier(0, { ...tiers[0], reserveRatioBP: _reserveRatioBP }))
+      await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], reserveRatioBP: _reserveRatioBP }]))
         .to.be.revertedWithCustomError(operatorGrid, "ReserveRatioTooHigh")
         .withArgs("0", _reserveRatioBP, totalBasisPoints);
     });
 
-    it("alterTier - validateParams - reverts if _rebalanceThresholdBP is zero", async function () {
-      await expect(operatorGrid.alterTier(0, { ...tiers[0], forcedRebalanceThresholdBP: 0 }))
+    it("alterTiers - validateParams - reverts if _rebalanceThresholdBP is zero", async function () {
+      await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], forcedRebalanceThresholdBP: 0 }]))
         .to.be.revertedWithCustomError(operatorGrid, "ZeroArgument")
         .withArgs("_forcedRebalanceThresholdBP");
     });
 
-    it("alterTier - validateParams - reverts if _rebalanceThresholdBP is greater than _reserveRatioBP", async function () {
+    it("alterTiers - validateParams - reverts if _rebalanceThresholdBP is greater than _reserveRatioBP", async function () {
       const _reserveRatioBP = 2000;
       const _forcedRebalanceThresholdBP = 2100;
       await expect(
-        operatorGrid.alterTier(0, {
-          ...tiers[0],
-          forcedRebalanceThresholdBP: _forcedRebalanceThresholdBP,
-          reserveRatioBP: _reserveRatioBP,
-        }),
+        operatorGrid.alterTiers(
+          [0],
+          [
+            {
+              ...tiers[0],
+              forcedRebalanceThresholdBP: _forcedRebalanceThresholdBP,
+              reserveRatioBP: _reserveRatioBP,
+            },
+          ],
+        ),
       )
         .to.be.revertedWithCustomError(operatorGrid, "ForcedRebalanceThresholdTooHigh")
         .withArgs("0", _forcedRebalanceThresholdBP, _reserveRatioBP);
     });
 
-    it("alterTier - validateParams - reverts if _infraFeeBP is greater than 100_00", async function () {
+    it("alterTiers - validateParams - reverts if _infraFeeBP is greater than 100_00", async function () {
       const _infraFeeBP = 100_01;
       const totalBasisPoints = 100_00;
-      await expect(operatorGrid.alterTier(0, { ...tiers[0], infraFeeBP: _infraFeeBP }))
+      await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], infraFeeBP: _infraFeeBP }]))
         .to.be.revertedWithCustomError(operatorGrid, "InfraFeeTooHigh")
         .withArgs("0", _infraFeeBP, totalBasisPoints);
     });
 
-    it("alterTier - validateParams - reverts if _liquidityFeeBP is greater than 100_00", async function () {
+    it("alterTiers - validateParams - reverts if _liquidityFeeBP is greater than 100_00", async function () {
       const _liquidityFeeBP = 100_01;
       const totalBasisPoints = 100_00;
-      await expect(operatorGrid.alterTier(0, { ...tiers[0], liquidityFeeBP: _liquidityFeeBP }))
+      await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], liquidityFeeBP: _liquidityFeeBP }]))
         .to.be.revertedWithCustomError(operatorGrid, "LiquidityFeeTooHigh")
         .withArgs("0", _liquidityFeeBP, totalBasisPoints);
     });
 
-    it("alterTier - validateParams - reverts if _reservationFeeBP is greater than 100_00", async function () {
+    it("alterTiers - validateParams - reverts if _reservationFeeBP is greater than 100_00", async function () {
       const _reservationFeeBP = 100_01;
       const totalBasisPoints = 100_00;
-      await expect(operatorGrid.alterTier(0, { ...tiers[0], reservationFeeBP: _reservationFeeBP }))
+      await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], reservationFeeBP: _reservationFeeBP }]))
         .to.be.revertedWithCustomError(operatorGrid, "ReservationFeeTooHigh")
         .withArgs("0", _reservationFeeBP, totalBasisPoints);
+    });
+
+    it("alterTiers - reverts if arrays length mismatch", async function () {
+      await expect(operatorGrid.alterTiers([0, 1], [tiers[0]])).to.be.revertedWithCustomError(
+        operatorGrid,
+        "ArrayLengthMismatch",
+      );
+    });
+
+    it("alterTiers - updates multiple tiers at once", async function () {
+      await operatorGrid.registerGroup(nodeOperator1, 1000);
+      await operatorGrid.registerTiers(nodeOperator1, [
+        {
+          shareLimit: 1000,
+          reserveRatioBP: 2000,
+          forcedRebalanceThresholdBP: 1800,
+          infraFeeBP: 500,
+          liquidityFeeBP: 400,
+          reservationFeeBP: 100,
+        },
+      ]);
+
+      const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
+      const tier1Id = 1;
+
+      const newShareLimit1 = 2000;
+      const newReserveRatio1 = 3000;
+      const newShareLimit2 = 3000;
+      const newReserveRatio2 = 4000;
+
+      await expect(
+        operatorGrid.alterTiers(
+          [defaultTierId, tier1Id],
+          [
+            {
+              shareLimit: newShareLimit1,
+              reserveRatioBP: newReserveRatio1,
+              forcedRebalanceThresholdBP: 2500,
+              infraFeeBP: 600,
+              liquidityFeeBP: 500,
+              reservationFeeBP: 200,
+            },
+            {
+              shareLimit: newShareLimit2,
+              reserveRatioBP: newReserveRatio2,
+              forcedRebalanceThresholdBP: 3500,
+              infraFeeBP: 700,
+              liquidityFeeBP: 600,
+              reservationFeeBP: 300,
+            },
+          ],
+        ),
+      )
+        .to.emit(operatorGrid, "TierUpdated")
+        .withArgs(defaultTierId, newShareLimit1, newReserveRatio1, 2500, 600, 500, 200)
+        .to.emit(operatorGrid, "TierUpdated")
+        .withArgs(tier1Id, newShareLimit2, newReserveRatio2, 3500, 700, 600, 300);
+
+      // Verify tier 0 (default tier) was updated correctly
+      const tier0 = await operatorGrid.tier(defaultTierId);
+      expect(tier0.shareLimit).to.equal(newShareLimit1);
+      expect(tier0.reserveRatioBP).to.equal(newReserveRatio1);
+      expect(tier0.forcedRebalanceThresholdBP).to.equal(2500);
+      expect(tier0.infraFeeBP).to.equal(600);
+      expect(tier0.liquidityFeeBP).to.equal(500);
+      expect(tier0.reservationFeeBP).to.equal(200);
+
+      // Verify tier 1 was updated correctly
+      const tier1 = await operatorGrid.tier(tier1Id);
+      expect(tier1.shareLimit).to.equal(newShareLimit2);
+      expect(tier1.reserveRatioBP).to.equal(newReserveRatio2);
+      expect(tier1.forcedRebalanceThresholdBP).to.equal(3500);
+      expect(tier1.infraFeeBP).to.equal(700);
+      expect(tier1.liquidityFeeBP).to.equal(600);
+      expect(tier1.reservationFeeBP).to.equal(300);
     });
   });
 

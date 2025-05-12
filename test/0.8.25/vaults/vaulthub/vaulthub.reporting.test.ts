@@ -87,14 +87,19 @@ describe("VaultHub.sol:reporting", () => {
     await vault.connect(user).lock(CONNECT_DEPOSIT);
 
     const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
-    await operatorGrid.connect(user).alterTier(defaultTierId, {
-      shareLimit: options?.shareLimit ?? SHARE_LIMIT,
-      reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
-      forcedRebalanceThresholdBP: options?.forcedRebalanceThresholdBP ?? FORCED_REBALANCE_THRESHOLD_BP,
-      infraFeeBP: options?.infraFeeBP ?? INFRA_FEE_BP,
-      liquidityFeeBP: options?.liquidityFeeBP ?? LIQUIDITY_FEE_BP,
-      reservationFeeBP: options?.reservationFeeBP ?? RESERVATION_FEE_BP,
-    });
+    await operatorGrid.connect(user).alterTiers(
+      [defaultTierId],
+      [
+        {
+          shareLimit: options?.shareLimit ?? SHARE_LIMIT,
+          reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
+          forcedRebalanceThresholdBP: options?.forcedRebalanceThresholdBP ?? FORCED_REBALANCE_THRESHOLD_BP,
+          infraFeeBP: options?.infraFeeBP ?? INFRA_FEE_BP,
+          liquidityFeeBP: options?.liquidityFeeBP ?? LIQUIDITY_FEE_BP,
+          reservationFeeBP: options?.reservationFeeBP ?? RESERVATION_FEE_BP,
+        },
+      ],
+    );
     await vaultHub.connect(user).connectVault(vault);
 
     return vault;
