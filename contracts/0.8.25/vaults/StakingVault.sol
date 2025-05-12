@@ -145,6 +145,14 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
+     * @notice Returns the pending owner of the contract
+     * @dev Fixes solidity interface inference
+     */
+    function pendingOwner() public view override(IStakingVault, Ownable2StepUpgradeable) returns (address) {
+        return Ownable2StepUpgradeable.pendingOwner();
+    }
+
+    /**
      * @notice Returns the node operator address
      * @return Address of the node operator
      */
@@ -383,6 +391,25 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * ║ └──────────────────────────────────────────────┘ ║
      * ╚══════════════════════════════════════════════════╝
      */
+
+    /**
+     * @notice Accepts the pending owner
+     * @dev Fixes solidity interface inference
+     * @dev Can only be called by the pending owner
+     */
+    function acceptOwnership() public override(IStakingVault, Ownable2StepUpgradeable) {
+        Ownable2StepUpgradeable.acceptOwnership();
+    }
+
+    /**
+     * @notice Transfers the ownership of the contract to a new owner
+     * @param _newOwner Address of the new owner
+     * @dev Fixes solidity interface inference
+     * @dev Can only be called by the owner
+     */
+    function transferOwnership(address _newOwner) public override(IStakingVault, Ownable2StepUpgradeable) {
+        Ownable2StepUpgradeable.transferOwnership(_newOwner);
+    }
 
     /**
      * @notice Sets the depositor address

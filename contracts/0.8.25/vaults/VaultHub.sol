@@ -4,7 +4,6 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -241,8 +240,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     function connectVault(address _vault) external whenResumed {
         if (_vault == address(0)) revert VaultZeroAddress();
-        if (address(this) != Ownable2StepUpgradeable(_vault).pendingOwner()) revert VaultHubNotPendingOwner(_vault);
+
         IStakingVault vault_ = IStakingVault(_vault);
+        if (address(this) != vault_.pendingOwner()) revert VaultHubNotPendingOwner(_vault);
         if (vault_.isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(this)) revert VaultHubMustBeDepositor(_vault);
 
@@ -263,7 +263,6 @@ contract VaultHub is PausableUntilWithRoles {
         ) revert InvalidOperator();
 
         _connectVault(_vault,
-            IStakingVault(_vault).owner(),
             shareLimit,
             reserveRatioBP,
             forcedRebalanceThresholdBP,
@@ -355,8 +354,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = $.records[_vault];
 
         if (connection.pendingDisconnect) {
-            // todo: embed 2step into IStakingVault
-            Ownable2StepUpgradeable(_vault).transferOwnership(connection.owner);
+            IStakingVault(_vault).transferOwnership(connection.owner);
             _deleteVault(_vault, connection);
 
             emit VaultDisconnectCompleted(_vault);
@@ -618,7 +616,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _connectVault(
         address _vault,
-        address _owner,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
@@ -644,7 +641,7 @@ contract VaultHub is PausableUntilWithRoles {
         );
 
         VaultConnection memory connection = VaultConnection(
-            _owner,
+            IStakingVault(_vault).owner(),
             uint96(_shareLimit),
             0, // vaultIndex
             false, // pendingDisconnect
@@ -664,7 +661,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _addVault(_vault, connection, record);
 
-        Ownable2StepUpgradeable(_vault).acceptOwnership();
+        IStakingVault(_vault).acceptOwnership();
 
         emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
