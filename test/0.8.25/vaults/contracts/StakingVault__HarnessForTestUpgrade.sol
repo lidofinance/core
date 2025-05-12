@@ -145,4 +145,10 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function triggerValidatorExits(bytes calldata _pubkeys, address _refundRecipient) external payable override {}
 
     function ossify() external override {}
+
+    function pendingOwner() external view override returns (address) {}
+
+    function acceptOwnership() external override {}
+
+    function transferOwnership(address _newOwner) public override(IStakingVault, OwnableUpgradeable) {}
 }
