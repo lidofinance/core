@@ -202,6 +202,28 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     }
 
     /**
+     * @notice validates proof of validator in CL with withdrawalCredentials and pubkey against Beacon block root
+     * @param _witness object containing validator pubkey, Merkle proof and timestamp for Beacon Block root child block
+     * @param _withdrawalCredentials to verify proof with
+     * @dev reverts with `InvalidProof` when provided input cannot be proven to Beacon block root
+     */
+    function validatePubKeyWCProof(ValidatorWitness calldata _witness, bytes32 _withdrawalCredentials) public view {
+        _validatePubKeyWCProof(_witness, _withdrawalCredentials);
+    }
+    
+    /**
+     * @notice verifies the deposit message signature using BLS12-381 pairing check
+     * @param _deposit staking vault deposit to verify
+     * @param _depositsY Y coordinates of the two BLS12-381 points (uncompressed pubkey and signature)
+     * @param _withdrawalCredentials withdrawal credentials of the deposit message to verify
+     * @dev reverts with `InvalidSignature` if the signature is invalid
+     * @dev reverts with `InputHasInfinityPoints` if the input contains infinity points(zero values)
+     */
+    function verifyDepositMessage(StakingVaultDeposit calldata _deposit, BLS12_381.DepositY calldata _depositsY, bytes32 _withdrawalCredentials) public view {
+        BLS12_381.verifyDepositMessage(_deposit, _depositsY, _withdrawalCredentials, DEPOSIT_DOMAIN);
+    }
+
+    /**
      * @notice withdraws unlocked NO's balance
      * @param _nodeOperator to withdraw from
      * @param _amount amount to withdraw
@@ -328,7 +350,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
             // this check isn't needed in  `depositToBeaconChain` because
             // Beacon Chain doesn't enforce the signature checks for existing validators and just top-ups to their balance
-            BLS12_381.verifyDepositMessage(_deposit, _depositsY[i], withdrawalCredentials, DEPOSIT_DOMAIN);
+            verifyDepositMessage(_deposit, _depositsY[i], withdrawalCredentials);
 
             if ($.validatorStatus[_deposit.pubkey].stage != ValidatorStage.NONE) {
                 revert ValidatorNotNew(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
@@ -369,7 +391,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         // WC will be sanity checked in `_processPositiveProof()`
         bytes32 withdrawalCredentials = validator.stakingVault.withdrawalCredentials();
 
-        _validatePubKeyWCProof(_witness, withdrawalCredentials);
+        validatePubKeyWCProof(_witness, withdrawalCredentials);
 
         _processPositiveProof(_witness.pubkey, validator, withdrawalCredentials);
     }
@@ -457,7 +479,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         // sanity check that vault returns valid WC
         _validateWC(_stakingVault, withdrawalCredentials);
 
-        _validatePubKeyWCProof(_witness, withdrawalCredentials);
+        validatePubKeyWCProof(_witness, withdrawalCredentials);
 
         $.validatorStatus[_witness.pubkey] = ValidatorStatus({
             stage: ValidatorStage.PROVEN,
@@ -486,7 +508,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         ValidatorWitness calldata _witness,
         bytes32 _invalidWithdrawalCredentials
     ) public whenResumed {
-        _validatePubKeyWCProof(_witness, _invalidWithdrawalCredentials);
+        validatePubKeyWCProof(_witness, _invalidWithdrawalCredentials);
 
         // validator state and WC incorrectness are enforced inside
         _processNegativeProof(_witness.pubkey, _invalidWithdrawalCredentials);

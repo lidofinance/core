@@ -69,6 +69,11 @@ contract VaultHub is PausableUntilWithRoles {
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
+        uint96 shareLimit;
+        uint16 reserveRatioBP;
+        uint16 forcedRebalanceThresholdBP;
+        uint16 treasuryFeeBP;
+        bool pendingDisconnect;
     }
 
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
@@ -89,7 +94,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     /// @notice The time delta for report freshness check
-    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days;
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
 
     /// @notice limit for a single vault share limit relative to Lido TVL in basis points
     uint256 private immutable RELATIVE_SHARE_LIMIT_BP;
@@ -178,22 +183,27 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _offset offset of the vault in the batch (indexes start from 0)
     /// @param _limit limit of the batch
     /// @return batch of vaults info
-    function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory) {
+    function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory batch) {
         VaultHubStorage storage $ = _getVaultHubStorage();
         uint256 limit = _offset + _limit > $.sockets.length - 1 ? $.sockets.length - 1 - _offset : _limit;
-        VaultInfo[] memory batch = new VaultInfo[](limit);
+        batch = new VaultInfo[](limit);
+        uint256 startIndex = _offset + 1;
         for (uint256 i = 0; i < limit; i++) {
-            VaultSocket storage socket = $.sockets[i + 1 + _offset];
+            VaultSocket memory socket = $.sockets[startIndex + i];
             IStakingVault currentVault = IStakingVault(socket.vault);
             batch[i] = VaultInfo(
                 address(currentVault),
                 address(currentVault).balance,
                 currentVault.inOutDelta(),
                 currentVault.withdrawalCredentials(),
-                socket.liabilityShares
+                socket.liabilityShares,
+                socket.shareLimit,
+                socket.reserveRatioBP,
+                socket.forcedRebalanceThresholdBP,
+                socket.treasuryFeeBP,
+                socket.pendingDisconnect
             );
         }
-        return batch;
     }
 
     /// @notice checks if the vault is healthy by comparing its total value after applying rebalance threshold

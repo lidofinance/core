@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault, VaultHub } from "typechain-types";
 
-import { advanceChainTime, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
+import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
 import {
   createVaultWithDashboard,
   disconnectFromHub,
@@ -61,6 +61,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     ));
 
     agent = await ctx.getSigner("agent");
+
+    // make sure that the vault has a fresh report
+    await reportVaultDataWithProof(stakingVault);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -194,7 +197,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
   describe("Outdated report", () => {
     beforeEach(async () => {
-      await reportVaultDataWithProof(stakingVault);
+      // Spoil the report freshness
       await advanceChainTime((await vaultHub.REPORT_FRESHNESS_DELTA()) + 100n);
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
@@ -305,13 +308,20 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       ).to.be.revertedWithCustomError(stakingVault, "VaultConnected");
     });
 
-    it("Can deauthorize Lido VaultHub if dicsconnected from Hub", async () => {
+    it("Can deauthorize Lido VaultHub if disconnected from Hub", async () => {
       await disconnectFromHub(ctx, stakingVault);
-      await reportVaultDataWithProof(stakingVault);
+      await reportVaultDataWithProof(stakingVault); // required to disconnect from the hub
 
       await expect(dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub())
         .to.emit(stakingVault, "VaultHubAuthorizedSet")
         .withArgs(false);
+    });
+  });
+
+  describe("Reporting", () => {
+    it("updates report data and keep in fresh state for 1 day", async () => {
+      await advanceChainTime(days(1n));
+      expect(await stakingVault.isReportFresh()).to.equal(true);
     });
   });
 });

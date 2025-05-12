@@ -29,10 +29,10 @@ import {
   ether,
   findEvents,
   getCurrentBlockTimestamp,
-  getNextBlockTimestamp,
   impersonate,
   randomValidatorPubkey,
 } from "lib";
+import { reportVaultWithMockedVaultHub, reportVaultWithoutProof } from "lib/protocol/helpers/vaults";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -540,6 +540,7 @@ describe("Dashboard.sol", () => {
       const amount = ether("1");
       await dashboard.connect(vaultOwner).fund({ value: amount });
 
+      await reportVaultWithoutProof(vault);
       await dashboard.connect(vaultOwner).lock(amount);
 
       expect(await dashboard.withdrawableEther()).to.equal(0n);
@@ -646,6 +647,8 @@ describe("Dashboard.sol", () => {
       await dashboard.connect(vaultOwner).fund({ value: amount });
       const recipient = certainAddress("dashboard:test:recipient");
       const previousBalance = await ethers.provider.getBalance(recipient);
+      const stakingVaultContract = await ethers.getContractAt("StakingVault", await dashboard.stakingVault());
+      await reportVaultWithoutProof(stakingVaultContract);
 
       await expect(dashboard.connect(vaultOwner).withdraw(recipient, amount))
         .to.emit(vault, "Withdrawn")
@@ -1236,7 +1239,8 @@ describe("Dashboard.sol", () => {
       const validatorPublicKeys = randomValidatorPubkey();
       const amounts = [ether("0.1")];
 
-      await vault.connect(hubSigner).report(await getNextBlockTimestamp(), ether("1"), 0n, ether("1"));
+      const stakingVault = await ethers.getContractAt("StakingVault", await dashboard.stakingVault());
+      await reportVaultWithMockedVaultHub(stakingVault);
 
       await expect(
         dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, {

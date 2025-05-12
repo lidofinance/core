@@ -292,12 +292,22 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultInfo.balance).to.equal(CONNECT_DEPOSIT);
       expect(vaultInfo.inOutDelta).to.equal(CONNECT_DEPOSIT);
       expect(vaultInfo.withdrawalCredentials).to.equal(ZERO_BYTES32);
+      expect(vaultInfo.shareLimit).to.equal(SHARE_LIMIT);
+      expect(vaultInfo.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
+      expect(vaultInfo.forcedRebalanceThresholdBP).to.equal(FORCED_REBALANCE_THRESHOLD_BP);
+      expect(vaultInfo.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
+      expect(vaultInfo.pendingDisconnect).to.equal(false);
 
       const vaultInfo2 = vaults[1];
       expect(vaultInfo2.vault).to.equal(vaultAddress2);
       expect(vaultInfo2.balance).to.equal(CONNECT_DEPOSIT);
       expect(vaultInfo2.inOutDelta).to.equal(CONNECT_DEPOSIT);
       expect(vaultInfo2.withdrawalCredentials).to.equal(ZERO_BYTES32);
+      expect(vaultInfo2.shareLimit).to.equal(SHARE_LIMIT);
+      expect(vaultInfo2.reserveRatioBP).to.equal(RESERVE_RATIO_BP);
+      expect(vaultInfo2.forcedRebalanceThresholdBP).to.equal(FORCED_REBALANCE_THRESHOLD_BP);
+      expect(vaultInfo2.treasuryFeeBP).to.equal(TREASURY_FEE_BP);
+      expect(vaultInfo2.pendingDisconnect).to.equal(false);
     });
 
     it("returns the vault info with pagination", async () => {
