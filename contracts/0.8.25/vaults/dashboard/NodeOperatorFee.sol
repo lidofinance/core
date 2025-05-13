@@ -200,7 +200,7 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Claims the node operator fee.
      */
-    function disburseNodeOperatorFee() public {
+    function disburseNodeOperatorFee() external {
         uint256 fee = nodeOperatorUnclaimedFee();
         if (fee == 0) revert NoUnclaimedFee();
 
