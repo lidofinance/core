@@ -40,24 +40,29 @@ contract VaultHub__HarnessForReporting is VaultHub {
     ) external {
         VaultHub.Storage storage $ = harness_getVaultHubStorage();
 
-        VaultHub.VaultSocket memory vsocket = VaultHub.VaultSocket(
-            _vault,
-            uint96(_shareLimit),
+        VaultHub.VaultConnection memory connection = VaultHub.VaultConnection(
             address(0), // owner
-            0, // liabilityShares
-            0, // locked
-            0, // inOutDelta
-            VaultHub.Report(0, 0), // report
-            0, // reportTimestamp
+            uint96(_shareLimit),
+            uint96($.vaults.length),
+            false, // pendingDisconnect
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
-            uint16(_treasuryFeeBP),
-            false, // pendingDisconnect
+            uint16(_treasuryFeeBP)
+        );
+        $.connections[_vault] = connection;
+
+        VaultHub.VaultRecord memory record = VaultHub.VaultRecord(
+            VaultHub.Report(0, 0), // report
+            0, // locked
+            uint96(_shareLimit), // liabilityShares
+            uint64(block.timestamp), // reportTimestamp
+            0, // inOutDelta
             0 // feeSharesCharged
         );
-        $.socketIndex[_vault] = $.sockets.length;
-        $.sockets.push(vsocket);
+        $.records[_vault] = record;
 
-        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
+        $.vaults.push(_vault);
+
+        emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
 }

@@ -58,28 +58,37 @@ contract LazyOracle {
     }
 
     /// @notice returns batch of vaults info
-    /// @param _offset offset of the vault in the batch (indexes start from 0)
-    /// @param _limit limit of the batch
+    /// @param _offset in the vaults list [0, vaultsCount)
+    /// @param _limit maximum number of vaults to return
     /// @return batch of vaults info
     function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory) {
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+
         uint256 vaultCount = vaultHub.vaultsCount();
-        uint256 limit = _offset + _limit > vaultCount - 1 ? vaultCount - 1 - _offset : _limit;
-        VaultInfo[] memory batch = new VaultInfo[](limit);
-        for (uint256 i = 0; i < limit; i++) {
-            VaultHub.VaultSocket memory socket = vaultHub.vaultSocket(i + 1 + _offset);
-            IStakingVault currentVault = IStakingVault(socket.vault);
+        uint256 batchSize;
+        if (_offset > vaultCount) {
+            batchSize = 0;
+        } else {
+            batchSize = _offset + _limit > vaultCount ? vaultCount - _offset : _limit;
+        }
+
+        VaultInfo[] memory batch = new VaultInfo[](batchSize);
+        for (uint256 i = 0; i < batchSize; i++) {
+            address vaultAddress = vaultHub.vaultByIndex(_offset + i + 1);
+            IStakingVault vault = IStakingVault(vaultAddress);
+            VaultHub.VaultConnection memory connection = vaultHub.vaultConnection(vaultAddress);
+            VaultHub.VaultRecord memory record = vaultHub.vaultRecord(vaultAddress);
             batch[i] = VaultInfo(
-                address(currentVault),
-                address(currentVault).balance,
-                socket.inOutDelta,
-                currentVault.withdrawalCredentials(),
-                socket.liabilityShares,
-                socket.shareLimit,
-                socket.reserveRatioBP,
-                socket.forcedRebalanceThresholdBP,
-                socket.treasuryFeeBP,
-                socket.pendingDisconnect
+                vaultAddress,
+                address(vault).balance,
+                record.inOutDelta,
+                vault.withdrawalCredentials(),
+                record.liabilityShares,
+                connection.shareLimit,
+                connection.reserveRatioBP,
+                connection.forcedRebalanceThresholdBP,
+                connection.treasuryFeeBP,
+                connection.pendingDisconnect
             );
         }
         return batch;
@@ -120,7 +129,7 @@ contract LazyOracle {
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
         VaultHub(payable(LIDO_LOCATOR.vaultHub()))
-            .updateSocket(
+            .applyVaultReport(
                 _vault,
                 _storage().vaultsDataTimestamp,
                 _totalValue,

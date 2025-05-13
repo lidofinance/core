@@ -86,67 +86,63 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Returns the vault socket data for the staking vault.
-     * @return VaultSocket struct containing vault data
+     * @return VaultConnection struct containing vault data
      */
-    function vaultSocket() public view returns (VaultHub.VaultSocket memory) {
-        return VAULT_HUB.vaultSocket(address(_stakingVault()));
+    function vaultConnection() public view returns (VaultHub.VaultConnection memory) {
+        return VAULT_HUB.vaultConnection(address(_stakingVault()));
     }
 
     /**
      * @notice Returns the stETH share limit of the vault
-     * @return The share limit as a uint96
      */
-    function shareLimit() external view returns (uint96) {
-        return vaultSocket().shareLimit;
+    function shareLimit() external view returns (uint256) {
+        return vaultConnection().shareLimit;
     }
 
     /**
      * @notice Returns the number of stETHshares minted
-     * @return The shares minted as a uint96
      */
-    function liabilityShares() public view returns (uint96) {
-        return vaultSocket().liabilityShares;
+    function liabilityShares() public view returns (uint256) {
+        return VAULT_HUB.liabilityShares(address(_stakingVault()));
     }
 
     /**
      * @notice Returns the reserve ratio of the vault in basis points
-     * @return The reserve ratio in basis points as a uint16
      */
     function reserveRatioBP() public view returns (uint16) {
-        return vaultSocket().reserveRatioBP;
+        return vaultConnection().reserveRatioBP;
     }
 
     /**
      * @notice Returns the rebalance threshold of the vault in basis points.
-     * @return The rebalance threshold in basis points as a uint16.
      */
     function forcedRebalanceThresholdBP() external view returns (uint16) {
-        return vaultSocket().forcedRebalanceThresholdBP;
+        return vaultConnection().forcedRebalanceThresholdBP;
     }
 
     /**
      * @notice Returns the treasury fee basis points.
-     * @return The treasury fee in basis points as a uint16.
      */
     function treasuryFeeBP() external view returns (uint16) {
-        return vaultSocket().treasuryFeeBP;
+        return vaultConnection().treasuryFeeBP;
     }
 
     /**
      * @notice Returns the total value of the vault in ether.
-     * @return The total value as a uint256.
      */
     function totalValue() public view returns (uint256) {
         return VAULT_HUB.totalValue(address(_stakingVault()));
     }
 
+    /**
+     * @notice Returns the locked amount of ether for the vault
+     */
     function locked() public view returns (uint256) {
-        return VAULT_HUB.vaultSocket(address(_stakingVault())).locked;
+        return VAULT_HUB.locked(address(_stakingVault()));
     }
 
     /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
-     * @return The maximum number of mintable stETH shares.
      */
     function totalMintingCapacity() public view returns (uint256) {
         return _totalMintingCapacity(0);
@@ -160,7 +156,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function remainingMintingCapacity(uint256 _etherToFund) external view returns (uint256) {
         uint256 totalShares = _totalMintingCapacity(_etherToFund);
-        uint256 liabilityShares_ = vaultSocket().liabilityShares;
+        uint256 liabilityShares_ = VAULT_HUB.liabilityShares(address(_stakingVault()));
 
         if (totalShares < liabilityShares_) return 0;
         return totalShares - liabilityShares_;
@@ -172,7 +168,6 @@ contract Dashboard is NodeOperatorFee {
      * and not reserved for node operator fee.
      * This amount does not account for the current balance of the StakingVault and
      * can return a value greater than the actual balance of the StakingVault.
-     * @return uint256: the amount of unreserved ether.
      */
     function unreserved() public view returns (uint256) {
         uint256 reserved = locked() + nodeOperatorUnclaimedFee();
@@ -185,7 +180,6 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the amount of ether that can be instantly withdrawn from the staking vault.
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
      * @dev This method overrides the Dashboard's withdrawableEther() method
-     * @return The amount of ether that can be withdrawn.
      */
     function withdrawableEther() external view returns (uint256) {
         return Math256.min(address(_stakingVault()).balance, unreserved());
@@ -539,9 +533,10 @@ contract Dashboard is NodeOperatorFee {
      * @param _additionalFunding additional ether that may be funded to the vault
      */
     function _totalMintingCapacity(uint256 _additionalFunding) internal view returns (uint256) {
+        VaultHub.VaultConnection memory connection = vaultConnection();
         uint256 maxMintableStETH = ((_mintableValue() + _additionalFunding) *
-            (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) / TOTAL_BASIS_POINTS;
-        return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), vaultSocket().shareLimit);
+            (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
+        return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), connection.shareLimit);
     }
 
     // ==================== Events ====================
