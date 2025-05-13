@@ -242,7 +242,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @return true if vault is healthy, false otherwise
     /// @dev reverts if the vault is not connected
-    function isVaultHealthyAsOfLatestReport(address _vault) external view returns (bool) {
+    function isVaultHealthy(address _vault) external view returns (bool) {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _storage().records[_vault];
         return _isVaultHealthyByThreshold(
@@ -312,7 +312,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         connection.shareLimit = uint96(_shareLimit);
 
-        emit ShareLimitUpdated(_vault, _shareLimit);
+        emit VaultShareLimitUpdated(_vault, _shareLimit);
     }
 
     /// @notice updates the vault's connection parameters
@@ -409,9 +409,10 @@ contract VaultHub is PausableUntilWithRoles {
             );
             record.reportTimestamp = _reportTimestamp;
             record.locked = uint128(lockedEther);
+
+            emit VaultReportApplied(_vault, _reportTimestamp, _reportTotalValue, _reportInOutDelta, _reportFeeSharesCharged, _reportLiabilityShares);
         }
 
-        // TODO: emit event
     }
 
     function mintVaultsTreasuryFeeShares(uint256 _amountOfShares) external {
@@ -556,6 +557,9 @@ contract VaultHub is PausableUntilWithRoles {
         burnShares(_vault, _amountOfShares);
     }
 
+    /// @notice pauses beacon chain deposits for the vault
+    /// @param _vault vault address
+    /// @dev msg.sender should be vault's owner
     function pauseBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
@@ -563,6 +567,9 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).pauseBeaconChainDeposits();
     }
 
+    /// @notice resumes beacon chain deposits for the vault
+    /// @param _vault vault address
+    /// @dev msg.sender should be vault's owner
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
@@ -570,6 +577,10 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).resumeBeaconChainDeposits();
     }
 
+    /// @notice deposits to the beacon chain
+    /// @param _vault vault address
+    /// @param _deposits array of deposits data structures
+    /// @dev msg.sender should be predeposit guarantee
     function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external {
         if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
 
@@ -585,6 +596,10 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).depositToBeaconChain(_deposits);
     }
 
+    /// @notice Emits a request event for the node operator to perform validator exit
+    /// @param _vault vault address
+    /// @param _pubkeys array of public keys of the validators to exit
+    /// @dev msg.sender should be vault's owner
     function requestValidatorExit(address _vault, bytes calldata _pubkeys) external {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
@@ -592,6 +607,10 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).requestValidatorExit(_pubkeys);
     }
 
+    /// @notice Triggers validator exit for the vault using EIP-7002
+    /// @param _vault vault address
+    /// @param _pubkeys array of public keys of the validators to exit
+    /// @dev msg.sender should be vault's owner
     function triggerValidatorWithdrawal(
         address _vault,
         bytes calldata _pubkeys,
@@ -602,16 +621,15 @@ contract VaultHub is PausableUntilWithRoles {
         if (msg.sender != connection.owner) revert NotAuthorized();
         VaultRecord storage record = _storage().records[_vault];
 
-        // todo: separate logic for partial and full withdrawals
         if (_totalValue(record) < record.locked) revert TotalValueBelowLockedAmount();
 
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
-    /// @notice Forces validator exit from the beacon chain when vault is unhealthy
-    /// @param _vault The address of the vault to exit validators from
-    /// @param _pubkeys The public keys of the validators to exit
-    /// @param _refundRecipient The address that will receive the refund for transaction costs
+    /// @notice Triggers validator exit for the vault using EIP-7002 permissionlessly if the vault is unhealthy
+    /// @param _vault address of the vault to exit validators from
+    /// @param _pubkeys public keys of the validators to exit
+    /// @param _refundRecipient address that will receive the refund for transaction costs
     /// @dev    When the vault becomes unhealthy, anyone can force its validators to exit the beacon chain
     ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
     function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _refundRecipient) external payable {
@@ -629,7 +647,7 @@ contract VaultHub is PausableUntilWithRoles {
         emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
-    /// @notice permissionless rebalance for unhealthy vaults
+    /// @notice Permissionless rebalance for unhealthy vaults
     /// @param _vault vault address
     /// @dev rebalance all available amount of ether until the vault is healthy
     function forceRebalance(address _vault) external {
@@ -869,17 +887,21 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 forcedRebalanceThresholdBP,
         uint256 treasuryFeeBP
     );
-
-    event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
-
-    event VaultsReportDataUpdated(uint64 indexed timestamp, bytes32 root, string cid);
-
+    event VaultShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultDisconnectInitiated(address indexed vault);
     event VaultDisconnectCompleted(address indexed vault);
+    event VaultReportApplied(
+        address indexed vault,
+        uint256 reportTimestamp,
+        uint256 reportTotalValue,
+        int256 reportInOutDelta,
+        uint256 reportFeeSharesCharged,
+        uint256 reportLiabilityShares
+    );
+
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
-
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     /**
