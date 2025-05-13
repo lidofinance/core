@@ -293,6 +293,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         return $.tiers[_tierId];
     }
 
+    /// @notice Returns a tiers count
+    /// @return Tiers count
+    function tiersCount() external view returns (uint256) {
+        return _getStorage().tiers.length;
+    }
+
     /// @notice Alters multiple tiers
     /// @dev We do not enforce to update old vaults with the new tier params, only new ones.
     /// @param _tierIds array of tier ids to alter
