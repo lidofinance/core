@@ -219,8 +219,9 @@ contract Dashboard is NodeOperatorFee {
      * VaultHub stores data for calculating the node operator fee, so the fees should be claimed first.
      */
     function voluntaryDisconnect() external {
-        if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
-
+        uint256 fee = nodeOperatorUnclaimedFee();
+        if (fee > 0) _disburseNodeOperatorFee(fee);
+        
         _voluntaryDisconnect();
     }
 
@@ -239,10 +240,11 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Reclaims the Dashboard contract, transferring the staking vault ownership to the VaultHub.
-     * @dev This function is used when the Dashboard contract is no longer needed and the staking vault should be transferred to a new owner.
+     * @notice Reclaims the Dashboard contract and reconnects to VaultHub, transferring ownership to VaultHub.
      */
     function connectToVaultHub() external {
+        _acceptOwnership();
+        _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
     }
 
