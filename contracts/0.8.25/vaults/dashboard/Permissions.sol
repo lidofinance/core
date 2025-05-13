@@ -324,7 +324,7 @@ abstract contract Permissions is AccessControlConfirmable {
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
-        return IPredepositGuarantee(_stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
+        return IPredepositGuarantee(VAULT_HUB.predepositGuarantee()).compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     /**
@@ -333,7 +333,7 @@ abstract contract Permissions is AccessControlConfirmable {
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
     ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
-        IPredepositGuarantee predepositGuarantee = IPredepositGuarantee(_stakingVault().depositor());
+        IPredepositGuarantee predepositGuarantee = IPredepositGuarantee(VAULT_HUB.predepositGuarantee());
         for (uint256 i = 0; i < _witnesses.length; i++) {
             predepositGuarantee.proveUnknownValidator(_witnesses[i], _stakingVault());
         }

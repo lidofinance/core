@@ -146,7 +146,6 @@ contract VaultHub is PausableUntilWithRoles {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
-
     /// @notice Add vault proxy codehash to allow list.
     /// @param _codehash vault proxy codehash
     function addVaultProxyCodehash(bytes32 _codehash) external onlyRole(VAULT_REGISTRY_ROLE) {
@@ -172,6 +171,10 @@ contract VaultHub is PausableUntilWithRoles {
 
     function operatorGrid() public view returns (address) {
         return LIDO_LOCATOR.operatorGrid();
+    }
+
+    function predepositGuarantee() external view returns (address) {
+        return LIDO_LOCATOR.predepositGuarantee();
     }
 
     /// @notice returns the number of vaults connected to the hub
