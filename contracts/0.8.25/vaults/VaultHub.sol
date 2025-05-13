@@ -787,7 +787,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
         Report memory report = _record.report;
-        return uint256(int256(uint256(report.totalValue)) + report.inOutDelta - _record.inOutDelta);
+        return uint256(int256(uint256(report.totalValue)) + _record.inOutDelta - report.inOutDelta);
     }
 
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
