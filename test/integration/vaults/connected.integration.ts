@@ -104,19 +104,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       .withArgs(stakingVault, testSharesAmountWei);
   });
 
-  // it("Allows burning stETH", async () => {
-  //   const { vaultHub, lido } = ctx.contracts;
-  //   const sharesAmount = await ctx.contracts.lido.getSharesByPooledEth(TEST_STETH_AMOUNT_WEI);
-
-  //   // add some stETH to the vault to have totalValue, mint shares and approve stETH
-  //   await dashboard.connect(roles.funder).fund({ value: ether("1") });
-  //   await reportVaultDataWithProof(stakingVault);
-  //   await dashboard.connect(roles.minter).mintStETH(roles.burner, TEST_STETH_AMOUNT_WEI);
-  //   await lido.connect(roles.burner).approve(dashboard, TEST_STETH_AMOUNT_WEI);
-
-  //   await expect(dashboard.connect(roles.burner).burnStETH(TEST_STETH_AMOUNT_WEI))
-  //     .to.emit(vaultHub, "BurnedSharesOnVault")
-  //     .withArgs(stakingVault, sharesAmount);
   context("stETH minting", () => {
     it("Allows minting stETH", async () => {
       // add some stETH to the vault to have totalValue

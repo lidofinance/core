@@ -20,7 +20,7 @@ describe("Integration: Withdrawal happy path", () => {
 
     snapshot = await Snapshot.take();
 
-    [holder] = await ethers.getSigners();
+    [, holder] = await ethers.getSigners();
     await setBalance(holder.address, ether("1000000"));
   });
 
@@ -38,7 +38,7 @@ describe("Integration: Withdrawal happy path", () => {
     while ((await wq.getLastRequestId()) !== (await wq.getLastFinalizedRequestId())) {
       await report(ctx, { clDiff: ether("1") });
       // Submit more ETH to increase buffer
-      await lido.submit(ethers.ZeroAddress, { value: ether("10000") });
+      await lido.connect(holder).submit(ethers.ZeroAddress, { value: ether("10000") });
     }
 
     // Get initial stETH holder balance
