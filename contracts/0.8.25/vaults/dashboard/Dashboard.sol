@@ -221,8 +221,8 @@ contract Dashboard is NodeOperatorFee {
      */
     function abandonDashboard(address _newOwner) external {
         address vaultAddress = address(_stakingVault());
-        if (VAULT_HUB.vaultSocket(vaultAddress).vault == vaultAddress) revert ConnectedToVaultHub();
-
+        if (VAULT_HUB.vaultConnection(vaultAddress).vaultIndex != 0) revert ConnectedToVaultHub();
+        
         _acceptOwnership();
         _transferOwnership(_newOwner);
     }
