@@ -173,7 +173,7 @@ describe("Integration: Accounting", () => {
   it("Should account correctly with negative CL rebase", async () => {
     const { lido, accountingOracle } = ctx.contracts;
 
-    const REBASE_AMOUNT = ether("-2"); // Must be enough to cover the fees
+    const REBASE_AMOUNT = ether("-10"); // Must be enough to cover the fees
 
     const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
     const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();

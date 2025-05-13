@@ -7,7 +7,6 @@ pragma solidity 0.8.25;
 import {IAccessControlEnumerable} from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
 import {IBurner as IBurnerWithoutAccessControl} from "contracts/common/interfaces/IBurner.sol";
 import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {IOssifiableProxy} from "./interfaces/IOssifiableProxy.sol";
 import {V3Addresses} from "./V3Addresses.sol";
@@ -171,7 +170,7 @@ contract V3Template {
     uint256 internal initialTotalPooledEther;
 
 
-    /// @param _addresses Addresses for the upgrade template
+    /// @param _addresses V3Addresses contract address
     constructor(address _addresses) {
         ADDRESSES = V3Addresses(_addresses);
 

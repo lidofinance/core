@@ -1,34 +1,34 @@
-// SPDX-FileCopyrightText: 2020 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 
 // SPDX-License-Identifier: GPL-3.0
 
 pragma solidity 0.4.24;
 
-import { APMRegistryFactory } from "@aragon/os/contracts/factory/APMRegistryFactory.sol";
-import { ACL } from "@aragon/os/contracts/acl/ACL.sol";
-import { Repo } from "@aragon/os/contracts/apm/Repo.sol";
-import { APMRegistry } from "@aragon/os/contracts/apm/APMRegistry.sol";
-import { ENSSubdomainRegistrar } from "@aragon/os/contracts/ens/ENSSubdomainRegistrar.sol";
-import { Kernel } from "@aragon/os/contracts/kernel/Kernel.sol";
-import { ENS } from "@aragon/os/contracts/lib/ens/ENS.sol";
-import { PublicResolver } from "@aragon/os/contracts/lib/ens/PublicResolver.sol";
-import { DAOFactory } from "@aragon/os/contracts/factory/DAOFactory.sol";
-import { IsContract } from "@aragon/os/contracts/common/IsContract.sol";
-import { MiniMeToken, MiniMeTokenFactory } from "@aragon/minime/contracts/MiniMeToken.sol";
-import { EVMScriptRegistry } from "@aragon/os/contracts/evmscript/EVMScriptRegistry.sol";
+import {APMRegistryFactory} from "@aragon/os/contracts/factory/APMRegistryFactory.sol";
+import {ACL} from "@aragon/os/contracts/acl/ACL.sol";
+import {Repo} from "@aragon/os/contracts/apm/Repo.sol";
+import {APMRegistry} from "@aragon/os/contracts/apm/APMRegistry.sol";
+import {ENSSubdomainRegistrar} from "@aragon/os/contracts/ens/ENSSubdomainRegistrar.sol";
+import {Kernel} from "@aragon/os/contracts/kernel/Kernel.sol";
+import {ENS} from "@aragon/os/contracts/lib/ens/ENS.sol";
+import {PublicResolver} from "@aragon/os/contracts/lib/ens/PublicResolver.sol";
+import {DAOFactory} from "@aragon/os/contracts/factory/DAOFactory.sol";
+import {IsContract} from "@aragon/os/contracts/common/IsContract.sol";
+import {MiniMeToken, MiniMeTokenFactory} from "@aragon/minime/contracts/MiniMeToken.sol";
+import {EVMScriptRegistry } from "@aragon/os/contracts/evmscript/EVMScriptRegistry.sol";
 
 
-import { Agent } from "@aragon/apps-agent/contracts/Agent.sol";
-import { Vault } from "@aragon/apps-vault/contracts/Vault.sol";
+import {Agent} from "@aragon/apps-agent/contracts/Agent.sol";
+import {Vault} from "@aragon/apps-vault/contracts/Vault.sol";
 
-import { Voting } from "@aragon/apps-lido/apps/voting/contracts/Voting.sol";
-import { Finance } from "@aragon/apps-finance/contracts/Finance.sol";
-import { TokenManager } from "@aragon/apps-lido/apps/token-manager/contracts/TokenManager.sol";
+import {Voting} from "@aragon/apps-lido/apps/voting/contracts/Voting.sol";
+import {Finance} from "@aragon/apps-finance/contracts/Finance.sol";
+import {TokenManager} from "@aragon/apps-lido/apps/token-manager/contracts/TokenManager.sol";
 
-import { IFIFSResolvingRegistrar } from "@aragon/id/contracts/IFIFSResolvingRegistrar.sol";
+import {IFIFSResolvingRegistrar} from "@aragon/id/contracts/IFIFSResolvingRegistrar.sol";
 
-import { Lido } from "../Lido.sol";
-import { NodeOperatorsRegistry } from "../nos/NodeOperatorsRegistry.sol";
+import {Lido} from "../Lido.sol";
+import {NodeOperatorsRegistry} from "../nos/NodeOperatorsRegistry.sol";
 
 contract LidoTemplate is IsContract {
     // Configuration errors
