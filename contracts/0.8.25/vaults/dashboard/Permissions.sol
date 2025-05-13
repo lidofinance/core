@@ -39,11 +39,6 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant WITHDRAW_ROLE = keccak256("vaults.Permissions.Withdraw");
 
     /**
-     * @notice Permission for locking ether on StakingVault.
-     */
-    bytes32 public constant LOCK_ROLE = keccak256("vaults.Permissions.Lock");
-
-    /**
      * @notice Permission for minting stETH shares backed by the StakingVault.
      */
     bytes32 public constant MINT_ROLE = keccak256("vaults.Permissions.Mint");
@@ -104,21 +99,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     bytes32 public constant UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE =
         keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
-
-    /**
-     * @dev Permission for ossifying the StakingVault.
-     */
-    bytes32 public constant OSSIFY_ROLE = keccak256("vaults.Permissions.Ossify");
-
-    /**
-     * @dev Permission for setting depositor on the StakingVault.
-     */
-    bytes32 public constant SET_DEPOSITOR_ROLE = keccak256("vaults.Permissions.SetDepositor");
-
-    /**
-     * @dev Permission for resetting locked amount on the disconnected StakingVault.
-     */
-    bytes32 public constant RESET_LOCKED_ROLE = keccak256("vaults.Permissions.ResetLocked");
 
     /**
      * @dev Permission for requesting change of tier on the OperatorGrid.
@@ -364,13 +344,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _setVaultOwner(address _newOwner) internal onlyConfirmed(confirmingRoles()) {
         VAULT_HUB.setVaultOwner(address(_stakingVault()), _newOwner);
-    }
-
-    /**
-     * @dev Checks the OSSIFY_ROLE and ossifies the StakingVault.
-     */
-    function _ossifyStakingVault() internal onlyRole(OSSIFY_ROLE) {
-        _stakingVault().ossify();
     }
 
     /**

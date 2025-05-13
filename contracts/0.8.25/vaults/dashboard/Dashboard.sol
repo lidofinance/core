@@ -477,16 +477,6 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Ossifies the staking vault. WARNING: This operation is irreversible,
-     *         once ossified, the vault cannot be upgraded or attached to VaultHub.
-     *         This is a one-way operation.
-     * @dev    Pins the current vault implementation to prevent further upgrades.
-     */
-    function ossifyStakingVault() external {
-        _ossifyStakingVault();
-    }
-
-    /**
      * @notice Requests a change of tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      */

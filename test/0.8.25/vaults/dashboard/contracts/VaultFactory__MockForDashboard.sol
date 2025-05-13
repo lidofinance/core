@@ -39,7 +39,6 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
         dashboard.grantRole(dashboard.FUND_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.WITHDRAW_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.MINT_ROLE(), msg.sender);
-        dashboard.grantRole(dashboard.LOCK_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.BURN_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.REBALANCE_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), msg.sender);
@@ -47,11 +46,6 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
         dashboard.grantRole(dashboard.REQUEST_VALIDATOR_EXIT_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), msg.sender);
         dashboard.grantRole(dashboard.VOLUNTARY_DISCONNECT_ROLE(), msg.sender);
-        dashboard.grantRole(dashboard.LIDO_VAULTHUB_AUTHORIZATION_ROLE(), msg.sender);
-        dashboard.grantRole(dashboard.OSSIFY_ROLE(), msg.sender);
-        dashboard.grantRole(dashboard.SET_DEPOSITOR_ROLE(), msg.sender);
-        dashboard.grantRole(dashboard.RESET_LOCKED_ROLE(), msg.sender);
-
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
 
         emit VaultCreated(address(dashboard), address(vault));

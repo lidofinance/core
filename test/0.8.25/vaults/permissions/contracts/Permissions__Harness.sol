@@ -74,10 +74,6 @@ contract Permissions__Harness is Permissions {
         return _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);
     }
 
-    function ossifyStakingVault() external {
-        _ossifyStakingVault();
-    }
-
     function setConfirmExpiry(uint256 _newConfirmExpiry) external {
         _setConfirmExpiry(_newConfirmExpiry);
     }

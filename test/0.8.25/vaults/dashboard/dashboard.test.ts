@@ -108,7 +108,7 @@ describe("Dashboard.sol", () => {
 
     const createVaultTx = await factory
       .connect(vaultOwner)
-      .createVaultWithDashboard(vaultOwner, nodeOperator, nodeOperator, nodeOperatorFeeBP, confirmExpiry, [], "0x", {
+      .createVaultWithDashboard(vaultOwner, nodeOperator, nodeOperator, nodeOperatorFeeBP, confirmExpiry, [], {
         value: VAULT_CONNECTION_DEPOSIT,
       });
     const createVaultReceipt = await createVaultTx.wait();
@@ -131,7 +131,6 @@ describe("Dashboard.sol", () => {
     const defaultAdminRoles = await Promise.all([
       dashboard.FUND_ROLE(),
       dashboard.WITHDRAW_ROLE(),
-      dashboard.LOCK_ROLE(),
       dashboard.MINT_ROLE(),
       dashboard.BURN_ROLE(),
       dashboard.REBALANCE_ROLE(),
@@ -143,11 +142,6 @@ describe("Dashboard.sol", () => {
       dashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
       dashboard.PDG_PROVE_VALIDATOR_ROLE(),
       dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
-      dashboard.OSSIFY_ROLE(),
-      dashboard.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(),
-      dashboard.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
-      dashboard.SET_DEPOSITOR_ROLE(),
-      dashboard.RESET_LOCKED_ROLE(),
       dashboard.RECOVER_ASSETS_ROLE(),
     ]);
 
@@ -654,23 +648,6 @@ describe("Dashboard.sol", () => {
         .to.emit(vault, "Withdrawn")
         .withArgs(dashboard, recipient, amount);
       expect(await ethers.provider.getBalance(recipient)).to.equal(previousBalance + amount);
-    });
-  });
-
-  context("lock", () => {
-    it("increases the locked amount", async () => {
-      expect(await vault.locked()).to.equal(0n);
-
-      await dashboard.fund({ value: ether("1") });
-      await dashboard.lock(ether("1"));
-      expect(await vault.locked()).to.equal(ether("1"));
-    });
-
-    it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).lock(ether("1"))).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
     });
   });
 
@@ -1249,90 +1226,6 @@ describe("Dashboard.sol", () => {
       )
         .to.emit(vault, "ValidatorWithdrawalTriggered")
         .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
-    });
-  });
-
-  context("authorizeLidoVaultHub", () => {
-    it("authorizes the lido vault hub", async () => {
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
-      await hub.deleteVaultSocket(vault);
-      await dashboard.deauthorizeLidoVaultHub();
-
-      await expect(dashboard.authorizeLidoVaultHub()).to.emit(vault, "VaultHubAuthorizedSet");
-    });
-
-    it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).authorizeLidoVaultHub()).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
-    });
-  });
-
-  context("ossifyStakingVault", () => {
-    it("ossifies the staking vault", async () => {
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
-      await hub.deleteVaultSocket(vault);
-      await dashboard.deauthorizeLidoVaultHub();
-
-      await dashboard.ossifyStakingVault();
-
-      expect(await vault.ossified()).to.be.true;
-    });
-
-    it("reverts if called by a non-admin", async () => {
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
-      await hub.deleteVaultSocket(vault);
-      await dashboard.deauthorizeLidoVaultHub();
-
-      await expect(dashboard.connect(stranger).ossifyStakingVault()).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
-    });
-  });
-
-  context("setDepositor", () => {
-    it("sets the depositor", async () => {
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
-      await hub.deleteVaultSocket(vault);
-      await dashboard.deauthorizeLidoVaultHub();
-
-      await dashboard.setDepositor(vaultOwner);
-      expect(await vault.depositor()).to.equal(vaultOwner);
-    });
-
-    it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).setDepositor(vaultOwner)).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
-    });
-  });
-
-  context("resetLocked", () => {
-    it("resets the locked amount", async () => {
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
-      await hub.deleteVaultSocket(vault);
-      await dashboard.deauthorizeLidoVaultHub();
-
-      expect(await vault.locked()).to.equal(0n);
-      const amount = ether("1");
-
-      await dashboard.fund({ value: amount });
-      await dashboard.lock(amount);
-      expect(await vault.locked()).to.equal(amount);
-
-      expect(await vault.vaultHubAuthorized()).to.be.false;
-      await expect(dashboard.resetLocked()).to.emit(vault, "LockedReset");
-      expect(await vault.locked()).to.equal(0n);
-    });
-
-    it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).resetLocked()).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
     });
   });
 
