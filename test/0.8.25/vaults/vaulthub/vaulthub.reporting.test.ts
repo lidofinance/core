@@ -28,7 +28,9 @@ const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 const SHARE_LIMIT = ether("1");
 const RESERVE_RATIO_BP = 10_00n;
 const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
-const TREASURY_FEE_BP = 5_00n;
+const INFRA_FEE_BP = 5_00n;
+const LIQUIDITY_FEE_BP = 4_00n;
+const RESERVATION_FEE_BP = 1_00n;
 
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
 const CONNECT_DEPOSIT = ether("1");
@@ -75,7 +77,9 @@ describe("VaultHub.sol:reporting", () => {
       shareLimit?: bigint;
       reserveRatioBP?: bigint;
       forcedRebalanceThresholdBP?: bigint;
-      treasuryFeeBP?: bigint;
+      infraFeeBP?: bigint;
+      liquidityFeeBP?: bigint;
+      reservationFeeBP?: bigint;
     },
   ) {
     const vault = await createVault(factory);
@@ -83,12 +87,19 @@ describe("VaultHub.sol:reporting", () => {
     await vault.connect(user).lock(CONNECT_DEPOSIT);
 
     const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
-    await operatorGrid.connect(user).alterTier(defaultTierId, {
-      shareLimit: options?.shareLimit ?? SHARE_LIMIT,
-      reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
-      forcedRebalanceThresholdBP: options?.forcedRebalanceThresholdBP ?? FORCED_REBALANCE_THRESHOLD_BP,
-      treasuryFeeBP: options?.treasuryFeeBP ?? TREASURY_FEE_BP,
-    });
+    await operatorGrid.connect(user).alterTiers(
+      [defaultTierId],
+      [
+        {
+          shareLimit: options?.shareLimit ?? SHARE_LIMIT,
+          reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
+          forcedRebalanceThresholdBP: options?.forcedRebalanceThresholdBP ?? FORCED_REBALANCE_THRESHOLD_BP,
+          infraFeeBP: options?.infraFeeBP ?? INFRA_FEE_BP,
+          liquidityFeeBP: options?.liquidityFeeBP ?? LIQUIDITY_FEE_BP,
+          reservationFeeBP: options?.reservationFeeBP ?? RESERVATION_FEE_BP,
+        },
+      ],
+    );
     await vaultHub.connect(user).connectVault(vault);
 
     return vault;
@@ -130,7 +141,9 @@ describe("VaultHub.sol:reporting", () => {
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
       reserveRatioBP: 2000n,
       forcedRebalanceThresholdBP: 1800n,
-      treasuryFeeBP: 500n,
+      infraFeeBP: 500n,
+      liquidityFeeBP: 400n,
+      reservationFeeBP: 100n,
     };
     await operatorGrid.initialize(user, defaultTierParams);
     await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
@@ -206,7 +219,9 @@ describe("VaultHub.sol:reporting", () => {
         SHARE_LIMIT,
         RESERVE_RATIO_BP,
         FORCED_REBALANCE_THRESHOLD_BP,
-        TREASURY_FEE_BP,
+        INFRA_FEE_BP,
+        LIQUIDITY_FEE_BP,
+        RESERVATION_FEE_BP,
       );
 
       await expect(
@@ -276,7 +291,9 @@ describe("VaultHub.sol:reporting", () => {
           SHARE_LIMIT,
           RESERVE_RATIO_BP,
           FORCED_REBALANCE_THRESHOLD_BP,
-          TREASURY_FEE_BP,
+          INFRA_FEE_BP,
+          LIQUIDITY_FEE_BP,
+          RESERVATION_FEE_BP,
         );
         await setCode(vaultReport[0], vaultCode);
         await vaultHub.updateVaultData(
