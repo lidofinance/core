@@ -19,11 +19,14 @@ import {StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
 /// Also, it passes the report from the accounting oracle to the vaults and charges fees
 /// @author folkyatina
 contract VaultHub is PausableUntilWithRoles {
+
+    // -----------------------------
+    //           STORAGE STRUCTS
+    // -----------------------------
     /// @custom:storage-location erc7201:Vaults
     struct Storage {
         /// @notice vault proxy contract codehashes allowed for connecting
         mapping(bytes32 codehash => bool allowed) vaultProxyCodehash;
-
         /// @notice accounting records for each vault
         mapping(address vault => VaultRecord) records;
         /// @notice connection parameters for each vault
@@ -31,14 +34,16 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice 1-based array of vaults connected to the hub. index 0 is reserved for not connected vaults
         address[] vaults;
     }
+
     struct VaultConnection {
         // ### 1st slot
-        /// @notice the address of the original vault owner
+        /// @notice address of the vault owner
         address owner;
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 shareLimit;
         // ### 2th slot
-        /// @notice index of the vault in the list of vaults
+        /// @notice index of the vault in the list of vaults. Indexes is guaranteed to be stable only if there was no deletions.
+        /// @dev vaultIndex is always greater than 0
         uint96 vaultIndex;
         /// @notice if true, vault is disconnected and fee is not accrued
         bool pendingDisconnect;
@@ -53,20 +58,32 @@ contract VaultHub is PausableUntilWithRoles {
 
     struct VaultRecord {
         // ### 1st slot
+        /// @notice latest report for the vault
         Report report;
         // ### 2nd slot
+        /// @notice locked amount of ether for the vault
         uint128 locked;
+        /// @notice liability shares of the vault
         uint96 liabilityShares;
         // ### 3rd slot
+        /// @notice timestamp of the latest report
         uint64 reportTimestamp;
+        /// @notice inOutDelta of the latest report
         int128 inOutDelta;
+        /// @notice fee shares charged for the vault
         uint96 feeSharesCharged;
     }
 
     struct Report {
+        /// @notice total value of the vault
         uint128 totalValue;
+        /// @notice inOutDelta of the report
         int128 inOutDelta;
     }
+
+    // -----------------------------
+    //           CONSTANTS
+    // -----------------------------
 
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_LOCATION = 0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
@@ -87,6 +104,10 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice codehash of the account with no code
     bytes32 private constant EMPTY_CODEHASH = keccak256("");
+
+    // -----------------------------
+    //           IMMUTABLES
+    // -----------------------------
 
     /// @notice limit for a single vault share limit relative to Lido TVL in basis points
     uint256 public immutable RELATIVE_SHARE_LIMIT_BP;
@@ -125,9 +146,6 @@ contract VaultHub is PausableUntilWithRoles {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
-    function operatorGrid() public view returns (address) {
-        return LIDO_LOCATOR.operatorGrid();
-    }
 
     /// @notice Add vault proxy codehash to allow list.
     /// @param _codehash vault proxy codehash
@@ -152,14 +170,21 @@ contract VaultHub is PausableUntilWithRoles {
         emit VaultProxyCodehashRemoved(_codehash);
     }
 
+    function operatorGrid() public view returns (address) {
+        return LIDO_LOCATOR.operatorGrid();
+    }
+
     /// @notice returns the number of vaults connected to the hub
+    /// @dev since index 0 is reserved for not connected vaults, it's always 1 less than the vaults array length
     function vaultsCount() external view returns (uint256) {
         return _storage().vaults.length - 1;
     }
 
     /// @notice returns the vault address by its index
-    /// @dev index is 1-based. Index 0 is returning 0x0 and is reserved for not connected vaults
+    /// @param _index index of the vault in the 1-based list of vaults. possible range [1, vaultsCount()]
+    /// @dev Indexes is guaranteed to be stable only in one transaction.
     function vaultByIndex(uint256 _index) external view returns (address) {
+        if (_index == 0) revert ZeroIndex();
         return _storage().vaults[_index];
     }
 
@@ -238,11 +263,12 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
     /// @param _vault vault address
+    /// @dev vault should have transferred ownership to the VaultHub contract
     function connectVault(address _vault) external whenResumed {
         if (_vault == address(0)) revert VaultZeroAddress();
 
         IStakingVault vault_ = IStakingVault(_vault);
-        if (address(this) != vault_.pendingOwner()) revert VaultHubNotPendingOwner(_vault);
+        if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
         if (vault_.isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(this)) revert VaultHubMustBeDepositor(_vault);
 
@@ -268,11 +294,14 @@ contract VaultHub is PausableUntilWithRoles {
             forcedRebalanceThresholdBP,
             treasuryFeeBP
         );
+
+        IStakingVault(_vault).acceptOwnership();
+
+        emit VaultConnected(_vault, shareLimit, reserveRatioBP, forcedRebalanceThresholdBP, treasuryFeeBP);
     }
 
     /// @notice updates share limit for the vault
     /// Setting share limit to zero actually pause the vault's ability to mint
-    /// and stops charging fees from the vault
     /// @param _vault vault address
     /// @param _shareLimit new share limit
     /// @dev msg.sender must have VAULT_MASTER_ROLE
@@ -318,7 +347,7 @@ contract VaultHub is PausableUntilWithRoles {
         connection.forcedRebalanceThresholdBP = uint16(_forcedRebalanceThresholdBP);
         connection.treasuryFeeBP = uint16(_treasuryFeeBP);
 
-        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
+        emit VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
 
     /// @notice force disconnects a vault from the hub
@@ -660,10 +689,6 @@ contract VaultHub is PausableUntilWithRoles {
         );
 
         _addVault(_vault, connection, record);
-
-        IStakingVault(_vault).acceptOwnership();
-
-        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
 
     function _initiateDisconnection(
@@ -826,7 +851,10 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    event VaultConnectionSet(
+    event VaultProxyCodehashAdded(bytes32 indexed codehash);
+    event VaultProxyCodehashRemoved(bytes32 indexed codehash);
+
+    event VaultConnected(
         address indexed vault,
         uint256 shareLimit,
         uint256 reserveRatioBP,
@@ -834,15 +862,24 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 treasuryFeeBP
     );
 
-    event VaultsReportDataUpdated(uint64 indexed timestamp, bytes32 root, string cid);
+    event VaultConnectionUpdated(
+        address indexed vault,
+        uint256 shareLimit,
+        uint256 reserveRatioBP,
+        uint256 forcedRebalanceThresholdBP,
+        uint256 treasuryFeeBP
+    );
+
     event ShareLimitUpdated(address indexed vault, uint256 newShareLimit);
+
+    event VaultsReportDataUpdated(uint64 indexed timestamp, bytes32 root, string cid);
+
     event VaultDisconnectInitiated(address indexed vault);
     event VaultDisconnectCompleted(address indexed vault);
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
-    event VaultProxyCodehashAdded(bytes32 indexed codehash);
-    event VaultProxyCodehashRemoved(bytes32 indexed codehash);
+
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     /**
@@ -861,22 +898,13 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultWithdrawn(address indexed vault, address indexed recipient, uint256 amount);
 
     /**
-     * @notice Emitted when the locked amount is increased
-     * @param locked New amount of locked ether
-     */
-    event LockedIncreased(uint256 locked);
-
-    /**
-     * @notice Emitted when deposits are paused
-     */
-    event DepositedToBeaconChain(address indexed sender, uint256 numberOfDeposits, uint256 totalAmount);
-
-    /**
      * @notice Emitted when the manager is set
      * @param vault The address of the vault
      * @param owner The address of the owner
      */
     event VaultOwnerSet(address indexed vault, address indexed owner);
+
+    error ZeroIndex();
 
     /**
      * @notice Thrown when attempting to decrease the locked amount outside of a report
