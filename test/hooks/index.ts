@@ -15,6 +15,13 @@ export const mochaRootHooks: Mocha.RootHookObject = {
    */
   async beforeAll() {
     await mine();
+
+    // To prevent issues due to the test addresses having bytecode when forking e.g. Mainnet.
+    // NB: hardhat cannot be imported the regular way here because it is yet being initialized.
+    const hre = await import("hardhat");
+    for (const signer of await hre.ethers.getSigners()) {
+      await hre.ethers.provider.send("hardhat_setCode", [signer.address, "0x"]);
+    }
   },
 
   /**
