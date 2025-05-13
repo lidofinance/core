@@ -373,7 +373,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         }
 
         balance.locked += totalDepositAmount;
-        VaultHub(payable(LIDO_LOCATOR.vaultHub())).depositToBeaconChain(address(_stakingVault), _deposits);
+        VaultHub(LIDO_LOCATOR.vaultHub()).depositToBeaconChain(address(_stakingVault), _deposits);
 
         emit BalanceLocked(nodeOperator, balance.total, balance.locked);
     }

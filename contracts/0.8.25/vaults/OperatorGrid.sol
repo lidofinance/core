@@ -392,7 +392,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         Tier storage requestedTier = $.tiers[requestedTierId];
 
-        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        VaultHub vaultHub = VaultHub(LIDO_LOCATOR.vaultHub());
         uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
 
         //check if tier limit is exceeded

@@ -62,7 +62,7 @@ contract LazyOracle {
     /// @param _limit maximum number of vaults to return
     /// @return batch of vaults info
     function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory) {
-        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        VaultHub vaultHub = VaultHub(LIDO_LOCATOR.vaultHub());
 
         uint256 vaultCount = vaultHub.vaultsCount();
         uint256 batchSize;
@@ -128,7 +128,7 @@ contract LazyOracle {
         );
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
-        VaultHub(payable(LIDO_LOCATOR.vaultHub()))
+        VaultHub(LIDO_LOCATOR.vaultHub())
             .applyVaultReport(
                 _vault,
                 _storage().vaultsDataTimestamp,
