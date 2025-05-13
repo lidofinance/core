@@ -163,16 +163,16 @@ describe("OperatorGrid.sol", () => {
       );
     });
 
-    it("reverts on updateGroupShareLimit when _nodeOperator address is zero", async function () {
-      await expect(operatorGrid.updateGroupShareLimit(ZeroAddress, 1000)).to.be.revertedWithCustomError(
+    it("reverts on updateGroupsShareLimit when _nodeOperator address is zero", async function () {
+      await expect(operatorGrid.updateGroupsShareLimit([ZeroAddress], [1000])).to.be.revertedWithCustomError(
         operatorGrid,
         "ZeroArgument",
       );
     });
 
-    it("reverts on updateGroupShareLimit when _nodeOperator not exists", async function () {
+    it("reverts on updateGroupsShareLimit when _nodeOperator not exists", async function () {
       await expect(
-        operatorGrid.updateGroupShareLimit(certainAddress("non-existent-group"), 1000),
+        operatorGrid.updateGroupsShareLimit([certainAddress("non-existent-group")], [1000]),
       ).to.be.revertedWithCustomError(operatorGrid, "GroupNotExists");
     });
 
@@ -194,7 +194,7 @@ describe("OperatorGrid.sol", () => {
     it("reverts when updating without `REGISTRY_ROLE` role", async function () {
       const nonExistentGroupId = certainAddress("non-existent-group");
       await expect(
-        operatorGrid.connect(stranger).updateGroupShareLimit(nonExistentGroupId, 2),
+        operatorGrid.connect(stranger).updateGroupsShareLimit([nonExistentGroupId], [2]),
       ).to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount");
     });
 
@@ -207,12 +207,46 @@ describe("OperatorGrid.sol", () => {
         .to.emit(operatorGrid, "GroupAdded")
         .withArgs(groupOperator, shareLimit);
 
-      await expect(operatorGrid.updateGroupShareLimit(groupOperator, newShareLimit))
+      await expect(operatorGrid.updateGroupsShareLimit([groupOperator], [newShareLimit]))
         .to.emit(operatorGrid, "GroupShareLimitUpdated")
         .withArgs(groupOperator, newShareLimit);
 
       const groupStruct = await operatorGrid.group(groupOperator);
       expect(groupStruct.shareLimit).to.equal(newShareLimit);
+    });
+
+    it("update multiple group share limits at once", async function () {
+      const groupOperator1 = certainAddress("new-operator-group-1");
+      const groupOperator2 = certainAddress("new-operator-group-2");
+      const shareLimit1 = 2000;
+      const shareLimit2 = 3000;
+      const newShareLimit1 = 5000;
+      const newShareLimit2 = 6000;
+
+      await operatorGrid.registerGroup(groupOperator1, shareLimit1);
+      await operatorGrid.registerGroup(groupOperator2, shareLimit2);
+
+      await expect(
+        operatorGrid.updateGroupsShareLimit([groupOperator1, groupOperator2], [newShareLimit1, newShareLimit2]),
+      )
+        .to.emit(operatorGrid, "GroupShareLimitUpdated")
+        .withArgs(groupOperator1, newShareLimit1)
+        .to.emit(operatorGrid, "GroupShareLimitUpdated")
+        .withArgs(groupOperator2, newShareLimit2);
+
+      const groupStruct1 = await operatorGrid.group(groupOperator1);
+      const groupStruct2 = await operatorGrid.group(groupOperator2);
+      expect(groupStruct1.shareLimit).to.equal(newShareLimit1);
+      expect(groupStruct2.shareLimit).to.equal(newShareLimit2);
+    });
+
+    it("reverts when arrays length mismatch in updateGroupsShareLimit", async function () {
+      const groupOperator = certainAddress("new-operator-group");
+      await operatorGrid.registerGroup(groupOperator, 1000);
+
+      await expect(
+        operatorGrid.updateGroupsShareLimit([groupOperator, groupOperator], [2000]),
+      ).to.be.revertedWithCustomError(operatorGrid, "ArrayLengthMismatch");
     });
 
     it("nodeOperatorCount - works", async function () {
@@ -883,7 +917,7 @@ describe("OperatorGrid.sol", () => {
     // it("mintShares - DEFAULT_GROUP group=2000 tier=2000 NO1_vault1=1000, NO2_vault2=1, reverts TierLimitExceeded", async function () {
     //   const groupAddress = await operatorGrid.DEFAULT_GROUP_ADDRESS();
     //   const shareLimit = 2000;
-    //   await operatorGrid.updateGroupShareLimit(groupAddress, shareLimit);
+    //   await operatorGrid.updateGroupsShareLimit([groupAddress], [shareLimit]);
 
     //   await operatorGrid.registerVault(vault_NO1_V1);
     //   await operatorGrid.registerVault(vault_NO2_V1);
