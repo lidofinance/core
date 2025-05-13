@@ -248,7 +248,9 @@ describe("Dashboard.sol", () => {
         shareLimit: 1000n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -260,7 +262,9 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.liabilityShares()).to.equal(sockets.liabilityShares);
       expect(await dashboard.reserveRatioBP()).to.equal(sockets.reserveRatioBP);
       expect(await dashboard.forcedRebalanceThresholdBP()).to.equal(sockets.forcedRebalanceThresholdBP);
-      expect(await dashboard.treasuryFeeBP()).to.equal(sockets.treasuryFeeBP);
+      expect(await dashboard.infraFeeBP()).to.equal(sockets.infraFeeBP);
+      expect(await dashboard.liquidityFeeBP()).to.equal(sockets.liquidityFeeBP);
+      expect(await dashboard.reservationFeeBP()).to.equal(sockets.reservationFeeBP);
     });
 
     it("totalValue", async () => {
@@ -283,7 +287,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 555n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -306,7 +312,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 0n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -327,7 +335,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 555n,
         reserveRatioBP: 10_000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -348,7 +358,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 555n,
         reserveRatioBP: 0n,
         forcedRebalanceThresholdBP: 0n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -377,7 +389,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 0n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -404,7 +418,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 900n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -428,7 +444,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 10000n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -452,7 +470,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 500n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -477,7 +497,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 500n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };

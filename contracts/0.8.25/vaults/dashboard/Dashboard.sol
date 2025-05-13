@@ -121,10 +121,24 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the treasury fee basis points.
+     * @notice Returns the infra fee basis points.
      */
-    function treasuryFeeBP() external view returns (uint16) {
-        return vaultConnection().treasuryFeeBP;
+    function infraFeeBP() external view returns (uint16) {
+        return vaultConnection().infraFeeBP;
+    }
+
+    /**
+     * @notice Returns the liquidity fee basis points.
+     */
+    function liquidityFeeBP() external view returns (uint16) {
+        return vaultConnection().liquidityFeeBP;
+    }
+
+    /**
+     * @notice Returns the reservation fee basis points.
+     */
+    function reservationFeeBP() external view returns (uint16) {
+        return vaultConnection().reservationFeeBP;
     }
 
     /**
@@ -209,7 +223,7 @@ contract Dashboard is NodeOperatorFee {
     function voluntaryDisconnect() external {
         uint256 fee = nodeOperatorUnclaimedFee();
         if (fee > 0) _disburseNodeOperatorFee(fee);
-        
+
         _voluntaryDisconnect();
     }
 
@@ -222,7 +236,7 @@ contract Dashboard is NodeOperatorFee {
     function abandonDashboard(address _newOwner) external {
         address vaultAddress = address(_stakingVault());
         if (VAULT_HUB.vaultConnection(vaultAddress).vaultIndex != 0) revert ConnectedToVaultHub();
-        
+
         _acceptOwnership();
         _transferOwnership(_newOwner);
     }
