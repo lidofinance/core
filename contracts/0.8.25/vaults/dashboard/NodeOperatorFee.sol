@@ -241,6 +241,8 @@ contract NodeOperatorFee is Permissions {
 
     function _setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) internal {
         if (_newNodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
+        uint256 fee = nodeOperatorUnclaimedFee();
+        if (fee > 0) _disburseNodeOperatorFee(fee);
 
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
 
