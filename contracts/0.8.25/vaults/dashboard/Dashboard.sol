@@ -204,9 +204,36 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Disconnects the staking vault from the vault hub.
+     * VaultHub stores data for calculating the node operator fee, so the fees should be claimed first.
      */
     function voluntaryDisconnect() external {
+        uint256 fee = nodeOperatorUnclaimedFee();
+        if (fee > 0) _disburseNodeOperatorFee(fee);
+        
         _voluntaryDisconnect();
+    }
+
+    /**
+     * @notice Accepts the ownership over the staking vault transferred from VaultHub on disconnect
+     * and immediately transfers it to a new pending owner. This new owner will have to accept the ownership
+     * on the staking vault contract.
+     * @param _newOwner The address to transfer the staking vault ownership to.
+     */
+    function abandonDashboard(address _newOwner) external {
+        address vaultAddress = address(_stakingVault());
+        if (VAULT_HUB.vaultSocket(vaultAddress).vault == vaultAddress) revert ConnectedToVaultHub();
+
+        _acceptOwnership();
+        _transferOwnership(_newOwner);
+    }
+
+    /**
+     * @notice Reclaims the Dashboard contract and reconnects to VaultHub, transferring ownership to VaultHub.
+     */
+    function connectToVaultHub() external {
+        _acceptOwnership();
+        _transferOwnership(address(VAULT_HUB));
+        VAULT_HUB.connectVault(address(_stakingVault()));
     }
 
     /**
@@ -583,4 +610,9 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error thrown when mintable total value is breached
      */
     error MintingCapacityExceeded(uint256 locked, uint256 mintableValue);
+
+    /**
+     * @notice Error when the StakingVault is not connected to the VaultHub.
+     */
+    error ConnectedToVaultHub();
 }

@@ -6,6 +6,8 @@ pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
@@ -83,6 +85,11 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
+     * @notice Permission for transferring the StakingVault ownership when disconnected from the VaultHub.
+     */
+    bytes32 public constant MANAGE_OWNERSHIP_ROLE = keccak256("vaults.Permissions.ManageOwnership");
+
+    /**
      * @notice Permission for getting compensation for disproven validator predeposit from PDG
      */
     bytes32 public constant PDG_COMPENSATE_PREDEPOSIT_ROLE = keccak256("vaults.Permissions.PDGCompensatePredeposit");
@@ -97,18 +104,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     bytes32 public constant UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE =
         keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
-
-    /**
-     * @dev Permission for deauthorizing Lido VaultHub from the StakingVault.
-     */
-    bytes32 public constant LIDO_VAULTHUB_DEAUTHORIZATION_ROLE =
-        keccak256("vaults.Permissions.LidoVaultHubDeauthorization");
-
-    /**
-     * @dev Permission for granting authorization to Lido VaultHub on the StakingVault.
-     */
-    bytes32 public constant LIDO_VAULTHUB_AUTHORIZATION_ROLE =
-        keccak256("vaults.Permissions.LidoVaultHubAuthorization");
 
     /**
      * @dev Permission for ossifying the StakingVault.
@@ -312,6 +307,21 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
         VAULT_HUB.voluntaryDisconnect(address(_stakingVault()));
+    }
+
+    /**
+     * @dev Checks the MANAGE_OWNERSHIP_ROLE and transfers the StakingVault ownership.
+     * @param _newOwner The address to transfer the ownership to.
+     */
+    function _transferOwnership(address _newOwner) internal onlyRole(MANAGE_OWNERSHIP_ROLE) {
+        OwnableUpgradeable(address(_stakingVault())).transferOwnership(_newOwner);
+    }
+
+    /**
+     * @dev Checks the MANAGE_OWNERSHIP_ROLE and accepts the StakingVault ownership.
+     */
+    function _acceptOwnership() internal onlyRole(MANAGE_OWNERSHIP_ROLE) {
+        Ownable2StepUpgradeable(address(_stakingVault())).acceptOwnership();
     }
 
     /**
