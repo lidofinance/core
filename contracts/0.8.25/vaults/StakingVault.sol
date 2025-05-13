@@ -245,6 +245,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
 
     /**
+     * @notice Returns whether the beacon chain deposits are paused
+     */
+    function beaconChainDepositsPaused() external view returns (bool) {
+        return _storage().beaconChainDepositsPaused;
+    }
+
+    /**
      * @notice Pauses deposits to beacon chain
      */
     function pauseBeaconChainDeposits() external onlyOwner {

@@ -116,7 +116,6 @@ export async function createVaultWithDashboard(
     dashboard.RECOVER_ASSETS_ROLE(),
     dashboard.FUND_ROLE(),
     dashboard.WITHDRAW_ROLE(),
-    dashboard.LOCK_ROLE(),
     dashboard.MINT_ROLE(),
     dashboard.BURN_ROLE(),
     dashboard.REBALANCE_ROLE(),
@@ -128,13 +127,7 @@ export async function createVaultWithDashboard(
     dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
     dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
     dashboard.VOLUNTARY_DISCONNECT_ROLE(),
-    dashboard.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
-    dashboard.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(),
-    dashboard.OSSIFY_ROLE(),
-    dashboard.SET_DEPOSITOR_ROLE(),
-    dashboard.RESET_LOCKED_ROLE(),
     dashboard.REQUEST_TIER_CHANGE_ROLE(),
-    dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
     dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
   ]);
 

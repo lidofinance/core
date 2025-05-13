@@ -6,6 +6,8 @@ pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
@@ -35,11 +37,6 @@ abstract contract Permissions is AccessControlConfirmable {
      * @notice Permission for withdrawing funds from the StakingVault.
      */
     bytes32 public constant WITHDRAW_ROLE = keccak256("vaults.Permissions.Withdraw");
-
-    /**
-     * @notice Permission for locking ether on StakingVault.
-     */
-    bytes32 public constant LOCK_ROLE = keccak256("vaults.Permissions.Lock");
 
     /**
      * @notice Permission for minting stETH shares backed by the StakingVault.
@@ -83,6 +80,11 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
+     * @notice Permission for transferring the StakingVault ownership when disconnected from the VaultHub.
+     */
+    bytes32 public constant MANAGE_OWNERSHIP_ROLE = keccak256("vaults.Permissions.ManageOwnership");
+
+    /**
      * @notice Permission for getting compensation for disproven validator predeposit from PDG
      */
     bytes32 public constant PDG_COMPENSATE_PREDEPOSIT_ROLE = keccak256("vaults.Permissions.PDGCompensatePredeposit");
@@ -97,33 +99,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     bytes32 public constant UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE =
         keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
-
-    /**
-     * @dev Permission for deauthorizing Lido VaultHub from the StakingVault.
-     */
-    bytes32 public constant LIDO_VAULTHUB_DEAUTHORIZATION_ROLE =
-        keccak256("vaults.Permissions.LidoVaultHubDeauthorization");
-
-    /**
-     * @dev Permission for granting authorization to Lido VaultHub on the StakingVault.
-     */
-    bytes32 public constant LIDO_VAULTHUB_AUTHORIZATION_ROLE =
-        keccak256("vaults.Permissions.LidoVaultHubAuthorization");
-
-    /**
-     * @dev Permission for ossifying the StakingVault.
-     */
-    bytes32 public constant OSSIFY_ROLE = keccak256("vaults.Permissions.Ossify");
-
-    /**
-     * @dev Permission for setting depositor on the StakingVault.
-     */
-    bytes32 public constant SET_DEPOSITOR_ROLE = keccak256("vaults.Permissions.SetDepositor");
-
-    /**
-     * @dev Permission for resetting locked amount on the disconnected StakingVault.
-     */
-    bytes32 public constant RESET_LOCKED_ROLE = keccak256("vaults.Permissions.ResetLocked");
 
     /**
      * @dev Permission for requesting change of tier on the OperatorGrid.
@@ -315,6 +290,21 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
+     * @dev Checks the MANAGE_OWNERSHIP_ROLE and transfers the StakingVault ownership.
+     * @param _newOwner The address to transfer the ownership to.
+     */
+    function _transferOwnership(address _newOwner) internal onlyRole(MANAGE_OWNERSHIP_ROLE) {
+        OwnableUpgradeable(address(_stakingVault())).transferOwnership(_newOwner);
+    }
+
+    /**
+     * @dev Checks the MANAGE_OWNERSHIP_ROLE and accepts the StakingVault ownership.
+     */
+    function _acceptOwnership() internal onlyRole(MANAGE_OWNERSHIP_ROLE) {
+        Ownable2StepUpgradeable(address(_stakingVault())).acceptOwnership();
+    }
+
+    /**
      * @dev Checks the PDG_COMPENSATE_PREDEPOSIT_ROLE and claims disproven predeposit from PDG.
      * @param _pubkey The pubkey of the validator.
      * @param _recipient The address to compensate the disproven validator predeposit to.
@@ -324,7 +314,7 @@ abstract contract Permissions is AccessControlConfirmable {
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
-        return IPredepositGuarantee(_stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
+        return IPredepositGuarantee(VAULT_HUB.predepositGuarantee()).compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     /**
@@ -333,7 +323,7 @@ abstract contract Permissions is AccessControlConfirmable {
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
     ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
-        IPredepositGuarantee predepositGuarantee = IPredepositGuarantee(_stakingVault().depositor());
+        IPredepositGuarantee predepositGuarantee = IPredepositGuarantee(VAULT_HUB.predepositGuarantee());
         for (uint256 i = 0; i < _witnesses.length; i++) {
             predepositGuarantee.proveUnknownValidator(_witnesses[i], _stakingVault());
         }
@@ -354,13 +344,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _setVaultOwner(address _newOwner) internal onlyConfirmed(confirmingRoles()) {
         VAULT_HUB.setVaultOwner(address(_stakingVault()), _newOwner);
-    }
-
-    /**
-     * @dev Checks the OSSIFY_ROLE and ossifies the StakingVault.
-     */
-    function _ossifyStakingVault() internal onlyRole(OSSIFY_ROLE) {
-        _stakingVault().ossify();
     }
 
     /**

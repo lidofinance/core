@@ -149,5 +149,4 @@ contract LazyOracle {
 
     error NotAuthorized();
     error InvalidProof();
-    error InvalidOffset();
 }

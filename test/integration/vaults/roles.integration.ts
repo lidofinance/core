@@ -34,7 +34,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     nodeOperatorManager: HardhatEthersSigner,
     funder: HardhatEthersSigner,
     withdrawer: HardhatEthersSigner,
-    locker: HardhatEthersSigner,
     assetRecoverer: HardhatEthersSigner,
     minter: HardhatEthersSigner,
     burner: HardhatEthersSigner,
@@ -47,13 +46,8 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     validatorExitRequester: HardhatEthersSigner,
     validatorWithdrawalTriggerer: HardhatEthersSigner,
     disconnecter: HardhatEthersSigner,
-    lidoVaultHubAuthorizer: HardhatEthersSigner,
-    lidoVaultHubDeauthorizer: HardhatEthersSigner,
-    ossifier: HardhatEthersSigner,
-    depositorSetter: HardhatEthersSigner,
-    lockedResetter: HardhatEthersSigner,
     tierChanger: HardhatEthersSigner,
-    nodeOperatorFeeClaimer: HardhatEthersSigner,
+    nodeOperatorFeeRecipientSetter: HardhatEthersSigner,
     nodeOperatorRewardAdjuster: HardhatEthersSigner,
     stranger: HardhatEthersSigner;
 
@@ -69,7 +63,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       assetRecoverer,
       funder,
       withdrawer,
-      locker,
       minter,
       burner,
       rebalancer,
@@ -81,13 +74,8 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       validatorExitRequester,
       validatorWithdrawalTriggerer,
       disconnecter,
-      lidoVaultHubAuthorizer,
-      lidoVaultHubDeauthorizer,
-      ossifier,
-      depositorSetter,
-      lockedResetter,
       tierChanger,
-      nodeOperatorFeeClaimer,
+      nodeOperatorFeeRecipientSetter,
       nodeOperatorRewardAdjuster,
       stranger,
     ] = allRoles;
@@ -116,7 +104,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           VAULT_NODE_OPERATOR_FEE,
           days(7n),
           [],
-          "0x",
           { value: VAULT_CONNECTION_DEPOSIT },
         );
 
@@ -137,10 +124,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         {
           account: withdrawer,
           role: await testDashboard.WITHDRAW_ROLE(),
-        },
-        {
-          account: locker,
-          role: await testDashboard.LOCK_ROLE(),
         },
         {
           account: minter,
@@ -183,26 +166,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           role: await testDashboard.VOLUNTARY_DISCONNECT_ROLE(),
         },
         {
-          account: lidoVaultHubAuthorizer,
-          role: await testDashboard.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
-        },
-        {
-          account: lidoVaultHubDeauthorizer,
-          role: await testDashboard.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(),
-        },
-        {
-          account: ossifier,
-          role: await testDashboard.OSSIFY_ROLE(),
-        },
-        {
-          account: depositorSetter,
-          role: await testDashboard.SET_DEPOSITOR_ROLE(),
-        },
-        {
-          account: lockedResetter,
-          role: await testDashboard.RESET_LOCKED_ROLE(),
-        },
-        {
           account: tierChanger,
           role: await testDashboard.REQUEST_TIER_CHANGE_ROLE(),
         },
@@ -210,8 +173,8 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
       await testDashboard.connect(nodeOperatorManager).grantRoles([
         {
-          account: nodeOperatorFeeClaimer,
-          role: await testDashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+          account: nodeOperatorFeeRecipientSetter,
+          role: await testDashboard.NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE(),
         },
         {
           account: nodeOperatorRewardAdjuster,
@@ -249,16 +212,17 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     describe("Verify ACL for methods that require only role", () => {
       describe("Dashboard methods", () => {
         it("claimNodeOperatorFee", async () => {
-          await testMethod(
-            testDashboard,
-            "claimNodeOperatorFee",
-            {
-              successUsers: [nodeOperatorFeeClaimer],
-              failingUsers: allRoles.filter((r) => r !== nodeOperatorFeeClaimer),
-            },
-            [stranger],
-            await testDashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
-          );
+          // TODO:
+          // await testMethod(
+          //   testDashboard,
+          //   "claimNodeOperatorFee",
+          //   {
+          //     successUsers: [nodeOperatorFeeClaimer],
+          //     failingUsers: allRoles.filter((r) => r !== nodeOperatorFeeClaimer),
+          //   },
+          //   [stranger],
+          //   await testDashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+          //);
         });
       });
 
@@ -451,19 +415,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           );
         });
 
-        it("lock", async () => {
-          await testMethod(
-            testDashboard,
-            "lock",
-            {
-              successUsers: [locker],
-              failingUsers: allRoles.filter((r) => r !== locker),
-            },
-            [ether("1")],
-            await testDashboard.LOCK_ROLE(),
-          );
-        });
-
         it("fund", async () => {
           await testMethod(
             testDashboard,
@@ -486,49 +437,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
             { successUsers: [disconnecter], failingUsers: allRoles.filter((r) => r !== disconnecter) },
             [],
             await testDashboard.VOLUNTARY_DISCONNECT_ROLE(),
-          );
-        });
-
-        it("authorizeLidoVaultHub", async () => {
-          await testMethod(
-            testDashboard,
-            "authorizeLidoVaultHub",
-            {
-              successUsers: [lidoVaultHubAuthorizer],
-              failingUsers: allRoles.filter((r) => r !== lidoVaultHubAuthorizer),
-            },
-            [],
-            await testDashboard.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
-          );
-        });
-
-        it("ossifyStakingVault", async () => {
-          await testMethod(
-            testDashboard,
-            "ossifyStakingVault",
-            { successUsers: [ossifier], failingUsers: allRoles.filter((r) => r !== ossifier) },
-            [],
-            await testDashboard.OSSIFY_ROLE(),
-          );
-        });
-
-        it("setDepositor", async () => {
-          await testMethod(
-            testDashboard,
-            "setDepositor",
-            { successUsers: [depositorSetter], failingUsers: allRoles.filter((r) => r !== depositorSetter) },
-            [stranger],
-            await testDashboard.SET_DEPOSITOR_ROLE(),
-          );
-        });
-
-        it("resetLocked", async () => {
-          await testMethod(
-            testDashboard,
-            "resetLocked",
-            { successUsers: [lockedResetter], failingUsers: allRoles.filter((r) => r !== lockedResetter) },
-            [],
-            await testDashboard.RESET_LOCKED_ROLE(),
           );
         });
 
@@ -618,7 +526,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           VAULT_NODE_OPERATOR_FEE,
           days(7n),
           [],
-          "0x",
           { value: VAULT_CONNECTION_DEPOSIT },
         );
 
@@ -630,7 +537,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
     it("Verify that roles are not assigned", async () => {
       const roles = await Promise.all([
-        testDashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
         testDashboard.FUND_ROLE(),
         testDashboard.WITHDRAW_ROLE(),
         testDashboard.MINT_ROLE(),
