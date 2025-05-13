@@ -44,9 +44,12 @@ interface IStakingVault {
     function calculateValidatorWithdrawalFee(uint256 _keysCount) external view returns (uint256);
     function fund() external payable;
     function withdraw(address _recipient, uint256 _ether) external;
+
+    function beaconChainDepositsPaused() external view returns (bool);
     function pauseBeaconChainDeposits() external;
     function resumeBeaconChainDeposits() external;
     function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external;
+
     function requestValidatorExit(bytes calldata _pubkeys) external;
     function triggerValidatorWithdrawals(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable;
     function triggerValidatorExits(bytes calldata _pubkeys, address _refundRecipient) external payable;
