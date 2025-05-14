@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { StakingRouter_Mock, ValidatorExitVerifier, ValidatorsExitBusOracle_Mock } from "typechain-types";
+import { StakingRouter_Mock, ValidatorExitDelayVerifier, ValidatorsExitBusOracle_Mock } from "typechain-types";
 import { ILidoLocator } from "typechain-types/test/0.8.9/contracts/oracle/OracleReportSanityCheckerMocks.sol";
 
 import { updateBeaconBlockRoot } from "lib";
@@ -16,12 +16,12 @@ import {
   toHistoricalHeaderWitness,
   toProvableBeaconBlockHeader,
   toValidatorWitness,
-} from "./validatorExitVerifierHelpers";
+} from "./validatorExitDelayVerifierHelpers";
 import { ACTIVE_VALIDATOR_PROOF } from "./validatorState";
 
 const EMPTY_REPORT = { data: "0x", dataFormat: 1n };
 
-describe("ValidatorExitVerifier.sol", () => {
+describe("ValidatorExitDelayVerifier.sol", () => {
   let originalState: string;
 
   beforeEach(async () => {
@@ -40,16 +40,16 @@ describe("ValidatorExitVerifier.sol", () => {
   const SHARD_COMMITTEE_PERIOD_IN_SECONDS = 8192;
   const LIDO_LOCATOR = "0x0000000000000000000000000000000000000001";
 
-  describe("ValidatorExitVerifier Constructor", () => {
+  describe("ValidatorExitDelayVerifier Constructor", () => {
     const GI_FIRST_VALIDATOR_PREV = `0x${"1".repeat(64)}`;
     const GI_FIRST_VALIDATOR_CURR = `0x${"2".repeat(64)}`;
     const GI_HISTORICAL_SUMMARIES_PREV = `0x${"3".repeat(64)}`;
     const GI_HISTORICAL_SUMMARIES_CURR = `0x${"4".repeat(64)}`;
 
-    let validatorExitVerifier: ValidatorExitVerifier;
+    let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
     before(async () => {
-      validatorExitVerifier = await ethers.deployContract("ValidatorExitVerifier", [
+      validatorExitDelayVerifier = await ethers.deployContract("ValidatorExitDelayVerifier", [
         LIDO_LOCATOR,
         GI_FIRST_VALIDATOR_PREV,
         GI_FIRST_VALIDATOR_CURR,
@@ -65,25 +65,25 @@ describe("ValidatorExitVerifier.sol", () => {
     });
 
     it("sets all parameters correctly", async () => {
-      expect(await validatorExitVerifier.LOCATOR()).to.equal(LIDO_LOCATOR);
-      expect(await validatorExitVerifier.GI_FIRST_VALIDATOR_PREV()).to.equal(GI_FIRST_VALIDATOR_PREV);
-      expect(await validatorExitVerifier.GI_FIRST_VALIDATOR_PREV()).to.equal(GI_FIRST_VALIDATOR_PREV);
-      expect(await validatorExitVerifier.GI_FIRST_VALIDATOR_CURR()).to.equal(GI_FIRST_VALIDATOR_CURR);
-      expect(await validatorExitVerifier.GI_HISTORICAL_SUMMARIES_PREV()).to.equal(GI_HISTORICAL_SUMMARIES_PREV);
-      expect(await validatorExitVerifier.GI_HISTORICAL_SUMMARIES_CURR()).to.equal(GI_HISTORICAL_SUMMARIES_CURR);
-      expect(await validatorExitVerifier.FIRST_SUPPORTED_SLOT()).to.equal(FIRST_SUPPORTED_SLOT);
-      expect(await validatorExitVerifier.PIVOT_SLOT()).to.equal(PIVOT_SLOT);
-      expect(await validatorExitVerifier.SLOTS_PER_EPOCH()).to.equal(SLOTS_PER_EPOCH);
-      expect(await validatorExitVerifier.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
-      expect(await validatorExitVerifier.GENESIS_TIME()).to.equal(GENESIS_TIME);
-      expect(await validatorExitVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS()).to.equal(
+      expect(await validatorExitDelayVerifier.LOCATOR()).to.equal(LIDO_LOCATOR);
+      expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_PREV()).to.equal(GI_FIRST_VALIDATOR_PREV);
+      expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_PREV()).to.equal(GI_FIRST_VALIDATOR_PREV);
+      expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_CURR()).to.equal(GI_FIRST_VALIDATOR_CURR);
+      expect(await validatorExitDelayVerifier.GI_HISTORICAL_SUMMARIES_PREV()).to.equal(GI_HISTORICAL_SUMMARIES_PREV);
+      expect(await validatorExitDelayVerifier.GI_HISTORICAL_SUMMARIES_CURR()).to.equal(GI_HISTORICAL_SUMMARIES_CURR);
+      expect(await validatorExitDelayVerifier.FIRST_SUPPORTED_SLOT()).to.equal(FIRST_SUPPORTED_SLOT);
+      expect(await validatorExitDelayVerifier.PIVOT_SLOT()).to.equal(PIVOT_SLOT);
+      expect(await validatorExitDelayVerifier.SLOTS_PER_EPOCH()).to.equal(SLOTS_PER_EPOCH);
+      expect(await validatorExitDelayVerifier.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
+      expect(await validatorExitDelayVerifier.GENESIS_TIME()).to.equal(GENESIS_TIME);
+      expect(await validatorExitDelayVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS()).to.equal(
         SHARD_COMMITTEE_PERIOD_IN_SECONDS,
       );
     });
 
     it("reverts with 'InvalidPivotSlot' if firstSupportedSlot > pivotSlot", async () => {
       await expect(
-        ethers.deployContract("ValidatorExitVerifier", [
+        ethers.deployContract("ValidatorExitDelayVerifier", [
           LIDO_LOCATOR,
           GI_FIRST_VALIDATOR_PREV,
           GI_FIRST_VALIDATOR_CURR,
@@ -96,15 +96,15 @@ describe("ValidatorExitVerifier.sol", () => {
           GENESIS_TIME,
           SHARD_COMMITTEE_PERIOD_IN_SECONDS,
         ]),
-      ).to.be.revertedWithCustomError(validatorExitVerifier, "InvalidPivotSlot");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidPivotSlot");
     });
   });
 
-  describe("verifyActiveValidatorsAfterExitRequest method", () => {
+  describe("verifyValidatorExitDelay method", () => {
     const GI_FIRST_VALIDATOR_INDEX = "0x0000000000000000000000000000000000000000000000000056000000000028";
     const GI_HISTORICAL_SUMMARIES_INDEX = "0x0000000000000000000000000000000000000000000000000000000000003b00";
 
-    let validatorExitVerifier: ValidatorExitVerifier;
+    let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
     let locator: ILidoLocator;
     let locatorAddr: string;
@@ -125,7 +125,7 @@ describe("ValidatorExitVerifier.sol", () => {
       locator = await deployLidoLocator({ validatorsExitBusOracle: veboAddr, stakingRouter: stakingRouterAddr });
       locatorAddr = await locator.getAddress();
 
-      validatorExitVerifier = await ethers.deployContract("ValidatorExitVerifier", [
+      validatorExitDelayVerifier = await ethers.deployContract("ValidatorExitDelayVerifier", [
         locatorAddr,
         GI_FIRST_VALIDATOR_INDEX,
         GI_FIRST_VALIDATOR_INDEX,
@@ -172,7 +172,7 @@ describe("ValidatorExitVerifier.sol", () => {
 
       const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
-      const tx = await validatorExitVerifier.verifyActiveValidatorsAfterExitRequest(
+      const tx = await validatorExitDelayVerifier.verifyValidatorExitDelay(
         toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
@@ -222,7 +222,7 @@ describe("ValidatorExitVerifier.sol", () => {
 
       const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
-      const tx = await validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+      const tx = await validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
         toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
         toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
@@ -249,7 +249,7 @@ describe("ValidatorExitVerifier.sol", () => {
       };
 
       await expect(
-        validatorExitVerifier.verifyActiveValidatorsAfterExitRequest(
+        validatorExitDelayVerifier.verifyValidatorExitDelay(
           {
             rootsTimestamp: 1n,
             header: invalidHeader,
@@ -257,13 +257,13 @@ describe("ValidatorExitVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           EMPTY_REPORT,
         ),
-      ).to.be.revertedWithCustomError(validatorExitVerifier, "UnsupportedSlot");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnsupportedSlot");
     });
 
     it("reverts with 'RootNotFound' if the staticcall to the block roots contract fails/returns empty", async () => {
       const badTimestamp = 999_999_999;
       await expect(
-        validatorExitVerifier.verifyActiveValidatorsAfterExitRequest(
+        validatorExitDelayVerifier.verifyValidatorExitDelay(
           {
             rootsTimestamp: badTimestamp,
             header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
@@ -271,7 +271,7 @@ describe("ValidatorExitVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           EMPTY_REPORT,
         ),
-      ).to.be.revertedWithCustomError(validatorExitVerifier, "RootNotFound");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "RootNotFound");
     });
 
     it("reverts with 'InvalidBlockHeader' if the block root from contract doesn't match the header root", async () => {
@@ -279,12 +279,12 @@ describe("ValidatorExitVerifier.sol", () => {
       const mismatchTimestamp = await updateBeaconBlockRoot(bogusBlockRoot);
 
       await expect(
-        validatorExitVerifier.verifyActiveValidatorsAfterExitRequest(
+        validatorExitDelayVerifier.verifyValidatorExitDelay(
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, mismatchTimestamp),
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           EMPTY_REPORT,
         ),
-      ).to.be.revertedWithCustomError(validatorExitVerifier, "InvalidBlockHeader");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidBlockHeader");
     });
 
     it("reverts if the validator proof is incorrect", async () => {
@@ -327,7 +327,7 @@ describe("ValidatorExitVerifier.sol", () => {
       };
 
       await expect(
-        validatorExitVerifier.verifyActiveValidatorsAfterExitRequest(
+        validatorExitDelayVerifier.verifyValidatorExitDelay(
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, timestamp),
           [badWitness],
           encodedExitRequests,
@@ -342,7 +342,7 @@ describe("ValidatorExitVerifier.sol", () => {
       };
 
       await expect(
-        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
           {
             rootsTimestamp: 1n,
             header: invalidHeader,
@@ -351,7 +351,7 @@ describe("ValidatorExitVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           EMPTY_REPORT,
         ),
-      ).to.be.revertedWithCustomError(validatorExitVerifier, "UnsupportedSlot");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnsupportedSlot");
     });
 
     it("reverts with 'UnsupportedSlot' if oldBlock slot < FIRST_SUPPORTED_SLOT", async () => {
@@ -363,7 +363,7 @@ describe("ValidatorExitVerifier.sol", () => {
       const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
       await expect(
-        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
           {
             header: invalidHeader,
@@ -373,19 +373,19 @@ describe("ValidatorExitVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           EMPTY_REPORT,
         ),
-      ).to.be.revertedWithCustomError(validatorExitVerifier, "UnsupportedSlot");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnsupportedSlot");
     });
 
     it("reverts with 'RootNotFound' if block root contract call fails", async () => {
       const badTimestamp = 999_999_999;
       await expect(
-        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, badTimestamp),
           toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           EMPTY_REPORT,
         ),
-      ).to.be.revertedWithCustomError(validatorExitVerifier, "RootNotFound");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "RootNotFound");
     });
 
     it("reverts with 'InvalidBlockHeader' if returned root doesn't match the new block header root", async () => {
@@ -393,13 +393,13 @@ describe("ValidatorExitVerifier.sol", () => {
       const mismatchTimestamp = await updateBeaconBlockRoot(bogusBlockRoot);
 
       await expect(
-        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, mismatchTimestamp),
           toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           EMPTY_REPORT,
         ),
-      ).to.be.revertedWithCustomError(validatorExitVerifier, "InvalidBlockHeader");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidBlockHeader");
     });
 
     it("reverts with 'InvalidGIndex' if oldBlock.rootGIndex is not under the historicalSummaries root", async () => {
@@ -409,7 +409,7 @@ describe("ValidatorExitVerifier.sol", () => {
       const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
       await expect(
-        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
           {
             header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
@@ -419,14 +419,14 @@ describe("ValidatorExitVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
           EMPTY_REPORT,
         ),
-      ).to.be.revertedWithCustomError(validatorExitVerifier, "InvalidGIndex");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidGIndex");
     });
 
     it("reverts if the oldBlock proof is corrupted", async () => {
       const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
       await expect(
-        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
           {
             header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
@@ -483,7 +483,7 @@ describe("ValidatorExitVerifier.sol", () => {
       };
 
       await expect(
-        validatorExitVerifier.verifyHistoricalActiveValidatorsAfterExitRequest(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
           toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
           [badWitness],

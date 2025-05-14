@@ -42,12 +42,12 @@ struct HistoricalHeaderWitness {
 }
 
 /**
- * @title ValidatorExitVerifier
+ * @title ValidatorExitDelayVerifier
  * @notice Verifies validator proofs to ensure they are unexited after an exit request.
  *         Allows permissionless report the status of validators which are assumed to have exited but have not.
  * @dev Uses EIP-4788 to confirm the correctness of a given beacon block root.
  */
-contract ValidatorExitVerifier {
+contract ValidatorExitDelayVerifier {
     using SSZ for Validator;
     using SSZ for BeaconBlockHeader;
 
@@ -167,7 +167,7 @@ contract ValidatorExitVerifier {
      * @param beaconBlock The block header and EIP-4788 timestamp to prove the block root is known.
      * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited.
      */
-    function verifyActiveValidatorsAfterExitRequest(
+    function verifyValidatorExitDelay(
         ProvableBeaconBlockHeader calldata beaconBlock,
         ValidatorWitness[] calldata validatorWitnesses,
         ExitRequestData calldata exitRequests
@@ -216,7 +216,7 @@ contract ValidatorExitVerifier {
      * @param oldBlock Historical block header witness data and its proof.
      * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited in oldBlock.header.
      */
-    function verifyHistoricalActiveValidatorsAfterExitRequest(
+    function verifyHistoricalValidatorExitDelay(
         ProvableBeaconBlockHeader calldata beaconBlock,
         HistoricalHeaderWitness calldata oldBlock,
         ValidatorWitness[] calldata validatorWitnesses,

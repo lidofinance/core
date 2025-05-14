@@ -5,7 +5,7 @@ import {
   HistoricalHeaderWitnessStruct,
   ProvableBeaconBlockHeaderStruct,
   ValidatorWitnessStruct,
-} from "typechain-types/contracts/0.8.25/ValidatorExitVerifier";
+} from "typechain-types/contracts/0.8.25/ValidatorExitDelayVerifier";
 
 import { de0x, findEventsWithInterfaces, numberToHex } from "lib";
 

@@ -28,7 +28,7 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     validatorsExitBusOracle: certainAddress("dummy-locator:validatorsExitBusOracle"),
     withdrawalQueue: certainAddress("dummy-locator:withdrawalQueue"),
     withdrawalVault: certainAddress("dummy-locator:withdrawalVault"),
-    validatorExitVerifier: certainAddress("dummy-locator:validatorExitVerifier"),
+    validatorExitDelayVerifier: certainAddress("dummy-locator:validatorExitDelayVerifier"),
     ...config,
   });
 

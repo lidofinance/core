@@ -91,7 +91,7 @@ async function main() {
   log.success(`NOR implementation address: ${NOR.address}`);
   log.emptyLine();
 
-  const validatorExitVerifierArgs = [
+  const validatorExitDelayVerifierArgs = [
     locator.address,
     "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorPrev,
     "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorCurr,
@@ -105,13 +105,13 @@ async function main() {
     2 ** 8 * 32 * 12, // uint32 shardCommitteePeriodInSeconds
   ];
 
-  const validatorExitVerifier = await deployImplementation(
-    Sk.validatorExitVerifier,
-    "ValidatorExitVerifier",
+  const validatorExitDelayVerifier = await deployImplementation(
+    Sk.validatorExitDelayVerifier,
+    "ValidatorExitDelayVerifier",
     deployer,
-    validatorExitVerifierArgs,
+    validatorExitDelayVerifierArgs,
   );
-  log.success(`ValidatorExitVerifier implementation address: ${NOR.address}`);
+  log.success(`ValidatorExitDelayVerifier implementation address: ${NOR.address}`);
   log.emptyLine();
 
   // fetch contract addresses that will not changed
@@ -130,7 +130,7 @@ async function main() {
     await locator.withdrawalQueue(),
     await locator.withdrawalVault(),
     await locator.oracleDaemonConfig(),
-    validatorExitVerifier.address,
+    validatorExitDelayVerifier.address,
   ];
 
   const lidoLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
@@ -142,7 +142,7 @@ VALIDATORS_EXIT_BUS_ORACLE_IMPL = "${validatorsExitBusOracle.address}"
 WITHDRAWAL_VAULT_IMPL = "${withdrawalVault.address}"
 STAKING_ROUTER_IMPL = "${stakingRouterAddress.address}"
 NODE_OPERATORS_REGISTRY_IMPL = "${NOR.address}"
-VALIDATOR_EXIT_VERIFIER = "${validatorExitVerifier.address}"
+VALIDATOR_EXIT_VERIFIER = "${validatorExitDelayVerifier.address}"
 `);
 }
 
