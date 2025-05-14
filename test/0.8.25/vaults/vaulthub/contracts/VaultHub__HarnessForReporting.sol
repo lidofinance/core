@@ -29,14 +29,18 @@ contract VaultHub__HarnessForReporting is VaultHub {
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
     /// @param _reserveRatioBP minimum reserve ratio in basis points
     /// @param _forcedRebalanceThresholdBP threshold to force rebalance on the vault in basis points
-    /// @param _treasuryFeeBP treasury fee in basis points
+    /// @param _infraFeeBP infra fee in basis points
+    /// @param _liquidityFeeBP liquidity fee in basis points
+    /// @param _reservationFeeBP reservation fee in basis points
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     function harness__connectVault(
         address _vault,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
-        uint256 _treasuryFeeBP
+        uint256 _infraFeeBP,
+        uint256 _liquidityFeeBP,
+        uint256 _reservationFeeBP
     ) external {
         VaultHub.Storage storage $ = harness_getVaultHubStorage();
 
@@ -47,7 +51,9 @@ contract VaultHub__HarnessForReporting is VaultHub {
             false, // pendingDisconnect
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
-            uint16(_treasuryFeeBP)
+            uint16(_infraFeeBP),
+            uint16(_liquidityFeeBP),
+            uint16(_reservationFeeBP)
         );
         $.connections[_vault] = connection;
 
@@ -59,10 +65,18 @@ contract VaultHub__HarnessForReporting is VaultHub {
             0, // inOutDelta
             0 // feeSharesCharged
         );
-        $.records[_vault] = record;
 
+        $.records[_vault] = record;
         $.vaults.push(_vault);
 
-        emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
+        emit VaultConnected(
+            _vault,
+            _shareLimit,
+            _reserveRatioBP,
+            _forcedRebalanceThresholdBP,
+            _infraFeeBP,
+            _liquidityFeeBP,
+            _reservationFeeBP
+        );
     }
 }

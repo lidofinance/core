@@ -29,7 +29,9 @@ contract LazyOracle {
         uint96 shareLimit;
         uint16 reserveRatioBP;
         uint16 forcedRebalanceThresholdBP;
-        uint16 treasuryFeeBP;
+        uint16 infraFeeBP;
+        uint16 liquidityFeeBP;
+        uint16 reservationFeeBP;
         bool pendingDisconnect;
     }
 
@@ -87,7 +89,9 @@ contract LazyOracle {
                 connection.shareLimit,
                 connection.reserveRatioBP,
                 connection.forcedRebalanceThresholdBP,
-                connection.treasuryFeeBP,
+                connection.infraFeeBP,
+                connection.liquidityFeeBP,
+                connection.reservationFeeBP,
                 connection.pendingDisconnect
             );
         }
