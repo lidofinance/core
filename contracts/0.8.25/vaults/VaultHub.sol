@@ -188,43 +188,43 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return the accounting record for the given vault
     /// @dev it returns empty struct if the vault is not connected to the hub
     function vaultRecord(address _vault) external view returns (VaultRecord memory) {
-        return _storage().records[_vault];
+        return _vaultRecord(_vault);
     }
 
     /// @return total value of the vault (as of the latest report received)
     /// @dev returns 0 if the vault is not connected
     function totalValue(address _vault) external view returns (uint256) {
-        return _totalValue(_storage().records[_vault]);
+        return _totalValue(_vaultRecord(_vault));
     }
 
     /// @return liability shares of the vault
     /// @dev returns 0 if the vault is not connected
     function liabilityShares(address _vault) external view returns (uint256) {
-        return _storage().records[_vault].liabilityShares;
+        return _vaultRecord(_vault).liabilityShares;
     }
 
     /// @return locked amount of ether for the vault
     /// @dev returns 0 if the vault is not connected
     function locked(address _vault) external view returns (uint256) {
-        return _storage().records[_vault].locked;
+        return _vaultRecord(_vault).locked;
     }
 
     /// @return amount of ether that is part of the vault's total value and is not locked as a collateral
     /// @dev returns 0 if the vault is not connected
     function unlocked(address _vault) external view returns (uint256) {
-        return _unlocked(_storage().records[_vault]);
+        return _unlocked(_vaultRecord(_vault));
     }
 
     /// @return the latest report for the vault
     /// @dev returns empty struct if the vault is not connected
     function latestReport(address _vault) external view returns (Report memory) {
-        return _storage().records[_vault].report;
+        return _vaultRecord(_vault).report;
     }
 
     /// @return true if the report for the vault is fresh, false otherwise
     /// @dev returns false if the vault is not connected
     function isReportFresh(address _vault) external view returns (bool) {
-        return _isReportFresh(_storage().records[_vault]);
+        return _isReportFresh(_vaultRecord(_vault));
     }
 
     /// @notice checks if the vault is healthy by comparing its total value after applying rebalance threshold
@@ -371,7 +371,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_shareLimit > _maxSaneShareLimit()) revert ShareLimitTooHigh(_vault, _shareLimit, _maxSaneShareLimit());
 
         VaultConnection storage connection = _checkConnection(_vault);
-        VaultRecord storage record = _storage().records[_vault];
+        VaultRecord storage record = _vaultRecord(_vault);
 
         uint256 totalValue_ = _totalValue(record);
         uint256 liabilityShares_ = record.liabilityShares;
@@ -403,7 +403,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     /// @dev vault's `liabilityShares` should be zero
     function disconnect(address _vault) external onlyRole(VAULT_MASTER_ROLE) {
-        _initiateDisconnection(_vault, _checkConnection(_vault), _storage().records[_vault]);
+        _initiateDisconnection(_vault, _checkConnection(_vault), _vaultRecord(_vault));
 
         emit VaultDisconnectInitiated(_vault);
     }
@@ -442,7 +442,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         uint256 newLiabilityShares = Math256.max(record.liabilityShares, _reportLiabilityShares);
-        uint256 newLiability = LIDO.getPooledEthBySharesRoundUp(newLiabilityShares);
+        uint256 newLiability = _getPooledEthBySharesRoundUp(newLiabilityShares);
 
         // locked ether can only be increased asynchronously once the oracle settled the new floor value
         // as of reference slot to prevent slashing upsides in between the report gathering and delivering
@@ -459,8 +459,10 @@ contract VaultHub is PausableUntilWithRoles {
         record.locked = uint128(lockedEther);
         record.liabilityShares = uint96(newLiabilityShares);
 
-        (uint256 withdrawals, uint256 treasuryFees) = ObligationsLedger(LIDO_LOCATOR.obligationsLedger())
-            .getSettledObligations(_vault, _reportFeeCharged - record.feeCharged, newLiability);
+        (
+            uint256 withdrawals,
+            uint256 treasuryFees
+        ) = _ledger().getSettledObligations(_vault, _reportFeeCharged - record.feeCharged, newLiability);
 
         if (withdrawals > 0) _rebalance(_vault, record, withdrawals);
         if (treasuryFees > 0) {
@@ -494,7 +496,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
 
-        _initiateDisconnection(_vault, connection, _storage().records[_vault]);
+        _initiateDisconnection(_vault, connection, _vaultRecord(_vault));
 
         emit VaultDisconnectInitiated(_vault);
     }
@@ -503,8 +505,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
 
-        VaultRecord storage record = _storage().records[_vault];
-        record.inOutDelta += int128(int256(msg.value));
+        _vaultRecord(_vault).inOutDelta += int128(int256(msg.value));
 
         (bool success, ) = _vault.call{value: msg.value}("");
         if (!success) revert TransferFailed(_vault, msg.value);
@@ -516,7 +517,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
 
-        VaultRecord storage record = _storage().records[_vault];
+        VaultRecord storage record = _vaultRecord(_vault);
         if (!_isReportFresh(record)) revert VaultReportStaled(_vault);
 
         uint256 unlocked_ = _unlocked(record);
@@ -540,9 +541,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
 
-        VaultRecord storage record = _storage().records[_vault];
-
-        _rebalance(_vault, record, _ether);
+        _rebalance(_vault, _vaultRecord(_vault), _ether);
     }
 
     /// @notice mint StETH shares backed by vault external balance to the receiver address
@@ -556,7 +555,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
 
-        VaultRecord storage record = _storage().records[_vault];
+        VaultRecord storage record = _vaultRecord(_vault);
 
         uint256 vaultSharesAfterMint = record.liabilityShares + _amountOfShares;
         if (vaultSharesAfterMint > connection.shareLimit) revert ShareLimitExceeded(_vault, connection.shareLimit);
@@ -565,7 +564,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - connection.reserveRatioBP;
         uint256 maxMintableEther = (_totalValue(record) * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
-        uint256 stETHAfterMint = LIDO.getPooledEthBySharesRoundUp(vaultSharesAfterMint);
+        uint256 stETHAfterMint = _getPooledEthBySharesRoundUp(vaultSharesAfterMint);
         if (stETHAfterMint > maxMintableEther) {
             revert InsufficientTotalValueToMint(_vault, _totalValue(record));
         }
@@ -692,24 +691,6 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
-    /// @notice Exits validators from the beacon chain when vault has outstanding withdrawal obligations
-    /// @param _vault The address of the vault to exit validators from
-    /// @param _pubkeys The public keys of the validators to exit
-    /// @param _refundRecipient The address that will receive the refund for transaction costs
-    /// @dev    Triggered by the DAO under certain conditions
-    function exitValidator(
-        address _vault,
-        bytes calldata _pubkeys,
-        address _refundRecipient
-    ) external payable onlyRole(VAULT_VALIDATOR_EJECTOR_ROLE) {
-        // if (ObligationsLedger(LIDO_LOCATOR.obligationsLedger()).getWithdrawalsObligationValue(_vault) == 0)
-        //     revert NoOutstandingWithdrawalObligation(_vault);
-
-        IStakingVault(_vault).triggerValidatorExits{value: msg.value}(_pubkeys, _refundRecipient);
-
-        emit ValidatorExitTriggered(_vault, _pubkeys, _refundRecipient, false);
-    }
-
     /// @notice Triggers validator exit for the vault using EIP-7002 permissionlessly if the vault is unhealthy
     /// @param _vault address of the vault to exit validators from
     /// @param _pubkeys public keys of the validators to exit
@@ -720,11 +701,16 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _storage().records[_vault];
 
-        if (_isVaultHealthyByThreshold(
-            _totalValue(record),
-            record.liabilityShares,
-            connection.forcedRebalanceThresholdBP
-        )) revert AlreadyHealthy(_vault);
+        bool hasOutstandingWithdrawalObligation = _ledger().getWithdrawalsObligation(_vault) > 0;
+        bool isEjector = hasRole(VAULT_VALIDATOR_EJECTOR_ROLE, msg.sender);
+
+        if (!(isEjector && hasOutstandingWithdrawalObligation)) {
+            if (_isVaultHealthyByThreshold(
+                _totalValue(record),
+                record.liabilityShares,
+                connection.forcedRebalanceThresholdBP
+            )) revert AlreadyHealthy(_vault);
+        }
 
         IStakingVault(_vault).triggerValidatorExits{value: msg.value}(_pubkeys, _refundRecipient);
 
@@ -856,7 +842,7 @@ contract VaultHub is PausableUntilWithRoles {
             return 0;
         }
 
-        uint256 liabilityStETH = LIDO.getPooledEthBySharesRoundUp(_record.liabilityShares);
+        uint256 liabilityStETH = _getPooledEthBySharesRoundUp(_record.liabilityShares);
         uint256 reserveRatioBP = _connection.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
 
@@ -893,13 +879,6 @@ contract VaultHub is PausableUntilWithRoles {
         return totalValue_ - locked_;
     }
 
-    function _availableBalance(address _vault) internal view returns (uint256) {
-        uint256 outstandingObligations = ObligationsLedger(LIDO_LOCATOR.obligationsLedger()).getObligationsValue(_vault);
-        if (outstandingObligations > _vault.balance) return 0;
-
-        return _vault.balance - outstandingObligations;
-    }
-
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
         Report memory report = _record.report;
         return uint256(int256(uint256(report.totalValue)) + _record.inOutDelta - report.inOutDelta);
@@ -912,13 +891,6 @@ contract VaultHub is PausableUntilWithRoles {
             block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }
 
-    function _checkAvailableBalance(address _vault, uint256 _requiredBalance) internal view {
-        uint256 availableBalance_ = _availableBalance(_vault);
-        if (_requiredBalance > availableBalance_) {
-            revert VaultInsufficientBalance(_vault, availableBalance_, _requiredBalance);
-        }
-    }
-
     function _isVaultHealthyByThreshold(
         uint256 _vaultTotalValue,
         uint256 _vaultLiabilityShares,
@@ -926,9 +898,35 @@ contract VaultHub is PausableUntilWithRoles {
     ) internal view returns (bool) {
         if (_vaultLiabilityShares == 0) return true;
 
-        return
-            ((_vaultTotalValue * (TOTAL_BASIS_POINTS - _checkThreshold)) / TOTAL_BASIS_POINTS) >=
-            LIDO.getPooledEthBySharesRoundUp(_vaultLiabilityShares);
+        uint256 liability = LIDO.getPooledEthBySharesRoundUp(_vaultLiabilityShares);
+        return ((_vaultTotalValue * (TOTAL_BASIS_POINTS - _checkThreshold)) / TOTAL_BASIS_POINTS) >= liability;
+    }
+
+    function _checkConnection(address _vault) internal view returns (VaultConnection storage) {
+        if (_vault == address(0)) revert VaultZeroAddress();
+
+        VaultConnection storage connection = _storage().connections[_vault];
+
+        if (connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
+        if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
+
+        return connection;
+    }
+
+    function _checkAvailableBalance(address _vault, uint256 _requiredBalance) internal view {
+        if (_vault == address(0)) revert VaultZeroAddress();
+
+        uint256 outstandingObligations = _ledger().getObligationsValue(_vault);
+        uint256 vaultBalance = _vault.balance;
+        uint256 available = outstandingObligations > vaultBalance ? 0 : vaultBalance - outstandingObligations;
+
+        if (_requiredBalance > available) {
+            revert VaultInsufficientBalance(_vault, available, _requiredBalance);
+        }
+    }
+
+    function _ledger() internal view returns (ObligationsLedger) {
+        return ObligationsLedger(LIDO_LOCATOR.obligationsLedger());
     }
 
     function _addVault(address _vault, VaultConnection memory _connection, VaultRecord memory _record) internal {
@@ -956,21 +954,18 @@ contract VaultHub is PausableUntilWithRoles {
         delete $.records[_vault];
     }
 
-    function _checkConnection(address _vault) internal view returns (VaultConnection storage) {
-        if (_vault == address(0)) revert VaultZeroAddress();
-
-        VaultConnection storage connection = _storage().connections[_vault];
-
-        if (connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
-        if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
-
-        return connection;
+    function _getPooledEthBySharesRoundUp(uint256 _shares) internal view returns (uint256) {
+        return LIDO.getPooledEthBySharesRoundUp(_shares);
     }
 
     function _storage() internal pure returns (Storage storage $) {
         assembly {
             $.slot := STORAGE_LOCATION
         }
+    }
+
+    function _vaultRecord(address _vault) internal view returns (VaultRecord storage) {
+        return _storage().records[_vault];
     }
 
     event VaultProxyCodehashUpdated(bytes32 indexed codehash, bool allowed);
