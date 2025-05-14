@@ -187,14 +187,12 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Calculates the total withdrawal fee required for given number of validator keys
+     * @notice Calculates the EIP-7002 withdrawal fee required for given number of validator keys
      * @param _numberOfKeys Number of validators' public keys
      * @return Total fee amount to pass as `msg.value` (wei)
-     * @dev    The fee is only valid for the requests made in the same block
+     * @dev    The fee may change from block to block
      */
     function calculateValidatorWithdrawalFee(uint256 _numberOfKeys) external view returns (uint256) {
-        if (_numberOfKeys == 0) revert ZeroArgument("_numberOfKeys");
-
         return _numberOfKeys * TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
