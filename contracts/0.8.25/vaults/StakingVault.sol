@@ -10,7 +10,7 @@ import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawal
 
 import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
-import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /**
  * @title StakingVault
@@ -275,7 +275,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Performs deposits to the beacon chain
      * @param _deposits Array of validator deposits
      */
-    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {
+    function depositToBeaconChain(Deposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
         Storage storage $ = _storage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsOnPause();
@@ -293,7 +293,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
 
         for (uint256 i = 0; i < numberOfDeposits; i++) {
-            StakingVaultDeposit calldata deposit = _deposits[i];
+            Deposit calldata deposit = _deposits[i];
 
             DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
