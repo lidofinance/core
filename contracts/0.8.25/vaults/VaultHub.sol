@@ -158,8 +158,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_codehash == bytes32(0)) revert ZeroArgument();
         if (_codehash == EMPTY_CODEHASH) revert VaultProxyZeroCodehash();
 
-        Storage storage $ = _storage();
-        $.vaultProxyCodehash[_codehash] = _allow;
+        _storage().vaultProxyCodehash[_codehash] = _allow;
 
         emit VaultProxyCodehashUpdated(_codehash, _allow);
     }
@@ -182,7 +181,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev it returns empty struct if the vault is not connected to the hub
     /// @dev it may return connection even if it's pending to be disconnected
     function vaultConnection(address _vault) external view returns (VaultConnection memory) {
-        return _storage().connections[_vault];
+        return _vaultConnection(_vault);
     }
 
     /// @return the accounting record for the given vault
@@ -233,12 +232,11 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return true if vault is healthy, false otherwise
     /// @dev returns true if the vault is not connected
     function isVaultHealthy(address _vault) external view returns (bool) {
-        Storage storage $ = _storage();
-        VaultRecord storage record = $.records[_vault];
+        VaultRecord storage record = _vaultRecord(_vault);
         return _isVaultHealthyByThreshold(
             _totalValue(record),
             record.liabilityShares,
-            $.connections[_vault].forcedRebalanceThresholdBP
+            _vaultConnection(_vault).forcedRebalanceThresholdBP
         );
     }
 
@@ -247,10 +245,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return amount to rebalance  or UINT256_MAX if it's impossible to make the vault healthy using rebalance
     /// @dev returns 0 if the vault is not connected
     function rebalanceShortfall(address _vault) external view returns (uint256) {
-        Storage storage $ = _storage();
         return _rebalanceShortfall(
-            $.connections[_vault],
-            $.records[_vault]
+            _vaultConnection(_vault),
+            _vaultRecord(_vault)
         );
     }
 
@@ -425,9 +422,8 @@ contract VaultHub is PausableUntilWithRoles {
     ) external {
         if (msg.sender != LIDO_LOCATOR.lazyOracle()) revert NotAuthorized();
 
-        Storage storage $ = _storage();
-        VaultConnection storage connection = $.connections[_vault];
-        VaultRecord storage record = $.records[_vault];
+        VaultConnection storage connection = _vaultConnection(_vault);
+        VaultRecord storage record = _vaultRecord(_vault);
 
         if (connection.pendingDisconnect) {
             IStakingVault(_vault).transferOwnership(connection.owner);
@@ -593,7 +589,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
 
-        VaultRecord storage record = _storage().records[_vault];
+        VaultRecord storage record = _vaultRecord(_vault);
 
         uint256 liabilityShares_ = record.liabilityShares;
         if (liabilityShares_ < _amountOfShares) revert InsufficientSharesToBurn(_vault, liabilityShares_);
@@ -642,7 +638,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
 
         VaultConnection storage connection = _checkConnection(_vault);
-        VaultRecord storage record = _storage().records[_vault];
+        VaultRecord storage record = _vaultRecord(_vault);
 
         if (!_isVaultHealthyByThreshold(
             _totalValue(record),
@@ -684,7 +680,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) external payable {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
-        VaultRecord storage record = _storage().records[_vault];
+        VaultRecord storage record = _vaultRecord(_vault);
 
         if (_totalValue(record) < record.locked) revert TotalValueBelowLockedAmount();
 
@@ -699,7 +695,7 @@ contract VaultHub is PausableUntilWithRoles {
     ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
     function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _refundRecipient) external payable {
         VaultConnection storage connection = _checkConnection(_vault);
-        VaultRecord storage record = _storage().records[_vault];
+        VaultRecord storage record = _vaultRecord(_vault);
 
         bool hasOutstandingWithdrawalObligation = _ledger().getWithdrawalsObligation(_vault) > 0;
         bool isEjector = hasRole(VAULT_VALIDATOR_EJECTOR_ROLE, msg.sender);
@@ -722,7 +718,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev rebalance all available amount of ether until the vault is healthy
     function forceRebalance(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
-        VaultRecord storage record = _storage().records[_vault];
+        VaultRecord storage record = _vaultRecord(_vault);
 
         uint256 fullRebalanceAmount = _rebalanceShortfall(connection, record);
         if (fullRebalanceAmount == 0) revert AlreadyHealthy(_vault);
@@ -751,9 +747,8 @@ contract VaultHub is PausableUntilWithRoles {
         if (_reservationFeeBP > TOTAL_BASIS_POINTS) revert ReservationFeeTooHigh(_vault, _reservationFeeBP, TOTAL_BASIS_POINTS);
         if (_shareLimit > _maxSaneShareLimit()) revert ShareLimitTooHigh(_vault, _shareLimit, _maxSaneShareLimit());
 
-        Storage storage $ = _storage();
-        if ($.connections[_vault].vaultIndex != 0) revert AlreadyConnected(_vault, $.connections[_vault].vaultIndex);
-        if (!$.vaultProxyCodehash[address(_vault).codehash]) revert VaultProxyNotAllowed(_vault, address(_vault).codehash);
+        if (_vaultConnection(_vault).vaultIndex != 0) revert AlreadyConnected(_vault, _vaultConnection(_vault).vaultIndex);
+        if (!_storage().vaultProxyCodehash[address(_vault).codehash]) revert VaultProxyNotAllowed(_vault, address(_vault).codehash);
         if (_vault.balance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
 
         Report memory report = Report(
@@ -905,7 +900,7 @@ contract VaultHub is PausableUntilWithRoles {
     function _checkConnection(address _vault) internal view returns (VaultConnection storage) {
         if (_vault == address(0)) revert VaultZeroAddress();
 
-        VaultConnection storage connection = _storage().connections[_vault];
+        VaultConnection storage connection = _vaultConnection(_vault);
 
         if (connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
         if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
@@ -962,6 +957,10 @@ contract VaultHub is PausableUntilWithRoles {
         assembly {
             $.slot := STORAGE_LOCATION
         }
+    }
+
+    function _vaultConnection(address _vault) internal view returns (VaultConnection storage) {
+        return _storage().connections[_vault];
     }
 
     function _vaultRecord(address _vault) internal view returns (VaultRecord storage) {
