@@ -73,7 +73,7 @@ contract VaultFactory {
         );
 
         vault.fund{value: msg.value}();
-
+        vault.transferOwnership(address(vaultHub));
         vaultHub.connectVault(address(vault));
 
         // If there are extra role assignments to be made,

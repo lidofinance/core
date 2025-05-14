@@ -124,7 +124,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _lido Lido stETH contract
     /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
     constructor(ILidoLocator _locator, ILido _lido, uint256 _relativeShareLimitBP) {
-        if (_relativeShareLimitBP == 0) revert ZeroArgument("_relativeShareLimitBP");
+        if (_relativeShareLimitBP == 0) revert ZeroArgument();
         if (_relativeShareLimitBP > TOTAL_BASIS_POINTS)
             revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
 
@@ -136,12 +136,10 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @dev used to perform rebalance operations
-    receive() external payable {
-        if (msg.value == 0) revert ZeroArgument("msg.value");
-    }
+    receive() external payable {}
 
     function initialize(address _admin) external initializer {
-        if (_admin == address(0)) revert ZeroArgument("_admin");
+        if (_admin == address(0)) revert ZeroArgument();
 
          __AccessControlEnumerable_init();
 
@@ -151,35 +149,17 @@ contract VaultHub is PausableUntilWithRoles {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
-    /// @notice Add vault proxy codehash to allow list.
+    /// @notice Set if a vault proxy codehash is allowed to be connected to the hub
     /// @param _codehash vault proxy codehash
-    function addVaultProxyCodehash(bytes32 _codehash) external onlyRole(VAULT_REGISTRY_ROLE) {
-        if (_codehash == bytes32(0)) revert ZeroArgument("codehash");
+    /// @param _allow true to add, false to remove
+    function setVaultProxyCodehashAllowance(bytes32 _codehash, bool _allow) external onlyRole(VAULT_REGISTRY_ROLE) {
+        if (_codehash == bytes32(0)) revert ZeroArgument();
         if (_codehash == EMPTY_CODEHASH) revert VaultProxyZeroCodehash();
 
         Storage storage $ = _storage();
-        if ($.vaultProxyCodehash[_codehash]) revert AlreadyExists(_codehash);
-        $.vaultProxyCodehash[_codehash] = true;
+        $.vaultProxyCodehash[_codehash] = _allow;
 
-        emit VaultProxyCodehashAdded(_codehash);
-    }
-
-    /// @notice Remove vault proxy codehash from allow list.
-    /// @param _codehash vault proxy codehash
-    function removeVaultProxyCodehash(bytes32 _codehash) external onlyRole(VAULT_REGISTRY_ROLE) {
-        Storage storage $ = _storage();
-        if (!$.vaultProxyCodehash[_codehash]) revert NotFound(_codehash);
-        delete $.vaultProxyCodehash[_codehash];
-
-        emit VaultProxyCodehashRemoved(_codehash);
-    }
-
-    function operatorGrid() public view returns (address) {
-        return LIDO_LOCATOR.operatorGrid();
-    }
-
-    function predepositGuarantee() external view returns (address) {
-        return LIDO_LOCATOR.predepositGuarantee();
+        emit VaultProxyCodehashUpdated(_codehash, _allow);
     }
 
     /// @notice returns the number of vaults connected to the hub
@@ -249,24 +229,27 @@ contract VaultHub is PausableUntilWithRoles {
     ///         against current liability shares
     /// @param _vault vault address
     /// @return true if vault is healthy, false otherwise
-    /// @dev reverts if the vault is not connected
+    /// @dev returns true if the vault is not connected
     function isVaultHealthy(address _vault) external view returns (bool) {
-        VaultConnection storage connection = _checkConnection(_vault);
-        VaultRecord storage record = _storage().records[_vault];
+        Storage storage $ = _storage();
+        VaultRecord storage record = $.records[_vault];
         return _isVaultHealthyByThreshold(
             _totalValue(record),
             record.liabilityShares,
-            connection.forcedRebalanceThresholdBP
+            $.connections[_vault].forcedRebalanceThresholdBP
         );
     }
 
     /// @notice calculate ether amount to make the vault healthy using rebalance
     /// @param _vault vault address
     /// @return amount to rebalance  or UINT256_MAX if it's impossible to make the vault healthy using rebalance
-    /// @dev reverts if the vault is not connected
+    /// @dev returns 0 if the vault is not connected
     function rebalanceShortfall(address _vault) external view returns (uint256) {
-        VaultConnection storage connection = _checkConnection(_vault);
-        return _rebalanceShortfall(connection, _storage().records[_vault]);
+        Storage storage $ = _storage();
+        return _rebalanceShortfall(
+            $.connections[_vault],
+            $.records[_vault]
+        );
     }
 
     /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
@@ -280,7 +263,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (vault_.isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(this)) revert VaultHubMustBeDepositor(_vault);
 
-        OperatorGrid operatorGrid_ = OperatorGrid(operatorGrid());
+        OperatorGrid operatorGrid_ = OperatorGrid(LIDO_LOCATOR.operatorGrid());
         (
             address nodeOperatorFixedInGrid, // tierId
             ,
@@ -553,8 +536,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _recipient address of the receiver
     /// @param _amountOfShares amount of stETH shares to mint
     function mintShares(address _vault, address _recipient, uint256 _amountOfShares) external whenResumed {
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
+        if (_recipient == address(0)) revert ZeroArgument();
+        if (_amountOfShares == 0) revert ZeroArgument();
 
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
@@ -593,7 +576,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev msg.sender should be vault's owner
     /// @dev this function is designed to be used by the smart contract, for EOA see `transferAndBurnShares`
     function burnShares(address _vault, uint256 _amountOfShares) public whenResumed {
-        if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
+        if (_amountOfShares == 0) revert ZeroArgument();
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
 
@@ -757,10 +740,10 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _liquidityFeeBP,
         uint256 _reservationFeeBP
     ) internal {
-        if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
+        if (_reserveRatioBP == 0) revert ZeroArgument();
         if (_reserveRatioBP > TOTAL_BASIS_POINTS)
             revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
-        if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument("_forcedRebalanceThresholdBP");
+        if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument();
         if (_forcedRebalanceThresholdBP > _reserveRatioBP)
             revert ForcedRebalanceThresholdTooHigh(_vault, _forcedRebalanceThresholdBP, _reserveRatioBP);
         if (_infraFeeBP > TOTAL_BASIS_POINTS) revert InfraFeeTooHigh(_vault, _infraFeeBP, TOTAL_BASIS_POINTS);
@@ -815,7 +798,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _ether) internal {
-        if (_ether == 0) revert ZeroArgument("_ether");
+        if (_ether == 0) revert ZeroArgument();
         if (_ether > _vault.balance) revert InsufficientBalance(_vault.balance, _ether);
 
         uint256 totalValue_ = _totalValue(_record);
@@ -1029,8 +1012,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    event VaultProxyCodehashAdded(bytes32 indexed codehash);
-    event VaultProxyCodehashRemoved(bytes32 indexed codehash);
+    event VaultProxyCodehashUpdated(bytes32 indexed codehash, bool allowed);
 
     event VaultConnected(
         address indexed vault,
@@ -1143,7 +1125,7 @@ contract VaultHub is PausableUntilWithRoles {
     error NotConnectedToHub(address vault);
     error NotAuthorized();
     error VaultZeroAddress();
-    error ZeroArgument(string argument);
+    error ZeroArgument();
     error ShareLimitTooHigh(address vault, uint256 shareLimit, uint256 maxShareLimit);
     error ReserveRatioTooHigh(address vault, uint256 reserveRatioBP, uint256 maxReserveRatioBP);
     error ForcedRebalanceThresholdTooHigh(
