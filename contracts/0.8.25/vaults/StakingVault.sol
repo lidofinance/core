@@ -79,7 +79,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     /**
      * @dev ERC-7201: Namespaced Storage Layout
      */
-    struct ERC7201Storage {
+    struct Storage {
         address nodeOperator;
         address depositor;
         bool beaconChainDepositsPaused;
@@ -256,7 +256,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Pauses deposits to beacon chain
      */
     function pauseBeaconChainDeposits() external onlyOwner {
-        ERC7201Storage storage $ = _storage();
+        Storage storage $ = _storage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsAlreadyPaused();
 
         $.beaconChainDepositsPaused = true;
@@ -268,7 +268,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Resumes deposits to beacon chain
      */
     function resumeBeaconChainDeposits() external onlyOwner {
-        ERC7201Storage storage $ = _storage();
+        Storage storage $ = _storage();
         if (!$.beaconChainDepositsPaused) revert BeaconChainDepositsAlreadyResumed();
 
         $.beaconChainDepositsPaused = false;
@@ -282,7 +282,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
-        ERC7201Storage storage $ = _storage();
+        Storage storage $ = _storage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsOnPause();
         if (msg.sender != $.depositor) revert SenderNotDepositor();
 
@@ -448,7 +448,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @dev Returns the storage struct for the ERC-7201 namespace
      * @return $ storage struct for the ERC-7201 namespace
      */
-    function _storage() private pure returns (ERC7201Storage storage $) {
+    function _storage() private pure returns (Storage storage $) {
         assembly {
             $.slot := ERC7201_SLOT
         }
