@@ -413,6 +413,12 @@ contract VaultHub is PausableUntilWithRoles {
             record.reportTimestamp = _reportTimestamp;
             record.locked = uint128(lockedEther);
 
+            if (!_isVaultHealthyByThreshold(
+                _totalValue(record),
+                record.liabilityShares,
+                connection.forcedRebalanceThresholdBP
+            )) IStakingVault(_vault).pauseBeaconChainDeposits();
+
             emit VaultReportApplied(_vault, _reportTimestamp, _reportTotalValue, _reportInOutDelta, _reportFeeSharesCharged, _reportLiabilityShares);
         }
 
@@ -576,7 +582,13 @@ contract VaultHub is PausableUntilWithRoles {
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
-
+        VaultRecord storage record = _storage().records[_vault];
+        if (!_isVaultHealthyByThreshold(
+            _totalValue(record),
+            record.liabilityShares,
+            connection.forcedRebalanceThresholdBP
+        )) revert UnhealthyVaultCannotDeposit(_vault);
+        
         IStakingVault(_vault).resumeBeaconChainDeposits();
     }
 
@@ -586,15 +598,6 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev msg.sender should be predeposit guarantee
     function depositToBeaconChain(address _vault, IStakingVault.Deposit[] calldata _deposits) external {
         if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
-
-        VaultConnection storage connection = _checkConnection(_vault);
-        VaultRecord storage record = _storage().records[_vault];
-
-        if (!_isVaultHealthyByThreshold(
-            _totalValue(record),
-            record.liabilityShares,
-            connection.forcedRebalanceThresholdBP
-        )) revert UnhealthyVaultCannotDeposit(_vault);
 
         IStakingVault(_vault).depositToBeaconChain(_deposits);
     }
