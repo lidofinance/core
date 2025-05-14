@@ -428,13 +428,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Ossifies the current implementation. WARNING: This operation is irreversible,
-     *         once ossified, the vault cannot be upgraded or attached to VaultHub.
-     * @dev Can only be called by the owner.
-     *      Pins the current vault implementation to prevent further upgrades.
-     *      Emits an event `PinnedImplementationUpdated` with the current implementation address.
-     * @dev Reverts if already ossified.
-     * @dev Reverts if vaultHub is authorized at the vault
+     * @notice Ossifies the current implementation. WARNING: This operation is irreversible.
      */
     function ossify() external onlyOwner {
         if (isOssified()) revert VaultOssified();
