@@ -75,6 +75,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint64 reportTimestamp;
         /// @notice inOutDelta of the latest report
         int128 inOutDelta;
+        /// @notice fee charged for the vault
+        uint96 feeCharged;
     }
 
     struct Report {
@@ -424,7 +426,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (msg.sender != LIDO_LOCATOR.lazyOracle()) revert NotAuthorized();
 
         Storage storage $ = _storage();
-
         VaultConnection storage connection = $.connections[_vault];
         VaultRecord storage record = $.records[_vault];
 
@@ -436,11 +437,17 @@ contract VaultHub is PausableUntilWithRoles {
             return;
         }
 
+        if (_reportFeeCharged < record.feeCharged) {
+            revert InvalidFees(_vault, _reportFeeCharged, record.feeCharged);
+        }
+
         uint256 newLiabilityShares = Math256.max(record.liabilityShares, _reportLiabilityShares);
+        uint256 newLiability = LIDO.getPooledEthBySharesRoundUp(newLiabilityShares);
+
         // locked ether can only be increased asynchronously once the oracle settled the new floor value
         // as of reference slot to prevent slashing upsides in between the report gathering and delivering
         uint256 lockedEther = Math256.max(
-            LIDO.getPooledEthBySharesRoundUp(newLiabilityShares) * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - connection.reserveRatioBP),
+            newLiability * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - connection.reserveRatioBP),
             connection.pendingDisconnect ? 0 : CONNECT_DEPOSIT
         );
 
@@ -452,7 +459,14 @@ contract VaultHub is PausableUntilWithRoles {
         record.locked = uint128(lockedEther);
         record.liabilityShares = uint96(newLiabilityShares);
 
-        _processObligations(_vault, _reportFeeCharged);
+        (uint256 withdrawals, uint256 treasuryFees) = ObligationsLedger(LIDO_LOCATOR.obligationsLedger())
+            .getSettledObligations(_vault, _reportFeeCharged - record.feeCharged, newLiability);
+
+        if (withdrawals > 0) _rebalance(_vault, record, withdrawals);
+        if (treasuryFees > 0) {
+            _withdrawFromVault(_vault, record, LIDO_LOCATOR.treasury(), treasuryFees);
+            record.feeCharged += uint96(treasuryFees);
+        }
 
         emit VaultReportApplied(_vault, _reportTimestamp, _reportTotalValue, _reportInOutDelta, _reportFeeCharged, _reportLiabilityShares);
     }
@@ -688,8 +702,8 @@ contract VaultHub is PausableUntilWithRoles {
         bytes calldata _pubkeys,
         address _refundRecipient
     ) external payable onlyRole(VAULT_VALIDATOR_EJECTOR_ROLE) {
-        if (ObligationsLedger(LIDO_LOCATOR.obligationsLedger()).getWithdrawalsObligationValue(_vault) == 0)
-            revert NoOutstandingWithdrawalObligation(_vault);
+        // if (ObligationsLedger(LIDO_LOCATOR.obligationsLedger()).getWithdrawalsObligationValue(_vault) == 0)
+        //     revert NoOutstandingWithdrawalObligation(_vault);
 
         IStakingVault(_vault).triggerValidatorExits{value: msg.value}(_pubkeys, _refundRecipient);
 
@@ -778,7 +792,8 @@ contract VaultHub is PausableUntilWithRoles {
             uint128(CONNECT_DEPOSIT), // locked
             0, // liabilityShares
             uint64(block.timestamp), // reportTimestamp
-            report.inOutDelta // inOutDelta
+            report.inOutDelta, // inOutDelta
+            0 // feeCharged
         );
 
         _addVault(_vault, connection, record);
@@ -950,60 +965,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
 
         return connection;
-    }
-
-    function _processObligations(address _vault, uint256 _reportFeeCharged) internal {
-        ObligationsLedger ledger = ObligationsLedger(LIDO_LOCATOR.obligationsLedger());
-        ObligationsLedger.Obligations memory obligations = ledger.getObligations(_vault);
-
-        _processWithdrawalsObligation(_vault, ledger, obligations);
-        _processTreasuryFeesObligation(_vault, ledger, obligations, _reportFeeCharged);
-    }
-
-    function _processWithdrawalsObligation(
-        address _vault,
-        ObligationsLedger _ledger,
-        ObligationsLedger.Obligations memory _obligations
-    ) internal {
-        VaultRecord storage record = _storage().records[_vault];
-
-        uint256 withdrawalsObligation = _obligations.accruedWithdrawals - _obligations.settledWithdrawals;
-
-        // Need to check if the vault's liability is enough to settle the obligation
-        // If not, we reduce the obligation to the current liability amount
-        uint96 liabilityShares_ = record.liabilityShares;
-        uint256 liability = LIDO.getPooledEthBySharesRoundUp(liabilityShares_);
-        if (liability < withdrawalsObligation) {
-            withdrawalsObligation = liability;
-            _ledger.setWithdrawalsObligation(_vault, liability);
-        }
-
-        // If it's possible to rebalance the vault to settle the obligation, we do it
-        uint256 valueToRebalance = Math256.min(withdrawalsObligation, _vault.balance);
-        if (valueToRebalance > 0) {
-            _rebalance(_vault, record, valueToRebalance);
-            _ledger.settleWithdrawalsObligation(_vault, valueToRebalance);
-        }
-    }
-
-    function _processTreasuryFeesObligation(
-        address _vault,
-        ObligationsLedger _ledger,
-        ObligationsLedger.Obligations memory _obligations,
-        uint256 _reportFeeCharged
-    ) internal {
-        if (_reportFeeCharged < _obligations.settledTreasuryFees) {
-            revert InvalidFees(_vault, _reportFeeCharged, _obligations.settledTreasuryFees);
-        }
-
-        uint256 treasuryFeesObligation = _reportFeeCharged - _obligations.settledTreasuryFees;
-        _ledger.setTreasuryFeesObligation(_vault, treasuryFeesObligation);
-
-        uint256 amountToTransfer = Math256.min(treasuryFeesObligation, _vault.balance);
-        if (amountToTransfer > 0) {
-            _withdrawFromVault(_vault, _storage().records[_vault], LIDO_LOCATOR.treasury(), amountToTransfer);
-            _ledger.settleTreasuryFeesObligation(_vault, amountToTransfer);
-        }
     }
 
     function _storage() internal pure returns (Storage storage $) {
