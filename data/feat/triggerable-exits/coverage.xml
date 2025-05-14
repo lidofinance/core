@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3255"  lines-covered="3166"  line-rate="0.9727"  branches-valid="1498"  branches-covered="1385"  branch-rate="0.9246"  timestamp="1747222393399" complexity="0" version="0.1">
+<coverage lines-valid="3255"  lines-covered="3166"  line-rate="0.9727"  branches-valid="1498"  branches-covered="1385"  branch-rate="0.9246"  timestamp="1747238080515" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1704,15 +1704,15 @@
 	</package>
 	<package name="0.8.25"  line-rate="0.9582999999999999"  branch-rate="0.7333" >
 	<classes>
-		<class name="ValidatorExitVerifier.sol"  filename="contracts/0.8.25/ValidatorExitVerifier.sol"  line-rate="0.9582999999999999"  branch-rate="0.7333" >
+		<class name="ValidatorExitDelayVerifier.sol"  filename="contracts/0.8.25/ValidatorExitDelayVerifier.sol"  line-rate="0.9582999999999999"  branch-rate="0.7333" >
 		<methods>
 			<method name="constructor"  hits="3"  signature="()V" >
 				<lines><line number="129"  hits="3" /></lines>
 			</method>
-			<method name="verifyActiveValidatorsAfterExitRequest"  hits="5"  signature="()V" >
+			<method name="verifyValidatorExitDelay"  hits="5"  signature="()V" >
 				<lines><line number="170"  hits="5" /></lines>
 			</method>
-			<method name="verifyHistoricalActiveValidatorsAfterExitRequest"  hits="8"  signature="()V" >
+			<method name="verifyHistoricalValidatorExitDelay"  hits="8"  signature="()V" >
 				<lines><line number="219"  hits="8" /></lines>
 			</method>
 			<method name="_verifyBeaconBlockRoot"  hits="13"  signature="()V" >
