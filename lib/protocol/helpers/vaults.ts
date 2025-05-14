@@ -66,6 +66,7 @@ export interface VaultWithDashboard {
   stakingVault: StakingVault;
   dashboard: Dashboard;
   roles: VaultRoles;
+  proxy: PinnedBeaconProxy;
 }
 
 /**
@@ -111,6 +112,7 @@ export async function createVaultWithDashboard(
 
   const stakingVault = await ethers.getContractAt("StakingVault", vaultAddress);
   const dashboard = await ethers.getContractAt("Dashboard", ownerAddress);
+  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vaultAddress)) as PinnedBeaconProxy;
 
   const roleIds = await Promise.all([
     dashboard.RECOVER_ASSETS_ROLE(),
@@ -177,6 +179,7 @@ export async function createVaultWithDashboard(
   return {
     stakingVault,
     dashboard,
+    proxy,
     roles,
   };
 }
