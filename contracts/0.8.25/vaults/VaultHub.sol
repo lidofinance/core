@@ -312,7 +312,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_vaults.length != _shareLimits.length) revert ArrayLengthMismatch();
 
         for (uint256 i = 0; i < _vaults.length; i++) {
-            if (_vaults[i] == address(0)) revert ZeroArgument("_vault");
+            if (_vaults[i] == address(0)) revert ZeroArgument();
             if (_shareLimits[i] > _maxSaneShareLimit()) revert ShareLimitTooHigh(_vaults[i], _shareLimits[i], _maxSaneShareLimit());
 
             VaultConnection storage connection = _checkConnection(_vaults[i]);
@@ -333,7 +333,7 @@ contract VaultHub is PausableUntilWithRoles {
             _vaults.length != _reservationFeesBP.length) revert ArrayLengthMismatch();
 
         for (uint256 i = 0; i < _vaults.length; i++) {
-            if (_vaults[i] == address(0)) revert ZeroArgument("_vault");
+            if (_vaults[i] == address(0)) revert ZeroArgument();
             if (_infraFeesBP[i] > TOTAL_BASIS_POINTS) revert InfraFeeTooHigh(_vaults[i], _infraFeesBP[i], TOTAL_BASIS_POINTS);
             if (_liquidityFeesBP[i] > TOTAL_BASIS_POINTS) revert LiquidityFeeTooHigh(_vaults[i], _liquidityFeesBP[i], TOTAL_BASIS_POINTS);
             if (_reservationFeesBP[i] > TOTAL_BASIS_POINTS) revert ReservationFeeTooHigh(_vaults[i], _reservationFeesBP[i], TOTAL_BASIS_POINTS);
