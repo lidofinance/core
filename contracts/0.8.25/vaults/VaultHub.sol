@@ -627,7 +627,13 @@ contract VaultHub is PausableUntilWithRoles {
         // disallow partial validator withdrawals when the vault value does not cover the locked amount,
         // in order to prevent the vault owner from jamming the consensus layer withdrawal queue
         // delaying the forceful validator exits required for rebalancing the vault
-        if (_totalValue(record) < record.locked) {
+        if (
+            !_isVaultHealthyByThreshold(
+                _totalValue(record),
+                record.liabilityShares,
+                connection.forcedRebalanceThresholdBP
+            )
+        ) {
             for (uint256 i = 0; i < _amounts.length; i++) {
                 if (_amounts[i] > 0) revert PartialValidatorWithdrawalNotAllowed();
             }
