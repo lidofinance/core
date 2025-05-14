@@ -10,7 +10,6 @@ import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
-
 import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";
@@ -53,11 +52,14 @@ contract Dashboard is NodeOperatorFee {
      * @param _stETH Address of the stETH token contract.
      * @param _wstETH Address of the wstETH token contract.
      * @param _vaultHub Address of the vault hub contract.
+     * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _stETH, address _wstETH, address _vaultHub) NodeOperatorFee(_vaultHub) {
+    constructor(address _stETH, address _wstETH, address _vaultHub, address _lidoLocator)
+        NodeOperatorFee(_vaultHub, _lidoLocator) {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
+        // stETH and wstETH are cached as immutable to save gas for main operations
         STETH = IStETH(_stETH);
         WSTETH = IWstETH(_wstETH);
     }
@@ -209,7 +211,7 @@ contract Dashboard is NodeOperatorFee {
     function voluntaryDisconnect() external {
         uint256 fee = nodeOperatorUnclaimedFee();
         if (fee > 0) _disburseNodeOperatorFee(fee);
-        
+
         _voluntaryDisconnect();
     }
 
@@ -222,7 +224,7 @@ contract Dashboard is NodeOperatorFee {
     function abandonDashboard(address _newOwner) external {
         address vaultAddress = address(_stakingVault());
         if (VAULT_HUB.vaultConnection(vaultAddress).vaultIndex != 0) revert ConnectedToVaultHub();
-        
+
         _acceptOwnership();
         _transferOwnership(_newOwner);
     }
