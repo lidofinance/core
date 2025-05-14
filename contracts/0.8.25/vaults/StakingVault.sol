@@ -110,6 +110,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     function initialize(address _owner, address _nodeOperator, address _depositor) external initializer {
         __Ownable_init(_owner);
+        __Ownable2Step_init();
         _fixNodeOperator(_nodeOperator);
         _setDepositor(_depositor);
     }
