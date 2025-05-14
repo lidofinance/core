@@ -333,7 +333,8 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Triggers validator withdrawals from the beacon chain using EIP-7002 triggerable exit
+     * @notice Triggers validator exits from the beacon chain using EIP-7002 triggerable withdrawals.
+     *         A general-purpose function for exiting validators from the beacon chain by the owner.
      * @param _pubkeys Concatenated validators public keys, each 48 bytes long
      * @param _amounts Amounts of ether to exit, must match the length of _pubkeys
      * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
@@ -345,14 +346,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address _refundRecipient
     ) external payable onlyOwner {
         if (msg.value == 0) revert ZeroArgument("msg.value");
-        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_amounts.length == 0) revert ZeroArgument("_amounts");
+        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
+        if (_pubkeys.length / PUBLIC_KEY_LENGTH != _amounts.length) revert PubkeyLengthDoesNotMatchAmountLength();
 
         // If the refund recipient is not set, use the sender as the refund recipient
-        if (_refundRecipient == address(0)) {
-            _refundRecipient = msg.sender;
-        }
+        if (_refundRecipient == address(0)) _refundRecipient = msg.sender;
 
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
@@ -369,16 +369,22 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         emit ValidatorWithdrawalsTriggered(msg.sender, _refundRecipient, _pubkeys, _amounts, excess);
     }
 
-    function triggerValidatorExits(bytes calldata _pubkeys, address _refundRecipient) external payable {
+    /**
+     * @notice Triggers EIP-7002 validator exits by the node operator.
+     *         Because the node operator cannot ensure that all the associated validators are under control,
+     *         the node operator has the ability to forcefully eject validators.
+     * @param _pubkeys Concatenated validators public keys, each 48 bytes long
+     * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
+     * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
+     */
+    function ejectValidators(bytes calldata _pubkeys, address _refundRecipient) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
-        if (msg.sender != owner() && msg.sender != _storage().nodeOperator) revert SenderNotNodeOperator();
+        if (msg.sender != _storage().nodeOperator) revert SenderNotNodeOperator();
 
         // If the refund recipient is not set, use the sender as the refund recipient
-        if (_refundRecipient == address(0)) {
-            _refundRecipient = msg.sender;
-        }
+        if (_refundRecipient == address(0)) _refundRecipient = msg.sender;
 
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
@@ -392,7 +398,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
             if (!success) revert TransferFailed(_refundRecipient, excess);
         }
 
-        emit ValidatorExitsTriggered(msg.sender, _refundRecipient, _pubkeys, excess);
+        emit ValidatorsEjected(msg.sender, _refundRecipient, _pubkeys, excess);
     }
 
     /*
@@ -560,7 +566,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         uint256 excess
     );
 
-    event ValidatorExitsTriggered(
+    event ValidatorsEjected(
         address indexed sender,
         address indexed refundRecipient,
         bytes pubkeys,
@@ -648,4 +654,9 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Thrown when the vault is already ossified
      */
     error VaultOssified();
+
+    /**
+     * @notice Thrown when the length of the validator public keys does not match the length of the amounts
+     */
+    error PubkeyLengthDoesNotMatchAmountLength();
 }
