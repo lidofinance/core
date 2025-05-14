@@ -11,7 +11,7 @@ import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 
-import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
+import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";
 import {VaultHub} from "../VaultHub.sol";
@@ -337,7 +337,7 @@ contract Dashboard is NodeOperatorFee {
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
     function unguaranteedDepositToBeaconChain(
-        StakingVaultDeposit[] calldata _deposits
+        IStakingVault.Deposit[] calldata _deposits
     ) public returns (uint256 totalAmount) {
         IStakingVault stakingVault_ = _stakingVault();
 
@@ -354,7 +354,7 @@ contract Dashboard is NodeOperatorFee {
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
 
-        StakingVaultDeposit calldata deposit;
+        IStakingVault.Deposit calldata deposit;
         for (uint256 i = 0; i < _deposits.length; i++) {
             deposit = _deposits[i];
             stakingVault_.DEPOSIT_CONTRACT().deposit{value: deposit.amount}(
@@ -473,7 +473,7 @@ contract Dashboard is NodeOperatorFee {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
+        _triggerValidatorWithdrawals(_pubkeys, _amounts, _refundRecipient);
     }
 
     /**
