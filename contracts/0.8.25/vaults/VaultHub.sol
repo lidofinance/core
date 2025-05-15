@@ -254,18 +254,17 @@ contract VaultHub is PausableUntilWithRoles {
 
         OperatorGrid operatorGrid_ = OperatorGrid(LIDO_LOCATOR.operatorGrid());
         (
-            address nodeOperatorFixedInGrid, // tierId
-            ,
+            address nodeOperatorFixedInGrid,
+            , // tierId
             uint256 shareLimit,
             uint256 reserveRatioBP,
             uint256 forcedRebalanceThresholdBP,
             uint256 treasuryFeeBP
         ) = operatorGrid_.vaultInfo(_vault);
 
-        address nodeOperatorFixedInVault = IStakingVault(_vault).nodeOperator();
         if (
-            nodeOperatorFixedInVault != operatorGrid_.DEFAULT_TIER_OPERATOR() &&
-            nodeOperatorFixedInVault != nodeOperatorFixedInGrid
+            nodeOperatorFixedInGrid != operatorGrid_.DEFAULT_TIER_OPERATOR() &&
+            nodeOperatorFixedInGrid != vault_.nodeOperator()
         ) revert InvalidOperator();
 
         _connectVault(_vault,
