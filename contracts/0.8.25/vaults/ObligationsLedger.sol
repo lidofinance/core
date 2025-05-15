@@ -54,20 +54,20 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
     }
 
     function getObligations(address _vault) external view returns (Obligations memory) {
-        return _storage().obligations[_vault];
+        return _vaultObligations(_vault);
     }
 
     function getObligationsValue(address _vault) public view returns (uint256) {
-        Obligations memory obligations = _storage().obligations[_vault];
+        Obligations memory obligations = _vaultObligations(_vault);
         return obligations.withdrawals + obligations.treasuryFees;
     }
 
     function getWithdrawalsObligation(address _vault) external view returns (uint256) {
-        return _storage().obligations[_vault].withdrawals;
+        return _vaultObligations(_vault).withdrawals;
     }
 
     function getTreasuryFeesObligation(address _vault) external view returns (uint256) {
-        return _storage().obligations[_vault].treasuryFees;
+        return _vaultObligations(_vault).treasuryFees;
     }
 
     function setWithdrawalsObligation(address _vault, uint256 _value) external onlyRole(WITHDRAWAL_MANAGER_ROLE) {
@@ -76,8 +76,8 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
         uint256 liability = LIDO.getPooledEthBySharesRoundUp(hub.liabilityShares(_vault));
         if (_value > liability) revert WithdrawalsObligationValueTooHigh(_vault, _value);
 
-        Obligations storage o = _storage().obligations[_vault];
-        o.withdrawals = _value;
+        Obligations storage obligations = _vaultObligations(_vault);
+        obligations.withdrawals = _value;
 
         emit WithdrawalsObligationUpdated(_vault, _value);
     }
@@ -87,7 +87,7 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
         uint256 _fees,
         uint256 _liability
     ) external onlyVaultHub returns (uint256 settledWithdrawals, uint256 settledTreasuryFees) {
-        Obligations storage obligations = _storage().obligations[_vault];
+        Obligations storage obligations = _vaultObligations(_vault);
         uint256 vaultBalance = _vault.balance;
 
         // If the vault liability is less than the withdrawals obligation, we need to update the obligation
@@ -123,6 +123,10 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
         assembly {
             $.slot := STORAGE_LOCATION
         }
+    }
+
+    function _vaultObligations(address _vault) private view returns (Obligations storage) {
+        return _storage().obligations[_vault];
     }
 
     modifier onlyVaultHub() {
