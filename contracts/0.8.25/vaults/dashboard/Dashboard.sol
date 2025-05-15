@@ -231,10 +231,17 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Reclaims the Dashboard contract and reconnects to VaultHub, transferring ownership to VaultHub.
+     * @notice Accepts the ownership over the staking vault and connects to VaultHub.
      */
-    function connectToVaultHub() external {
+    function acceptOwnershipAndConnectToVaultHub() external {
         _acceptOwnership();
+        connectToVaultHub();
+    }
+
+    /**
+     * @notice Connects to VaultHub, transferring ownership to VaultHub.
+     */
+    function connectToVaultHub() public {
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
     }

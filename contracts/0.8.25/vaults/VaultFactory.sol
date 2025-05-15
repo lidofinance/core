@@ -55,43 +55,43 @@ contract VaultFactory {
         uint256 _confirmExpiry,
         Permissions.RoleAssignment[] calldata _roleAssignments
     ) external payable returns (IStakingVault vault, Dashboard dashboard) {
-        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+        // check if the msg.value is enough to cover the connect deposit
         ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
-        VaultHub vaultHub = VaultHub(payable(locator.vaultHub()));
+        address vaultHubAddress = locator.vaultHub();
+        if (msg.value < VaultHub(payable(vaultHubAddress)).CONNECT_DEPOSIT()) revert InsufficientFunds();
 
-        uint256 connectDeposit = vaultHub.CONNECT_DEPOSIT();
-        if (msg.value < connectDeposit) revert InsufficientFunds();
+        // create the vault proxy
+        address vaultAddress = address(new PinnedBeaconProxy(BEACON, ""));
+        
+        // send the msg.value to the vault
+        // note: not using fund() to avoid having to set the factory as the owner
+        (bool success, ) = vaultAddress.call{value: msg.value}("");
+        if (!success) revert TransferFailed();
 
+        // create the dashboard proxy
         bytes memory immutableArgs = abi.encode(vault);
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
-        // initialize StakingVault
-        vault.initialize(
+        // initialize StakingVault with the dashboard address as the owner
+        IStakingVault(vaultAddress).initialize(
             address(dashboard),
             _nodeOperator,
             locator.predepositGuarantee()
         );
 
-        vault.fund{value: msg.value}();
-        vault.transferOwnership(address(vaultHub));
-        vaultHub.connectVault(address(vault));
+        // initialize Dashboard with the factory address as the default admin and grant optional roles
+        dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        dashboard.grantRoles(_roleAssignments);
 
-        // If there are extra role assignments to be made,
-        // we initialize the dashboard with the VaultFactory as the default admin,
-        // grant the roles and revoke the VaultFactory's admin role.
-        // Otherwise, we initialize the dashboard with the default admin.
-        if (_roleAssignments.length > 0) {
-            dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
-            // will revert if any role is not controlled by the default admin
-            dashboard.grantRoles(_roleAssignments);
+        // grant the factory the MANAGE_OWNERSHIP_ROLE to be able to connect the vault to the hub
+        dashboard.grantRole(dashboard.MANAGE_OWNERSHIP_ROLE(), address(this));
+        dashboard.connectToVaultHub();
+        dashboard.revokeRole(dashboard.MANAGE_OWNERSHIP_ROLE(), address(this));
 
-            dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
-            dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
-        } else {
-            dashboard.initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
-        }
+        dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
+        dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
 
-        emit VaultCreated(address(vault), address(dashboard));
+        emit VaultCreated(address(vault), vaultHubAddress);
         emit DashboardCreated(address(dashboard), _defaultAdmin);
     }
 
@@ -119,4 +119,9 @@ contract VaultFactory {
      * @notice Error thrown for when insufficient funds are provided
      */
     error InsufficientFunds();
+
+    /**
+     * @notice Error thrown for when a transfer fails
+     */
+    error TransferFailed();
 }
