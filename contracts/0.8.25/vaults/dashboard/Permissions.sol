@@ -405,9 +405,10 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev Checks the REQUEST_TIER_CHANGE_ROLE and requests a change of the tier on the OperatorGrid.
      * @param _tierId The tier to change to.
+     * @param _requestedShareLimit The requested share limit.
      */
-    function _requestTierChange(uint256 _tierId) internal onlyRole(REQUEST_TIER_CHANGE_ROLE) {
-        OperatorGrid(VAULT_HUB.operatorGrid()).requestTierChange(address(_stakingVault()), _tierId);
+    function _requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) internal onlyRole(REQUEST_TIER_CHANGE_ROLE) {
+        OperatorGrid(VAULT_HUB.operatorGrid()).requestTierChange(address(_stakingVault()), _tierId, _requestedShareLimit);
     }
 
     /**
