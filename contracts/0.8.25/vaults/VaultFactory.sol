@@ -61,11 +61,6 @@ contract VaultFactory {
 
         // create the vault proxy
         address vaultAddress = address(new PinnedBeaconProxy(BEACON, ""));
-        
-        // send the msg.value to the vault
-        // note: not using fund() to avoid having to set the factory as the owner
-        (bool success, ) = vaultAddress.call{value: msg.value}("");
-        if (!success) revert TransferFailed();
 
         // create the dashboard proxy
         bytes memory immutableArgs = abi.encode(vault);
@@ -84,7 +79,7 @@ contract VaultFactory {
 
         // grant the factory the MANAGE_OWNERSHIP_ROLE to be able to connect the vault to the hub
         dashboard.grantRole(dashboard.MANAGE_OWNERSHIP_ROLE(), address(this));
-        dashboard.connectToVaultHub();
+        dashboard.connectToVaultHub{value: msg.value}();
         dashboard.revokeRole(dashboard.MANAGE_OWNERSHIP_ROLE(), address(this));
 
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);

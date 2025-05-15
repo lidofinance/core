@@ -244,7 +244,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
     /// @param _vault vault address
     /// @dev vault should have transferred ownership to the VaultHub contract
-    function connectVault(address _vault) external whenResumed {
+    function connectVault(address _vault) external payable whenResumed {
         if (_vault == address(0)) revert VaultZeroAddress();
 
         IStakingVault vault_ = IStakingVault(_vault);
@@ -274,8 +274,6 @@ contract VaultHub is PausableUntilWithRoles {
             forcedRebalanceThresholdBP,
             treasuryFeeBP
         );
-
-        IStakingVault(_vault).acceptOwnership();
 
         emit VaultConnected(_vault, shareLimit, reserveRatioBP, forcedRebalanceThresholdBP, treasuryFeeBP);
     }
@@ -655,15 +653,21 @@ contract VaultHub is PausableUntilWithRoles {
         Storage storage $ = _storage();
         if ($.connections[_vault].vaultIndex != 0) revert AlreadyConnected(_vault, $.connections[_vault].vaultIndex);
         if (!$.vaultProxyCodehash[address(_vault).codehash]) revert VaultProxyNotAllowed(_vault, address(_vault).codehash);
-        if (_vault.balance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
+        
+        IStakingVault vault_ = IStakingVault(_vault);
+        address owner = vault_.owner();
+        vault_.acceptOwnership();
+        vault_.fund{value: msg.value}();
+        uint256 vaultBalance = _vault.balance;
+        if (vaultBalance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, vaultBalance, CONNECT_DEPOSIT);
 
         Report memory report = Report(
-            uint128(_vault.balance), // totalValue
-            int128(int256(_vault.balance)) // inOutDelta
+            uint128(vaultBalance), // totalValue
+            int128(int256(vaultBalance)) // inOutDelta
         );
 
         VaultConnection memory connection = VaultConnection(
-            IStakingVault(_vault).owner(),
+            owner,
             uint96(_shareLimit),
             0, // vaultIndex
             false, // pendingDisconnect
