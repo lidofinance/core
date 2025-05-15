@@ -17,6 +17,7 @@ import {
   log,
   prepareLocalMerkleTree,
 } from "lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { reportVaultDataWithProof } from "lib/protocol/helpers/vaults";
 
@@ -29,7 +30,6 @@ const VAULT_DEPOSIT = VALIDATOR_DEPOSIT_SIZE * VALIDATORS_PER_VAULT;
 // const ONE_YEAR = 365n * ONE_DAY;
 // const TARGET_APR = 3_00n; // 3% APR
 // const PROTOCOL_FEE = 10_00n; // 10% fee (5% treasury + 5% node operators)
-const TOTAL_BASIS_POINTS = 100_00n; // 100%
 
 const VAULT_CONNECTION_DEPOSIT = ether("1");
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator performance fee

@@ -1,6 +1,7 @@
 import { ethers, ZeroAddress } from "ethers";
 
-import { certainAddress, ether, impersonate, log } from "lib";
+import { BigIntMath, certainAddress, ether, impersonate, log } from "lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { ZERO_HASH } from "test/deploy";
 
@@ -51,6 +52,28 @@ export const getStakingModuleManagerSigner = async (ctx: ProtocolContext) => {
   }
 
   return await impersonate(await stakingRouter.getRoleMember(role, 0n), ether("100000"));
+};
+
+export const setModuleStakeShareLimit = async (ctx: ProtocolContext, moduleId: bigint, stakeShareLimit: bigint) => {
+  const { stakingRouter } = ctx.contracts;
+
+  const module = await stakingRouter.getStakingModule(moduleId);
+  const managerSigner = await getStakingModuleManagerSigner(ctx);
+
+  await stakingRouter
+    .connect(managerSigner)
+    .updateStakingModule(
+      moduleId,
+      stakeShareLimit,
+      BigIntMath.min(
+        stakeShareLimit + (module.priorityExitShareThreshold - module.stakeShareLimit),
+        TOTAL_BASIS_POINTS,
+      ),
+      module.stakingModuleFee,
+      module.treasuryFee,
+      module.maxDepositsPerBlock,
+      module.minDepositBlockDistance,
+    );
 };
 
 export const ensureStakeLimit = async (ctx: ProtocolContext) => {

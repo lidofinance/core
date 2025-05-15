@@ -15,13 +15,13 @@ import {
 } from "typechain-types";
 
 import { ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { Snapshot } from "test/suite";
 
 const MAX_UINT16 = 2 ** 16;
 const MAX_UINT32 = 2 ** 32;
 const MAX_UINT64 = 2 ** 64;
-const TOTAL_BASIS_POINTS = 100_00n;
 
 describe("OracleReportSanityChecker.sol", () => {
   let checker: OracleReportSanityChecker;

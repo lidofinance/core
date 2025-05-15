@@ -7,11 +7,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub, WstETH__HarnessForVault } from "typechain-types";
 
 import { ether } from "lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
-
-const TOTAL_BASIS_POINTS = 100_00n;
 
 describe("VaultHub.sol:initialization", () => {
   let admin: HardhatEthersSigner;

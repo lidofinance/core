@@ -23,6 +23,7 @@ export const norSdvtEnsureOperators = async (
   module: LoadedContract<NodeOperatorsRegistry>,
   minOperatorsCount = MIN_OPS_COUNT,
   minOperatorKeysCount = MIN_OP_KEYS_COUNT,
+  numKeysPerNodeOperatorToDeposit = 1n,
 ) => {
   const { numBefore, numAdded } = await norSdvtEnsureOperatorsHaveMinKeys(
     ctx,
@@ -52,7 +53,7 @@ export const norSdvtEnsureOperators = async (
 
   if (numAdded > 0) {
     const moduleId = (await isNor(module, ctx)) ? NOR_MODULE_ID : SDVT_MODULE_ID;
-    await depositAndReportValidators(ctx, moduleId, numAdded * (minOperatorKeysCount / 2n));
+    await depositAndReportValidators(ctx, moduleId, numAdded * numKeysPerNodeOperatorToDeposit);
   }
   return { numBefore, numAdded };
 };
