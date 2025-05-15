@@ -234,6 +234,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     mapping(uint256 => NodeOperator) internal _nodeOperators;
     NodeOperatorSummary internal _nodeOperatorSummary;
 
+    /// @dev Mapping of Node Operator exit delay keys
+    mapping(bytes32 => bool) internal _validatorExitProcessedKeys;
+
     //
     // METHODS
     //
@@ -1052,10 +1055,25 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _removeUnusedSigningKeys(_nodeOperatorId, _fromIndex, _keysCount);
     }
 
+    function _isValidatorExitingKeyReported(bytes32 _keyHash) internal view returns (bool) {
+        return _validatorExitProcessedKeys[_keyHash];
+    }
+
+    function _markValidatorExitingKeyAsReported(bytes32 _keyHash) internal {
+        // Require that key is currently NotProcessed
+        require(_validatorExitProcessedKeys[_keyHash] == false,
+            "VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+        _validatorExitProcessedKeys[_keyHash] = true;
+    }
+
+    /// @notice Returns the number of seconds after which a validator is considered late.
+    /// @return uint256 The exit deadline threshold in seconds for all node operators.
     function exitDeadlineThreshold() public view returns (uint256) {
         return EXIT_DELAY_THRESHOLD_SECONDS.getStorageUint256();
     }
 
+    /// @notice Sets the number of seconds after which a validator is considered late for exit.
+    /// @param _threshold The new exit deadline threshold in seconds.
     function setExitDeadlineThreshold(uint256 _threshold) external {
         _auth(MANAGE_NODE_OPERATOR_ROLE);
         require(_threshold > 0, "INVALID_EXIT_DELAY_THRESHOLD");
@@ -1063,6 +1081,13 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         emit ExitDeadlineThresholdChanged(_threshold);
     }
 
+    /// @notice Handles the triggerable exit event for a validator belonging to a specific node operator.
+    /// @dev This function is called by the StakingRouter when a validator is exited using the triggerable
+    ///      exit request on the Execution Layer (EL).
+    /// @param _nodeOperatorId The ID of the node operator.
+    /// @param _publicKey The public key of the validator being reported.
+    /// @param _withdrawalRequestPaidFee Fee amount paid to send a withdrawal request on the Execution Layer (EL).
+    /// @param _exitType The type of exit being performed.
     function onValidatorExitTriggered(
         uint256 _nodeOperatorId,
         bytes _publicKey,
@@ -1074,15 +1099,31 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         emit ValidatorExitTriggered(_nodeOperatorId, _publicKey, _withdrawalRequestPaidFee, _exitType);
     }
 
+    /// @notice Determines whether a validator's exit status should be updated and will have an effect on the Node Operator.
+    /// @param _publicKey The public key of the validator.
+    /// @param _eligibleToExitInSec The number of seconds the validator was eligible to exit but did not.
+    /// @return True if the validator has exceeded the exit deadline threshold and hasn't been reported yet.
     function isValidatorExitDelayPenaltyApplicable(
         uint256, // _nodeOperatorId
         uint256, // _proofSlotTimestamp
-        bytes, // _publicKey
+        bytes _publicKey,
         uint256 _eligibleToExitInSec
     ) external view returns (bool) {
+        bytes32 processedKeyHash = keccak256(_publicKey);
+        // Check if the key is already reported
+        if (_isValidatorExitingKeyReported(processedKeyHash)) {
+            return false;
+        }
         return _eligibleToExitInSec >= exitDeadlineThreshold();
     }
 
+    /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
+    /// @dev This function is called by the StakingRouter to report the current exit-related status of a validator
+    ///      belonging to a specific node operator. It marks the validator as processed to avoid duplicate reports.
+    /// @param _nodeOperatorId The ID of the node operator whose validator's status is being delivered.
+    /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
+    /// @param _publicKey The public key of the validator being reported.
+    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit but has not exited.
     function reportValidatorExitDelay(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
@@ -1094,6 +1135,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
         // Check if exit delay exceeds the threshold
         require(_eligibleToExitInSec >= exitDeadlineThreshold(), "EXIT_DELAY_BELOW_THRESHOLD");
+
+        bytes32 processedKeyHash = keccak256(_publicKey);
+        _markValidatorExitingKeyAsReported(processedKeyHash);
 
         emit ValidatorExitStatusUpdated(_nodeOperatorId, _publicKey, _eligibleToExitInSec, _proofSlotTimestamp);
     }

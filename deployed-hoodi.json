@@ -596,9 +596,9 @@
       "constructorArgs": ["0x00000000219ab540356cBB839Cbe05303d7705Fa"]
     }
   },
-  "validatorExitVerifier": {
+  "validatorExitDelayVerifier": {
     "implementation": {
-      "contract": "contracts/0.8.25/ValidatorExitVerifier.sol",
+      "contract": "contracts/0.8.25/ValidatorExitDelayVerifier.sol",
       "address": "0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB",
       "constructorArgs": [
         "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",

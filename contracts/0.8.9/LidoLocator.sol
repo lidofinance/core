@@ -28,7 +28,7 @@ contract LidoLocator is ILidoLocator {
         address withdrawalQueue;
         address withdrawalVault;
         address oracleDaemonConfig;
-        address validatorExitVerifier;
+        address validatorExitDelayVerifier;
         address triggerableWithdrawalGateway;
     }
 
@@ -48,7 +48,7 @@ contract LidoLocator is ILidoLocator {
     address public immutable withdrawalQueue;
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
-    address public immutable validatorExitVerifier;
+    address public immutable validatorExitDelayVerifier;
     address public immutable triggerableWithdrawalGateway;
 
     /**
@@ -71,7 +71,7 @@ contract LidoLocator is ILidoLocator {
         withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
-        validatorExitVerifier = _assertNonZero(_config.validatorExitVerifier);
+        validatorExitDelayVerifier = _assertNonZero(_config.validatorExitDelayVerifier);
         triggerableWithdrawalGateway = _assertNonZero(_config.triggerableWithdrawalGateway);
     }
 

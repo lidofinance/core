@@ -21,7 +21,7 @@ const services = [
   "withdrawalQueue",
   "withdrawalVault",
   "oracleDaemonConfig",
-  "validatorExitVerifier",
+  "validatorExitDelayVerifier",
   "triggerableWithdrawalGateway",
 ] as const;
 
