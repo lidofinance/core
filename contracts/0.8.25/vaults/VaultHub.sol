@@ -197,11 +197,6 @@ contract VaultHub is PausableUntilWithRoles {
         return _totalValue(_vaultRecord(_vault));
     }
 
-    /// @return total value of the vaults obligations
-    function totalObligationsValue(address _vault) external view returns (uint256) {
-        return _ledger().getTotalObligationsValue(_vault);
-    }
-
     /// @return amount of ether that is available for the vault to withdraw
     function availableBalance(address _vault) external view returns (uint256) {
         return _availableBalance(_vault);
@@ -229,6 +224,17 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev returns empty struct if the vault is not connected
     function latestReport(address _vault) external view returns (Report memory) {
         return _vaultRecord(_vault).report;
+    }
+
+    /// @notice obligations for the vault
+    /// @return obligations obligations for the vault
+    function obligations(address _vault) external view returns (ObligationsLedger.Obligations memory) {
+        return _ledger().getObligations(_vault);
+    }
+
+    /// @return total value of the vaults obligations
+    function unsettledObligations(address _vault) public view returns (uint256) {
+        return _ledger().getUnsettledObligations(_vault);
     }
 
     /// @return true if the report for the vault is fresh, false otherwise
@@ -442,8 +448,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 newLiabilityShares = Math256.max(record.liabilityShares, _reportLiabilityShares);
         uint256 newLiability = _getPooledEthBySharesRoundUp(newLiabilityShares);
 
-        (uint256 valueToRebalance, uint256 valueToTransfer) = _ledger().obligationsToSettle(_vault, _reportFeeCharged, newLiability);
-
         // locked ether can only be increased asynchronously once the oracle settled the new floor value
         // as of reference slot to prevent slashing upsides in between the report gathering and delivering
         uint256 lockedEther = Math256.max(
@@ -459,11 +463,7 @@ contract VaultHub is PausableUntilWithRoles {
         record.locked = uint128(lockedEther);
         record.liabilityShares = uint96(newLiabilityShares);
 
-        if (valueToRebalance > 0) _rebalance(_vault, record, valueToRebalance);
-        if (valueToTransfer > 0) {
-            _withdrawFromVault(_vault, record, LIDO_LOCATOR.treasury(), valueToTransfer);
-            record.feeCharged += uint96(valueToTransfer);
-        }
+        _settleObligations(_vault, record, _reportFeeCharged - record.feeCharged, newLiability);
 
         IStakingVault vault_ = IStakingVault(_vault);
         if (!_isVaultHealthy(connection, record) && !vault_.beaconChainDepositsPaused()) vault_.pauseBeaconChainDeposits();
@@ -662,8 +662,11 @@ contract VaultHub is PausableUntilWithRoles {
         address _refundRecipient
     ) external payable {
         VaultConnection storage connection = _checkConnection(_vault);
-        bool canEject = hasRole(WITHDRAWAL_EXECUTOR_ROLE, msg.sender) && _ledger().getWithdrawalsObligation(_vault) > 0;
-        if (msg.sender != connection.owner && !canEject) revert NotAuthorized();
+
+        bool isWithdrawalExecutor = hasRole(WITHDRAWAL_EXECUTOR_ROLE, msg.sender);
+        if (msg.sender != connection.owner && !isWithdrawalExecutor) revert NotAuthorized();
+        if (isWithdrawalExecutor && _ledger().getObligations(_vault).unsettledWithdrawals == 0) revert NotAuthorized();
+
         VaultRecord storage record = _vaultRecord(_vault);
 
         // disallow partial validator withdrawals when the vault value does not cover the locked amount,
@@ -709,6 +712,37 @@ contract VaultHub is PausableUntilWithRoles {
 
         // TODO: add some gas compensation here
         _rebalance(_vault, record, Math256.min(fullRebalanceAmount, _vault.balance));
+    }
+
+    /// @notice Allows a vault owner to repay all outstanding obligations
+    /// @param _vault The address of the vault
+    /// @dev msg.sender should be vault's owner
+    function settleObligations(address _vault) external {
+        VaultConnection storage connection = _checkConnection(_vault);
+        if (msg.sender != connection.owner) revert NotAuthorized();
+
+        VaultRecord storage record = _vaultRecord(_vault);
+        _settleObligations(
+            _vault,
+            record,
+            _ledger().getObligations(_vault).unsettledTreasuryFees,
+            _getPooledEthBySharesRoundUp(record.liabilityShares)
+        );
+    }
+
+    function _settleObligations(
+        address _vault,
+        VaultRecord storage _record,
+        uint256 _outstandingFees,
+        uint256 _liability
+    ) internal {
+        (uint256 valueToRebalance, uint256 valueToTransfer) = _ledger().calculateSettlementOnReport(_vault, _outstandingFees, _liability);
+
+        if (valueToRebalance > 0) _rebalance(_vault, _record, valueToRebalance);
+        if (valueToTransfer > 0) {
+            _withdrawFromVault(_vault, _record, LIDO_LOCATOR.treasury(), valueToTransfer);
+            _record.feeCharged += uint96(valueToTransfer);
+        }
     }
 
     function _connectVault(
@@ -774,6 +808,11 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 liabilityShares_ = _record.liabilityShares;
         if (liabilityShares_ > 0) {
             revert NoLiabilitySharesShouldBeLeft(_vault, liabilityShares_);
+        }
+
+        uint256 unsettledObligations_ = unsettledObligations(_vault);
+        if (unsettledObligations_ > 0) {
+            revert OutstandingObligationsExist(_vault, unsettledObligations_);
         }
 
         _connection.pendingDisconnect = true;
@@ -888,7 +927,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _availableBalance(address _vault) internal view returns (uint256) {
         uint256 vaultBalance = _vault.balance;
-        uint256 outstandingObligations = _ledger().getTotalObligationsValue(_vault);
+        uint256 outstandingObligations = unsettledObligations(_vault);
 
         return outstandingObligations > vaultBalance ? 0 : vaultBalance - outstandingObligations;
     }
@@ -1088,6 +1127,7 @@ contract VaultHub is PausableUntilWithRoles {
     error UnhealthyVaultCannotDeposit(address vault);
     error VaultIsDisconnecting(address vault);
     error NoOutstandingWithdrawalObligation(address vault);
+    error OutstandingObligationsExist(address vault, uint256 totalObligations);
     error ArrayLengthMismatch();
     error PartialValidatorWithdrawalNotAllowed();
 }

@@ -4,6 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
@@ -17,8 +18,8 @@ import {VaultHub} from "./VaultHub.sol";
 contract ObligationsLedger is AccessControlEnumerableUpgradeable {
     /// @notice obligations that may be accrued by a vault
     struct Obligations {
-        uint256 withdrawals;
-        uint256 treasuryFees;
+        uint256 unsettledWithdrawals;
+        uint256 unsettledTreasuryFees;
     }
 
     /// @custom:storage-location erc7201:ObligationsLedger
@@ -52,66 +53,93 @@ contract ObligationsLedger is AccessControlEnumerableUpgradeable {
         return LIDO_LOCATOR.vaultHub();
     }
 
-    function getVaultObligations(address _vault) external view returns (Obligations memory) {
+    function getObligations(address _vault) external view returns (Obligations memory) {
         return _vaultObligations(_vault);
     }
 
-    function getTotalObligationsValue(address _vault) public view returns (uint256) {
-        Obligations memory obligations = _vaultObligations(_vault);
-        return obligations.withdrawals + obligations.treasuryFees;
+    function getUnsettledObligations(address _vault) external view returns (uint256) {
+        return _vaultObligations(_vault).unsettledWithdrawals + _vaultObligations(_vault).unsettledTreasuryFees;
     }
 
-    function getWithdrawalsObligation(address _vault) external view returns (uint256) {
-        return _vaultObligations(_vault).withdrawals;
+    function getUnsettledWithdrawals(address _vault) external view returns (uint256) {
+        return _vaultObligations(_vault).unsettledWithdrawals;
     }
 
-    function getTreasuryFeesObligation(address _vault) external view returns (uint256) {
-        return _vaultObligations(_vault).treasuryFees;
+    function getUnsettledTreasuryFees(address _vault) external view returns (uint256) {
+        return _vaultObligations(_vault).unsettledTreasuryFees;
     }
 
-    function setWithdrawalsObligation(address _vault, uint256 _value) external onlyRole(WITHDRAWAL_MANAGER_ROLE) {
+    function setUnsettledWithdrawals(address _vault, uint256 _value) external onlyRole(WITHDRAWAL_MANAGER_ROLE) {
         VaultHub hub = VaultHub(payable(vaultHub()));
 
         uint256 liability = LIDO.getPooledEthBySharesRoundUp(hub.liabilityShares(_vault));
         if (_value > liability) revert WithdrawalsObligationValueTooHigh(_vault, _value);
 
-        Obligations storage obligations = _vaultObligations(_vault);
-        obligations.withdrawals = _value;
+        _vaultObligations(_vault).unsettledWithdrawals = _value;
 
         emit WithdrawalsObligationUpdated(_vault, _value);
     }
 
-    function obligationsToSettle(
+    function calculateSettlement(
         address _vault,
-        uint256 _fees,
-        uint256 _liability
-    ) external onlyVaultHub returns (uint256 toRebalance, uint256 toTreasury) {
+        uint256 _maxAvailableWithdrawals
+    ) external onlyVaultHub returns (uint256 valueToRebalance, uint256 valueToTransferToTreasury) {
         Obligations storage obligations = _vaultObligations(_vault);
-        uint256 vaultBalance = _vault.balance;
+        return _getSettlementValues(
+            _vault,
+            obligations,
+            obligations.unsettledTreasuryFees,
+            _maxAvailableWithdrawals
+        );
+    }
 
-        // If the vault liability is less than the withdrawals obligation, we need to update the obligation
-        if (_liability < obligations.withdrawals) {
-            obligations.withdrawals = _liability;
+    function calculateSettlementOnReport(
+        address _vault,
+        uint256 _newUnsettledTreasuryFees,
+        uint256 _maxAvailableWithdrawals
+    ) external onlyVaultHub returns (uint256 valueToRebalance, uint256 valueToTransferToTreasury) {
+        return _getSettlementValues(
+            _vault,
+            _vaultObligations(_vault),
+            _newUnsettledTreasuryFees,
+            _maxAvailableWithdrawals
+        );
+    }
+
+    function _getSettlementValues(
+        address _vault,
+        Obligations storage _obligations,
+        uint256 _newUnsettledTreasuryFees,
+        uint256 _maxWithdrawals
+    ) private returns (uint256 valueToRebalance, uint256 valueToTransferToTreasury) {
+        uint256 _vaultBalance = _vault.balance;
+        uint256 _newUnsettledWithdrawals = _obligations.unsettledWithdrawals;
+
+        if (_maxWithdrawals < _newUnsettledWithdrawals) {
+            _newUnsettledWithdrawals = _maxWithdrawals;
         }
 
-        uint256 valueToRebalance = Math256.min(obligations.withdrawals, vaultBalance);
-        uint256 valueToWithdrawAsTreasuryFees = Math256.min(_fees, vaultBalance - valueToRebalance);
+        valueToRebalance = Math256.min(_newUnsettledWithdrawals, _vaultBalance);
+        valueToTransferToTreasury = Math256.min(_newUnsettledTreasuryFees, _vaultBalance - valueToRebalance);
 
         if (valueToRebalance > 0) {
-            toRebalance = valueToRebalance;
-            obligations.withdrawals -= valueToRebalance;
-            emit WithdrawalsObligationSettled(_vault, valueToRebalance, obligations.withdrawals);
+            _obligations.unsettledWithdrawals = _newUnsettledWithdrawals - valueToRebalance;
+            emit WithdrawalsObligationSettled(_vault, valueToRebalance, _obligations.unsettledWithdrawals);
+        } else {
+            if (_newUnsettledWithdrawals != _obligations.unsettledWithdrawals) {
+                _obligations.unsettledWithdrawals = _newUnsettledWithdrawals;
+                emit WithdrawalsObligationUpdated(_vault, _obligations.unsettledWithdrawals);
+            }
         }
 
-        if (valueToWithdrawAsTreasuryFees > 0) {
-            toTreasury = valueToWithdrawAsTreasuryFees;
-            obligations.treasuryFees -= valueToWithdrawAsTreasuryFees;
-            emit TreasuryFeesObligationSettled(_vault, valueToWithdrawAsTreasuryFees, obligations.treasuryFees);
-        }
-
-        if (_fees > valueToWithdrawAsTreasuryFees) {
-            obligations.treasuryFees = _fees;
-            emit TreasuryFeesObligationUpdated(_vault, _fees);
+        if (valueToTransferToTreasury > 0) {
+            _obligations.unsettledTreasuryFees = _newUnsettledTreasuryFees - valueToTransferToTreasury;
+            emit TreasuryFeesObligationSettled(_vault, valueToTransferToTreasury, _obligations.unsettledTreasuryFees);
+        } else {
+            if (_newUnsettledTreasuryFees != _obligations.unsettledTreasuryFees) {
+                _obligations.unsettledTreasuryFees = _newUnsettledTreasuryFees;
+                emit TreasuryFeesObligationUpdated(_vault, _obligations.unsettledTreasuryFees);
+            }
         }
     }
 
@@ -133,9 +161,10 @@ contract ObligationsLedger is AccessControlEnumerableUpgradeable {
     error WithdrawalsObligationValueTooHigh(address vault, uint256 amount);
 
     event WithdrawalsObligationUpdated(address indexed vault, uint256 amount);
-    event WithdrawalsObligationSettled(address indexed vault, uint256 amount, uint256 total);
-
     event TreasuryFeesObligationUpdated(address indexed vault, uint256 amount);
+    event ObligationsUpdated(address indexed vault, uint256 unsettledWithdrawals, uint256 unsettledTreasuryFees);
+
+    event WithdrawalsObligationSettled(address indexed vault, uint256 amount, uint256 total);
     event TreasuryFeesObligationSettled(address indexed vault, uint256 amount, uint256 total);
 
     error NotAuthorized(address caller);

@@ -55,8 +55,12 @@ contract Dashboard is NodeOperatorFee {
      * @param _vaultHub Address of the vault hub contract.
      * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _stETH, address _wstETH, address _vaultHub, address _lidoLocator)
-        NodeOperatorFee(_vaultHub, _lidoLocator) {
+    constructor(
+        address _stETH,
+        address _wstETH,
+        address _vaultHub,
+        address _lidoLocator
+    ) NodeOperatorFee(_vaultHub, _lidoLocator) {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
@@ -211,6 +215,14 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Utility function to get the total amount of obligations for the vault
+     * @return The total value of all obligations for the vault
+     */
+    function unsettledObligations() public view returns (uint256) {
+        return VAULT_HUB.unsettledObligations(address(_stakingVault()));
+    }
+
+    /**
      * @notice Returns the amount of ether that can be instantly withdrawn from the staking vault.
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
      * @dev This method overrides the Dashboard's withdrawableEther() method
@@ -298,6 +310,17 @@ contract Dashboard is NodeOperatorFee {
         }
 
         _withdraw(_recipient, _ether);
+    }
+
+    /**
+     * @notice Allows a vault owner to settle outstanding vault obligations
+     * @dev First funds the vault with the sent ETH, then triggers a settlement process
+     *      Settlement process uses the same logic as oracle reports
+     */
+    function settleObligations() external payable {
+        if (msg.value > 0) _fund(msg.value);
+
+        VAULT_HUB.settleObligations(address(_stakingVault()));
     }
 
     /**
@@ -444,7 +467,7 @@ contract Dashboard is NodeOperatorFee {
         if (_amount == 0) revert ZeroArgument("_amount");
 
         if (_token == ETH) {
-            (bool success, ) = payable(_recipient).call{value: _amount}("");
+            (bool success,) = payable(_recipient).call{value: _amount}("");
             if (!success) revert EthTransferFailed(_recipient, _amount);
         } else {
             SafeERC20.safeTransfer(IERC20(_token), _recipient, _amount);
@@ -552,7 +575,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The total obligations value of the vault in wei.
      */
     function _feesAndObligations() internal view returns (uint256) {
-        return nodeOperatorUnclaimedFee() + VAULT_HUB.totalObligationsValue(address(_stakingVault()));
+        return nodeOperatorUnclaimedFee() + unsettledObligations();
     }
 
     /**
