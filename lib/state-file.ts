@@ -94,6 +94,7 @@ export enum Sk {
   dashboardImpl = "dashboardImpl",
   stakingVaultBeacon = "stakingVaultBeacon",
   operatorGrid = "operatorGrid",
+  lazyOracle = "lazyOracle",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {

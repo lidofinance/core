@@ -251,6 +251,7 @@ async function getLocatorConfig(locatorAddress: string) {
     "wstETH",
     "predepositGuarantee",
     "vaultHub",
+    "lazyOracle",
     "operatorGrid",
   ] as (keyof LidoLocator.ConfigStruct)[];
 

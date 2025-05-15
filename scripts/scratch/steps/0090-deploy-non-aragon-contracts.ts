@@ -219,6 +219,7 @@ export async function main() {
       pdgDeployParams.gIndex,
       pdgDeployParams.gIndexAfterChange,
       pdgDeployParams.changeSlot,
+      locator.address,
     ],
   );
 
@@ -241,6 +242,7 @@ export async function main() {
     predepositGuarantee.address,
     wstETH.address,
     vaultHub.address,
+    certainAddress("dummy-locator:LazyOracle"), // requires LidoLocator in the constructor, so deployed after it
     operatorGrid.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
