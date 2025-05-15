@@ -146,7 +146,7 @@ export const setBeaconBlockRoot = async (root: string) => {
       data: root,
     })
     .then((tx) => tx.getBlock());
-  if (!block) throw new Error("ivariant");
+  if (!block) throw new Error("invariant");
   return block.timestamp;
 };
 

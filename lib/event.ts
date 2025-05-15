@@ -1,5 +1,7 @@
 import { ContractTransactionReceipt, EventLog, Interface, Log, LogDescription } from "ethers";
 
+import { LogDescriptionExtended } from "lib/protocol/types";
+
 import { log } from "./log";
 
 const parseEventLog = (entry: EventLog): LogDescription | null => {
@@ -39,8 +41,8 @@ export function findEventsWithInterfaces(
   eventName: string,
   interfaces: Interface[],
   numberOfIndexedParams?: number,
-): LogDescription[] {
-  const events: LogDescription[] = [];
+): LogDescriptionExtended[] {
+  const events: LogDescriptionExtended[] = [];
   const notParsedLogs: Log[] = [];
 
   const topics0OfInterest = interfaces.map((iface) => {
@@ -64,8 +66,9 @@ export function findEventsWithInterfaces(
       return;
     }
 
-    const logDescription = parseLogEntry(entry, interfaces);
+    const logDescription = parseLogEntry(entry, interfaces) as LogDescriptionExtended;
     if (logDescription) {
+      logDescription.address = entry.address;
       events.push(logDescription);
     } else {
       notParsedLogs.push(entry);

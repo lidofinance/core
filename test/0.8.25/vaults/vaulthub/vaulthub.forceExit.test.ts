@@ -17,6 +17,7 @@ import {
 } from "typechain-types";
 
 import { GENESIS_FORK_VERSION, impersonate } from "lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
@@ -26,7 +27,6 @@ import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 
 const SHARE_LIMIT = ether("1");
-const TOTAL_BASIS_POINTS = 10_000n;
 const RESERVE_RATIO_BP = 10_00n;
 const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
 const TREASURY_FEE_BP = 5_00n;

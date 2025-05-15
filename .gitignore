@@ -27,6 +27,7 @@ deployed-local.json
 deployed-local-devnet.json
 deployed-hardhat.json
 deployed-local-devnet.json
+deployed-mainnet-upgrade.json
 
 # MacOS
 .DS_Store

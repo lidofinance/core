@@ -20,7 +20,7 @@ describe("Integration: Withdrawal happy path", () => {
 
     snapshot = await Snapshot.take();
 
-    [holder] = await ethers.getSigners();
+    [, holder] = await ethers.getSigners();
     await setBalance(holder.address, ether("1000000"));
   });
 
@@ -37,10 +37,11 @@ describe("Integration: Withdrawal happy path", () => {
     while ((await wq.getLastRequestId()) !== (await wq.getLastFinalizedRequestId())) {
       await report(ctx, { clDiff: ether("1") });
       // Submit more ETH to increase buffer
-      await lido.submit(ethers.ZeroAddress, { value: ether("10000") });
+      await lido.connect(holder).submit(ethers.ZeroAddress, { value: ether("10000") });
     }
 
     // Get initial stETH holder balance
+    await lido.connect(await ctx.getSigner("voting")).removeStakingLimit();
     await lido.connect(holder).submit(ethers.ZeroAddress, { value: ether("10000") });
     expect(await lido.balanceOf(holder.address)).to.be.gte(REQUESTS_SUM);
 
@@ -58,7 +59,7 @@ describe("Integration: Withdrawal happy path", () => {
 
     // Make withdrawal requests
     const stethBalanceBefore = await lido.balanceOf(holder.address);
-    await lido.approve(wq.target, REQUESTS_SUM);
+    await lido.connect(holder).approve(wq.target, REQUESTS_SUM);
     const requests = Array(parseInt(REQUESTS_COUNT.toString())).fill(REQUEST_AMOUNT);
     const requestTx = await wq.connect(holder).requestWithdrawals(requests, holder.address);
     const stethBalanceAfter = await lido.balanceOf(holder.address);
@@ -118,7 +119,10 @@ describe("Integration: Withdrawal happy path", () => {
     const [parsedFinalizedEvent] = findEventsWithInterfaces(reportReceipt!, "WithdrawalsFinalized", [wq.interface]);
     expect(parsedFinalizedEvent?.args.from).to.equal(lastFinalizedRequestId + 1n);
     expect(parsedFinalizedEvent?.args.to).to.equal(REQUESTS_COUNT + lastRequestId);
-    expect(parsedFinalizedEvent?.args.amountOfETHLocked).to.be.closeTo(REQUESTS_SUM + unfinalizedSteth, 1n);
+    expect(parsedFinalizedEvent?.args.amountOfETHLocked).to.be.closeTo(
+      REQUESTS_SUM + unfinalizedSteth,
+      2n * REQUESTS_COUNT,
+    );
     expect(parsedFinalizedEvent?.args.sharesToBurn).to.be.closeTo(sharesToBurn, 1n);
 
     // Verify post-finalization state

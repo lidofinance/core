@@ -20,6 +20,7 @@ import {
 import { Snapshot } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
+const TEST_STETH_AMOUNT_WEI = 100n;
 
 describe("Integration: Actions with vault connected to VaultHub", () => {
   let ctx: ProtocolContext;
@@ -35,6 +36,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   let stranger: HardhatEthersSigner;
   let pauser: HardhatEthersSigner;
   let agent: HardhatEthersSigner;
+
+  let testSharesAmountWei: bigint;
 
   let snapshot: string;
   let originalSnapshot: string;
@@ -64,6 +67,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
     // make sure that the vault has a fresh report
     await reportVaultDataWithProof(stakingVault);
+
+    testSharesAmountWei = await ctx.contracts.lido.getSharesByPooledEth(TEST_STETH_AMOUNT_WEI);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -86,18 +91,17 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     expect(await vaultHub.isPaused()).to.equal(true);
 
     // check that minting is paused
-    await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n)).to.be.revertedWithCustomError(
-      vaultHub,
-      "ResumedExpected",
-    );
+    await expect(
+      dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI),
+    ).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
 
     await expect(vaultHub.connect(pauser).resume()).to.emit(vaultHub, "Resumed");
     expect(await vaultHub.isPaused()).to.equal(false);
 
     // check that minting is resumed
-    await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
+    await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
       .to.emit(vaultHub, "MintedSharesOnVault")
-      .withArgs(stakingVault, 1n);
+      .withArgs(stakingVault, testSharesAmountWei);
   });
 
   context("stETH minting", () => {
@@ -105,9 +109,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // add some stETH to the vault to have totalValue
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
+      await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, 1n);
+        .withArgs(stakingVault, testSharesAmountWei);
     });
 
     // TODO: can mint within share limits of the vault
@@ -124,9 +128,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(await lido.getCurrentStakeLimit()).to.equal(0); // <-- no more limit
 
       await dashboard.connect(roles.funder).fund({ value: ether("2") }); // try to fund to go healthy
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
+      await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, 1n);
+        .withArgs(stakingVault, testSharesAmountWei);
     });
   });
 
@@ -136,19 +140,19 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       // add some stETH to the vault to have totalValue, mint shares and approve stETH
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
-      await dashboard.connect(roles.minter).mintStETH(roles.burner, 1n);
-      await lido.connect(roles.burner).approve(dashboard, 1n);
+      await dashboard.connect(roles.minter).mintStETH(roles.burner, TEST_STETH_AMOUNT_WEI);
+      await lido.connect(roles.burner).approve(dashboard, TEST_STETH_AMOUNT_WEI);
 
-      await expect(dashboard.connect(roles.burner).burnStETH(1n))
+      await expect(dashboard.connect(roles.burner).burnStETH(TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "BurnedSharesOnVault")
-        .withArgs(stakingVault, 1n);
+        .withArgs(stakingVault, testSharesAmountWei);
     });
 
     // Can burn steth from the lido v2 core protocol
     // 1. Mint some stETH
     // 2. transfer stETH to some other address
     // 3. try to burn stETH, get reject that nothing to burn
-    // 4. submit some ethe to lido (v2 core protocol) lido.submit(sender, { value: amount })
+    // 4. submit some ether to lido (v2 core protocol) lido.submit(sender, { value: amount })
     // 5. try to burn stETH again, now it should work
   });
 
@@ -184,12 +188,14 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") }); // total value is 2 ether
       await dashboard.connect(roles.locker).lock(ether("2")); // raise cap full capacity
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
+      const etherToRebalance = ether(".5");
+      const sharesBurnt = await ctx.contracts.lido.getSharesByPooledEth(etherToRebalance);
 
-      await expect(dashboard.connect(roles.rebalancer).rebalanceVault(ether(".5")))
+      await expect(dashboard.connect(roles.rebalancer).rebalanceVault(etherToRebalance))
         .to.emit(stakingVault, "Withdrawn")
-        .withArgs(dashboard, vaultHub, ether(".5"))
+        .withArgs(dashboard, vaultHub, etherToRebalance)
         .to.emit(vaultHub, "VaultRebalanced")
-        .withArgs(stakingVault, ether(".5"));
+        .withArgs(stakingVault, sharesBurnt);
 
       expect(await stakingVault.totalValue()).to.equal(ether("1.5"));
     });
@@ -252,16 +258,15 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     it.skip("Can't triggerValidatorWithdrawal", () => {});
 
     it("can't mintShares", async () => {
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n)).to.be.revertedWithCustomError(
-        vaultHub,
-        "VaultReportStaled",
-      );
+      await expect(
+        dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI),
+      ).to.be.revertedWithCustomError(vaultHub, "VaultReportStaled");
       await reportVaultDataWithProof(stakingVault);
 
       expect(await stakingVault.isReportFresh()).to.equal(true);
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
+      await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, 1n);
+        .withArgs(stakingVault, testSharesAmountWei);
     });
   });
 
@@ -281,9 +286,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     it("Can't mint", async () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") }); // try to fund to increase the total value (optional)
       // Here now minted 1 stETH, total vault value is 1 wei, so any minting should fail
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
+      await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.be.revertedWithCustomError(ctx.contracts.vaultHub, "InsufficientTotalValueToMint")
-        .withArgs(await stakingVault.getAddress(), ether("1") + 1n); // here + 1n is from the report
+        .withArgs(await stakingVault.getAddress(), ether("1") + testSharesAmountWei); // here + 1n is from the report
     });
 
     it("Can mint if goes to healthy", async () => {
@@ -291,9 +296,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(await vaultHub.isVaultHealthyAsOfLatestReport(stakingVault)).to.equal(true); // <-- should be healthy now, but the function name is weird
 
       // Here now minted 1 stETH, total vault value is 1 wei, so any minting should fail
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
+      await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.be.revertedWithCustomError(ctx.contracts.vaultHub, "InsufficientTotalValueToMint")
-        .withArgs(await stakingVault.getAddress(), 1n); // here 1n is total value from report
+        .withArgs(await stakingVault.getAddress(), testSharesAmountWei); // here 1n is total value from report
     });
   });
 

@@ -3,6 +3,9 @@ import * as process from "node:process";
 import hre from "hardhat";
 
 import { log } from "lib";
+import { readNetworkState, Sk } from "lib/state-file";
+
+import { getMode } from "../../hardhat.helpers";
 
 import { ProtocolNetworkItems } from "./types";
 
@@ -82,37 +85,54 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
   const config = await parseDeploymentJson(network);
   const defaults: Record<keyof ProtocolNetworkItems, string> = {
     ...getDefaults(defaultEnv),
-    locator: config["lidoLocator"].proxy.address,
-    agentAddress: config["app:aragon-agent"].proxy.address,
-    votingAddress: config["app:aragon-voting"].proxy.address,
-    easyTrackAddress: config["app:aragon-voting"].proxy.address,
-    stakingVaultFactory: config["stakingVaultFactory"].address,
-    stakingVaultBeacon: config["stakingVaultBeacon"].address,
-    operatorGrid: config["operatorGrid"].proxy.address,
+    locator: config[Sk.lidoLocator].proxy.address,
+    agentAddress: config[Sk.appAgent].proxy.address,
+    votingAddress: config[Sk.appVoting].proxy.address,
+    easyTrackAddress: config[Sk.appVoting].proxy.address,
+    stakingVaultFactory: config[Sk.stakingVaultFactory].address,
+    stakingVaultBeacon: config[Sk.stakingVaultBeacon].address,
+    operatorGrid: config[Sk.operatorGrid].proxy.address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }
 
 async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
+  const state = readNetworkState();
+
   const defaults: Record<keyof ProtocolNetworkItems, string> = {
     ...getDefaults(defaultEnv),
     locator: "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
     agentAddress: "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
     votingAddress: "0x2e59A20f205bB85a89C53f1936454680651E618e",
     easyTrackAddress: "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977",
-    stakingVaultFactory: "",
-    stakingVaultBeacon: "",
+    stakingVaultFactory: state[Sk.stakingVaultFactory].address,
+    stakingVaultBeacon: state[Sk.stakingVaultBeacon].address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "mainnet-fork");
+}
+
+async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
+  const state = readNetworkState();
+
+  const defaults: Record<keyof ProtocolNetworkItems, string> = {
+    ...getDefaults(defaultEnv),
+    locator: state[Sk.lidoLocator].proxy.address,
+    agentAddress: state[Sk.appAgent].proxy.address,
+    votingAddress: state[Sk.appVoting].proxy.address,
+    easyTrackAddress: state["easyTrackEVMScriptExecutor"].address,
+    stakingVaultFactory: state[Sk.stakingVaultFactory] && state[Sk.stakingVaultFactory].address,
+    stakingVaultBeacon: state[Sk.stakingVaultBeacon] && state[Sk.stakingVaultBeacon].address,
+  };
+  return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "state-network-config");
 }
 
 export async function getNetworkConfig(network: string): Promise<ProtocolNetworkConfig> {
   switch (network) {
     case "hardhat":
-      if (isNonForkingHardhatNetwork()) {
+      if (getMode() === "scratch") {
         return getLocalNetworkConfig(network, "scratch");
       }
-      return getMainnetForkNetworkConfig();
+      return getForkingNetworkConfig();
     case "local":
       return getLocalNetworkConfig(network, "fork");
     case "mainnet-fork":

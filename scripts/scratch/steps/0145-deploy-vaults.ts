@@ -19,11 +19,11 @@ export async function main() {
   const depositContract = state.chainSpec.depositContract;
 
   // Deploy StakingVault implementation contract
-  const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
+  const vaultImplementation = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
     vaultHubAddress,
     depositContract,
   ]);
-  const impAddress = await imp.getAddress();
+  const vaultImplementationAddress = await vaultImplementation.getAddress();
 
   // Deploy Dashboard implementation contract
   const dashboard = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [
@@ -33,7 +33,10 @@ export async function main() {
   ]);
   const dashboardAddress = await dashboard.getAddress();
 
-  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [impAddress, deployer]);
+  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
+    vaultImplementationAddress,
+    deployer,
+  ]);
   const beaconAddress = await beacon.getAddress();
 
   // Deploy BeaconProxy to get bytecode and add it to whitelist
@@ -56,15 +59,9 @@ export async function main() {
   // Add VaultFactory and Vault implementation to the Accounting contract
   const vaultHub = await loadContract<VaultHub>("VaultHub", vaultHubAddress);
 
-  // Grant roles for the Accounting contract
-  const vaultMasterRole = await vaultHub.VAULT_MASTER_ROLE();
+  // Grant VaultHub roles
   const vaultRegistryRole = await vaultHub.VAULT_REGISTRY_ROLE();
-
-  await makeTx(vaultHub, "grantRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(vaultHub, "grantRole", [vaultRegistryRole, deployer], { from: deployer });
-
   await makeTx(vaultHub, "addVaultProxyCodehash", [vaultBeaconProxyCodeHash], { from: deployer });
-
-  await makeTx(vaultHub, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(vaultHub, "renounceRole", [vaultRegistryRole, deployer], { from: deployer });
 }

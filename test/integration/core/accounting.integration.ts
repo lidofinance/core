@@ -173,7 +173,7 @@ describe("Integration: Accounting", () => {
   it("Should account correctly with negative CL rebase", async () => {
     const { lido, accountingOracle } = ctx.contracts;
 
-    const REBASE_AMOUNT = ether("-1"); // Must be enough to cover the fees
+    const REBASE_AMOUNT = ether("-10"); // Must be enough to cover the fees
 
     const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
     const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();
@@ -886,7 +886,7 @@ describe("Integration: Accounting", () => {
     await ensureRequestsFinalized();
 
     const limit = await rebaseLimitWei();
-    const excess = ether("10");
+    const excess = limit / 2n; // 2nd report will take two halves of the excess of the limit size
     const limitWithExcess = limit + excess;
 
     await setBalance(withdrawalVault.address, limitWithExcess);

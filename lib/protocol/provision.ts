@@ -1,5 +1,4 @@
 import { log } from "lib";
-import { ensureEIP7002WithdrawalRequestContractPresent } from "lib/eips";
 
 import {
   ensureDsmGuardians,
@@ -24,9 +23,6 @@ export const provision = async (ctx: ProtocolContext) => {
     return;
   }
 
-  // Ensure necessary precompiled contracts are present
-  await ensureEIP7002WithdrawalRequestContractPresent();
-
   // Ensure protocol is fully operational
   await ensureHashConsensusInitialEpoch(ctx);
 
@@ -35,8 +31,13 @@ export const provision = async (ctx: ProtocolContext) => {
   await unpauseStaking(ctx);
   await unpauseWithdrawalQueue(ctx);
 
-  await norSdvtEnsureOperators(ctx, ctx.contracts.nor, 5n, 9n);
-  await norSdvtEnsureOperators(ctx, ctx.contracts.sdvt, 5n, 9n);
+  await norSdvtEnsureOperators(ctx, ctx.contracts.nor, 10n, 15n, 10n);
+
+  // NB: For scratch deployment share of SDVT module is quite low
+  // so we need to ensure that there are enough operators in NOR
+  // so there are enough share limit for SDVT to get the deposits
+  // (see SDVT_STAKING_MODULE_TARGET_SHARE_BP)
+  await norSdvtEnsureOperators(ctx, ctx.contracts.sdvt, 2n, 3n, 1n);
 
   await finalizeWithdrawalQueue(ctx);
 
