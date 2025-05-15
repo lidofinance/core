@@ -339,6 +339,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _amounts Amounts of ether to exit, must match the length of _pubkeys
      * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
+     * @dev    Use `calculateValidatorWithdrawalFee` to calculate the fee
      */
     function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
@@ -376,6 +377,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _pubkeys Concatenated validators public keys, each 48 bytes long
      * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
+     * @dev    Use `calculateValidatorWithdrawalFee` to calculate the fee
      */
     function ejectValidators(bytes calldata _pubkeys, address _refundRecipient) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
