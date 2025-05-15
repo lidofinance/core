@@ -110,22 +110,23 @@ contract VaultHub is PausableUntilWithRoles {
     // -----------------------------
 
     /// @notice limit for a single vault share limit relative to Lido TVL in basis points
-    uint256 public immutable RELATIVE_SHARE_LIMIT_BP;
+    uint256 public immutable MAX_RELATIVE_SHARE_LIMIT_BP;
 
     ILido public immutable LIDO;
     ILidoLocator public immutable LIDO_LOCATOR;
 
     /// @param _locator Lido Locator contract
     /// @param _lido Lido stETH contract
-    /// @param _relativeShareLimitBP Maximum share limit relative to TVL in basis points
-    constructor(ILidoLocator _locator, ILido _lido, uint256 _relativeShareLimitBP) {
-        if (_relativeShareLimitBP == 0) revert ZeroArgument();
-        if (_relativeShareLimitBP > TOTAL_BASIS_POINTS)
-            revert RelativeShareLimitBPTooHigh(_relativeShareLimitBP, TOTAL_BASIS_POINTS);
+    /// @param _maxRelativeShareLimitBP Maximum share limit relative to TVL in basis points
+    constructor(ILidoLocator _locator, ILido _lido, uint256 _maxRelativeShareLimitBP) {
+        if (_maxRelativeShareLimitBP == 0) revert ZeroArgument();
+        if (_maxRelativeShareLimitBP > TOTAL_BASIS_POINTS)
+            revert MaxRelativeShareLimitBPTooHigh(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
+
+        MAX_RELATIVE_SHARE_LIMIT_BP = _maxRelativeShareLimitBP;
 
         LIDO_LOCATOR = _locator;
         LIDO = _lido;
-        RELATIVE_SHARE_LIMIT_BP = _relativeShareLimitBP;
 
         _disableInitializers();
     }
@@ -760,9 +761,9 @@ contract VaultHub is PausableUntilWithRoles {
         return (liabilityStETH * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio) / reserveRatioBP;
     }
 
-    /// @dev check if the share limit is within the upper bound set by RELATIVE_SHARE_LIMIT_BP
+    /// @dev check if the share limit is within the upper bound set by MAX_RELATIVE_SHARE_LIMIT_BP
     function _maxSaneShareLimit() internal view returns (uint256) {
-        return (LIDO.getTotalShares() * RELATIVE_SHARE_LIMIT_BP) / TOTAL_BASIS_POINTS;
+        return (LIDO.getTotalShares() * MAX_RELATIVE_SHARE_LIMIT_BP) / TOTAL_BASIS_POINTS;
     }
 
     function _unlocked(VaultRecord storage _record) internal view returns (uint256) {
@@ -953,7 +954,7 @@ contract VaultHub is PausableUntilWithRoles {
     error NotFound(bytes32 codehash);
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
     error VaultProxyNotAllowed(address beacon, bytes32 codehash);
-    error RelativeShareLimitBPTooHigh(uint256 relativeShareLimitBP, uint256 totalBasisPoints);
+    error MaxRelativeShareLimitBPTooHigh(uint256 maxRelativeShareLimitBP, uint256 totalBasisPoints);
     error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
     error VaultOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
