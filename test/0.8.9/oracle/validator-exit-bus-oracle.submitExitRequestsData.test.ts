@@ -108,7 +108,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
     const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
 
-    await expect(submitTx).to.emit(oracle, "StoredExitRequestHash").withArgs(exitRequestHash);
+    await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
   });
 
   it("Emit ValidatorExit event", async () => {
@@ -160,7 +160,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     const request = [exitRequest.data, 2];
     const hash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], request));
     const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
-    await expect(submitTx).to.emit(oracle, "StoredExitRequestHash").withArgs(hash);
+    await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
     exitRequest = { dataFormat: 2, data: encodeExitRequestsDataList(exitRequests) };
     await expect(oracle.submitExitRequestsData(exitRequest))
       .to.be.revertedWithCustomError(oracle, "UnsupportedRequestsDataFormat")
@@ -174,8 +174,9 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       await consensus.advanceTimeBy(24 * 60 * 60);
     });
 
-    it("Should deliver request fully as it is below limit (5)", async () => {
-      await oracle.connect(authorizedEntity).setExitRequestLimit(5, 2);
+    it("Should deliver request fully as it is below limit", async () => {
+      const exitLimitTx = await oracle.connect(authorizedEntity).setExitRequestLimit(5, 1, 48);
+      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(5, 1, 48);
 
       exitRequests = [
         { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
@@ -232,7 +233,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       }
     });
 
-    it("Should revert when limit exceeded for the day", async () => {
+    it("Should revert when limit exceeded for the frame", async () => {
       exitRequests = [
         { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
         { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
@@ -252,7 +253,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should process remaining requests after a day passes", async () => {
-      await consensus.advanceTimeBy(24 * 60 * 60);
+      await consensus.advanceTimeBy(2 * 4 * 12);
 
       exitRequests = [
         { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },

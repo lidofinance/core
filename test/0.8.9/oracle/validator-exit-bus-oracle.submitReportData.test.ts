@@ -320,7 +320,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const encodedData = ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [data, reportData.dataFormat]);
       const reportDataHash = ethers.keccak256(encodedData);
 
-      await expect(tx).to.emit(oracle, "StoredExitRequestHash").withArgs(reportDataHash);
+      await expect(tx).to.emit(oracle, "RequestsHashSubmitted").withArgs(reportDataHash);
     });
 
     it("updates processing state", async () => {
@@ -609,8 +609,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     it("Set exit limit", async () => {
       const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
       await oracle.grantRole(role, admin);
-      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7, 7);
-      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(7, 7);
+      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7, 1, 48);
+      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(7, 1, 48);
     });
 
     it("deliver report by actor different from oracle", async () => {
@@ -629,7 +629,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       await oracle.grantRole(role, authorizedEntity);
 
       const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
-      await expect(submitTx).to.emit(oracle, "StoredExitRequestHash").withArgs(exitRequestHash);
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
 
       const exitRequest = {
         dataFormat: reportData.dataFormat,

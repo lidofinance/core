@@ -244,10 +244,15 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         // Check VEB common limit
 
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        exitRequestLimitData.checkLimit(data.requestsCount, _getTimestamp());
-        EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            exitRequestLimitData.updateRequestsCounter(data.requestsCount, _getTimestamp())
-        );
+        if (exitRequestLimitData.isExitLimitSet()) {
+           uint256 limit = exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
+           if (limit < data.requestsCount) {
+            revert ExitRequestsLimit(data.requestsCount, limit);
+           }
+           EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+             exitRequestLimitData.updatePrevExitLimit(limit - data.requestsCount, _getTimestamp())
+           );
+        }
 
         if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
             revert UnexpectedRequestsDataLength();
@@ -271,17 +276,18 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         );
     }
 
-    function _storeOracleExitRequestHash(bytes32 exitRequestHash, uint256 requestsCount, uint256 contractVersion) internal {
+    function _storeOracleExitRequestHash(bytes32 exitRequestsHash, uint256 requestsCount, uint256 contractVersion) internal {
         if (requestsCount == 0) {
             return;
         }
         _storeExitRequestHash(
-            exitRequestHash,
+            exitRequestsHash,
             requestsCount,
             requestsCount,
             contractVersion,
             DeliveryHistory(requestsCount - 1, _getTimestamp())
         );
+        emit RequestsHashSubmitted(exitRequestsHash);
     }
 
     ///

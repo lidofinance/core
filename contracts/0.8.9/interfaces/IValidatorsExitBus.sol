@@ -31,7 +31,18 @@ interface IValidatorsExitBus {
         uint8 exitType
     ) external payable;
 
-    function setExitRequestLimit(uint256 exitsDailyLimit, uint256 twExitsDailyLimit) external;
+    function setExitRequestLimit(uint256 maxExitRequests, uint256 exitsPerFrame, uint256 frameDuration) external;
+
+    function getExitRequestLimitFullInfo()
+        external
+        view
+        returns (
+            uint256 maxExitRequestsLimit,
+            uint256 exitsPerFrame,
+            uint256 frameDuration,
+            uint256 prevExitRequestsLimit,
+            uint256 currentExitRequestsLimit
+        );
 
     function getExitRequestsDeliveryHistory(
         bytes32 exitRequestsHash
