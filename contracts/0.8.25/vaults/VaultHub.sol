@@ -226,13 +226,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return true if vault is healthy, false otherwise
     /// @dev returns true if the vault is not connected
     function isVaultHealthy(address _vault) external view returns (bool) {
-        Storage storage $ = _storage();
-        VaultRecord storage record = $.records[_vault];
-        return _isVaultHealthyByThreshold(
-            _totalValue(record),
-            record.liabilityShares,
-            $.connections[_vault].forcedRebalanceThresholdBP
-        );
+        return _isVaultHealthy(_storage().connections[_vault], _storage().records[_vault]);
     }
 
     /// @notice calculate ether amount to make the vault healthy using rebalance
@@ -325,7 +319,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 liabilityShares_ = record.liabilityShares;
 
         // check healthy with new rebalance threshold
-        if (!_isVaultHealthyByThreshold(totalValue_, liabilityShares_, _reserveRatioBP))
+        if (_isThresholdBreached(totalValue_, liabilityShares_, _reserveRatioBP))
             revert VaultMintingCapacityExceeded(_vault, totalValue_, liabilityShares_, _reserveRatioBP);
 
         connection.shareLimit = uint96(_shareLimit);
@@ -396,11 +390,7 @@ contract VaultHub is PausableUntilWithRoles {
             record.reportTimestamp = _reportTimestamp;
             record.locked = uint128(lockedEther);
 
-            if (!_isVaultHealthyByThreshold(
-                _totalValue(record),
-                record.liabilityShares,
-                connection.forcedRebalanceThresholdBP
-            )) IStakingVault(_vault).pauseBeaconChainDeposits();
+            if (!_isVaultHealthy(connection, record)) IStakingVault(_vault).pauseBeaconChainDeposits();
 
             emit VaultReportApplied(_vault, _reportTimestamp, _reportTotalValue, _reportInOutDelta, _reportFeeSharesCharged, _reportLiabilityShares);
         }
@@ -565,13 +555,8 @@ contract VaultHub is PausableUntilWithRoles {
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
-        VaultRecord storage record = _storage().records[_vault];
-        if (!_isVaultHealthyByThreshold(
-            _totalValue(record),
-            record.liabilityShares,
-            connection.forcedRebalanceThresholdBP
-        )) revert UnhealthyVaultCannotDeposit(_vault);
-        
+        if (!_isVaultHealthy(connection, _storage().records[_vault])) revert UnhealthyVaultCannotDeposit(_vault);
+
         IStakingVault(_vault).resumeBeaconChainDeposits();
     }
 
@@ -613,13 +598,7 @@ contract VaultHub is PausableUntilWithRoles {
         // disallow partial validator withdrawals when the vault value does not cover the locked amount,
         // in order to prevent the vault owner from jamming the consensus layer withdrawal queue
         // delaying the forceful validator exits required for rebalancing the vault
-        if (
-            !_isVaultHealthyByThreshold(
-                _totalValue(record),
-                record.liabilityShares,
-                connection.forcedRebalanceThresholdBP
-            )
-        ) {
+        if (!_isVaultHealthy(connection, record)) {
             for (uint256 i = 0; i < _amounts.length; i++) {
                 if (_amounts[i] > 0) revert PartialValidatorWithdrawalNotAllowed();
             }
@@ -638,11 +617,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _storage().records[_vault];
 
-        if (_isVaultHealthyByThreshold(
-            _totalValue(record),
-            record.liabilityShares,
-            connection.forcedRebalanceThresholdBP
-        )) revert AlreadyHealthy(_vault);
+        if (_isVaultHealthy(connection, record)) revert AlreadyHealthy(_vault);
 
         uint64[] memory amounts = new uint64[](_pubkeys.length / PUBLIC_KEY_LENGTH);
 
@@ -759,11 +734,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage _record
     ) internal view returns (uint256) {
         uint256 totalValue_ = _totalValue(_record);
-        bool isHealthy = _isVaultHealthyByThreshold(
-            totalValue_,
-            _record.liabilityShares,
-            _connection.forcedRebalanceThresholdBP
-        );
+        bool isHealthy = _isVaultHealthy(_connection, _record);
 
         // Health vault do not need to rebalance
         if (isHealthy) {
@@ -819,16 +790,22 @@ contract VaultHub is PausableUntilWithRoles {
             block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }
 
-    function _isVaultHealthyByThreshold(
+    function _isVaultHealthy(VaultConnection storage _connection, VaultRecord storage _record) internal view returns (bool) {
+        return !_isThresholdBreached(
+            _totalValue(_record),
+            _record.liabilityShares,
+            _connection.forcedRebalanceThresholdBP
+        );
+    }
+
+    /// @dev Returns true if the vault liability breached the given threshold (inverted)
+    function _isThresholdBreached(
         uint256 _vaultTotalValue,
         uint256 _vaultLiabilityShares,
-        uint256 _checkThreshold
+        uint256 _thresholdBP
     ) internal view returns (bool) {
-        if (_vaultLiabilityShares == 0) return true;
-
-        return
-            ((_vaultTotalValue * (TOTAL_BASIS_POINTS - _checkThreshold)) / TOTAL_BASIS_POINTS) >=
-            LIDO.getPooledEthBySharesRoundUp(_vaultLiabilityShares);
+        return LIDO.getPooledEthBySharesRoundUp(_vaultLiabilityShares) >
+            _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
     }
 
     function _addVault(address _vault, VaultConnection memory _connection, VaultRecord memory _record) internal {
