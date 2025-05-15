@@ -55,8 +55,12 @@ contract Dashboard is NodeOperatorFee {
      * @param _vaultHub Address of the vault hub contract.
      * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _stETH, address _wstETH, address _vaultHub, address _lidoLocator)
-        NodeOperatorFee(_vaultHub, _lidoLocator) {
+    constructor(
+        address _stETH,
+        address _wstETH,
+        address _vaultHub,
+        address _lidoLocator
+    ) NodeOperatorFee(_vaultHub, _lidoLocator) {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
@@ -96,6 +100,14 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Returns the vault record for the staking vault.
+     * @return VaultRecord struct containing vault data
+     */
+    function vaultRecord() public view returns (VaultHub.VaultRecord memory) {
+        return VAULT_HUB.vaultRecord(address(_stakingVault()));
+    }
+
+    /**
      * @notice Returns the stETH share limit of the vault
      */
     function shareLimit() external view returns (uint256) {
@@ -124,10 +136,24 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the treasury fee basis points.
+     * @notice Returns the infra fee basis points.
      */
-    function treasuryFeeBP() external view returns (uint16) {
-        return vaultConnection().treasuryFeeBP;
+    function infraFeeBP() external view returns (uint16) {
+        return vaultConnection().infraFeeBP;
+    }
+
+    /**
+     * @notice Returns the liquidity fee basis points.
+     */
+    function liquidityFeeBP() external view returns (uint16) {
+        return vaultConnection().liquidityFeeBP;
+    }
+
+    /**
+     * @notice Returns the reservation fee basis points.
+     */
+    function reservationFeeBP() external view returns (uint16) {
+        return vaultConnection().reservationFeeBP;
     }
 
     /**
@@ -173,10 +199,27 @@ contract Dashboard is NodeOperatorFee {
      * can return a value greater than the actual balance of the StakingVault.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = locked() + nodeOperatorUnclaimedFee();
+        uint256 reserved = locked() + _feesAndObligations();
         uint256 totalValue_ = totalValue();
 
         return reserved > totalValue_ ? 0 : totalValue_ - reserved;
+    }
+
+    /**
+     * @notice Returns the amount of ether that is available for withdrawal from the staking vault taking into account
+     *         fees and obligations and not taking locked ether into account.
+     * @dev This amount is not available for minting shares.
+     */
+    function availableBalance() public view returns (uint256) {
+        return VAULT_HUB.availableBalance(address(_stakingVault())) - nodeOperatorUnclaimedFee();
+    }
+
+    /**
+     * @notice Utility function to get the total amount of obligations for the vault
+     * @return The total value of all obligations for the vault
+     */
+    function unsettledObligations() public view returns (uint256) {
+        return VAULT_HUB.unsettledObligations(address(_stakingVault()));
     }
 
     /**
@@ -185,7 +228,7 @@ contract Dashboard is NodeOperatorFee {
      * @dev This method overrides the Dashboard's withdrawableEther() method
      */
     function withdrawableEther() external view returns (uint256) {
-        return Math256.min(address(_stakingVault()).balance, unreserved());
+        return Math256.min(availableBalance(), unreserved());
     }
 
     // ==================== Vault Management Functions ====================
@@ -267,6 +310,17 @@ contract Dashboard is NodeOperatorFee {
         }
 
         _withdraw(_recipient, _ether);
+    }
+
+    /**
+     * @notice Allows a vault owner to settle outstanding vault obligations
+     * @dev First funds the vault with the sent ETH, then triggers a settlement process
+     *      Settlement process uses the same logic as oracle reports
+     */
+    function settleObligations() external payable {
+        if (msg.value > 0) _fund(msg.value);
+
+        VAULT_HUB.settleObligations(address(_stakingVault()));
     }
 
     /**
@@ -413,7 +467,7 @@ contract Dashboard is NodeOperatorFee {
         if (_amount == 0) revert ZeroArgument("_amount");
 
         if (_token == ETH) {
-            (bool success, ) = payable(_recipient).call{value: _amount}("");
+            (bool success,) = payable(_recipient).call{value: _amount}("");
             if (!success) revert EthTransferFailed(_recipient, _amount);
         } else {
             SafeERC20.safeTransfer(IERC20(_token), _recipient, _amount);
@@ -513,7 +567,15 @@ contract Dashboard is NodeOperatorFee {
      * @return The amount of ether in wei that can be used to mint shares.
      */
     function _mintableValue() internal view returns (uint256) {
-        return VAULT_HUB.totalValue(address(_stakingVault())) - nodeOperatorUnclaimedFee();
+        return VAULT_HUB.totalValue(address(_stakingVault())) - _feesAndObligations();
+    }
+
+    /**
+     * @notice Returns the total value of the vault including the node operator fee and obligations.
+     * @return The total obligations value of the vault in wei.
+     */
+    function _feesAndObligations() internal view returns (uint256) {
+        return nodeOperatorUnclaimedFee() + unsettledObligations();
     }
 
     /**
