@@ -3,7 +3,7 @@
 
 pragma solidity ^0.8.0;
 
-import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract StakingVault__MockForVaultHub {
     address public depositContract;
@@ -33,11 +33,9 @@ contract StakingVault__MockForVaultHub {
         nodeOperator = _no;
     }
 
-    function fund() external payable {
-    }
+    function fund() external payable {}
 
-    function withdraw(address, uint256 amount) external {
-    }
+    function withdraw(address, uint256 amount) external {}
 
     function depositor() external view returns (address) {
         return depositor_;
@@ -51,7 +49,7 @@ contract StakingVault__MockForVaultHub {
         emit ValidatorWithdrawalTriggered(_pubkeys, _amounts, _refundRecipient);
     }
 
-    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {}
+    function depositToBeaconChain(IStakingVault.Deposit[] calldata _deposits) external {}
 
     function ossified() external pure returns (bool) {
         return false;

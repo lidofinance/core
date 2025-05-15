@@ -55,12 +55,12 @@ contract Permissions__Harness is Permissions {
         _requestValidatorExit(_pubkey);
     }
 
-    function triggerValidatorWithdrawal(
+    function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
+        _triggerValidatorWithdrawals(_pubkeys, _amounts, _refundRecipient);
     }
 
     function voluntaryDisconnect() external {
