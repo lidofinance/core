@@ -743,12 +743,14 @@ contract VaultHub is PausableUntilWithRoles {
         if (_shareLimit > _maxSaneShareLimit()) revert ShareLimitTooHigh(_vault, _shareLimit, _maxSaneShareLimit());
 
         if (_vaultConnection(_vault).vaultIndex != 0) revert AlreadyConnected(_vault, _vaultConnection(_vault).vaultIndex);
-        if (!_storage().vaultProxyCodehash[address(_vault).codehash]) revert VaultProxyNotAllowed(_vault, address(_vault).codehash);
-        if (_vault.balance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
+        bytes32 codehash = address(_vault).codehash;
+        if (!_storage().vaultProxyCodehash[codehash]) revert VaultProxyNotAllowed(_vault, codehash);
+        uint256 vaultBalance = _vault.balance;
+        if (vaultBalance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, vaultBalance, CONNECT_DEPOSIT);
 
         Report memory report = Report(
-            uint128(_vault.balance), // totalValue
-            int128(int256(_vault.balance)) // inOutDelta
+            uint128(vaultBalance), // totalValue
+            int128(int256(vaultBalance)) // inOutDelta
         );
 
         VaultConnection memory connection = VaultConnection(

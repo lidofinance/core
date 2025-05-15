@@ -264,7 +264,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Accepts the ownership over the staking vault and connects to VaultHub.
      */
-    function acceptOwnershipAndConnectToVaultHub() external {
+    function acceptOwnershipAndConnectToVaultHub() external payable {
         _acceptOwnership();
         connectToVaultHub();
     }
@@ -272,7 +272,8 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Connects to VaultHub, transferring ownership to VaultHub.
      */
-    function connectToVaultHub() public {
+    function connectToVaultHub() public payable {
+        if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
     }
