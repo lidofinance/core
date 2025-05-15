@@ -53,11 +53,11 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
         return LIDO_LOCATOR.vaultHub();
     }
 
-    function getObligations(address _vault) external view returns (Obligations memory) {
+    function getVaultObligations(address _vault) external view returns (Obligations memory) {
         return _vaultObligations(_vault);
     }
 
-    function getObligationsValue(address _vault) public view returns (uint256) {
+    function getTotalObligationsValue(address _vault) public view returns (uint256) {
         Obligations memory obligations = _vaultObligations(_vault);
         return obligations.withdrawals + obligations.treasuryFees;
     }
@@ -82,11 +82,11 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
         emit WithdrawalsObligationUpdated(_vault, _value);
     }
 
-    function getSettledObligations(
+    function obligationsToSettle(
         address _vault,
         uint256 _fees,
         uint256 _liability
-    ) external onlyVaultHub returns (uint256 settledWithdrawals, uint256 settledTreasuryFees) {
+    ) external onlyVaultHub returns (uint256 withdrawals, uint256 treasuryFees) {
         Obligations storage obligations = _vaultObligations(_vault);
         uint256 vaultBalance = _vault.balance;
 
@@ -99,14 +99,14 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
         uint256 valueToWithdrawAsTreasuryFees = Math256.min(_fees, vaultBalance - valueToRebalance);
 
         if (valueToRebalance > 0) {
-            settledWithdrawals = valueToRebalance;
+            withdrawals = valueToRebalance;
             obligations.withdrawals -= valueToRebalance;
 
             emit WithdrawalsObligationSettled(_vault, valueToRebalance, obligations.withdrawals);
         }
 
         if (valueToWithdrawAsTreasuryFees > 0) {
-            settledTreasuryFees = valueToWithdrawAsTreasuryFees;
+            treasuryFees = valueToWithdrawAsTreasuryFees;
             obligations.treasuryFees -= valueToWithdrawAsTreasuryFees;
 
             emit TreasuryFeesObligationSettled(_vault, valueToWithdrawAsTreasuryFees, obligations.treasuryFees);

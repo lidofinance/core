@@ -196,6 +196,16 @@ contract VaultHub is PausableUntilWithRoles {
         return _totalValue(_vaultRecord(_vault));
     }
 
+    /// @return total value of the vaults obligations
+    function totalObligationsValue(address _vault) external view returns (uint256) {
+        return _ledger().getTotalObligationsValue(_vault);
+    }
+
+    /// @return amount of ether that is available for the vault to withdraw
+    function availableBalance(address _vault) external view returns (uint256) {
+        return _availableBalance(_vault);
+    }
+
     /// @return liability shares of the vault
     /// @dev returns 0 if the vault is not connected
     function liabilityShares(address _vault) external view returns (uint256) {
@@ -432,6 +442,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 newLiabilityShares = Math256.max(record.liabilityShares, _reportLiabilityShares);
         uint256 newLiability = _getPooledEthBySharesRoundUp(newLiabilityShares);
 
+        (uint256 withdrawals, uint256 treasuryFees) = _ledger().obligationsToSettle(_vault, _reportFeeCharged, newLiability);
+
         // locked ether can only be increased asynchronously once the oracle settled the new floor value
         // as of reference slot to prevent slashing upsides in between the report gathering and delivering
         uint256 lockedEther = Math256.max(
@@ -450,15 +462,9 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault vault_ = IStakingVault(_vault);
         if (!_isVaultHealthy(connection, record) && !vault_.beaconChainDepositsPaused()) vault_.pauseBeaconChainDeposits();
 
-        (
-            uint256 withdrawals,
-            uint256 treasuryFees
-        ) = _ledger().getSettledObligations(_vault, _reportFeeCharged - record.feeCharged, newLiability);
-
         if (withdrawals > 0) _rebalance(_vault, record, withdrawals);
         if (treasuryFees > 0) {
             _withdrawFromVault(_vault, record, LIDO_LOCATOR.treasury(), treasuryFees);
-            record.feeCharged += uint96(treasuryFees);
         }
 
         emit VaultReportApplied(_vault, _reportTimestamp, _reportTotalValue, _reportInOutDelta, _reportFeeCharged, _reportLiabilityShares);
@@ -885,8 +891,15 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _vaultLiabilityShares,
         uint256 _thresholdBP
     ) internal view returns (bool) {
-        return _getPooledEthBySharesRoundUp(_vaultLiabilityShares) >
-            _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
+        uint256 liability = _getPooledEthBySharesRoundUp(_vaultLiabilityShares);
+        return liability > _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
+    }
+
+    function _availableBalance(address _vault) internal view returns (uint256) {
+        uint256 vaultBalance = _vault.balance;
+        uint256 outstandingObligations = _ledger().getTotalObligationsValue(_vault);
+
+        return outstandingObligations > vaultBalance ? 0 : vaultBalance - outstandingObligations;
     }
 
     function _checkConnection(address _vault) internal view returns (VaultConnection storage) {
@@ -901,12 +914,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _checkAvailableBalance(address _vault, uint256 _requiredBalance) internal view {
-        if (_vault == address(0)) revert VaultZeroAddress();
-
-        uint256 outstandingObligations = _ledger().getObligationsValue(_vault);
-        uint256 vaultBalance = _vault.balance;
-        uint256 available = outstandingObligations > vaultBalance ? 0 : vaultBalance - outstandingObligations;
-
+        uint256 available = _availableBalance(_vault);
         if (_requiredBalance > available) {
             revert VaultInsufficientBalance(_vault, available, _requiredBalance);
         }

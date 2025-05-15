@@ -96,6 +96,14 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Returns the vault record for the staking vault.
+     * @return VaultRecord struct containing vault data
+     */
+    function vaultRecord() public view returns (VaultHub.VaultRecord memory) {
+        return VAULT_HUB.vaultRecord(address(_stakingVault()));
+    }
+
+    /**
      * @notice Returns the stETH share limit of the vault
      */
     function shareLimit() external view returns (uint256) {
@@ -187,10 +195,19 @@ contract Dashboard is NodeOperatorFee {
      * can return a value greater than the actual balance of the StakingVault.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = locked() + nodeOperatorUnclaimedFee();
+        uint256 reserved = locked() + _feesAndObligations();
         uint256 totalValue_ = totalValue();
 
         return reserved > totalValue_ ? 0 : totalValue_ - reserved;
+    }
+
+    /**
+     * @notice Returns the amount of ether that is available for withdrawal from the staking vault taking into account
+     *         fees and obligations and not taking locked ether into account.
+     * @dev This amount is not available for minting shares.
+     */
+    function availableBalance() public view returns (uint256) {
+        return VAULT_HUB.availableBalance(address(_stakingVault())) - nodeOperatorUnclaimedFee();
     }
 
     /**
@@ -199,7 +216,7 @@ contract Dashboard is NodeOperatorFee {
      * @dev This method overrides the Dashboard's withdrawableEther() method
      */
     function withdrawableEther() external view returns (uint256) {
-        return Math256.min(address(_stakingVault()).balance, unreserved());
+        return Math256.min(availableBalance(), unreserved());
     }
 
     // ==================== Vault Management Functions ====================
@@ -526,7 +543,15 @@ contract Dashboard is NodeOperatorFee {
      * @return The amount of ether in wei that can be used to mint shares.
      */
     function _mintableValue() internal view returns (uint256) {
-        return VAULT_HUB.totalValue(address(_stakingVault())) - nodeOperatorUnclaimedFee();
+        return VAULT_HUB.totalValue(address(_stakingVault())) - _feesAndObligations();
+    }
+
+    /**
+     * @notice Returns the total value of the vault including the node operator fee and obligations.
+     * @return The total obligations value of the vault in wei.
+     */
+    function _feesAndObligations() internal view returns (uint256) {
+        return nodeOperatorUnclaimedFee() + VAULT_HUB.totalObligationsValue(address(_stakingVault()));
     }
 
     /**
