@@ -11,9 +11,10 @@ import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRo
 
 import {CLProofVerifier} from "./CLProofVerifier.sol";
 
-import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
+import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
-
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {VaultHub} from "../VaultHub.sol";
 /**
  * @title PredepositGuarantee
  * @author Lido
@@ -116,6 +117,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     bytes32 private constant ERC7201_STORAGE_LOCATION =
         0xf66b5a365356c5798cc70e3ea6a236b181a826a69f730fc07cc548244bee5200;
 
+    ILidoLocator public immutable LIDO_LOCATOR;
+
     /**
      * @param _genesisForkVersion genesis fork version for the current chain
      * @param _gIFirstValidator packed(general index + depth in tree, see GIndex.sol) GIndex of first validator in CL state tree
@@ -127,11 +130,13 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         bytes4 _genesisForkVersion,
         GIndex _gIFirstValidator,
         GIndex _gIFirstValidatorAfterChange,
-        uint64 _changeSlot
+        uint64 _changeSlot,
+        address _lidoLocator
     ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {
         DEPOSIT_DOMAIN = SSZ.computeDepositDomain(_genesisForkVersion);
         _disableInitializers();
         _pauseUntil(PAUSE_INFINITELY);
+        LIDO_LOCATOR = ILidoLocator(_lidoLocator);
     }
 
     function initialize(address _defaultAdmin) external initializer {
@@ -219,7 +224,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @dev reverts with `InvalidSignature` if the signature is invalid
      * @dev reverts with `InputHasInfinityPoints` if the input contains infinity points(zero values)
      */
-    function verifyDepositMessage(StakingVaultDeposit calldata _deposit, BLS12_381.DepositY calldata _depositsY, bytes32 _withdrawalCredentials) public view {
+    function verifyDepositMessage(IStakingVault.Deposit calldata _deposit, BLS12_381.DepositY calldata _depositsY, bytes32 _withdrawalCredentials) public view {
         BLS12_381.verifyDepositMessage(_deposit, _depositsY, _withdrawalCredentials, DEPOSIT_DOMAIN);
     }
 
@@ -319,7 +324,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      */
     function predeposit(
         IStakingVault _stakingVault,
-        StakingVaultDeposit[] calldata _deposits,
+        IStakingVault.Deposit[] calldata _deposits,
         BLS12_381.DepositY[] calldata _depositsY
     ) external payable whenResumed {
         if (_deposits.length == 0) revert EmptyDeposits();
@@ -346,7 +351,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         if (unlocked < totalDepositAmount) revert NotEnoughUnlocked(unlocked, totalDepositAmount);
 
         for (uint256 i = 0; i < _deposits.length; i++) {
-            StakingVaultDeposit calldata _deposit = _deposits[i];
+            IStakingVault.Deposit calldata _deposit = _deposits[i];
 
             // this check isn't needed in  `depositToBeaconChain` because
             // Beacon Chain doesn't enforce the signature checks for existing validators and just top-ups to their balance
@@ -368,7 +373,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         }
 
         balance.locked += totalDepositAmount;
-        _stakingVault.depositToBeaconChain(_deposits);
+        VaultHub(payable(LIDO_LOCATOR.vaultHub())).depositToBeaconChain(address(_stakingVault), _deposits);
 
         emit BalanceLocked(nodeOperator, balance.total, balance.locked);
     }
@@ -404,7 +409,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      */
     function depositToBeaconChain(
         IStakingVault _stakingVault,
-        StakingVaultDeposit[] calldata _deposits
+        IStakingVault.Deposit[] calldata _deposits
     ) public payable whenResumed {
         if (msg.sender != _stakingVault.nodeOperator()) {
             revert NotNodeOperator();
@@ -412,7 +417,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         ERC7201Storage storage $ = _getStorage();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
-            StakingVaultDeposit calldata _deposit = _deposits[i];
+            IStakingVault.Deposit calldata _deposit = _deposits[i];
 
             ValidatorStatus storage validator = $.validatorStatus[_deposit.pubkey];
 
@@ -446,7 +451,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      */
     function proveAndDeposit(
         ValidatorWitness[] calldata _witnesses,
-        StakingVaultDeposit[] calldata _deposits,
+        IStakingVault.Deposit[] calldata _deposits,
         IStakingVault _stakingVault
     ) external payable {
         for (uint256 i = 0; i < _witnesses.length; i++) {

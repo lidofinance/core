@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {IStakingVault} from "../interfaces/IStakingVault.sol";
+import {VaultHub} from "../VaultHub.sol";
 import {Permissions} from "./Permissions.sol";
 
 /**
@@ -53,7 +53,8 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Claims node operator fee.
      */
-    bytes32 public constant NODE_OPERATOR_FEE_CLAIM_ROLE = keccak256("vaults.NodeOperatorFee.FeeClaimRole");
+    bytes32 public constant NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE =
+        keccak256("vaults.NodeOperatorFee.SetFeeRecipientRole");
 
     /**
      * @notice Adjusts rewards to allow fee correction during side deposits or consolidations
@@ -69,7 +70,12 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice The last report for which node operator fee was claimed. Updated on each claim.
      */
-    IStakingVault.Report public nodeOperatorFeeClaimedReport;
+    VaultHub.Report public nodeOperatorFeeClaimedReport;
+
+    /**
+     * @notice The address of the node operator fee recipient.
+     */
+    address public nodeOperatorFeeRecipient;
 
     /**
      * @notice Adjustment to allow fee correction during side deposits or consolidations.
@@ -85,8 +91,9 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Passes the address of the vault hub up the inheritance chain.
      * @param _vaultHub The address of the vault hub.
+     * @param _lidoLocator The address of the Lido locator.
      */
-    constructor(address _vaultHub) Permissions(_vaultHub) {}
+    constructor(address _vaultHub, address _lidoLocator) Permissions(_vaultHub, _lidoLocator) {}
 
     /**
      * @dev Calls the parent's initializer, sets the node operator fee, assigns the node operator manager role,
@@ -107,10 +114,11 @@ contract NodeOperatorFee is Permissions {
         super._initialize(_defaultAdmin, _confirmExpiry);
 
         _setNodeOperatorFeeBP(_nodeOperatorFeeBP);
+        _setNodeOperatorFeeRecipient(_nodeOperatorManager);
 
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
-        _setRoleAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE, NODE_OPERATOR_MANAGER_ROLE);
+        _setRoleAdmin(NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_REWARDS_ADJUST_ROLE, NODE_OPERATOR_MANAGER_ROLE);
     }
 
@@ -127,6 +135,10 @@ contract NodeOperatorFee is Permissions {
         roles[1] = NODE_OPERATOR_MANAGER_ROLE;
     }
 
+    function latestReport() public view returns (VaultHub.Report memory) {
+        return VAULT_HUB.latestReport(address(_stakingVault()));
+    }
+
     /**
      * @notice Returns the accumulated unclaimed node operator fee in ether,
      * calculated as: U = ((R - A) * F) / T
@@ -139,14 +151,15 @@ contract NodeOperatorFee is Permissions {
      * @return uint256: the amount of unclaimed fee in ether.
      */
     function nodeOperatorUnclaimedFee() public view returns (uint256) {
-        IStakingVault.Report memory latestReport = _stakingVault().latestReport();
-        IStakingVault.Report storage _lastClaimedReport = nodeOperatorFeeClaimedReport;
+        VaultHub.Report memory latestReport_ = latestReport();
+        VaultHub.Report storage _lastClaimedReport = nodeOperatorFeeClaimedReport;
 
         // cast down safely clamping to int128.max
         int128 adjustment = int128(int256(accruedRewardsAdjustment & ADJUSTMENT_CLAMP_MASK));
 
-        int128 rewardsAccrued = int128(latestReport.totalValue) - int128(_lastClaimedReport.totalValue) -
-            (latestReport.inOutDelta - _lastClaimedReport.inOutDelta) -
+        int128 rewardsAccrued = int128(latestReport_.totalValue) -
+            int128(_lastClaimedReport.totalValue) -
+            (latestReport_.inOutDelta - _lastClaimedReport.inOutDelta) -
             adjustment;
 
         return rewardsAccrued > 0 ? (uint256(uint128(rewardsAccrued)) * nodeOperatorFeeBP) / TOTAL_BASIS_POINTS : 0;
@@ -175,21 +188,23 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice Claims the node operator fee.
-     * Note that the authorized role is NODE_OPERATOR_FEE_CLAIMER_ROLE, not NODE_OPERATOR_MANAGER_ROLE,
-     * although NODE_OPERATOR_MANAGER_ROLE is the admin role for NODE_OPERATOR_FEE_CLAIMER_ROLE.
-     * @param _recipient The address to which the node operator fee will be sent.
+     * @notice Sets the node operator fee recipient.
+     * @param _newNodeOperatorFeeRecipient The address of the new node operator fee recipient.
      */
-    function claimNodeOperatorFee(address _recipient) external onlyRole(NODE_OPERATOR_FEE_CLAIM_ROLE) {
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+    function setNodeOperatorFeeRecipient(
+        address _newNodeOperatorFeeRecipient
+    ) external onlyRole(NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE) {
+        _setNodeOperatorFeeRecipient(_newNodeOperatorFeeRecipient);
+    }
 
+    /**
+     * @notice Claims the node operator fee.
+     */
+    function disburseNodeOperatorFee() external {
         uint256 fee = nodeOperatorUnclaimedFee();
         if (fee == 0) revert NoUnclaimedFee();
 
-        if (accruedRewardsAdjustment != 0) _setAccruedRewardsAdjustment(0);
-        nodeOperatorFeeClaimedReport = _stakingVault().latestReport();
-
-        _stakingVault().withdraw(_recipient, fee);
+        _disburseNodeOperatorFee(fee);
     }
 
     /**
@@ -226,18 +241,31 @@ contract NodeOperatorFee is Permissions {
 
     function _setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) internal {
         if (_newNodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
-        if (nodeOperatorUnclaimedFee() > 0) revert NodeOperatorFeeUnclaimed();
+        uint256 fee = nodeOperatorUnclaimedFee();
+        if (fee > 0) _disburseNodeOperatorFee(fee);
 
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
 
         // If fee is changing from 0, update the claimed report to current to prevent retroactive fees
         if (oldNodeOperatorFeeBP == 0 && _newNodeOperatorFeeBP > 0) {
-            nodeOperatorFeeClaimedReport = _stakingVault().latestReport();
+            nodeOperatorFeeClaimedReport = latestReport();
         }
 
         nodeOperatorFeeBP = _newNodeOperatorFeeBP;
 
         emit NodeOperatorFeeBPSet(msg.sender, oldNodeOperatorFeeBP, _newNodeOperatorFeeBP);
+    }
+
+    function _setNodeOperatorFeeRecipient(address _newNodeOperatorFeeRecipient) internal {
+        if (_newNodeOperatorFeeRecipient == address(0)) revert ZeroArgument("nodeOperatorFeeRecipient");
+        nodeOperatorFeeRecipient = _newNodeOperatorFeeRecipient;
+    }
+
+    function _disburseNodeOperatorFee(uint256 _fee) internal {
+        if (accruedRewardsAdjustment != 0) _setAccruedRewardsAdjustment(0);
+        nodeOperatorFeeClaimedReport = latestReport();
+
+        VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, _fee);
     }
 
     /**

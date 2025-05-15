@@ -27,8 +27,4 @@ struct ReportValues {
     uint256 vaultsTotalTreasuryFeesShares;
     /// @notice overall vaults total deficit
     uint256 vaultsTotalDeficit;
-    /// @notice Merkle Tree root of the vaults data.
-    bytes32 vaultsDataTreeRoot;
-    /// @notice CID of the published Merkle tree of the vault data.
-    string vaultsDataTreeCid;
 }

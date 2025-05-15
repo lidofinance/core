@@ -5,7 +5,6 @@
 pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 
 import {VaultHub} from "./VaultHub.sol";
@@ -47,7 +46,6 @@ contract VaultFactory {
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry in seconds
      * @param _roleAssignments The optional role assignments to be made
-     * @param _extraParams The extra params for the StakingVault
      */
     function createVaultWithDashboard(
         address _defaultAdmin,
@@ -55,51 +53,44 @@ contract VaultFactory {
         address _nodeOperatorManager,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry,
-        Permissions.RoleAssignment[] calldata _roleAssignments,
-        bytes calldata _extraParams
+        Permissions.RoleAssignment[] calldata _roleAssignments
     ) external payable returns (IStakingVault vault, Dashboard dashboard) {
-        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+        // check if the msg.value is enough to cover the connect deposit
+        ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
+        if (msg.value < VaultHub(payable(locator.vaultHub())).CONNECT_DEPOSIT()) revert InsufficientFunds();
 
-        uint256 connectDeposit = VaultHub(vault.vaultHub()).CONNECT_DEPOSIT();
-        if (msg.value < connectDeposit) revert InsufficientFunds();
+        // create the vault proxy
+        address vaultAddress = address(new PinnedBeaconProxy(BEACON, ""));
+        
+        // send the msg.value to the vault
+        // note: not using fund() to avoid having to set the factory as the owner
+        (bool success, ) = vaultAddress.call{value: msg.value}("");
+        if (!success) revert TransferFailed();
 
+        // create the dashboard proxy
         bytes memory immutableArgs = abi.encode(vault);
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
-        // initialize StakingVault
-        vault.initialize(
-            address(this),
+        // initialize StakingVault with the dashboard address as the owner
+        IStakingVault(vaultAddress).initialize(
+            address(dashboard),
             _nodeOperator,
-            ILidoLocator(LIDO_LOCATOR).predepositGuarantee(),
-            _extraParams
+            locator.predepositGuarantee()
         );
 
-        vault.fund{value: msg.value}();
-        vault.lock(connectDeposit);
-        vault.authorizeLidoVaultHub();
+        // initialize Dashboard with the factory address as the default admin and grant optional roles
+        dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        dashboard.grantRoles(_roleAssignments);
 
-        // connect to hub
-        VaultHub(vault.vaultHub()).connectVault(address(vault));
+        // grant the factory the MANAGE_OWNERSHIP_ROLE to be able to connect the vault to the hub
+        dashboard.grantRole(dashboard.MANAGE_OWNERSHIP_ROLE(), address(this));
+        dashboard.connectToVaultHub();
+        dashboard.revokeRole(dashboard.MANAGE_OWNERSHIP_ROLE(), address(this));
 
-        // transfer ownership of the vault back to the dashboard
-        OwnableUpgradeable(address(vault)).transferOwnership(address(dashboard));
+        dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
+        dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
 
-        // If there are extra role assignments to be made,
-        // we initialize the dashboard with the VaultFactory as the default admin,
-        // grant the roles and revoke the VaultFactory's admin role.
-        // Otherwise, we initialize the dashboard with the default admin.
-        if (_roleAssignments.length > 0) {
-            dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
-            // will revert if any role is not controlled by the default admin
-            dashboard.grantRoles(_roleAssignments);
-
-            dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
-            dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
-        } else {
-            dashboard.initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
-        }
-
-        emit VaultCreated(address(vault), address(dashboard));
+        emit VaultCreated(address(vault), locator.vaultHub());
         emit DashboardCreated(address(dashboard), _defaultAdmin);
     }
 
@@ -127,4 +118,9 @@ contract VaultFactory {
      * @notice Error thrown for when insufficient funds are provided
      */
     error InsufficientFunds();
+
+    /**
+     * @notice Error thrown for when a transfer fails
+     */
+    error TransferFailed();
 }

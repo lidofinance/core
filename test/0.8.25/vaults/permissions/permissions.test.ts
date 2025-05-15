@@ -35,7 +35,6 @@ type PermissionsConfigStruct = {
   confirmExpiry: bigint;
   funder: HardhatEthersSigner;
   withdrawer: HardhatEthersSigner;
-  locker: HardhatEthersSigner;
   minter: HardhatEthersSigner;
   burner: HardhatEthersSigner;
   rebalancer: HardhatEthersSigner;
@@ -47,11 +46,6 @@ type PermissionsConfigStruct = {
   validatorExitRequester: HardhatEthersSigner;
   validatorWithdrawalTriggerer: HardhatEthersSigner;
   disconnecter: HardhatEthersSigner;
-  lidoVaultHubAuthorizer: HardhatEthersSigner;
-  lidoVaultHubDeauthorizer: HardhatEthersSigner;
-  ossifier: HardhatEthersSigner;
-  depositorSetter: HardhatEthersSigner;
-  lockedResetter: HardhatEthersSigner;
   tierChanger: HardhatEthersSigner;
 };
 
@@ -61,7 +55,6 @@ describe("Permissions", () => {
   let nodeOperator: HardhatEthersSigner;
   let funder: HardhatEthersSigner;
   let withdrawer: HardhatEthersSigner;
-  let locker: HardhatEthersSigner;
   let minter: HardhatEthersSigner;
   let burner: HardhatEthersSigner;
   let rebalancer: HardhatEthersSigner;
@@ -73,11 +66,6 @@ describe("Permissions", () => {
   let validatorExitRequester: HardhatEthersSigner;
   let validatorWithdrawalTriggerer: HardhatEthersSigner;
   let disconnecter: HardhatEthersSigner;
-  let lidoVaultHubAuthorizer: HardhatEthersSigner;
-  let lidoVaultHubDeauthorizer: HardhatEthersSigner;
-  let ossifier: HardhatEthersSigner;
-  let depositorSetter: HardhatEthersSigner;
-  let lockedResetter: HardhatEthersSigner;
   let tierChanger: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
@@ -100,7 +88,6 @@ describe("Permissions", () => {
       nodeOperator,
       funder,
       withdrawer,
-      locker,
       minter,
       burner,
       rebalancer,
@@ -112,11 +99,6 @@ describe("Permissions", () => {
       validatorExitRequester,
       disconnecter,
       validatorWithdrawalTriggerer,
-      lidoVaultHubAuthorizer,
-      lidoVaultHubDeauthorizer,
-      ossifier,
-      depositorSetter,
-      lockedResetter,
       tierChanger,
       stranger,
     ] = await getRandomSigners(30);
@@ -154,7 +136,6 @@ describe("Permissions", () => {
         confirmExpiry: days(7n),
         funder,
         withdrawer,
-        locker,
         minter,
         burner,
         rebalancer,
@@ -166,14 +147,8 @@ describe("Permissions", () => {
         validatorExitRequester,
         validatorWithdrawalTriggerer,
         disconnecter,
-        lidoVaultHubAuthorizer,
-        lidoVaultHubDeauthorizer,
-        ossifier,
-        depositorSetter,
-        lockedResetter,
         tierChanger,
       } as PermissionsConfigStruct,
-      "0x",
     );
     const vaultCreationReceipt = await vaultCreationTx.wait();
     if (!vaultCreationReceipt) throw new Error("Vault creation failed");
@@ -195,7 +170,6 @@ describe("Permissions", () => {
     // 10. Check that StakingVault is initialized properly
     expect(await stakingVault.owner()).to.equal(permissions);
     expect(await stakingVault.nodeOperator()).to.equal(nodeOperator);
-    expect(await stakingVault.vaultHub()).to.equal(vaultHub);
 
     // 11. Check events
     expect(vaultCreatedEvent.args.owner).to.equal(permissions);
@@ -229,11 +203,6 @@ describe("Permissions", () => {
       await checkSoleMember(validatorExitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
       await checkSoleMember(validatorWithdrawalTriggerer, await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await checkSoleMember(disconnecter, await permissions.VOLUNTARY_DISCONNECT_ROLE());
-      await checkSoleMember(lidoVaultHubAuthorizer, await permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE());
-      await checkSoleMember(lidoVaultHubDeauthorizer, await permissions.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE());
-      await checkSoleMember(ossifier, await permissions.OSSIFY_ROLE());
-      await checkSoleMember(depositorSetter, await permissions.SET_DEPOSITOR_ROLE());
-      await checkSoleMember(lockedResetter, await permissions.RESET_LOCKED_ROLE());
       await checkSoleMember(tierChanger, await permissions.REQUEST_TIER_CHANGE_ROLE());
     });
   });
@@ -248,7 +217,6 @@ describe("Permissions", () => {
             confirmExpiry: days(7n),
             funder,
             withdrawer,
-            locker,
             minter,
             burner,
             rebalancer,
@@ -260,14 +228,8 @@ describe("Permissions", () => {
             validatorExitRequester,
             validatorWithdrawalTriggerer,
             disconnecter,
-            lidoVaultHubAuthorizer,
-            lidoVaultHubDeauthorizer,
-            ossifier,
-            depositorSetter,
-            lockedResetter,
             tierChanger,
           } as PermissionsConfigStruct,
-          "0x",
         ),
       ).to.be.revertedWithCustomError(permissions, "AlreadyInitialized");
     });
@@ -289,7 +251,6 @@ describe("Permissions", () => {
             confirmExpiry: days(7n),
             funder,
             withdrawer,
-            locker,
             minter,
             burner,
             rebalancer,
@@ -301,14 +262,8 @@ describe("Permissions", () => {
             validatorExitRequester,
             validatorWithdrawalTriggerer,
             disconnecter,
-            lidoVaultHubAuthorizer,
-            lidoVaultHubDeauthorizer,
-            ossifier,
-            depositorSetter,
-            lockedResetter,
             tierChanger,
           } as PermissionsConfigStruct,
-          "0x",
         ),
       )
         .to.be.revertedWithCustomError(permissions, "ZeroArgument")
@@ -567,23 +522,6 @@ describe("Permissions", () => {
     });
   });
 
-  context("lock()", () => {
-    it("locks the requested amount on the StakingVault", async () => {
-      const amount = ether("1");
-      await permissions.connect(funder).fund(amount, { value: amount });
-
-      await expect(permissions.connect(locker).lock(amount)).to.emit(stakingVault, "LockedIncreased").withArgs(amount);
-    });
-
-    it("reverts if the caller is not a member of the lock role", async () => {
-      expect(await permissions.hasRole(await permissions.LOCK_ROLE(), stranger)).to.be.false;
-
-      await expect(permissions.connect(stranger).lock(ether("1")))
-        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.LOCK_ROLE());
-    });
-  });
-
   context("mintShares()", () => {
     it("emits mock event on the mock vault hub", async () => {
       const mintAmount = ether("1");
@@ -620,7 +558,6 @@ describe("Permissions", () => {
 
   context("rebalanceVault()", () => {
     it("rebalances the StakingVault", async () => {
-      expect(await stakingVault.vaultHub()).to.equal(vaultHub);
       const fundAmount = ether("1");
       await permissions.connect(funder).fund(fundAmount, { value: fundAmount });
 
@@ -761,97 +698,12 @@ describe("Permissions", () => {
     });
   });
 
-  context("transferStakingVaultOwnership()", () => {
-    it("transfers the StakingVault ownership", async () => {
-      const newOwner = certainAddress("new-owner");
-      await expect(permissions.connect(defaultAdmin).transferStakingVaultOwnership(newOwner))
-        .to.emit(stakingVault, "OwnershipTransferred")
-        .withArgs(permissions, newOwner);
 
-      expect(await stakingVault.owner()).to.equal(newOwner);
-    });
-
-    it("reverts if the caller is not a member of the default admin role", async () => {
-      expect(await permissions.hasRole(await permissions.DEFAULT_ADMIN_ROLE(), stranger)).to.be.false;
-
-      await expect(
-        permissions.connect(stranger).transferStakingVaultOwnership(certainAddress("new-owner")),
-      ).to.be.revertedWithCustomError(permissions, "SenderNotMember");
-    });
-  });
-
-  context("authorizeLidoVaultHub()", () => {
-    it("sets vault hub authorization", async () => {
-      await expect(permissions.connect(lidoVaultHubAuthorizer).authorizeLidoVaultHub()).to.emit(
-        stakingVault,
-        "VaultHubAuthorizedSet",
-      );
-
-      expect(await stakingVault.vaultHubAuthorized()).to.be.true;
-    });
-
-    it("reverts if the caller is not a member of the lido vault hub authorization role", async () => {
-      expect(await permissions.hasRole(await permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE(), stranger)).to.be.false;
-
-      await expect(permissions.connect(stranger).authorizeLidoVaultHub())
-        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE());
-    });
-  });
-
-  context("ossifyStakingVault()", () => {
-    it("ossifies the StakingVault", async () => {
-      await expect(permissions.connect(ossifier).ossifyStakingVault()).to.emit(
-        stakingVault,
-        "PinnedImplementationUpdated",
-      );
-
-      expect(await stakingVault.ossified()).to.be.true;
-    });
-
-    it("reverts if the caller is not a member of the ossifier role", async () => {
-      expect(await permissions.hasRole(await permissions.OSSIFY_ROLE(), stranger)).to.be.false;
-
-      await expect(permissions.connect(stranger).ossifyStakingVault())
-        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.OSSIFY_ROLE());
-    });
-  });
-
-  context("setDepositor()", () => {
-    it("sets the depositor", async () => {
-      await expect(permissions.connect(depositorSetter).setDepositor(certainAddress("new-depositor"))).to.emit(
-        stakingVault,
-        "DepositorSet",
-      );
-
-      expect(await stakingVault.depositor()).to.equal(certainAddress("new-depositor"));
-    });
-
-    it("reverts if the caller is not a member of the set depositor role", async () => {
-      expect(await permissions.hasRole(await permissions.SET_DEPOSITOR_ROLE(), stranger)).to.be.false;
-
-      await expect(permissions.connect(stranger).setDepositor(certainAddress("new-depositor")))
-        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.SET_DEPOSITOR_ROLE());
-    });
-  });
-
-  context("resetLocked()", () => {
-    it("resets the locked state", async () => {
-      await expect(permissions.connect(lockedResetter).resetLocked()).to.emit(stakingVault, "LockedReset");
-
-      expect(await stakingVault.locked()).to.equal(0n);
-    });
-
-    it("reverts if the caller is not a member of the reset locked role", async () => {
-      expect(await permissions.hasRole(await permissions.RESET_LOCKED_ROLE(), stranger)).to.be.false;
-
-      await expect(permissions.connect(stranger).resetLocked())
-        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.RESET_LOCKED_ROLE());
-    });
-  });
+  // TODO: add tests for the following functions:
+  // - requestTierChange()
+  // - feeRecipientChange()
+  // - abandonDashboard
+  // - connectToVaultHub()
 
   async function checkSoleMember(account: HardhatEthersSigner, role: string) {
     expect(await permissions.getRoleMemberCount(role)).to.equal(1);

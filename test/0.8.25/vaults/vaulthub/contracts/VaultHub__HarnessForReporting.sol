@@ -18,7 +18,7 @@ contract VaultHub__HarnessForReporting is VaultHub {
         uint256 _relativeShareLimitBP
     ) VaultHub(_locator, _lido, _relativeShareLimitBP) {}
 
-    function harness_getVaultHubStorage() private pure returns (VaultHubStorage storage $) {
+    function harness_getVaultHubStorage() private pure returns (VaultHub.Storage storage $) {
         assembly {
             $.slot := VAULT_HUB_STORAGE_LOCATION
         }
@@ -38,21 +38,31 @@ contract VaultHub__HarnessForReporting is VaultHub {
         uint256 _forcedRebalanceThresholdBP,
         uint256 _treasuryFeeBP
     ) external {
-        VaultHubStorage storage $ = harness_getVaultHubStorage();
+        VaultHub.Storage storage $ = harness_getVaultHubStorage();
 
-        VaultSocket memory vsocket = VaultSocket(
-            _vault,
-            0, // liabilityShares
+        VaultHub.VaultConnection memory connection = VaultHub.VaultConnection(
+            address(0), // owner
             uint96(_shareLimit),
+            uint96($.vaults.length),
+            false, // pendingDisconnect
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
-            uint16(_treasuryFeeBP),
-            false, // pendingDisconnect
-            0
+            uint16(_treasuryFeeBP)
         );
-        $.vaultIndex[_vault] = $.sockets.length;
-        $.sockets.push(vsocket);
+        $.connections[_vault] = connection;
 
-        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
+        VaultHub.VaultRecord memory record = VaultHub.VaultRecord(
+            VaultHub.Report(0, 0), // report
+            0, // locked
+            uint96(_shareLimit), // liabilityShares
+            uint64(block.timestamp), // reportTimestamp
+            0, // inOutDelta
+            0 // feeSharesCharged
+        );
+        $.records[_vault] = record;
+
+        $.vaults.push(_vault);
+
+        emit VaultConnected(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
 }

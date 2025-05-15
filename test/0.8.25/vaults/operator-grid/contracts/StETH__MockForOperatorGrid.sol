@@ -21,7 +21,7 @@ contract StETH__MockForOperatorGrid is ERC20 {
         return amount;
     }
 
-    function getTotalShares() external view returns (uint256) {
+    function getTotalShares() external pure returns (uint256) {
         return 1000 * 10 ** 18;
     }
 }

@@ -312,11 +312,6 @@ contract Accounting {
             _update.etherToFinalizeWQ
         );
 
-        _contracts.vaultHub.updateReportData(
-            uint64(_report.timestamp),
-            _report.vaultsDataTreeRoot,
-            _report.vaultsDataTreeCid
-        );
         if (_report.vaultsTotalTreasuryFeesShares > 0) {
             _contracts.vaultHub.mintVaultsTreasuryFeeShares(_report.vaultsTotalTreasuryFeesShares);
         }
@@ -452,7 +447,7 @@ contract Accounting {
                 IWithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
                 IStakingRouter(stakingRouter),
-                VaultHub(vaultHub)
+                VaultHub(payable(vaultHub))
             );
     }
 

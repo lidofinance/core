@@ -11,22 +11,8 @@ contract StakingVault__MockForNodeOperatorFee {
     address public immutable vaultHub;
     uint256 public locked;
 
-    IStakingVault.Report public latestReport;
-
     constructor(address _vaultHub) {
         vaultHub = _vaultHub;
-    }
-
-    function setLatestReport(IStakingVault.Report memory _latestReport) external {
-        latestReport = _latestReport;
-    }
-
-    function setLocked(uint256 _locked) external {
-        locked = _locked;
-    }
-
-    function totalValue() external view returns (uint256) {
-        return latestReport.totalValue;
     }
 
     function withdraw(address _recipient, uint256 _amount) external {

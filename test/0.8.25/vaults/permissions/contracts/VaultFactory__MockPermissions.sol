@@ -15,7 +15,6 @@ struct PermissionsConfig {
     uint256 confirmExpiry;
     address funder;
     address withdrawer;
-    address locker;
     address minter;
     address burner;
     address rebalancer;
@@ -27,11 +26,6 @@ struct PermissionsConfig {
     address validatorExitRequester;
     address validatorWithdrawalTriggerer;
     address disconnecter;
-    address lidoVaultHubAuthorizer;
-    address lidoVaultHubDeauthorizer;
-    address ossifier;
-    address depositorSetter;
-    address lockedResetter;
     address tierChanger;
 }
 
@@ -54,10 +48,8 @@ contract VaultFactory__MockPermissions {
 
     /// @notice Creates a new StakingVault and Permissions contracts
     /// @param _permissionsConfig The params of permissions initialization
-    /// @param _stakingVaultInitializerExtraParams The params of vault initialization
     function createVaultWithPermissions(
-        PermissionsConfig calldata _permissionsConfig,
-        bytes calldata _stakingVaultInitializerExtraParams
+        PermissionsConfig calldata _permissionsConfig
     ) external returns (IStakingVault vault, Permissions__Harness permissions) {
         // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
@@ -70,8 +62,7 @@ contract VaultFactory__MockPermissions {
         vault.initialize(
             address(permissions),
             _permissionsConfig.nodeOperator,
-            PREDEPOSIT_GUARANTEE,
-            _stakingVaultInitializerExtraParams
+            PREDEPOSIT_GUARANTEE
         );
 
         // initialize Permissions
@@ -87,8 +78,7 @@ contract VaultFactory__MockPermissions {
     }
 
     function revertCreateVaultWithPermissionsWithDoubleInitialize(
-        PermissionsConfig calldata _permissionsConfig,
-        bytes calldata _stakingVaultInitializerExtraParams
+        PermissionsConfig calldata _permissionsConfig
     ) external returns (IStakingVault vault, Permissions__Harness permissions) {
         // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
@@ -101,8 +91,7 @@ contract VaultFactory__MockPermissions {
         vault.initialize(
             address(permissions),
             _permissionsConfig.nodeOperator,
-            PREDEPOSIT_GUARANTEE,
-            _stakingVaultInitializerExtraParams
+            PREDEPOSIT_GUARANTEE
         );
 
         // initialize Permissions
@@ -120,8 +109,7 @@ contract VaultFactory__MockPermissions {
     }
 
     function revertCreateVaultWithPermissionsWithZeroDefaultAdmin(
-        PermissionsConfig calldata _permissionsConfig,
-        bytes calldata _stakingVaultInitializerExtraParams
+        PermissionsConfig calldata _permissionsConfig
     ) external returns (IStakingVault vault, Permissions__Harness permissions) {
         // create StakingVault
         vault = IStakingVault(address(new BeaconProxy(BEACON, "")));
@@ -134,8 +122,7 @@ contract VaultFactory__MockPermissions {
         vault.initialize(
             address(permissions),
             _permissionsConfig.nodeOperator,
-            PREDEPOSIT_GUARANTEE,
-            _stakingVaultInitializerExtraParams
+            PREDEPOSIT_GUARANTEE
         );
 
         // should revert here
@@ -155,7 +142,6 @@ contract VaultFactory__MockPermissions {
         permissions.grantRole(permissions.DEFAULT_ADMIN_ROLE(), _permissionsConfig.defaultAdmin);
         permissions.grantRole(permissions.FUND_ROLE(), _permissionsConfig.funder);
         permissions.grantRole(permissions.WITHDRAW_ROLE(), _permissionsConfig.withdrawer);
-        permissions.grantRole(permissions.LOCK_ROLE(), _permissionsConfig.locker);
         permissions.grantRole(permissions.MINT_ROLE(), _permissionsConfig.minter);
         permissions.grantRole(permissions.BURN_ROLE(), _permissionsConfig.burner);
         permissions.grantRole(permissions.REBALANCE_ROLE(), _permissionsConfig.rebalancer);
@@ -173,17 +159,6 @@ contract VaultFactory__MockPermissions {
             _permissionsConfig.validatorWithdrawalTriggerer
         );
         permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
-        permissions.grantRole(
-            permissions.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
-            _permissionsConfig.lidoVaultHubAuthorizer
-        );
-        permissions.grantRole(
-            permissions.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(),
-            _permissionsConfig.lidoVaultHubDeauthorizer
-        );
-        permissions.grantRole(permissions.OSSIFY_ROLE(), _permissionsConfig.ossifier);
-        permissions.grantRole(permissions.SET_DEPOSITOR_ROLE(), _permissionsConfig.depositorSetter);
-        permissions.grantRole(permissions.RESET_LOCKED_ROLE(), _permissionsConfig.lockedResetter);
         permissions.grantRole(permissions.REQUEST_TIER_CHANGE_ROLE(), _permissionsConfig.tierChanger);
     }
 
