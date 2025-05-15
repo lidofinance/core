@@ -276,12 +276,12 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the TRIGGER_VALIDATOR_WITHDRAWAL_ROLE and triggers validator withdrawal on the StakingVault using EIP-7002 triggerable exit.
      * @dev The zero checks for parameters are performed in the StakingVault contract.
      */
-    function _triggerValidatorWithdrawal(
+    function _triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
         address _refundRecipient
     ) internal onlyRole(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
-        VAULT_HUB.triggerValidatorWithdrawal{value: msg.value}(address(_stakingVault()), _pubkeys, _amounts, _refundRecipient);
+        VAULT_HUB.triggerValidatorWithdrawals{value: msg.value}(address(_stakingVault()), _pubkeys, _amounts, _refundRecipient);
     }
 
     /**

@@ -10,7 +10,7 @@ import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawal
 
 import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
 import {IDepositContract} from "../interfaces/IDepositContract.sol";
-import {IStakingVault, StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /**
  * @title StakingVault
@@ -79,7 +79,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     /**
      * @dev ERC-7201: Namespaced Storage Layout
      */
-    struct ERC7201Storage {
+    struct Storage {
         address nodeOperator;
         address depositor;
         bool beaconChainDepositsPaused;
@@ -110,6 +110,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     function initialize(address _owner, address _nodeOperator, address _depositor) external initializer {
         __Ownable_init(_owner);
+        __Ownable2Step_init();
         _fixNodeOperator(_nodeOperator);
         _setDepositor(_depositor);
     }
@@ -186,14 +187,12 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Calculates the total withdrawal fee required for given number of validator keys
+     * @notice Calculates the total fee required for EIP-7002 withdrawals for a given number of validator keys
      * @param _numberOfKeys Number of validators' public keys
      * @return Total fee amount to pass as `msg.value` (wei)
-     * @dev    The fee is only valid for the requests made in the same block
+     * @dev    The fee may change from block to block
      */
     function calculateValidatorWithdrawalFee(uint256 _numberOfKeys) external view returns (uint256) {
-        if (_numberOfKeys == 0) revert ZeroArgument("_numberOfKeys");
-
         return _numberOfKeys * TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
@@ -208,16 +207,12 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     /**
      * @dev Transfers ether directly to the `StakingVault`
      */
-    receive() external payable {
-        if (msg.value == 0) revert ZeroArgument("msg.value");
-    }
+    receive() external payable {}
 
     /**
      * @notice Funds the `StakingVault` with ether
      */
     function fund() external payable onlyOwner {
-        if (msg.value == 0) revert ZeroArgument("msg.value");
-
         emit EtherFunded(msg.sender, msg.value);
     }
 
@@ -231,7 +226,8 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         if (_ether == 0) revert ZeroArgument("_ether");
         if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance, _ether);
 
-        _transferEther("withdraw", _recipient, _ether);
+        (bool success, ) = _recipient.call{value: _ether}("");
+        if (!success) revert TransferFailed(_recipient, _ether);
 
         emit EtherWithdrawn(msg.sender, _recipient, _ether);
     }
@@ -255,7 +251,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Pauses deposits to beacon chain
      */
     function pauseBeaconChainDeposits() external onlyOwner {
-        ERC7201Storage storage $ = _storage();
+        Storage storage $ = _storage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsAlreadyPaused();
 
         $.beaconChainDepositsPaused = true;
@@ -267,7 +263,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Resumes deposits to beacon chain
      */
     function resumeBeaconChainDeposits() external onlyOwner {
-        ERC7201Storage storage $ = _storage();
+        Storage storage $ = _storage();
         if (!$.beaconChainDepositsPaused) revert BeaconChainDepositsAlreadyResumed();
 
         $.beaconChainDepositsPaused = false;
@@ -279,9 +275,9 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Performs deposits to the beacon chain
      * @param _deposits Array of validator deposits
      */
-    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {
+    function depositToBeaconChain(Deposit[] calldata _deposits) external {
         if (_deposits.length == 0) revert ZeroArgument("_deposits");
-        ERC7201Storage storage $ = _storage();
+        Storage storage $ = _storage();
         if ($.beaconChainDepositsPaused) revert BeaconChainDepositsOnPause();
         if (msg.sender != $.depositor) revert SenderNotDepositor();
 
@@ -297,7 +293,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
 
         for (uint256 i = 0; i < numberOfDeposits; i++) {
-            StakingVaultDeposit calldata deposit = _deposits[i];
+            Deposit calldata deposit = _deposits[i];
 
             DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
                 deposit.pubkey,
@@ -337,11 +333,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Triggers validator withdrawals from the beacon chain using EIP-7002 triggerable exit
+     * @notice Triggers validator exits from the beacon chain using EIP-7002 triggerable withdrawals.
+     *         A general-purpose function for exiting validators from the beacon chain by the owner.
      * @param _pubkeys Concatenated validators public keys, each 48 bytes long
      * @param _amounts Amounts of ether to exit, must match the length of _pubkeys
      * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
+     * @dev    Use `calculateValidatorWithdrawalFee` to calculate the fee
      */
     function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
@@ -349,14 +347,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address _refundRecipient
     ) external payable onlyOwner {
         if (msg.value == 0) revert ZeroArgument("msg.value");
-        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_amounts.length == 0) revert ZeroArgument("_amounts");
+        if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
+        if (_pubkeys.length / PUBLIC_KEY_LENGTH != _amounts.length) revert PubkeyLengthDoesNotMatchAmountLength();
 
         // If the refund recipient is not set, use the sender as the refund recipient
-        if (_refundRecipient == address(0)) {
-            _refundRecipient = msg.sender;
-        }
+        if (_refundRecipient == address(0)) _refundRecipient = msg.sender;
 
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
@@ -364,21 +361,32 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
         TriggerableWithdrawals.addWithdrawalRequests(_pubkeys, _amounts, feePerRequest);
 
-        uint256 excess = _refundExcess(totalFee, _refundRecipient);
+        uint256 excess = msg.value - totalFee;
+        if (excess > 0) {
+            (bool success, ) = _refundRecipient.call{value: excess}("");
+            if (!success) revert TransferFailed(_refundRecipient, excess);
+        }
 
         emit ValidatorWithdrawalsTriggered(msg.sender, _refundRecipient, _pubkeys, _amounts, excess);
     }
 
-    function triggerValidatorExits(bytes calldata _pubkeys, address _refundRecipient) external payable {
+    /**
+     * @notice Triggers EIP-7002 validator exits by the node operator.
+     *         Because the node operator cannot ensure that all the associated validators are under control,
+     *         the node operator has the ability to forcefully eject validators.
+     * @param _pubkeys Concatenated validators public keys, each 48 bytes long
+     * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
+     * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
+     * @dev    Use `calculateValidatorWithdrawalFee` to calculate the fee
+     */
+    function ejectValidators(bytes calldata _pubkeys, address _refundRecipient) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
-        if (msg.sender != owner() && msg.sender != _storage().nodeOperator) revert SenderNotNodeOperator();
+        if (msg.sender != _storage().nodeOperator) revert SenderNotNodeOperator();
 
         // If the refund recipient is not set, use the sender as the refund recipient
-        if (_refundRecipient == address(0)) {
-            _refundRecipient = msg.sender;
-        }
+        if (_refundRecipient == address(0)) _refundRecipient = msg.sender;
 
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
@@ -386,9 +394,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
         TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, feePerRequest);
 
-        uint256 excess = _refundExcess(totalFee, _refundRecipient);
+        uint256 excess = msg.value - totalFee;
+        if (excess > 0) {
+            (bool success, ) = _refundRecipient.call{value: excess}("");
+            if (!success) revert TransferFailed(_refundRecipient, excess);
+        }
 
-        emit ValidatorExitsTriggered(msg.sender, _refundRecipient, _pubkeys, excess);
+        emit ValidatorsEjected(msg.sender, _refundRecipient, _pubkeys, excess);
     }
 
     /*
@@ -427,13 +439,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Ossifies the current implementation. WARNING: This operation is irreversible,
-     *         once ossified, the vault cannot be upgraded or attached to VaultHub.
-     * @dev Can only be called by the owner.
-     *      Pins the current vault implementation to prevent further upgrades.
-     *      Emits an event `PinnedImplementationUpdated` with the current implementation address.
-     * @dev Reverts if already ossified.
-     * @dev Reverts if vaultHub is authorized at the vault
+     * @notice Ossifies the current implementation. WARNING: This operation is irreversible.
      */
     function ossify() external onlyOwner {
         if (isOssified()) revert VaultOssified();
@@ -453,15 +459,10 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @dev Returns the storage struct for the ERC-7201 namespace
      * @return $ storage struct for the ERC-7201 namespace
      */
-    function _storage() private pure returns (ERC7201Storage storage $) {
+    function _storage() private pure returns (Storage storage $) {
         assembly {
             $.slot := ERC7201_SLOT
         }
-    }
-
-    function _transferEther(string memory _operation, address _recipient, uint256 _amount) internal {
-        (bool success, ) = _recipient.call{value: _amount}("");
-        if (!success) revert TransferFailed(_operation, _recipient, _amount);
     }
 
     /**
@@ -484,11 +485,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address previousDepositor = _storage().depositor;
         _storage().depositor = _depositor;
         emit DepositorSet(msg.sender, previousDepositor, _depositor);
-    }
-
-    function _refundExcess(uint256 _totalFee, address _refundRecipient) internal returns (uint256 excess) {
-        excess = msg.value - _totalFee;
-        if (excess > 0) _transferEther("refund", _refundRecipient, excess);
     }
 
     /*
@@ -572,7 +568,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         uint256 excess
     );
 
-    event ValidatorExitsTriggered(
+    event ValidatorsEjected(
         address indexed sender,
         address indexed refundRecipient,
         bytes pubkeys,
@@ -605,7 +601,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param recipient Address that was supposed to receive the transfer
      * @param amount Amount that failed to transfer
      */
-    error TransferFailed(string operation, address recipient, uint256 amount);
+    error TransferFailed(address recipient, uint256 amount);
 
     /**
      * @notice Thrown when the new depositor is the same as the previous depositor
@@ -660,4 +656,9 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Thrown when the vault is already ossified
      */
     error VaultOssified();
+
+    /**
+     * @notice Thrown when the length of the validator public keys does not match the length of the amounts
+     */
+    error PubkeyLengthDoesNotMatchAmountLength();
 }

@@ -12,7 +12,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {ILido} from "../interfaces/ILido.sol";
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 import {LazyOracle} from "./LazyOracle.sol";
-import {StakingVaultDeposit} from "./interfaces/IStakingVault.sol";
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
@@ -396,6 +396,12 @@ contract VaultHub is PausableUntilWithRoles {
             record.reportTimestamp = _reportTimestamp;
             record.locked = uint128(lockedEther);
 
+            if (!_isVaultHealthyByThreshold(
+                _totalValue(record),
+                record.liabilityShares,
+                connection.forcedRebalanceThresholdBP
+            )) IStakingVault(_vault).pauseBeaconChainDeposits();
+
             emit VaultReportApplied(_vault, _reportTimestamp, _reportTotalValue, _reportInOutDelta, _reportFeeSharesCharged, _reportLiabilityShares);
         }
 
@@ -559,7 +565,13 @@ contract VaultHub is PausableUntilWithRoles {
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
-
+        VaultRecord storage record = _storage().records[_vault];
+        if (!_isVaultHealthyByThreshold(
+            _totalValue(record),
+            record.liabilityShares,
+            connection.forcedRebalanceThresholdBP
+        )) revert UnhealthyVaultCannotDeposit(_vault);
+        
         IStakingVault(_vault).resumeBeaconChainDeposits();
     }
 
@@ -567,17 +579,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _deposits array of deposits data structures
     /// @dev msg.sender should be predeposit guarantee
-    function depositToBeaconChain(address _vault, StakingVaultDeposit[] calldata _deposits) external {
+    function depositToBeaconChain(address _vault, IStakingVault.Deposit[] calldata _deposits) external {
         if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
-
-        VaultConnection storage connection = _checkConnection(_vault);
-        VaultRecord storage record = _storage().records[_vault];
-
-        if (!_isVaultHealthyByThreshold(
-            _totalValue(record),
-            record.liabilityShares,
-            connection.forcedRebalanceThresholdBP
-        )) revert UnhealthyVaultCannotDeposit(_vault);
 
         IStakingVault(_vault).depositToBeaconChain(_deposits);
     }
@@ -597,7 +600,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _pubkeys array of public keys of the validators to exit
     /// @dev msg.sender should be vault's owner
-    function triggerValidatorWithdrawal(
+    function triggerValidatorWithdrawals(
         address _vault,
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
@@ -607,7 +610,20 @@ contract VaultHub is PausableUntilWithRoles {
         if (msg.sender != connection.owner) revert NotAuthorized();
         VaultRecord storage record = _storage().records[_vault];
 
-        if (_totalValue(record) < record.locked) revert TotalValueBelowLockedAmount();
+        // disallow partial validator withdrawals when the vault value does not cover the locked amount,
+        // in order to prevent the vault owner from jamming the consensus layer withdrawal queue
+        // delaying the forceful validator exits required for rebalancing the vault
+        if (
+            !_isVaultHealthyByThreshold(
+                _totalValue(record),
+                record.liabilityShares,
+                connection.forcedRebalanceThresholdBP
+            )
+        ) {
+            for (uint256 i = 0; i < _amounts.length; i++) {
+                if (_amounts[i] > 0) revert PartialValidatorWithdrawalNotAllowed();
+            }
+        }
 
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
@@ -628,7 +644,9 @@ contract VaultHub is PausableUntilWithRoles {
             connection.forcedRebalanceThresholdBP
         )) revert AlreadyHealthy(_vault);
 
-        IStakingVault(_vault).triggerValidatorExits{value: msg.value}(_pubkeys, _refundRecipient);
+        uint64[] memory amounts = new uint64[](_pubkeys.length / PUBLIC_KEY_LENGTH);
+
+        IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, amounts, _refundRecipient);
 
         emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
@@ -988,4 +1006,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultHubNotPendingOwner(address vault);
     error UnhealthyVaultCannotDeposit(address vault);
     error VaultIsDisconnecting(address vault);
+    error PartialValidatorWithdrawalNotAllowed();
 }
