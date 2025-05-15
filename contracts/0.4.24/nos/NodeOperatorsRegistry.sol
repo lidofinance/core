@@ -247,7 +247,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         address _locator,
         bytes32 _type,
         uint256 _exitDeadlineThresholdInSeconds,
-        uint256 _exitPenaltyCutoffTimestamp
+        uint256 _reportingWindow
     ) public onlyInit {
         // Initializations for v1 --> v2
         _initialize_v2(_locator, _type);
@@ -256,7 +256,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _initialize_v3();
 
         // Initializations for v3 --> v4
-        _initialize_v4(_exitDeadlineThresholdInSeconds, _exitPenaltyCutoffTimestamp);
+        _initialize_v4(_exitDeadlineThresholdInSeconds, _reportingWindow);
 
         initialized();
     }
@@ -282,12 +282,11 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     function _initialize_v4(
         uint256 _exitDeadlineThresholdInSeconds,
-        uint256 _exitPenaltyCutoffTimestamp
+        uint256 _reportingWindow
     ) internal {
         _setContractVersion(4);
 
-        EXIT_DELAY_THRESHOLD_SECONDS.setStorageUint256(_exitDeadlineThresholdInSeconds);
-        EXIT_PENALTY_CUTOFF_TIMESTAMP.setStorageUint256(_exitPenaltyCutoffTimestamp);
+        _setExitDeadlineThreshold(_exitDeadlineThresholdInSeconds, _reportingWindow);
     }
 
     /// @notice A function to finalize upgrade to v2 (from v1). Can be called only once.
@@ -1097,7 +1096,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         return EXIT_PENALTY_CUTOFF_TIMESTAMP.getStorageUint256();
     }
 
-
     /// @notice Sets the validator exit deadline threshold and the reporting window for late exits.
     /// @dev Updates the cutoff timestamp before which validators are protected from penalization.
     ///      Prevents penalizing validators whose exit eligibility began before the new policy took effect.
@@ -1105,6 +1103,10 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @param _reportingWindow Additional number of seconds during which a late exit can still be reported.
     function setExitDeadlineThreshold(uint256 _threshold, uint256 _reportingWindow) external {
         _auth(MANAGE_NODE_OPERATOR_ROLE);
+        _setExitDeadlineThreshold(_threshold, _reportingWindow);
+    }
+
+    function _setExitDeadlineThreshold(uint256 _threshold, uint256 _reportingWindow) internal {
         require(_threshold > 0, "INVALID_EXIT_DELAY_THRESHOLD");
         require(_reportingWindow > 0, "INVALID_REPORTING_WINDOW");
 

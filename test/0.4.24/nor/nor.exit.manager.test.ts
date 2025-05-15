@@ -61,7 +61,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
   const testPublicKey = "0x" + "0".repeat(48 * 2);
   const eligibleToExitInSec = 86400n; // 2 days
-  const proofSlotTimestamp = 1234567890n;
+  const proofSlotTimestamp = (1n << 256n) - 1n; // 2^256 - 1 max value for uint256
   const withdrawalRequestPaidFee = 100000n;
   const exitType = 1n;
 
