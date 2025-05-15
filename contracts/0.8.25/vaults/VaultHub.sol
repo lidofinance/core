@@ -254,7 +254,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (vault_.isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(this)) revert VaultHubMustBeDepositor(_vault);
 
-        OperatorGrid operatorGrid_ = OperatorGrid(LIDO_LOCATOR.operatorGrid());
+        OperatorGrid operatorGrid = _operatorGrid();
         (
             address nodeOperatorFixedInGrid, // tierId
             ,
@@ -264,11 +264,11 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 infraFeeBP,
             uint256 liquidityFeeBP,
             uint256 reservationFeeBP
-        ) = operatorGrid_.vaultInfo(_vault);
+        ) = operatorGrid.vaultInfo(_vault);
 
         address nodeOperatorFixedInVault = IStakingVault(_vault).nodeOperator();
         if (
-            nodeOperatorFixedInVault != operatorGrid_.DEFAULT_TIER_OPERATOR() &&
+            nodeOperatorFixedInVault != operatorGrid.DEFAULT_TIER_OPERATOR() &&
             nodeOperatorFixedInVault != nodeOperatorFixedInGrid
         ) revert InvalidOperator();
 
@@ -564,7 +564,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         record.liabilityShares = uint96(vaultSharesAfterMint);
         LIDO.mintExternalShares(_recipient, _amountOfShares);
-        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onMintedShares(_vault, _amountOfShares);
+        _operatorGrid().onMintedShares(_vault, _amountOfShares);
 
         emit MintedSharesOnVault(_vault, _amountOfShares);
     }
@@ -587,7 +587,7 @@ contract VaultHub is PausableUntilWithRoles {
         record.liabilityShares = uint96(liabilityShares_ - _amountOfShares);
 
         LIDO.burnExternalShares(_amountOfShares);
-        OperatorGrid(LIDO_LOCATOR.operatorGrid()).onBurnedShares(_vault, _amountOfShares);
+        _operatorGrid().onBurnedShares(_vault, _amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
@@ -616,7 +616,7 @@ contract VaultHub is PausableUntilWithRoles {
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
-        if (!_isVaultHealthy(connection, _storage().records[_vault])) revert UnhealthyVaultCannotDeposit(_vault);
+        if (!_isVaultHealthy(connection, _vaultRecord(_vault))) revert UnhealthyVaultCannotDeposit(_vault);
 
         IStakingVault(_vault).resumeBeaconChainDeposits();
     }
@@ -885,7 +885,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _vaultLiabilityShares,
         uint256 _thresholdBP
     ) internal view returns (bool) {
-        return LIDO.getPooledEthBySharesRoundUp(_vaultLiabilityShares) >
+        return _getPooledEthBySharesRoundUp(_vaultLiabilityShares) >
             _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
     }
 
@@ -910,10 +910,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (_requiredBalance > available) {
             revert VaultInsufficientBalance(_vault, available, _requiredBalance);
         }
-    }
-
-    function _ledger() internal view returns (ObligationsLedger) {
-        return ObligationsLedger(LIDO_LOCATOR.obligationsLedger());
     }
 
     function _addVault(address _vault, VaultConnection memory _connection, VaultRecord memory _record) internal {
@@ -957,6 +953,14 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _vaultRecord(address _vault) internal view returns (VaultRecord storage) {
         return _storage().records[_vault];
+    }
+
+    function _ledger() internal view returns (ObligationsLedger) {
+        return ObligationsLedger(LIDO_LOCATOR.obligationsLedger());
+    }
+
+    function _operatorGrid() internal view returns (OperatorGrid) {
+        return OperatorGrid(LIDO_LOCATOR.operatorGrid());
     }
 
     event VaultProxyCodehashUpdated(bytes32 indexed codehash, bool allowed);
