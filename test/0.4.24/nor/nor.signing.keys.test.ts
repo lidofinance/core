@@ -99,6 +99,7 @@ describe("NodeOperatorsRegistry.sol:signing-keys", () => {
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
   const exitDeadlineThreshold = 86400n;
+  const reportingWindow = 86400n;
   const contractVersion = 2n;
 
   const firstNOKeys = new FakeValidatorKeys(5, { kFill: "a", sFill: "b" });
@@ -149,7 +150,7 @@ describe("NodeOperatorsRegistry.sol:signing-keys", () => {
     locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), deployer);
 
     // Initialize the nor's proxy.
-    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold))
+    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold, reportingWindow))
       .to.emit(nor, "ContractVersionSet")
       .withArgs(contractVersion)
       .and.to.emit(nor, "LocatorContractSet")

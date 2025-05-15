@@ -57,6 +57,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
   const exitDeadlineThreshold = 86400n;
+  const reportingWindow = 86400n;
 
   const testPublicKey = "0x" + "0".repeat(48 * 2);
   const eligibleToExitInSec = 86400n; // 2 days
@@ -103,7 +104,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy
-    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold))
+    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold, reportingWindow))
       .to.emit(nor, "RewardDistributionStateChanged")
       .withArgs(RewardDistributionState.Distributed);
 
@@ -228,6 +229,79 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         1n, // Less than the threshold
       );
       expect(shouldPenalize).to.be.false;
+    });
+  });
+
+  context("exitPenaltyCutoffTimestamp", () => {
+    const threshold = 86400n; // 1 day
+    // eslint-disable-next-line @typescript-eslint/no-shadow
+    const reportingWindow = 3600n; // 1 hour
+    // eslint-disable-next-line @typescript-eslint/no-shadow
+    const eligibleToExitInSec = threshold + 100n;
+
+    let cutoff: bigint;
+
+    beforeEach(async () => {
+      // Set threshold and grace period via contract method
+      const tx = await nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(threshold, reportingWindow);
+
+      // Fetch actual cutoff timestamp from the contract
+      cutoff = BigInt(await nor.exitPenaltyCutoffTimestamp());
+
+      // Get the block timestamp of the transaction
+      const block = await deployer.provider.getBlock(tx.blockNumber!);
+      const expectedCutoff = BigInt(block!.timestamp) - threshold - reportingWindow;
+
+      // Ensure cutoff was set correctly
+      expect(cutoff).to.equal(expectedCutoff);
+    });
+
+    it("returns false when _proofSlotTimestamp < cutoff", async () => {
+      const result = await nor.isValidatorExitDelayPenaltyApplicable(
+        firstNodeOperatorId,
+        cutoff - 1n,
+        testPublicKey,
+        eligibleToExitInSec,
+      );
+      expect(result).to.be.false;
+    });
+
+    it("returns true when _proofSlotTimestamp == cutoff", async () => {
+      const result = await nor.isValidatorExitDelayPenaltyApplicable(
+        firstNodeOperatorId,
+        cutoff,
+        testPublicKey,
+        eligibleToExitInSec,
+      );
+      expect(result).to.be.true;
+    });
+
+    it("returns true when _proofSlotTimestamp > cutoff", async () => {
+      const result = await nor.isValidatorExitDelayPenaltyApplicable(
+        firstNodeOperatorId,
+        cutoff + 1n,
+        testPublicKey,
+        eligibleToExitInSec,
+      );
+      expect(result).to.be.true;
+    });
+
+    it("reverts reportValidatorExitDelay when _proofSlotTimestamp < cutoff", async () => {
+      await expect(
+        nor
+          .connect(stakingRouter)
+          .reportValidatorExitDelay(firstNodeOperatorId, cutoff - 1n, testPublicKey, eligibleToExitInSec),
+      ).to.be.revertedWith("EXIT_PENALTY_CUTOFF_NOT_REACHED");
+    });
+
+    it("emits event when reportValidatorExitDelay is called with _proofSlotTimestamp >= cutoff", async () => {
+      await expect(
+        nor
+          .connect(stakingRouter)
+          .reportValidatorExitDelay(firstNodeOperatorId, cutoff, testPublicKey, eligibleToExitInSec),
+      )
+        .to.emit(nor, "ValidatorExitStatusUpdated")
+        .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, cutoff);
     });
   });
 });
