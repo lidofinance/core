@@ -91,8 +91,9 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Passes the address of the vault hub up the inheritance chain.
      * @param _vaultHub The address of the vault hub.
+     * @param _lidoLocator The address of the Lido locator.
      */
-    constructor(address _vaultHub) Permissions(_vaultHub) {}
+    constructor(address _vaultHub, address _lidoLocator) Permissions(_vaultHub, _lidoLocator) {}
 
     /**
      * @dev Calls the parent's initializer, sets the node operator fee, assigns the node operator manager role,

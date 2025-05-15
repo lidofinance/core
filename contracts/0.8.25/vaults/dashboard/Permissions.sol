@@ -11,6 +11,7 @@ import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/ac
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {OperatorGrid} from "../OperatorGrid.sol";
 import {VaultHub} from "../VaultHub.sol";
 
@@ -112,20 +113,21 @@ abstract contract Permissions is AccessControlConfirmable {
     address private immutable _SELF;
 
     VaultHub public immutable VAULT_HUB;
+    ILidoLocator public immutable LIDO_LOCATOR;
 
     /**
      * @notice Indicates whether the contract has been initialized
      */
     bool public initialized;
 
-    /**
-     * @notice Constructor sets the address of the implementation contract.
-     */
-    constructor(address _vaultHub) {
+    constructor(address _vaultHub, address _lidoLocator) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
 
         _SELF = address(this);
+        // @dev vaultHub is cached as immutable to save gas for main operations
         VAULT_HUB = VaultHub(payable(_vaultHub));
+        LIDO_LOCATOR = ILidoLocator(_lidoLocator);
     }
 
     /**
@@ -314,7 +316,7 @@ abstract contract Permissions is AccessControlConfirmable {
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
-        return IPredepositGuarantee(VAULT_HUB.predepositGuarantee()).compensateDisprovenPredeposit(_pubkey, _recipient);
+        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee()).compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     /**
@@ -323,7 +325,7 @@ abstract contract Permissions is AccessControlConfirmable {
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
     ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
-        IPredepositGuarantee predepositGuarantee = IPredepositGuarantee(VAULT_HUB.predepositGuarantee());
+        IPredepositGuarantee predepositGuarantee = IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee());
         for (uint256 i = 0; i < _witnesses.length; i++) {
             predepositGuarantee.proveUnknownValidator(_witnesses[i], _stakingVault());
         }
@@ -351,7 +353,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _tierId The tier to change to.
      */
     function _requestTierChange(uint256 _tierId) internal onlyRole(REQUEST_TIER_CHANGE_ROLE) {
-        OperatorGrid(VAULT_HUB.operatorGrid()).requestTierChange(address(_stakingVault()), _tierId);
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).requestTierChange(address(_stakingVault()), _tierId);
     }
 
     /**
