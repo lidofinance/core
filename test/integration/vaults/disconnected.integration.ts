@@ -174,7 +174,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         treasuryFeeBP: 500,
       },
     ]);
-    await expect(dashboard.connect(roles.tierChanger).requestTierChange(1))
+    await expect(dashboard.connect(roles.tierChanger).requestTierChange(1, 0))
       .to.emit(operatorGrid, "TierChangeRequested")
       .withArgs(stakingVault, 1);
     await expect(operatorGrid.connect(nodeOperator).confirmTierChange(stakingVault, 1))
