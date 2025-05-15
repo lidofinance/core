@@ -98,7 +98,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice role that allows to add factories and vault implementations to hub
     bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("vaults.VaultHub.VaultRegistryRole");
     /// @notice role that allows to fulfill withdrawal obligations by exiting validators
-    bytes32 public constant VAULT_VALIDATOR_EJECTOR_ROLE = keccak256("vaults.VaultHub.VaultValidatorEjectorRole");
+    bytes32 public constant WITHDRAWAL_EXECUTOR_ROLE = keccak256("vaults.VaultHub.WithdrawalExecutorRole");
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     /// @notice The time delta for report freshness check
@@ -442,7 +442,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 newLiabilityShares = Math256.max(record.liabilityShares, _reportLiabilityShares);
         uint256 newLiability = _getPooledEthBySharesRoundUp(newLiabilityShares);
 
-        (uint256 withdrawals, uint256 treasuryFees) = _ledger().obligationsToSettle(_vault, _reportFeeCharged, newLiability);
+        (uint256 valueToRebalance, uint256 valueToTransfer) = _ledger().obligationsToSettle(_vault, _reportFeeCharged, newLiability);
 
         // locked ether can only be increased asynchronously once the oracle settled the new floor value
         // as of reference slot to prevent slashing upsides in between the report gathering and delivering
@@ -459,21 +459,16 @@ contract VaultHub is PausableUntilWithRoles {
         record.locked = uint128(lockedEther);
         record.liabilityShares = uint96(newLiabilityShares);
 
+        if (valueToRebalance > 0) _rebalance(_vault, record, valueToRebalance);
+        if (valueToTransfer > 0) {
+            _withdrawFromVault(_vault, record, LIDO_LOCATOR.treasury(), valueToTransfer);
+            record.feeCharged += uint96(valueToTransfer);
+        }
+
         IStakingVault vault_ = IStakingVault(_vault);
         if (!_isVaultHealthy(connection, record) && !vault_.beaconChainDepositsPaused()) vault_.pauseBeaconChainDeposits();
 
-        if (withdrawals > 0) _rebalance(_vault, record, withdrawals);
-        if (treasuryFees > 0) {
-            _withdrawFromVault(_vault, record, LIDO_LOCATOR.treasury(), treasuryFees);
-        }
-
         emit VaultReportApplied(_vault, _reportTimestamp, _reportTotalValue, _reportInOutDelta, _reportFeeCharged, _reportLiabilityShares);
-    }
-
-    function mintVaultsTreasuryFeeShares(uint256 _amountOfShares) external {
-        if (msg.sender != LIDO_LOCATOR.accounting()) revert NotAuthorized();
-
-        LIDO.mintExternalShares(LIDO_LOCATOR.treasury(), _amountOfShares);
     }
 
     function setVaultOwner(address _vault, address _owner) external {
@@ -667,7 +662,8 @@ contract VaultHub is PausableUntilWithRoles {
         address _refundRecipient
     ) external payable {
         VaultConnection storage connection = _checkConnection(_vault);
-        if (msg.sender != connection.owner) revert NotAuthorized();
+        bool canEject = hasRole(WITHDRAWAL_EXECUTOR_ROLE, msg.sender) && _ledger().getWithdrawalsObligation(_vault) > 0;
+        if (msg.sender != connection.owner && !canEject) revert NotAuthorized();
         VaultRecord storage record = _vaultRecord(_vault);
 
         // disallow partial validator withdrawals when the vault value does not cover the locked amount,
@@ -692,14 +688,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        bool hasOutstandingWithdrawalObligation = _ledger().getWithdrawalsObligation(_vault) > 0;
-        bool isEjector = hasRole(VAULT_VALIDATOR_EJECTOR_ROLE, msg.sender);
-
-        if (!(isEjector && hasOutstandingWithdrawalObligation)) {
-            if (_isVaultHealthy(connection,
-                record
-            )) revert AlreadyHealthy(_vault);
-        }
+        if (_isVaultHealthy(connection, record)) revert AlreadyHealthy(_vault);
 
         uint64[] memory amounts = new uint64[](_pubkeys.length / PUBLIC_KEY_LENGTH);
 

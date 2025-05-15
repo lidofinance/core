@@ -4,6 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
@@ -11,11 +12,9 @@ import {ILido} from "../interfaces/ILido.sol";
 
 import {VaultHub} from "./VaultHub.sol";
 
-import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
-
 /// @title ObligationsLedger
 /// @notice Tracks vaults withdrawals and treasury‑fee obligations.
-        contract ObligationsLedger is PausableUntilWithRoles {
+contract ObligationsLedger is AccessControlEnumerableUpgradeable {
     /// @notice obligations that may be accrued by a vault
     struct Obligations {
         uint256 withdrawals;
@@ -86,7 +85,7 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
         address _vault,
         uint256 _fees,
         uint256 _liability
-    ) external onlyVaultHub returns (uint256 withdrawals, uint256 treasuryFees) {
+    ) external onlyVaultHub returns (uint256 toRebalance, uint256 toTreasury) {
         Obligations storage obligations = _vaultObligations(_vault);
         uint256 vaultBalance = _vault.balance;
 
@@ -99,22 +98,19 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
         uint256 valueToWithdrawAsTreasuryFees = Math256.min(_fees, vaultBalance - valueToRebalance);
 
         if (valueToRebalance > 0) {
-            withdrawals = valueToRebalance;
+            toRebalance = valueToRebalance;
             obligations.withdrawals -= valueToRebalance;
-
             emit WithdrawalsObligationSettled(_vault, valueToRebalance, obligations.withdrawals);
         }
 
         if (valueToWithdrawAsTreasuryFees > 0) {
-            treasuryFees = valueToWithdrawAsTreasuryFees;
+            toTreasury = valueToWithdrawAsTreasuryFees;
             obligations.treasuryFees -= valueToWithdrawAsTreasuryFees;
-
             emit TreasuryFeesObligationSettled(_vault, valueToWithdrawAsTreasuryFees, obligations.treasuryFees);
         }
 
         if (_fees > valueToWithdrawAsTreasuryFees) {
             obligations.treasuryFees = _fees;
-
             emit TreasuryFeesObligationUpdated(_vault, _fees);
         }
     }
