@@ -390,7 +390,8 @@ contract VaultHub is PausableUntilWithRoles {
             record.reportTimestamp = _reportTimestamp;
             record.locked = uint128(lockedEther);
 
-            if (!_isVaultHealthy(connection, record)) IStakingVault(_vault).pauseBeaconChainDeposits();
+            IStakingVault vault_ = IStakingVault(_vault);
+            if (!_isVaultHealthy(connection, record) && !vault_.beaconChainDepositsPaused()) vault_.pauseBeaconChainDeposits();
 
             emit VaultReportApplied(_vault, _reportTimestamp, _reportTotalValue, _reportInOutDelta, _reportFeeSharesCharged, _reportLiabilityShares);
         }
