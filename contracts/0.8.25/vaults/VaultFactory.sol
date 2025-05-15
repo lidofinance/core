@@ -57,8 +57,7 @@ contract VaultFactory {
     ) external payable returns (IStakingVault vault, Dashboard dashboard) {
         // check if the msg.value is enough to cover the connect deposit
         ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
-        address vaultHubAddress = locator.vaultHub();
-        if (msg.value < VaultHub(payable(vaultHubAddress)).CONNECT_DEPOSIT()) revert InsufficientFunds();
+        if (msg.value < VaultHub(payable(locator.vaultHub())).CONNECT_DEPOSIT()) revert InsufficientFunds();
 
         // create the vault proxy
         address vaultAddress = address(new PinnedBeaconProxy(BEACON, ""));
@@ -91,7 +90,7 @@ contract VaultFactory {
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
 
-        emit VaultCreated(address(vault), vaultHubAddress);
+        emit VaultCreated(address(vault), locator.vaultHub());
         emit DashboardCreated(address(dashboard), _defaultAdmin);
     }
 

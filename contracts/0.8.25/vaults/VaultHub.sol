@@ -498,10 +498,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _vaultRecord(_vault).inOutDelta += int128(int256(msg.value));
 
-        (bool success, ) = _vault.call{value: msg.value}("");
-        if (!success) revert TransferFailed(_vault, msg.value);
-
-        emit VaultFunded(_vault, msg.value);
+        IStakingVault(_vault).fund{value: msg.value}();
     }
 
     function withdraw(address _vault, address _recipient, uint256 _ether) external {
@@ -519,8 +516,6 @@ contract VaultHub is PausableUntilWithRoles {
         _withdrawFromVault(_vault, record, _recipient, _ether);
 
         if (_totalValue(record) < record.locked) revert TotalValueBelowLockedAmount();
-
-        emit VaultWithdrawn(_vault, _recipient, _ether);
     }
 
     /**
@@ -1002,21 +997,6 @@ contract VaultHub is PausableUntilWithRoles {
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event ValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient, bool isForceExit);
-
-    /**
-     * @notice Emitted when `StakingVault` is funded with ether
-     * @dev Event is not emitted upon direct transfers through `receive()`
-     * @param amount Amount of ether funded
-     */
-    event VaultFunded(address indexed vault, uint256 amount);
-
-    /**
-     * @notice Emitted when ether is withdrawn from `StakingVault`
-     * @dev Also emitted upon rebalancing in favor of `VaultHub`
-     * @param recipient Address that received the withdrawn ether
-     * @param amount Amount of ether withdrawn
-     */
-    event VaultWithdrawn(address indexed vault, address indexed recipient, uint256 amount);
 
     /**
      * @notice Emitted when the manager is set
