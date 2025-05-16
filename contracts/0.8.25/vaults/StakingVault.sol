@@ -217,6 +217,8 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Funds the `StakingVault` with ether
      */
     function fund() external payable onlyOwner {
+        if (msg.value == 0) revert ZeroArgument("msg.value");
+        
         emit EtherFunded(msg.sender, msg.value);
     }
 
