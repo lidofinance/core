@@ -14,7 +14,7 @@ import {CLProofVerifier} from "./CLProofVerifier.sol";
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {VaultHub} from "../VaultHub.sol";
+
 /**
  * @title PredepositGuarantee
  * @author Lido
@@ -117,8 +117,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     bytes32 private constant ERC7201_STORAGE_LOCATION =
         0xf66b5a365356c5798cc70e3ea6a236b181a826a69f730fc07cc548244bee5200;
 
-    ILidoLocator public immutable LIDO_LOCATOR;
-
     /**
      * @param _genesisForkVersion genesis fork version for the current chain
      * @param _gIFirstValidator packed(general index + depth in tree, see GIndex.sol) GIndex of first validator in CL state tree
@@ -130,13 +128,11 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         bytes4 _genesisForkVersion,
         GIndex _gIFirstValidator,
         GIndex _gIFirstValidatorAfterChange,
-        uint64 _changeSlot,
-        address _lidoLocator
+        uint64 _changeSlot
     ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {
         DEPOSIT_DOMAIN = SSZ.computeDepositDomain(_genesisForkVersion);
         _disableInitializers();
         _pauseUntil(PAUSE_INFINITELY);
-        LIDO_LOCATOR = ILidoLocator(_lidoLocator);
     }
 
     function initialize(address _defaultAdmin) external initializer {
@@ -373,7 +369,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         }
 
         balance.locked += totalDepositAmount;
-        VaultHub(payable(LIDO_LOCATOR.vaultHub())).depositToBeaconChain(address(_stakingVault), _deposits);
+        IStakingVault(_stakingVault).depositToBeaconChain(_deposits);
 
         emit BalanceLocked(nodeOperator, balance.total, balance.locked);
     }

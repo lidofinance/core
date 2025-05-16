@@ -251,7 +251,7 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault vault_ = IStakingVault(_vault);
         if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
         if (vault_.isOssified()) revert VaultOssified(_vault);
-        if (vault_.depositor() != address(this)) revert VaultHubMustBeDepositor(_vault);
+        if (vault_.depositor() != LIDO_LOCATOR.predepositGuarantee()) revert PDGNotDepositor(_vault);
 
         (
             , // nodeOperatorInTier
@@ -560,16 +560,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (!_isVaultHealthy(connection, _storage().records[_vault])) revert UnhealthyVaultCannotDeposit(_vault);
 
         IStakingVault(_vault).resumeBeaconChainDeposits();
-    }
-
-    /// @notice deposits to the beacon chain
-    /// @param _vault vault address
-    /// @param _deposits array of deposits data structures
-    /// @dev msg.sender should be predeposit guarantee
-    function depositToBeaconChain(address _vault, IStakingVault.Deposit[] calldata _deposits) external {
-        if (msg.sender != LIDO_LOCATOR.predepositGuarantee()) revert NotAuthorized();
-
-        IStakingVault(_vault).depositToBeaconChain(_deposits);
     }
 
     /// @notice Emits a request event for the node operator to perform validator exit
@@ -972,7 +962,7 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
     error VaultReportStale(address vault);
-    error VaultHubMustBeDepositor(address vault);
+    error PDGNotDepositor(address vault);
     error ZeroCodehash();
     error VaultHubNotPendingOwner(address vault);
     error UnhealthyVaultCannotDeposit(address vault);
