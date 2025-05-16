@@ -109,10 +109,14 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _depositor Address of the depositor
      */
     function initialize(address _owner, address _nodeOperator, address _depositor) external initializer {
+        if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
+
         __Ownable_init(_owner);
         __Ownable2Step_init();
-        _fixNodeOperator(_nodeOperator);
         _setDepositor(_depositor);
+        _storage().nodeOperator = _nodeOperator;
+        
+        emit NodeOperatorSet(msg.sender, _nodeOperator);
     }
 
     /*
@@ -466,16 +470,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @dev Fixes the node operator address in the `StakingVault`
-     * @param _nodeOperator Address of the node operator
-     */
-    function _fixNodeOperator(address _nodeOperator) internal {
-        if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
-        _storage().nodeOperator = _nodeOperator;
-        emit NodeOperatorFixed(msg.sender, _nodeOperator);
-    }
-
-    /**
      * @dev Sets the depositor address in the `StakingVault`
      * @param _depositor Address of the new depositor
      */
@@ -511,11 +505,11 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     event EtherWithdrawn(address indexed sender, address indexed recipient, uint256 amount);
 
     /**
-     * @notice Emitted when the node operator is fixed in the `StakingVault` upon initialization
-     * @param sender Address that fixed the node operator
+     * @notice Emitted when the node operator is set in the `StakingVault`
+     * @param sender Address that set the node operator
      * @param nodeOperator Address of the node operator
      */
-    event NodeOperatorFixed(address indexed sender, address indexed nodeOperator);
+    event NodeOperatorSet(address indexed sender, address indexed nodeOperator);
 
     /**
      * @notice Emitted when the depositor is set in the `StakingVault`
