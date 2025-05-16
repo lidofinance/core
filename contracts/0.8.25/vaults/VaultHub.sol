@@ -585,7 +585,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _storage().records[_vault];
 
-        // disallow partial validator withdrawals when the vault value does not cover the locked amount,
+        // disallow partial validator withdrawals when the vault is unhealthy,
         // in order to prevent the vault owner from jamming the consensus layer withdrawal queue
         // delaying the forceful validator exits required for rebalancing the vault
         if (!_isVaultHealthy(connection, record)) {
@@ -609,7 +609,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (_isVaultHealthy(connection, record)) revert AlreadyHealthy(_vault);
 
-        uint64[] memory amounts = new uint64[](_pubkeys.length / PUBLIC_KEY_LENGTH);
+        uint64[] memory amounts = new uint64[](0);
 
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, amounts, _refundRecipient);
 
