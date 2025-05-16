@@ -406,7 +406,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
             if (!success) revert TransferFailed(_refundRecipient, excess);
         }
 
-        emit ValidatorsEjected(msg.sender, _refundRecipient, _pubkeys, excess);
+        emit ValidatorEjectionsTriggered(msg.sender, _refundRecipient, _pubkeys, excess);
     }
 
     /*
@@ -564,7 +564,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         uint256 excess
     );
 
-    event ValidatorsEjected(
+    event ValidatorEjectionsTriggered(
         address indexed sender,
         address indexed refundRecipient,
         bytes pubkeys,
