@@ -340,9 +340,9 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
     /**
      * @notice Triggers validator exits from the beacon chain using EIP-7002 triggerable withdrawals.
-     *         A general-purpose function for exiting validators from the beacon chain by the owner.
+     *         A general-purpose function for withdrawing validators from the beacon chain by the owner.
      * @param _pubkeys Concatenated validators public keys, each 48 bytes long
-     * @param _amounts Amounts of ether to exit, must match the length of _pubkeys
+     * @param _amounts Amounts of ether to withdraw, must match the length of _pubkeys. If empty, triggers full withdrawals.
      * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
      * @dev    Use `calculateValidatorWithdrawalFee` to calculate the fee
@@ -353,10 +353,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address _refundRecipient
     ) external payable onlyOwner {
         if (msg.value == 0) revert ZeroArgument("msg.value");
-        if (_amounts.length == 0) revert ZeroArgument("_amounts");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
-        if (_pubkeys.length / PUBLIC_KEY_LENGTH != _amounts.length) revert PubkeyLengthDoesNotMatchAmountLength();
+
+        // If amounts array is not empty, validate its length matches pubkeys
+        if (_amounts.length > 0 && _pubkeys.length / PUBLIC_KEY_LENGTH != _amounts.length) {
+            revert PubkeyLengthDoesNotMatchAmountLength();
+        }
 
         // If the refund recipient is not set, use the sender as the refund recipient
         if (_refundRecipient == address(0)) _refundRecipient = msg.sender;
@@ -365,7 +368,12 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
         if (msg.value < totalFee) revert InsufficientValidatorWithdrawalFee(msg.value, totalFee);
 
-        TriggerableWithdrawals.addWithdrawalRequests(_pubkeys, _amounts, feePerRequest);
+        // If amounts array is empty, trigger full withdrawals, otherwise use partial withdrawals
+        if (_amounts.length == 0) {
+            TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, feePerRequest);
+        } else {
+            TriggerableWithdrawals.addWithdrawalRequests(_pubkeys, _amounts, feePerRequest);
+        }
 
         uint256 excess = msg.value - totalFee;
         if (excess > 0) {
