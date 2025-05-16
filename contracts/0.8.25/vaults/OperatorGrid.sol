@@ -201,25 +201,19 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         emit GroupAdded(_nodeOperator, uint96(_shareLimit));
     }
 
-    /// @notice Updates the share limits of multiple groups
-    /// @param _nodeOperators addresses of the node operators
-    /// @param _shareLimits New share limit values
-    function updateGroupsShareLimit(address[] calldata _nodeOperators, uint256[] calldata _shareLimits) external onlyRole(REGISTRY_ROLE) {
-        if (_nodeOperators.length != _shareLimits.length) revert ArrayLengthMismatch();
-
-        ERC7201Storage storage $ = _getStorage();
-        uint256 length = _nodeOperators.length;
+    /// @notice Updates the share limit of a group
+    /// @param _nodeOperator address of the node operator
+    /// @param _shareLimit New share limit value
+    function updateGroupShareLimit(address _nodeOperator, uint256 _shareLimit) external onlyRole(REGISTRY_ROLE) {
+        if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
         
-        for (uint256 i = 0; i < length; i++) {
-            if (_nodeOperators[i] == address(0)) revert ZeroArgument("_nodeOperators");
+        ERC7201Storage storage $ = _getStorage();
+        Group storage group_ = $.groups[_nodeOperator];
+        if (group_.operator == address(0)) revert GroupNotExists();
 
-            Group storage group_ = $.groups[_nodeOperators[i]];
-            if (group_.operator == address(0)) revert GroupNotExists();
+        group_.shareLimit = uint96(_shareLimit);
 
-            group_.shareLimit = uint96(_shareLimits[i]);
-
-            emit GroupShareLimitUpdated(_nodeOperators[i], uint96(_shareLimits[i]));
-        }
+        emit GroupShareLimitUpdated(_nodeOperator, uint96(_shareLimit));
     }
 
     /// @notice Returns a group by node operator address
