@@ -28,10 +28,33 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
 
     function _getTime() internal view override returns (uint256) {
         address consensus = CONSENSUS_CONTRACT_POSITION.getStorageAddress();
-        return ITimeProvider(consensus).getTime();
+        uint256 time = ITimeProvider(consensus).getTime();
+
+        return time;
+    }
+
+    // Method used in VEB
+    function _getTimestamp() internal view override returns (uint256) {
+        return _getTime();
     }
 
     function getDataProcessingState() external view returns (DataProcessingState memory) {
         return _storageDataProcessingState().value;
+    }
+
+    function storeExitRequestHash(
+        bytes32 exitRequestHash,
+        uint256 totalItemsCount,
+        uint256 deliveredItemsCount,
+        uint256 contractVersion,
+        uint256 lastDeliveredKeyIndex
+    ) external {
+        _storeExitRequestHash(
+            exitRequestHash,
+            totalItemsCount,
+            deliveredItemsCount,
+            contractVersion,
+            DeliveryHistory(lastDeliveredKeyIndex, block.timestamp)
+        );
     }
 }

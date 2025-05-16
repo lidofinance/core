@@ -35,6 +35,7 @@ export async function main() {
   const exitBusOracleAdmin = testnetAdmin;
   const stakingRouterAdmin = testnetAdmin;
   const withdrawalQueueAdmin = testnetAdmin;
+  const withdrawalVaultAdmin = testnetAdmin;
 
   // Initialize NodeOperatorsRegistry
 
@@ -49,7 +50,8 @@ export async function main() {
     [
       lidoLocatorAddress,
       encodeStakingModuleTypeId(nodeOperatorsRegistryParams.stakingModuleTypeId),
-      nodeOperatorsRegistryParams.stuckPenaltyDelay,
+      nodeOperatorsRegistryParams.exitDeadlineThresholdInSeconds,
+      nodeOperatorsRegistryParams.exitsReportingWindow,
     ],
     { from: deployer },
   );
@@ -61,7 +63,8 @@ export async function main() {
     [
       lidoLocatorAddress,
       encodeStakingModuleTypeId(simpleDvtRegistryParams.stakingModuleTypeId),
-      simpleDvtRegistryParams.stuckPenaltyDelay,
+      simpleDvtRegistryParams.exitDeadlineThresholdInSeconds,
+      simpleDvtRegistryParams.exitDeadlineThresholdInSeconds,
     ],
     { from: deployer },
   );
@@ -110,7 +113,7 @@ export async function main() {
 
   // Initialize WithdrawalVault
   const withdrawalVault = await loadContract("WithdrawalVault", withdrawalVaultAddress);
-  await makeTx(withdrawalVault, "initialize", [], { from: deployer });
+  await makeTx(withdrawalVault, "initialize", [withdrawalVaultAdmin], { from: deployer });
 
   // Initialize WithdrawalQueue
   const withdrawalQueue = await loadContract("WithdrawalQueueERC721", withdrawalQueueAddress);
