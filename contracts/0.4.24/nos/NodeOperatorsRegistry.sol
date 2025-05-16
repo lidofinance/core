@@ -75,7 +75,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         uint256 withdrawalRequestPaidFee,
         uint256 exitType
     );
-    event ExitDeadlineThresholdChanged(uint256 threshold);
+    event ExitDeadlineThresholdChanged(uint256 threshold, uint256 reportingWindow);
 
     // Enum to represent the state of the reward distribution process
     enum RewardDistributionState {
@@ -185,6 +185,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     // Threshold in seconds after which a delayed exit is penalized
     // bytes32 internal constant EXIT_DELAY_THRESHOLD_SECONDS = keccak256("lido.NodeOperatorsRegistry.exitDelayThresholdSeconds");
     bytes32 internal constant EXIT_DELAY_THRESHOLD_SECONDS = 0x96656d3ece9cdbe3bd729ff6d7df8d0aeb457ff7c7c42372184ae30b10b37976;
+    // Cutoff timestamp used to protect validators from penalization after threshold changes
+    // bytes32 internal constant EXIT_PENALTY_CUTOFF_TIMESTAMP = keccak256("lido.NodeOperatorsRegistry.exitPenaltyCutoffTimestamp");
+    bytes32 internal constant EXIT_PENALTY_CUTOFF_TIMESTAMP = 0x93f1d4cdf7a6d0aac32b989ca335f5ae5f4322e4361b8f67a199fdda105f821b;
 
 
     //
@@ -240,7 +243,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     //
     // METHODS
     //
-    function initialize(address _locator, bytes32 _type, uint256 _exitDeadlineThresholdInSeconds) public onlyInit {
+    function initialize(
+        address _locator,
+        bytes32 _type,
+        uint256 _exitDeadlineThresholdInSeconds,
+        uint256 _reportingWindow
+    ) public onlyInit {
         // Initializations for v1 --> v2
         _initialize_v2(_locator, _type);
 
@@ -248,7 +256,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _initialize_v3();
 
         // Initializations for v3 --> v4
-        _initialize_v4(_exitDeadlineThresholdInSeconds);
+        _initialize_v4(_exitDeadlineThresholdInSeconds, _reportingWindow);
 
         initialized();
     }
@@ -272,9 +280,13 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _updateRewardDistributionState(RewardDistributionState.Distributed);
     }
 
-    function _initialize_v4(uint256 _exitDeadlineThresholdInSeconds) internal {
+    function _initialize_v4(
+        uint256 _exitDeadlineThresholdInSeconds,
+        uint256 _reportingWindow
+    ) internal {
         _setContractVersion(4);
-        EXIT_DELAY_THRESHOLD_SECONDS.setStorageUint256(_exitDeadlineThresholdInSeconds);
+
+        _setExitDeadlineThreshold(_exitDeadlineThresholdInSeconds, _reportingWindow);
     }
 
     /// @notice A function to finalize upgrade to v2 (from v1). Can be called only once.
@@ -286,10 +298,16 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// See historical usage in commit: https://github.com/lidofinance/core/blob/c19480aa3366b26aa6eac17f85a6efae8b9f4f72/contracts/0.4.24/nos/NodeOperatorsRegistry.sol#L298
     /// function finalizeUpgrade_v3() external
 
-    function finalizeUpgrade_v4(uint256 _exitDeadlineThresholdInSeconds) external {
+    /// @notice Finalizes upgrade to version 4 by initializing new exit-related parameters.
+    /// @param _exitDeadlineThresholdInSeconds Exit deadline threshold in seconds for validator exits.
+    /// @param _exitPenaltyCutoffTimestamp Cutoff timestamp before which validators cannot be penalized.
+    function finalizeUpgrade_v4(
+        uint256 _exitDeadlineThresholdInSeconds,
+        uint256 _exitPenaltyCutoffTimestamp
+    ) external {
         require(hasInitialized(), "CONTRACT_NOT_INITIALIZED");
         _checkContractVersion(3);
-        _initialize_v4(_exitDeadlineThresholdInSeconds);
+        _initialize_v4(_exitDeadlineThresholdInSeconds, _exitPenaltyCutoffTimestamp);
     }
 
     /// @notice Add node operator named `name` with reward address `rewardAddress` and staking limit = 0 validators
@@ -1072,13 +1090,33 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         return EXIT_DELAY_THRESHOLD_SECONDS.getStorageUint256();
     }
 
-    /// @notice Sets the number of seconds after which a validator is considered late for exit.
-    /// @param _threshold The new exit deadline threshold in seconds.
-    function setExitDeadlineThreshold(uint256 _threshold) external {
+    /// @notice Returns the cutoff timestamp before which validators cannot be penalized for delayed exit.
+    /// @return uint256 The cutoff timestamp used when evaluating late exits.
+    function exitPenaltyCutoffTimestamp() public view returns (uint256) {
+        return EXIT_PENALTY_CUTOFF_TIMESTAMP.getStorageUint256();
+    }
+
+    /// @notice Sets the validator exit deadline threshold and the reporting window for late exits.
+    /// @dev Updates the cutoff timestamp before which validators are protected from penalization.
+    ///      Prevents penalizing validators whose exit eligibility began before the new policy took effect.
+    /// @param _threshold Number of seconds a validator has to exit after becoming eligible.
+    /// @param _reportingWindow Additional number of seconds during which a late exit can still be reported.
+    function setExitDeadlineThreshold(uint256 _threshold, uint256 _reportingWindow) external {
         _auth(MANAGE_NODE_OPERATOR_ROLE);
+        _setExitDeadlineThreshold(_threshold, _reportingWindow);
+    }
+
+    function _setExitDeadlineThreshold(uint256 _threshold, uint256 _reportingWindow) internal {
         require(_threshold > 0, "INVALID_EXIT_DELAY_THRESHOLD");
+        require(_reportingWindow > 0, "INVALID_REPORTING_WINDOW");
+
         EXIT_DELAY_THRESHOLD_SECONDS.setStorageUint256(_threshold);
-        emit ExitDeadlineThresholdChanged(_threshold);
+
+        // Set the cutoff timestamp to the current time minus the threshold and reportingWindow period
+        uint256 currentCutoffTimestamp = block.timestamp - _threshold - _reportingWindow;
+        EXIT_PENALTY_CUTOFF_TIMESTAMP.setStorageUint256(currentCutoffTimestamp);
+
+        emit ExitDeadlineThresholdChanged(_threshold, _reportingWindow);
     }
 
     /// @notice Handles the triggerable exit event for a validator belonging to a specific node operator.
@@ -1101,11 +1139,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     /// @notice Determines whether a validator's exit status should be updated and will have an effect on the Node Operator.
     /// @param _publicKey The public key of the validator.
+    /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
     /// @param _eligibleToExitInSec The number of seconds the validator was eligible to exit but did not.
     /// @return True if the validator has exceeded the exit deadline threshold and hasn't been reported yet.
     function isValidatorExitDelayPenaltyApplicable(
         uint256, // _nodeOperatorId
-        uint256, // _proofSlotTimestamp
+        uint256 _proofSlotTimestamp,
         bytes _publicKey,
         uint256 _eligibleToExitInSec
     ) external view returns (bool) {
@@ -1114,7 +1153,8 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         if (_isValidatorExitingKeyReported(processedKeyHash)) {
             return false;
         }
-        return _eligibleToExitInSec >= exitDeadlineThreshold();
+        return _eligibleToExitInSec >= exitDeadlineThreshold()
+            && _proofSlotTimestamp >= exitPenaltyCutoffTimestamp();
     }
 
     /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
@@ -1135,6 +1175,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
         // Check if exit delay exceeds the threshold
         require(_eligibleToExitInSec >= exitDeadlineThreshold(), "EXIT_DELAY_BELOW_THRESHOLD");
+        require(_proofSlotTimestamp >= exitPenaltyCutoffTimestamp(), "EXIT_PENALTY_CUTOFF_NOT_REACHED");
 
         bytes32 processedKeyHash = keccak256(_publicKey);
         _markValidatorExitingKeyAsReported(processedKeyHash);
