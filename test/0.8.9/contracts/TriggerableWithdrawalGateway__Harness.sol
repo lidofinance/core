@@ -5,7 +5,7 @@ import {TriggerableWithdrawalGateway} from "contracts/0.8.9/TriggerableWithdrawa
 contract TriggerableWithdrawalGateway__Harness is TriggerableWithdrawalGateway {
     uint256 internal _time = 2513040315;
 
-    constructor(address lidoLocator) TriggerableWithdrawalGateway(lidoLocator) {}
+    constructor(address admin, address lidoLocator) TriggerableWithdrawalGateway(admin, lidoLocator) {}
 
     function getTimestamp() external view returns (uint256) {
         return _time;

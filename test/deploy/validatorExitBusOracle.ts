@@ -108,9 +108,16 @@ export async function initVEBO({
   lastProcessingRefSlot = 0,
   resumeAfterDeploy = false,
 }: VEBOConfig) {
-  const initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion, lastProcessingRefSlot);
-
-  await oracle.finalizeUpgrade_v2();
+  const initTx = await oracle.initialize(
+    admin,
+    await consensus.getAddress(),
+    consensusVersion,
+    lastProcessingRefSlot,
+    600,
+    13000,
+    1,
+    48,
+  );
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_VERSION_ROLE(), admin);

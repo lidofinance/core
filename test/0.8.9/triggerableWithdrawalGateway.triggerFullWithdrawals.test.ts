@@ -65,9 +65,10 @@ describe("TriggerableWithdrawalGateway.sol:triggerFullWithdrawals", () => {
       stakingRouter: await stakingRouter.getAddress(),
     });
 
-    triggerableWithdrawalGateway = await ethers.deployContract("TriggerableWithdrawalGateway__Harness", [locatorAddr]);
-
-    await triggerableWithdrawalGateway.initialize(admin);
+    triggerableWithdrawalGateway = await ethers.deployContract("TriggerableWithdrawalGateway__Harness", [
+      admin,
+      locatorAddr,
+    ]);
   });
 
   it("should revert if caller does not have the `ADD_FULL_WITHDRAWAL_REQUEST_ROLE", async () => {

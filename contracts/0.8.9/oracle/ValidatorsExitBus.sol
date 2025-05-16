@@ -18,6 +18,12 @@ interface ITriggerableWithdrawalGateway {
     ) external payable;
 }
 
+/**
+ * @title ValidatorsExitBus
+ * @notice An on-chain contract that serves as the central infrastructure for managing validator exit requests.
+ * It stores report hashes, emits exit events, and maintains data and tools that enables anyone to prove a validator was requested to exit.
+ * Unlike VEBO, it supports exit reports from a wide range of entities.
+ */
 contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
     using ExitLimitUtilsStorage for bytes32;
@@ -92,6 +98,12 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      * @param remainingLimit Amount of requests that still can be processed at current day
      */
     error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
+    /**
+     * @notice Thrown when the number of requests submitted via submitExitRequestsData exceeds the allowed maxRequestsPerBatch.
+     * @param requestsCount The number of requests included in the current call.
+     * @param maxRequestsPerBatch The maximum number of requests allowed per call to submitExitRequestsData.
+     */
+    error MaxRequestsBatchSizeExceeded(uint256 requestsCount, uint256 maxRequestsPerBatch);
 
     /// @dev Events
 
@@ -140,13 +152,16 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         bytes pubkey;
     }
 
+    /// @notice An ACL role granting the permission to submit a hash of the exit requests data
     bytes32 public constant SUBMIT_REPORT_HASH_ROLE = keccak256("SUBMIT_REPORT_HASH_ROLE");
-    bytes32 public constant DIRECT_EXIT_ROLE = keccak256("DIRECT_EXIT_ROLE");
+    /// @notice An ACL role granting the permission to set maximum exit request limit and the frame limit restoring values
     bytes32 public constant EXIT_REPORT_LIMIT_ROLE = keccak256("EXIT_REPORT_LIMIT_ROLE");
     /// @notice An ACL role granting the permission to pause accepting validator exit requests
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     /// @notice An ACL role granting the permission to resume accepting validator exit requests
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
+    /// @notice An ACL role granting the permission to set MAX_VALIDATORS_PER_BATCH value
+    bytes32 public constant MAX_VALIDATORS_PER_BATCH_ROLE = keccak256("MAX_VALIDATORS_PER_BATCH_ROLE");
 
     /// Length in bytes of packed request
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
@@ -178,6 +193,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     /// Hash constant for mapping exit requests storage
     bytes32 internal constant EXIT_REQUESTS_HASHES_POSITION = keccak256("lido.ValidatorsExitBus.reportHashes");
     bytes32 public constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestLimit");
+    bytes32 internal constant MAX_VALIDATORS_PER_BATCH_POSITION =
+        keccak256("lido.ValidatorsExitBus.maxValidatorsPerBatch");
 
     constructor(address lidoLocator) {
         LOCATOR = ILidoLocator(lidoLocator);
@@ -233,6 +250,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         if (requestStatus.totalItemsCount == type(uint256).max) {
             requestStatus.totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
         }
+
+        _checkRequestsBatchSize(requestStatus.totalItemsCount);
 
         uint256 undeliveredItemsCount = requestStatus.totalItemsCount - requestStatus.deliveredItemsCount;
 
@@ -345,20 +364,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 exitsPerFrame,
         uint256 frameDuration
     ) external onlyRole(EXIT_REPORT_LIMIT_ROLE) {
-        require(maxExitRequestsLimit >= exitsPerFrame, "TOO_LARGE_TW_EXIT_REQUEST_LIMIT");
-
-        uint256 timestamp = _getTimestamp();
-
-        EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitLimits(
-                maxExitRequestsLimit,
-                exitsPerFrame,
-                frameDuration,
-                timestamp
-            )
-        );
-
-        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
     }
 
     /**
@@ -465,6 +471,14 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         _pauseUntil(_pauseUntilInclusive);
     }
 
+    function setMaxRequestsPerBatch(uint256 value) external onlyRole(MAX_VALIDATORS_PER_BATCH_ROLE) {
+        _setMaxRequestsPerBatch(value);
+    }
+
+    function getMaxRequestsPerBatch() external view returns (uint256) {
+        return _getMaxRequestsPerBatch();
+    }
+
     /// Internal functions
 
     function _checkExitRequestData(bytes calldata requests, uint256 dataFormat) internal pure {
@@ -474,6 +488,13 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         if (requests.length % PACKED_REQUEST_LENGTH != 0) {
             revert InvalidRequestsDataLength();
+        }
+    }
+
+    function _checkRequestsBatchSize(uint256 requestsCount) internal view {
+        uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
+        if (requestsCount > maxRequestsPerBatch) {
+            revert MaxRequestsBatchSizeExceeded(requestsCount, maxRequestsPerBatch);
         }
     }
 
@@ -500,6 +521,31 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
     function _getTimestamp() internal view virtual returns (uint256) {
         return block.timestamp; // solhint-disable-line not-rely-on-time
+    }
+
+    function _setMaxRequestsPerBatch(uint256 value) internal {
+        MAX_VALIDATORS_PER_BATCH_POSITION.setStorageUint256(value);
+    }
+
+    function _getMaxRequestsPerBatch() internal view returns (uint256) {
+        return MAX_VALIDATORS_PER_BATCH_POSITION.getStorageUint256();
+    }
+
+    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration) internal {
+        require(maxExitRequestsLimit >= exitsPerFrame, "TOO_LARGE_TW_EXIT_REQUEST_LIMIT");
+
+        uint256 timestamp = _getTimestamp();
+
+        EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+            EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitLimits(
+                maxExitRequestsLimit,
+                exitsPerFrame,
+                frameDuration,
+                timestamp
+            )
+        );
+
+        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
     }
 
     function _storeExitRequestHash(

@@ -97,6 +97,8 @@ contract TriggerableWithdrawalGateway is AccessControlEnumerable {
     uint256 internal constant PACKED_EXIT_REQUEST_LENGTH = 56;
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
+    uint256 public constant VERSION = 1;
+
     ILidoLocator internal immutable LOCATOR;
 
     /// @dev Ensures the contract’s ETH balance is unchanged.
@@ -106,12 +108,10 @@ contract TriggerableWithdrawalGateway is AccessControlEnumerable {
         assert(address(this).balance == balanceBeforeCall);
     }
 
-    constructor(address lidoLocator) {
-        LOCATOR = ILidoLocator(lidoLocator);
-    }
-
-    function initialize(address admin) external {
+    constructor(address admin, address lidoLocator) {
         if (admin == address(0)) revert AdminCannotBeZero();
+        LOCATOR = ILidoLocator(lidoLocator);
+
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
     }
 

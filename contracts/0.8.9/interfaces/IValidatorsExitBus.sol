@@ -8,12 +8,6 @@ interface IValidatorsExitBus {
         uint256 dataFormat;
     }
 
-    struct DirectExitData {
-        uint256 stakingModuleId;
-        uint256 nodeOperatorId;
-        bytes validatorsPubkeys;
-    }
-
     struct DeliveryHistory {
         // index in array of requests
         uint256 lastDeliveredKeyIndex;
