@@ -73,19 +73,15 @@ contract VaultFactory {
             locator.predepositGuarantee()
         );
 
-        // initialize Dashboard with the factory address as the default admin and grant optional roles
+        // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
         dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
         dashboard.grantRoles(_roleAssignments);
-
-        // grant the factory the MANAGE_OWNERSHIP_ROLE to be able to connect the vault to the hub
-        dashboard.grantRole(dashboard.MANAGE_OWNERSHIP_ROLE(), address(this));
         dashboard.connectToVaultHub{value: msg.value}();
-        dashboard.revokeRole(dashboard.MANAGE_OWNERSHIP_ROLE(), address(this));
 
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
 
-        emit VaultCreated(address(vault), locator.vaultHub());
+        emit VaultCreated(address(vault), _defaultAdmin);
         emit DashboardCreated(address(dashboard), _defaultAdmin);
     }
 
