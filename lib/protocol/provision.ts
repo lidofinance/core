@@ -1,5 +1,5 @@
 import { log } from "lib";
-import { ensureEIP7002WithdrawalRequestContractPresent } from "lib/eips";
+import { ensureEIP4788BeaconBlockRootContractPresent, ensureEIP7002WithdrawalRequestContractPresent } from "lib/eips";
 
 import {
   ensureHashConsensusInitialEpoch,
@@ -26,6 +26,7 @@ export const provision = async (ctx: ProtocolContext) => {
 
   // Ensure necessary precompiled contracts are present
   await ensureEIP7002WithdrawalRequestContractPresent();
+  await ensureEIP4788BeaconBlockRootContractPresent();
 
   // Ensure protocol is fully operational
   await ensureHashConsensusInitialEpoch(ctx);

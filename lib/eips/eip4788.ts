@@ -1,3 +1,5 @@
+import { ethers } from "hardhat";
+
 import { impersonate } from "lib";
 
 // Address of the Beacon Block Storage contract, which exposes beacon chain roots.
@@ -20,4 +22,12 @@ export const updateBeaconBlockRoot = async (root: string): Promise<number> => {
   if (!blockDetails) throw new Error("Failed to retrieve block details.");
 
   return blockDetails.timestamp;
+};
+
+export const ensureEIP4788BeaconBlockRootContractPresent = async (): Promise<void> => {
+  const code = await ethers.provider.getCode(BEACON_ROOTS_ADDRESS);
+
+  if (code === "0x") {
+    throw new Error(`EIP7788 Beacon Block Root contract not found at ${BEACON_ROOTS_ADDRESS}`);
+  }
 };
