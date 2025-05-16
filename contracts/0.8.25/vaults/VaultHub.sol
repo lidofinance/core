@@ -26,7 +26,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @custom:storage-location erc7201:Vaults
     struct Storage {
         /// @notice vault proxy contract codehashes allowed for connecting
-        mapping(bytes32 codehash => bool allowed) vaultProxyCodehash;
+        mapping(bytes32 codehash => bool allowed) codehashes;
         /// @notice accounting records for each vault
         mapping(address vault => VaultRecord) records;
         /// @notice connection parameters for each vault
@@ -61,14 +61,14 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice latest report for the vault
         Report report;
         // ### 2nd slot
-        /// @notice locked amount of ether for the vault
+        /// @notice amount of ether that is locked from withdrawal on the vault
         uint128 locked;
         /// @notice liability shares of the vault
         uint96 liabilityShares;
         // ### 3rd slot
         /// @notice timestamp of the latest report
         uint64 reportTimestamp;
-        /// @notice inOutDelta of the latest report
+        /// @notice current inOutDelta of the vault (all deposits - all withdrawals)
         int128 inOutDelta;
         /// @notice fee shares charged for the vault
         uint96 feeSharesCharged;
@@ -147,15 +147,15 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Set if a vault proxy codehash is allowed to be connected to the hub
     /// @param _codehash vault proxy codehash
-    /// @param _allow true to add, false to remove
-    function setVaultProxyCodehashAllowance(bytes32 _codehash, bool _allow) external onlyRole(VAULT_REGISTRY_ROLE) {
+    /// @param _allowed true to add, false to remove
+    function setAllowedCodehash(bytes32 _codehash, bool _allowed) external onlyRole(VAULT_REGISTRY_ROLE) {
         if (_codehash == bytes32(0)) revert ZeroArgument();
         if (_codehash == EMPTY_CODEHASH) revert VaultProxyZeroCodehash();
 
         Storage storage $ = _storage();
-        $.vaultProxyCodehash[_codehash] = _allow;
+        $.codehashes[_codehash] = _allowed;
 
-        emit VaultProxyCodehashUpdated(_codehash, _allow);
+        emit AllowedCodehashUpdated(_codehash, _allowed);
     }
 
     /// @notice returns the number of vaults connected to the hub
@@ -255,18 +255,13 @@ contract VaultHub is PausableUntilWithRoles {
 
         OperatorGrid operatorGrid_ = OperatorGrid(LIDO_LOCATOR.operatorGrid());
         (
-            address nodeOperatorFixedInGrid,
+            , // nodeOperatorInTier
             , // tierId
             uint256 shareLimit,
             uint256 reserveRatioBP,
             uint256 forcedRebalanceThresholdBP,
             uint256 treasuryFeeBP
         ) = operatorGrid_.vaultInfo(_vault);
-
-        if (
-            nodeOperatorFixedInGrid != operatorGrid_.DEFAULT_TIER_OPERATOR() &&
-            nodeOperatorFixedInGrid != vault_.nodeOperator()
-        ) revert InvalidOperator();
 
         _connectVault(_vault,
             shareLimit,
@@ -654,7 +649,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         Storage storage $ = _storage();
         if ($.connections[_vault].vaultIndex != 0) revert AlreadyConnected(_vault, $.connections[_vault].vaultIndex);
-        if (!$.vaultProxyCodehash[address(_vault).codehash]) revert VaultProxyNotAllowed(_vault, address(_vault).codehash);
+        if (!$.codehashes[address(_vault).codehash]) revert VaultProxyNotAllowed(_vault, address(_vault).codehash);
         uint256 vaultBalance = _vault.balance;
         if (vaultBalance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, vaultBalance, CONNECT_DEPOSIT);
 
@@ -847,7 +842,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    event VaultProxyCodehashUpdated(bytes32 indexed codehash, bool allowed);
+    event AllowedCodehashUpdated(bytes32 indexed codehash, bool allowed);
 
     event VaultConnected(
         address indexed vault,
@@ -961,7 +956,6 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultReportStaled(address vault);
     error VaultHubMustBeDepositor(address vault);
     error VaultProxyZeroCodehash();
-    error InvalidOperator();
     error VaultHubNotPendingOwner(address vault);
     error UnhealthyVaultCannotDeposit(address vault);
     error VaultIsDisconnecting(address vault);
