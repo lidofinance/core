@@ -10,7 +10,7 @@ import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../li
 import {PausableUntil} from "../utils/PausableUntil.sol";
 import {IValidatorsExitBus} from "../interfaces/IValidatorsExitBus.sol";
 
-interface ITriggerableWithdrawalGateway {
+interface ITriggerableWithdrawalsGateway {
     function triggerFullWithdrawals(
         bytes calldata triggerableExitData,
         address refundRecipient,
@@ -346,7 +346,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             _copyValidatorData(validatorData, exits, i);
         }
 
-        ITriggerableWithdrawalGateway(LOCATOR.triggerableWithdrawalGateway()).triggerFullWithdrawals{value: msg.value}(
+        ITriggerableWithdrawalsGateway(LOCATOR.triggerableWithdrawalsGateway()).triggerFullWithdrawals{value: msg.value}(
             exits,
             refundRecipient,
             exitType

@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   StakingRouter__MockForTWG,
-  TriggerableWithdrawalGateway__Harness,
+  TriggerableWithdrawalsGateway__Harness,
   WithdrawalVault__MockForTWG,
 } from "typechain-types";
 
@@ -34,8 +34,8 @@ const exitRequests = [
 
 const ZERO_ADDRESS = ethers.ZeroAddress;
 
-describe("TriggerableWithdrawalGateway.sol:triggerFullWithdrawals", () => {
-  let triggerableWithdrawalGateway: TriggerableWithdrawalGateway__Harness;
+describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
+  let triggerableWithdrawalsGateway: TriggerableWithdrawalsGateway__Harness;
   let withdrawalVault: WithdrawalVault__MockForTWG;
   let stakingRouter: StakingRouter__MockForTWG;
   let admin: HardhatEthersSigner;
@@ -65,7 +65,7 @@ describe("TriggerableWithdrawalGateway.sol:triggerFullWithdrawals", () => {
       stakingRouter: await stakingRouter.getAddress(),
     });
 
-    triggerableWithdrawalGateway = await ethers.deployContract("TriggerableWithdrawalGateway__Harness", [
+    triggerableWithdrawalsGateway = await ethers.deployContract("TriggerableWithdrawalsGateway__Harness", [
       admin,
       locatorAddr,
     ]);
@@ -73,45 +73,45 @@ describe("TriggerableWithdrawalGateway.sol:triggerFullWithdrawals", () => {
 
   it("should revert if caller does not have the `ADD_FULL_WITHDRAWAL_REQUEST_ROLE", async () => {
     const requests = encodeTWGExitDataList(exitRequests);
-    const role = await triggerableWithdrawalGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE();
+    const role = await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE();
     await expect(
-      triggerableWithdrawalGateway
+      triggerableWithdrawalsGateway
         .connect(authorizedEntity)
         .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 10 }),
     ).to.be.revertedWithOZAccessControlError(await authorizedEntity.getAddress(), role);
   });
 
   it("should revert if total fee value sent is insufficient to cover all provided TW requests ", async () => {
-    const role = await triggerableWithdrawalGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE();
-    await triggerableWithdrawalGateway.grantRole(role, authorizedEntity);
+    const role = await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE();
+    await triggerableWithdrawalsGateway.grantRole(role, authorizedEntity);
 
     const requests = encodeTWGExitDataList(exitRequests);
 
     await expect(
-      triggerableWithdrawalGateway
+      triggerableWithdrawalsGateway
         .connect(authorizedEntity)
         .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 1 }),
     )
-      .to.be.revertedWithCustomError(triggerableWithdrawalGateway, "InsufficientWithdrawalFee")
+      .to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "InsufficientWithdrawalFee")
       .withArgs(3, 1);
   });
 
   it("set limit", async () => {
-    const role = await triggerableWithdrawalGateway.TW_EXIT_REPORT_LIMIT_ROLE();
-    await triggerableWithdrawalGateway.grantRole(role, authorizedEntity);
+    const role = await triggerableWithdrawalsGateway.TW_EXIT_REPORT_LIMIT_ROLE();
+    await triggerableWithdrawalsGateway.grantRole(role, authorizedEntity);
 
-    const exitLimitTx = await triggerableWithdrawalGateway.connect(authorizedEntity).setExitRequestLimit(4, 1, 48);
-    await expect(exitLimitTx).to.emit(triggerableWithdrawalGateway, "ExitRequestsLimitSet").withArgs(4, 1, 48);
+    const exitLimitTx = await triggerableWithdrawalsGateway.connect(authorizedEntity).setExitRequestLimit(4, 1, 48);
+    await expect(exitLimitTx).to.emit(triggerableWithdrawalsGateway, "ExitRequestsLimitSet").withArgs(4, 1, 48);
   });
 
   it("should add withdrawal request", async () => {
     const requests = encodeTWGExitDataList(exitRequests);
 
-    const tx = await triggerableWithdrawalGateway
+    const tx = await triggerableWithdrawalsGateway
       .connect(authorizedEntity)
       .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 4 });
 
-    const timestamp = await triggerableWithdrawalGateway.getTimestamp();
+    const timestamp = await triggerableWithdrawalsGateway.getTimestamp();
 
     const pubkeys =
       "0x" +
@@ -124,7 +124,7 @@ describe("TriggerableWithdrawalGateway.sol:triggerFullWithdrawals", () => {
 
     for (const request of exitRequests) {
       await expect(tx)
-        .to.emit(triggerableWithdrawalGateway, "TriggerableExitRequest")
+        .to.emit(triggerableWithdrawalsGateway, "TriggerableExitRequest")
         .withArgs(request.moduleId, request.nodeOpId, request.valPubkey, timestamp);
 
       await expect(tx)
@@ -136,7 +136,7 @@ describe("TriggerableWithdrawalGateway.sol:triggerFullWithdrawals", () => {
   });
 
   it("check current limit", async () => {
-    const data = await triggerableWithdrawalGateway.getExitRequestLimitFullInfo();
+    const data = await triggerableWithdrawalsGateway.getExitRequestLimitFullInfo();
 
     // maxExitRequestsLimit
     expect(data[0]).to.equal(4);
@@ -156,11 +156,11 @@ describe("TriggerableWithdrawalGateway.sol:triggerFullWithdrawals", () => {
     const requests = encodeTWGExitDataList(exitRequests);
 
     await expect(
-      triggerableWithdrawalGateway
+      triggerableWithdrawalsGateway
         .connect(authorizedEntity)
         .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 4 }),
     )
-      .to.be.revertedWithCustomError(triggerableWithdrawalGateway, "ExitRequestsLimit")
+      .to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "ExitRequestsLimit")
       .withArgs(3, 1);
   });
 
@@ -168,20 +168,20 @@ describe("TriggerableWithdrawalGateway.sol:triggerFullWithdrawals", () => {
     const requests = encodeTWGExitDataList(exitRequests);
 
     await expect(
-      triggerableWithdrawalGateway
+      triggerableWithdrawalsGateway
         .connect(authorizedEntity)
         .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 4 }),
     )
-      .to.be.revertedWithCustomError(triggerableWithdrawalGateway, "ExitRequestsLimit")
+      .to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "ExitRequestsLimit")
       .withArgs(3, 1);
   });
 
   it("rewind time", async () => {
-    await triggerableWithdrawalGateway.advanceTimeBy(2 * 48);
+    await triggerableWithdrawalsGateway.advanceTimeBy(2 * 48);
   });
 
   it("current limit should be increased by 2", async () => {
-    const data = await triggerableWithdrawalGateway.getExitRequestLimitFullInfo();
+    const data = await triggerableWithdrawalsGateway.getExitRequestLimitFullInfo();
 
     // maxExitRequestsLimit
     expect(data[0]).to.equal(4);
@@ -199,11 +199,11 @@ describe("TriggerableWithdrawalGateway.sol:triggerFullWithdrawals", () => {
   it("should add withdrawal request ias limit is enough for processing all requests", async () => {
     const requests = encodeTWGExitDataList(exitRequests);
 
-    const tx = await triggerableWithdrawalGateway
+    const tx = await triggerableWithdrawalsGateway
       .connect(authorizedEntity)
       .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 4 });
 
-    const timestamp = await triggerableWithdrawalGateway.getTimestamp();
+    const timestamp = await triggerableWithdrawalsGateway.getTimestamp();
 
     const pubkeys =
       "0x" +
@@ -216,7 +216,7 @@ describe("TriggerableWithdrawalGateway.sol:triggerFullWithdrawals", () => {
 
     for (const request of exitRequests) {
       await expect(tx)
-        .to.emit(triggerableWithdrawalGateway, "TriggerableExitRequest")
+        .to.emit(triggerableWithdrawalsGateway, "TriggerableExitRequest")
         .withArgs(request.moduleId, request.nodeOpId, request.valPubkey, timestamp);
 
       await expect(tx)

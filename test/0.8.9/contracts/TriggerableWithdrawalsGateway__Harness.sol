@@ -1,11 +1,11 @@
 pragma solidity 0.8.9;
 
-import {TriggerableWithdrawalGateway} from "contracts/0.8.9/TriggerableWithdrawalGateway.sol";
+import {TriggerableWithdrawalsGateway} from "contracts/0.8.9/TriggerableWithdrawalsGateway.sol";
 
-contract TriggerableWithdrawalGateway__Harness is TriggerableWithdrawalGateway {
+contract TriggerableWithdrawalsGateway__Harness is TriggerableWithdrawalsGateway {
     uint256 internal _time = 2513040315;
 
-    constructor(address admin, address lidoLocator) TriggerableWithdrawalGateway(admin, lidoLocator) {}
+    constructor(address admin, address lidoLocator) TriggerableWithdrawalsGateway(admin, lidoLocator) {}
 
     function getTimestamp() external view returns (uint256) {
         return _time;

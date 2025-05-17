@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import {
   Burner,
   StakingRouter,
-  TriggerableWithdrawalGateway,
+  TriggerableWithdrawalsGateway,
   ValidatorsExitBusOracle,
   WithdrawalQueueERC721,
   WithdrawalVault,
@@ -30,7 +30,7 @@ export async function main() {
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
-  const triggerableWithdrawalGatewayAddress = state[Sk.triggerableWithdrawalGateway].address;
+  const triggerableWithdrawalsGatewayAddress = state[Sk.triggerableWithdrawalsGateway].address;
 
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
@@ -67,15 +67,15 @@ export async function main() {
     log.emptyLine();
   }
 
-  // TriggerableWithdrawalGateway
-  const triggerableWithdrawalGateway = await loadContract<TriggerableWithdrawalGateway>(
-    "TriggerableWithdrawalGateway",
-    triggerableWithdrawalGatewayAddress,
+  // TriggerableWithdrawalsGateway
+  const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
+    "TriggerableWithdrawalsGateway",
+    triggerableWithdrawalsGatewayAddress,
   );
   await makeTx(
-    triggerableWithdrawalGateway,
+    triggerableWithdrawalsGateway,
     "grantRole",
-    [await triggerableWithdrawalGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), validatorsExitBusOracleAddress],
+    [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), validatorsExitBusOracleAddress],
     { from: deployer },
   );
 

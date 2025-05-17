@@ -1,6 +1,6 @@
 pragma solidity 0.8.9;
 
-contract TriggerableWithdrawalGateway__MockForVEB {
+contract TriggerableWithdrawalsGateway__MockForVEB {
     event Mock__triggerFullWithdrawalsTriggered(bytes triggerableExitData, address refundRecipient, uint8 exitType);
 
     function triggerFullWithdrawals(

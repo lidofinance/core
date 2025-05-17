@@ -221,11 +221,15 @@ export async function main() {
     ],
   );
 
-  const triggerableWithdrawalGateway = await deployWithoutProxy(
-    Sk.triggerableWithdrawalGateway,
-    "TriggerableWithdrawalGateway",
+  // Deploy Triggerable Withdrawals Gateway
+  const triggerableWithdrawalsGateway = await deployWithoutProxy(
+    Sk.triggerableWithdrawalsGateway,
+    "TriggerableWithdrawalsGateway",
     deployer,
-    [admin, locator.address],
+    [
+      deployer, // address admin
+      locator.address, // address lidoLocator
+    ],
   );
 
   // Update LidoLocator with valid implementation
@@ -245,7 +249,7 @@ export async function main() {
     withdrawalVaultAddress,
     oracleDaemonConfig.address,
     validatorExitDelayVerifier.address,
-    triggerableWithdrawalGateway.address,
+    triggerableWithdrawalsGateway.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }

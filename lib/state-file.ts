@@ -86,9 +86,8 @@ export enum Sk {
   chainSpec = "chainSpec",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
-  triggerableWithdrawals = "triggerableWithdrawals",
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
-  triggerableWithdrawalGateway = "triggerableWithdrawalGateway",
+  triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -111,7 +110,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.withdrawalQueueERC721:
     case Sk.withdrawalVault:
       return state[contractKey].proxy.address;
-    case Sk.triggerableWithdrawals:
     case Sk.apmRegistryFactory:
     case Sk.burner:
     case Sk.callsScript:
@@ -134,6 +132,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.oracleReportSanityChecker:
     case Sk.wstETH:
     case Sk.depositContract:
+    case Sk.validatorExitDelayVerifier:
+    case Sk.triggerableWithdrawalsGateway:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
