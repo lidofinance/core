@@ -4,162 +4,124 @@ pragma solidity 0.8.9;
 
 import {UnstructuredStorage} from "./UnstructuredStorage.sol";
 
-// MSB -----------------------------------> LSB
-// 256___________160_______________ 64______________ 0
-// |_______________|________________|_______________|
-// |   dailyLimit  | dailyExitCount |  currentDay   |
-// |<-- 96 bits -->| <-- 96 bits -->|<-- 64 bits -->|
+// MSB ---------------------------------------------------------------------------------------> LSB
+// 160___________________128_____________________96______________64_____________32_______________ 0
+// |______________________|_______________________|_______________|_______________|_______________|
+// | maxExitRequestsLimit | prevExitRequestsLimit | prevTimestamp | frameDuration | exitsPerFrame |
+// |<------ 32 bits ----->|<------ 32 bits ------>|<-- 32 bits -->|<-- 32 bits -->|<-- 32 bits -->|
 //
 
 struct ExitRequestLimitData {
-    uint96 dailyLimit;
-    uint96 dailyExitCount;
-    uint64 currentDay;
+    uint32 maxExitRequestsLimit; // Maximum limit
+    uint32 prevExitRequestsLimit; // Limit left after previous requests
+    uint32 prevTimestamp; // Timestamp of the last update
+    uint32 frameDuration; // Seconds that should pass to restore part of exits
+    uint32 exitsPerFrame; // Restored exits per frame
 }
 
 library ExitLimitUtilsStorage {
     using UnstructuredStorage for bytes32;
 
-    uint256 internal constant DAILY_LIMIT_OFFSET = 160;
-    uint256 internal constant DAILY_EXIT_COUNT_OFFSET = 64;
-    uint256 internal constant CURRENT_DAY_OFFSET = 0;
+    uint256 internal constant EXITS_PER_FRAME_OFFSET = 0;
+    uint256 internal constant FRAME_DURATION_OFFSET = 32;
+    uint256 internal constant PREV_TIMESTAMP_OFFSET = 64;
+    uint256 internal constant PREV_EXIT_REQUESTS_LIMIT_OFFSET = 96;
+    uint256 internal constant MAX_EXIT_REQUESTS_LIMIT_OFFSET = 128;
 
     function getStorageExitRequestLimit(bytes32 _position) internal view returns (ExitRequestLimitData memory data) {
-        uint256 slotValue = _position.getStorageUint256();
+        uint256 slot = _position.getStorageUint256();
 
-        data.currentDay = uint64(slotValue >> CURRENT_DAY_OFFSET);
-        data.dailyExitCount = uint96(slotValue >> DAILY_EXIT_COUNT_OFFSET);
-        data.dailyLimit = uint96(slotValue >> DAILY_LIMIT_OFFSET);
+        data.exitsPerFrame = uint32(slot >> EXITS_PER_FRAME_OFFSET);
+        data.frameDuration = uint32(slot >> FRAME_DURATION_OFFSET);
+        data.prevTimestamp = uint32(slot >> PREV_TIMESTAMP_OFFSET);
+        data.prevExitRequestsLimit = uint32(slot >> PREV_EXIT_REQUESTS_LIMIT_OFFSET);
+        data.maxExitRequestsLimit = uint32(slot >> MAX_EXIT_REQUESTS_LIMIT_OFFSET);
     }
 
     function setStorageExitRequestLimit(bytes32 _position, ExitRequestLimitData memory _data) internal {
-        _position.setStorageUint256(
-            (uint256(_data.currentDay) << CURRENT_DAY_OFFSET) |
-                (uint256(_data.dailyExitCount) << DAILY_EXIT_COUNT_OFFSET) |
-                (uint256(_data.dailyLimit) << DAILY_LIMIT_OFFSET)
-        );
+        uint256 value = (uint256(_data.exitsPerFrame) << EXITS_PER_FRAME_OFFSET) |
+            (uint256(_data.frameDuration) << FRAME_DURATION_OFFSET) |
+            (uint256(_data.prevTimestamp) << PREV_TIMESTAMP_OFFSET) |
+            (uint256(_data.prevExitRequestsLimit) << PREV_EXIT_REQUESTS_LIMIT_OFFSET) |
+            (uint256(_data.maxExitRequestsLimit) << MAX_EXIT_REQUESTS_LIMIT_OFFSET);
+
+        _position.setStorageUint256(value);
     }
 }
 
-// TODO: description
-// dailyLimit 0 - exits unlimited
 library ExitLimitUtils {
-    /**
-     * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
-     * @param requestsCount Amount of requests that were sent for processing
-     * @param remainingLimit Amount of requests that still can be processed at current day
-     */
-    error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
+    // What should happen with limits if pause is enabled
+    function calculateCurrentExitLimit(
+        ExitRequestLimitData memory _data,
+        uint256 timestamp
+    ) internal pure returns (uint256 currentLimit) {
+        uint256 secondsPassed = timestamp - _data.prevTimestamp;
 
-    /**
-     * Method check limit and return how much can be processed
-     * @param requestsCount Amount of requests for processing
-     * @param currentTimestamp Block timestamp
-     * @return limit Amount of requests that can be processed
-     */
-    function consumeLimit(
-        ExitRequestLimitData memory data,
-        uint256 requestsCount,
-        uint256 currentTimestamp
-    ) internal pure returns (uint256 limit) {
-        uint64 currentDay = uint64(currentTimestamp / 1 days);
-
-        // exits unlimited
-        if (data.dailyLimit == 0) {
-            return requestsCount;
+        if (secondsPassed < _data.frameDuration || _data.exitsPerFrame == 0) {
+            return _data.prevExitRequestsLimit;
         }
 
-        if (data.currentDay != currentDay) {
-            return data.dailyLimit >= requestsCount ? requestsCount : data.dailyLimit;
+        uint256 framesPassed = secondsPassed / _data.frameDuration;
+        uint256 restoredLimit = framesPassed * _data.exitsPerFrame;
+
+        uint256 newLimit = _data.prevExitRequestsLimit + restoredLimit;
+        if (newLimit > _data.maxExitRequestsLimit) {
+            newLimit = _data.maxExitRequestsLimit;
         }
 
-        if (data.dailyExitCount >= data.dailyLimit) {
-            revert ExitRequestsLimit(requestsCount, 0);
-        }
-
-        uint256 remainingLimit = data.dailyLimit - data.dailyExitCount;
-        return remainingLimit >= requestsCount ? requestsCount : remainingLimit;
+        return newLimit;
     }
 
-    /**
-     * Method check limit and revert if requests amount is more than limit
-     * @param requestsCount Amount of requests for processing
-     * @param currentTimestamp Block timestamp
-     */
-    function checkLimit(
-        ExitRequestLimitData memory data,
-        uint256 requestsCount,
-        uint256 currentTimestamp
-    ) internal pure {
-        uint64 currentDay = uint64(currentTimestamp / 1 days);
-
-        // exits unlimited
-        if (data.dailyLimit == 0) return;
-
-        if (data.currentDay != currentDay) return;
-
-        if (data.dailyExitCount >= data.dailyLimit) {
-            revert ExitRequestsLimit(requestsCount, 0);
-        }
-
-        uint256 remainingLimit = data.dailyLimit - data.dailyExitCount;
-
-        if (requestsCount > remainingLimit) {
-            revert ExitRequestsLimit(requestsCount, remainingLimit);
-        }
-    }
-
-    /**
-     * @notice Updates the current request counter and day in the exit limit data
-     * @param data Exit request limit struct
-     * @param newCount New requests amount spent during the day
-     * @param currentTimestamp Block timestamp
-     */
-    function updateRequestsCounter(
-        ExitRequestLimitData memory data,
-        uint256 newCount,
-        uint256 currentTimestamp
+    function updatePrevExitLimit(
+        ExitRequestLimitData memory _data,
+        uint256 newExitRequestLimit,
+        uint256 timestamp
     ) internal pure returns (ExitRequestLimitData memory) {
-        require(newCount <= type(uint96).max, "TOO_LARGE_REQUESTS_COUNT_LIMIT");
+        require(_data.maxExitRequestsLimit >= newExitRequestLimit, "LIMIT_EXCEEDED");
 
-        // TODO: Should we count requests when exits are unlimited?
-        // If a limit is set after a period of unlimited exits, should we account for the requests that already occurred?
-        // if (data.dailyLimit == 0) return;
+        uint256 secondsPassed = timestamp - _data.prevTimestamp;
+        uint256 framesPassed = secondsPassed / _data.frameDuration;
+        uint32 passedTime = uint32(framesPassed) * _data.frameDuration;
 
-        uint64 currentDay = uint64(currentTimestamp / 1 days);
+        _data.prevExitRequestsLimit = uint32(newExitRequestLimit);
+        _data.prevTimestamp += passedTime;
 
-        if (data.currentDay != currentDay) {
-            data.currentDay = currentDay;
-            data.dailyExitCount = 0;
-        }
-
-        uint256 updatedCount = uint256(data.dailyExitCount) + newCount;
-        require(updatedCount <= type(uint96).max, "DAILY_EXIT_COUNT_OVERFLOW");
-        require(data.dailyLimit == 0 || updatedCount <= data.dailyLimit, "REQUESTS_COUNT_EXCEED_LIMIT");
-
-        data.dailyExitCount = uint96(updatedCount);
-
-        return data;
+        return _data;
     }
 
-    /**
-     * @notice Update daily limit
-     * @param data Exit request limit struct
-     * @param limit Exit request limit per day
-     * @param currentTimestamp Block timestamp
-     */
-    function setExitDailyLimit(
-        ExitRequestLimitData memory data,
-        uint256 limit,
-        uint256 currentTimestamp
+    function setExitLimits(
+        ExitRequestLimitData memory _data,
+        uint256 maxExitRequestsLimit,
+        uint256 exitsPerFrame,
+        uint256 frameDuration,
+        uint256 timestamp
     ) internal pure returns (ExitRequestLimitData memory) {
-        require(limit <= type(uint96).max, "TOO_LARGE_DAILY_LIMIT");
+        // TODO: restrictions on parameters?
+        // require(maxExitRequests != 0, "ZERO_MAX_LIMIT");
+        // require(frameDuration != 0, "ZERO_FRAME_DURATION");
+        require(maxExitRequestsLimit <= type(uint32).max, "TOO_LARGE_MAX_EXIT_REQUESTS_LIMIT");
+        require(exitsPerFrame <= type(uint32).max, "TOO_LARGE_EXITS_PER_FRAME");
+        require(frameDuration <= type(uint32).max, "TOO_LARGE_FRAME_DURATION");
 
-        uint64 day = uint64(currentTimestamp / 1 days);
-        require(data.currentDay <= day, "INVALID_TIMESTAMP_BACKWARD");
+        _data.exitsPerFrame = uint32(exitsPerFrame);
+        _data.frameDuration = uint32(frameDuration);
 
-        data.dailyLimit = uint96(limit);
+        if (
+            // new maxExitRequestsLimit is smaller than prev remaining limit
+            maxExitRequestsLimit < _data.prevExitRequestsLimit ||
+            // previously exits were unlimited
+            _data.maxExitRequestsLimit == 0
+        ) {
+            _data.prevExitRequestsLimit = uint32(maxExitRequestsLimit);
+        }
 
-        return data;
+        _data.maxExitRequestsLimit = uint32(maxExitRequestsLimit);
+        _data.prevTimestamp = uint32(timestamp);
+
+        return _data;
+    }
+
+    function isExitLimitSet(ExitRequestLimitData memory _data) internal pure returns (bool) {
+        return _data.maxExitRequestsLimit != 0;
     }
 }

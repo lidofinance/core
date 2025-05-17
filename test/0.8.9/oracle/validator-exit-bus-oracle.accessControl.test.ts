@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { HashConsensus__Harness, ValidatorsExitBus__Harness, WithdrawalVault__MockForVebo } from "typechain-types";
+import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
 
 import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
@@ -22,7 +22,6 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
   let originalState: string;
-  let withdrawalVault: WithdrawalVault__MockForVebo;
 
   let initTx: ContractTransactionResponse;
   let oracleVersion: bigint;
@@ -73,9 +72,8 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
-    withdrawalVault = deployed.withdrawalVault;
 
-    initTx = await initVEBO({ admin: admin.address, oracle, consensus, withdrawalVault, resumeAfterDeploy: true });
+    initTx = await initVEBO({ admin: admin.address, oracle, consensus, resumeAfterDeploy: true });
 
     oracleVersion = await oracle.getContractVersion();
 
@@ -133,7 +131,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
       });
       it("should revert without admin address", async () => {
         await expect(
-          oracle.initialize(ZeroAddress, await consensus.getAddress(), CONSENSUS_VERSION, 0),
+          oracle.initialize(ZeroAddress, await consensus.getAddress(), CONSENSUS_VERSION, 0, 600, 13000, 1, 48),
         ).to.be.revertedWithCustomError(oracle, "AdminCannotBeZero");
       });
     });

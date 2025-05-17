@@ -1,6 +1,6 @@
 pragma solidity 0.8.9;
 
-contract WithdrawalVault__MockForVebo {
+contract WithdrawalVault__MockForTWG {
     event AddFullWithdrawalRequestsCalled(bytes pubkeys);
 
     function addWithdrawalRequests(bytes calldata pubkeys, uint64[] calldata amount) external payable {

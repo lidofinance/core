@@ -69,18 +69,44 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         address admin,
         address consensusContract,
         uint256 consensusVersion,
-        uint256 lastProcessingRefSlot
+        uint256 lastProcessingRefSlot,
+        uint256 maxValidatorsPerBatch,
+        uint256 maxExitRequestsLimit,
+        uint256 exitsPerFrame,
+        uint256 frameDuration
     ) external {
         if (admin == address(0)) revert AdminCannotBeZero();
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
 
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
+
+        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDuration);
     }
 
-    function finalizeUpgrade_v2() external {
-        _updateContractVersion(2);
+    /**
+     * @notice A function to finalize upgrade to v2 (from v1). Can be called only once
+     *
+     * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
+     */
+    function finalizeUpgrade_v2(
+        uint256 maxValidatorsPerBatch,
+        uint256 maxExitRequestsLimit,
+        uint256 exitsPerFrame,
+        uint256 frameDuration
+    ) external {
+        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDuration);
+    }
 
+    function _initialize_v2(
+        uint256 maxValidatorsPerBatch,
+        uint256 maxExitRequestsLimit,
+        uint256 exitsPerFrame,
+        uint256 frameDuration
+    ) internal {
+        _updateContractVersion(2);
+        _setMaxRequestsPerBatch(maxValidatorsPerBatch);
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
     }
 
     ///
@@ -244,10 +270,15 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         // Check VEB common limit
 
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        exitRequestLimitData.checkLimit(data.requestsCount, _getTimestamp());
-        EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            exitRequestLimitData.updateRequestsCounter(data.requestsCount, _getTimestamp())
-        );
+        if (exitRequestLimitData.isExitLimitSet()) {
+           uint256 limit = exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
+           if (limit < data.requestsCount) {
+            revert ExitRequestsLimit(data.requestsCount, limit);
+           }
+           EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
+             exitRequestLimitData.updatePrevExitLimit(limit - data.requestsCount, _getTimestamp())
+           );
+        }
 
         if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
             revert UnexpectedRequestsDataLength();
@@ -271,17 +302,18 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         );
     }
 
-    function _storeOracleExitRequestHash(bytes32 exitRequestHash, uint256 requestsCount, uint256 contractVersion) internal {
+    function _storeOracleExitRequestHash(bytes32 exitRequestsHash, uint256 requestsCount, uint256 contractVersion) internal {
         if (requestsCount == 0) {
             return;
         }
         _storeExitRequestHash(
-            exitRequestHash,
+            exitRequestsHash,
             requestsCount,
             requestsCount,
             contractVersion,
             DeliveryHistory(requestsCount - 1, _getTimestamp())
         );
+        emit RequestsHashSubmitted(exitRequestsHash);
     }
 
     ///

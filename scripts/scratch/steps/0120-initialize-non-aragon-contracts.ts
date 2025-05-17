@@ -99,6 +99,10 @@ export async function main() {
 
   // Initialize ValidatorsExitBusOracle
   const validatorsExitBusOracle = await loadContract("ValidatorsExitBusOracle", ValidatorsExitBusOracleAddress);
+  const maxValidatorsPerBatch = 600;
+  const maxExitRequestsLimit = 13000;
+  const exitsPerFrame = 1;
+  const frameDuration = 48;
   await makeTx(
     validatorsExitBusOracle,
     "initialize",
@@ -107,6 +111,10 @@ export async function main() {
       hashConsensusForValidatorsExitBusOracleAddress,
       validatorsExitBusOracleParams.consensusVersion,
       zeroLastProcessingRefSlot,
+      maxValidatorsPerBatch,
+      maxExitRequestsLimit,
+      exitsPerFrame,
+      frameDuration,
     ],
     { from: deployer },
   );
