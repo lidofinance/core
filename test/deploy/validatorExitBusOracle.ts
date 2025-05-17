@@ -35,7 +35,7 @@ async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, ad
 }
 
 async function deployTWG() {
-  return await ethers.deployContract("TriggerableWithdrawalGateway__MockForVEB");
+  return await ethers.deployContract("TriggerableWithdrawalsGateway__MockForVEB");
 }
 
 export async function deployVEBO(
@@ -62,12 +62,12 @@ export async function deployVEBO(
 
   const { ao, lido } = await deployMockAccountingOracle(secondsPerSlot, genesisTime);
 
-  const triggerableWithdrawalGateway = await deployTWG();
+  const triggerableWithdrawalsGateway = await deployTWG();
 
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
     accountingOracle: await ao.getAddress(),
-    triggerableWithdrawalGateway, //: await lido.getAddress(), // await triggerableWithdrawalGateway.getAddress(),
+    triggerableWithdrawalsGateway, //: await lido.getAddress(), // await TriggerableWithdrawalsGateway.getAddress(),
   });
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(locatorAddr, admin);
@@ -85,7 +85,7 @@ export async function deployVEBO(
     oracle,
     consensus,
     oracleReportSanityChecker,
-    triggerableWithdrawalGateway,
+    triggerableWithdrawalsGateway,
   };
 }
 

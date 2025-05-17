@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   HashConsensus__Harness,
-  TriggerableWithdrawalGateway__MockForVEB,
+  TriggerableWithdrawalsGateway__MockForVEB,
   ValidatorsExitBus__Harness,
 } from "typechain-types";
 
@@ -27,7 +27,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
-  let triggerableWithdrawalGateway: TriggerableWithdrawalGateway__MockForVEB;
+  let triggerableWithdrawalsGateway: TriggerableWithdrawalsGateway__MockForVEB;
 
   let oracleVersion: bigint;
   let exitRequests: ExitRequest[];
@@ -88,9 +88,9 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     const locator = deployed.locator;
     oracle = deployed.oracle;
     consensus = deployed.consensus;
-    triggerableWithdrawalGateway = deployed.triggerableWithdrawalGateway;
+    triggerableWithdrawalsGateway = deployed.triggerableWithdrawalsGateway;
 
-    console.log("twg=", await locator.triggerableWithdrawalGateway());
+    console.log("twg=", await locator.triggerableWithdrawalsGateway());
 
     await initVEBO({
       admin: admin.address,
@@ -178,7 +178,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     const requests = encodeTWGExitDataList(exitRequests);
 
     await expect(tx)
-      .to.emit(triggerableWithdrawalGateway, "Mock__triggerFullWithdrawalsTriggered")
+      .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
       .withArgs(requests, admin.address, 0);
   });
 
@@ -196,7 +196,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     const requests = encodeTWGExitDataList(exitRequests.filter((req, i) => [0, 1, 3].includes(i)));
 
     await expect(tx)
-      .to.emit(triggerableWithdrawalGateway, "Mock__triggerFullWithdrawalsTriggered")
+      .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
       .withArgs(requests, admin.address, 0);
   });
 

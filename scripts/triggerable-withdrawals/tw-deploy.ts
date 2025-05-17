@@ -111,7 +111,16 @@ async function main() {
     deployer,
     validatorExitDelayVerifierArgs,
   );
-  log.success(`ValidatorExitDelayVerifier implementation address: ${NOR.address}`);
+  log.success(`ValidatorExitDelayVerifier implementation address: ${validatorExitDelayVerifier.address}`);
+  log.emptyLine();
+
+  const triggerableWithdrawalsGateway = await deployImplementation(
+    Sk.triggerableWithdrawalsGateway,
+    "triggerableWithdrawalsGateway",
+    deployer,
+    [deployer, locator.address],
+  );
+  log.success(`TriggerableWithdrawalsGateway implementation address: ${triggerableWithdrawalsGateway.address}`);
   log.emptyLine();
 
   // fetch contract addresses that will not changed
@@ -131,6 +140,7 @@ async function main() {
     await locator.withdrawalVault(),
     await locator.oracleDaemonConfig(),
     validatorExitDelayVerifier.address,
+    triggerableWithdrawalsGateway.address,
   ];
 
   const lidoLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
@@ -143,6 +153,7 @@ WITHDRAWAL_VAULT_IMPL = "${withdrawalVault.address}"
 STAKING_ROUTER_IMPL = "${stakingRouterAddress.address}"
 NODE_OPERATORS_REGISTRY_IMPL = "${NOR.address}"
 VALIDATOR_EXIT_VERIFIER = "${validatorExitDelayVerifier.address}"
+TRIGGERABLE_WITHDRAWALS_GATEWAY = "${triggerableWithdrawalsGateway.address}"
 `);
 }
 

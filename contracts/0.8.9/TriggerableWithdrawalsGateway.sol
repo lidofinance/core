@@ -23,11 +23,11 @@ interface IStakingRouter {
 }
 
 /**
- * @title TriggerableWithdrawalGateway
- * @notice TriggerableWithdrawalGateway contract is one entrypoint for all triggerable withdrawal requests (TWRs) in protocol.
+ * @title TriggerableWithdrawalsGateway
+ * @notice TriggerableWithdrawalsGateway contract is one entrypoint for all triggerable withdrawal requests (TWRs) in protocol.
  * This contract is responsible for limiting TWRs, checking ADD_FULL_WITHDRAWAL_REQUEST_ROLE role before it gets to Withdrawal Vault.
  */
-contract TriggerableWithdrawalGateway is AccessControlEnumerable {
+contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;
 
@@ -91,7 +91,7 @@ contract TriggerableWithdrawalGateway is AccessControlEnumerable {
     bytes32 public constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
     bytes32 public constant TW_EXIT_REPORT_LIMIT_ROLE = keccak256("TW_EXIT_REPORT_LIMIT_ROLE");
 
-    bytes32 public constant TWR_LIMIT_POSITION = keccak256("lido.TriggerableWithdrawalGateway.maxExitRequestLimit");
+    bytes32 public constant TWR_LIMIT_POSITION = keccak256("lido.TriggerableWithdrawalsGateway.maxExitRequestLimit");
 
     /// Length in bytes of packed triggerable exit request
     uint256 internal constant PACKED_EXIT_REQUEST_LENGTH = 56;

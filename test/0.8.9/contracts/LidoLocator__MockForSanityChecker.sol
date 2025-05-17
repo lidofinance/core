@@ -22,7 +22,8 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address withdrawalVault;
         address postTokenRebaseReceiver;
         address oracleDaemonConfig;
-        address triggerableWithdrawalGateway;
+        address validatorExitDelayVerifier;
+        address triggerableWithdrawalsGateway;
     }
 
     address public immutable lido;
@@ -39,7 +40,8 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable postTokenRebaseReceiver;
     address public immutable oracleDaemonConfig;
-    address public immutable triggerableWithdrawalGateway;
+    address public immutable validatorExitDelayVerifier;
+    address public immutable triggerableWithdrawalsGateway;
 
     constructor(ContractAddresses memory addresses) {
         lido = addresses.lido;
@@ -56,7 +58,8 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         withdrawalVault = addresses.withdrawalVault;
         postTokenRebaseReceiver = addresses.postTokenRebaseReceiver;
         oracleDaemonConfig = addresses.oracleDaemonConfig;
-        triggerableWithdrawalGateway = addresses.triggerableWithdrawalGateway;
+        validatorExitDelayVerifier = addresses.validatorExitDelayVerifier;
+        triggerableWithdrawalsGateway = addresses.triggerableWithdrawalsGateway;
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {
