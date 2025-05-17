@@ -88,6 +88,7 @@ export enum Sk {
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
   triggerableWithdrawals = "triggerableWithdrawals",
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
+  triggerableWithdrawalGateway = "triggerableWithdrawalGateway".
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
