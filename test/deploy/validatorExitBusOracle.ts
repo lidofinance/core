@@ -97,6 +97,10 @@ interface VEBOConfig {
   consensusVersion?: bigint;
   lastProcessingRefSlot?: number;
   resumeAfterDeploy?: boolean;
+  maxRequestsPerBatch?: number;
+  maxExitRequestsLimit?: number;
+  exitsPerFrame?: number;
+  frameDuration?: number;
 }
 
 export async function initVEBO({
@@ -107,16 +111,20 @@ export async function initVEBO({
   consensusVersion = CONSENSUS_VERSION,
   lastProcessingRefSlot = 0,
   resumeAfterDeploy = false,
+  maxRequestsPerBatch = 600,
+  maxExitRequestsLimit = 13000,
+  exitsPerFrame = 1,
+  frameDuration = 48,
 }: VEBOConfig) {
   const initTx = await oracle.initialize(
     admin,
     await consensus.getAddress(),
     consensusVersion,
     lastProcessingRefSlot,
-    600,
-    13000,
-    1,
-    48,
+    maxRequestsPerBatch,
+    maxExitRequestsLimit,
+    exitsPerFrame,
+    frameDuration,
   );
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);

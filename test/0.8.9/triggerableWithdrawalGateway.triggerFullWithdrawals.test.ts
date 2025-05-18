@@ -66,6 +66,9 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
     triggerableWithdrawalsGateway = await ethers.deployContract("TriggerableWithdrawalsGateway__Harness", [
       admin,
       locatorAddr,
+      100,
+      1,
+      48,
     ]);
   });
 

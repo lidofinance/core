@@ -293,5 +293,26 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
         "RequestsAlreadyDelivered",
       );
     });
+
+    it("Should revert if maxBatchSize exceeded", async () => {
+      const role = await oracle.MAX_VALIDATORS_PER_BATCH_ROLE();
+      await oracle.grantRole(role, authorizedEntity);
+
+      const maxRequestsPerBatch = 4;
+
+      await oracle.connect(authorizedEntity).setMaxRequestsPerBatch(maxRequestsPerBatch);
+
+      exitRequests = [
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
+        { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] },
+      ];
+
+      await expect(oracle.submitExitRequestsData(exitRequest))
+        .to.be.revertedWithCustomError(oracle, "MaxRequestsBatchSizeExceeded")
+        .withArgs(exitRequests.length, maxRequestsPerBatch);
+    });
   });
 });

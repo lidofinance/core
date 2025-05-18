@@ -107,11 +107,18 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         assert(address(this).balance == balanceBeforeCall);
     }
 
-    constructor(address admin, address lidoLocator) {
+    constructor(
+        address admin,
+        address lidoLocator,
+        uint256 maxExitRequestsLimit,
+        uint256 exitsPerFrame,
+        uint256 frameDuration
+    ) {
         if (admin == address(0)) revert AdminCannotBeZero();
         LOCATOR = ILidoLocator(lidoLocator);
 
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
     }
 
     /**
@@ -188,20 +195,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         uint256 exitsPerFrame,
         uint256 frameDuration
     ) external onlyRole(TW_EXIT_REPORT_LIMIT_ROLE) {
-        require(maxExitRequestsLimit >= exitsPerFrame, "TOO_LARGE_TW_EXIT_REQUEST_LIMIT");
-
-        uint256 timestamp = _getTimestamp();
-
-        TWR_LIMIT_POSITION.setStorageExitRequestLimit(
-            TWR_LIMIT_POSITION.getStorageExitRequestLimit().setExitLimits(
-                maxExitRequestsLimit,
-                exitsPerFrame,
-                frameDuration,
-                timestamp
-            )
-        );
-
-        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
     }
 
     /**
@@ -303,5 +297,22 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         }
 
         return twrLimitData.calculateCurrentExitLimit(_getTimestamp());
+    }
+
+    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration) internal {
+        require(maxExitRequestsLimit >= exitsPerFrame, "TOO_LARGE_TW_EXIT_REQUEST_LIMIT");
+
+        uint256 timestamp = _getTimestamp();
+
+        TWR_LIMIT_POSITION.setStorageExitRequestLimit(
+            TWR_LIMIT_POSITION.getStorageExitRequestLimit().setExitLimits(
+                maxExitRequestsLimit,
+                exitsPerFrame,
+                frameDuration,
+                timestamp
+            )
+        );
+
+        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
     }
 }
