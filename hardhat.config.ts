@@ -1,7 +1,8 @@
 import * as process from "node:process";
 
 import "@nomicfoundation/hardhat-chai-matchers";
-import "@nomicfoundation/hardhat-toolbox";
+import "@nomicfoundation/ethereumjs-util";
+import "@nomicfoundation/hardhat-verify";
 import "@typechain/hardhat";
 
 import "dotenv/config";
