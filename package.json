@@ -6,7 +6,7 @@
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "yarn@4.7.0",
+  "packageManager": "yarn@4.9.1",
   "scripts": {
     "compile": "hardhat compile",
     "lint:sol": "solhint 'contracts/**/*.sol'",
@@ -48,8 +48,8 @@
     ]
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.8.0",
-    "@commitlint/config-conventional": "^19.8.0",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
     "@eslint/compat": "^1.2.7",
     "@eslint/js": "^9.22.0",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
@@ -87,7 +87,7 @@
     "hardhat-tracer": "3.1.0",
     "hardhat-watcher": "2.5.0",
     "husky": "^9.1.7",
-    "lint-staged": "^15.5.0",
+    "lint-staged": "^16.0.0",
     "prettier": "^3.5.3",
     "prettier-plugin-solidity": "^1.4.2",
     "solhint": "^5.0.5",
@@ -96,7 +96,7 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typechain": "^8.3.2",
-    "typescript": "^5.8.2",
+    "typescript": "^5.8.3",
     "typescript-eslint": "^8.26.1"
   },
   "dependencies": {
