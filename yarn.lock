@@ -482,18 +482,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@eslint-community/eslint-utils@npm:^4.2.0":
-  version: 4.5.1
-  resolution: "@eslint-community/eslint-utils@npm:4.5.1"
-  dependencies:
-    eslint-visitor-keys: "npm:^3.4.3"
-  peerDependencies:
-    eslint: ^6.0.0 || ^7.0.0 || >=8.0.0
-  checksum: 10c0/b520ae1b7bd04531a5c5da2021071815df4717a9f7d13720e3a5ddccf5c9c619532039830811fcbae1c2f1c9d133e63af2435ee69e0fc0fabbd6d928c6800fb2
-  languageName: node
-  linkType: hard
-
-"@eslint-community/eslint-utils@npm:^4.7.0":
+"@eslint-community/eslint-utils@npm:^4.2.0, @eslint-community/eslint-utils@npm:^4.7.0":
   version: 4.7.0
   resolution: "@eslint-community/eslint-utils@npm:4.7.0"
   dependencies:
@@ -1258,17 +1247,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/hashes@npm:1.7.2, @noble/hashes@npm:~1.7.1":
+"@noble/hashes@npm:1.7.2, @noble/hashes@npm:^1.4.0, @noble/hashes@npm:~1.7.1":
   version: 1.7.2
   resolution: "@noble/hashes@npm:1.7.2"
   checksum: 10c0/b1411eab3c0b6691d847e9394fe7f1fcd45eeb037547c8f97e7d03c5068a499b4aef188e8e717eee67389dca4fee17d69d7e0f58af6c092567b0b76359b114b2
-  languageName: node
-  linkType: hard
-
-"@noble/hashes@npm:^1.4.0":
-  version: 1.7.1
-  resolution: "@noble/hashes@npm:1.7.1"
-  checksum: 10c0/2f8ec0338ccc92b576a0f5c16ab9c017a3a494062f1fbb569ae641c5e7eab32072f9081acaa96b5048c0898f972916c818ea63cbedda707886a4b5ffcfbf94e3
   languageName: node
   linkType: hard
 
@@ -2210,12 +2192,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^20.17.24":
-  version: 20.17.24
-  resolution: "@types/node@npm:20.17.24"
+"@types/node@npm:^20.17.47":
+  version: 20.17.47
+  resolution: "@types/node@npm:20.17.47"
   dependencies:
     undici-types: "npm:~6.19.2"
-  checksum: 10c0/2a39ce4c4cd4588a05b2a485cc0a1407cbea608dd1ab03e36add59d61712718d95c84b492ca5190753f0be2bce748aeeb0f2a1412e712775462befe3820b3ff9
+  checksum: 10c0/df336ed7897177214d1c0f2c7e2f94bbc19da28bffd150ad67dfdb373ca55167479a266c836f99450ab6b6a71799a53583b3f4f159c5424255e9f3851cc9d431
   languageName: node
   linkType: hard
 
@@ -6657,9 +6639,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hardhat-tracer@npm:3.1.0":
-  version: 3.1.0
-  resolution: "hardhat-tracer@npm:3.1.0"
+"hardhat-tracer@npm:3.2.0":
+  version: 3.2.0
+  resolution: "hardhat-tracer@npm:3.2.0"
   dependencies:
     chalk: "npm:^4.1.2"
     debug: "npm:^4.3.4"
@@ -6668,7 +6650,7 @@ __metadata:
   peerDependencies:
     chai: 4.x
     hardhat: ">=2.22.5 <3.x"
-  checksum: 10c0/8d4df8d483ebb36eb438583349e6a515d680eeefa8e7f7498c5a1ea7f376ca7a812fca2c2f23ecc23127e284ea50bfe8b606c5b8f2b2965d10eae11a7ada5271
+  checksum: 10c0/8298d104da850c9e061d5f9625af52fe2488b24d0833e366a719a5acae72ea7937f7d0277671b14f414a898fa1c65712a270c8a2b02a280c43dc3f43bf755ba7
   languageName: node
   linkType: hard
 
@@ -8098,7 +8080,7 @@ __metadata:
     "@types/chai": "npm:^4.3.20"
     "@types/eslint": "npm:^9.6.1"
     "@types/mocha": "npm:^10.0.10"
-    "@types/node": "npm:^20.17.24"
+    "@types/node": "npm:^20.17.47"
     bigint-conversion: "npm:^2.4.3"
     chai: "npm:^4.5.0"
     chalk: "npm:^4.1.2"
@@ -8116,7 +8098,7 @@ __metadata:
     hardhat-contract-sizer: "npm:^2.10.0"
     hardhat-gas-reporter: "npm:^1.0.10"
     hardhat-ignore-warnings: "npm:^0.2.12"
-    hardhat-tracer: "npm:3.1.0"
+    hardhat-tracer: "npm:3.2.0"
     hardhat-watcher: "npm:2.5.0"
     husky: "npm:^9.1.7"
     lint-staged: "npm:^16.0.0"
@@ -10431,16 +10413,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"semver@npm:^7.3.4, semver@npm:^7.3.5, semver@npm:^7.3.7, semver@npm:^7.5.2, semver@npm:^7.6.0, semver@npm:^7.6.2":
-  version: 7.7.1
-  resolution: "semver@npm:7.7.1"
-  bin:
-    semver: bin/semver.js
-  checksum: 10c0/fd603a6fb9c399c6054015433051bdbe7b99a940a8fb44b85c2b524c4004b023d7928d47cb22154f8d054ea7ee8597f586605e05b52047f048278e4ac56ae958
-  languageName: node
-  linkType: hard
-
-"semver@npm:^7.7.1":
+"semver@npm:^7.3.4, semver@npm:^7.3.5, semver@npm:^7.3.7, semver@npm:^7.5.2, semver@npm:^7.6.0, semver@npm:^7.6.2, semver@npm:^7.7.1":
   version: 7.7.2
   resolution: "semver@npm:7.7.2"
   bin:
