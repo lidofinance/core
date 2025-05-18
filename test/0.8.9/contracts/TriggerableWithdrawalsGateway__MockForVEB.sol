@@ -1,13 +1,19 @@
 pragma solidity 0.8.9;
 
 contract TriggerableWithdrawalsGateway__MockForVEB {
-    event Mock__triggerFullWithdrawalsTriggered(bytes triggerableExitData, address refundRecipient, uint8 exitType);
+    event Mock__triggerFullWithdrawalsTriggered(uint256 exitsCount, address refundRecipient, uint8 exitType);
+
+    struct ValidatorData {
+        uint256 stakingModuleId;
+        uint256 nodeOperatorId;
+        bytes pubkey;
+    }
 
     function triggerFullWithdrawals(
-        bytes calldata triggerableExitData,
+        ValidatorData[] calldata triggerableExitData,
         address refundRecipient,
         uint8 exitType
     ) external payable {
-        emit Mock__triggerFullWithdrawalsTriggered(triggerableExitData, refundRecipient, exitType);
+        emit Mock__triggerFullWithdrawalsTriggered(triggerableExitData.length, refundRecipient, exitType);
     }
 }

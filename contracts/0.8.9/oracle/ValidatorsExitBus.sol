@@ -11,8 +11,14 @@ import {PausableUntil} from "../utils/PausableUntil.sol";
 import {IValidatorsExitBus} from "../interfaces/IValidatorsExitBus.sol";
 
 interface ITriggerableWithdrawalsGateway {
+    struct ValidatorData {
+        uint256 stakingModuleId;
+        uint256 nodeOperatorId;
+        bytes pubkey;
+    }
+
     function triggerFullWithdrawals(
-        bytes calldata triggerableExitData,
+        ValidatorData[] calldata triggerableExitData,
         address refundRecipient,
         uint8 exitType
     ) external payable;
@@ -322,7 +328,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         _checkExitRequestData(requestsData.data, requestsData.dataFormat);
         _checkContractVersion(requestStatus.contractVersion);
 
-        bytes memory exits = new bytes(keyIndexes.length * PACKED_TWG_EXIT_REQUEST_LENGTH);
+        ITriggerableWithdrawalsGateway.ValidatorData[]
+            memory triggerableExitData = new ITriggerableWithdrawalsGateway.ValidatorData[](keyIndexes.length);
 
         uint256 lastKeyIndex = type(uint256).max;
 
@@ -343,11 +350,15 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             ValidatorData memory validatorData = _getValidatorData(requestsData.data, keyIndexes[i]);
             if (validatorData.moduleId == 0) revert InvalidRequestsData();
 
-            _copyValidatorData(validatorData, exits, i);
+            triggerableExitData[i] = ITriggerableWithdrawalsGateway.ValidatorData(
+                validatorData.moduleId,
+                validatorData.nodeOpId,
+                validatorData.pubkey
+            );
         }
 
         ITriggerableWithdrawalsGateway(LOCATOR.triggerableWithdrawalsGateway()).triggerFullWithdrawals{value: msg.value}(
-            exits,
+            triggerableExitData,
             refundRecipient,
             exitType
         );
@@ -660,30 +671,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
-        }
-    }
-
-    /// Methods for working with TWG exit data type
-    /// | MSB <------------------------------------------------ LSB
-    /// |       3 bytes     |     5 bytes      |    48 bytes     |
-    /// |  stakingModuleId  |  nodeOperatorId  | validatorPubkey |
-
-    function _copyValidatorData(
-        ValidatorData memory validatorData,
-        bytes memory exitData,
-        uint256 index
-    ) internal pure {
-        uint256 nodeOpId = validatorData.nodeOpId;
-        uint256 moduleId = validatorData.moduleId;
-        bytes memory pubkey = validatorData.pubkey;
-
-        assembly {
-            let exitDataOffset := add(exitData, add(32, mul(56, index)))
-            let id := or(shl(40, moduleId), nodeOpId)
-            mstore(exitDataOffset, shl(192, id))
-            let pubkeyOffset := add(pubkey, 32)
-            mstore(add(exitDataOffset, 8), mload(pubkeyOffset))
-            mstore(add(exitDataOffset, 40), mload(add(pubkeyOffset, 32)))
         }
     }
 

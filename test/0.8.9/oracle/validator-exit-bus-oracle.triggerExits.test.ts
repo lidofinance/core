@@ -73,24 +73,19 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     return "0x" + requests.map(encodeExitRequestHex).join("");
   };
 
-  const encodeTWGExitRequestsData = ({ moduleId, nodeOpId, valPubkey }: ExitRequest) => {
-    const pubkeyHex = de0x(valPubkey);
-    expect(pubkeyHex.length).to.equal(48 * 2);
-    return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + pubkeyHex;
-  };
-
-  const encodeTWGExitDataList = (requests: ExitRequest[]) => {
-    return "0x" + requests.map(encodeTWGExitRequestsData).join("");
+  const createValidatorDataList = (requests: ExitRequest[]) => {
+    return requests.map((request) => ({
+      stakingModuleId: request.moduleId,
+      nodeOperatorId: request.nodeOpId,
+      pubkey: request.valPubkey,
+    }));
   };
 
   const deploy = async () => {
     const deployed = await deployVEBO(admin.address);
-    const locator = deployed.locator;
     oracle = deployed.oracle;
     consensus = deployed.consensus;
     triggerableWithdrawalsGateway = deployed.triggerableWithdrawalsGateway;
-
-    console.log("twg=", await locator.triggerableWithdrawalsGateway());
 
     await initVEBO({
       admin: admin.address,
@@ -175,11 +170,11 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       { value: 4 },
     );
 
-    const requests = encodeTWGExitDataList(exitRequests);
+    const requests = createValidatorDataList(exitRequests);
 
     await expect(tx)
       .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
-      .withArgs(requests, admin.address, 0);
+      .withArgs(requests.length, admin.address, 0);
   });
 
   it("should triggers exits only for validators in selected request indexes", async () => {
@@ -193,11 +188,11 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       },
     );
 
-    const requests = encodeTWGExitDataList(exitRequests.filter((req, i) => [0, 1, 3].includes(i)));
+    const requests = createValidatorDataList(exitRequests.filter((req, i) => [0, 1, 3].includes(i)));
 
     await expect(tx)
       .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
-      .withArgs(requests, admin.address, 0);
+      .withArgs(requests.length, admin.address, 0);
   });
 
   it("should revert with error if the hash of `requestsData` was not previously submitted in the VEB", async () => {

@@ -94,7 +94,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
     bytes32 public constant TWR_LIMIT_POSITION = keccak256("lido.TriggerableWithdrawalsGateway.maxExitRequestLimit");
 
     /// Length in bytes of packed triggerable exit request
-    uint256 internal constant PACKED_EXIT_REQUEST_LENGTH = 56;
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
     uint256 public constant VERSION = 1;
@@ -119,11 +118,11 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      * @dev Submits Triggerable Withdrawal Requests to the Withdrawal Vault as full withdrawal requests
      *      for the specified validator public keys.
      *
-     * @param triggerableExitData A packed byte array containing one or more 56-byte items, each representing:
-     *        MSB <-------------------------------------------------- LSB
-     *        |  3 bytes          |  5 bytes         |    48 bytes     |
-     *        |  stakingModuleId  |  nodeOperatorId  | validatorPubkey |
-     *
+     * @param triggerableExitsData An array of `ValidatorData` structs, each representing a validator
+     * for which a withdrawal request will be submitted. Each entry includes:
+     *   - `stakingModuleId`: ID of the staking module.
+     *   - `nodeOperatorId`: ID of the node operator.
+     *   - `pubkey`: Validator public key, 48 bytes length.
      * @param refundRecipient The address that will receive any excess ETH sent for fees.
      * @param exitType A parameter indicating the type of exit, passed to the Staking Module.
      *
@@ -135,7 +134,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      *     - There is not enough limit quota left in the current frame to process all requests.
      */
     function triggerFullWithdrawals(
-        bytes calldata triggerableExitData,
+        ValidatorData[] calldata triggerableExitsData,
         address refundRecipient,
         uint8 exitType
     ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance {
@@ -146,9 +145,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
             refundRecipient = msg.sender;
         }
 
-        _checkExitRequestData(triggerableExitData);
-
-        uint256 requestsCount = triggerableExitData.length / PACKED_EXIT_REQUEST_LENGTH;
+        uint256 requestsCount = triggerableExitsData.length;
 
         ExitRequestLimitData memory twrLimitData = TWR_LIMIT_POSITION.getStorageExitRequestLimit();
         if (twrLimitData.isExitLimitSet()) {
@@ -170,8 +167,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         bytes memory pubkeys = new bytes(requestsCount * PUBLIC_KEY_LENGTH);
 
         for (uint256 i = 0; i < requestsCount; ++i) {
-            ValidatorData memory data = _parseExitRequestData(triggerableExitData, i);
-
+            ValidatorData memory data = triggerableExitsData[i];
             _copyPubkey(data.pubkey, pubkeys, i);
             _notifyStakingModule(data.stakingModuleId, data.nodeOperatorId, data.pubkey, withdrawalFee, exitType);
 
@@ -237,37 +233,10 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
 
     /// Internal functions
 
-    function _checkExitRequestData(bytes calldata triggerableExitData) internal pure {
-        if (triggerableExitData.length % PACKED_EXIT_REQUEST_LENGTH != 0) {
-            revert InvalidRequestsDataLength();
-        }
-    }
-
     function _checkFee(uint256 requestsCount, uint256 withdrawalFee) internal {
         if (msg.value < requestsCount * withdrawalFee) {
             revert InsufficientWithdrawalFee(requestsCount * withdrawalFee, msg.value);
         }
-    }
-
-    function _parseExitRequestData(
-        bytes calldata request,
-        uint256 requestNumber
-    ) internal pure returns (ValidatorData memory data) {
-        uint256 dataWithoutPubkey;
-        uint256 offset;
-        bytes calldata pubkey;
-
-        assembly {
-            offset := add(request.offset, mul(requestNumber, PACKED_EXIT_REQUEST_LENGTH))
-            dataWithoutPubkey := shr(192, calldataload(offset))
-            pubkey.length := 48
-            // 8 bytes =  3 bytes (module id) + 5 bytes (operator id)
-            pubkey.offset := add(offset, 8)
-        }
-
-        data.nodeOperatorId = uint40(dataWithoutPubkey);
-        data.stakingModuleId = uint24(dataWithoutPubkey >> 40);
-        data.pubkey = pubkey;
     }
 
     function _copyPubkey(bytes memory pubkey, bytes memory pubkeys, uint256 index) internal pure {

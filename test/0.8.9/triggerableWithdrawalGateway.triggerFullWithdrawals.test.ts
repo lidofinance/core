@@ -9,7 +9,7 @@ import {
   WithdrawalVault__MockForTWG,
 } from "typechain-types";
 
-import { de0x, numberToHex } from "lib";
+import { de0x } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator";
 
@@ -41,14 +41,12 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
   let admin: HardhatEthersSigner;
   let authorizedEntity: HardhatEthersSigner;
 
-  const encodeTWGExitRequestsData = ({ moduleId, nodeOpId, valPubkey }: ExitRequest) => {
-    const pubkeyHex = de0x(valPubkey);
-    expect(pubkeyHex.length).to.equal(48 * 2);
-    return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + pubkeyHex;
-  };
-
-  const encodeTWGExitDataList = (requests: ExitRequest[]) => {
-    return "0x" + requests.map(encodeTWGExitRequestsData).join("");
+  const createValidatorDataList = (requests: ExitRequest[]) => {
+    return requests.map((request) => ({
+      stakingModuleId: request.moduleId,
+      nodeOperatorId: request.nodeOpId,
+      pubkey: request.valPubkey,
+    }));
   };
 
   before(async () => {
@@ -72,8 +70,9 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
   });
 
   it("should revert if caller does not have the `ADD_FULL_WITHDRAWAL_REQUEST_ROLE", async () => {
-    const requests = encodeTWGExitDataList(exitRequests);
+    const requests = createValidatorDataList(exitRequests);
     const role = await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE();
+
     await expect(
       triggerableWithdrawalsGateway
         .connect(authorizedEntity)
@@ -85,7 +84,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
     const role = await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE();
     await triggerableWithdrawalsGateway.grantRole(role, authorizedEntity);
 
-    const requests = encodeTWGExitDataList(exitRequests);
+    const requests = createValidatorDataList(exitRequests);
 
     await expect(
       triggerableWithdrawalsGateway
@@ -105,7 +104,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
   });
 
   it("should add withdrawal request", async () => {
-    const requests = encodeTWGExitDataList(exitRequests);
+    const requests = createValidatorDataList(exitRequests);
 
     const tx = await triggerableWithdrawalsGateway
       .connect(authorizedEntity)
@@ -153,7 +152,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
   });
 
   it("should revert if limit doesnt cover requests count", async () => {
-    const requests = encodeTWGExitDataList(exitRequests);
+    const requests = createValidatorDataList(exitRequests);
 
     await expect(
       triggerableWithdrawalsGateway
@@ -165,7 +164,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
   });
 
   it("should revert if limit doesnt cover requests count", async () => {
-    const requests = encodeTWGExitDataList(exitRequests);
+    const requests = createValidatorDataList(exitRequests);
 
     await expect(
       triggerableWithdrawalsGateway
@@ -197,7 +196,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
   });
 
   it("should add withdrawal request ias limit is enough for processing all requests", async () => {
-    const requests = encodeTWGExitDataList(exitRequests);
+    const requests = createValidatorDataList(exitRequests);
 
     const tx = await triggerableWithdrawalsGateway
       .connect(authorizedEntity)
