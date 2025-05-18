@@ -1,26 +1,17 @@
 import { expect } from "chai";
-import { ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   HashConsensus__Harness,
-  StakingRouter__MockForVebo,
+  TriggerableWithdrawalsGateway__MockForVEB,
   ValidatorsExitBus__Harness,
-  WithdrawalVault__MockForVebo,
 } from "typechain-types";
 
 import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
-import {
-  computeTimestampAtSlot,
-  DATA_FORMAT_LIST,
-  deployVEBO,
-  initVEBO,
-  SECONDS_PER_FRAME,
-  SLOTS_PER_FRAME,
-} from "test/deploy";
+import { DATA_FORMAT_LIST, deployVEBO, initVEBO, SECONDS_PER_FRAME } from "test/deploy";
 
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -36,8 +27,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
-  let withdrawalVault: WithdrawalVault__MockForVebo;
-  let stakingRouter: StakingRouter__MockForVebo;
+  let triggerableWithdrawalsGateway: TriggerableWithdrawalsGateway__MockForVEB;
 
   let oracleVersion: bigint;
   let exitRequests: ExitRequest[];
@@ -83,18 +73,24 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     return "0x" + requests.map(encodeExitRequestHex).join("");
   };
 
+  const createValidatorDataList = (requests: ExitRequest[]) => {
+    return requests.map((request) => ({
+      stakingModuleId: request.moduleId,
+      nodeOperatorId: request.nodeOpId,
+      pubkey: request.valPubkey,
+    }));
+  };
+
   const deploy = async () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
-    withdrawalVault = deployed.withdrawalVault;
-    stakingRouter = deployed.stakingRouter;
+    triggerableWithdrawalsGateway = deployed.triggerableWithdrawalsGateway;
 
     await initVEBO({
       admin: admin.address,
       oracle,
       consensus,
-      withdrawalVault,
       resumeAfterDeploy: true,
       lastProcessingRefSlot: LAST_PROCESSING_REF_SLOT,
     });
@@ -123,38 +119,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     await consensus.advanceTimeBy(24 * 60 * 60);
   });
 
-  it("Should set limit for tw", async () => {
-    const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
-    await oracle.grantRole(role, admin);
-    const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(8, 8);
-
-    await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(8, 8);
-  });
-
-  it("initially, consensus report is empty and is not being processed", async () => {
-    const report = await oracle.getConsensusReport();
-    expect(report.hash).to.equal(ZeroHash);
-
-    expect(report.processingDeadlineTime).to.equal(0);
-    expect(report.processingStarted).to.equal(false);
-
-    const frame = await consensus.getCurrentFrame();
-    const procState = await oracle.getProcessingState();
-
-    expect(procState.currentFrameRefSlot).to.equal(frame.refSlot);
-    expect(procState.dataHash).to.equal(ZeroHash);
-    expect(procState.processingDeadlineTime).to.equal(0);
-    expect(procState.dataSubmitted).to.equal(false);
-    expect(procState.dataFormat).to.equal(0);
-    expect(procState.requestsCount).to.equal(0);
-    expect(procState.requestsSubmitted).to.equal(0);
-  });
-
-  it("reference slot of the empty initial consensus report is set to the last processing slot passed to the initialize function", async () => {
-    const report = await oracle.getConsensusReport();
-    expect(report.refSlot).to.equal(LAST_PROCESSING_REF_SLOT);
-  });
-
   it("committee reaches consensus on a report hash", async () => {
     const { refSlot } = await consensus.getCurrentFrame();
 
@@ -178,26 +142,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     await triggerConsensusOnHash(reportHash);
   });
 
-  it("oracle gets the report hash", async () => {
-    const report = await oracle.getConsensusReport();
-    expect(report.hash).to.equal(reportHash);
-    expect(report.refSlot).to.equal(reportFields.refSlot);
-    expect(report.processingDeadlineTime).to.equal(computeTimestampAtSlot(report.refSlot + SLOTS_PER_FRAME));
-
-    expect(report.processingStarted).to.equal(false);
-
-    const frame = await consensus.getCurrentFrame();
-    const procState = await oracle.getProcessingState();
-
-    expect(procState.currentFrameRefSlot).to.equal(frame.refSlot);
-    expect(procState.dataHash).to.equal(reportHash);
-    expect(procState.processingDeadlineTime).to.equal(computeTimestampAtSlot(frame.reportProcessingDeadlineSlot));
-    expect(procState.dataSubmitted).to.equal(false);
-    expect(procState.dataFormat).to.equal(0);
-    expect(procState.requestsCount).to.equal(0);
-    expect(procState.requestsSubmitted).to.equal(0);
-  });
-
   it("some time passes", async () => {
     await consensus.advanceTimeBy(SECONDS_PER_FRAME / 3n);
   });
@@ -217,20 +161,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     }
   });
 
-  it("reports are marked as processed", async () => {
-    const frame = await consensus.getCurrentFrame();
-    const procState = await oracle.getProcessingState();
-
-    expect(procState.currentFrameRefSlot).to.equal(frame.refSlot);
-    expect(procState.dataHash).to.equal(reportHash);
-    expect(procState.processingDeadlineTime).to.equal(computeTimestampAtSlot(frame.reportProcessingDeadlineSlot));
-    expect(procState.dataSubmitted).to.equal(true);
-    expect(procState.dataFormat).to.equal(DATA_FORMAT_LIST);
-    expect(procState.requestsCount).to.equal(exitRequests.length);
-    expect(procState.requestsSubmitted).to.equal(exitRequests.length);
-  });
-
-  it("someone submitted exit report data and triggered exit", async () => {
+  it("should triggers exits for all validators in exit request", async () => {
     const tx = await oracle.triggerExits(
       { data: reportFields.data, dataFormat: reportFields.dataFormat },
       [0, 1, 2, 3],
@@ -239,30 +170,14 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       { value: 4 },
     );
 
-    const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2], PUBKEYS[3]];
-    const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
-    await expect(tx)
-      .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
-      .withArgs("0x" + concatenatedPubKeys);
+    const requests = createValidatorDataList(exitRequests);
 
     await expect(tx)
-      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
-      .withArgs(exitRequests[0].moduleId, exitRequests[0].nodeOpId, pubkeys[0], 1, 0);
-
-    await expect(tx)
-      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
-      .withArgs(exitRequests[1].moduleId, exitRequests[1].nodeOpId, pubkeys[1], 1, 0);
-
-    await expect(tx)
-      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
-      .withArgs(exitRequests[2].moduleId, exitRequests[2].nodeOpId, pubkeys[2], 1, 0);
-
-    await expect(tx)
-      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
-      .withArgs(exitRequests[3].moduleId, exitRequests[3].nodeOpId, pubkeys[3], 1, 0);
+      .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
+      .withArgs(requests.length, admin.address, 0);
   });
 
-  it("someone submitted exit report data and triggered exit on not sequential indexes", async () => {
+  it("should triggers exits only for validators in selected request indexes", async () => {
     const tx = await oracle.triggerExits(
       { data: reportFields.data, dataFormat: reportFields.dataFormat },
       [0, 1, 3],
@@ -273,38 +188,14 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       },
     );
 
-    const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
-    const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
-    await expect(tx)
-      .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
-      .withArgs("0x" + concatenatedPubKeys);
+    const requests = createValidatorDataList(exitRequests.filter((req, i) => [0, 1, 3].includes(i)));
 
     await expect(tx)
-      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
-      .withArgs(exitRequests[0].moduleId, exitRequests[0].nodeOpId, pubkeys[0], 1, 0);
-
-    await expect(tx)
-      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
-      .withArgs(exitRequests[1].moduleId, exitRequests[1].nodeOpId, pubkeys[1], 1, 0);
-
-    await expect(tx)
-      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
-      .withArgs(exitRequests[3].moduleId, exitRequests[3].nodeOpId, pubkeys[2], 1, 0);
-
-    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(admin, 7);
+      .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
+      .withArgs(requests.length, admin.address, 0);
   });
 
-  it("Not enough fee", async () => {
-    await expect(
-      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0, 1], ZERO_ADDRESS, 0, {
-        value: 1,
-      }),
-    )
-      .to.be.revertedWithCustomError(oracle, "InsufficientWithdrawalFee")
-      .withArgs(2, 1);
-  });
-
-  it("Should trigger withdrawals only for validators that were requested for voluntary exit by trusted entities earlier", async () => {
+  it("should revert with error if the hash of `requestsData` was not previously submitted in the VEB", async () => {
     await expect(
       oracle.triggerExits(
         {
@@ -316,10 +207,10 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
         0,
         { value: 2 },
       ),
-    ).to.be.revertedWithCustomError(oracle, "ExitHashWasNotSubmitted");
+    ).to.be.revertedWithCustomError(oracle, "ExitHashNotSubmitted");
   });
 
-  it("Requested index out of range", async () => {
+  it("should revert with error if requested index out of range", async () => {
     await expect(
       oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [5], ZERO_ADDRESS, 0, {
         value: 2,
@@ -329,55 +220,31 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       .withArgs(5, 4);
   });
 
-  it("someone submitted exit report data and triggered exit on not sequential indexes", async () => {
+  it("should revert with an error if the key index array contains duplicates", async () => {
     await expect(
       oracle.triggerExits(
         { data: reportFields.data, dataFormat: reportFields.dataFormat },
-        [0, 1, 3],
+        [1, 2, 2],
         ZERO_ADDRESS,
         0,
         {
-          value: 10,
+          value: 2,
         },
       ),
-    )
-      .to.be.revertedWithCustomError(oracle, "ExitRequestsLimit")
-      .withArgs(3, 1);
+    ).to.be.revertedWithCustomError(oracle, "InvalidKeyIndexSortOrder");
   });
 
-  it("some time passes", async () => {
-    await consensus.advanceTimeBy(24 * 60 * 60);
-  });
-
-  it("Limit regenerated in a day", async () => {
-    const tx = await oracle.triggerExits(
-      { data: reportFields.data, dataFormat: reportFields.dataFormat },
-      [0, 1, 3],
-      ZERO_ADDRESS,
-      0,
-      {
-        value: 10,
-      },
-    );
-
-    const pubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[3]];
-    const concatenatedPubKeys = pubkeys.map((pk) => pk.replace(/^0x/, "")).join("");
-    await expect(tx)
-      .to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled")
-      .withArgs("0x" + concatenatedPubKeys);
-
-    await expect(tx)
-      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
-      .withArgs(exitRequests[0].moduleId, exitRequests[0].nodeOpId, pubkeys[0], 1, 0);
-
-    await expect(tx)
-      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
-      .withArgs(exitRequests[1].moduleId, exitRequests[1].nodeOpId, pubkeys[1], 1, 0);
-
-    await expect(tx)
-      .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
-      .withArgs(exitRequests[3].moduleId, exitRequests[3].nodeOpId, pubkeys[2], 1, 0);
-
-    await expect(tx).to.emit(oracle, "MadeRefund").withArgs(admin, 7);
+  it("should revert with an error if the key index array is not strictly increasing", async () => {
+    await expect(
+      oracle.triggerExits(
+        { data: reportFields.data, dataFormat: reportFields.dataFormat },
+        [1, 2, 2],
+        ZERO_ADDRESS,
+        0,
+        {
+          value: 2,
+        },
+      ),
+    ).to.be.revertedWithCustomError(oracle, "InvalidKeyIndexSortOrder");
   });
 });

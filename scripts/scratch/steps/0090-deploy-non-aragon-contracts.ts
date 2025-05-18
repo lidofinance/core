@@ -221,6 +221,18 @@ export async function main() {
     ],
   );
 
+  // Deploy Triggerable Withdrawals Gateway
+  const maxExitRequestsLimit = 13000;
+  const exitsPerFrame = 1;
+  const frameDuration = 48;
+
+  const triggerableWithdrawalsGateway = await deployWithoutProxy(
+    Sk.triggerableWithdrawalsGateway,
+    "TriggerableWithdrawalsGateway",
+    deployer,
+    [admin, locator.address, maxExitRequestsLimit, exitsPerFrame, frameDuration],
+  );
+
   // Update LidoLocator with valid implementation
   const locatorConfig: string[] = [
     accountingOracle.address,
@@ -238,6 +250,7 @@ export async function main() {
     withdrawalVaultAddress,
     oracleDaemonConfig.address,
     validatorExitDelayVerifier.address,
+    triggerableWithdrawalsGateway.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }

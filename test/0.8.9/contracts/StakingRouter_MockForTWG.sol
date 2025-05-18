@@ -1,6 +1,6 @@
 pragma solidity 0.8.9;
 
-contract StakingRouter__MockForVebo {
+contract StakingRouter__MockForTWG {
     event Mock__onValidatorExitTriggered(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,

@@ -22,41 +22,54 @@ contract ExitLimitUtilsStorage__Harness {
 contract ExitLimitUtils__Harness {
     using ExitLimitUtils for ExitRequestLimitData;
 
-    event CheckLimitDone();
-
     ExitRequestLimitData public state;
 
-    function harness_setState(uint96 dailyLimit, uint96 dailyExitCount, uint64 currentDay) external {
-        state.dailyLimit = dailyLimit;
-        state.dailyExitCount = dailyExitCount;
-        state.currentDay = currentDay;
+    function harness_setState(
+        uint32 maxExitRequestsLimit,
+        uint32 prevExitRequestsLimit,
+        uint32 exitsPerFrame,
+        uint32 frameDuration,
+        uint32 timestamp
+    ) external {
+        state.maxExitRequestsLimit = maxExitRequestsLimit;
+        state.exitsPerFrame = exitsPerFrame;
+        state.frameDuration = frameDuration;
+        state.prevExitRequestsLimit = prevExitRequestsLimit;
+        state.prevTimestamp = timestamp;
     }
 
     function harness_getState() external view returns (ExitRequestLimitData memory) {
-        return ExitRequestLimitData(state.dailyLimit, state.dailyExitCount, state.currentDay);
+        return
+            ExitRequestLimitData(
+                state.maxExitRequestsLimit,
+                state.prevExitRequestsLimit,
+                state.prevTimestamp,
+                state.frameDuration,
+                state.exitsPerFrame
+            );
     }
 
-    function consumeLimit(uint256 requestsCount, uint256 currentTimestamp) external view returns (uint256 limit) {
-        return state.consumeLimit(requestsCount, currentTimestamp);
+    function calculateCurrentExitLimit(uint256 currentTimestamp) external view returns (uint256) {
+        return state.calculateCurrentExitLimit(currentTimestamp);
     }
 
-    function checkLimit(uint256 requestsCount, uint256 currentTimestamp) external {
-        state.checkLimit(requestsCount, currentTimestamp);
-
-        emit CheckLimitDone();
-    }
-
-    function updateRequestsCounter(
-        uint256 newCount,
-        uint256 currentTimestamp
+    function updatePrevExitLimit(
+        uint256 newExitRequestLimit,
+        uint256 timestamp
     ) external view returns (ExitRequestLimitData memory) {
-        return state.updateRequestsCounter(newCount, currentTimestamp);
+        return state.updatePrevExitLimit(newExitRequestLimit, timestamp);
     }
 
-    function setExitDailyLimit(
-        uint256 limit,
-        uint256 currentTimestamp
+    function setExitLimits(
+        uint256 maxExitRequestsLimit,
+        uint256 exitsPerFrame,
+        uint256 frameDuration,
+        uint256 timestamp
     ) external view returns (ExitRequestLimitData memory) {
-        return state.setExitDailyLimit(limit, currentTimestamp);
+        return state.setExitLimits(maxExitRequestsLimit, exitsPerFrame, frameDuration, timestamp);
+    }
+
+    function isExitLimitSet() external view returns (bool) {
+        return state.isExitLimitSet();
     }
 }
