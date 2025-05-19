@@ -3,9 +3,8 @@ import { ethers } from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
 
-import { SSZHelpers, SSZMerkleTree } from "typechain-types";
+import { IStakingVault, SSZHelpers, SSZMerkleTree } from "typechain-types";
 import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
-import { StakingVaultDepositStruct } from "typechain-types/contracts/0.8.25/vaults/StakingVault";
 
 import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "lib";
 
@@ -50,7 +49,7 @@ type GeneratePredepositOptions = {
 export const generatePredeposit = async (
   validator: Validator,
   options = {} as GeneratePredepositOptions,
-): Promise<{ deposit: StakingVaultDepositStruct; depositY: BLS12_381.DepositYStruct }> => {
+): Promise<{ deposit: IStakingVault.DepositStruct; depositY: BLS12_381.DepositYStruct }> => {
   const { overrideAmount = ether("1"), depositDomain } = options;
   const amount = overrideAmount;
   const pubkey = validator.blsPrivateKey.toPublicKey();
@@ -110,7 +109,7 @@ export const generatePredeposit = async (
 export const generatePostDeposit = (
   validator: SSZHelpers.ValidatorStruct,
   amount = ether("31"),
-): StakingVaultDepositStruct => {
+): IStakingVault.DepositStruct => {
   // signature is not checked for post-deposit
   const signature = zeroPadBytes("0x00", 96);
   return {

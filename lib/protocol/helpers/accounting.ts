@@ -194,7 +194,6 @@ export const report = async (
     sharesRequestedToBurn,
     withdrawalFinalizationBatches,
     isBunkerMode,
-    vaultsTotalTreasuryFeesShares,
     vaultsTotalDeficit,
     vaultsDataTreeRoot,
     vaultsDataTreeCid,
@@ -389,10 +388,7 @@ const simulateReport = async (
       elRewardsVaultBalance,
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches: [],
-      vaultsTotalTreasuryFeesShares,
       vaultsTotalDeficit,
-      vaultsDataTreeRoot,
-      vaultsDataTreeCid,
     },
     0n,
   );
@@ -465,10 +461,7 @@ export const handleOracleReport = async (
       elRewardsVaultBalance,
       sharesRequestedToBurn,
       withdrawalFinalizationBatches: [],
-      vaultsTotalTreasuryFeesShares,
       vaultsTotalDeficit,
-      vaultsDataTreeRoot,
-      vaultsDataTreeCid,
     });
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
@@ -777,7 +770,6 @@ export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.sharesRequestedToBurn,
   data.withdrawalFinalizationBatches,
   data.isBunkerMode,
-  data.vaultsTotalTreasuryFeesShares,
   data.vaultsTotalDeficit,
   data.vaultsDataTreeRoot,
   data.vaultsDataTreeCid,
@@ -802,7 +794,6 @@ export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>)
     "uint256", // sharesRequestedToBurn
     "uint256[]", // withdrawalFinalizationBatches
     "bool", // isBunkerMode
-    "uint256", // vaultsTotalTreasuryFeesShares
     "uint256", // vaultsTotalDeficit
     "bytes32", // vaultsDataTreeRoot
     "string", // vaultsDataTreeCid

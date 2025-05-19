@@ -7,30 +7,33 @@ import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
 import {
   Dashboard,
+  IStakingVault,
   Permissions,
   PinnedBeaconProxy,
   PredepositGuarantee,
   StakingVault,
   VaultFactory,
+  VaultHub,
 } from "typechain-types";
 
 import {
   computeDepositDataRoot,
   days,
   de0x,
+  ether,
   findEventsWithInterfaces,
   generatePostDeposit,
   generatePredeposit,
   getCurrentBlockTimestamp,
   impersonate,
+  LoadedContract,
   prepareLocalMerkleTree,
   Validator,
 } from "lib";
 
-import { BLS12_381 } from "../../../typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
-import { StakingVaultDepositStruct } from "../../../typechain-types/contracts/0.8.25/vaults/StakingVault";
-import { ether } from "../../units";
-import { LoadedContract, ProtocolContext } from "../types";
+import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
+
+import { ProtocolContext } from "../types";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
@@ -96,7 +99,7 @@ export async function createVaultWithDashboard(
 ): Promise<VaultWithDashboard> {
   const deployTx = await stakingVaultFactory
     .connect(owner)
-    .createVaultWithDashboard(owner, nodeOperator, nodeOperatorManager, fee, confirmExpiry, roleAssignments, "0x", {
+    .createVaultWithDashboard(owner, nodeOperator, nodeOperatorManager, fee, confirmExpiry, roleAssignments, {
       value: VAULT_CONNECTION_DEPOSIT,
     });
 
@@ -201,7 +204,6 @@ export async function disconnectFromHub(ctx: ProtocolContext, stakingVault: Stak
 export async function lockConnectionDeposit(ctx: ProtocolContext, dashboard: Dashboard, stakingVault: StakingVault) {
   const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("100"));
   await stakingVault.connect(dashboardSigner).fund({ value: ether("1") });
-  await stakingVault.connect(dashboardSigner).lock(ether("1"));
 }
 
 /**
@@ -212,8 +214,14 @@ export async function lockConnectionDeposit(ctx: ProtocolContext, dashboard: Das
  */
 export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: StakingVault, amount: bigint) {
   const { vaultHub } = ctx.contracts;
-  const hubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-  await stakingVault.connect(hubSigner).report(await getCurrentBlockTimestamp(), amount, 0n, 0n);
+  await vaultHub.applyVaultReport(
+    await stakingVault.getAddress(),
+    await getCurrentBlockTimestamp(),
+    amount,
+    0n,
+    0n,
+    0n,
+  );
 }
 
 // address, totalValue, inOutDelta, treasuryFees, liabilityShares
@@ -224,118 +232,115 @@ export function createVaultsReportTree(vaults: VaultReportItem[]) {
 }
 
 export async function reportVaultDataWithProof(
+  vaultHub: VaultHub,
   stakingVault: StakingVault,
   totalValue: bigint | null = null,
   inOutDelta: bigint | null = null,
 ) {
-  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
+  const stakingVaultAddress = await stakingVault.getAddress();
   const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
-  const totalValueArg = totalValue ?? (await stakingVault.totalValue());
-  const inOutDeltaArg = inOutDelta ?? (await stakingVault.inOutDelta());
+
+  const totalValueArg = totalValue ?? (await vaultHub.totalValue(stakingVaultAddress));
+  const inOutDeltaArg = inOutDelta ?? (await vaultHub.vaultRecord(stakingVaultAddress)).inOutDelta;
   const vaultReport: VaultReportItem = [await stakingVault.getAddress(), totalValueArg, inOutDeltaArg, 0n, 0n];
   const reportTree = createVaultsReportTree([vaultReport]);
 
-  const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-  await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
-  await vaultHub.updateVaultData(
-    await stakingVault.getAddress(),
-    totalValueArg,
-    inOutDeltaArg,
-    0n,
-    0n,
-    reportTree.getProof(0),
-  );
+  const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100"));
+  const lazyOracle = await ethers.getContractAt("LazyOracle", await locator.lazyOracle());
+  await lazyOracle
+    .connect(accountingOracleSigner)
+    .updateReportData(await getCurrentBlockTimestamp(), reportTree.root, await stakingVault.getAddress());
+
+  // permissionless
+  await lazyOracle.updateVaultData(stakingVaultAddress, totalValueArg, inOutDeltaArg, 0n, 0n, reportTree.getProof(0));
 }
 
-export async function reportVaultWithoutProof(stakingVault: StakingVault) {
+export async function reportVaultWithoutProof(vaultHub: VaultHub, stakingVault: StakingVault) {
+  const stakingVaultAddress = await stakingVault.getAddress();
   const reportTimestamp = await getCurrentBlockTimestamp();
-  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
   const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
-  const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-  const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-  await vaultHub.connect(accountingSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
-  await stakingVault
-    .connect(vaultHubSigner)
-    .report(
-      reportTimestamp,
-      await stakingVault.totalValue(),
-      await stakingVault.inOutDelta(),
-      await stakingVault.locked(),
-    );
+
+  const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100"));
+  const lazyOracle = await ethers.getContractAt("LazyOracle", await locator.lazyOracle());
+  await lazyOracle.connect(accountingOracleSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
+
+  const totalValue = await vaultHub.totalValue(stakingVaultAddress);
+  const inOutDelta = (await vaultHub.vaultRecord(stakingVaultAddress)).inOutDelta;
+  await lazyOracle.updateVaultData(stakingVaultAddress, totalValue, inOutDelta, 0n, 0n, []);
 }
 
-export async function reportVaultWithMockedVaultHub(stakingVault: StakingVault) {
-  const reportTimestamp = await getCurrentBlockTimestamp();
-  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
-  const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-  await vaultHub.updateReportData(reportTimestamp, ethers.ZeroHash, "");
-  await stakingVault
-    .connect(vaultHubSigner)
-    .report(
-      reportTimestamp,
-      await stakingVault.totalValue(),
-      await stakingVault.inOutDelta(),
-      await stakingVault.locked(),
-    );
-}
+// export async function reportVaultWithMockedVaultHub(stakingVault: StakingVault) {
+//   const reportTimestamp = await getCurrentBlockTimestamp();
+//   const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
+//   const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+//   await vaultHub.updateReportData(reportTimestamp, ethers.ZeroHash, "");
+//   await stakingVault
+//     .connect(vaultHubSigner)
+//     .report(
+//       reportTimestamp,
+//       await stakingVault.totalValue(),
+//       await stakingVault.inOutDelta(),
+//       await stakingVault.locked(),
+//     );
+// }
 
-interface CreateVaultResponse {
-  tx: ContractTransactionResponse;
-  proxy: PinnedBeaconProxy;
-  vault: StakingVault;
-  dashboard: Dashboard;
-}
+// interface CreateVaultResponse {
+//   tx: ContractTransactionResponse;
+//   proxy: PinnedBeaconProxy;
+//   vault: StakingVault;
+//   dashboard: Dashboard;
+// }
 
-export async function createVaultProxy(
-  caller: HardhatEthersSigner,
-  vaultFactory: VaultFactory,
-  vaultOwner: HardhatEthersSigner,
-  nodeOperator: HardhatEthersSigner,
-  nodeOperatorManager: HardhatEthersSigner,
-  nodeOperatorFeeBP: bigint,
-  confirmExpiry: bigint,
-  roleAssignments: Permissions.RoleAssignmentStruct[],
-  stakingVaultInitializerExtraParams: BytesLike = "0x",
-): Promise<CreateVaultResponse> {
-  const tx = await vaultFactory
-    .connect(caller)
-    .createVaultWithDashboard(
-      vaultOwner,
-      nodeOperator,
-      nodeOperatorManager,
-      nodeOperatorFeeBP,
-      confirmExpiry,
-      roleAssignments,
-      stakingVaultInitializerExtraParams,
-      { value: VAULT_CONNECTION_DEPOSIT },
-    );
+// export async function createVaultProxy(
+//   caller: HardhatEthersSigner,
+//   vaultFactory: VaultFactory,
+//   vaultOwner: HardhatEthersSigner,
+//   nodeOperator: HardhatEthersSigner,
+//   nodeOperatorManager: HardhatEthersSigner,
+//   nodeOperatorFeeBP: bigint,
+//   confirmExpiry: bigint,
+//   roleAssignments: Permissions.RoleAssignmentStruct[],
+//   stakingVaultInitializerExtraParams: BytesLike = "0x",
+// ): Promise<CreateVaultResponse> {
+//   const tx = await vaultFactory
+//     .connect(caller)
+//     .createVaultWithDashboard(
+//       vaultOwner,
+//       nodeOperator,
+//       nodeOperatorManager,
+//       nodeOperatorFeeBP,
+//       confirmExpiry,
+//       roleAssignments,
+//       stakingVaultInitializerExtraParams,
+//       { value: VAULT_CONNECTION_DEPOSIT },
+//     );
 
-  // Get the receipt manually
-  const receipt = (await tx.wait())!;
-  const events = findEventsWithInterfaces(receipt, "VaultCreated", [vaultFactory.interface]);
+//   // Get the receipt manually
+//   const receipt = (await tx.wait())!;
+//   const events = findEventsWithInterfaces(receipt, "VaultCreated", [vaultFactory.interface]);
 
-  if (events.length === 0) throw new Error("Vault creation event not found");
+//   if (events.length === 0) throw new Error("Vault creation event not found");
 
-  const event = events[0];
-  const { vault } = event.args;
+//   const event = events[0];
+//   const { vault } = event.args;
 
-  const dashboardEvents = findEventsWithInterfaces(receipt, "DashboardCreated", [vaultFactory.interface]);
+//   const dashboardEvents = findEventsWithInterfaces(receipt, "DashboardCreated", [vaultFactory.interface]);
 
-  if (dashboardEvents.length === 0) throw new Error("Dashboard creation event not found");
+//   if (dashboardEvents.length === 0) throw new Error("Dashboard creation event not found");
 
-  const { dashboard: dashboardAddress } = dashboardEvents[0].args;
+//   const { dashboard: dashboardAddress } = dashboardEvents[0].args;
 
-  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
-  const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
-  const dashboard = (await ethers.getContractAt("Dashboard", dashboardAddress, caller)) as Dashboard;
+//   const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
+//   const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
+//   const dashboard = (await ethers.getContractAt("Dashboard", dashboardAddress, caller)) as Dashboard;
 
-  return {
-    tx,
-    proxy,
-    vault: stakingVault,
-    dashboard,
-  };
-}
+//   return {
+//     tx,
+//     proxy,
+//     vault: stakingVault,
+//     dashboard,
+//   };
+// }
 
 export const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
   const pubkeys = Array.from({ length: num }, (_, i) => {
@@ -356,7 +361,7 @@ export const generatePredepositData = async (
   nodeOperator: HardhatEthersSigner,
   validator: Validator,
 ): Promise<{
-  deposit: StakingVaultDepositStruct;
+  deposit: IStakingVault.DepositStruct;
   depositY: BLS12_381.DepositYStruct;
 }> => {
   // Pre-requisite: fund the vault to have enough balance to start a validator
