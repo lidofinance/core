@@ -51,7 +51,6 @@ export type VaultRoles = {
   validatorExitRequester: HardhatEthersSigner;
   validatorWithdrawalTriggerer: HardhatEthersSigner;
   disconnecter: HardhatEthersSigner;
-  ossifier: HardhatEthersSigner;
   tierChanger: HardhatEthersSigner;
   nodeOperatorRewardAdjuster: HardhatEthersSigner;
 };
@@ -148,13 +147,12 @@ export async function createVaultWithDashboard(
     depositResumer: signers[7],
     pdgCompensator: signers[8],
     unguaranteedBeaconChainDepositor: signers[9],
-    unknownValidatorProver: signers[11],
-    validatorExitRequester: signers[12],
-    validatorWithdrawalTriggerer: signers[13],
-    disconnecter: signers[14],
-    ossifier: signers[15],
-    tierChanger: signers[16],
-    nodeOperatorRewardAdjuster: signers[17],
+    unknownValidatorProver: signers[10],
+    validatorExitRequester: signers[11],
+    validatorWithdrawalTriggerer: signers[12],
+    disconnecter: signers[13],
+    tierChanger: signers[14],
+    nodeOperatorRewardAdjuster: signers[15],
   };
 
   for (let i = 0; i < roleIds.length; i++) {
@@ -181,14 +179,6 @@ export async function setupLido(ctx: ProtocolContext) {
   const votingSigner = await ctx.getSigner("voting");
 
   await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
-}
-
-export async function disconnectFromHub(ctx: ProtocolContext, stakingVault: StakingVault) {
-  const agentSigner = await ctx.getSigner("agent");
-
-  const { vaultHub } = ctx.contracts;
-
-  await vaultHub.connect(agentSigner).disconnect(stakingVault);
 }
 
 // address, totalValue, inOutDelta, treasuryFees, liabilityShares
@@ -344,6 +334,7 @@ export const getProofAndDepositData = async (
   predepositGuarantee: LoadedContract<PredepositGuarantee>,
   validator: Validator,
   withdrawalCredentials: string,
+  amount: bigint = ether("31"),
 ) => {
   // Step 3: Prove and deposit the validator
   const pivot_slot = await predepositGuarantee.PIVOT_SLOT();
@@ -355,11 +346,11 @@ export const getProofAndDepositData = async (
   );
   const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
 
-  const postdeposit = generatePostDeposit(validator.container);
+  const postdeposit = generatePostDeposit(validator.container, amount);
   const pubkey = hexlify(validator.container.pubkey);
   const signature = hexlify(postdeposit.signature);
 
-  postdeposit.depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, ether("31"));
+  postdeposit.depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
 
   const witnesses = [
     {
