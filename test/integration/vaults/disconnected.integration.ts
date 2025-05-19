@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
-import { certainAddress, ether, generatePostDeposit, generatePredeposit, generateValidator, impersonate } from "lib";
+import { certainAddress, ether, generatePostDeposit, generatePredeposit, generateValidator } from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
