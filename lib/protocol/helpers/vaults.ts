@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { BytesLike, ContractTransactionReceipt, ContractTransactionResponse, hexlify } from "ethers";
+import { ContractTransactionReceipt, ContractTransactionResponse, hexlify } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -13,27 +13,24 @@ import {
   PredepositGuarantee,
   StakingVault,
   VaultFactory,
-  VaultHub,
 } from "typechain-types";
+import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
 import {
   computeDepositDataRoot,
   days,
   de0x,
-  ether,
   findEventsWithInterfaces,
   generatePostDeposit,
   generatePredeposit,
   getCurrentBlockTimestamp,
   impersonate,
-  LoadedContract,
   prepareLocalMerkleTree,
   Validator,
 } from "lib";
 
-import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
-
-import { ProtocolContext } from "../types";
+import { ether } from "../../units";
+import { LoadedContract, ProtocolContext } from "../types";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
@@ -43,7 +40,6 @@ export type VaultRoles = {
   assetRecoverer: HardhatEthersSigner;
   funder: HardhatEthersSigner;
   withdrawer: HardhatEthersSigner;
-  locker: HardhatEthersSigner;
   minter: HardhatEthersSigner;
   burner: HardhatEthersSigner;
   rebalancer: HardhatEthersSigner;
@@ -55,13 +51,8 @@ export type VaultRoles = {
   validatorExitRequester: HardhatEthersSigner;
   validatorWithdrawalTriggerer: HardhatEthersSigner;
   disconnecter: HardhatEthersSigner;
-  lidoVaultHubAuthorizer: HardhatEthersSigner;
-  lidoVaultHubDeauthorizer: HardhatEthersSigner;
   ossifier: HardhatEthersSigner;
-  depositorSetter: HardhatEthersSigner;
-  lockedResetter: HardhatEthersSigner;
   tierChanger: HardhatEthersSigner;
-  nodeOperatorFeeClaimer: HardhatEthersSigner;
   nodeOperatorRewardAdjuster: HardhatEthersSigner;
 };
 
@@ -112,8 +103,18 @@ export async function createVaultWithDashboard(
   const vaultAddress = createVaultEvents[0].args!.vault;
   const ownerAddress = createVaultEvents[0].args!.owner;
 
+  const createDashboardEvents = ctx.getEvents(createVaultTxReceipt, "DashboardCreated");
+  expect(createDashboardEvents.length).to.equal(1n, "Expected exactly one DashboardCreated event");
+  expect(createDashboardEvents[0].args).to.not.be.undefined, "DashboardCreated event args should be defined";
+
+  const dashboardAddress = createDashboardEvents[0].args!.dashboard;
+  expect(ownerAddress).to.equal(dashboardAddress);
+
+  const adminAddress = createDashboardEvents[0].args!.admin;
+  expect(adminAddress).to.equal(owner.address);
+
   const stakingVault = await ethers.getContractAt("StakingVault", vaultAddress);
-  const dashboard = await ethers.getContractAt("Dashboard", ownerAddress);
+  const dashboard = await ethers.getContractAt("Dashboard", dashboardAddress);
 
   const roleIds = await Promise.all([
     dashboard.RECOVER_ASSETS_ROLE(),
@@ -139,26 +140,20 @@ export async function createVaultWithDashboard(
     assetRecoverer: signers[0],
     funder: signers[1],
     withdrawer: signers[2],
-    locker: signers[3],
-    minter: signers[4],
-    burner: signers[5],
-    rebalancer: signers[6],
-    depositPauser: signers[7],
-    depositResumer: signers[8],
-    pdgCompensator: signers[9],
-    unguaranteedBeaconChainDepositor: signers[10],
+    minter: signers[3],
+    burner: signers[4],
+    rebalancer: signers[5],
+    depositPauser: signers[6],
+    depositResumer: signers[7],
+    pdgCompensator: signers[8],
+    unguaranteedBeaconChainDepositor: signers[9],
     unknownValidatorProver: signers[11],
     validatorExitRequester: signers[12],
     validatorWithdrawalTriggerer: signers[13],
     disconnecter: signers[14],
-    lidoVaultHubAuthorizer: signers[15],
-    lidoVaultHubDeauthorizer: signers[16],
-    ossifier: signers[17],
-    depositorSetter: signers[18],
-    lockedResetter: signers[19],
-    tierChanger: signers[20],
-    nodeOperatorFeeClaimer: signers[21],
-    nodeOperatorRewardAdjuster: signers[22],
+    ossifier: signers[15],
+    tierChanger: signers[16],
+    nodeOperatorRewardAdjuster: signers[17],
   };
 
   for (let i = 0; i < roleIds.length; i++) {
@@ -195,35 +190,6 @@ export async function disconnectFromHub(ctx: ProtocolContext, stakingVault: Stak
   await vaultHub.connect(agentSigner).disconnect(stakingVault);
 }
 
-/**
- * Locks the connection deposit
- * @param ctx Protocol context for contract interaction
- * @param dashboard Dashboard contract instance
- * @param stakingVault Staking vault instance
- */
-export async function lockConnectionDeposit(ctx: ProtocolContext, dashboard: Dashboard, stakingVault: StakingVault) {
-  const dashboardSigner = await impersonate(await dashboard.getAddress(), ether("100"));
-  await stakingVault.connect(dashboardSigner).fund({ value: ether("1") });
-}
-
-/**
- * Generates fees to claim for the vault
- * @param ctx Protocol context for contract interaction
- * @param stakingVault Staking vault instance
- * @param amount Amount of fees to claim
- */
-export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: StakingVault, amount: bigint) {
-  const { vaultHub } = ctx.contracts;
-  await vaultHub.applyVaultReport(
-    await stakingVault.getAddress(),
-    await getCurrentBlockTimestamp(),
-    amount,
-    0n,
-    0n,
-    0n,
-  );
-}
-
 // address, totalValue, inOutDelta, treasuryFees, liabilityShares
 export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
 
@@ -232,115 +198,112 @@ export function createVaultsReportTree(vaults: VaultReportItem[]) {
 }
 
 export async function reportVaultDataWithProof(
-  vaultHub: VaultHub,
+  ctx: ProtocolContext,
   stakingVault: StakingVault,
-  totalValue: bigint | null = null,
-  inOutDelta: bigint | null = null,
+  totalValue?: bigint,
+  inOutDelta?: bigint,
+  liabilityShares?: bigint,
 ) {
-  const stakingVaultAddress = await stakingVault.getAddress();
-  const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
+  const { vaultHub, locator, lazyOracle } = ctx.contracts;
 
-  const totalValueArg = totalValue ?? (await vaultHub.totalValue(stakingVaultAddress));
-  const inOutDeltaArg = inOutDelta ?? (await vaultHub.vaultRecord(stakingVaultAddress)).inOutDelta;
-  const vaultReport: VaultReportItem = [await stakingVault.getAddress(), totalValueArg, inOutDeltaArg, 0n, 0n];
+  const totalValueArg = totalValue ?? (await vaultHub.totalValue(stakingVault));
+  const inOutDeltaArg = inOutDelta ?? (await vaultHub.vaultRecord(stakingVault)).inOutDelta;
+  const liabilitySharesArg = liabilityShares ?? (await vaultHub.liabilityShares(stakingVault));
+
+  const vaultReport: VaultReportItem = [
+    await stakingVault.getAddress(),
+    totalValueArg,
+    inOutDeltaArg,
+    0n,
+    liabilitySharesArg,
+  ];
   const reportTree = createVaultsReportTree([vaultReport]);
 
-  const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100"));
-  const lazyOracle = await ethers.getContractAt("LazyOracle", await locator.lazyOracle());
-  await lazyOracle
-    .connect(accountingOracleSigner)
-    .updateReportData(await getCurrentBlockTimestamp(), reportTree.root, await stakingVault.getAddress());
+  const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
+  await lazyOracle.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
 
-  // permissionless
-  await lazyOracle.updateVaultData(stakingVaultAddress, totalValueArg, inOutDeltaArg, 0n, 0n, reportTree.getProof(0));
+  return await lazyOracle.updateVaultData(
+    await stakingVault.getAddress(),
+    totalValueArg,
+    inOutDeltaArg,
+    0n,
+    liabilitySharesArg,
+    reportTree.getProof(0),
+  );
 }
 
-export async function reportVaultWithoutProof(vaultHub: VaultHub, stakingVault: StakingVault) {
-  const stakingVaultAddress = await stakingVault.getAddress();
+export async function reportVaultWithoutProof(stakingVault: StakingVault) {
   const reportTimestamp = await getCurrentBlockTimestamp();
+  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
   const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
-
-  const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100"));
-  const lazyOracle = await ethers.getContractAt("LazyOracle", await locator.lazyOracle());
-  await lazyOracle.connect(accountingOracleSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
-
-  const totalValue = await vaultHub.totalValue(stakingVaultAddress);
-  const inOutDelta = (await vaultHub.vaultRecord(stakingVaultAddress)).inOutDelta;
-  await lazyOracle.updateVaultData(stakingVaultAddress, totalValue, inOutDelta, 0n, 0n, []);
+  const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+  const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+  await vaultHub.connect(accountingSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
+  await stakingVault
+    .connect(vaultHubSigner)
+    .report(
+      reportTimestamp,
+      await stakingVault.totalValue(),
+      await stakingVault.inOutDelta(),
+      await stakingVault.locked(),
+    );
 }
 
-// export async function reportVaultWithMockedVaultHub(stakingVault: StakingVault) {
-//   const reportTimestamp = await getCurrentBlockTimestamp();
-//   const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
-//   const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-//   await vaultHub.updateReportData(reportTimestamp, ethers.ZeroHash, "");
-//   await stakingVault
-//     .connect(vaultHubSigner)
-//     .report(
-//       reportTimestamp,
-//       await stakingVault.totalValue(),
-//       await stakingVault.inOutDelta(),
-//       await stakingVault.locked(),
-//     );
-// }
+interface CreateVaultResponse {
+  tx: ContractTransactionResponse;
+  proxy: PinnedBeaconProxy;
+  vault: StakingVault;
+  dashboard: Dashboard;
+}
 
-// interface CreateVaultResponse {
-//   tx: ContractTransactionResponse;
-//   proxy: PinnedBeaconProxy;
-//   vault: StakingVault;
-//   dashboard: Dashboard;
-// }
+export async function createVaultProxy(
+  caller: HardhatEthersSigner,
+  vaultFactory: VaultFactory,
+  vaultOwner: HardhatEthersSigner,
+  nodeOperator: HardhatEthersSigner,
+  nodeOperatorManager: HardhatEthersSigner,
+  nodeOperatorFeeBP: bigint,
+  confirmExpiry: bigint,
+  roleAssignments: Permissions.RoleAssignmentStruct[],
+): Promise<CreateVaultResponse> {
+  const tx = await vaultFactory
+    .connect(caller)
+    .createVaultWithDashboard(
+      vaultOwner,
+      nodeOperator,
+      nodeOperatorManager,
+      nodeOperatorFeeBP,
+      confirmExpiry,
+      roleAssignments,
+      { value: VAULT_CONNECTION_DEPOSIT },
+    );
 
-// export async function createVaultProxy(
-//   caller: HardhatEthersSigner,
-//   vaultFactory: VaultFactory,
-//   vaultOwner: HardhatEthersSigner,
-//   nodeOperator: HardhatEthersSigner,
-//   nodeOperatorManager: HardhatEthersSigner,
-//   nodeOperatorFeeBP: bigint,
-//   confirmExpiry: bigint,
-//   roleAssignments: Permissions.RoleAssignmentStruct[],
-//   stakingVaultInitializerExtraParams: BytesLike = "0x",
-// ): Promise<CreateVaultResponse> {
-//   const tx = await vaultFactory
-//     .connect(caller)
-//     .createVaultWithDashboard(
-//       vaultOwner,
-//       nodeOperator,
-//       nodeOperatorManager,
-//       nodeOperatorFeeBP,
-//       confirmExpiry,
-//       roleAssignments,
-//       stakingVaultInitializerExtraParams,
-//       { value: VAULT_CONNECTION_DEPOSIT },
-//     );
+  // Get the receipt manually
+  const receipt = (await tx.wait())!;
+  const events = findEventsWithInterfaces(receipt, "VaultCreated", [vaultFactory.interface]);
 
-//   // Get the receipt manually
-//   const receipt = (await tx.wait())!;
-//   const events = findEventsWithInterfaces(receipt, "VaultCreated", [vaultFactory.interface]);
+  if (events.length === 0) throw new Error("Vault creation event not found");
 
-//   if (events.length === 0) throw new Error("Vault creation event not found");
+  const event = events[0];
+  const { vault } = event.args;
 
-//   const event = events[0];
-//   const { vault } = event.args;
+  const dashboardEvents = findEventsWithInterfaces(receipt, "DashboardCreated", [vaultFactory.interface]);
 
-//   const dashboardEvents = findEventsWithInterfaces(receipt, "DashboardCreated", [vaultFactory.interface]);
+  if (dashboardEvents.length === 0) throw new Error("Dashboard creation event not found");
 
-//   if (dashboardEvents.length === 0) throw new Error("Dashboard creation event not found");
+  const { dashboard: dashboardAddress } = dashboardEvents[0].args;
 
-//   const { dashboard: dashboardAddress } = dashboardEvents[0].args;
+  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
+  const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
+  const dashboard = (await ethers.getContractAt("Dashboard", dashboardAddress, caller)) as Dashboard;
 
-//   const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
-//   const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
-//   const dashboard = (await ethers.getContractAt("Dashboard", dashboardAddress, caller)) as Dashboard;
-
-//   return {
-//     tx,
-//     proxy,
-//     vault: stakingVault,
-//     dashboard,
-//   };
-// }
+  return {
+    tx,
+    proxy,
+    vault: stakingVault,
+    dashboard,
+  };
+}
 
 export const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
   const pubkeys = Array.from({ length: num }, (_, i) => {
@@ -379,11 +342,10 @@ export const generatePredepositData = async (
 };
 
 export const getProofAndDepositData = async (
-  ctx: ProtocolContext,
+  predepositGuarantee: LoadedContract<PredepositGuarantee>,
   validator: Validator,
   withdrawalCredentials: string,
 ) => {
-  const { predepositGuarantee } = ctx.contracts;
   // Step 3: Prove and deposit the validator
   const pivot_slot = await predepositGuarantee.PIVOT_SLOT();
 

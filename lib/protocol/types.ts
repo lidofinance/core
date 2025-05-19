@@ -94,6 +94,7 @@ export interface ContractTypes {
   OperatorGrid: OperatorGrid;
   LazyOracle: LazyOracle;
   ICSModule: ICSModule;
+  LazyOracle: LazyOracle;
 }
 
 export type ContractName = keyof ContractTypes;

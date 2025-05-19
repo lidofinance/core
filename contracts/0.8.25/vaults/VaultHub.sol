@@ -592,7 +592,7 @@ contract VaultHub is PausableUntilWithRoles {
         _operatorGrid().onMintedShares(_vault, _amountOfShares);
         LIDO.mintExternalShares(_recipient, _amountOfShares);
 
-        emit MintedSharesOnVault(_vault, _amountOfShares);
+        emit MintedSharesOnVault(_vault, _amountOfShares, record.locked);
     }
 
     /// @notice burn steth shares from the balance of the VaultHub contract
@@ -1123,7 +1123,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 reportLiabilityShares
     );
 
-    event MintedSharesOnVault(address indexed vault, uint256 amountOfShares);
+    event MintedSharesOnVault(address indexed vault, uint256 amountOfShares, uint256 lockedAmount);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
     event ValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient, bool isForceExit);
