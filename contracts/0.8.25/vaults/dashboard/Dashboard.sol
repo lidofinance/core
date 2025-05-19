@@ -11,7 +11,7 @@ import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 
-import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
+import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";
 import {VaultHub} from "../VaultHub.sol";
@@ -53,11 +53,14 @@ contract Dashboard is NodeOperatorFee {
      * @param _stETH Address of the stETH token contract.
      * @param _wstETH Address of the wstETH token contract.
      * @param _vaultHub Address of the vault hub contract.
+     * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _stETH, address _wstETH, address _vaultHub) NodeOperatorFee(_vaultHub) {
+    constructor(address _stETH, address _wstETH, address _vaultHub, address _lidoLocator)
+        NodeOperatorFee(_vaultHub, _lidoLocator) {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
+        // stETH and wstETH are cached as immutable to save gas for main operations
         STETH = IStETH(_stETH);
         WSTETH = IWstETH(_wstETH);
     }
@@ -209,7 +212,7 @@ contract Dashboard is NodeOperatorFee {
     function voluntaryDisconnect() external {
         uint256 fee = nodeOperatorUnclaimedFee();
         if (fee > 0) _disburseNodeOperatorFee(fee);
-        
+
         _voluntaryDisconnect();
     }
 
@@ -222,16 +225,24 @@ contract Dashboard is NodeOperatorFee {
     function abandonDashboard(address _newOwner) external {
         address vaultAddress = address(_stakingVault());
         if (VAULT_HUB.vaultConnection(vaultAddress).vaultIndex != 0) revert ConnectedToVaultHub();
-        
+
         _acceptOwnership();
         _transferOwnership(_newOwner);
     }
 
     /**
-     * @notice Reclaims the Dashboard contract and reconnects to VaultHub, transferring ownership to VaultHub.
+     * @notice Accepts the ownership over the staking vault and connects to VaultHub.
      */
-    function connectToVaultHub() external {
+    function acceptOwnershipAndConnectToVaultHub() external payable {
         _acceptOwnership();
+        connectToVaultHub();
+    }
+
+    /**
+     * @notice Connects to VaultHub, transferring ownership to VaultHub.
+     */
+    function connectToVaultHub() public payable {
+        if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
     }
@@ -337,7 +348,7 @@ contract Dashboard is NodeOperatorFee {
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
     function unguaranteedDepositToBeaconChain(
-        StakingVaultDeposit[] calldata _deposits
+        IStakingVault.Deposit[] calldata _deposits
     ) public returns (uint256 totalAmount) {
         IStakingVault stakingVault_ = _stakingVault();
 
@@ -354,7 +365,7 @@ contract Dashboard is NodeOperatorFee {
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
 
-        StakingVaultDeposit calldata deposit;
+        IStakingVault.Deposit calldata deposit;
         for (uint256 i = 0; i < _deposits.length; i++) {
             deposit = _deposits[i];
             stakingVault_.DEPOSIT_CONTRACT().deposit{value: deposit.amount}(
@@ -473,15 +484,16 @@ contract Dashboard is NodeOperatorFee {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
+        _triggerValidatorWithdrawals(_pubkeys, _amounts, _refundRecipient);
     }
 
     /**
      * @notice Requests a change of tier on the OperatorGrid.
      * @param _tierId The tier to change to.
+     * @param _requestedShareLimit The requested share limit.
      */
-    function requestTierChange(uint256 _tierId) external {
-        _requestTierChange(_tierId);
+    function requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) external {
+        _requestTierChange(_tierId, _requestedShareLimit);
     }
 
     // ==================== Internal Functions ====================

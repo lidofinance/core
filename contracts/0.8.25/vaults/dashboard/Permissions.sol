@@ -11,6 +11,7 @@ import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/ac
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {OperatorGrid} from "../OperatorGrid.sol";
 import {VaultHub} from "../VaultHub.sol";
 
@@ -80,11 +81,6 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
-     * @notice Permission for transferring the StakingVault ownership when disconnected from the VaultHub.
-     */
-    bytes32 public constant MANAGE_OWNERSHIP_ROLE = keccak256("vaults.Permissions.ManageOwnership");
-
-    /**
      * @notice Permission for getting compensation for disproven validator predeposit from PDG
      */
     bytes32 public constant PDG_COMPENSATE_PREDEPOSIT_ROLE = keccak256("vaults.Permissions.PDGCompensatePredeposit");
@@ -112,20 +108,21 @@ abstract contract Permissions is AccessControlConfirmable {
     address private immutable _SELF;
 
     VaultHub public immutable VAULT_HUB;
+    ILidoLocator public immutable LIDO_LOCATOR;
 
     /**
      * @notice Indicates whether the contract has been initialized
      */
     bool public initialized;
 
-    /**
-     * @notice Constructor sets the address of the implementation contract.
-     */
-    constructor(address _vaultHub) {
+    constructor(address _vaultHub, address _lidoLocator) {
         if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
+        if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
 
         _SELF = address(this);
+        // @dev vaultHub is cached as immutable to save gas for main operations
         VAULT_HUB = VaultHub(payable(_vaultHub));
+        LIDO_LOCATOR = ILidoLocator(_lidoLocator);
     }
 
     /**
@@ -274,12 +271,12 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the TRIGGER_VALIDATOR_WITHDRAWAL_ROLE and triggers validator withdrawal on the StakingVault using EIP-7002 triggerable exit.
      * @dev The zero checks for parameters are performed in the StakingVault contract.
      */
-    function _triggerValidatorWithdrawal(
+    function _triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
         address _refundRecipient
     ) internal onlyRole(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
-        VAULT_HUB.triggerValidatorWithdrawal{value: msg.value}(address(_stakingVault()), _pubkeys, _amounts, _refundRecipient);
+        VAULT_HUB.triggerValidatorWithdrawals{value: msg.value}(address(_stakingVault()), _pubkeys, _amounts, _refundRecipient);
     }
 
     /**
@@ -290,17 +287,17 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the MANAGE_OWNERSHIP_ROLE and transfers the StakingVault ownership.
+     * @dev Checks the DEFAULT_ADMIN_ROLE and transfers the StakingVault ownership.
      * @param _newOwner The address to transfer the ownership to.
      */
-    function _transferOwnership(address _newOwner) internal onlyRole(MANAGE_OWNERSHIP_ROLE) {
+    function _transferOwnership(address _newOwner) internal onlyRole(DEFAULT_ADMIN_ROLE) {
         OwnableUpgradeable(address(_stakingVault())).transferOwnership(_newOwner);
     }
 
     /**
-     * @dev Checks the MANAGE_OWNERSHIP_ROLE and accepts the StakingVault ownership.
+     * @dev Checks the DEFAULT_ADMIN_ROLE and accepts the StakingVault ownership.
      */
-    function _acceptOwnership() internal onlyRole(MANAGE_OWNERSHIP_ROLE) {
+    function _acceptOwnership() internal onlyRole(DEFAULT_ADMIN_ROLE) {
         Ownable2StepUpgradeable(address(_stakingVault())).acceptOwnership();
     }
 
@@ -314,7 +311,7 @@ abstract contract Permissions is AccessControlConfirmable {
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
-        return IPredepositGuarantee(VAULT_HUB.predepositGuarantee()).compensateDisprovenPredeposit(_pubkey, _recipient);
+        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee()).compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     /**
@@ -323,7 +320,7 @@ abstract contract Permissions is AccessControlConfirmable {
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
     ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
-        IPredepositGuarantee predepositGuarantee = IPredepositGuarantee(VAULT_HUB.predepositGuarantee());
+        IPredepositGuarantee predepositGuarantee = IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee());
         for (uint256 i = 0; i < _witnesses.length; i++) {
             predepositGuarantee.proveUnknownValidator(_witnesses[i], _stakingVault());
         }
@@ -349,9 +346,14 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev Checks the REQUEST_TIER_CHANGE_ROLE and requests a change of the tier on the OperatorGrid.
      * @param _tierId The tier to change to.
+     * @param _requestedShareLimit The requested share limit.
      */
-    function _requestTierChange(uint256 _tierId) internal onlyRole(REQUEST_TIER_CHANGE_ROLE) {
-        OperatorGrid(VAULT_HUB.operatorGrid()).requestTierChange(address(_stakingVault()), _tierId);
+    function _requestTierChange(
+        uint256 _tierId,
+        uint256 _requestedShareLimit
+    ) internal onlyRole(REQUEST_TIER_CHANGE_ROLE) {
+        OperatorGrid(LIDO_LOCATOR.operatorGrid())
+            .requestTierChange(address(_stakingVault()), _tierId, _requestedShareLimit);
     }
 
     /**

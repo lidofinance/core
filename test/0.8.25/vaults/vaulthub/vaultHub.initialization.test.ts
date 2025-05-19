@@ -9,7 +9,7 @@ import { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub, WstETH__Harness
 import { ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const TOTAL_BASIS_POINTS = 100_00n;
 
@@ -42,7 +42,7 @@ describe("VaultHub.sol:initialization", () => {
     vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       await locator.lido(),
-      VAULTS_RELATIVE_SHARE_LIMIT_BP,
+      VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
@@ -78,15 +78,15 @@ describe("VaultHub.sol:initialization", () => {
   });
 
   context("constructor", () => {
-    it("reverts on `_relativeShareLimitBP` is zero", async () => {
+    it("reverts on `_maxRelativeShareLimitBP` is zero", async () => {
       await expect(ethers.deployContract("VaultHub", [locator, await locator.lido(), 0n]))
         .to.be.revertedWithCustomError(vaultHubImpl, "ZeroArgument")
-        .withArgs("_relativeShareLimitBP");
+        .withArgs("_maxRelativeShareLimitBP");
     });
 
-    it("reverts if `_relativeShareLimitBP` is greater than `TOTAL_BASIS_POINTS`", async () => {
+    it("reverts if `_maxRelativeShareLimitBP` is greater than `TOTAL_BASIS_POINTS`", async () => {
       await expect(ethers.deployContract("VaultHub", [locator, await locator.lido(), TOTAL_BASIS_POINTS + 1n]))
-        .to.be.revertedWithCustomError(vaultHubImpl, "RelativeShareLimitBPTooHigh")
+        .to.be.revertedWithCustomError(vaultHubImpl, "MaxRelativeShareLimitBPTooHigh")
         .withArgs(TOTAL_BASIS_POINTS + 1n, TOTAL_BASIS_POINTS);
     });
   });

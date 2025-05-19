@@ -6,7 +6,7 @@ pragma solidity 0.8.25;
 import {BeaconBlockHeader, Validator} from "./BeaconTypes.sol";
 import {GIndex} from "./GIndex.sol";
 
-import {StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 /*
  SSZ library from CSM
@@ -34,7 +34,7 @@ library SSZ {
     /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
     /// @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
     function depositMessageSigningRoot(
-        StakingVaultDeposit calldata deposit,
+        IStakingVault.Deposit calldata deposit,
         bytes32 withdrawalCredentials,
         bytes32 depositDomain
     ) internal view returns (bytes32 root) {
