@@ -48,6 +48,12 @@ contract Dashboard is NodeOperatorFee {
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
+     * @notice Slot for the fund-on-receive flag
+     *         keccak256("vaults.Dashboard.fundOnReceive")
+     */
+    bytes32 private constant FUND_ON_RECEIVE_FLAG_SLOT = 0x7408b7b034fda7051615c19182918ecb91d753231cffd86f81a45d996d63e038;
+
+    /**
      * @notice Constructor sets the stETH, and WSTETH token addresses,
      * and passes the address of the vault hub up the inheritance chain.
      * @param _stETH Address of the stETH token contract.
@@ -194,7 +200,7 @@ contract Dashboard is NodeOperatorFee {
      * @dev Automatically funds the staking vault with ether
      */
     receive() external payable {
-        _fund(msg.value);
+        if (_shouldFundOnReceive()) _fund(msg.value);
     }
 
     /**
@@ -360,7 +366,11 @@ contract Dashboard is NodeOperatorFee {
             revert WithdrawalAmountExceedsUnreserved(totalAmount, unreserved());
         }
 
+        _disableFundOnReceive();
         _withdrawForUnguaranteedDepositToBeaconChain(totalAmount);
+        // Instead of relying on auto-reset at the end of the transaction,
+        // re-enable fund-on-receive manually to restore the default receive() behavior in the same transaction
+        _enableFundOnReceive();
         _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
@@ -566,6 +576,26 @@ contract Dashboard is NodeOperatorFee {
         uint256 maxMintableStETH = ((_mintableValue() + _additionalFunding) *
             (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), connection.shareLimit);
+    }
+    
+    // @dev The logic is inverted, 0 means fund-on-receive is enabled,
+    // so that fund-on-receive is enabled by default
+    function _shouldFundOnReceive() internal view returns (bool shouldFund) {
+        assembly {
+            shouldFund := iszero(tload(FUND_ON_RECEIVE_FLAG_SLOT))
+        }
+    }
+
+    function _enableFundOnReceive() internal {
+        assembly {
+            tstore(FUND_ON_RECEIVE_FLAG_SLOT, 0)
+        }
+    }
+
+    function _disableFundOnReceive() internal {
+        assembly {
+            tstore(FUND_ON_RECEIVE_FLAG_SLOT, 1)
+        }
     }
 
     // ==================== Events ====================
