@@ -182,6 +182,7 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
       config.get("predepositGuarantee") || (await locator.predepositGuarantee()),
     ),
     operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid")),
+    lazyOracle: loadContract("LazyOracle", config.get("lazyOracle") || (await locator.lazyOracle())),
   })) as VaultsContracts;
 };
 
@@ -226,6 +227,7 @@ export async function discover() {
     "Vault Hub": contracts.vaultHub.address,
     "Predeposit Guarantee": contracts.predepositGuarantee.address,
     "Operator Grid": contracts.operatorGrid.address,
+    "Lazy Oracle": contracts.lazyOracle.address,
   });
 
   const signers = {

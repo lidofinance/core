@@ -414,7 +414,6 @@ type HandleOracleReportParams = {
   sharesRequestedToBurn: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
-  vaultsTotalTreasuryFeesShares: bigint;
   vaultsTotalDeficit: bigint;
   vaultsDataTreeRoot: string;
   vaultsDataTreeCid: string;
@@ -428,13 +427,12 @@ export const handleOracleReport = async (
     sharesRequestedToBurn,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    vaultsTotalTreasuryFeesShares,
     vaultsTotalDeficit,
     vaultsDataTreeRoot,
     vaultsDataTreeCid,
   }: HandleOracleReportParams,
 ): Promise<void> => {
-  const { hashConsensus, accountingOracle, accounting } = ctx.contracts;
+  const { hashConsensus, accountingOracle, accounting, lazyOracle } = ctx.contracts;
 
   const { refSlot } = await hashConsensus.getCurrentFrame();
   const { genesisTime, secondsPerSlot } = await hashConsensus.getChainConfig();
@@ -463,6 +461,10 @@ export const handleOracleReport = async (
       withdrawalFinalizationBatches: [],
       vaultsTotalDeficit,
     });
+
+    await lazyOracle
+      .connect(accountingOracleAccount)
+      .updateReportData(reportTimestamp, vaultsDataTreeRoot, vaultsDataTreeCid);
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
     expect(error).to.be.undefined;

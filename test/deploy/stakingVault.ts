@@ -8,7 +8,7 @@ import {
   StakingVault,
   StakingVault__factory,
   VaultFactory__MockForStakingVault,
-  VaultHub__MockForStakingVault,
+  VaultHub__MockForVault,
 } from "typechain-types";
 
 import { findEvents } from "lib";
@@ -17,7 +17,7 @@ type DeployedStakingVault = {
   depositContract: DepositContract__MockForStakingVault;
   stakingVault: StakingVault;
   stakingVaultImplementation: StakingVault;
-  vaultHub: VaultHub__MockForStakingVault;
+  vaultHub: VaultHub__MockForVault;
   vaultFactory: VaultFactory__MockForStakingVault;
 };
 
@@ -28,7 +28,7 @@ export async function deployStakingVaultBehindBeaconProxy(
 ): Promise<DeployedStakingVault> {
   // deploying implementation
   const lidoLocator_ = await ethers.deployContract("LidoLocator__MockForStakingVault", [depositor]);
-  const vaultHub_ = await ethers.deployContract("VaultHub__MockForStakingVault", [lidoLocator_]);
+  const vaultHub_ = await ethers.deployContract("VaultHub__MockForVault", [lidoLocator_]);
   const depositContract_ = await ethers.deployContract("DepositContract__MockForStakingVault");
   const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [vaultHub_, depositContract_]);
 
