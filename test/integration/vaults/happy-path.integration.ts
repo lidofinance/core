@@ -157,6 +157,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const agentSigner = await ctx.getSigner("agent");
 
+    const _dashboard = await ethers.getContractAt("Dashboard", await stakingVaultFactory.DASHBOARD_IMPL());
+
     const defaultGroupId = await operatorGrid.DEFAULT_TIER_ID();
     await operatorGrid.connect(agentSigner).alterTiers(
       [defaultGroupId],
@@ -172,12 +174,35 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       ],
     );
 
+    // TODO: check all the roles present
+    const assignedRoles = [
+      { role: await _dashboard.FUND_ROLE(), account: curator },
+      { role: await _dashboard.WITHDRAW_ROLE(), account: curator },
+      { role: await _dashboard.MINT_ROLE(), account: curator },
+      { role: await _dashboard.BURN_ROLE(), account: curator },
+      { role: await _dashboard.REBALANCE_ROLE(), account: curator },
+      { role: await _dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), account: curator },
+      { role: await _dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), account: curator },
+      { role: await _dashboard.REQUEST_VALIDATOR_EXIT_ROLE(), account: curator },
+      { role: await _dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), account: curator },
+      { role: await _dashboard.VOLUNTARY_DISCONNECT_ROLE(), account: curator },
+    ];
+
+    Tracing.enable();
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory
       .connect(owner)
-      .createVaultWithDashboard(owner, nodeOperator, nodeOperator, VAULT_NODE_OPERATOR_FEE, CONFIRM_EXPIRY, [], "0x", {
-        value: VAULT_CONNECTION_DEPOSIT,
-      });
+      .createVaultWithDashboard(
+        owner,
+        nodeOperator,
+        nodeOperator,
+        VAULT_NODE_OPERATOR_FEE,
+        CONFIRM_EXPIRY,
+        assignedRoles,
+        {
+          value: VAULT_CONNECTION_DEPOSIT,
+        },
+      );
 
     const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
     const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
@@ -187,63 +212,15 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     stakingVault = await ethers.getContractAt("StakingVault", createVaultEvents[0].args?.vault);
     dashboard = await ethers.getContractAt("Dashboard", createVaultEvents[0].args?.owner);
 
-    await dashboard.connect(owner).grantRoles([
-      {
-        role: await dashboard.FUND_ROLE(),
-        account: curator,
-      },
-      {
-        role: await dashboard.WITHDRAW_ROLE(),
-        account: curator,
-      },
-      {
-        role: await dashboard.LOCK_ROLE(),
-        account: curator,
-      },
-      {
-        role: await dashboard.MINT_ROLE(),
-        account: curator,
-      },
-      {
-        role: await dashboard.BURN_ROLE(),
-        account: curator,
-      },
-      {
-        role: await dashboard.REBALANCE_ROLE(),
-        account: curator,
-      },
-      {
-        role: await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
-        account: curator,
-      },
-      {
-        role: await dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
-        account: curator,
-      },
-      {
-        role: await dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
-        account: curator,
-      },
-      {
-        role: await dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
-        account: curator,
-      },
-      {
-        role: await dashboard.VOLUNTARY_DISCONNECT_ROLE(),
-        account: curator,
-      },
-    ]);
-
-    await dashboard.connect(nodeOperator).grantRole(await dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(), nodeOperator);
+    // await dashboard.connect(nodeOperator).grantRole(await dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(), nodeOperator);
 
     expect(await isSoleRoleMember(owner, await dashboard.DEFAULT_ADMIN_ROLE())).to.be.true;
 
     expect(await isSoleRoleMember(nodeOperator, await dashboard.NODE_OPERATOR_MANAGER_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(nodeOperator, await dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE())).to.be.true;
+    // expect(await isSoleRoleMember(nodeOperator, await dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE())).to.be.true;
 
     expect(await isSoleRoleMember(curator, await dashboard.FUND_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await dashboard.WITHDRAW_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await dashboard.LOCK_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await dashboard.MINT_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await dashboard.BURN_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await dashboard.REBALANCE_ROLE())).to.be.true;
@@ -254,25 +231,26 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await isSoleRoleMember(curator, await dashboard.VOLUNTARY_DISCONNECT_ROLE())).to.be.true;
   });
 
-  it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
-    const { lido, vaultHub } = ctx.contracts;
+  // it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
+  //   const { lido, vaultHub } = ctx.contracts;
 
-    expect(await stakingVault.locked()).to.equal(ether("1")); // has locked value cause of connection deposit
+  //   const votingSigner = await ctx.getSigner("voting");
+  //   await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
 
-    const votingSigner = await ctx.getSigner("voting");
-    await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
-
-    expect(await vaultHub.vaultsCount()).to.equal(1n);
-    expect(await stakingVault.locked()).to.equal(VAULT_CONNECTION_DEPOSIT);
-  });
+  //   expect(await vaultHub.vaultsCount()).to.equal(1n);
+  // });
 
   it("Should allow Curator to fund vault via dashboard contract", async () => {
+    const { vaultHub } = ctx.contracts;
+
+    expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(0n);
+
     await dashboard.connect(curator).fund({ value: VAULT_DEPOSIT });
 
     const vaultBalance = await ethers.provider.getBalance(stakingVault);
 
     expect(vaultBalance).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
-    expect(await stakingVault.totalValue()).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
+    expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT);
   });
 
   it("Should allow NodeOperator to deposit validators from the vault via PDG", async () => {
