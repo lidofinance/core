@@ -3,9 +3,9 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { StakingVault } from "typechain-types";
+import { PredepositGuarantee, StakingVault } from "typechain-types";
 
-import { generateValidator } from "lib";
+import { generateValidator, LoadedContract } from "lib";
 import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLido } from "lib/protocol";
 import { getProofAndDepositData } from "lib/protocol/helpers/vaults";
 
@@ -53,7 +53,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
   after(async () => await Snapshot.restore(originalSnapshot));
 
   beforeEach(async () => {
-    expect(await ctx.contracts.vaultHub.isVaultHealthyAsOfLatestReport(stakingVault)).to.equal(true);
+    expect(await ctx.contracts.vaultHub.isVaultHealthy(stakingVault)).to.equal(true);
   });
 
   it("PredepositGuarantee is pausable and resumable", async () => {
@@ -73,11 +73,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     const withdrawalCredentials = await stakingVault.withdrawalCredentials();
     const validator = generateValidator(withdrawalCredentials);
 
-    const { witnesses, postdeposit } = await getProofAndDepositData(
-      predepositGuarantee,
-      validator,
-      withdrawalCredentials,
-    );
+    const { witnesses, postdeposit } = await getProofAndDepositData(ctx, validator, withdrawalCredentials);
 
     await expect(
       predepositGuarantee.connect(nodeOperator).proveAndDeposit(witnesses, [postdeposit], stakingVault),
