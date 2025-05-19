@@ -342,10 +342,12 @@ export const generatePredepositData = async (
 };
 
 export const getProofAndDepositData = async (
-  predepositGuarantee: LoadedContract<PredepositGuarantee>,
+  ctx: ProtocolContext,
   validator: Validator,
   withdrawalCredentials: string,
 ) => {
+  const { predepositGuarantee } = ctx.contracts;
+
   // Step 3: Prove and deposit the validator
   const pivot_slot = await predepositGuarantee.PIVOT_SLOT();
 

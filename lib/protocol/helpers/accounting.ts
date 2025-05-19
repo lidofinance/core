@@ -499,7 +499,13 @@ const getFinalizationBatches = async (
   const MAX_REQUESTS_PER_CALL = 1000n;
 
   if (availableEth === 0n) {
-    log.warning("No available ether to request withdrawals");
+    log.debug("No available ether to request withdrawals", {
+      "Available Eth": formatEther(availableEth),
+      "Reserved Buffer": formatEther(reservedBuffer),
+      "Buffered Ether": formatEther(bufferedEther),
+      "Unfinalized Steth": formatEther(unfinalizedSteth),
+    });
+
     return [];
   }
 
@@ -839,14 +845,15 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
 
   let count = addresses.length;
   while (addresses.length < minMembersCount) {
-    log.warning(`Adding oracle committee member ${count}`);
-
     const address = getOracleCommitteeMemberAddress(count);
+
+    log.debug(`Adding oracle committee member`, { Address: address });
+
     await hashConsensus.connect(agentSigner).addMember(address, quorum);
 
     addresses.push(address);
 
-    log.success(`Added oracle committee member ${count}`);
+    log.debug(`Added oracle committee member`, { Count: count });
 
     count++;
   }
@@ -870,7 +877,9 @@ export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
 
   const { initialEpoch } = await hashConsensus.getFrameConfig();
   if (initialEpoch === HASH_CONSENSUS_FAR_FUTURE_EPOCH) {
-    log.warning("Initializing hash consensus epoch...");
+    log.debug("Initializing hash consensus epoch...", {
+      "Initial epoch": initialEpoch,
+    });
 
     const latestBlockTimestamp = await getCurrentBlockTimestamp();
     const { genesisTime, secondsPerSlot, slotsPerEpoch } = await hashConsensus.getChainConfig();
@@ -878,7 +887,5 @@ export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
 
     const agentSigner = await ctx.getSigner("agent");
     await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
-
-    log.success("Hash consensus epoch initialized");
   }
 };
