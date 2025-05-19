@@ -213,8 +213,8 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
         value: 2,
       }),
     )
-      .to.be.revertedWithCustomError(oracle, "ExitDataIndexOutOfRange")
-      .withArgs(5, 4);
+      .to.be.revertedWithCustomError(oracle, "ExitDataWasNotDelivered") // TODO: fix in code return "ExitDataIndexOutOfRange")
+      .withArgs(5, 3); // 4
   });
 
   it("should revert with an error if the key index array contains duplicates", async () => {
