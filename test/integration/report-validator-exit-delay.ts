@@ -82,8 +82,8 @@ describe("Report Validator Exit Delay", () => {
     // Set the block timestamp to 7 days before the proof time
     await advanceChainTime(proofSlotTimestamp - currentBlockTimestamp - BigInt(3600 * 24 * 7));
 
-    await validatorsExitBusOracle.connect(vebReportSubmitter).submitReportHash(encodedExitRequestsHash);
-    await validatorsExitBusOracle.emitExitEvents(encodedExitRequests);
+    await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
+    await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
     const deliveryHistory = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
     const eligibleToExitInSec = proofSlotTimestamp - deliveryHistory.history[0].timestamp;
@@ -123,8 +123,8 @@ describe("Report Validator Exit Delay", () => {
     // Set the block timestamp to 7 days before the proof time
     await advanceChainTime(proofSlotTimestamp - currentBlockTimestamp - BigInt(3600 * 24 * 7));
 
-    await validatorsExitBusOracle.connect(vebReportSubmitter).submitReportHash(encodedExitRequestsHash);
-    await validatorsExitBusOracle.emitExitEvents(encodedExitRequests);
+    await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
+    await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
     const deliveryHistory = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
     const eligibleToExitInSec = proofSlotTimestamp - deliveryHistory.history[0].timestamp;
