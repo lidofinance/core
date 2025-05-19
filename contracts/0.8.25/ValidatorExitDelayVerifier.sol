@@ -106,8 +106,8 @@ contract ValidatorExitDelayVerifier {
     error InvalidPivotSlot();
     error ZeroLidoLocatorAddress();
     error ExitRequestNotEligibleOnProvableBeaconBlock(
-        uint64 provableBeaconBlockTimestamp,
-        uint64 eligibleExitRequestTimestamp
+        uint256 provableBeaconBlockTimestamp,
+        uint256 eligibleExitRequestTimestamp
     );
     error KeyWasNotUnpacked(uint256 keyIndex, uint256 lastUnpackedKeyIndex);
     error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
@@ -178,7 +178,7 @@ contract ValidatorExitDelayVerifier {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
         ExitRequestsDeliveryHistory memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
-        uint64 proofSlotTimestamp = _slotToTimestamp(beaconBlock.header.slot);
+        uint256 proofSlotTimestamp = _slotToTimestamp(beaconBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
             ValidatorWitness calldata witness = validatorWitnesses[i];
@@ -189,7 +189,7 @@ contract ValidatorExitDelayVerifier {
                 witness.exitRequestIndex
             );
 
-            uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
+            uint256 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
                 requestsDeliveryHistory,
                 witness,
                 proofSlotTimestamp
@@ -229,7 +229,7 @@ contract ValidatorExitDelayVerifier {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
         ExitRequestsDeliveryHistory memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
-        uint64 proofSlotTimestamp = _slotToTimestamp(oldBlock.header.slot);
+        uint256 proofSlotTimestamp = _slotToTimestamp(oldBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
             ValidatorWitness calldata witness = validatorWitnesses[i];
@@ -240,7 +240,7 @@ contract ValidatorExitDelayVerifier {
                 witness.exitRequestIndex
             );
 
-            uint64 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
+            uint256 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
                 requestsDeliveryHistory,
                 witness,
                 proofSlotTimestamp
@@ -329,24 +329,24 @@ contract ValidatorExitDelayVerifier {
     /**
      * @dev Determines how many seconds have passed since a validator was first eligible
      *      to exit after ValidatorsExitBusOracle exit request.
-     * @return uint64 The elapsed seconds since the earliest eligible exit request time.
+     * @return uint256 The elapsed seconds since the earliest eligible exit request time.
      */
     function _getSecondsSinceExitRequestEligible(
         ExitRequestsDeliveryHistory memory history,
         ValidatorWitness calldata witness,
-        uint64 referenceSlotTimestamp
-    ) internal view returns (uint64) {
-        uint64 validatorExitRequestTimestamp = _getExitRequestTimestamp(history, witness.exitRequestIndex);
+        uint256 referenceSlotTimestamp
+    ) internal view returns (uint256) {
+        uint256 validatorExitRequestTimestamp = _getExitRequestTimestamp(history, witness.exitRequestIndex);
 
         // The earliest a validator can voluntarily exit is after the Shard Committee Period
         // subsequent to its activation epoch.
-        uint64 earliestPossibleVoluntaryExitTimestamp = GENESIS_TIME +
+        uint256 earliestPossibleVoluntaryExitTimestamp = GENESIS_TIME +
             (witness.activationEpoch * SLOTS_PER_EPOCH * SECONDS_PER_SLOT) +
             SHARD_COMMITTEE_PERIOD_IN_SECONDS;
 
         // The actual eligible timestamp is the max between the exit request submission time
         // and the earliest possible voluntary exit time.
-        uint64 eligibleExitRequestTimestamp = validatorExitRequestTimestamp > earliestPossibleVoluntaryExitTimestamp
+        uint256 eligibleExitRequestTimestamp = validatorExitRequestTimestamp > earliestPossibleVoluntaryExitTimestamp
             ? validatorExitRequestTimestamp
             : earliestPossibleVoluntaryExitTimestamp;
 
@@ -380,7 +380,7 @@ contract ValidatorExitDelayVerifier {
     function _getExitRequestTimestamp(
         ExitRequestsDeliveryHistory memory history,
         uint256 index
-    ) internal pure returns (uint64 validatorExitRequestTimestamp) {
+    ) internal pure returns (uint256 validatorExitRequestTimestamp) {
         if (index >= history.totalItemsCount) {
             revert KeyIndexOutOfRange(index, history.totalItemsCount);
         }
@@ -400,7 +400,7 @@ contract ValidatorExitDelayVerifier {
         assert(false);
     }
 
-    function _slotToTimestamp(uint64 slot) internal view returns (uint64) {
+    function _slotToTimestamp(uint64 slot) internal view returns (uint256) {
         return GENESIS_TIME + slot * SECONDS_PER_SLOT;
     }
 }

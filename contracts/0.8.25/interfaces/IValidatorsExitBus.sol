@@ -5,11 +5,10 @@
 pragma solidity 0.8.25;
 
 struct DeliveryHistory {
-    uint64 timestamp;
-    // Key index in exit request array
+    // index in array of requests
     uint256 lastDeliveredKeyIndex;
+    uint256 timestamp;
 }
-
 interface IValidatorsExitBus {
     function getExitRequestsDeliveryHistory(
         bytes32 exitRequestsHash
