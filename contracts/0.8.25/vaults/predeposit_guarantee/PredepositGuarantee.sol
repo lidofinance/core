@@ -13,7 +13,6 @@ import {CLProofVerifier} from "./CLProofVerifier.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 /**
  * @title PredepositGuarantee
@@ -211,7 +210,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     function validatePubKeyWCProof(ValidatorWitness calldata _witness, bytes32 _withdrawalCredentials) public view {
         _validatePubKeyWCProof(_witness, _withdrawalCredentials);
     }
-    
+
     /**
      * @notice verifies the deposit message signature using BLS12-381 pairing check
      * @param _deposit staking vault deposit to verify
