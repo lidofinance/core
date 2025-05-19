@@ -60,22 +60,20 @@ contract VaultFactory {
         if (msg.value < VaultHub(payable(locator.vaultHub())).CONNECT_DEPOSIT()) revert InsufficientFunds();
 
         // create the vault proxy
-        address vaultAddress = address(new PinnedBeaconProxy(BEACON, ""));
+        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
 
         // create the dashboard proxy
-        bytes memory immutableArgs = abi.encode(vault);
+        bytes memory immutableArgs = abi.encode(address(vault));
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
         // initialize StakingVault with the dashboard address as the owner
-        IStakingVault(vaultAddress).initialize(
-            address(dashboard),
-            _nodeOperator,
-            locator.predepositGuarantee()
-        );
+        vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
         dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
-        dashboard.grantRoles(_roleAssignments);
+
+        if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
+
         dashboard.connectToVaultHub{value: msg.value}();
 
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
