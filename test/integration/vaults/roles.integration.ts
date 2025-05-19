@@ -108,7 +108,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         );
 
       const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
-      const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
+      const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "DashboardCreated");
 
       testDashboard = await ethers.getContractAt("Dashboard", createVaultEvents[0].args?.owner);
 
@@ -509,7 +509,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   });
 
   // initializing contracts without signers
-  describe('"Vault created with no roles', () => {
+  describe("Vault created with no roles", () => {
     let testDashboard: Dashboard;
 
     before(async () => {
