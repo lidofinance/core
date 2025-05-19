@@ -19,9 +19,7 @@ export async function main() {
   const depositContract = state.chainSpec.depositContract;
 
   // Deploy StakingVault implementation contract
-  const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
-    depositContract,
-  ]);
+  const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [depositContract]);
   const impAddress = await imp.getAddress();
 
   // Deploy Dashboard implementation contract

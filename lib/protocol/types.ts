@@ -11,6 +11,7 @@ import {
   HashConsensus,
   ICSModule,
   Kernel,
+  LazyOracle,
   Lido,
   LidoExecutionLayerRewardsVault,
   LidoLocator,
@@ -64,6 +65,7 @@ export type ProtocolNetworkItems = {
   vaultHub: string;
   predepositGuarantee: string;
   operatorGrid: string;
+  lazyOracle: string;
 };
 
 export interface ContractTypes {
@@ -91,6 +93,7 @@ export interface ContractTypes {
   VaultHub: VaultHub;
   OperatorGrid: OperatorGrid;
   ICSModule: ICSModule;
+  LazyOracle: LazyOracle;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -145,6 +148,7 @@ export type VaultsContracts = {
   vaultHub: LoadedContract<VaultHub>;
   predepositGuarantee: LoadedContract<PredepositGuarantee>;
   operatorGrid: LoadedContract<OperatorGrid>;
+  lazyOracle: LoadedContract<LazyOracle>;
 };
 
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &

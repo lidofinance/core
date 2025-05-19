@@ -509,7 +509,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   });
 
   // initializing contracts without signers
-  describe('"Vault created with no roles', () => {
+  describe("Vault created with no roles", () => {
     let testDashboard: Dashboard;
 
     before(async () => {
@@ -561,11 +561,11 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
     describe("Verify ACL for methods that require only role", () => {
       describe("Dashboard methods", () => {
-        it("claimNodeOperatorFee", async () => {
+        it("setNodeOperatorFeeRecipient", async () => {
           await testGrantingRole(
             testDashboard,
-            "claimNodeOperatorFee",
-            await testDashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+            "setNodeOperatorFeeRecipient",
+            await testDashboard.NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE(),
             [stranger],
             nodeOperatorManager,
           );
