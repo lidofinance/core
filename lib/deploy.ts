@@ -8,6 +8,8 @@ import { addContractHelperFields, DeployedContract, getContractPath, loadContrac
 import { ConvertibleToString, cy, log, yl } from "lib/log";
 import { incrementGasUsed, Sk, updateObjectInState } from "lib/state-file";
 
+import { keysOf } from "./protocol/types";
+
 const GAS_PRIORITY_FEE = process.env.GAS_PRIORITY_FEE || null;
 const GAS_MAX_FEE = process.env.GAS_MAX_FEE || null;
 
@@ -233,7 +235,7 @@ export async function updateProxyImplementation(
 async function getLocatorConfig(locatorAddress: string) {
   const locator = await ethers.getContractAt("LidoLocator", locatorAddress);
 
-  const addresses = [
+  const locatorKeys = keysOf<LidoLocator.ConfigStruct>()([
     "accountingOracle",
     "depositSecurityModule",
     "elRewardsVault",
@@ -251,19 +253,18 @@ async function getLocatorConfig(locatorAddress: string) {
     "wstETH",
     "predepositGuarantee",
     "vaultHub",
+    "lazyOracle",
     "operatorGrid",
-  ] as (keyof LidoLocator.ConfigStruct)[];
+  ]);
 
-  const configPromises = addresses.map((name) => locator[name]());
+  const config = await Promise.all(locatorKeys.map((name) => locator[name]()));
 
-  const config = await Promise.all(configPromises);
-
-  return Object.fromEntries(addresses.map((n, i) => [n, config[i]])) as LidoLocator.ConfigStruct;
+  return Object.fromEntries(locatorKeys.map((n, i) => [n, config[i]])) as LidoLocator.ConfigStruct;
 }
 
 export async function deployLidoLocatorImplementation(
   locatorAddress: string,
-  configUpdate = {},
+  configUpdate: Partial<LidoLocator.ConfigStruct>,
   proxyOwner: string,
   withStateFile = true,
 ) {

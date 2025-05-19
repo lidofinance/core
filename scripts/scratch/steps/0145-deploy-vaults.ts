@@ -19,10 +19,7 @@ export async function main() {
   const depositContract = state.chainSpec.depositContract;
 
   // Deploy StakingVault implementation contract
-  const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [
-    vaultHubAddress,
-    depositContract,
-  ]);
+  const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [depositContract]);
   const impAddress = await imp.getAddress();
 
   // Deploy Dashboard implementation contract
@@ -30,6 +27,7 @@ export async function main() {
     stethAddress,
     wstethAddress,
     vaultHubAddress,
+    locatorAddress,
   ]);
   const dashboardAddress = await dashboard.getAddress();
 
@@ -63,7 +61,7 @@ export async function main() {
   await makeTx(vaultHub, "grantRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(vaultHub, "grantRole", [vaultRegistryRole, deployer], { from: deployer });
 
-  await makeTx(vaultHub, "addVaultProxyCodehash", [vaultBeaconProxyCodeHash], { from: deployer });
+  await makeTx(vaultHub, "setAllowedCodehash", [vaultBeaconProxyCodeHash, true], { from: deployer });
 
   await makeTx(vaultHub, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(vaultHub, "renounceRole", [vaultRegistryRole, deployer], { from: deployer });

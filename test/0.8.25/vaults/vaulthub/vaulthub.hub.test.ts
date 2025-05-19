@@ -30,7 +30,7 @@ import {
 } from "lib";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
 
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 
@@ -1010,8 +1010,8 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if share limit exceeds the maximum vault limit", async () => {
       const insaneLimit = ether("1000000000000000000000000");
       const totalShares = await lido.getTotalShares();
-      const relativeShareLimitBP = VAULTS_RELATIVE_SHARE_LIMIT_BP;
-      const relativeShareLimitPerVault = (totalShares * relativeShareLimitBP) / TOTAL_BASIS_POINTS;
+      const maxRelativeShareLimitBP = VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP;
+      const relativeShareLimitPerVault = (totalShares * maxRelativeShareLimitBP) / TOTAL_BASIS_POINTS;
 
       await expect(vaultHub.connect(user).updateShareLimits([vaultAddress], [insaneLimit]))
         .to.be.revertedWithCustomError(vaultHub, "ShareLimitTooHigh")

@@ -81,11 +81,6 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
-     * @notice Permission for transferring the StakingVault ownership when disconnected from the VaultHub.
-     */
-    bytes32 public constant MANAGE_OWNERSHIP_ROLE = keccak256("vaults.Permissions.ManageOwnership");
-
-    /**
      * @notice Permission for getting compensation for disproven validator predeposit from PDG
      */
     bytes32 public constant PDG_COMPENSATE_PREDEPOSIT_ROLE = keccak256("vaults.Permissions.PDGCompensatePredeposit");
@@ -292,17 +287,17 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the MANAGE_OWNERSHIP_ROLE and transfers the StakingVault ownership.
+     * @dev Checks the DEFAULT_ADMIN_ROLE and transfers the StakingVault ownership.
      * @param _newOwner The address to transfer the ownership to.
      */
-    function _transferOwnership(address _newOwner) internal onlyRole(MANAGE_OWNERSHIP_ROLE) {
+    function _transferOwnership(address _newOwner) internal onlyRole(DEFAULT_ADMIN_ROLE) {
         OwnableUpgradeable(address(_stakingVault())).transferOwnership(_newOwner);
     }
 
     /**
-     * @dev Checks the MANAGE_OWNERSHIP_ROLE and accepts the StakingVault ownership.
+     * @dev Checks the DEFAULT_ADMIN_ROLE and accepts the StakingVault ownership.
      */
-    function _acceptOwnership() internal onlyRole(MANAGE_OWNERSHIP_ROLE) {
+    function _acceptOwnership() internal onlyRole(DEFAULT_ADMIN_ROLE) {
         Ownable2StepUpgradeable(address(_stakingVault())).acceptOwnership();
     }
 
