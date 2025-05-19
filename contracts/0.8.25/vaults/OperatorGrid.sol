@@ -206,7 +206,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @param _shareLimit New share limit value
     function updateGroupShareLimit(address _nodeOperator, uint256 _shareLimit) external onlyRole(REGISTRY_ROLE) {
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
-
+        
         ERC7201Storage storage $ = _getStorage();
         Group storage group_ = $.groups[_nodeOperator];
         if (group_.operator == address(0)) revert GroupNotExists();

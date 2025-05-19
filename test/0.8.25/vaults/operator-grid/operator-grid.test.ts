@@ -215,6 +215,31 @@ describe("OperatorGrid.sol", () => {
       expect(groupStruct.shareLimit).to.equal(newShareLimit);
     });
 
+    it("update multiple groups share limits", async function () {
+      const groupOperator1 = certainAddress("new-operator-group-1");
+      const groupOperator2 = certainAddress("new-operator-group-2");
+      const shareLimit1 = 2000;
+      const shareLimit2 = 3000;
+      const newShareLimit1 = 5000;
+      const newShareLimit2 = 6000;
+
+      await operatorGrid.registerGroup(groupOperator1, shareLimit1);
+      await operatorGrid.registerGroup(groupOperator2, shareLimit2);
+
+      await expect(operatorGrid.updateGroupShareLimit(groupOperator1, newShareLimit1))
+        .to.emit(operatorGrid, "GroupShareLimitUpdated")
+        .withArgs(groupOperator1, newShareLimit1);
+
+      await expect(operatorGrid.updateGroupShareLimit(groupOperator2, newShareLimit2))
+        .to.emit(operatorGrid, "GroupShareLimitUpdated")
+        .withArgs(groupOperator2, newShareLimit2);
+
+      const groupStruct1 = await operatorGrid.group(groupOperator1);
+      const groupStruct2 = await operatorGrid.group(groupOperator2);
+      expect(groupStruct1.shareLimit).to.equal(newShareLimit1);
+      expect(groupStruct2.shareLimit).to.equal(newShareLimit2);
+    });
+
     it("nodeOperatorCount - works", async function () {
       expect(await operatorGrid.nodeOperatorCount()).to.equal(0);
 
