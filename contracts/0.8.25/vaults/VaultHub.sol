@@ -777,7 +777,7 @@ contract VaultHub is PausableUntilWithRoles {
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
         uint256 latestReportTimestamp = LazyOracle(LIDO_LOCATOR.lazyOracle()).latestReportTimestamp();
         return
-            latestReportTimestamp == _record.reportTimestamp &&
+            latestReportTimestamp <= _record.reportTimestamp &&
             block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }
 
