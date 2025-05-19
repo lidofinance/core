@@ -48,7 +48,6 @@ export type OracleReportParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
-  vaultsTotalTreasuryFeesShares?: bigint;
   vaultsTotalDeficit?: bigint;
   vaultsDataTreeRoot?: string;
   vaultsDataTreeCid?: string;
@@ -86,7 +85,6 @@ export const report = async (
     numExitedValidatorsByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
-    vaultsTotalTreasuryFeesShares = 0n,
     vaultsTotalDeficit = 0n,
     vaultsDataTreeRoot = ZERO_BYTES32,
     vaultsDataTreeCid = "",
@@ -148,7 +146,6 @@ export const report = async (
       clBalance: postCLBalance,
       withdrawalVaultBalance,
       elRewardsVaultBalance,
-      vaultsTotalTreasuryFeesShares,
       vaultsTotalDeficit,
       vaultsDataTreeRoot,
       vaultsDataTreeCid,
@@ -334,7 +331,6 @@ type SimulateReportParams = {
   clBalance: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
-  vaultsTotalTreasuryFeesShares: bigint;
   vaultsTotalDeficit: bigint;
   vaultsDataTreeRoot: string;
   vaultsDataTreeCid: string;
@@ -358,10 +354,7 @@ const simulateReport = async (
     clBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    vaultsTotalTreasuryFeesShares,
     vaultsTotalDeficit,
-    vaultsDataTreeRoot,
-    vaultsDataTreeCid,
   }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
@@ -571,7 +564,6 @@ export type OracleReportSubmitParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   withdrawalFinalizationBatches?: bigint[];
   isBunkerMode?: boolean;
-  vaultsTotalTreasuryFeesShares?: bigint;
   vaultsTotalDeficit?: bigint;
   vaultsDataTreeRoot?: string;
   vaultsDataTreeCid?: string;
@@ -603,7 +595,6 @@ const submitReport = async (
     numExitedValidatorsByStakingModule = [],
     withdrawalFinalizationBatches = [],
     isBunkerMode = false,
-    vaultsTotalTreasuryFeesShares = 0n,
     vaultsTotalDeficit = 0n,
     vaultsDataTreeRoot = ZERO_BYTES32,
     vaultsDataTreeCid = "",
@@ -626,7 +617,6 @@ const submitReport = async (
     "Num exited validators by staking module": numExitedValidatorsByStakingModule,
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
-    "Vaults total treasury fees": vaultsTotalTreasuryFeesShares,
     "Vaults total deficit": vaultsTotalDeficit,
     "Vaults data tree root": vaultsDataTreeRoot,
     "Vaults data tree cid": vaultsDataTreeCid,
@@ -651,7 +641,6 @@ const submitReport = async (
     numExitedValidatorsByStakingModule,
     withdrawalFinalizationBatches,
     isBunkerMode,
-    vaultsTotalTreasuryFeesShares,
     vaultsTotalDeficit,
     vaultsDataTreeRoot,
     vaultsDataTreeCid,

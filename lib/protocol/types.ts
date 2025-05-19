@@ -92,7 +92,6 @@ export interface ContractTypes {
   UpgradeableBeacon: UpgradeableBeacon;
   VaultHub: VaultHub;
   OperatorGrid: OperatorGrid;
-  LazyOracle: LazyOracle;
   ICSModule: ICSModule;
   LazyOracle: LazyOracle;
 }

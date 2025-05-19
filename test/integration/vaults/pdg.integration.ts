@@ -3,9 +3,9 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { PredepositGuarantee, StakingVault } from "typechain-types";
+import { StakingVault } from "typechain-types";
 
-import { generateValidator, LoadedContract } from "lib";
+import { generateValidator } from "lib";
 import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLido } from "lib/protocol";
 import { getProofAndDepositData } from "lib/protocol/helpers/vaults";
 
