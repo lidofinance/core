@@ -115,8 +115,8 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         __Ownable2Step_init();
         _setDepositor(_depositor);
         _storage().nodeOperator = _nodeOperator;
-        
-        emit NodeOperatorSet(msg.sender, _nodeOperator);
+
+        emit NodeOperatorSet(_nodeOperator);
     }
 
     /*
@@ -218,8 +218,8 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     function fund() external payable onlyOwner {
         if (msg.value == 0) revert ZeroArgument("msg.value");
-        
-        emit EtherFunded(msg.sender, msg.value);
+
+        emit EtherFunded(msg.value);
     }
 
     /**
@@ -235,7 +235,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
 
-        emit EtherWithdrawn(msg.sender, _recipient, _ether);
+        emit EtherWithdrawn(_recipient, _ether);
     }
 
     /*
@@ -309,7 +309,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
             );
         }
 
-        emit DepositedToBeaconChain(msg.sender, numberOfDeposits, totalAmount);
+        emit DepositedToBeaconChain(numberOfDeposits, totalAmount);
     }
 
     /*
@@ -334,7 +334,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         uint256 keysCount = _pubkeys.length / PUBLIC_KEY_LENGTH;
         for (uint256 i = 0; i < keysCount; i++) {
             bytes memory pubkey = _pubkeys[i * PUBLIC_KEY_LENGTH:(i + 1) * PUBLIC_KEY_LENGTH];
-            emit ValidatorExitRequested(msg.sender, /* indexed */ pubkey, pubkey);
+            emit ValidatorExitRequested(/* indexed */ pubkey, pubkey);
         }
     }
 
@@ -381,7 +381,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
             if (!success) revert TransferFailed(_refundRecipient, excess);
         }
 
-        emit ValidatorWithdrawalsTriggered(msg.sender, _refundRecipient, _pubkeys, _amounts, excess);
+        emit ValidatorWithdrawalsTriggered(_pubkeys, _amounts, excess, _refundRecipient);
     }
 
     /**
@@ -414,7 +414,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
             if (!success) revert TransferFailed(_refundRecipient, excess);
         }
 
-        emit ValidatorEjectionsTriggered(msg.sender, _refundRecipient, _pubkeys, excess);
+        emit ValidatorEjectionsTriggered(_pubkeys, excess, _refundRecipient);
     }
 
     /*
@@ -488,7 +488,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         if (_depositor == _storage().depositor) revert NewDepositorSameAsPrevious();
         address previousDepositor = _storage().depositor;
         _storage().depositor = _depositor;
-        emit DepositorSet(msg.sender, previousDepositor, _depositor);
+        emit DepositorSet(previousDepositor, _depositor);
     }
 
     /*
@@ -501,33 +501,29 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
     /**
      * @notice Emitted when ether is funded to the `StakingVault`
-     * @param sender Address that funded the `StakingVault`
      * @param amount Amount of ether funded
      */
-    event EtherFunded(address indexed sender, uint256 amount);
+    event EtherFunded(uint256 amount);
 
     /**
      * @notice Emitted when ether is withdrawn from the `StakingVault`
-     * @param sender Address that withdrew the ether
      * @param recipient Address that received the ether
      * @param amount Amount of ether withdrawn
      */
-    event EtherWithdrawn(address indexed sender, address indexed recipient, uint256 amount);
+    event EtherWithdrawn(address indexed recipient, uint256 amount);
 
     /**
      * @notice Emitted when the node operator is set in the `StakingVault`
-     * @param sender Address that set the node operator
      * @param nodeOperator Address of the node operator
      */
-    event NodeOperatorSet(address indexed sender, address indexed nodeOperator);
+    event NodeOperatorSet(address indexed nodeOperator);
 
     /**
      * @notice Emitted when the depositor is set in the `StakingVault`
-     * @param sender Address that set the depositor
      * @param previousDepositor Previous depositor
      * @param newDepositor New depositor
      */
-    event DepositorSet(address indexed sender, address indexed previousDepositor, address indexed newDepositor);
+    event DepositorSet(address indexed previousDepositor, address indexed newDepositor);
 
     /**
      * @notice Emitted when the beacon chain deposits are paused
@@ -541,42 +537,37 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
     /**
      * @notice Emitted when ether is deposited to `DepositContract`.
-     * @param _sender Address that initiated the deposit.
      * @param _deposits Number of validator deposits made.
      * @param _totalAmount Total amount of ether deposited.
      */
-    event DepositedToBeaconChain(address indexed _sender, uint256 _deposits, uint256 _totalAmount);
+    event DepositedToBeaconChain(uint256 _deposits, uint256 _totalAmount);
 
     /**
      * @notice Emitted when vault owner requests node operator to exit validators from the beacon chain
-     * @param sender Address that requested the exit
      * @param pubkey Indexed public key of the validator to exit
      * @param pubkeyRaw Raw public key of the validator to exit
      * @dev    Signals to node operators that they should exit this validator from the beacon chain
      */
-    event ValidatorExitRequested(address indexed sender, bytes pubkey, bytes pubkeyRaw);
+    event ValidatorExitRequested(bytes pubkey, bytes pubkeyRaw);
 
     /**
      * @notice Emitted when validator withdrawals are requested via EIP-7002
-     * @param sender Address that requested the withdrawals
      * @param pubkeys Concatenated public keys of the validators to withdraw
      * @param amounts Amounts of ether to withdraw per validator
      * @param refundRecipient Address to receive any excess withdrawal fee
      * @param excess Amount of excess fee refunded to recipient
      */
     event ValidatorWithdrawalsTriggered(
-        address indexed sender,
-        address indexed refundRecipient,
         bytes pubkeys,
         uint64[] amounts,
-        uint256 excess
+        uint256 excess,
+        address indexed refundRecipient
     );
 
     event ValidatorEjectionsTriggered(
-        address indexed sender,
-        address indexed refundRecipient,
         bytes pubkeys,
-        uint256 excess
+        uint256 excess,
+        address indexed refundRecipient
     );
 
     /*
