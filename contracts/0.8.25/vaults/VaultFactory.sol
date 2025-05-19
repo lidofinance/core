@@ -79,7 +79,7 @@ contract VaultFactory {
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
 
-        emit VaultCreated(address(vault), _defaultAdmin);
+        emit VaultCreated(address(vault), address(dashboard));
         emit DashboardCreated(address(dashboard), _defaultAdmin);
     }
 
