@@ -102,16 +102,17 @@ export async function createVaultWithDashboard(
 
   const vaultAddress = createVaultEvents[0].args!.vault;
   const ownerAddress = createVaultEvents[0].args!.owner;
-  expect(ownerAddress).to.equal(owner.address);
+
 
   const createDashboardEvents = ctx.getEvents(createVaultTxReceipt, "DashboardCreated");
   expect(createDashboardEvents.length).to.equal(1n, "Expected exactly one DashboardCreated event");
   expect(createDashboardEvents[0].args).to.not.be.undefined, "DashboardCreated event args should be defined";
 
+  const dashboardAddress = createDashboardEvents[0].args!.dashboard;
+  expect(ownerAddress).to.equal(dashboardAddress);
+
   const adminAddress = createDashboardEvents[0].args!.admin;
   expect(adminAddress).to.equal(owner.address);
-
-  const dashboardAddress = createDashboardEvents[0].args!.dashboard;
 
   const stakingVault = await ethers.getContractAt("StakingVault", vaultAddress);
   const dashboard = await ethers.getContractAt("Dashboard", dashboardAddress);
@@ -198,25 +199,34 @@ export function createVaultsReportTree(vaults: VaultReportItem[]) {
 }
 
 export async function reportVaultDataWithProof(
+  ctx: ProtocolContext,
   stakingVault: StakingVault,
-  totalValue: bigint | null = null,
-  inOutDelta: bigint | null = null,
+  totalValue?: bigint,
+  inOutDelta?: bigint,
+  liabilityShares?: bigint,
 ) {
-  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
-  const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
-  const totalValueArg = totalValue ?? (await stakingVault.totalValue());
-  const inOutDeltaArg = inOutDelta ?? (await stakingVault.inOutDelta());
-  const vaultReport: VaultReportItem = [await stakingVault.getAddress(), totalValueArg, inOutDeltaArg, 0n, 0n];
+  const { vaultHub, locator, lazyOracle } = ctx.contracts;
+
+  const totalValueArg = totalValue ?? (await vaultHub.totalValue(stakingVault));
+  const inOutDeltaArg = inOutDelta ?? (await vaultHub.vaultRecord(stakingVault)).inOutDelta;
+  const liabilitySharesArg = liabilityShares ?? await vaultHub.liabilityShares(stakingVault);
+
+  const vaultReport: VaultReportItem = [await stakingVault.getAddress(), totalValueArg, inOutDeltaArg, 0n, liabilitySharesArg];
   const reportTree = createVaultsReportTree([vaultReport]);
 
-  const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-  await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
-  return await vaultHub.updateVaultData(
+  const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
+  await lazyOracle.connect(accountingSigner).updateReportData(
+    await getCurrentBlockTimestamp(),
+    reportTree.root,
+    "",
+  );
+
+  return await lazyOracle.updateVaultData(
     await stakingVault.getAddress(),
     totalValueArg,
     inOutDeltaArg,
     0n,
-    0n,
+    liabilitySharesArg,
     reportTree.getProof(0),
   );
 }

@@ -108,7 +108,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         );
 
       const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
-      const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "DashboardCreated");
+      const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
 
       testDashboard = await ethers.getContractAt("Dashboard", createVaultEvents[0].args?.owner);
 
@@ -561,11 +561,11 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
     describe("Verify ACL for methods that require only role", () => {
       describe("Dashboard methods", () => {
-        it("claimNodeOperatorFee", async () => {
+        it("setNodeOperatorFeeRecipient", async () => {
           await testGrantingRole(
             testDashboard,
-            "claimNodeOperatorFee",
-            await testDashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
+            "setNodeOperatorFeeRecipient",
+            await testDashboard.NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE(),
             [stranger],
             nodeOperatorManager,
           );
