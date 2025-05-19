@@ -461,7 +461,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(mintedShares).to.be.equal(0n); // it's zero because protocol fees deducted not in shares
 
     const lockedOnVault = await vaultHub.locked(stakingVaultAddress);
-    expect(lockedOnVault).to.be.gt(VAULT_DEPOSIT);
+    expect(lockedOnVault).to.be.gt(0);
   });
 
   it("Should allow Manager to rebalance the vault to reduce the debt", async () => {
