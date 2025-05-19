@@ -107,14 +107,14 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
       );
     });
 
-    it("reverts if the index is out of range (KeyIndexOutOfRange)", async () => {
+    it("reverts if the index is out of range (ExitDataIndexOutOfRange)", async () => {
       // We have only 1 request => 64 bytes
       const exitRequests = [{ moduleId: 1, nodeOpId: 1, valIndex: 1, valPubkey: PUBKEYS[0] }];
       const data = encodeExitRequestsDataList(exitRequests);
 
       // There is exactly 1 request, so index=1 is out of range (should be 0)
       await expect(oracle.unpackExitRequest(data, DATA_FORMAT_LIST, 1))
-        .to.be.revertedWithCustomError(oracle, "KeyIndexOutOfRange")
+        .to.be.revertedWithCustomError(oracle, "ExitDataIndexOutOfRange")
         .withArgs(1, 1); // index=1, total=1
     });
   });
@@ -142,7 +142,7 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
       const totalItemsCount = 5;
       const deliveredItemsCount = 2;
       const contractVersion = 42;
-      const lastDeliveredKeyIndex = 1;
+      const lastDeliveredExitDataIndex = 1;
 
       // Call the helper to store the hash
       await oracle.storeExitRequestHash(
@@ -150,7 +150,7 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
         totalItemsCount,
         deliveredItemsCount,
         contractVersion,
-        lastDeliveredKeyIndex,
+        lastDeliveredExitDataIndex,
       );
 
       const [returnedTotalItemsCount, returnedDeliveredItemsCount, returnedHistory] =
@@ -160,7 +160,7 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
       expect(returnedDeliveredItemsCount).to.equal(deliveredItemsCount);
       expect(returnedHistory.length).to.equal(1);
       const [firstDelivery] = returnedHistory;
-      expect(firstDelivery.lastDeliveredKeyIndex).to.equal(lastDeliveredKeyIndex);
+      expect(firstDelivery.lastDeliveredExitDataIndex).to.equal(lastDeliveredExitDataIndex);
     });
   });
 });

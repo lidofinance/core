@@ -166,7 +166,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       { data: reportFields.data, dataFormat: reportFields.dataFormat },
       [0, 1, 2, 3],
       ZERO_ADDRESS,
-      0,
       { value: 4 },
     );
 
@@ -174,7 +173,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
     await expect(tx)
       .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
-      .withArgs(requests.length, admin.address, 0);
+      .withArgs(requests.length, admin.address, 1);
   });
 
   it("should triggers exits only for validators in selected request indexes", async () => {
@@ -182,7 +181,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       { data: reportFields.data, dataFormat: reportFields.dataFormat },
       [0, 1, 3],
       ZERO_ADDRESS,
-      0,
       {
         value: 10,
       },
@@ -192,7 +190,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
     await expect(tx)
       .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
-      .withArgs(requests.length, admin.address, 0);
+      .withArgs(requests.length, admin.address, 1);
   });
 
   it("should revert with error if the hash of `requestsData` was not previously submitted in the VEB", async () => {
@@ -204,7 +202,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
         },
         [0],
         ZERO_ADDRESS,
-        0,
         { value: 2 },
       ),
     ).to.be.revertedWithCustomError(oracle, "ExitHashNotSubmitted");
@@ -212,39 +209,27 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
   it("should revert with error if requested index out of range", async () => {
     await expect(
-      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [5], ZERO_ADDRESS, 0, {
+      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [5], ZERO_ADDRESS, {
         value: 2,
       }),
     )
-      .to.be.revertedWithCustomError(oracle, "KeyIndexOutOfRange")
+      .to.be.revertedWithCustomError(oracle, "ExitDataIndexOutOfRange")
       .withArgs(5, 4);
   });
 
   it("should revert with an error if the key index array contains duplicates", async () => {
     await expect(
-      oracle.triggerExits(
-        { data: reportFields.data, dataFormat: reportFields.dataFormat },
-        [1, 2, 2],
-        ZERO_ADDRESS,
-        0,
-        {
-          value: 2,
-        },
-      ),
-    ).to.be.revertedWithCustomError(oracle, "InvalidKeyIndexSortOrder");
+      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [1, 2, 2], ZERO_ADDRESS, {
+        value: 2,
+      }),
+    ).to.be.revertedWithCustomError(oracle, "InvalidExitDataIndexSortOrder");
   });
 
   it("should revert with an error if the key index array is not strictly increasing", async () => {
     await expect(
-      oracle.triggerExits(
-        { data: reportFields.data, dataFormat: reportFields.dataFormat },
-        [1, 2, 2],
-        ZERO_ADDRESS,
-        0,
-        {
-          value: 2,
-        },
-      ),
-    ).to.be.revertedWithCustomError(oracle, "InvalidKeyIndexSortOrder");
+      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [1, 2, 2], ZERO_ADDRESS, {
+        value: 2,
+      }),
+    ).to.be.revertedWithCustomError(oracle, "InvalidExitDataIndexSortOrder");
   });
 });
