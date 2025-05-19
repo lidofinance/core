@@ -82,6 +82,7 @@ describe("NodeOperatorsRegistry.sol:stakingLimit", () => {
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
   const exitDeadlineThreshold = 86400n;
+  const reportingWindow = 86400n;
   const contractVersion = 2n;
 
   before(async () => {
@@ -125,7 +126,7 @@ describe("NodeOperatorsRegistry.sol:stakingLimit", () => {
     locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy.
-    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold))
+    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold, reportingWindow))
       .to.emit(nor, "ContractVersionSet")
       .withArgs(contractVersion)
       .and.to.emit(nor, "LocatorContractSet")

@@ -4,12 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  HashConsensus__Harness,
-  OracleReportSanityChecker,
-  ValidatorsExitBus__Harness,
-  WithdrawalVault__MockForVebo,
-} from "typechain-types";
+import { HashConsensus__Harness, OracleReportSanityChecker, ValidatorsExitBus__Harness } from "typechain-types";
 
 import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
@@ -30,7 +25,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
   let oracleReportSanityChecker: OracleReportSanityChecker;
-  let withdrawalVault: WithdrawalVault__MockForVebo;
 
   let oracleVersion: bigint;
 
@@ -108,13 +102,11 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     oracle = deployed.oracle;
     consensus = deployed.consensus;
     oracleReportSanityChecker = deployed.oracleReportSanityChecker;
-    withdrawalVault = deployed.withdrawalVault;
 
     await initVEBO({
       admin: admin.address,
       oracle,
       consensus,
-      withdrawalVault,
       resumeAfterDeploy: true,
       lastProcessingRefSlot: LAST_PROCESSING_REF_SLOT,
     });
@@ -328,7 +320,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const encodedData = ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [data, reportData.dataFormat]);
       const reportDataHash = ethers.keccak256(encodedData);
 
-      await expect(tx).to.emit(oracle, "StoredExitRequestHash").withArgs(reportDataHash);
+      await expect(tx).to.emit(oracle, "RequestsHashSubmitted").withArgs(reportDataHash);
     });
 
     it("updates processing state", async () => {
@@ -617,8 +609,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     it("Set exit limit", async () => {
       const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
       await oracle.grantRole(role, admin);
-      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7, 7);
-      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(7, 7);
+      const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7, 1, 48);
+      await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(7, 1, 48);
     });
 
     it("deliver report by actor different from oracle", async () => {
@@ -636,15 +628,15 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
       await oracle.grantRole(role, authorizedEntity);
 
-      const submitTx = await oracle.connect(authorizedEntity).submitReportHash(exitRequestHash);
-      await expect(submitTx).to.emit(oracle, "StoredExitRequestHash").withArgs(exitRequestHash);
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
 
       const exitRequest = {
         dataFormat: reportData.dataFormat,
         data: reportData.data,
       };
 
-      const emitTx = await oracle.emitExitEvents(exitRequest);
+      const emitTx = await oracle.submitExitRequestsData(exitRequest);
 
       const timestamp = await oracle.getTime();
 

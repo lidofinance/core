@@ -8,21 +8,15 @@ interface IValidatorsExitBus {
         uint256 dataFormat;
     }
 
-    struct DirectExitData {
-        uint256 stakingModuleId;
-        uint256 nodeOperatorId;
-        bytes validatorsPubkeys;
-    }
-
     struct DeliveryHistory {
         // index in array of requests
         uint256 lastDeliveredKeyIndex;
         uint256 timestamp;
     }
 
-    function submitReportHash(bytes32 exitReportHash) external;
+    function submitExitRequestsHash(bytes32 exitReportHash) external;
 
-    function emitExitEvents(ExitRequestData calldata request) external;
+    function submitExitRequestsData(ExitRequestData calldata request) external;
 
     function triggerExits(
         ExitRequestData calldata request,
@@ -31,13 +25,18 @@ interface IValidatorsExitBus {
         uint8 exitType
     ) external payable;
 
-    function triggerExitsDirectly(
-        DirectExitData calldata exitData,
-        address refundRecipient,
-        uint8 exitType
-    ) external payable;
+    function setExitRequestLimit(uint256 maxExitRequests, uint256 exitsPerFrame, uint256 frameDuration) external;
 
-    function setExitRequestLimit(uint256 exitsDailyLimit, uint256 twExitsDailyLimit) external;
+    function getExitRequestLimitFullInfo()
+        external
+        view
+        returns (
+            uint256 maxExitRequestsLimit,
+            uint256 exitsPerFrame,
+            uint256 frameDuration,
+            uint256 prevExitRequestsLimit,
+            uint256 currentExitRequestsLimit
+        );
 
     function getExitRequestsDeliveryHistory(
         bytes32 exitRequestsHash

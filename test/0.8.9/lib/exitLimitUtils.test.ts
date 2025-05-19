@@ -4,12 +4,12 @@ import { ethers } from "hardhat";
 import { ExitLimitUtils__Harness, ExitLimitUtilsStorage__Harness } from "typechain-types";
 
 interface ExitRequestLimitData {
-  dailyLimit: bigint;
-  dailyExitCount: bigint;
-  currentDay: bigint;
+  maxExitRequestsLimit: bigint;
+  prevExitRequestsLimit: bigint;
+  prevTimestamp: bigint;
+  frameDuration: bigint;
+  exitsPerFrame: bigint;
 }
-
-const DAY = 86400;
 
 describe("ExitLimitUtils.sol", () => {
   let exitLimitStorage: ExitLimitUtilsStorage__Harness;
@@ -25,195 +25,438 @@ describe("ExitLimitUtils.sol", () => {
 
     it("Min possible values", async () => {
       data = {
-        dailyLimit: 0n,
-        dailyExitCount: 0n,
-        currentDay: 0n,
+        maxExitRequestsLimit: 0n,
+        prevExitRequestsLimit: 0n,
+        prevTimestamp: 0n,
+        frameDuration: 0n,
+        exitsPerFrame: 0n,
       };
 
       await exitLimitStorage.setStorageExitRequestLimit(data);
 
       const result = await exitLimitStorage.getStorageExitRequestLimit();
-      expect(result.dailyLimit).to.equal(0n);
-      expect(result.dailyExitCount).to.equal(0n);
-      expect(result.currentDay).to.equal(0n);
+      expect(result.maxExitRequestsLimit).to.equal(0n);
+      expect(result.prevExitRequestsLimit).to.equal(0n);
+      expect(result.prevTimestamp).to.equal(0n);
+      expect(result.frameDuration).to.equal(0n);
+      expect(result.exitsPerFrame).to.equal(0n);
     });
 
     it("Max possible values", async () => {
-      const MAX_UINT96 = 2n ** 96n - 1n;
-      const MAX_UINT64 = 2n ** 64n - 1n;
+      const MAX_UINT32 = 2n ** 32n - 1n;
 
       data = {
-        dailyLimit: MAX_UINT96,
-        dailyExitCount: MAX_UINT96,
-        currentDay: MAX_UINT64,
+        maxExitRequestsLimit: MAX_UINT32,
+        prevExitRequestsLimit: MAX_UINT32,
+        prevTimestamp: MAX_UINT32,
+        frameDuration: MAX_UINT32,
+        exitsPerFrame: MAX_UINT32,
       };
 
       await exitLimitStorage.setStorageExitRequestLimit(data);
 
       const result = await exitLimitStorage.getStorageExitRequestLimit();
-      expect(result.dailyLimit).to.equal(MAX_UINT96);
-      expect(result.dailyExitCount).to.equal(MAX_UINT96);
-      expect(result.currentDay).to.equal(MAX_UINT64);
+      expect(result.maxExitRequestsLimit).to.equal(MAX_UINT32);
+      expect(result.prevExitRequestsLimit).to.equal(MAX_UINT32);
+      expect(result.prevTimestamp).to.equal(MAX_UINT32);
+      expect(result.frameDuration).to.equal(MAX_UINT32);
+      expect(result.exitsPerFrame).to.equal(MAX_UINT32);
     });
 
     it("Some random values", async () => {
-      const dailyLimit = 100n;
-      const dailyExitCount = 50n;
-      const currentDay = 2n;
+      const maxExitRequestsLimit = 100n;
+      const prevExitRequestsLimit = 9n;
+      const prevTimestamp = 90n;
+      const frameDuration = 10n;
+      const exitsPerFrame = 1n;
 
       data = {
-        dailyLimit,
-        dailyExitCount,
-        currentDay,
+        maxExitRequestsLimit,
+        prevExitRequestsLimit,
+        prevTimestamp,
+        frameDuration,
+        exitsPerFrame,
       };
 
       await exitLimitStorage.setStorageExitRequestLimit(data);
 
       const result = await exitLimitStorage.getStorageExitRequestLimit();
-      expect(result.dailyLimit).to.equal(dailyLimit);
-      expect(result.dailyExitCount).to.equal(dailyExitCount);
-      expect(result.currentDay).to.equal(currentDay);
+      expect(result.maxExitRequestsLimit).to.equal(maxExitRequestsLimit);
+      expect(result.prevExitRequestsLimit).to.equal(prevExitRequestsLimit);
+      expect(result.prevTimestamp).to.equal(prevTimestamp);
+      expect(result.frameDuration).to.equal(frameDuration);
+      expect(result.exitsPerFrame).to.equal(exitsPerFrame);
     });
   });
 
   context("ExitLimitUtils", () => {
-    context("consumeLimit", () => {
-      it("should allow unlimited exits when dailyLimit was not set", async () => {
-        await exitLimit.harness_setState(0, 0, 0);
-        const result = await exitLimit.consumeLimit(100, 0);
-        expect(result).to.equal(100);
+    context("calculateCurrentExitLimit", () => {
+      beforeEach(async () => {
+        await exitLimit.harness_setState(0, 0, 0, 0, 0);
       });
 
-      it("should reset on new day and return requestsCount if under limit", async () => {
-        await exitLimit.harness_setState(10, 5, 1);
-        const result = await exitLimit.consumeLimit(8, 2n * BigInt(DAY));
-        expect(result).to.equal(8);
+      it("should return prevExitRequestsLimit value (nothing restored), if no time passed", async () => {
+        const timestamp = 1000;
+        const maxExitRequestsLimit = 10;
+        const prevExitRequestsLimit = 5; // remaining limit from prev usage
+        const exitsPerFrame = 1;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          timestamp,
+        );
+
+        const result = await exitLimit.calculateCurrentExitLimit(timestamp);
+        expect(result).to.equal(prevExitRequestsLimit);
       });
 
-      it("should cap requests to remaining limit", async () => {
-        await exitLimit.harness_setState(10, 8, 0);
-        const result = await exitLimit.consumeLimit(5, 0);
-        expect(result).to.equal(2);
+      it("should return prevExitRequestsLimit value (nothing restored), if less than one frame passed", async () => {
+        const prevTimestamp = 1000;
+        const maxExitRequestsLimit = 10;
+        const prevExitRequestsLimit = 5; // remaining limit from prev usage
+        const exitsPerFrame = 1;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          prevTimestamp,
+        );
+
+        const result = await exitLimit.calculateCurrentExitLimit(prevTimestamp + 9);
+        expect(result).to.equal(prevExitRequestsLimit);
       });
 
-      it("should revert if no limit left", async () => {
-        await exitLimit.harness_setState(5, 5, 0);
-        await expect(exitLimit.consumeLimit(1, 0)).to.be.revertedWithCustomError(exitLimit, "ExitRequestsLimit");
+      it("Should return prevExitRequestsLimit + 1 (restored one exit), if exactly one frame passed", async () => {
+        const prevTimestamp = 1000;
+        const maxExitRequestsLimit = 10;
+        const prevExitRequestsLimit = 5; // remaining limit from prev usage
+        const exitsPerFrame = 1;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          prevTimestamp,
+        );
+
+        const result = await exitLimit.calculateCurrentExitLimit(prevTimestamp + frameDuration);
+        expect(result).to.equal(prevExitRequestsLimit + 1);
       });
 
-      it("should respect new dailyLimit after changing from unlimited", async () => {
-        await exitLimit.harness_setState(0, 50, 0);
-        const newData = await exitLimit.setExitDailyLimit(60, 0);
-        await exitLimit.harness_setState(newData.dailyLimit, newData.dailyExitCount, newData.currentDay);
-        const result = await exitLimit.consumeLimit(11, 0);
-        expect(result).to.equal(10);
+      it("Should return prevExitRequestsLimit + restored value, if multiple full frames passed, restored value does not exceed maxExitRequestsLimit", async () => {
+        const prevTimestamp = 1000;
+        const maxExitRequestsLimit = 20;
+        const prevExitRequestsLimit = 5; // remaining limit from prev usage
+        const exitsPerFrame = 1;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          prevTimestamp,
+        );
+        const result = await exitLimit.calculateCurrentExitLimit(prevTimestamp + 40);
+        expect(result).to.equal(prevExitRequestsLimit + 4);
       });
 
-      it("should revert if after new dailyLimit dailyEXitCount exceed accepted amount", async () => {
-        await exitLimit.harness_setState(0, 50, 0);
-        const newData = await exitLimit.setExitDailyLimit(50, 0);
-        await exitLimit.harness_setState(newData.dailyLimit, newData.dailyExitCount, newData.currentDay);
-        await expect(exitLimit.consumeLimit(1, 0)).to.be.revertedWithCustomError(exitLimit, "ExitRequestsLimit");
+      it("Should return maxExitRequestsLimit, if restored limit exceeds max", async () => {
+        const prevTimestamp = 1000;
+        const maxExitRequestsLimit = 100;
+        const prevExitRequestsLimit = 90; // remaining limit from prev usage
+        const exitsPerFrame = 3;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          prevTimestamp,
+        );
+
+        const result = await exitLimit.calculateCurrentExitLimit(prevTimestamp + 100); // 10 frames * 3 = 30
+        expect(result).to.equal(maxExitRequestsLimit);
       });
 
-      it("should process new amount of requests if new day come", async () => {
-        await exitLimit.harness_setState(0, 50, 1);
-        const newData = await exitLimit.setExitDailyLimit(50, BigInt(DAY));
-        await exitLimit.harness_setState(newData.dailyLimit, newData.dailyExitCount, newData.currentDay);
-        const result = await exitLimit.consumeLimit(1, 2n * BigInt(DAY));
-        expect(result).to.equal(1);
+      it("Should return prevExitRequestsLimit, if exitsPerFrame = 0", async () => {
+        const prevTimestamp = 1000;
+        const maxExitRequestsLimit = 100;
+        const prevExitRequestsLimit = 7; // remaining limit from prev usage
+        const exitsPerFrame = 0;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          prevTimestamp,
+        );
+
+        const result = await exitLimit.calculateCurrentExitLimit(prevTimestamp + 100);
+        expect(result).to.equal(7);
+      });
+
+      it("non-multiple frame passed (should truncate fractional frame)", async () => {
+        const prevTimestamp = 1000;
+        const maxExitRequestsLimit = 20;
+        const prevExitRequestsLimit = 5; // remaining limit from prev usage
+        const exitsPerFrame = 1;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          prevTimestamp,
+        );
+
+        const result = await exitLimit.calculateCurrentExitLimit(prevTimestamp + 25);
+        expect(result).to.equal(7); // 5 + 2
       });
     });
 
-    context("checkLimit", () => {
-      it("should allow unlimited exits when dailyLimit was not set", async () => {
-        await exitLimit.harness_setState(0, 0, 0);
-        const tx = await exitLimit.checkLimit(100, 0);
-        await expect(tx).to.emit(exitLimit, "CheckLimitDone");
+    context("updatePrevExitLimit", () => {
+      beforeEach(async () => {
+        await exitLimit.harness_setState(0, 0, 0, 0, 0);
       });
 
-      it("should reset on new day and pass checks if under limit", async () => {
-        await exitLimit.harness_setState(10, 5, 1);
-        const tx = await exitLimit.checkLimit(8, 2n * BigInt(DAY));
-        await expect(tx).to.emit(exitLimit, "CheckLimitDone");
+      it("should revert with LIMIT_EXCEEDED, if newExitRequestLimit exceeded maxExitRequestsLimit", async () => {
+        const prevTimestamp = 1000;
+
+        const maxExitRequestsLimit = 10;
+        const prevExitRequestsLimit = 5; // remaining limit from prev usage
+        const exitsPerFrame = 1;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          prevTimestamp,
+        );
+
+        await expect(exitLimit.updatePrevExitLimit(11, prevTimestamp + 10)).to.be.revertedWith("LIMIT_EXCEEDED");
       });
 
-      it("should revert if limit doesnt cover required amount of requests", async () => {
-        await exitLimit.harness_setState(10, 8, 0);
-        await expect(exitLimit.checkLimit(5, 0)).to.be.revertedWithCustomError(exitLimit, "ExitRequestsLimit");
+      it("should increase prevTimestamp on frame duration if one frame passed", async () => {
+        const prevTimestamp = 1000;
+
+        const maxExitRequestsLimit = 10;
+        const prevExitRequestsLimit = 5; // remaining limit from prev usage
+        const exitsPerFrame = 1;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          prevTimestamp,
+        );
+
+        const updated = await exitLimit.updatePrevExitLimit(4, prevTimestamp + 10);
+        expect(updated.prevExitRequestsLimit).to.equal(4);
+        expect(updated.prevTimestamp).to.equal(prevTimestamp + 10);
       });
 
-      it("should revert if no limit left", async () => {
-        await exitLimit.harness_setState(5, 5, 0);
-        await expect(exitLimit.checkLimit(1, 0)).to.be.revertedWithCustomError(exitLimit, "ExitRequestsLimit");
+      it("should not change prevTimestamp, as less than frame passed", async () => {
+        const prevTimestamp = 1000;
+        const maxExitRequestsLimit = 10;
+        const prevExitRequestsLimit = 5; // remaining limit from prev usage
+        const exitsPerFrame = 1;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          prevTimestamp,
+        );
+
+        const updated = await exitLimit.updatePrevExitLimit(3, prevTimestamp + 9);
+        expect(updated.prevExitRequestsLimit).to.equal(3);
+        expect(updated.prevTimestamp).to.equal(prevTimestamp);
       });
 
-      it("should respect new dailyLimit after changing from unlimited", async () => {
-        await exitLimit.harness_setState(0, 50, 0);
-        const newData = await exitLimit.setExitDailyLimit(60, 0);
-        await exitLimit.harness_setState(newData.dailyLimit, newData.dailyExitCount, newData.currentDay);
-        const tx = await exitLimit.checkLimit(10, 0);
-        await expect(tx).to.emit(exitLimit, "CheckLimitDone");
+      it("should increase prevTimestamp on multiple frames value, if multiple frames passed", async () => {
+        const prevTimestamp = 1000;
+        const maxExitRequestsLimit = 100;
+        const prevExitRequestsLimit = 90; // remaining limit from prev usage
+        const exitsPerFrame = 5;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          prevTimestamp,
+        );
+
+        const updated = await exitLimit.updatePrevExitLimit(85, prevTimestamp + 45);
+        expect(updated.prevExitRequestsLimit).to.equal(85);
+        expect(updated.prevTimestamp).to.equal(prevTimestamp + 40);
       });
 
-      it("should revert if after new dailyLimit dailyEXitCount exceed accepted amount", async () => {
-        await exitLimit.harness_setState(0, 50, 0);
-        const newData = await exitLimit.setExitDailyLimit(60, 0);
-        await exitLimit.harness_setState(newData.dailyLimit, newData.dailyExitCount, newData.currentDay);
-        await expect(exitLimit.checkLimit(11, 0)).to.be.revertedWithCustomError(exitLimit, "ExitRequestsLimit");
-      });
+      it("should not change prevTimestamp, if no time passed", async () => {
+        const prevTimestamp = 1000;
+        const maxExitRequestsLimit = 50;
+        const prevExitRequestsLimit = 25; // remaining limit from prev usage
+        const exitsPerFrame = 2;
+        const frameDuration = 10;
 
-      it("should process new amount of requests if new day come", async () => {
-        await exitLimit.harness_setState(0, 50, 1);
-        const newData = await exitLimit.setExitDailyLimit(50, BigInt(DAY));
-        await exitLimit.harness_setState(newData.dailyLimit, newData.dailyExitCount, newData.currentDay);
-        const tx = await exitLimit.checkLimit(1, 2n * BigInt(DAY));
-        await expect(tx).to.emit(exitLimit, "CheckLimitDone");
+        await exitLimit.harness_setState(
+          maxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          prevTimestamp,
+        );
+
+        const updated = await exitLimit.updatePrevExitLimit(20, prevTimestamp);
+        expect(updated.prevExitRequestsLimit).to.equal(20);
+        expect(updated.prevTimestamp).to.equal(prevTimestamp);
       });
     });
 
-    context("updateRequestsCounter", () => {
-      it("should revert if newCount exceed uint96", async () => {
-        await exitLimit.harness_setState(0, 0, 0);
+    context("setExitLimits", () => {
+      beforeEach(async () => {
+        await exitLimit.harness_setState(0, 0, 0, 0, 0);
+      });
 
-        await expect(exitLimit.updateRequestsCounter(2n ** 96n, 2n * BigInt(DAY))).to.be.revertedWith(
-          "TOO_LARGE_REQUESTS_COUNT_LIMIT",
+      it("should initialize limits", async () => {
+        const timestamp = 1000;
+        const maxExitRequestsLimit = 100;
+        const exitsPerFrame = 2;
+        const frameDuration = 10;
+
+        const result = await exitLimit.setExitLimits(maxExitRequestsLimit, exitsPerFrame, frameDuration, timestamp);
+
+        expect(result.maxExitRequestsLimit).to.equal(maxExitRequestsLimit);
+        expect(result.exitsPerFrame).to.equal(exitsPerFrame);
+        expect(result.frameDuration).to.equal(frameDuration);
+        expect(result.prevExitRequestsLimit).to.equal(maxExitRequestsLimit);
+        expect(result.prevTimestamp).to.equal(timestamp);
+      });
+
+      it("should set prevExitRequestsLimit to new maxExitRequestsLimit, if new maxExitRequestsLimit is lower than prevExitRequestsLimit", async () => {
+        const timestamp = 900;
+        const oldMaxExitRequestsLimit = 100;
+        const prevExitRequestsLimit = 80;
+        const exitsPerFrame = 2;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          oldMaxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          timestamp,
+        );
+
+        const newMaxExitRequestsLimit = 50;
+        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDuration, timestamp);
+
+        expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+        expect(result.prevExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+        expect(result.prevTimestamp).to.equal(timestamp);
+      });
+
+      it("should not update prevExitRequestsLimit, if new maxExitRequestsLimit is higher", async () => {
+        const timestamp = 900;
+        const oldMaxExitRequestsLimit = 100;
+        const prevExitRequestsLimit = 80;
+        const exitsPerFrame = 2;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          oldMaxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          timestamp,
+        );
+
+        const newMaxExitRequestsLimit = 150;
+
+        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDuration, timestamp);
+
+        expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+        expect(result.prevExitRequestsLimit).to.equal(prevExitRequestsLimit);
+        expect(result.prevTimestamp).to.equal(timestamp);
+      });
+
+      it("should reset prevExitRequestsLimit if old max was zero", async () => {
+        const timestamp = 900;
+        const oldMaxExitRequestsLimit = 0;
+        const prevExitRequestsLimit = 0;
+        const exitsPerFrame = 2;
+        const frameDuration = 10;
+
+        await exitLimit.harness_setState(
+          oldMaxExitRequestsLimit,
+          prevExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+          timestamp,
+        );
+
+        const newMaxExitRequestsLimit = 77;
+        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDuration, timestamp);
+
+        expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+        expect(result.prevExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+        expect(result.prevTimestamp).to.equal(timestamp);
+      });
+
+      it("should revert if maxExitRequestsLimit is too large", async () => {
+        const MAX_UINT32 = 2 ** 32;
+        await expect(exitLimit.setExitLimits(MAX_UINT32, 2, 10, 1000)).to.be.revertedWith(
+          "TOO_LARGE_MAX_EXIT_REQUESTS_LIMIT",
         );
       });
 
-      it("should reset dailyExitLimit and currentDay on new day", async () => {
-        await exitLimit.harness_setState(0, 50, 1);
-
-        const result = await exitLimit.updateRequestsCounter(30, 2n * BigInt(DAY));
-
-        expect(result.currentDay).to.equal(2);
-        expect(result.dailyExitCount).to.equal(30);
-        expect(result.dailyLimit).to.equal(0);
-      });
-
-      it("should revert if new dailyExitCount exceed uint96", async () => {
-        await exitLimit.harness_setState(0, 100, 0);
-
-        await expect(exitLimit.updateRequestsCounter(2n ** 96n - 1n, 0)).to.be.revertedWith(
-          "DAILY_EXIT_COUNT_OVERFLOW",
+      it("should revert if exitsPerFrame is too large", async () => {
+        const MAX_UINT32 = 2 ** 32;
+        await expect(exitLimit.setExitLimits(100, MAX_UINT32, 10, 1000)).to.be.revertedWith(
+          "TOO_LARGE_EXITS_PER_FRAME",
         );
       });
 
-      it("should revert if new dailyExitCount more than dailyLimit", async () => {
-        await exitLimit.harness_setState(100, 50, 0);
+      it("should revert if frameDuration is too large", async () => {
+        const MAX_UINT32 = 2 ** 32;
+        await expect(exitLimit.setExitLimits(100, 2, MAX_UINT32, 1000)).to.be.revertedWith("TOO_LARGE_FRAME_DURATION");
+      });
+    });
 
-        await expect(exitLimit.updateRequestsCounter(2n ** 96n - 1n, 0)).to.be.revertedWith(
-          "DAILY_EXIT_COUNT_OVERFLOW",
-        );
+    context("isExitLimitSet", () => {
+      it("returns false when maxExitRequestsLimit is 0", async () => {
+        await exitLimit.harness_setState(0, 0, 0, 0, 0);
+
+        const result = await exitLimit.isExitLimitSet();
+        expect(result).to.be.false;
       });
 
-      it("should accumulate dailyExitCount even if requests are unlimited", async () => {
-        await exitLimit.harness_setState(0, 50, 1);
+      it("returns true when maxExitRequestsLimit is non-zero", async () => {
+        await exitLimit.harness_setState(100, 50, 2, 10, 1000);
 
-        const result = await exitLimit.updateRequestsCounter(30, BigInt(DAY));
-        expect(result.currentDay).to.equal(1);
-        expect(result.dailyExitCount).to.equal(80);
-        expect(result.dailyLimit).to.equal(0);
+        const result = await exitLimit.isExitLimitSet();
+        expect(result).to.be.true;
       });
     });
   });
