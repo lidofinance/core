@@ -174,7 +174,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory
       .connect(owner)
-      .createVaultWithDashboard(owner, nodeOperator, nodeOperator, VAULT_NODE_OPERATOR_FEE, CONFIRM_EXPIRY, [], "0x", {
+      .createVaultWithDashboard(owner, nodeOperator, nodeOperator, VAULT_NODE_OPERATOR_FEE, CONFIRM_EXPIRY, [], {
         value: VAULT_CONNECTION_DEPOSIT,
       });
 
@@ -193,10 +193,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       },
       {
         role: await dashboard.WITHDRAW_ROLE(),
-        account: curator,
-      },
-      {
-        role: await dashboard.LOCK_ROLE(),
         account: curator,
       },
       {
@@ -233,16 +229,13 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       },
     ]);
 
-    await dashboard.connect(nodeOperator).grantRole(await dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(), nodeOperator);
 
     expect(await isSoleRoleMember(owner, await dashboard.DEFAULT_ADMIN_ROLE())).to.be.true;
 
     expect(await isSoleRoleMember(nodeOperator, await dashboard.NODE_OPERATOR_MANAGER_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(nodeOperator, await dashboard.NODE_OPERATOR_FEE_CLAIM_ROLE())).to.be.true;
 
     expect(await isSoleRoleMember(curator, await dashboard.FUND_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await dashboard.WITHDRAW_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(curator, await dashboard.LOCK_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await dashboard.MINT_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await dashboard.BURN_ROLE())).to.be.true;
     expect(await isSoleRoleMember(curator, await dashboard.REBALANCE_ROLE())).to.be.true;

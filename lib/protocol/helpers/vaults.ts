@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { BytesLike, ContractTransactionReceipt, ContractTransactionResponse, hexlify } from "ethers";
+import { ContractTransactionReceipt, ContractTransactionResponse, hexlify } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -7,6 +7,7 @@ import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
 import {
   Dashboard,
+  IStakingVault,
   Permissions,
   PinnedBeaconProxy,
   PredepositGuarantee,
@@ -28,7 +29,6 @@ import {
 } from "lib";
 
 import { BLS12_381 } from "../../../typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
-import { StakingVaultDepositStruct } from "../../../typechain-types/contracts/0.8.25/vaults/StakingVault";
 import { ether } from "../../units";
 import { LoadedContract, ProtocolContext } from "../types";
 
@@ -96,7 +96,7 @@ export async function createVaultWithDashboard(
 ): Promise<VaultWithDashboard> {
   const deployTx = await stakingVaultFactory
     .connect(owner)
-    .createVaultWithDashboard(owner, nodeOperator, nodeOperatorManager, fee, confirmExpiry, roleAssignments, "0x", {
+    .createVaultWithDashboard(owner, nodeOperator, nodeOperatorManager, fee, confirmExpiry, roleAssignments, {
       value: VAULT_CONNECTION_DEPOSIT,
     });
 
@@ -295,7 +295,6 @@ export async function createVaultProxy(
   nodeOperatorFeeBP: bigint,
   confirmExpiry: bigint,
   roleAssignments: Permissions.RoleAssignmentStruct[],
-  stakingVaultInitializerExtraParams: BytesLike = "0x",
 ): Promise<CreateVaultResponse> {
   const tx = await vaultFactory
     .connect(caller)
@@ -306,7 +305,6 @@ export async function createVaultProxy(
       nodeOperatorFeeBP,
       confirmExpiry,
       roleAssignments,
-      stakingVaultInitializerExtraParams,
       { value: VAULT_CONNECTION_DEPOSIT },
     );
 
@@ -356,7 +354,7 @@ export const generatePredepositData = async (
   nodeOperator: HardhatEthersSigner,
   validator: Validator,
 ): Promise<{
-  deposit: StakingVaultDepositStruct;
+  deposit: IStakingVault.DepositStruct;
   depositY: BLS12_381.DepositYStruct;
 }> => {
   // Pre-requisite: fund the vault to have enough balance to start a validator

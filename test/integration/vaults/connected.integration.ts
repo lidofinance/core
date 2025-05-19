@@ -8,7 +8,6 @@ import { Dashboard, StakingVault, VaultHub } from "typechain-types";
 import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
 import {
   createVaultWithDashboard,
-  disconnectFromHub,
   getProtocolContext,
   getPubkeys,
   ProtocolContext,
@@ -73,7 +72,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   after(async () => await Snapshot.restore(originalSnapshot));
 
   beforeEach(async () => {
-    expect(await vaultHub.isVaultHealthyAsOfLatestReport(stakingVault)).to.equal(true);
+    expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(true);
   });
 
   it("VaultHub is pausable and resumable", async () => {
@@ -182,7 +181,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   context("rebalancing", () => {
     it("May rebalance debt to the protocol", async () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") }); // total value is 2 ether
-      await dashboard.connect(roles.locker).lock(ether("2")); // raise cap full capacity
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
 
       await expect(dashboard.connect(roles.rebalancer).rebalanceVault(ether(".5")))
@@ -269,13 +267,12 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   describe.skip("If vault is unhealthy", () => {
     beforeEach(async () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") }); // total value is 2 ether
-      await dashboard.connect(roles.locker).lock(ether("2")); // raise cap full capacity
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1")); // mint 1 ether
 
       const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
       await stakingVault.connect(vaultHubSigner).report(await getCurrentBlockTimestamp(), 1n, ether("2"), ether("2")); // below the threshold
 
-      expect(await vaultHub.isVaultHealthyAsOfLatestReport(stakingVault)).to.equal(false);
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(false);
     });
 
     it("Can't mint", async () => {
@@ -288,33 +285,12 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
     it("Can mint if goes to healthy", async () => {
       await dashboard.connect(roles.funder).fund({ value: ether("2") }); // try to fund to go healthy
-      expect(await vaultHub.isVaultHealthyAsOfLatestReport(stakingVault)).to.equal(true); // <-- should be healthy now, but the function name is weird
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(true); // <-- should be healthy now, but the function name is weird
 
       // Here now minted 1 stETH, total vault value is 1 wei, so any minting should fail
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
         .to.be.revertedWithCustomError(ctx.contracts.vaultHub, "InsufficientTotalValueToMint")
         .withArgs(await stakingVault.getAddress(), 1n); // here 1n is total value from report
-    });
-  });
-
-  describe("Authorize / Deauthorize Lido VaultHub", () => {
-    it("After creation via createVaultWithDelegation and connection vault is authorized", async () => {
-      expect(await stakingVault.vaultHubAuthorized()).to.equal(true);
-    });
-
-    it("Can't deauthorize Lido VaultHub if connected to Hub", async () => {
-      await expect(
-        dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub(),
-      ).to.be.revertedWithCustomError(stakingVault, "VaultConnected");
-    });
-
-    it("Can deauthorize Lido VaultHub if disconnected from Hub", async () => {
-      await disconnectFromHub(ctx, stakingVault);
-      await reportVaultDataWithProof(stakingVault); // required to disconnect from the hub
-
-      await expect(dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub())
-        .to.emit(stakingVault, "VaultHubAuthorizedSet")
-        .withArgs(false);
     });
   });
 

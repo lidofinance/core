@@ -53,7 +53,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
   after(async () => await Snapshot.restore(originalSnapshot));
 
   beforeEach(async () => {
-    expect(await ctx.contracts.vaultHub.isVaultHealthyAsOfLatestReport(stakingVault)).to.equal(true);
+    expect(await ctx.contracts.vaultHub.isVaultHealthy(stakingVault)).to.equal(true);
   });
 
   it("PredepositGuarantee is pausable and resumable", async () => {
