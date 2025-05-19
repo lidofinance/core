@@ -227,7 +227,6 @@ export async function main() {
       pdgDeployParams.gIndex,
       pdgDeployParams.gIndexAfterChange,
       pdgDeployParams.changeSlot,
-      locator.address,
     ],
   );
 
