@@ -22,7 +22,7 @@ struct TierParams {
 
 /**
  * @title OperatorGrid
- * @author Lido
+ * @author loga4
  * @notice
  * OperatorGrid is a contract that manages mint parameters for vaults when they are connected to the VaultHub.
  * These parameters include:
@@ -101,7 +101,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         address operator;
         uint96 shareLimit;
         uint96 liabilityShares;
-        uint128[] tierIds;
+        uint64[] tierIds;
     }
 
     struct Tier {
@@ -116,8 +116,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     }
 
     struct VaultTier {
-        uint128 currentTierId;
-        uint128 requestedTierId;
+        uint64 currentTierId;
+        uint64 requestedTierId;
+        uint96 requestedShareLimit;
     }
 
     /**
@@ -194,7 +195,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
             operator: _nodeOperator,
             shareLimit: uint96(_shareLimit),
             liabilityShares: 0,
-            tierIds: new uint128[](0)
+            tierIds: new uint64[](0)
         });
         $.nodeOperators.push(_nodeOperator);
 
@@ -206,7 +207,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @param _shareLimit New share limit value
     function updateGroupShareLimit(address _nodeOperator, uint256 _shareLimit) external onlyRole(REGISTRY_ROLE) {
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
-        
+
         ERC7201Storage storage $ = _getStorage();
         Group storage group_ = $.groups[_nodeOperator];
         if (group_.operator == address(0)) revert GroupNotExists();
@@ -251,7 +252,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         Group storage group_ = $.groups[_nodeOperator];
         if (group_.operator == address(0)) revert GroupNotExists();
 
-        uint128 tierId = uint128($.tiers.length);
+        uint64 tierId = uint64($.tiers.length);
         uint256 length = _tiers.length;
         for (uint256 i = 0; i < length; i++) {
             _validateParams(tierId, _tiers[i].reserveRatioBP, _tiers[i].forcedRebalanceThresholdBP, _tiers[i].infraFeeBP, _tiers[i].liquidityFeeBP, _tiers[i].reservationFeeBP);
@@ -293,6 +294,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         return $.tiers[_tierId];
     }
 
+    /// @notice Returns a number of tiers
+    /// @return Number of tiers
+    function tierCount() external view returns (uint256) {
+        return _getStorage().tiers.length;
+    }
+
     /// @notice Returns a tiers count
     /// @return Tiers count
     function tiersCount() external view returns (uint256) {
@@ -305,11 +312,11 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @param _tierParams array of new tier params
     function alterTiers(uint256[] calldata _tierIds, TierParams[] calldata _tierParams) external onlyRole(REGISTRY_ROLE) {
         if (_tierIds.length != _tierParams.length) revert ArrayLengthMismatch();
-        
+
         ERC7201Storage storage $ = _getStorage();
         uint256 length = _tierIds.length;
         uint256 tiersLength = $.tiers.length;
-        
+
         for (uint256 i = 0; i < length; i++) {
             if (_tierIds[i] >= tiersLength) revert TierNotExists();
 
@@ -346,7 +353,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @notice Request to change tier
     /// @param _vault address of the vault
     /// @param _tierId id of the tier
-    function requestTierChange(address _vault, uint256 _tierId) external {
+    /// @param _requestedShareLimit requested share limit
+    function requestTierChange(address _vault, uint256 _tierId, uint256 _requestedShareLimit) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
         if (msg.sender != IStakingVault(_vault).owner()) revert NotAuthorized("requestTierChange", msg.sender);
 
@@ -358,15 +366,18 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         address requestedTierOperator = requestedTier.operator;
         address nodeOperator = IStakingVault(_vault).nodeOperator();
         if (nodeOperator != requestedTierOperator) revert TierNotInOperatorGroup();
+        if (_requestedShareLimit > requestedTier.shareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
 
-        uint128 tierId = uint128(_tierId);
+        uint64 tierId = uint64(_tierId);
 
         VaultTier storage vaultTier = $.vaultTier[_vault];
         if (vaultTier.currentTierId == tierId) revert TierAlreadySet();
-        if (vaultTier.requestedTierId == tierId) revert TierAlreadyRequested();
+        if (vaultTier.requestedTierId == tierId && vaultTier.requestedShareLimit == uint96(_requestedShareLimit)) {
+            revert TierAlreadyRequested();
+        }
 
         vaultTier.requestedTierId = tierId;
-
+        vaultTier.requestedShareLimit = uint96(_requestedShareLimit);
         $.pendingRequests[nodeOperator].add(_vault); //returns true if the vault was not in the set
 
         emit TierChangeRequested(_vault, vaultTier.currentTierId, _tierId);
@@ -429,7 +440,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         ERC7201Storage storage $ = _getStorage();
         VaultTier storage vaultTier = $.vaultTier[_vault];
-        uint128 requestedTierId = vaultTier.requestedTierId;
+        uint64 requestedTierId = vaultTier.requestedTierId;
         if (requestedTierId != _tierIdToConfirm) revert InvalidTierId(requestedTierId, _tierIdToConfirm);
 
         Tier storage requestedTier = $.tiers[requestedTierId];
@@ -454,14 +465,17 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         currentTier.liabilityShares -= uint96(vaultLiabilityShares);
         requestedTier.liabilityShares += uint96(vaultLiabilityShares);
 
+        uint96 requestedShareLimit = vaultTier.requestedShareLimit;
+
         vaultTier.currentTierId = requestedTierId;
         vaultTier.requestedTierId = 0;
+        vaultTier.requestedShareLimit = 0;
 
         $.pendingRequests[nodeOperator].remove(_vault);
 
         VaultHub(payable(LIDO_LOCATOR.vaultHub())).updateConnection(
             _vault,
-            requestedTier.shareLimit,
+            requestedShareLimit,
             requestedTier.reserveRatioBP,
             requestedTier.forcedRebalanceThresholdBP,
             requestedTier.infraFeeBP,
@@ -510,7 +524,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
 
         VaultTier memory vaultTier = $.vaultTier[vaultAddr];
-        uint128 tierId = vaultTier.currentTierId;
+        uint64 tierId = vaultTier.currentTierId;
 
         uint96 amount_ = uint96(amount);
 
@@ -542,7 +556,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         ERC7201Storage storage $ = _getStorage();
 
         VaultTier memory vaultTier = $.vaultTier[vaultAddr];
-        uint128 tierId = vaultTier.currentTierId;
+        uint64 tierId = vaultTier.currentTierId;
 
         uint96 amount_ = uint96(amount);
 
@@ -675,4 +689,5 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     error LiquidityFeeTooHigh(uint256 tierId, uint256 liquidityFeeBP, uint256 maxLiquidityFeeBP);
     error ReservationFeeTooHigh(uint256 tierId, uint256 reservationFeeBP, uint256 maxReservationFeeBP);
     error ArrayLengthMismatch();
+    error RequestedShareLimitTooHigh(uint256 requestedShareLimit, uint256 tierShareLimit);
 }

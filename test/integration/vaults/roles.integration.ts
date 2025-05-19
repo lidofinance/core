@@ -445,7 +445,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
             testDashboard,
             "requestTierChange",
             { successUsers: [tierChanger], failingUsers: allRoles.filter((r) => r !== tierChanger) },
-            [1n],
+            [1n, 1n],
             await testDashboard.REQUEST_TIER_CHANGE_ROLE(),
           );
         });
