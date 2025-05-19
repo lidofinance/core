@@ -47,14 +47,14 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
         uint256 totalItemsCount,
         uint256 deliveredItemsCount,
         uint256 contractVersion,
-        uint256 lastDeliveredKeyIndex
+        uint256 lastDeliveredExitDataIndex
     ) external {
         _storeExitRequestHash(
             exitRequestHash,
             totalItemsCount,
             deliveredItemsCount,
             contractVersion,
-            DeliveryHistory(lastDeliveredKeyIndex, block.timestamp)
+            DeliveryHistory(lastDeliveredExitDataIndex, block.timestamp)
         );
     }
 }

@@ -82,28 +82,29 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      * @notice Throw when in submitExitRequestsData all requests were already delivered
      */
     error RequestsAlreadyDelivered();
+
     /**
-     * @notice Thrown when triggerable withdrawal was requested for validator that was not delivered yet
+     * @notice Thrown when any of the provided `exitDataIndexes` refers to a validator that was not yet delivered (i.e., exit request not emitted)
      */
-    error KeyWasNotDelivered(uint256 keyIndex, uint256 lastDeliveredKeyIndex);
+    error ExitDataWasNotDelivered(uint256 exitDataIndex, uint256 lastDeliveredExitDataIndex);
+
     /**
      * @notice Thrown when index of request in submitted data for triggerable withdrawal is out of range
      */
-    error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
+    error ExitDataIndexOutOfRange(uint256 exitDataIndex, uint256 totalItemsCount);
+
     /**
      * @notice Thrown when array of indexes of requests in submitted data for triggerable withdrawal is not is not strictly increasing array
      */
-    error InvalidKeyIndexSortOrder();
-    /**
-     * @notice Thrown when a withdrawal fee refund failed
-     */
-    error TriggerableWithdrawalFeeRefundFailed();
+    error InvalidExitDataIndexSortOrder();
+
     /**
      * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
      * @param requestsCount Amount of requests that were sent for processing
      * @param remainingLimit Amount of requests that still can be processed at current day
      */
     error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
+
     /**
      * @notice Thrown when the number of requests submitted via submitExitRequestsData exceeds the allowed maxRequestsPerBatch.
      * @param requestsCount The number of requests included in the current call.
@@ -150,7 +151,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 contractVersion;
         DeliveryHistory[] deliverHistory;
     }
-
     struct ValidatorData {
         uint256 nodeOpId;
         uint256 moduleId;
@@ -296,22 +296,20 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     /**
      * @notice Submits Triggerable Withdrawal Requests to the Triggerable Withdrawals Gateway.
      *
-     * @param requestsData The report data previously unpacked and emitted by the VEB.
-     * @param keyIndexes Array of indexes pointing to validators in `requestsData.data`
-     *                   to be exited via TWR.
+     * @param exitsData The report data previously unpacked and emitted by the VEB.
+     * @param exitDataIndexes Array of of sorted indexes pointing to validators in `exitsData.data`
+     * to be exited via TWR.
      * @param refundRecipient Address to return extra fee on TW (eip-7002) exit.
-     * @param exitType Type of request. 0 - non-refundable, 1 - require refund.
      *
      * @dev Reverts if:
-     *     - The hash of `requestsData` was not previously submitted in the VEB.
-     *     - Any of the provided `keyIndexes` refers to a validator that was not yet unpacked (i.e., exit requiest not emitted).
-     *     - `keyIndexes` is not strictly increasing array
+     *     - The hash of `exitsData` was not previously submitted in the VEB.
+     *     - Any of the provided `exitDataIndexes` refers to a validator that was not yet delivered (i.e., exit request not emitted).
+     *     - `exitDataIndexes` is not strictly increasing array
      */
     function triggerExits(
-        ExitRequestData calldata requestsData,
-        uint256[] calldata keyIndexes,
-        address refundRecipient,
-        uint8 exitType
+        ExitRequestData calldata exitsData,
+        uint256[] calldata exitDataIndexes,
+        address refundRecipient
     ) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
@@ -321,33 +319,33 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
 
         RequestStatus storage requestStatus = _storageExitRequestsHashes()[
-            keccak256(abi.encode(requestsData.data, requestsData.dataFormat))
+            keccak256(abi.encode(exitsData.data, exitsData.dataFormat))
         ];
 
         _checkExitSubmitted(requestStatus);
-        _checkExitRequestData(requestsData.data, requestsData.dataFormat);
+        _checkExitRequestData(exitsData.data, exitsData.dataFormat);
         _checkContractVersion(requestStatus.contractVersion);
 
         ITriggerableWithdrawalsGateway.ValidatorData[]
-            memory triggerableExitData = new ITriggerableWithdrawalsGateway.ValidatorData[](keyIndexes.length);
+            memory triggerableExitData = new ITriggerableWithdrawalsGateway.ValidatorData[](exitDataIndexes.length);
 
-        uint256 lastKeyIndex = type(uint256).max;
+        uint256 lastExitDataIndex = type(uint256).max;
 
-        for (uint256 i = 0; i < keyIndexes.length; i++) {
-            if (keyIndexes[i] >= requestStatus.totalItemsCount) {
-                revert KeyIndexOutOfRange(keyIndexes[i], requestStatus.totalItemsCount);
+        for (uint256 i = 0; i < exitDataIndexes.length; i++) {
+            if (exitDataIndexes[i] >= requestStatus.totalItemsCount) {
+                revert ExitDataIndexOutOfRange(exitDataIndexes[i], requestStatus.totalItemsCount);
             }
 
-            if (keyIndexes[i] > (requestStatus.deliveredItemsCount - 1)) {
-                revert KeyWasNotDelivered(keyIndexes[i], requestStatus.deliveredItemsCount - 1);
+            if (exitDataIndexes[i] > (requestStatus.deliveredItemsCount - 1)) {
+                revert ExitDataWasNotDelivered(exitDataIndexes[i], requestStatus.deliveredItemsCount - 1);
             }
 
-            if (i > 0 && keyIndexes[i] <= lastKeyIndex) {
-                revert InvalidKeyIndexSortOrder();
+            if (i > 0 && exitDataIndexes[i] <= lastExitDataIndex) {
+                revert InvalidExitDataIndexSortOrder();
             }
-            lastKeyIndex = keyIndexes[i];
+            lastExitDataIndex = exitDataIndexes[i];
 
-            ValidatorData memory validatorData = _getValidatorData(requestsData.data, keyIndexes[i]);
+            ValidatorData memory validatorData = _getValidatorData(exitsData.data, exitDataIndexes[i]);
             if (validatorData.moduleId == 0) revert InvalidRequestsData();
 
             triggerableExitData[i] = ITriggerableWithdrawalsGateway.ValidatorData(
@@ -357,11 +355,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             );
         }
 
-        ITriggerableWithdrawalsGateway(LOCATOR.triggerableWithdrawalsGateway()).triggerFullWithdrawals{value: msg.value}(
-            triggerableExitData,
-            refundRecipient,
-            exitType
-        );
+        ITriggerableWithdrawalsGateway(LOCATOR.triggerableWithdrawalsGateway()).triggerFullWithdrawals{
+            value: msg.value
+        }(triggerableExitData, refundRecipient, 1);
     }
 
     /**
@@ -440,7 +436,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         _checkExitRequestData(exitRequests, dataFormat);
 
         if (index >= exitRequests.length / PACKED_REQUEST_LENGTH) {
-            revert KeyIndexOutOfRange(index, exitRequests.length / PACKED_REQUEST_LENGTH);
+            revert ExitDataIndexOutOfRange(index, exitRequests.length / PACKED_REQUEST_LENGTH);
         }
 
         ValidatorData memory validatorData = _getValidatorData(exitRequests, index);

@@ -10,7 +10,7 @@ interface IValidatorsExitBus {
 
     struct DeliveryHistory {
         // index in array of requests
-        uint256 lastDeliveredKeyIndex;
+        uint256 lastDeliveredExitDataIndex;
         uint256 timestamp;
     }
 
@@ -19,10 +19,9 @@ interface IValidatorsExitBus {
     function submitExitRequestsData(ExitRequestData calldata request) external;
 
     function triggerExits(
-        ExitRequestData calldata request,
-        uint256[] calldata keyIndexes,
-        address refundRecipient,
-        uint8 exitType
+        ExitRequestData calldata exitsData,
+        uint256[] calldata exitDataIndexes,
+        address refundRecipient
     ) external payable;
 
     function setExitRequestLimit(uint256 maxExitRequests, uint256 exitsPerFrame, uint256 frameDuration) external;
