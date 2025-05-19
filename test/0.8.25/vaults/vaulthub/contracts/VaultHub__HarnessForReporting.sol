@@ -62,8 +62,7 @@ contract VaultHub__HarnessForReporting is VaultHub {
             0, // locked
             uint96(_shareLimit), // liabilityShares
             uint64(block.timestamp), // reportTimestamp
-            0, // inOutDelta
-            0 // feeCharged
+            0 // inOutDelta
         );
 
         $.records[_vault] = record;

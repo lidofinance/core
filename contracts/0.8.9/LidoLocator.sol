@@ -33,7 +33,6 @@ contract LidoLocator is ILidoLocator {
         address vaultHub;
         address lazyOracle;
         address operatorGrid;
-        address obligationsLedger;
     }
 
     error ZeroAddress();
@@ -58,7 +57,6 @@ contract LidoLocator is ILidoLocator {
     address public immutable vaultHub;
     address public immutable lazyOracle;
     address public immutable operatorGrid;
-    address public immutable obligationsLedger;
     //solhint-enable immutable-vars-naming
 
     /**
@@ -86,7 +84,6 @@ contract LidoLocator is ILidoLocator {
         vaultHub = _assertNonZero(_config.vaultHub);
         lazyOracle = _assertNonZero(_config.lazyOracle);
         operatorGrid = _assertNonZero(_config.operatorGrid);
-        obligationsLedger = _assertNonZero(_config.obligationsLedger);
     }
 
     function coreComponents() external view returns (

@@ -25,7 +25,6 @@ interface ILidoLocator {
     function vaultHub() external view returns (address);
     function lazyOracle() external view returns (address);
     function operatorGrid() external view returns (address);
-    function obligationsLedger() external view returns (address);
 
     /// @notice Returns core Lido protocol component addresses in a single call
     /// @dev This function provides a gas-efficient way to fetch multiple component addresses in a single call
