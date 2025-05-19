@@ -9,22 +9,18 @@ import {PausableUntil} from "./utils/PausableUntil.sol";
 
 /**
  * @title A base contract for a withdrawal vault implementing EIP-7685: General Purpose Execution Layer Requests
- * @dev This contract enables validators to submit EIP-7002 withdrawal requests
- *      and manages the associated fees.
+ * @dev This contract enables validators to submit EIP-7002 withdrawal requests.
  */
 abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable, PausableUntil {
-    address constant CONSOLIDATION_REQUEST = 0x0000BBdDc7CE488642fb579F8B00f3a590007251;
     address constant WITHDRAWAL_REQUEST = 0x00000961Ef480Eb55e80D19ad83579A64c007002;
 
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
     bytes32 public constant ADD_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_WITHDRAWAL_REQUEST_ROLE");
-    bytes32 public constant ADD_CONSOLIDATION_REQUEST_ROLE = keccak256("ADD_CONSOLIDATION_REQUEST_ROLE");
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
     event WithdrawalRequestAdded(bytes request);
-    event ConsolidationRequestAdded(bytes request);
 
     error ZeroArgument(string name);
     error MalformedPubkeysArray();
@@ -103,13 +99,15 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable, PausableUnt
         if (pubkeys.length == 0) revert ZeroArgument("pubkeys");
         if (pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert MalformedPubkeysArray();
 
-        uint256 requestsCount = _countPubkeys(pubkeys);
+        uint256 requestsCount = pubkeys.length / PUBLIC_KEY_LENGTH;
         if (requestsCount != amounts.length) revert ArraysLengthMismatch(requestsCount, amounts.length);
 
         uint256 feePerRequest = _getRequestFee(WITHDRAWAL_REQUEST);
         uint256 totalFee = requestsCount * feePerRequest;
 
-        _requireExactFee(totalFee);
+        if (totalFee != msg.value) {
+            revert IncorrectFee(msg.value, totalFee);
+        }
 
         bytes memory request = new bytes(56);
         for (uint256 i = 0; i < requestsCount; i++) {
@@ -137,61 +135,6 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable, PausableUnt
         return _getRequestFee(WITHDRAWAL_REQUEST);
     }
 
-    /**
-     * @dev Submits EIP-7251 consolidation requests for the specified public keys.
-     *
-     * @param sourcePubkeys A tightly packed array of 48-byte source public keys corresponding to validators requesting consolidation.
-     *                | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
-     *
-     * @param targetPubkeys A tightly packed array of 48-byte target public keys corresponding to validators requesting consolidation.
-     *                | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
-     *
-     * @notice Reverts if:
-     *         - The caller does not have the `ADD_CONSOLIDATION_REQUEST_ROLE`.
-     *         - The provided public key array is empty.
-     *         - The provided public key array malformed.
-     *         - The provided source public key and target public key arrays are not of equal length.
-     *         - The provided total withdrawal fee value is invalid.
-     */
-    function addConsolidationRequests(
-        bytes calldata sourcePubkeys,
-        bytes calldata targetPubkeys
-    ) external payable onlyRole(ADD_CONSOLIDATION_REQUEST_ROLE) whenResumed preservesEthBalance {
-        if (sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
-        if (sourcePubkeys.length % PUBLIC_KEY_LENGTH != 0) revert MalformedPubkeysArray();
-        if (sourcePubkeys.length != targetPubkeys.length)
-            revert ArraysLengthMismatch(sourcePubkeys.length, sourcePubkeys.length);
-
-        uint256 requestsCount = _countPubkeys(sourcePubkeys);
-        uint256 feePerRequest = _getRequestFee(CONSOLIDATION_REQUEST);
-
-        _requireExactFee(requestsCount * feePerRequest);
-
-        bytes memory request = new bytes(96);
-        for (uint256 i = 0; i < requestsCount; i++) {
-            assembly {
-                calldatacopy(add(request, 32), add(sourcePubkeys.offset, mul(i, PUBLIC_KEY_LENGTH)), PUBLIC_KEY_LENGTH)
-                calldatacopy(add(request, 80), add(targetPubkeys.offset, mul(i, PUBLIC_KEY_LENGTH)), PUBLIC_KEY_LENGTH)
-            }
-
-            (bool success, ) = CONSOLIDATION_REQUEST.call{value: feePerRequest}(request);
-
-            if (!success) {
-                revert RequestAdditionFailed(request);
-            }
-
-            emit ConsolidationRequestAdded(request);
-        }
-    }
-
-    /**
-     * @dev Retrieves the current EIP-7251 consolidation fee.
-     * @return The minimum fee required per consolidation request.
-     */
-    function getConsolidationRequestFee() external view returns (uint256) {
-        return _getRequestFee(CONSOLIDATION_REQUEST);
-    }
-
     function _getRequestFee(address requestedContract) internal view returns (uint256) {
         (bool success, bytes memory feeData) = requestedContract.staticcall("");
 
@@ -204,15 +147,5 @@ abstract contract WithdrawalVaultEIP7685 is AccessControlEnumerable, PausableUnt
         }
 
         return abi.decode(feeData, (uint256));
-    }
-
-    function _countPubkeys(bytes calldata pubkeys) internal pure returns (uint256) {
-        return (pubkeys.length / PUBLIC_KEY_LENGTH);
-    }
-
-    function _requireExactFee(uint256 requiredFee) internal view {
-        if (requiredFee != msg.value) {
-            revert IncorrectFee(msg.value, requiredFee);
-        }
     }
 }
