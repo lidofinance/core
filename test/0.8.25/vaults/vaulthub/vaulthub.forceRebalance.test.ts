@@ -85,7 +85,7 @@ describe("VaultHub.sol:forceRebalance", () => {
     vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("10000.0"));
 
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), user);
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract]);
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);

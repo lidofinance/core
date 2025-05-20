@@ -79,23 +79,22 @@ contract VaultFactory {
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
 
-        emit VaultCreated(address(vault), address(dashboard));
-        emit DashboardCreated(address(dashboard), _defaultAdmin);
+        emit VaultCreated(address(vault));
+        emit DashboardCreated(address(dashboard), address(vault), _defaultAdmin);
     }
 
     /**
      * @notice Event emitted on a Vault creation
      * @param vault The address of the created Vault
-     * @param owner The address of the owner of the Vault
      */
-    event VaultCreated(address indexed vault, address indexed owner);
+    event VaultCreated(address indexed vault);
 
     /**
      * @notice Event emitted on a Dashboard creation
      * @param dashboard The address of the created Dashboard
      * @param admin The address of the Dashboard admin
      */
-    event DashboardCreated(address indexed dashboard, address indexed admin);
+    event DashboardCreated(address indexed dashboard, address indexed vault, address indexed admin);
 
     /**
      * @notice Error thrown for when a given value cannot be zero
@@ -107,9 +106,4 @@ contract VaultFactory {
      * @notice Error thrown for when insufficient funds are provided
      */
     error InsufficientFunds();
-
-    /**
-     * @notice Error thrown for when a transfer fails
-     */
-    error TransferFailed();
 }

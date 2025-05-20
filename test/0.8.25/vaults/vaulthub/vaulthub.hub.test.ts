@@ -151,7 +151,7 @@ describe("VaultHub.sol:hub", () => {
     await vaultHubAdmin.grantRole(await vaultHub.PAUSE_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.RESUME_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), user);
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 
@@ -181,10 +181,10 @@ describe("VaultHub.sol:hub", () => {
   });
 
   context("addVaultProxyCodehash", () => {
-    it("reverts if called by non-VAULT_REGISTRY_ROLE", async () => {
+    it("reverts if called by non-VAULT_CODEHASH_SET_ROLE", async () => {
       await expect(vaultHub.connect(stranger).addVaultProxyCodehash(ZERO_BYTES32))
         .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await vaultHub.VAULT_REGISTRY_ROLE());
+        .withArgs(stranger, await vaultHub.VAULT_CODEHASH_SET_ROLE());
     });
 
     it("reverts if codehash is zero", async () => {

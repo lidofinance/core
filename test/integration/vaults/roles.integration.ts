@@ -108,9 +108,8 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         );
 
       const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
-      const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
-
-      testDashboard = await ethers.getContractAt("Dashboard", createVaultEvents[0].args?.owner);
+      const createDashboardEvent = ctx.getEvents(createVaultTxReceipt, "DashboardCreated")[0];
+      testDashboard = await ethers.getContractAt("Dashboard", createDashboardEvent.args?.dashboard);
 
       await testDashboard.connect(owner).grantRoles([
         {
@@ -530,9 +529,9 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         );
 
       const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
-      const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
+      const createDashboardEvent = ctx.getEvents(createVaultTxReceipt, "DashboardCreated")[0];
 
-      testDashboard = await ethers.getContractAt("Dashboard", createVaultEvents[0].args?.owner);
+      testDashboard = await ethers.getContractAt("Dashboard", createDashboardEvent.args?.dashboard);
     });
 
     it("Verify that roles are not assigned", async () => {

@@ -48,23 +48,13 @@ contract VaultFactory__MockForDashboard is UpgradeableBeacon {
         dashboard.grantRole(dashboard.VOLUNTARY_DISCONNECT_ROLE(), msg.sender);
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
 
-        emit VaultCreated(address(dashboard), address(vault));
-        emit DashboardCreated(msg.sender, address(dashboard));
+        emit VaultCreated(address(vault));
+        emit DashboardCreated(address(dashboard), address(vault), msg.sender);
     }
 
-    /**
-     * @notice Event emitted on a Vault creation
-     * @param owner The address of the Vault owner
-     * @param vault The address of the created Vault
-     */
-    event VaultCreated(address indexed owner, address indexed vault);
+    event VaultCreated(address indexed vault);
 
-    /**
-     * @notice Event emitted on a Dashboard creation
-     * @param admin The address of the Dashboard admin
-     * @param dashboard The address of the created Dashboard
-     */
-    event DashboardCreated(address indexed admin, address indexed dashboard);
+    event DashboardCreated(address indexed dashboard, address indexed vault, address indexed admin);
 
     error ZeroArgument(string);
 }

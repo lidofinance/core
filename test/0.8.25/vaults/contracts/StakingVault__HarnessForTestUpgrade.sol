@@ -40,8 +40,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function initialize(
         address _owner,
         address _nodeOperator,
-        address _depositor,
-        bytes calldata /* _params */
+        address _depositor
     ) external reinitializer(_VERSION) {
         if (owner() != address(0)) revert VaultAlreadyInitialized();
 
@@ -131,8 +130,6 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();
-
-    function initialize(address _owner, address _nodeOperator, address _depositor) external override {}
 
     function isOssified() external view override returns (bool) {}
 

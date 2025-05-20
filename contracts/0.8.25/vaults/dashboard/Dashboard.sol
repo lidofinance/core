@@ -639,7 +639,7 @@ contract Dashboard is NodeOperatorFee {
             (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), connection.shareLimit);
     }
-    
+
     // @dev The logic is inverted, 0 means fund-on-receive is enabled,
     // so that fund-on-receive is enabled by default
     function _shouldFundOnReceive() internal view returns (bool shouldFund) {
@@ -706,7 +706,7 @@ contract Dashboard is NodeOperatorFee {
     error MintingCapacityExceeded(uint256 locked, uint256 mintableValue);
 
     /**
-     * @notice Error when the StakingVault is not connected to the VaultHub.
+     * @notice Error when the StakingVault is still connected to the VaultHub.
      */
     error ConnectedToVaultHub();
 }
