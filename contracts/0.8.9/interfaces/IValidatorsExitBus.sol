@@ -10,8 +10,8 @@ interface IValidatorsExitBus {
 
     struct DeliveryHistory {
         // index in array of requests
-        uint256 lastDeliveredExitDataIndex;
-        uint256 timestamp;
+        uint32 lastDeliveredExitDataIndex;
+        uint32 timestamp;
     }
 
     function submitExitRequestsHash(bytes32 exitReportHash) external;
@@ -39,7 +39,7 @@ interface IValidatorsExitBus {
 
     function getExitRequestsDeliveryHistory(
         bytes32 exitRequestsHash
-    ) external view returns (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history);
+    ) external view returns (DeliveryHistory[] memory history);
 
     function unpackExitRequest(
         bytes calldata exitRequests,

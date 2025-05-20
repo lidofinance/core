@@ -8,7 +8,7 @@ import { ValidatorsExitBus__Harness } from "typechain-types";
 
 import { de0x, numberToHex } from "lib";
 
-import { deployVEBO } from "test/deploy";
+import { deployVEBO, initVEBO } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const PUBKEYS = [
@@ -45,6 +45,15 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
   const deploy = async () => {
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
+    const consensus = deployed.consensus;
+
+    await initVEBO({
+      admin: admin.address,
+      oracle,
+      consensus,
+      resumeAfterDeploy: true,
+      lastProcessingRefSlot: 1, //LAST_PROCESSING_REF_SLOT,
+    });
   };
 
   before(async () => {
@@ -137,30 +146,78 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
       );
     });
 
-    it("returns correct data for a previously stored exitRequestsHash", async () => {
+    it("Returns empty history if deliveryHistoryLength is equal to 0", async () => {
+      const MAX_UINT32 = 2 ** 32 - 1;
       const exitRequestsHash = keccak256("0x1111");
-      const totalItemsCount = 5;
-      const deliveredItemsCount = 2;
+      const deliveryHistoryLength = 0;
+      const contractVersion = 42;
+      const lastDeliveredExitDataIndex = MAX_UINT32;
+      const lastDeliveredExitDataTimestamp = MAX_UINT32;
+
+      // Call the helper to store the hash
+      await oracle.storeNewHashRequestStatus(
+        exitRequestsHash,
+        contractVersion,
+        deliveryHistoryLength,
+        lastDeliveredExitDataIndex,
+        lastDeliveredExitDataTimestamp,
+      );
+
+      const returnedHistory = await oracle.getExitRequestsDeliveryHistory(exitRequestsHash);
+
+      expect(returnedHistory.length).to.equal(0);
+    });
+
+    it("Returns array with single record if deliveryHistoryLength is equal to 1", async () => {
+      const exitRequestsHash = keccak256("0x2222");
+      const deliveryHistoryLength = 1;
+      const timestamp = await oracle.getTime();
       const contractVersion = 42;
       const lastDeliveredExitDataIndex = 1;
 
       // Call the helper to store the hash
-      await oracle.storeExitRequestHash(
+      await oracle.storeNewHashRequestStatus(
         exitRequestsHash,
-        totalItemsCount,
-        deliveredItemsCount,
         contractVersion,
+        deliveryHistoryLength,
         lastDeliveredExitDataIndex,
+        timestamp,
       );
 
-      const [returnedTotalItemsCount, returnedDeliveredItemsCount, returnedHistory] =
-        await oracle.getExitRequestsDeliveryHistory(exitRequestsHash);
+      const returnedHistory = await oracle.getExitRequestsDeliveryHistory(exitRequestsHash);
 
-      expect(returnedTotalItemsCount).to.equal(totalItemsCount);
-      expect(returnedDeliveredItemsCount).to.equal(deliveredItemsCount);
       expect(returnedHistory.length).to.equal(1);
       const [firstDelivery] = returnedHistory;
       expect(firstDelivery.lastDeliveredExitDataIndex).to.equal(lastDeliveredExitDataIndex);
+    });
+
+    it("Returns array with multiple reconrds if deliveryHistoryLength is equal to ", async () => {
+      const exitRequestsHash = keccak256("0x3333");
+      const deliveryHistoryLength = 2;
+      const timestamp = await oracle.getTime();
+      const contractVersion = 42;
+      // Call the helper to store the hash
+      await oracle.storeNewHashRequestStatus(
+        exitRequestsHash,
+        contractVersion,
+        deliveryHistoryLength,
+        1,
+        timestamp + 1n,
+      );
+
+      await oracle.storeDeliveryEntry(exitRequestsHash, 0, timestamp);
+
+      await oracle.storeDeliveryEntry(exitRequestsHash, 1, timestamp + 1n);
+
+      const returnedHistory = await oracle.getExitRequestsDeliveryHistory(exitRequestsHash);
+
+      expect(returnedHistory.length).to.equal(2);
+      const [firstDelivery, secondDelivery] = returnedHistory;
+      expect(firstDelivery.lastDeliveredExitDataIndex).to.equal(0);
+      expect(firstDelivery.timestamp).to.equal(timestamp);
+
+      expect(secondDelivery.lastDeliveredExitDataIndex).to.equal(1);
+      expect(secondDelivery.timestamp).to.equal(timestamp + 1n);
     });
   });
 });

@@ -154,19 +154,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
 
         uint256 requestsCount = triggerableExitsData.length;
 
-        ExitRequestLimitData memory twrLimitData = TWR_LIMIT_POSITION.getStorageExitRequestLimit();
-        if (twrLimitData.isExitLimitSet()) {
-            uint256 timestamp = _getTimestamp();
-            uint256 limit = twrLimitData.calculateCurrentExitLimit(timestamp);
-
-            if (limit < requestsCount) {
-                revert ExitRequestsLimit(requestsCount, limit);
-            }
-
-            TWR_LIMIT_POSITION.setStorageExitRequestLimit(
-                twrLimitData.updatePrevExitLimit(limit - requestsCount, timestamp)
-            );
-        }
+        _checkExitRequestLimit(requestsCount);
 
         uint256 withdrawalFee = IWithdrawalVault(LOCATOR.withdrawalVault()).getWithdrawalRequestFee();
         _checkFee(requestsCount, withdrawalFee);
@@ -314,5 +302,23 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         );
 
         emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+    }
+
+    function _checkExitRequestLimit(uint256 requestsCount) internal {
+        ExitRequestLimitData memory twrLimitData = TWR_LIMIT_POSITION.getStorageExitRequestLimit();
+        if (!twrLimitData.isExitLimitSet()) {
+            return;
+        }
+
+        uint256 timestamp = _getTimestamp();
+        uint256 limit = twrLimitData.calculateCurrentExitLimit(timestamp);
+
+        if (limit < requestsCount) {
+            revert ExitRequestsLimit(requestsCount, limit);
+        }
+
+        TWR_LIMIT_POSITION.setStorageExitRequestLimit(
+            twrLimitData.updatePrevExitLimit(limit - requestsCount, timestamp)
+        );
     }
 }
