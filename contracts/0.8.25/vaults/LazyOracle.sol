@@ -8,6 +8,9 @@ import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {ILido} from "../interfaces/ILido.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
+
 
 contract LazyOracle {
     /// @custom:storage-location erc7201:LazyOracle
@@ -38,6 +41,9 @@ contract LazyOracle {
     // keccak256(abi.encode(uint256(keccak256("LazyOracle")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant LAZY_ORACLE_STORAGE_LOCATION =
         0xe5459f2b48ec5df2407caac4ec464a5cb0f7f31a1f22f649728a9579b25c1d00;
+
+    /// @dev basis points base
+    uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
 
     ILidoLocator public immutable LIDO_LOCATOR;
 
@@ -84,6 +90,14 @@ contract LazyOracle {
             IStakingVault vault = IStakingVault(vaultAddress);
             VaultHub.VaultConnection memory connection = vaultHub.vaultConnection(vaultAddress);
             VaultHub.VaultRecord memory record = vaultHub.vaultRecord(vaultAddress);
+
+            uint256 maxMintableStETH = (vaultHub.totalValue(vaultAddress) *
+                (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
+            uint256 mintableCapacityStETH = Math256.min(
+                ILido(LIDO_LOCATOR.lido()).getSharesByPooledEth(maxMintableStETH),
+                connection.shareLimit
+            );
+    
             batch[i] = VaultInfo(
                 vaultAddress,
                 address(vault).balance,
@@ -91,8 +105,8 @@ contract LazyOracle {
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
                 connection.shareLimit,
-                0,
-                0,
+                record.locked,
+                mintableCapacityStETH,
                 connection.reserveRatioBP,
                 connection.forcedRebalanceThresholdBP,
                 connection.treasuryFeeBP,
