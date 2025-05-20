@@ -188,7 +188,7 @@ contract ValidatorExitDelayVerifier {
                 proofSlotTimestamp
             );
 
-            _verifyValidatorIsNotExited(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
+            _verifyValidatorExitUnset(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
 
             stakingRouter.reportValidatorExitDelay(
                 moduleId,
@@ -239,7 +239,7 @@ contract ValidatorExitDelayVerifier {
                 proofSlotTimestamp
             );
 
-            _verifyValidatorIsNotExited(oldBlock.header, witness, pubkey, valIndex);
+            _verifyValidatorExitUnset(oldBlock.header, witness, pubkey, valIndex);
 
             stakingRouter.reportValidatorExitDelay(
                 moduleId,
@@ -292,9 +292,16 @@ contract ValidatorExitDelayVerifier {
     }
 
     /**
-     * @dev Verifies that a validator is still active (exitEpoch == FAR_FUTURE_EPOCH) and proves it against the state root.
+     * @notice Proves—via an SSZ Merkle proof—that the validator
+     *         has not scheduled nor completed an exit.
+     *
+     * @dev    It reconstructs the `Validator` object with `exitEpoch` hard-coded
+     *         to `FAR_FUTURE_EPOCH` and checks that this leaf is present under
+     *         the supplied `stateRoot`.
+     *
+     *         Reverts if proof verification fail.
      */
-    function _verifyValidatorIsNotExited(
+    function _verifyValidatorExitUnset(
         BeaconBlockHeader calldata header,
         ValidatorWitness calldata witness,
         bytes memory pubkey,
