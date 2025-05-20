@@ -250,6 +250,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         _checkExitSubmitted(requestStatus);
         _checkExitRequestData(request.data, request.dataFormat);
+        _checkMaxBatchSize(request.data);
         _checkContractVersion(requestStatus.contractVersion);
 
         uint256 totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
@@ -442,7 +443,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         bytes calldata exitRequests,
         uint256 dataFormat,
         uint256 index
-    ) external view returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
+    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
         _checkExitRequestData(exitRequests, dataFormat);
 
         if (index >= exitRequests.length / PACKED_REQUEST_LENGTH) {
@@ -498,7 +499,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
     /// Internal functions
 
-    function _checkExitRequestData(bytes calldata requests, uint256 dataFormat) internal view {
+    function _checkExitRequestData(bytes calldata requests, uint256 dataFormat) internal pure {
         if (dataFormat != DATA_FORMAT_LIST) {
             revert UnsupportedRequestsDataFormat(dataFormat);
         }
@@ -506,7 +507,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         if (requests.length == 0 || requests.length % PACKED_REQUEST_LENGTH != 0) {
             revert InvalidRequestsDataLength();
         }
+    }
 
+    function _checkMaxBatchSize(bytes calldata requests) internal view {
         uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
         uint256 requestsCount = requests.length / PACKED_REQUEST_LENGTH;
 
