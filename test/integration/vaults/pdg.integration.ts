@@ -28,6 +28,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let guarantor: HardhatEthersSigner;
   let agent: HardhatEthersSigner;
 
   let snapshot: string;
@@ -40,7 +41,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
     await setupLido(ctx);
 
-    [owner, nodeOperator, stranger] = await ethers.getSigners();
+    [owner, nodeOperator, stranger, guarantor] = await ethers.getSigners();
 
     // Owner can create a vault with operator as a node operator
     ({ stakingVault, dashboard, roles, proxy } = await createVaultWithDashboard(
@@ -105,16 +106,18 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .to.emit(stakingVault, "Funded")
         .withArgs(dashboard, ether("100"));
 
-      // 2. Making sure node operator is the guarantor
-      expect(await predepositGuarantee.nodeOperatorGuarantor(nodeOperator)).to.equal(await nodeOperator.getAddress());
+      // 2. Setting stranger as a guarantor
+      await expect(predepositGuarantee.setNodeOperatorGuarantor(guarantor))
+        .to.emit(predepositGuarantee, "GuarantorSet")
+        .withArgs(owner, await guarantor.getAddress(), owner);
+
+      expect(await predepositGuarantee.nodeOperatorGuarantor(nodeOperator)).to.equal(nodeOperator);
 
       // 3. The Node Operator's guarantor tops up 1 ETH to the PDG contract, specifying the Node Operator's address. This serves as the predeposit guarantee collateral.
       //  Method called: PredepositGuarantee.topUpNodeOperatorBalance(nodeOperator) with ETH transfer.
-      await expect(
-        predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, { value: ether("1") }),
-      )
+      await expect(predepositGuarantee.connect(guarantor).topUpNodeOperatorBalance(guarantor, { value: ether("1") }))
         .to.emit(predepositGuarantee, "BalanceToppedUp")
-        .withArgs(nodeOperator, nodeOperator, ether("1"));
+        .withArgs(guarantor, guarantor, ether("1"));
 
       // 4. The Node Operator generates validator keys and predeposit data
       const withdrawalCredentials = await stakingVault.withdrawalCredentials();
@@ -138,12 +141,13 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .to.emit(stakingVault, "DepositedToBeaconChain")
         .withArgs(predepositGuarantee, 1, ether("1"))
         .to.emit(predepositGuarantee, "BalanceLocked")
-        .withArgs(nodeOperator, ether("2"), ether("1"));
+        .withArgs(nodeOperator, ether("1"), ether("1"));
 
       const { witnesses, postdeposit } = await getProofAndDepositData(
         predepositGuarantee,
         validator,
         withdrawalCredentials,
+        ether("99"),
       );
 
       // 6. Anyone (permissionless) submits a Merkle proof of the validator's appearing on the Consensus Layer to the PDG contract with the withdrawal credentials corresponding to the stVault's address.
@@ -153,15 +157,15 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .to.emit(predepositGuarantee, "ValidatorProven")
         .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials)
         .to.emit(predepositGuarantee, "BalanceUnlocked")
-        .withArgs(nodeOperator, ether("2"), ether("0"));
+        .withArgs(nodeOperator, ether("1"), ether("0"));
 
       // 7. The Node Operator's guarantor withdraws the 1 ETH from the PDG contract or retains it for reuse with future validators.
       const balanceBefore = await ethers.provider.getBalance(nodeOperator);
       await expect(
-        predepositGuarantee.connect(nodeOperator).withdrawNodeOperatorBalance(nodeOperator, ether("1"), nodeOperator),
+        predepositGuarantee.connect(guarantor).withdrawNodeOperatorBalance(guarantor, ether("1"), nodeOperator),
       )
         .to.emit(predepositGuarantee, "BalanceWithdrawn")
-        .withArgs(nodeOperator, nodeOperator, ether("1"));
+        .withArgs(guarantor, nodeOperator, ether("1"));
       return { balanceBefore, postdeposit };
     }
 
@@ -177,7 +181,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       //    Method called: PredepositGuarantee.depositToBeaconChain(stakingVault, deposits).
       await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(predepositGuarantee, 1, ether("31"));
+        .withArgs(predepositGuarantee, 1, ether("99"));
     });
 
     it("Works with vaults deposit pauses", async () => {
@@ -205,12 +209,12 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       // 11. The Node Operator deposits the remaining 99 ETH from the vault balance to the validator through the PDG.
       await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(predepositGuarantee, 1, ether("31"));
+        .withArgs(predepositGuarantee, 1, ether("99"));
     });
   });
 
   // https://docs.lido.fi/guides/stvaults/pdg#pdg-shortcut
-  it.skip("PDG shortcut", async () => {
+  it("PDG shortcut", async () => {
     const { predepositGuarantee } = ctx.contracts;
 
     // 1. The stVault's owner supplies 100 ETH to the vault.
@@ -263,6 +267,6 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     // 7. The Node Operator deposits the remaining 99 ETH from the vault balance to the validator through the PDG.
     await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
       .to.emit(stakingVault, "DepositedToBeaconChain")
-      .withArgs(predepositGuarantee, 1, ether("31"));
+      .withArgs(predepositGuarantee, 1, ether("99"));
   });
 });

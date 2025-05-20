@@ -387,6 +387,7 @@ export const getProofAndDepositData = async (
   predepositGuarantee: LoadedContract<PredepositGuarantee>,
   validator: Validator,
   withdrawalCredentials: string,
+  depositAmount = ether("31"),
 ) => {
   // Step 3: Prove and deposit the validator
   const pivot_slot = await predepositGuarantee.PIVOT_SLOT();
@@ -398,11 +399,11 @@ export const getProofAndDepositData = async (
   );
   const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
 
-  const postdeposit = generatePostDeposit(validator.container);
+  const postdeposit = generatePostDeposit(validator.container, depositAmount);
   const pubkey = hexlify(validator.container.pubkey);
   const signature = hexlify(postdeposit.signature);
 
-  postdeposit.depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, ether("31"));
+  postdeposit.depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, depositAmount);
 
   const witnesses = [
     {
