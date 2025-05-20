@@ -151,7 +151,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 valIndex;
         bytes pubkey;
     }
-    struct PackedRequestStatus {
+    struct RequestStatus {
         uint8 contractVersion;
         uint32 deliveryHistoryLength;
         uint32 lastDeliveredExitDataIndex; // index of validator,  maximum 600 for example
@@ -201,7 +201,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     bytes32 public constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestLimit");
     bytes32 internal constant MAX_VALIDATORS_PER_BATCH_POSITION =
         keccak256("lido.ValidatorsExitBus.maxValidatorsPerBatch");
-    bytes32 internal constant PACKED_REQUEST_STATUS_POSITION = keccak256("lido.ValidatorsExitBus.packedRequestStatus");
+    bytes32 internal constant REQUEST_STATUS_POSITION = keccak256("lido.ValidatorsExitBus.requestStatus");
     bytes32 internal constant DELIVERY_HISTORY_POSITION = keccak256("lido.ValidatorsBus.deliveryHistory");
 
     constructor(address lidoLocator) {
@@ -222,11 +222,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      */
     function submitExitRequestsHash(bytes32 exitRequestsHash) external whenResumed onlyRole(SUBMIT_REPORT_HASH_ROLE) {
         uint256 contractVersion = getContractVersion();
-        // _storeExitRequestHash(exitRequestsHash, type(uint256).max, 0, contractVersion, DeliveryHistory(0, 0));
-
-        _storePackedRequestStatus(
+        _storeRequestStatus(
             exitRequestsHash,
-            PackedRequestStatus(uint8(contractVersion), 0, type(uint32).max, type(uint32).max)
+            RequestStatus(uint8(contractVersion), 0, type(uint32).max, type(uint32).max)
         );
     }
 
@@ -248,7 +246,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     function submitExitRequestsData(ExitRequestData calldata request) external whenResumed {
         // bytes calldata data = request.data;
         bytes32 exitRequestsHash = keccak256(abi.encode(request.data, request.dataFormat));
-        PackedRequestStatus storage requestStatus = _storagePackedRequestStatus()[exitRequestsHash];
+        RequestStatus storage requestStatus = _storageRequestStatus()[exitRequestsHash];
 
         _checkExitSubmitted(requestStatus);
         _checkExitRequestData(request.data, request.dataFormat);
@@ -289,7 +287,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             _storeDeliveryEntry(exitRequestsHash, newLastDeliveredIndex, _getTimestamp());
         }
 
-        _updatePackedRequestStatus(requestStatus, requestStatus.deliveryHistoryLength + 1, newLastDeliveredIndex);
+        _updateRequestStatus(requestStatus, requestStatus.deliveryHistoryLength + 1, newLastDeliveredIndex);
     }
 
     /**
@@ -317,7 +315,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             refundRecipient = msg.sender;
         }
 
-        PackedRequestStatus storage requestStatus = _storagePackedRequestStatus()[
+        RequestStatus storage requestStatus = _storageRequestStatus()[
             keccak256(abi.encode(exitsData.data, exitsData.dataFormat))
         ];
 
@@ -408,8 +406,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      *     - No delivery history
      */
     function getExitRequestsDeliveryHistory(bytes32 exitRequestsHash) external view returns (DeliveryHistory[] memory) {
-        mapping(bytes32 => PackedRequestStatus) storage packedRequestStatusMap = _storagePackedRequestStatus();
-        PackedRequestStatus storage storedRequest = packedRequestStatusMap[exitRequestsHash];
+        mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
+        RequestStatus storage storedRequest = requestStatusMap[exitRequestsHash];
 
         if (storedRequest.contractVersion == 0) {
             revert ExitHashNotSubmitted();
@@ -519,19 +517,19 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
     }
 
-    function _checkExitSubmitted(PackedRequestStatus storage requestStatus) internal view {
+    function _checkExitSubmitted(RequestStatus storage requestStatus) internal view {
         if (requestStatus.contractVersion == 0) {
             revert ExitHashNotSubmitted();
         }
     }
 
-    function _checkExitNotSubmitted(PackedRequestStatus storage requestStatus) internal view {
+    function _checkExitNotSubmitted(RequestStatus storage requestStatus) internal view {
         if (requestStatus.contractVersion != 0) {
             revert ExitHashAlreadySubmitted();
         }
     }
 
-    function _checkDeliveryStarted(PackedRequestStatus storage status) internal view {
+    function _checkDeliveryStarted(RequestStatus storage status) internal view {
         if (status.deliveryHistoryLength == 0) {
             revert DeliveryWasNotStarted();
         }
@@ -593,9 +591,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         );
     }
 
-    function _storePackedRequestStatus(bytes32 exitRequestsHash, PackedRequestStatus memory requestStatus) internal {
-        mapping(bytes32 => PackedRequestStatus) storage packedRequestStatusMap = _storagePackedRequestStatus();
-        PackedRequestStatus storage storedRequest = packedRequestStatusMap[exitRequestsHash];
+    function _storeRequestStatus(bytes32 exitRequestsHash, RequestStatus memory requestStatus) internal {
+        mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
+        RequestStatus storage storedRequest = requestStatusMap[exitRequestsHash];
 
         if (storedRequest.contractVersion != 0) {
             revert ExitHashAlreadySubmitted();
@@ -609,8 +607,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         emit RequestsHashSubmitted(exitRequestsHash);
     }
 
-    function _updatePackedRequestStatus(
-        PackedRequestStatus storage requestStatus,
+    function _updateRequestStatus(
+        RequestStatus storage requestStatus,
         uint256 deliveryHistoryLength,
         uint256 lastDeliveredExitDataIndex
     ) internal {
@@ -733,8 +731,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
     /// Storage helpers
 
-    function _storagePackedRequestStatus() internal pure returns (mapping(bytes32 => PackedRequestStatus) storage r) {
-        bytes32 position = PACKED_REQUEST_STATUS_POSITION;
+    function _storageRequestStatus() internal pure returns (mapping(bytes32 => RequestStatus) storage r) {
+        bytes32 position = REQUEST_STATUS_POSITION;
         assembly {
             r.slot := position
         }
