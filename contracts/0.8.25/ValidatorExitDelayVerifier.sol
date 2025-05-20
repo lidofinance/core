@@ -51,12 +51,6 @@ contract ValidatorExitDelayVerifier {
     using SSZ for Validator;
     using SSZ for BeaconBlockHeader;
 
-    struct ExitRequestsDeliveryHistory {
-        uint256 totalItemsCount;
-        uint256 deliveredItemsCount;
-        DeliveryHistory[] deliveryHistory;
-    }
-
     /// @notice EIP-4788 contract address that provides a mapping of timestamp -> known beacon block root.
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
@@ -109,8 +103,7 @@ contract ValidatorExitDelayVerifier {
         uint256 provableBeaconBlockTimestamp,
         uint256 eligibleExitRequestTimestamp
     );
-    error KeyWasNotUnpacked(uint256 keyIndex, uint256 lastUnpackedKeyIndex);
-    error KeyIndexOutOfRange(uint256 keyIndex, uint256 totalItemsCount);
+    error KeyWasNotUnpacked(uint256 keyIndex);
 
     /**
      * @dev The previous and current forks can be essentially the same.
@@ -177,7 +170,7 @@ contract ValidatorExitDelayVerifier {
         IValidatorsExitBus vebo = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        ExitRequestsDeliveryHistory memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
+        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(beaconBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
@@ -195,7 +188,7 @@ contract ValidatorExitDelayVerifier {
                 proofSlotTimestamp
             );
 
-            _verifyValidatorIsNotExited(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
+            _verifyValidatorExitUnset(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
 
             stakingRouter.reportValidatorExitDelay(
                 moduleId,
@@ -228,7 +221,7 @@ contract ValidatorExitDelayVerifier {
         IValidatorsExitBus vebo = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        ExitRequestsDeliveryHistory memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
+        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(oldBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
@@ -246,7 +239,7 @@ contract ValidatorExitDelayVerifier {
                 proofSlotTimestamp
             );
 
-            _verifyValidatorIsNotExited(oldBlock.header, witness, pubkey, valIndex);
+            _verifyValidatorExitUnset(oldBlock.header, witness, pubkey, valIndex);
 
             stakingRouter.reportValidatorExitDelay(
                 moduleId,
@@ -299,9 +292,16 @@ contract ValidatorExitDelayVerifier {
     }
 
     /**
-     * @dev Verifies that a validator is still active (exitEpoch == FAR_FUTURE_EPOCH) and proves it against the state root.
+     * @notice Proves—via an SSZ Merkle proof—that the validator
+     *         has not scheduled nor completed an exit.
+     *
+     * @dev    It reconstructs the `Validator` object with `exitEpoch` hard-coded
+     *         to `FAR_FUTURE_EPOCH` and checks that this leaf is present under
+     *         the supplied `stateRoot`.
+     *
+     *         Reverts if proof verification fail.
      */
-    function _verifyValidatorIsNotExited(
+    function _verifyValidatorExitUnset(
         BeaconBlockHeader calldata header,
         ValidatorWitness calldata witness,
         bytes memory pubkey,
@@ -332,7 +332,7 @@ contract ValidatorExitDelayVerifier {
      * @return uint256 The elapsed seconds since the earliest eligible exit request time.
      */
     function _getSecondsSinceExitRequestEligible(
-        ExitRequestsDeliveryHistory memory history,
+        DeliveryHistory[] memory history,
         ValidatorWitness calldata witness,
         uint256 referenceSlotTimestamp
     ) internal view returns (uint256) {
@@ -369,35 +369,24 @@ contract ValidatorExitDelayVerifier {
     function _getExitRequestDeliveryHistory(
         IValidatorsExitBus vebo,
         ExitRequestData calldata exitRequests
-    ) internal view returns (ExitRequestsDeliveryHistory memory) {
+    ) internal view returns (DeliveryHistory[] memory) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
-        (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history) = vebo
-            .getExitRequestsDeliveryHistory(exitRequestsHash);
+        DeliveryHistory[] memory history = vebo.getExitRequestsDeliveryHistory(exitRequestsHash);
 
-        return ExitRequestsDeliveryHistory(totalItemsCount, deliveredItemsCount, history);
+        return history;
     }
 
     function _getExitRequestTimestamp(
-        ExitRequestsDeliveryHistory memory history,
+        DeliveryHistory[] memory deliveryHistory,
         uint256 index
     ) internal pure returns (uint256 validatorExitRequestTimestamp) {
-        if (index >= history.totalItemsCount) {
-            revert KeyIndexOutOfRange(index, history.totalItemsCount);
-        }
-
-        if (index > history.deliveredItemsCount - 1) {
-            revert KeyWasNotUnpacked(index, history.deliveredItemsCount - 1);
-        }
-
-        for (uint256 i = 0; i < history.deliveryHistory.length; i++) {
-            if (history.deliveryHistory[i].lastDeliveredKeyIndex >= index) {
-                return history.deliveryHistory[i].timestamp;
+        for (uint256 i = 0; i < deliveryHistory.length; i++) {
+            if (deliveryHistory[i].lastDeliveredKeyIndex >= index) {
+                return deliveryHistory[i].timestamp;
             }
         }
 
-        // As the loop should always end prematurely with the `return` statement,
-        // this code should be unreachable. We assert `false` just to be safe.
-        assert(false);
+        revert KeyWasNotUnpacked(index);
     }
 
     function _slotToTimestamp(uint64 slot) internal view returns (uint256) {

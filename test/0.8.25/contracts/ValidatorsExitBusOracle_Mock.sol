@@ -3,43 +3,37 @@ pragma solidity ^0.8.0;
 
 import {IValidatorsExitBus, DeliveryHistory} from "contracts/0.8.25/interfaces/IValidatorsExitBus.sol";
 
-struct MockExitRequestDeliveryHistory {
-    uint256 totalItemsCount;
-    uint256 deliveredItemsCount;
-    DeliveryHistory[] history;
-}
-
 struct MockExitRequestData {
     bytes pubkey;
     uint256 nodeOpId;
     uint256 moduleId;
     uint256 valIndex;
 }
+
 contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
     bytes32 _hash;
-    MockExitRequestDeliveryHistory private _history;
+    DeliveryHistory[] private _deliveryHistory;
     MockExitRequestData[] private _data;
 
     function setExitRequests(
         bytes32 exitRequestsHash,
-        MockExitRequestDeliveryHistory calldata history,
+        DeliveryHistory[] calldata deliveryHistory,
         MockExitRequestData[] calldata data
     ) external {
         _hash = exitRequestsHash;
-        _history = history;
+
+        for (uint256 i = 0; i < deliveryHistory.length; i++) {
+            _deliveryHistory.push(deliveryHistory[i]);
+        }
 
         for (uint256 i = 0; i < data.length; i++) {
             _data.push(data[i]);
         }
     }
 
-    function getExitRequestsDeliveryHistory(
-        bytes32 exitRequestsHash
-    ) external view returns (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history) {
+    function getExitRequestsDeliveryHistory(bytes32 exitRequestsHash) external view returns (DeliveryHistory[] memory) {
         require(exitRequestsHash == _hash, "Mock error, Invalid exitRequestsHash");
-        totalItemsCount = _history.totalItemsCount;
-        deliveredItemsCount = _history.deliveredItemsCount;
-        history = _history.history;
+        return _deliveryHistory;
     }
 
     function unpackExitRequest(
