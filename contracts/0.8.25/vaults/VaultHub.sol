@@ -16,7 +16,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
-/// Also, it passes the report from the accounting oracle to the vaults and charges fees
+/// Also, it passes the report from the accounting oracle to the vaults and charges Lido fees
 /// @author folkyatina
 contract VaultHub is PausableUntilWithRoles {
 
@@ -90,8 +90,8 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice role that allows to connect vaults to the hub
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("vaults.VaultHub.VaultMasterRole");
-    /// @notice role that allows to add factories and vault implementations to hub
-    bytes32 public constant VAULT_REGISTRY_ROLE = keccak256("vaults.VaultHub.VaultRegistryRole");
+    /// @notice role that allows to set allowed codehashes
+    bytes32 public constant VAULT_CODEHASH_SET_ROLE = keccak256("vaults.VaultHub.VaultCodehashSetRole");
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     /// @notice The time delta for report freshness check
@@ -145,19 +145,6 @@ contract VaultHub is PausableUntilWithRoles {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
-    /// @notice Set if a vault proxy codehash is allowed to be connected to the hub
-    /// @param _codehash vault proxy codehash
-    /// @param _allowed true to add, false to remove
-    function setAllowedCodehash(bytes32 _codehash, bool _allowed) external onlyRole(VAULT_REGISTRY_ROLE) {
-        if (_codehash == bytes32(0)) revert ZeroArgument();
-        if (_codehash == EMPTY_CODEHASH) revert ZeroCodehash();
-
-        Storage storage $ = _storage();
-        $.codehashes[_codehash] = _allowed;
-
-        emit AllowedCodehashUpdated(_codehash, _allowed);
-    }
-
     /// @notice returns the number of vaults connected to the hub
     /// @dev since index 0 is reserved for not connected vaults, it's always 1 less than the vaults array length
     function vaultsCount() external view returns (uint256) {
@@ -183,6 +170,11 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev it returns empty struct if the vault is not connected to the hub
     function vaultRecord(address _vault) external view returns (VaultRecord memory) {
         return _storage().records[_vault];
+    }
+
+    /// @return true if the vault is connected to the hub
+    function isVaultConnected(address _vault) external view returns (bool) {
+        return _storage().connections[_vault].vaultIndex != 0;
     }
 
     /// @return total value of the vault (as of the latest report received)
@@ -240,6 +232,19 @@ contract VaultHub is PausableUntilWithRoles {
             $.connections[_vault],
             $.records[_vault]
         );
+    }
+
+    /// @notice Set if a vault proxy codehash is allowed to be connected to the hub
+    /// @param _codehash vault proxy codehash
+    /// @param _allowed true to add, false to remove
+    function setAllowedCodehash(bytes32 _codehash, bool _allowed) external onlyRole(VAULT_CODEHASH_SET_ROLE) {
+        if (_codehash == bytes32(0)) revert ZeroArgument();
+        if (_codehash == EMPTY_CODEHASH) revert ZeroCodehash();
+
+        Storage storage $ = _storage();
+        $.codehashes[_codehash] = _allowed;
+
+        emit AllowedCodehashUpdated(_codehash, _allowed);
     }
 
     /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
@@ -312,9 +317,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 totalValue_ = _totalValue(record);
         uint256 liabilityShares_ = record.liabilityShares;
 
-        // check healthy with new rebalance threshold
-        if (_isThresholdBreached(totalValue_, liabilityShares_, _reserveRatioBP))
+        if (_isThresholdBreached(totalValue_, liabilityShares_, _reserveRatioBP)) {
             revert VaultMintingCapacityExceeded(_vault, totalValue_, liabilityShares_, _reserveRatioBP);
+        }
 
         connection.shareLimit = uint96(_shareLimit);
         connection.reserveRatioBP = uint16(_reserveRatioBP);
@@ -324,7 +329,7 @@ contract VaultHub is PausableUntilWithRoles {
         emit VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
 
-    /// @notice force disconnects a vault from the hub
+    /// @notice disconnect a vault from the hub
     /// @param _vault vault address
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     /// @dev vault's `liabilityShares` should be zero
@@ -356,8 +361,10 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = $.connections[_vault];
         VaultRecord storage record = $.records[_vault];
 
+        // here we don't check the reported values but rely on the oracle to preserve vault indexes
         if (connection.pendingDisconnect) {
             IStakingVault(_vault).transferOwnership(connection.owner);
+            // we rely on the oracle to preserve vault index
             _deleteVault(_vault, connection);
 
             emit VaultDisconnectCompleted(_vault);
@@ -439,7 +446,11 @@ contract VaultHub is PausableUntilWithRoles {
         _checkConnectionAndOwner(_vault);
 
         VaultRecord storage record = _storage().records[_vault];
-        record.inOutDelta += int128(int256(msg.value));
+
+        int128 inOutDelta_ = record.inOutDelta + int128(int256(msg.value));
+        record.inOutDelta = inOutDelta_;
+
+        emit VaultInOutDeltaUpdated(_vault, inOutDelta_);
 
         IStakingVault(_vault).fund{value: msg.value}();
     }
@@ -652,29 +663,29 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 vaultBalance = _vault.balance;
         if (vaultBalance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, vaultBalance, CONNECT_DEPOSIT);
 
-        Report memory report = Report(
-            uint128(vaultBalance), // totalValue
-            int128(int256(vaultBalance)) // inOutDelta
-        );
+        Report memory report = Report({
+            totalValue: uint128(vaultBalance),
+            inOutDelta: int128(int256(vaultBalance))
+        });
 
-        VaultConnection memory connection = VaultConnection(
-            IStakingVault(_vault).owner(),
-            uint96(_shareLimit),
-            0, // vaultIndex
-            false, // pendingDisconnect
-            uint16(_reserveRatioBP),
-            uint16(_forcedRebalanceThresholdBP),
-            uint16(_treasuryFeeBP)
-        );
+        VaultConnection memory connection = VaultConnection({
+            owner: IStakingVault(_vault).owner(),
+            shareLimit: uint96(_shareLimit),
+            vaultIndex: uint96($.vaults.length),
+            pendingDisconnect: false,
+            reserveRatioBP: uint16(_reserveRatioBP),
+            forcedRebalanceThresholdBP: uint16(_forcedRebalanceThresholdBP),
+            treasuryFeeBP: uint16(_treasuryFeeBP)
+        });
 
-        VaultRecord memory record = VaultRecord(
-            report,
-            uint128(CONNECT_DEPOSIT), // locked
-            0, // liabilityShares
-            uint64(block.timestamp), // reportTimestamp
-            report.inOutDelta, // inOutDelta
-            uint96(0) // feeSharesCharged
-        );
+        VaultRecord memory record = VaultRecord({
+            report: report,
+            locked: uint128(CONNECT_DEPOSIT),
+            liabilityShares: 0,
+            reportTimestamp: uint64(block.timestamp),
+            inOutDelta: report.inOutDelta,
+            feeSharesCharged: uint96(0)
+        });
 
         _addVault(_vault, connection, record);
     }
@@ -716,7 +727,11 @@ contract VaultHub is PausableUntilWithRoles {
         address _recipient,
         uint256 _amount
     ) internal {
-        _record.inOutDelta -= int128(int256(_amount));
+        int128 inOutDelta_ = _record.inOutDelta - int128(int256(_amount));
+        _record.inOutDelta = inOutDelta_;
+
+        emit VaultInOutDeltaUpdated(_vault, inOutDelta_);
+
         IStakingVault(_vault).withdraw(_recipient, _amount);
     }
 
@@ -801,11 +816,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _addVault(address _vault, VaultConnection memory _connection, VaultRecord memory _record) internal {
         Storage storage $ = _storage();
-
-        uint256 vaultIndex = $.vaults.length;
         $.vaults.push(_vault);
-
-        _connection.vaultIndex = uint96(vaultIndex);
 
         $.connections[_vault] = _connection;
         $.records[_vault] = _record;
@@ -882,6 +893,7 @@ contract VaultHub is PausableUntilWithRoles {
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares, uint256 lockedAmount);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned);
+    event VaultInOutDeltaUpdated(address indexed vault, int128 inOutDelta);
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     /**

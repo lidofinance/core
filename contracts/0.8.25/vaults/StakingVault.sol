@@ -339,18 +339,21 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Triggers validator exits from the beacon chain using EIP-7002 triggerable withdrawals.
-     *         A general-purpose function for withdrawing validators from the beacon chain by the owner.
+     * @notice Triggers validator withdrawals from the beacon chain using EIP-7002 triggerable withdrawals.
+     *         A general-purpose function for withdrawing ether from the beacon chain by the owner.
+     *         If the amount of ether to withdraw is not specified, the full balance of the validator is withdrawn.
      * @param _pubkeys Concatenated validators public keys, each 48 bytes long
-     * @param _amounts Amounts of ether to withdraw, must match the length of _pubkeys. If empty, triggers full withdrawals.
-     * @param _refundRecipient Address to receive the fee refund, if zero, refunds go to msg.sender
+     * @param _amounts Amounts of ether to withdraw. If array is empty or amount value is zero, triggers full withdrawals.
+     * @param _excessRefundRecipient Address to receive any excess withdrawal fee
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
-     * @dev    Use `calculateValidatorWithdrawalFee` to calculate the fee
+     * @dev    You can use `calculateValidatorWithdrawalFee` to calculate the fee but it's actual only for the block
+     *         it's called. The fee may change from block to block, so it's recommended to send fee with some surplus.
+     *         The excess amount will be refunded.
      */
     function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
-        address _refundRecipient
+        address _excessRefundRecipient
     ) external payable onlyOwner {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
@@ -362,13 +365,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         }
 
         // If the refund recipient is not set, use the sender as the refund recipient
-        if (_refundRecipient == address(0)) _refundRecipient = msg.sender;
+        if (_excessRefundRecipient == address(0)) _excessRefundRecipient = msg.sender;
 
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
         if (msg.value < totalFee) revert InsufficientValidatorWithdrawalFee(msg.value, totalFee);
 
-        // If amounts array is empty, trigger full withdrawals, otherwise use partial withdrawals
+        // If amounts array is empty, trigger full withdrawals, otherwise use amount-driven withdrawal types
         if (_amounts.length == 0) {
             TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, feePerRequest);
         } else {
@@ -377,11 +380,11 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
         uint256 excess = msg.value - totalFee;
         if (excess > 0) {
-            (bool success, ) = _refundRecipient.call{value: excess}("");
-            if (!success) revert TransferFailed(_refundRecipient, excess);
+            (bool success, ) = _excessRefundRecipient.call{value: excess}("");
+            if (!success) revert TransferFailed(_excessRefundRecipient, excess);
         }
 
-        emit ValidatorWithdrawalsTriggered(_pubkeys, _amounts, excess, _refundRecipient);
+        emit ValidatorWithdrawalsTriggered(_pubkeys, _amounts, excess, _excessRefundRecipient);
     }
 
     /**
