@@ -306,7 +306,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         if (requestsCount == 0) {
             return;
         }
-        _storeRequestStatus(exitRequestsHash, RequestStatus(uint8(contractVersion), 1, uint32(requestsCount - 1), uint32(_getTime())));
+        _storeNewHashRequestStatus(exitRequestsHash, RequestStatus(uint32(contractVersion), 1, uint32(requestsCount - 1), uint32(_getTime())));
     }
 
     ///

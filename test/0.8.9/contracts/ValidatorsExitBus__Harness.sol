@@ -42,16 +42,24 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
         return _storageDataProcessingState().value;
     }
 
-    function storeExitRequestHash(
+    function storeNewHashRequestStatus(
         bytes32 exitRequestHash,
         uint8 contractVersion,
         uint32 deliveryHistoryLength,
         uint32 lastDeliveredExitDataIndex,
         uint32 timestamp
     ) external {
-        _storeRequestStatus(
+        _storeNewHashRequestStatus(
             exitRequestHash,
             RequestStatus(contractVersion, deliveryHistoryLength, lastDeliveredExitDataIndex, timestamp)
         );
+    }
+
+    function storeDeliveryEntry(
+        bytes32 exitRequestsHash,
+        uint256 lastDeliveredExitDataIndex,
+        uint256 lastDeliveredExitDataTimestamp
+    ) external {
+        _storeDeliveryEntry(exitRequestsHash, lastDeliveredExitDataIndex, lastDeliveredExitDataTimestamp);
     }
 }

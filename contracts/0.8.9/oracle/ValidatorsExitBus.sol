@@ -152,7 +152,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         bytes pubkey;
     }
     struct RequestStatus {
-        uint8 contractVersion;
+        uint32 contractVersion;
         uint32 deliveryHistoryLength;
         uint32 lastDeliveredExitDataIndex; // index of validator,  maximum 600 for example
         uint32 lastDeliveredExitDataTimestamp;
@@ -222,9 +222,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      */
     function submitExitRequestsHash(bytes32 exitRequestsHash) external whenResumed onlyRole(SUBMIT_REPORT_HASH_ROLE) {
         uint256 contractVersion = getContractVersion();
-        _storeRequestStatus(
+        _storeNewHashRequestStatus(
             exitRequestsHash,
-            RequestStatus(uint8(contractVersion), 0, type(uint32).max, type(uint32).max)
+            RequestStatus(uint32(contractVersion), 0, type(uint32).max, type(uint32).max)
         );
     }
 
@@ -273,21 +273,19 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         uint256 newLastDeliveredIndex = startIndex + requestsToDeliver - 1;
 
-        if (requestStatus.deliveryHistoryLength == 1) {
-            _storeDeliveryEntry(
-                exitRequestsHash,
-                requestStatus.lastDeliveredExitDataIndex,
-                requestStatus.lastDeliveredExitDataTimestamp
-            );
-
+        // if totalItemsCount ==  requestsToDeliver, we deliver it via one attempt and don't need to store deliveryHistory array
+        // can store in RequestStatus via lastDeliveredExitDataIndex and lastDeliveredExitDataTimestamp fields
+        bool deliverFullyAtOnce = totalItemsCount == requestsToDeliver && requestStatus.deliveryHistoryLength == 0;
+        if (!deliverFullyAtOnce) {
             _storeDeliveryEntry(exitRequestsHash, newLastDeliveredIndex, _getTimestamp());
         }
 
-        if (requestStatus.deliveryHistoryLength > 1) {
-            _storeDeliveryEntry(exitRequestsHash, newLastDeliveredIndex, _getTimestamp());
-        }
-
-        _updateRequestStatus(requestStatus, requestStatus.deliveryHistoryLength + 1, newLastDeliveredIndex);
+        _updateRequestStatus(
+            requestStatus,
+            requestStatus.deliveryHistoryLength + 1,
+            newLastDeliveredIndex,
+            _getTimestamp()
+        );
     }
 
     /**
@@ -397,13 +395,12 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     }
 
     /**
-     * @notice Returns unpacking history and current status for specific exitRequestsData
+     * @notice Returns delivery history and current status for specific exitRequestsData
      *
      * @param exitRequestsHash - The exit requests hash.
      *
      * @dev Reverts if:
      *     - exitRequestsHash was not submited
-     *     - No delivery history
      */
     function getExitRequestsDeliveryHistory(bytes32 exitRequestsHash) external view returns (DeliveryHistory[] memory) {
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
@@ -414,7 +411,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
 
         if (storedRequest.deliveryHistoryLength == 0) {
-            revert DeliveryWasNotStarted();
+            DeliveryHistory[] memory deliveryHistory;
+            return deliveryHistory;
         }
 
         if (storedRequest.deliveryHistoryLength == 1) {
@@ -523,12 +521,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
     }
 
-    function _checkExitNotSubmitted(RequestStatus storage requestStatus) internal view {
-        if (requestStatus.contractVersion != 0) {
-            revert ExitHashAlreadySubmitted();
-        }
-    }
-
     function _checkDeliveryStarted(RequestStatus storage status) internal view {
         if (status.deliveryHistoryLength == 0) {
             revert DeliveryWasNotStarted();
@@ -591,7 +583,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         );
     }
 
-    function _storeRequestStatus(bytes32 exitRequestsHash, RequestStatus memory requestStatus) internal {
+    function _storeNewHashRequestStatus(bytes32 exitRequestsHash, RequestStatus memory requestStatus) internal {
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
         RequestStatus storage storedRequest = requestStatusMap[exitRequestsHash];
 
@@ -610,13 +602,16 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     function _updateRequestStatus(
         RequestStatus storage requestStatus,
         uint256 deliveryHistoryLength,
-        uint256 lastDeliveredExitDataIndex
+        uint256 lastDeliveredExitDataIndex,
+        uint256 lastDeliveredExitDataTimestamp
     ) internal {
         require(deliveryHistoryLength <= type(uint32).max, "DELIVERY_HISTORY_LENGTH_OVERFLOW");
         require(lastDeliveredExitDataIndex <= type(uint32).max, "LAST_DELIVERED_EXIT_DATA_INDEX_OVERFLOW");
+        require(lastDeliveredExitDataTimestamp <= type(uint32).max, "LAST_DELIVERED_EXIT_DATA_TIMESTAMP_OVERFLOW");
+
         requestStatus.deliveryHistoryLength = uint32(deliveryHistoryLength);
         requestStatus.lastDeliveredExitDataIndex = uint32(lastDeliveredExitDataIndex);
-        requestStatus.lastDeliveredExitDataTimestamp = uint32(_getTimestamp());
+        requestStatus.lastDeliveredExitDataTimestamp = uint32(lastDeliveredExitDataTimestamp);
     }
 
     function _storeDeliveryEntry(
