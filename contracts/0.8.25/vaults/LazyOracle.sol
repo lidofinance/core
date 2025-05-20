@@ -27,6 +27,8 @@ contract LazyOracle {
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
         uint96 shareLimit;
+        uint256 mintedStETH;
+        uint256 mintableCapacityStETH;
         uint16 reserveRatioBP;
         uint16 forcedRebalanceThresholdBP;
         uint16 treasuryFeeBP;
@@ -57,6 +59,10 @@ contract LazyOracle {
         return _storage().vaultsDataTimestamp;
     }
 
+    function getVaultCount() external view returns (uint256) {
+        return VaultHub(payable(LIDO_LOCATOR.vaultHub())).vaultsCount();
+    }
+
     /// @notice returns batch of vaults info
     /// @param _offset in the vaults list [0, vaultsCount)
     /// @param _limit maximum number of vaults to return
@@ -85,6 +91,8 @@ contract LazyOracle {
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
                 connection.shareLimit,
+                0,
+                0,
                 connection.reserveRatioBP,
                 connection.forcedRebalanceThresholdBP,
                 connection.treasuryFeeBP,
