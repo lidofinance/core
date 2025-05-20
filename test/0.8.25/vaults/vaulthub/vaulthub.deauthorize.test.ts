@@ -115,8 +115,8 @@ describe("VaultHub.sol:deauthorize", () => {
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
-    //add VAULT_REGISTRY_ROLE role to allow admin to add factory and vault implementation to the hub
-    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
+    //add VAULT_CODEHASH_SET_ROLE role to allow admin to add factory and vault implementation to the hub
+    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
     await expect(implOld.initialize(stranger, operator, predepositGuarantee, "0x")).to.revertedWithCustomError(

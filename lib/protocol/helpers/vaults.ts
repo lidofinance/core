@@ -100,15 +100,13 @@ export async function createVaultWithDashboard(
   expect(createVaultEvents[0].args).to.not.be.undefined, "VaultCreated event args should be defined";
 
   const vaultAddress = createVaultEvents[0].args!.vault;
-  const ownerAddress = createVaultEvents[0].args!.owner;
 
   const createDashboardEvents = ctx.getEvents(createVaultTxReceipt, "DashboardCreated");
   expect(createDashboardEvents.length).to.equal(1n, "Expected exactly one DashboardCreated event");
   expect(createDashboardEvents[0].args).to.not.be.undefined, "DashboardCreated event args should be defined";
 
   const dashboardAddress = createDashboardEvents[0].args!.dashboard;
-  expect(ownerAddress).to.equal(dashboardAddress);
-
+  expect(createDashboardEvents[0].args!.vault).to.equal(vaultAddress);
   const adminAddress = createDashboardEvents[0].args!.admin;
   expect(adminAddress).to.equal(owner.address);
 

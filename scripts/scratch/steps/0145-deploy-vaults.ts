@@ -56,7 +56,7 @@ export async function main() {
 
   // Grant roles for the Accounting contract
   const vaultMasterRole = await vaultHub.VAULT_MASTER_ROLE();
-  const vaultRegistryRole = await vaultHub.VAULT_REGISTRY_ROLE();
+  const vaultRegistryRole = await vaultHub.VAULT_CODEHASH_SET_ROLE();
 
   await makeTx(vaultHub, "grantRole", [vaultMasterRole, deployer], { from: deployer });
   await makeTx(vaultHub, "grantRole", [vaultRegistryRole, deployer], { from: deployer });

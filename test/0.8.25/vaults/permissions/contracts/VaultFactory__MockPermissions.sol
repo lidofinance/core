@@ -162,23 +162,9 @@ contract VaultFactory__MockPermissions {
         permissions.grantRole(permissions.REQUEST_TIER_CHANGE_ROLE(), _permissionsConfig.tierChanger);
     }
 
-    /**
-     * @notice Event emitted on a Vault creation
-     * @param owner The address of the Vault owner
-     * @param vault The address of the created Vault
-     */
     event VaultCreated(address indexed owner, address indexed vault);
 
-    /**
-     * @notice Event emitted on a Permissions creation
-     * @param admin The address of the Permissions admin
-     * @param permissions The address of the created Permissions
-     */
     event PermissionsCreated(address indexed admin, address indexed permissions);
 
-    /**
-     * @notice Error thrown for when a given value cannot be zero
-     * @param argument Name of the argument
-     */
     error ZeroArgument(string argument);
 }

@@ -86,7 +86,7 @@ describe("VaultHub.sol:forceExit", () => {
     vaultHubAddress = await vaultHub.getAddress();
 
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), user);
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 

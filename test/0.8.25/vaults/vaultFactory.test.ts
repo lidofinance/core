@@ -127,8 +127,8 @@ describe("VaultFactory.sol", () => {
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
-    //add VAULT_REGISTRY_ROLE role to allow admin to add factory and vault implementation to the hub
-    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
+    //add VAULT_CODEHASH_SET_ROLE role to allow admin to add factory and vault implementation to the hub
+    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
     await expect(implOld.initialize(stranger, operator, predepositGuarantee)).to.revertedWithCustomError(
@@ -198,11 +198,11 @@ describe("VaultFactory.sol", () => {
 
       await expect(tx)
         .to.emit(vaultFactory, "VaultCreated")
-        .withArgs(await vault.getAddress(), await dashboard_.getAddress());
+        .withArgs(vault);
 
       await expect(tx)
         .to.emit(vaultFactory, "DashboardCreated")
-        .withArgs(await dashboard_.getAddress(), vaultOwner1);
+        .withArgs(dashboard_, vault, vaultOwner1);
 
       expect(await dashboard_.getAddress()).to.eq(await vault.owner());
     });
