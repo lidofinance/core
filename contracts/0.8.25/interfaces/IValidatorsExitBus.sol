@@ -12,7 +12,7 @@ struct DeliveryHistory {
 interface IValidatorsExitBus {
     function getExitRequestsDeliveryHistory(
         bytes32 exitRequestsHash
-    ) external view returns (uint256 totalItemsCount, uint256 deliveredItemsCount, DeliveryHistory[] memory history);
+    ) external view returns (DeliveryHistory[] memory history);
 
     function unpackExitRequest(
         bytes calldata exitRequests,

@@ -86,7 +86,7 @@ describe("Report Validator Exit Delay", () => {
     await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
     const deliveryHistory = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
-    const eligibleToExitInSec = proofSlotTimestamp - deliveryHistory.history[0].timestamp;
+    const eligibleToExitInSec = proofSlotTimestamp - deliveryHistory[0].timestamp;
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
@@ -127,7 +127,7 @@ describe("Report Validator Exit Delay", () => {
     await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
     const deliveryHistory = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
-    const eligibleToExitInSec = proofSlotTimestamp - deliveryHistory.history[0].timestamp;
+    const eligibleToExitInSec = proofSlotTimestamp - deliveryHistory[0].timestamp;
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 

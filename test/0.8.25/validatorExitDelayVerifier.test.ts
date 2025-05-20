@@ -162,11 +162,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await vebo.setExitRequests(
         encodedExitRequestsHash,
-        {
-          totalItemsCount: 1n,
-          deliveredItemsCount: 1n,
-          history: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-        },
+        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
         exitRequests,
       );
 
@@ -212,11 +208,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await vebo.setExitRequests(
         encodedExitRequestsHash,
-        {
-          totalItemsCount: 1n,
-          deliveredItemsCount: 1n,
-          history: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-        },
+        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
         exitRequests,
       );
 
@@ -306,11 +298,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await vebo.setExitRequests(
         encodedExitRequestsHash,
-        {
-          totalItemsCount: 1n,
-          deliveredItemsCount: 1n,
-          history: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-        },
+        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
         exitRequests,
       );
 
@@ -462,11 +450,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       await vebo.setExitRequests(
         encodedExitRequestsHash,
-        {
-          totalItemsCount: 1n,
-          deliveredItemsCount: 1n,
-          history: [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-        },
+        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
         exitRequests,
       );
 
