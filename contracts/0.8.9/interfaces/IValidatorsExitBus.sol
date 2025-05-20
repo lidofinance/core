@@ -45,7 +45,7 @@ interface IValidatorsExitBus {
         bytes calldata exitRequests,
         uint256 dataFormat,
         uint256 index
-    ) external view returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex);
+    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex);
 
     function resume() external;
 
