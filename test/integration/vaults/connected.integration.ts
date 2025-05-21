@@ -12,7 +12,7 @@ import {
   getPubkeys,
   ProtocolContext,
   reportVaultDataWithProof,
-  setupLido,
+  setupLidoForVaults,
   VaultRoles,
 } from "lib/protocol";
 
@@ -43,7 +43,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
     originalSnapshot = await Snapshot.take();
 
-    await setupLido(ctx);
+    await setupLidoForVaults(ctx);
 
     ({ vaultHub } = ctx.contracts);
 
@@ -267,7 +267,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") }); // total value is 2 ether
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1")); // mint 1 ether
 
-      await reportVaultDataWithProof(ctx, stakingVault, 1n); // slashing to 1 wei
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: 1n }); // slashing to 1 wei
 
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(false);
     });

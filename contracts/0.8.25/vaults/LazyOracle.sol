@@ -116,19 +116,19 @@ contract LazyOracle {
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault
     /// @param _inOutDelta the inOutDelta of the vault
-    /// @param _feeCharged the feeCharged of the vault
+    /// @param _accruedTreasuryFees the accrued treasury fees on the vault
     /// @param _liabilityShares the liabilityShares of the vault
     /// @param _proof the proof of the reported data
     function updateVaultData(
         address _vault,
         uint256 _totalValue,
         int256 _inOutDelta,
-        uint256 _feeCharged,
+        uint256 _accruedTreasuryFees,
         uint256 _liabilityShares,
         bytes32[] calldata _proof
     ) external {
         bytes32 leaf = keccak256(
-            bytes.concat(keccak256(abi.encode(_vault, _totalValue, _inOutDelta, _feeCharged, _liabilityShares)))
+            bytes.concat(keccak256(abi.encode(_vault, _totalValue, _inOutDelta, _accruedTreasuryFees, _liabilityShares)))
         );
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
@@ -138,7 +138,7 @@ contract LazyOracle {
                 _storage().vaultsDataTimestamp,
                 _totalValue,
                 _inOutDelta,
-                _feeCharged,
+                _accruedTreasuryFees,
                 _liabilityShares
             );
     }

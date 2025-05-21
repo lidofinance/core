@@ -43,6 +43,10 @@ const TARGET_APR = 3_00n; // 3% APR
 const PROTOCOL_FEE = 10_00n; // 10% fee (5% treasury + 5% node operators)
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
 
+const INFRA_FEE_BP = 5_00n;
+const LIQUIDITY_FEE_BP = 4_00n;
+const RESERVATION_FEE_BP = 1_00n;
+
 const VAULT_CONNECTION_DEPOSIT = ether("1");
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator performance fee
 const CONFIRM_EXPIRY = days(7n);
@@ -64,8 +68,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   let stakingVaultAddress: string;
   let stakingVaultCLBalance = 0n;
   let stakingVaultMaxMintingShares = 0n;
-
-  const treasuryFeeBP = 5_00n; // 5% of the treasury fee
 
   let snapshot: string;
 
@@ -163,12 +165,19 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const agentSigner = await ctx.getSigner("agent");
 
     const defaultGroupId = await operatorGrid.DEFAULT_TIER_ID();
-    await operatorGrid.connect(agentSigner).alterTier(defaultGroupId, {
-      shareLimit,
-      reserveRatioBP: reserveRatio,
-      forcedRebalanceThresholdBP: forcedRebalanceThreshold,
-      treasuryFeeBP: treasuryFeeBP,
-    });
+    await operatorGrid.connect(agentSigner).alterTiers(
+      [defaultGroupId],
+      [
+        {
+          shareLimit,
+          reserveRatioBP: reserveRatio,
+          forcedRebalanceThresholdBP: forcedRebalanceThreshold,
+          infraFeeBP: INFRA_FEE_BP,
+          liquidityFeeBP: LIQUIDITY_FEE_BP,
+          reservationFeeBP: RESERVATION_FEE_BP,
+        },
+      ],
+    );
 
     // Owner can create a vault with operator as a node operator
     const deployTx = await stakingVaultFactory
@@ -396,7 +405,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.be.equal(stakingVaultMaxMintingShares);
 
-    const reportResponse = await reportVaultDataWithProof(ctx, stakingVault, vaultValue);
+    const reportResponse = await reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultValue });
     const reportTxReceipt = (await reportResponse.wait()) as ContractTransactionReceipt;
     const vaultReportedEvents = ctx.getEvents(reportTxReceipt, "VaultReportApplied", [vaultHub.interface]);
     expect(vaultReportedEvents.length).to.equal(1n);
@@ -454,7 +463,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     await report(ctx, params);
 
-    await reportVaultDataWithProof(ctx, stakingVault, vaultValue, VAULT_DEPOSIT);
+    await reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultValue, inOutDelta: VAULT_DEPOSIT });
 
     const mintedShares = await vaultHub.liabilityShares(stakingVaultAddress);
     expect(mintedShares).to.be.equal(0n); // it's zero because protocol fees deducted not in shares

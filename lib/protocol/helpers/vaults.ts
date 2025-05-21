@@ -171,7 +171,7 @@ export async function createVaultWithDashboard(
 /**
  * Sets up the protocol with a maximum external ratio
  */
-export async function setupLido(ctx: ProtocolContext) {
+export async function setupLidoForVaults(ctx: ProtocolContext) {
   const { lido } = ctx.contracts;
   const votingSigner = await ctx.getSigner("voting");
 
@@ -188,21 +188,24 @@ export function createVaultsReportTree(vaults: VaultReportItem[]) {
 export async function reportVaultDataWithProof(
   ctx: ProtocolContext,
   stakingVault: StakingVault,
-  totalValue?: bigint,
-  inOutDelta?: bigint,
-  liabilityShares?: bigint,
+  params: {
+    totalValue?: bigint;
+    inOutDelta?: bigint;
+    accruedTreasuryFees?: bigint;
+    liabilityShares?: bigint;
+  } = {},
 ) {
   const { vaultHub, locator, lazyOracle } = ctx.contracts;
 
-  const totalValueArg = totalValue ?? (await vaultHub.totalValue(stakingVault));
-  const inOutDeltaArg = inOutDelta ?? (await vaultHub.vaultRecord(stakingVault)).inOutDelta;
-  const liabilitySharesArg = liabilityShares ?? (await vaultHub.liabilityShares(stakingVault));
+  const totalValueArg = params.totalValue ?? (await vaultHub.totalValue(stakingVault));
+  const inOutDeltaArg = params.inOutDelta ?? (await vaultHub.vaultRecord(stakingVault)).inOutDelta;
+  const liabilitySharesArg = params.liabilityShares ?? (await vaultHub.liabilityShares(stakingVault));
 
   const vaultReport: VaultReportItem = [
     await stakingVault.getAddress(),
     totalValueArg,
     inOutDeltaArg,
-    0n,
+    params.accruedTreasuryFees ?? 0n,
     liabilitySharesArg,
   ];
   const reportTree = createVaultsReportTree([vaultReport]);
@@ -214,26 +217,30 @@ export async function reportVaultDataWithProof(
     await stakingVault.getAddress(),
     totalValueArg,
     inOutDeltaArg,
-    0n,
+    params.accruedTreasuryFees ?? 0n,
     liabilitySharesArg,
     reportTree.getProof(0),
   );
 }
 
-export async function reportVaultWithoutProof(stakingVault: StakingVault) {
+export async function reportVaultWithoutProof(ctx: ProtocolContext, stakingVault: StakingVault) {
+  const { vaultHub, lazyOracle } = ctx.contracts;
   const reportTimestamp = await getCurrentBlockTimestamp();
-  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
   const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
-  const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+
   const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-  await vaultHub.connect(accountingSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
-  await stakingVault
-    .connect(vaultHubSigner)
-    .report(
+  const lazyOracleSigner = await impersonate(await locator.lazyOracle(), ether("100"));
+
+  await lazyOracle.connect(accountingSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
+  await vaultHub
+    .connect(lazyOracleSigner)
+    .applyVaultReport(
+      await stakingVault.getAddress(),
       reportTimestamp,
-      await stakingVault.totalValue(),
-      await stakingVault.inOutDelta(),
-      await stakingVault.locked(),
+      await vaultHub.totalValue(stakingVault),
+      (await vaultHub.vaultRecord(stakingVault)).inOutDelta,
+      0n,
+      (await vaultHub.vaultRecord(stakingVault)).liabilityShares,
     );
 }
 

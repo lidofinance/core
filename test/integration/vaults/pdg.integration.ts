@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { StakingVault } from "typechain-types";
 
 import { generateValidator } from "lib";
-import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLido } from "lib/protocol";
+import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
 import { getProofAndDepositData } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
@@ -29,7 +29,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
     originalSnapshot = await Snapshot.take();
 
-    await setupLido(ctx);
+    await setupLidoForVaults(ctx);
 
     [owner, nodeOperator, stranger] = await ethers.getSigners();
 

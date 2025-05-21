@@ -6,18 +6,8 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Dashboard, StakingVault } from "typechain-types";
 
 import { certainAddress, ether, generatePostDeposit, generatePredeposit, generateValidator } from "lib";
-import {
-  createVaultWithDashboard,
-  getProtocolContext,
-  ProtocolContext,
-  setupLido,
-} from "lib/protocol";
-import {
-  getProofAndDepositData,
-  getPubkeys,
-  reportVaultDataWithProof,
-  VaultRoles,
-} from "lib/protocol/helpers/vaults";
+import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
+import { getProofAndDepositData, getPubkeys, reportVaultDataWithProof, VaultRoles } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
 
@@ -40,7 +30,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     ctx = await getProtocolContext();
 
-    await setupLido(ctx);
+    await setupLidoForVaults(ctx);
 
     [owner, nodeOperator, stranger] = await ethers.getSigners();
 
@@ -167,10 +157,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     describe("Ossification", () => {
       it("Can ossify vault", async () => {
-        await expect(stakingVault.connect(owner).ossify()).to.emit(
-          stakingVault,
-          "PinnedImplementationUpdated",
-        );
+        await expect(stakingVault.connect(owner).ossify()).to.emit(stakingVault, "PinnedImplementationUpdated");
 
         expect(await stakingVault.isOssified()).to.equal(true);
       });
@@ -222,7 +209,11 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       it("Can trigger validator withdrawal", async () => {
         const keys = getPubkeys(2);
         const value = await stakingVault.calculateValidatorWithdrawalFee(2);
-        await expect(stakingVault.connect(owner).triggerValidatorWithdrawals(keys.stringified, [ether("1"), ether("2")], owner.address, { value }))
+        await expect(
+          stakingVault
+            .connect(owner)
+            .triggerValidatorWithdrawals(keys.stringified, [ether("1"), ether("2")], owner.address, { value }),
+        )
           .to.emit(stakingVault, "ValidatorWithdrawalsTriggered")
           .withArgs(keys.stringified, [ether("1"), ether("2")], 0, owner.address);
       });
@@ -253,11 +244,15 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       });
 
       it("Can pause/resume deposits to beacon chain", async () => {
-        await expect(stakingVault.connect(owner).pauseBeaconChainDeposits())
-          .to.emit(stakingVault, "BeaconChainDepositsPaused");
+        await expect(stakingVault.connect(owner).pauseBeaconChainDeposits()).to.emit(
+          stakingVault,
+          "BeaconChainDepositsPaused",
+        );
 
-        await expect(stakingVault.connect(owner).resumeBeaconChainDeposits())
-          .to.emit(stakingVault, "BeaconChainDepositsResumed");
+        await expect(stakingVault.connect(owner).resumeBeaconChainDeposits()).to.emit(
+          stakingVault,
+          "BeaconChainDepositsResumed",
+        );
       });
 
       it("Can deposit to beacon chain using predeposit guarantee", async () => {
@@ -273,12 +268,16 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
         });
 
-        await expect(predepositGuarantee.connect(nodeOperator).predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]))
+        await expect(
+          predepositGuarantee
+            .connect(nodeOperator)
+            .predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]),
+        )
           .to.emit(stakingVault, "DepositedToBeaconChain")
           .withArgs(1, ether("1"));
 
         const { witnesses, postdeposit } = await getProofAndDepositData(
-          predepositGuarantee,
+          ctx,
           validator,
           withdrawalCredentials,
           ether("2048"),

@@ -32,7 +32,7 @@ import {
   impersonate,
   randomValidatorPubkey,
 } from "lib";
-import { reportVaultWithMockedVaultHub, reportVaultWithoutProof } from "lib/protocol/helpers/vaults";
+import { reportVaultWithMockedVaultHub } from "lib/protocol/helpers/vaults";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";

@@ -19,12 +19,12 @@ export { ensureDsmGuardians } from "./dsm";
 export { norSdvtEnsureOperators } from "./nor-sdvt";
 export { calcNodeOperatorRewards } from "./staking-module";
 export {
-  // createVaultProxy,
+  createVaultProxy,
   createVaultsReportTree,
   createVaultWithDashboard,
-  disconnectFromHub,
   getPubkeys,
   reportVaultDataWithProof,
-  setupLido,
+  reportVaultWithoutProof,
+  setupLidoForVaults,
   VaultRoles,
 } from "./vaults";
