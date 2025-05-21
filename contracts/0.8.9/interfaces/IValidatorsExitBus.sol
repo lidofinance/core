@@ -3,7 +3,7 @@
 pragma solidity 0.8.9;
 
 interface IValidatorsExitBus {
-    struct ExitRequestData {
+    struct ExitRequestsData {
         bytes data;
         uint256 dataFormat;
     }
@@ -16,10 +16,10 @@ interface IValidatorsExitBus {
 
     function submitExitRequestsHash(bytes32 exitReportHash) external;
 
-    function submitExitRequestsData(ExitRequestData calldata request) external;
+    function submitExitRequestsData(ExitRequestsData calldata request) external;
 
     function triggerExits(
-        ExitRequestData calldata exitsData,
+        ExitRequestsData calldata exitsData,
         uint256[] calldata exitDataIndexes,
         address refundRecipient
     ) external payable;

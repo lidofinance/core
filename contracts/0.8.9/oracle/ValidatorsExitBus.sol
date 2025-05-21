@@ -174,8 +174,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
-    uint256 internal constant PACKED_TWG_EXIT_REQUEST_LENGTH = 56;
-
     /// @notice The list format of the validator exit requests data. Used when all
     /// requests fit into a single transaction.
     ///
@@ -196,13 +194,24 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
     ILidoLocator internal immutable LOCATOR;
 
-    /// Hash constant for mapping exit requests storage
-    bytes32 internal constant EXIT_REQUESTS_HASHES_POSITION = keccak256("lido.ValidatorsExitBus.reportHashes");
-    bytes32 public constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestLimit");
+    // Storage slot for exit request limit configuration and current quota tracking
+    bytes32 internal constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestLimit");
+    // Storage slot for the maximum number of validator exit requests allowed per processing batch
     bytes32 internal constant MAX_VALIDATORS_PER_BATCH_POSITION =
         keccak256("lido.ValidatorsExitBus.maxValidatorsPerBatch");
+
+    // Storage slot for mapping(bytes32 => RequestStatus), keyed by exitRequestsHash
     bytes32 internal constant REQUEST_STATUS_POSITION = keccak256("lido.ValidatorsExitBus.requestStatus");
-    bytes32 internal constant DELIVERY_HISTORY_POSITION = keccak256("lido.ValidatorsBus.deliveryHistory");
+    // Storage slot for mapping(bytes32 => DeliveryHistory[]), keyed by exitRequestsHash
+    bytes32 internal constant DELIVERY_HISTORY_POSITION = keccak256("lido.ValidatorsExitBus.deliveryHistory");
+
+    // RequestStatus stores the last delivered index of the request, timestamp of delivery, and deliveryHistory length (number of deliveries).
+    // If a request is fully delivered in one step (as with oracle requests, which can't be delivered partially),
+    // only RequestStatus is used for efficiency.
+    // If a request is delivered in parts (e.g., due to limit constraints),
+    // DeliveryHistory[] stores full delivery records in addition to RequestStatus.
+    // If deliveryHistoryLength == 1, delivery info is read from RequestStatus; otherwise, from DeliveryHistory[].
+    // Both mappings use the same key (exitRequestsHash).
 
     constructor(address lidoLocator) {
         LOCATOR = ILidoLocator(lidoLocator);
@@ -243,7 +252,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      *
      * @param request - The exit requests structure.
      */
-    function submitExitRequestsData(ExitRequestData calldata request) external whenResumed {
+    function submitExitRequestsData(ExitRequestsData calldata request) external whenResumed {
         // bytes calldata data = request.data;
         bytes32 exitRequestsHash = keccak256(abi.encode(request.data, request.dataFormat));
         RequestStatus storage requestStatus = _storageRequestStatus()[exitRequestsHash];
@@ -303,7 +312,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      *     - `exitDataIndexes` is not strictly increasing array
      */
     function triggerExits(
-        ExitRequestData calldata exitsData,
+        ExitRequestsData calldata exitsData,
         uint256[] calldata exitDataIndexes,
         address refundRecipient
     ) external payable {
@@ -393,6 +402,22 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         frameDuration = exitRequestLimitData.frameDuration;
         prevExitRequestsLimit = exitRequestLimitData.prevExitRequestsLimit;
         currentExitRequestsLimit = _getCurrentExitLimit();
+    }
+
+    /**
+     * @notice Sets the maximum allowed number of validator exit requests to process in a single batch.
+     * @param maxRequests The new maximum number of exit requests allowed per batch.
+     */
+    function setMaxRequestsPerBatch(uint256 maxRequests) external onlyRole(MAX_VALIDATORS_PER_BATCH_ROLE) {
+        _setMaxRequestsPerBatch(maxRequests);
+    }
+
+    /**
+     * @notice Returns information about allowed number of validator exit requests to process in a single batch.
+     * @return The new maximum number of exit requests allowed per batch
+     */
+    function getMaxRequestsPerBatch() external view returns (uint256) {
+        return _getMaxRequestsPerBatch();
     }
 
     /**
@@ -487,14 +512,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     /// @dev Reverts with `ResumedExpected()` if contract is already paused.
     function pauseUntil(uint256 _pauseUntilInclusive) external onlyRole(PAUSE_ROLE) {
         _pauseUntil(_pauseUntilInclusive);
-    }
-
-    function setMaxRequestsPerBatch(uint256 value) external onlyRole(MAX_VALIDATORS_PER_BATCH_ROLE) {
-        _setMaxRequestsPerBatch(value);
-    }
-
-    function getMaxRequestsPerBatch() external view returns (uint256) {
-        return _getMaxRequestsPerBatch();
     }
 
     /// Internal functions
