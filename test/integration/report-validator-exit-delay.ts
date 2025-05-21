@@ -90,6 +90,15 @@ describe("Report Validator Exit Delay", () => {
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
+    expect(
+      await nor.isValidatorExitDelayPenaltyApplicable(
+        nodeOpId,
+        proofSlotTimestamp,
+        ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        eligibleToExitInSec,
+      ),
+    ).to.be.true;
+
     await expect(
       validatorExitDelayVerifier.verifyValidatorExitDelay(
         toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
@@ -99,6 +108,23 @@ describe("Report Validator Exit Delay", () => {
     )
       .and.to.emit(nor, "ValidatorExitStatusUpdated")
       .withArgs(nodeOpId, ACTIVE_VALIDATOR_PROOF.validator.pubkey, eligibleToExitInSec, proofSlotTimestamp);
+
+    expect(
+      await nor.isValidatorExitDelayPenaltyApplicable(
+        nodeOpId,
+        proofSlotTimestamp,
+        ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        eligibleToExitInSec,
+      ),
+    ).to.be.false;
+
+    await expect(
+      validatorExitDelayVerifier.verifyValidatorExitDelay(
+        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        encodedExitRequests,
+      ),
+    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
   });
 
   it("Should report validator exit delay historically", async () => {
@@ -131,6 +157,15 @@ describe("Report Validator Exit Delay", () => {
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
+    expect(
+      await nor.isValidatorExitDelayPenaltyApplicable(
+        nodeOpId,
+        proofSlotTimestamp,
+        ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        eligibleToExitInSec,
+      ),
+    ).to.be.true;
+
     await expect(
       validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
         toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
@@ -141,5 +176,163 @@ describe("Report Validator Exit Delay", () => {
     )
       .and.to.emit(nor, "ValidatorExitStatusUpdated")
       .withArgs(nodeOpId, ACTIVE_VALIDATOR_PROOF.validator.pubkey, eligibleToExitInSec, proofSlotTimestamp);
+
+    expect(
+      await nor.isValidatorExitDelayPenaltyApplicable(
+        nodeOpId,
+        proofSlotTimestamp,
+        ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        eligibleToExitInSec,
+      ),
+    ).to.be.false;
+
+    await expect(
+      validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
+        toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        encodedExitRequests,
+      ),
+    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+  });
+
+  it("Should revert when validator reported multiple times in a single transaction", async () => {
+    const { validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
+
+    // Setup multiple exit requests with the same pubkey
+    const nodeOpIds = [1, 2];
+    const exitRequests = nodeOpIds.map((nodeOpId) => ({
+      moduleId,
+      nodeOpId,
+      valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+      pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+    }));
+
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+    const currentBlockTimestamp = await getCurrentBlockTimestamp();
+    const proofSlotTimestamp =
+      (await validatorExitDelayVerifier.GENESIS_TIME()) + BigInt(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * 12);
+
+    // Set the block timestamp to 7 days before the proof time
+    await advanceChainTime(proofSlotTimestamp - currentBlockTimestamp - BigInt(3600 * 24 * 7));
+
+    await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
+    await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
+
+    const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+
+    const witnesses = nodeOpIds.map((_, index) => toValidatorWitness(ACTIVE_VALIDATOR_PROOF, index));
+    await expect(
+      validatorExitDelayVerifier.verifyValidatorExitDelay(
+        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+        witnesses,
+        encodedExitRequests,
+      ),
+    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+  });
+
+  it("Should revert when exit request hash is not submitted", async () => {
+    const { validatorExitDelayVerifier, validatorsExitBusOracle } = ctx.contracts;
+
+    const exitRequests = [
+      {
+        moduleId,
+        nodeOpId: 2,
+        valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+        pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+      },
+    ];
+
+    const { encodedExitRequests } = encodeExitRequestsDataListWithFormat(exitRequests);
+    // Note that we don't submit the hash to ValidatorsExitBusOracle
+
+    const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+
+    await expect(
+      validatorExitDelayVerifier.verifyValidatorExitDelay(
+        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        encodedExitRequests,
+      ),
+    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "ExitHashNotSubmitted");
+  });
+
+  it("Should revert when submitting validator exit delay with invalid beacon block root", async () => {
+    const { validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
+
+    const nodeOpId = 2;
+    const exitRequests = [
+      {
+        moduleId,
+        nodeOpId,
+        valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+        pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+      },
+    ];
+
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+    await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
+    await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
+
+    // Use a different block root that won't match the header
+    const fakeRoot = "0xbadbadbad0000000000000000000000000000000000000000000000000000000";
+    const mismatchTimestamp = await updateBeaconBlockRoot(fakeRoot);
+
+    await expect(
+      validatorExitDelayVerifier.verifyValidatorExitDelay(
+        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, mismatchTimestamp),
+        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        encodedExitRequests,
+      ),
+    ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidBlockHeader");
+  });
+
+  it("Should revert when reporting validator exit delay before exit deadline threshold", async () => {
+    const { nor, validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
+
+    const nodeOpId = 2;
+    const exitRequests = [
+      {
+        moduleId,
+        nodeOpId,
+        valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+        pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+      },
+    ];
+
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+    const currentBlockTimestamp = await getCurrentBlockTimestamp();
+    const proofSlotTimestamp =
+      (await validatorExitDelayVerifier.GENESIS_TIME()) + BigInt(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * 12);
+
+    const exitDeadlineThreshold = await nor.exitDeadlineThreshold();
+    await advanceChainTime(proofSlotTimestamp - currentBlockTimestamp - exitDeadlineThreshold);
+
+    await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
+    await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
+
+    const deliveryHistory = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
+    const eligibleToExitInSec = proofSlotTimestamp - deliveryHistory[0].timestamp;
+
+    const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+
+    expect(
+      await nor.isValidatorExitDelayPenaltyApplicable(
+        nodeOpId,
+        proofSlotTimestamp,
+        ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        eligibleToExitInSec,
+      ),
+    ).to.be.false;
+
+    await expect(
+      validatorExitDelayVerifier.verifyValidatorExitDelay(
+        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        encodedExitRequests,
+      ),
+    ).to.be.revertedWith("EXIT_DELAY_BELOW_THRESHOLD");
   });
 });
