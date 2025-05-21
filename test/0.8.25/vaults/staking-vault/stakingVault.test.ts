@@ -1,8 +1,10 @@
 import { expect } from "chai";
+import { toChecksumAddress } from "ethereumjs-util";
 import { ContractTransactionReceipt, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   DepositContract__MockForStakingVault,
@@ -25,10 +27,8 @@ import {
   proxify,
   streccak,
 } from "lib";
-
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
-import { toChecksumAddress } from "ethereumjs-util";
 import { getPubkeys } from "lib/protocol";
+
 import { Snapshot } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
@@ -39,12 +39,11 @@ const encodeEip7002Input = (pubkey: string, amount: bigint): string => {
 };
 
 // @TODO: test reentrancy attacks
-describe.only("StakingVault.sol", () => {
+describe("StakingVault.sol", () => {
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let elRewardsSender: HardhatEthersSigner;
   let depositor: HardhatEthersSigner;
 
   let stakingVault: StakingVault;
@@ -56,7 +55,7 @@ describe.only("StakingVault.sol", () => {
   let originalState: string;
 
   before(async () => {
-    [deployer, vaultOwner, operator, elRewardsSender, depositor, stranger] = await ethers.getSigners();
+    [deployer, vaultOwner, operator, depositor, stranger] = await ethers.getSigners();
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
 
     stakingVaultImplementation = await ethers.deployContract("StakingVault", [depositContract]);

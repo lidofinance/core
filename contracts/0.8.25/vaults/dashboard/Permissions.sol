@@ -6,8 +6,6 @@ pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
-import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
@@ -192,9 +190,6 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev Returns an array of roles that need to confirm the call
      *      used for the `onlyConfirmed` modifier.
-     *      At this level, only the DEFAULT_ADMIN_ROLE is needed to confirm the call
-     *      but in inherited contracts, the function can be overridden to add more roles,
-     *      which are introduced further in the inheritance chain.
      * @return The roles that need to confirm the call.
      */
     function confirmingRoles() public pure virtual returns (bytes32[] memory);
@@ -291,14 +286,14 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _newOwner The address to transfer the ownership to.
      */
     function _transferOwnership(address _newOwner) internal onlyRole(DEFAULT_ADMIN_ROLE) {
-        OwnableUpgradeable(address(_stakingVault())).transferOwnership(_newOwner);
+        _stakingVault().transferOwnership(_newOwner);
     }
 
     /**
      * @dev Checks the DEFAULT_ADMIN_ROLE and accepts the StakingVault ownership.
      */
     function _acceptOwnership() internal onlyRole(DEFAULT_ADMIN_ROLE) {
-        Ownable2StepUpgradeable(address(_stakingVault())).acceptOwnership();
+        _stakingVault().acceptOwnership();
     }
 
     /**
@@ -311,7 +306,7 @@ abstract contract Permissions is AccessControlConfirmable {
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
-        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee()).compensateDisprovenPredeposit(_pubkey, _recipient);
+        return VAULT_HUB.compensateDisprovenPredepositFromPDG(address(_stakingVault()), _pubkey, _recipient);
     }
 
     /**
@@ -320,9 +315,8 @@ abstract contract Permissions is AccessControlConfirmable {
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
     ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
-        IPredepositGuarantee predepositGuarantee = IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee());
         for (uint256 i = 0; i < _witnesses.length; i++) {
-            predepositGuarantee.proveUnknownValidator(_witnesses[i], _stakingVault());
+            VAULT_HUB.proveUnknownValidatorToPDG(address(_stakingVault()), _witnesses[i]);
         }
     }
 

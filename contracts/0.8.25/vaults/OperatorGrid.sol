@@ -356,7 +356,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @param _requestedShareLimit requested share limit
     function requestTierChange(address _vault, uint256 _tierId, uint256 _requestedShareLimit) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
-        if (msg.sender != IStakingVault(_vault).owner()) revert NotAuthorized("requestTierChange", msg.sender);
+        if (msg.sender != VaultHub(payable(LIDO_LOCATOR.vaultHub())).vaultConnection(_vault).owner)
+            revert NotAuthorized("requestTierChange", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
         if (_tierId >= $.tiers.length) revert TierNotExists();
