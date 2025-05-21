@@ -230,6 +230,17 @@ describe("Report Validator Exit Delay", () => {
         encodedExitRequests,
       ),
     ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+
+    const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+    await expect(
+      validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
+        toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+        witnesses,
+        encodedExitRequests,
+      ),
+    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
   });
 
   it("Should revert when exit request hash is not submitted", async () => {
@@ -245,6 +256,7 @@ describe("Report Validator Exit Delay", () => {
     ];
 
     const { encodedExitRequests } = encodeExitRequestsDataListWithFormat(exitRequests);
+
     // Note that we don't submit the hash to ValidatorsExitBusOracle
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
@@ -256,6 +268,56 @@ describe("Report Validator Exit Delay", () => {
         encodedExitRequests,
       ),
     ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "ExitHashNotSubmitted");
+
+    const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+    await expect(
+      validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
+        toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        encodedExitRequests,
+      ),
+    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "ExitHashNotSubmitted");
+  });
+
+  it("Should revert when exit request was not unpacked", async () => {
+    const { validatorExitDelayVerifier, validatorsExitBusOracle } = ctx.contracts;
+
+    const exitRequests = [
+      {
+        moduleId,
+        nodeOpId: 2,
+        valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+        pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+      },
+    ];
+
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+    // Note that we don't submit actual report, only hash
+    await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
+
+    const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+
+    await expect(
+      validatorExitDelayVerifier.verifyValidatorExitDelay(
+        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        encodedExitRequests,
+      ),
+    ).to.be.revertedWithCustomError(await validatorExitDelayVerifier, "KeyWasNotUnpacked");
+
+    const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+    await expect(
+      validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
+        toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        encodedExitRequests,
+      ),
+    ).to.be.revertedWithCustomError(await validatorExitDelayVerifier, "KeyWasNotUnpacked");
   });
 
   it("Should revert when submitting validator exit delay with invalid beacon block root", async () => {

@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ContractTransactionResponse } from "ethers";
 import { ethers } from "hardhat";
 
 import { StakingRouter_Mock, ValidatorExitDelayVerifier, ValidatorsExitBusOracle_Mock } from "typechain-types";
@@ -98,6 +99,27 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         ]),
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidPivotSlot");
     });
+
+    it("reverts with 'ZeroLidoLocatorAddress' if lidoLocator is zero address", async () => {
+      await expect(
+        ethers.deployContract("ValidatorExitDelayVerifier", [
+          ethers.ZeroAddress, // Zero address for locator
+          GI_FIRST_VALIDATOR_PREV,
+          GI_FIRST_VALIDATOR_CURR,
+          GI_HISTORICAL_SUMMARIES_PREV,
+          GI_HISTORICAL_SUMMARIES_CURR,
+          FIRST_SUPPORTED_SLOT,
+          PIVOT_SLOT,
+          SLOTS_PER_EPOCH,
+          SECONDS_PER_SLOT,
+          GENESIS_TIME,
+          SHARD_COMMITTEE_PERIOD_IN_SECONDS,
+        ]),
+      ).to.be.revertedWithCustomError(
+        await ethers.getContractFactory("ValidatorExitDelayVerifier"),
+        "ZeroLidoLocatorAddress",
+      );
+    });
   });
 
   describe("verifyValidatorExitDelay method", () => {
@@ -148,12 +170,16 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           SECONDS_PER_SLOT;
       const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
 
-      const moduleId = 1;
-      const nodeOpId = 2;
       const exitRequests: ExitRequest[] = [
         {
-          moduleId,
-          nodeOpId,
+          moduleId: 11,
+          nodeOpId: 11,
+          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        },
+        {
+          moduleId: 22,
+          nodeOpId: 22,
           valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
           pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
         },
@@ -165,72 +191,46 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
         exitRequests,
       );
+
+      const verifyExitDelayEvents = async (tx: ContractTransactionResponse) => {
+        const receipt = await tx.wait();
+        const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
+        expect(events.length).to.equal(2);
+
+        const firstEvent = events[0];
+        expect(firstEvent.args[0]).to.equal(11);
+        expect(firstEvent.args[1]).to.equal(11);
+        expect(firstEvent.args[2]).to.equal(proofSlotTimestamp);
+        expect(firstEvent.args[3]).to.equal(ACTIVE_VALIDATOR_PROOF.validator.pubkey);
+        expect(firstEvent.args[4]).to.equal(intervalInSlotsBetweenProvableBlockAndExitRequest * SECONDS_PER_SLOT);
+
+        const secondEvent = events[1];
+        expect(secondEvent.args[0]).to.equal(22);
+        expect(secondEvent.args[1]).to.equal(22);
+        expect(secondEvent.args[2]).to.equal(proofSlotTimestamp);
+        expect(secondEvent.args[3]).to.equal(ACTIVE_VALIDATOR_PROOF.validator.pubkey);
+        expect(secondEvent.args[4]).to.equal(intervalInSlotsBetweenProvableBlockAndExitRequest * SECONDS_PER_SLOT);
+      };
 
       const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+      const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
-      const tx = await validatorExitDelayVerifier.verifyValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-        encodedExitRequests,
+      await verifyExitDelayEvents(
+        await validatorExitDelayVerifier.verifyValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0), toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
+          encodedExitRequests,
+        ),
       );
 
-      const receipt = await tx.wait();
-      const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
-      expect(events.length).to.equal(1);
-
-      const event = events[0];
-      expect(event.args[0]).to.equal(moduleId);
-      expect(event.args[1]).to.equal(nodeOpId);
-      expect(event.args[2]).to.equal(proofSlotTimestamp);
-      expect(event.args[3]).to.equal(ACTIVE_VALIDATOR_PROOF.validator.pubkey);
-      expect(event.args[4]).to.equal(intervalInSlotsBetweenProvableBlockAndExitRequest * SECONDS_PER_SLOT);
-    });
-
-    it("accepts a valid historical proof and does not revert", async () => {
-      const intervalInSlotsBetweenProvableBlockAndExitRequest = 1000;
-      const veboExitRequestTimestamp =
-        GENESIS_TIME +
-        (ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot - intervalInSlotsBetweenProvableBlockAndExitRequest) *
-          SECONDS_PER_SLOT;
-      const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
-
-      const moduleId = 1;
-      const nodeOpId = 2;
-      const exitRequests: ExitRequest[] = [
-        {
-          moduleId,
-          nodeOpId,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
-        },
-      ];
-      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
-
-      await vebo.setExitRequests(
-        encodedExitRequestsHash,
-        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-        exitRequests,
+      await verifyExitDelayEvents(
+        await validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0), toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
+          encodedExitRequests,
+        ),
       );
-
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
-
-      const tx = await validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
-        toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-        encodedExitRequests,
-      );
-
-      const receipt = await tx.wait();
-      const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
-      expect(events.length).to.equal(1);
-
-      const event = events[0];
-      expect(event.args[0]).to.equal(moduleId);
-      expect(event.args[1]).to.equal(nodeOpId);
-      expect(event.args[2]).to.equal(proofSlotTimestamp);
-      expect(event.args[3]).to.equal(ACTIVE_VALIDATOR_PROOF.validator.pubkey);
-      expect(event.args[4]).to.equal(intervalInSlotsBetweenProvableBlockAndExitRequest * SECONDS_PER_SLOT);
     });
 
     it("reverts with 'UnsupportedSlot' when slot < FIRST_SUPPORTED_SLOT", async () => {
@@ -250,6 +250,40 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnsupportedSlot");
+
+      await expect(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+          {
+            rootsTimestamp: 1n,
+            header: invalidHeader,
+          },
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnsupportedSlot");
+    });
+
+    it("reverts with 'UnsupportedSlot' if for historical proof the oldBlock slot < FIRST_SUPPORTED_SLOT", async () => {
+      const invalidHeader = {
+        ...ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
+        slot: 0,
+      };
+
+      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+      await expect(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
+          {
+            header: invalidHeader,
+            rootGIndex: ACTIVE_VALIDATOR_PROOF.historicalSummariesGI,
+            proof: ACTIVE_VALIDATOR_PROOF.historicalRootProof,
+          },
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnsupportedSlot");
     });
 
     it("reverts with 'RootNotFound' if the staticcall to the block roots contract fails/returns empty", async () => {
@@ -264,6 +298,18 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "RootNotFound");
+
+      await expect(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+          {
+            rootsTimestamp: badTimestamp,
+            header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
+          },
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "RootNotFound");
     });
 
     it("reverts with 'InvalidBlockHeader' if the block root from contract doesn't match the header root", async () => {
@@ -273,6 +319,15 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       await expect(
         validatorExitDelayVerifier.verifyValidatorExitDelay(
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, mismatchTimestamp),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          EMPTY_REPORT,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidBlockHeader");
+
+      await expect(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, mismatchTimestamp),
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           EMPTY_REPORT,
         ),
@@ -321,73 +376,15 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           encodedExitRequests,
         ),
       ).to.be.reverted;
-    });
-
-    it("reverts with 'UnsupportedSlot' if beaconBlock slot < FIRST_SUPPORTED_SLOT", async () => {
-      const invalidHeader = {
-        ...ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-        slot: 0,
-      };
 
       await expect(
         validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          {
-            rootsTimestamp: 1n,
-            header: invalidHeader,
-          },
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, timestamp),
           toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-          EMPTY_REPORT,
+          [badWitness],
+          encodedExitRequests,
         ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnsupportedSlot");
-    });
-
-    it("reverts with 'UnsupportedSlot' if oldBlock slot < FIRST_SUPPORTED_SLOT", async () => {
-      const invalidHeader = {
-        ...ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-        slot: 0,
-      };
-
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
-
-      await expect(
-        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
-          {
-            header: invalidHeader,
-            rootGIndex: ACTIVE_VALIDATOR_PROOF.historicalSummariesGI,
-            proof: ACTIVE_VALIDATOR_PROOF.historicalRootProof,
-          },
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-          EMPTY_REPORT,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnsupportedSlot");
-    });
-
-    it("reverts with 'RootNotFound' if block root contract call fails", async () => {
-      const badTimestamp = 999_999_999;
-      await expect(
-        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, badTimestamp),
-          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-          EMPTY_REPORT,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "RootNotFound");
-    });
-
-    it("reverts with 'InvalidBlockHeader' if returned root doesn't match the new block header root", async () => {
-      const bogusBlockRoot = "0xbadbadbad0000000000000000000000000000000000000000000000000000000";
-      const mismatchTimestamp = await updateBeaconBlockRoot(bogusBlockRoot);
-
-      await expect(
-        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, mismatchTimestamp),
-          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-          EMPTY_REPORT,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidBlockHeader");
+      ).to.be.reverted;
     });
 
     it("reverts with 'InvalidGIndex' if oldBlock.rootGIndex is not under the historicalSummaries root", async () => {
@@ -408,6 +405,79 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidGIndex");
+    });
+
+    it("reverts with 'KeyWasNotUnpacked' if exit request index is not in delivery history", async () => {
+      const nodeOpId = 2;
+      const exitRequests: ExitRequest[] = [
+        {
+          moduleId: 1,
+          nodeOpId,
+          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        },
+        {
+          moduleId: 2,
+          nodeOpId,
+          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        },
+        {
+          moduleId: 3,
+          nodeOpId,
+          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        },
+      ];
+      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+
+      const unpackedExitRequestIndex = 2;
+
+      // Report not unpacked.
+      await vebo.setExitRequests(encodedExitRequestsHash, [], exitRequests);
+      expect((await vebo.getExitRequestsDeliveryHistory(encodedExitRequestsHash)).length).to.equal(0);
+
+      await expect(
+        validatorExitDelayVerifier.verifyValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
+          encodedExitRequests,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "KeyWasNotUnpacked");
+
+      const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+      await expect(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
+          encodedExitRequests,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "KeyWasNotUnpacked");
+
+      // Report not fully unpacked.
+      await vebo.setExitRequests(encodedExitRequestsHash, [{ timestamp: 0n, lastDeliveredKeyIndex: 1n }], exitRequests);
+      expect((await vebo.getExitRequestsDeliveryHistory(encodedExitRequestsHash)).length).to.equal(1);
+
+      await expect(
+        validatorExitDelayVerifier.verifyValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
+          encodedExitRequests,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "KeyWasNotUnpacked");
+
+      await expect(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
+          encodedExitRequests,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "KeyWasNotUnpacked");
     });
 
     it("reverts if the oldBlock proof is corrupted", async () => {

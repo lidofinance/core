@@ -22,10 +22,12 @@ contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
     ) external {
         _hash = exitRequestsHash;
 
+        delete _deliveryHistory;
         for (uint256 i = 0; i < deliveryHistory.length; i++) {
             _deliveryHistory.push(deliveryHistory[i]);
         }
 
+        delete _data;
         for (uint256 i = 0; i < data.length; i++) {
             _data.push(data[i]);
         }
