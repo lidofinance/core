@@ -1273,5 +1273,4 @@ contract VaultHub is PausableUntilWithRoles {
     error OutstandingObligationsExist(address vault, uint256 totalObligations);
     error ArrayLengthMismatch();
     error PartialValidatorWithdrawalNotAllowed();
-    error ArrayLengthMismatch();
 }
