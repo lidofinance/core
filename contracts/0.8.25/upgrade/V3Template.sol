@@ -10,22 +10,10 @@ import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {IOssifiableProxy} from "./interfaces/IOssifiableProxy.sol";
 import {V3Addresses} from "./V3Addresses.sol";
-
-
-interface IPausableUntil {
-    function isPaused() external view returns (bool);
-    function getResumeSinceTimestamp() external view returns (uint256);
-    function PAUSE_INFINITELY() external view returns (uint256);
-}
-
-interface IPausableUntilWithRoles is IPausableUntil, IAccessControlEnumerable {
-    function RESUME_ROLE() external view returns (bytes32);
-    function PAUSE_ROLE() external view returns (bytes32);
-}
-
-interface IOperatorGrid is IAccessControlEnumerable {
-    function REGISTRY_ROLE() external view returns (bytes32);
-}
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol";
+import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 
 
 interface IBaseOracle is IAccessControlEnumerable, IVersioned {
@@ -54,24 +42,9 @@ interface IAragonAppRepo {
     function getLatest() external view returns (uint16[3] memory, address, bytes memory);
 }
 
-interface IUpgradeableBeacon {
-    function implementation() external view returns (address);
-    function owner() external view returns (address);
-}
-
 interface IWithdrawalsManagerProxy {
     function proxy_getAdmin() external view returns (address);
     function implementation() external view returns (address);
-}
-
-interface IVaultFactory {
-    function BEACON() external view returns (address);
-    function DASHBOARD_IMPL() external view returns (address);
-}
-
-interface IVaultHub is IPausableUntilWithRoles {
-    function VAULT_MASTER_ROLE() external view returns (bytes32);
-    function VAULT_REGISTRY_ROLE() external view returns (bytes32);
 }
 
 interface IOracleReportSanityChecker is IAccessControlEnumerable {
@@ -117,6 +90,7 @@ contract V3Template {
     //
     // -------- Roles --------
     //
+    // NB: Storing the roles as immutables to save gas
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
     // Burner
     bytes32 public immutable REQUEST_BURN_SHARES_ROLE;
@@ -152,9 +126,9 @@ contract V3Template {
     // Timestamp since startUpgrade() and finishUpgrade() revert with Expired()
     // This behavior is introduced to disarm the template if the upgrade voting creation or enactment didn't
     // happen in proper time period
-    uint256 public constant EXPIRE_SINCE_INCLUSIVE = 1754006400; // 2025-08-01 00:00:00 UTC
+    uint256 public constant EXPIRE_SINCE_INCLUSIVE = 1761868800; // 2025-10-31 00:00:00 UTC
 
-    // Initial value of _upgradeBlockNumber
+    // Initial value of upgradeBlockNumber storage variable
     uint256 internal constant UPGRADE_NOT_STARTED = 0;
 
     uint256 internal constant INFINITE_ALLOWANCE = type(uint256).max;
@@ -181,8 +155,8 @@ contract V3Template {
         REQUEST_BURN_SHARES_ROLE = IBurner(ADDRESSES.BURNER()).REQUEST_BURN_SHARES_ROLE();
         REQUEST_BURN_MY_STETH_ROLE = IBurner(ADDRESSES.BURNER()).REQUEST_BURN_MY_STETH_ROLE();
         // Initialize PauseUntilWithRoles roles
-        RESUME_ROLE = IVaultHub(ADDRESSES.VAULT_HUB()).RESUME_ROLE();
-        PAUSE_ROLE = IVaultHub(ADDRESSES.VAULT_HUB()).PAUSE_ROLE();
+        RESUME_ROLE = VaultHub(ADDRESSES.VAULT_HUB()).RESUME_ROLE();
+        PAUSE_ROLE = VaultHub(ADDRESSES.VAULT_HUB()).PAUSE_ROLE();
         // Initialize OracleReportSanityChecker roles
         ALL_LIMITS_MANAGER_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).ALL_LIMITS_MANAGER_ROLE();
         EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE = IOracleReportSanityChecker(ADDRESSES.ORACLE_REPORT_SANITY_CHECKER()).EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE();
@@ -199,15 +173,15 @@ contract V3Template {
         // Initialize StakingRouter roles
         REPORT_REWARDS_MINTED_ROLE = IStakingRouter(ADDRESSES.STAKING_ROUTER()).REPORT_REWARDS_MINTED_ROLE();
         // Initialize VaultHub roles
-        VAULT_MASTER_ROLE = IVaultHub(ADDRESSES.VAULT_HUB()).VAULT_MASTER_ROLE();
-        VAULT_REGISTRY_ROLE = IVaultHub(ADDRESSES.VAULT_HUB()).VAULT_REGISTRY_ROLE();
+        VAULT_MASTER_ROLE = VaultHub(ADDRESSES.VAULT_HUB()).VAULT_MASTER_ROLE();
+        VAULT_REGISTRY_ROLE = VaultHub(ADDRESSES.VAULT_HUB()).VAULT_REGISTRY_ROLE();
         // Initialize OperatorGrid roles
-        REGISTRY_ROLE = IOperatorGrid(ADDRESSES.OPERATOR_GRID()).REGISTRY_ROLE();
+        REGISTRY_ROLE = OperatorGrid(ADDRESSES.OPERATOR_GRID()).REGISTRY_ROLE();
     }
 
     /// @notice Must be called after LidoLocator is upgraded
     function startUpgrade() external {
-        if (msg.sender != ADDRESSES.VOTING()) revert OnlyVotingCanUpgrade();
+        if (msg.sender != ADDRESSES.AGENT()) revert OnlyVotingCanUpgrade();
         if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
         if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
 
@@ -223,12 +197,9 @@ contract V3Template {
     }
 
     function finishUpgrade() external {
-        if (msg.sender != ADDRESSES.VOTING()) revert OnlyVotingCanUpgrade();
+        if (msg.sender != ADDRESSES.AGENT()) revert OnlyVotingCanUpgrade();
         if (upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
         if (isUpgradeFinished) revert UpgradeAlreadyFinished();
-        if (ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).getTotalShares() != initialTotalShares || ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).getTotalPooledEther() != initialTotalPooledEther) {
-            revert TotalSharesOrPooledEtherChanged();
-        }
 
         isUpgradeFinished = true;
 
@@ -267,10 +238,15 @@ contract V3Template {
     }
 
     function _assertPostUpgradeState() internal view {
-        // Check LidoLocator was upgraded
+        if (
+            ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).getTotalShares() != initialTotalShares ||
+            ILidoWithFinalizeUpgrade(ADDRESSES.LIDO()).getTotalPooledEther() != initialTotalPooledEther
+        ) {
+            revert TotalSharesOrPooledEtherChanged();
+        }
+
         _assertProxyImplementation(IOssifiableProxy(ADDRESSES.LOCATOR()), ADDRESSES.NEW_LOCATOR_IMPLEMENTATION());
 
-        // Check contract versions
         _assertContractVersion(IVersioned(ADDRESSES.LIDO()), EXPECTED_FINAL_LIDO_VERSION);
         _assertContractVersion(IVersioned(ADDRESSES.ACCOUNTING_ORACLE()), EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
 
@@ -278,16 +254,16 @@ contract V3Template {
 
         _checkBurnerMigratedCorrectly();
 
-        if (IVaultFactory(ADDRESSES.VAULT_FACTORY()).BEACON() != ADDRESSES.UPGRADEABLE_BEACON()) {
+        if (VaultFactory(ADDRESSES.VAULT_FACTORY()).BEACON() != ADDRESSES.UPGRADEABLE_BEACON()) {
             revert IncorrectVaultFactoryBeacon(ADDRESSES.VAULT_FACTORY(), ADDRESSES.UPGRADEABLE_BEACON());
         }
-        if (IVaultFactory(ADDRESSES.VAULT_FACTORY()).DASHBOARD_IMPL() != ADDRESSES.DASHBOARD_IMPLEMENTATION()) {
+        if (VaultFactory(ADDRESSES.VAULT_FACTORY()).DASHBOARD_IMPL() != ADDRESSES.DASHBOARD_IMPLEMENTATION()) {
             revert IncorrectVaultFactoryDashboardImplementation(ADDRESSES.VAULT_FACTORY(), ADDRESSES.DASHBOARD_IMPLEMENTATION());
         }
-        if (IUpgradeableBeacon(ADDRESSES.UPGRADEABLE_BEACON()).owner() != ADDRESSES.AGENT()) {
+        if (UpgradeableBeacon(ADDRESSES.UPGRADEABLE_BEACON()).owner() != ADDRESSES.AGENT()) {
             revert IncorrectUpgradeableBeaconOwner(ADDRESSES.UPGRADEABLE_BEACON(), ADDRESSES.AGENT());
         }
-        if (IUpgradeableBeacon(ADDRESSES.UPGRADEABLE_BEACON()).implementation() != ADDRESSES.STAKING_VAULT_IMPLEMENTATION()) {
+        if (UpgradeableBeacon(ADDRESSES.UPGRADEABLE_BEACON()).implementation() != ADDRESSES.STAKING_VAULT_IMPLEMENTATION()) {
             revert IncorrectUpgradeableBeaconImplementation(ADDRESSES.UPGRADEABLE_BEACON(), ADDRESSES.STAKING_VAULT_IMPLEMENTATION());
         }
     }
@@ -308,9 +284,9 @@ contract V3Template {
         _assertZeroOZRoleHolders(IBurner(ADDRESSES.OLD_BURNER()), REQUEST_BURN_SHARES_ROLE);
 
         // VaultHub
-        _assertSingleOZRoleHolder(IVaultHub(ADDRESSES.VAULT_HUB()), DEFAULT_ADMIN_ROLE, agent);
-        _assertSingleOZRoleHolder(IVaultHub(ADDRESSES.VAULT_HUB()), VAULT_MASTER_ROLE, agent);
-        _assertZeroOZRoleHolders(IVaultHub(ADDRESSES.VAULT_HUB()), VAULT_REGISTRY_ROLE);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(ADDRESSES.VAULT_HUB()), DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(ADDRESSES.VAULT_HUB()), VAULT_MASTER_ROLE, agent);
+        _assertZeroOZRoleHolders(IAccessControlEnumerable(ADDRESSES.VAULT_HUB()), VAULT_REGISTRY_ROLE);
         _assertProxyAdmin(IOssifiableProxy(ADDRESSES.VAULT_HUB()), agent);
         // TODO: add PausableUntilWithRoles checks when gate seal is added
 

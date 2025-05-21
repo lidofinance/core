@@ -8,7 +8,6 @@ import {AragonApp, UnstructuredStorage} from "@aragon/os/contracts/apps/AragonAp
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
-import {IBurner} from "../common/interfaces/IBurner.sol";
 import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from "./lib/StakeLimitUtils.sol";
 import {Math256} from "../common/lib/Math256.sol";
 
@@ -238,8 +237,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         // migrate burner stETH balance
         uint256 oldBurnerShares = _sharesOf(_oldBurner);
         if (oldBurnerShares > 0) {
+            uint256 oldBurnerBalance = getPooledEthByShares(oldBurnerShares);
             _transferShares(_oldBurner, burner, oldBurnerShares);
-            _emitTransferEvents(_oldBurner, burner, oldBurnerShares, oldBurnerShares);
+            _emitTransferEvents(_oldBurner, burner, oldBurnerBalance, oldBurnerShares);
         }
 
         // initialize new burner with state from the old burner

@@ -69,7 +69,7 @@ contract V3VoteScript is OmnibusBase {
         // Start the upgrade process
         voteItems[index++] = VoteItem({
             description: "1. Call UpgradeTemplateV3.startUpgrade",
-            call: _votingCall(address(params.upgradeTemplate), abi.encodeCall(ITemplateV3.startUpgrade, ()))
+            call: _forwardCall(ADDRESSES.AGENT(), address(params.upgradeTemplate), abi.encodeCall(ITemplateV3.startUpgrade, ()))
         });
 
         // Upgrade LidoLocator implementation
@@ -162,7 +162,9 @@ contract V3VoteScript is OmnibusBase {
         // Finish the upgrade process
         voteItems[index++] = VoteItem({
             description: "11. Call UpgradeTemplateV3.finishUpgrade",
-            call: _votingCall(address(params.upgradeTemplate), abi.encodeCall(ITemplateV3.finishUpgrade, ()))
+            call: _forwardCall(ADDRESSES.AGENT(), address(params.upgradeTemplate), abi.encodeCall(ITemplateV3.finishUpgrade, ()))
         });
+
+        assert(index == VOTE_ITEMS_COUNT);
     }
 }

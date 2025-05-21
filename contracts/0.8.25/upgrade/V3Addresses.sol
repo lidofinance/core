@@ -35,7 +35,7 @@ interface ICSModule {
  */
 contract V3Addresses {
 
-    struct UpgradeTemplateV3Params {
+    struct V3AddressesParams {
         // Old implementations
         address oldLocatorImplementation;
         address oldLidoImplementation;
@@ -47,7 +47,7 @@ contract V3Addresses {
         // New non-proxy contracts
         address vaultFactory;
 
-        // New fancy proxy contracts
+        // New fancy proxy and blueprint contracts
         address upgradeableBeacon;
         address stakingVaultImplementation;
         address dashboardImplementation;
@@ -107,7 +107,7 @@ contract V3Addresses {
     address public immutable CSM_ACCOUNTING;
 
     constructor(
-        UpgradeTemplateV3Params memory params
+        V3AddressesParams memory params
     ) {
         if (params.newLocatorImplementation == params.oldLocatorImplementation) {
             revert NewAndOldLocatorImplementationsMustBeDifferent();

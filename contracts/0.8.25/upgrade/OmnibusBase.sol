@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {CallsScriptBuilder} from "./calls_script_builder.sol";
+import {CallsScriptBuilder} from "./CallScriptBuilder.sol";
 
 import {IVoting} from "./interfaces/IVoting.sol";
 import {IForwarder} from "./interfaces/IForwarder.sol";
@@ -11,6 +11,7 @@ import {IForwarder} from "./interfaces/IForwarder.sol";
 ///
 /// @dev Inheriting contracts must implement:
 ///     - getVoteItems() - to define the specific actions in the proposal
+/// @dev Originates from https://github.com/lidofinance/dual-governance/tree/98216fb2c9150b8111a14b06afd9d6e646f14c20/scripts/upgrade
 abstract contract OmnibusBase {
     using CallsScriptBuilder for CallsScriptBuilder.Context;
 
@@ -52,6 +53,9 @@ abstract contract OmnibusBase {
         return scriptBuilder.getResult();
     }
 
+    /// @notice Returns the bytecode for creating a new vote on the Aragon Voting contract.
+    /// @param description The description of the vote.
+    /// @return newVoteBytecode The bytecode for creating a new vote.
     function getNewVoteCallBytecode(string memory description) external view returns (bytes memory newVoteBytecode) {
         newVoteBytecode = CallsScriptBuilder.create(
             address(VOTING_CONTRACT), abi.encodeCall(VOTING_CONTRACT.newVote, (getEVMScript(), description, false, false))

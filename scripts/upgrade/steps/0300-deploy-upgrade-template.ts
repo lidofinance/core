@@ -36,7 +36,7 @@ export async function main() {
       // New non-proxy contracts
       state[Sk.stakingVaultFactory].address,
 
-      // New fancy proxy contracts
+      // New fancy proxy and blueprint contracts
       state[Sk.stakingVaultBeacon].address,
       state[Sk.stakingVaultImplementation].address,
       state[Sk.dashboardImpl].address,
