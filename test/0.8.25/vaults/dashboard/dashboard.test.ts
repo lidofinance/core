@@ -119,7 +119,6 @@ describe("Dashboard.sol", () => {
 
     vaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", vaultAddress, vaultOwner);
-    expect(await vault.vaultHub()).to.equal(hub);
 
     const dashboardCreatedEvents = findEvents(createVaultReceipt, "DashboardCreated");
     expect(dashboardCreatedEvents.length).to.equal(1);

@@ -7,7 +7,7 @@ import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 
 import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
-import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
@@ -40,8 +40,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     function initialize(
         address _owner,
         address _nodeOperator,
-        address _depositor,
-        bytes calldata /* _params */
+        address _depositor
     ) external reinitializer(_VERSION) {
         if (owner() != address(0)) revert VaultAlreadyInitialized();
 
@@ -85,7 +84,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         }
     }
 
-    function depositToBeaconChain(StakingVaultDeposit[] calldata _deposits) external {}
+    function depositToBeaconChain(IStakingVault.Deposit[] calldata _deposits) external {}
 
     function fund() external payable {}
 
@@ -132,8 +131,6 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();
 
-    function initialize(address _owner, address _nodeOperator, address _depositor) external override {}
-
     function isOssified() external view override returns (bool) {}
 
     function triggerValidatorWithdrawals(
@@ -142,7 +139,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
         address _refundRecipient
     ) external payable override {}
 
-    function triggerValidatorExits(bytes calldata _pubkeys, address _refundRecipient) external payable override {}
+    function ejectValidators(bytes calldata _pubkeys, address _refundRecipient) external payable override {}
 
     function ossify() external override {}
 

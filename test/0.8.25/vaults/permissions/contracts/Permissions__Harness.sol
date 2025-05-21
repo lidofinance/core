@@ -6,7 +6,7 @@ pragma solidity ^0.8.0;
 import {Permissions} from "contracts/0.8.25/vaults/dashboard/Permissions.sol";
 
 contract Permissions__Harness is Permissions {
-    constructor(address _vaultHub) Permissions(_vaultHub) {}
+    constructor(address _vaultHub, address _lidoLocator) Permissions(_vaultHub, _lidoLocator) {}
 
     function initialize(address _defaultAdmin, uint256 _confirmExpiry) external {
         super._initialize(_defaultAdmin, _confirmExpiry);
@@ -55,12 +55,12 @@ contract Permissions__Harness is Permissions {
         _requestValidatorExit(_pubkey);
     }
 
-    function triggerValidatorWithdrawal(
+    function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
+        _triggerValidatorWithdrawals(_pubkeys, _amounts, _refundRecipient);
     }
 
     function voluntaryDisconnect() external {

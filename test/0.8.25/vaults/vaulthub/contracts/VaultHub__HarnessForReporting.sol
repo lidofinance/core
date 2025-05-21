@@ -15,8 +15,8 @@ contract VaultHub__HarnessForReporting is VaultHub {
     constructor(
         ILidoLocator _locator,
         ILido _lido,
-        uint256 _relativeShareLimitBP
-    ) VaultHub(_locator, _lido, _relativeShareLimitBP) {}
+        uint256 _maxRelativeShareLimitBP
+    ) VaultHub(_locator, _lido, _maxRelativeShareLimitBP) {}
 
     function harness_getVaultHubStorage() private pure returns (VaultHub.Storage storage $) {
         assembly {

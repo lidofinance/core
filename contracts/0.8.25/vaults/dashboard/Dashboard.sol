@@ -11,7 +11,7 @@ import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 
-import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
+import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";
 import {VaultHub} from "../VaultHub.sol";
@@ -48,16 +48,25 @@ contract Dashboard is NodeOperatorFee {
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
+     * @notice Slot for the fund-on-receive flag
+     *         keccak256("vaults.Dashboard.fundOnReceive")
+     */
+    bytes32 private constant FUND_ON_RECEIVE_FLAG_SLOT = 0x7408b7b034fda7051615c19182918ecb91d753231cffd86f81a45d996d63e038;
+
+    /**
      * @notice Constructor sets the stETH, and WSTETH token addresses,
      * and passes the address of the vault hub up the inheritance chain.
      * @param _stETH Address of the stETH token contract.
      * @param _wstETH Address of the wstETH token contract.
      * @param _vaultHub Address of the vault hub contract.
+     * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _stETH, address _wstETH, address _vaultHub) NodeOperatorFee(_vaultHub) {
+    constructor(address _stETH, address _wstETH, address _vaultHub, address _lidoLocator)
+        NodeOperatorFee(_vaultHub, _lidoLocator) {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
+        // stETH and wstETH are cached as immutable to save gas for main operations
         STETH = IStETH(_stETH);
         WSTETH = IWstETH(_wstETH);
     }
@@ -205,7 +214,7 @@ contract Dashboard is NodeOperatorFee {
      * @dev Automatically funds the staking vault with ether
      */
     receive() external payable {
-        _fund(msg.value);
+        if (_shouldFundOnReceive()) _fund(msg.value);
     }
 
     /**
@@ -242,10 +251,18 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Reclaims the Dashboard contract and reconnects to VaultHub, transferring ownership to VaultHub.
+     * @notice Accepts the ownership over the staking vault and connects to VaultHub.
      */
-    function connectToVaultHub() external {
+    function acceptOwnershipAndConnectToVaultHub() external payable {
         _acceptOwnership();
+        connectToVaultHub();
+    }
+
+    /**
+     * @notice Connects to VaultHub, transferring ownership to VaultHub.
+     */
+    function connectToVaultHub() public payable {
+        if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
     }
@@ -351,7 +368,7 @@ contract Dashboard is NodeOperatorFee {
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
     function unguaranteedDepositToBeaconChain(
-        StakingVaultDeposit[] calldata _deposits
+        IStakingVault.Deposit[] calldata _deposits
     ) public returns (uint256 totalAmount) {
         IStakingVault stakingVault_ = _stakingVault();
 
@@ -363,12 +380,16 @@ contract Dashboard is NodeOperatorFee {
             revert WithdrawalAmountExceedsUnreserved(totalAmount, unreserved());
         }
 
+        _disableFundOnReceive();
         _withdrawForUnguaranteedDepositToBeaconChain(totalAmount);
+        // Instead of relying on auto-reset at the end of the transaction,
+        // re-enable fund-on-receive manually to restore the default receive() behavior in the same transaction
+        _enableFundOnReceive();
         _setAccruedRewardsAdjustment(accruedRewardsAdjustment + totalAmount);
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
 
-        StakingVaultDeposit calldata deposit;
+        IStakingVault.Deposit calldata deposit;
         for (uint256 i = 0; i < _deposits.length; i++) {
             deposit = _deposits[i];
             stakingVault_.DEPOSIT_CONTRACT().deposit{value: deposit.amount}(
@@ -487,15 +508,16 @@ contract Dashboard is NodeOperatorFee {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
+        _triggerValidatorWithdrawals(_pubkeys, _amounts, _refundRecipient);
     }
 
     /**
      * @notice Requests a change of tier on the OperatorGrid.
      * @param _tierId The tier to change to.
+     * @param _requestedShareLimit The requested share limit.
      */
-    function requestTierChange(uint256 _tierId) external {
-        _requestTierChange(_tierId);
+    function requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) external {
+        _requestTierChange(_tierId, _requestedShareLimit);
     }
 
     // ==================== Internal Functions ====================
@@ -570,6 +592,26 @@ contract Dashboard is NodeOperatorFee {
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), connection.shareLimit);
     }
 
+    // @dev The logic is inverted, 0 means fund-on-receive is enabled,
+    // so that fund-on-receive is enabled by default
+    function _shouldFundOnReceive() internal view returns (bool shouldFund) {
+        assembly {
+            shouldFund := iszero(tload(FUND_ON_RECEIVE_FLAG_SLOT))
+        }
+    }
+
+    function _enableFundOnReceive() internal {
+        assembly {
+            tstore(FUND_ON_RECEIVE_FLAG_SLOT, 0)
+        }
+    }
+
+    function _disableFundOnReceive() internal {
+        assembly {
+            tstore(FUND_ON_RECEIVE_FLAG_SLOT, 1)
+        }
+    }
+
     // ==================== Events ====================
 
     /**
@@ -616,7 +658,7 @@ contract Dashboard is NodeOperatorFee {
     error MintingCapacityExceeded(uint256 locked, uint256 mintableValue);
 
     /**
-     * @notice Error when the StakingVault is not connected to the VaultHub.
+     * @notice Error when the StakingVault is still connected to the VaultHub.
      */
     error ConnectedToVaultHub();
 }

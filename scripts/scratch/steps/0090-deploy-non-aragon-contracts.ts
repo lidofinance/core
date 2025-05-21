@@ -1,6 +1,8 @@
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
+import { LidoLocator } from "typechain-types";
+
 import { certainAddress } from "lib";
 import { getContractPath } from "lib/contract";
 import {
@@ -153,10 +155,16 @@ export async function main() {
     lidoAddress,
   ]);
 
+  // Deploy VaultHub
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     locator.address,
     lidoAddress,
-    vaultHubParams.relativeShareLimitBP,
+    vaultHubParams.maxRelativeShareLimitBP,
+  ]);
+
+  // Deploy LazyOracle
+  const lazyOracle = await deployBehindOssifiableProxy(Sk.lazyOracle, "LazyOracle", proxyContractsOwner, deployer, [
+    locator.address,
   ]);
 
   // Deploy AccountingOracle
@@ -223,25 +231,28 @@ export async function main() {
   );
 
   // Update LidoLocator with valid implementation
-  const locatorConfig: string[] = [
-    accountingOracle.address,
-    depositSecurityModuleAddress,
-    elRewardsVault.address,
-    lidoAddress,
-    certainAddress("dummy-locator:oracleReportSanityChecker"), // requires LidoLocator in the constructor, so deployed after it
-    ZeroAddress,
-    burner.address,
-    stakingRouter.address,
-    treasuryAddress,
-    validatorsExitBusOracle.address,
-    withdrawalQueueERC721.address,
-    withdrawalVaultAddress,
-    oracleDaemonConfig.address,
-    accounting.address,
-    predepositGuarantee.address,
-    wstETH.address,
-    vaultHub.address,
-    operatorGrid.address,
-  ];
+  const locatorConfig: LidoLocator.ConfigStruct =
+  {
+    accountingOracle: accountingOracle.address,
+    depositSecurityModule: depositSecurityModuleAddress,
+    elRewardsVault: elRewardsVault.address,
+    lido: lidoAddress,
+    oracleReportSanityChecker: certainAddress("dummy-locator:oracleReportSanityChecker"), // requires LidoLocator in the constructor, so deployed after it
+    burner: burner.address,
+    stakingRouter: stakingRouter.address,
+    treasury: treasuryAddress,
+    validatorsExitBusOracle: validatorsExitBusOracle.address,
+    withdrawalQueue: withdrawalQueueERC721.address,
+    withdrawalVault: withdrawalVaultAddress,
+    oracleDaemonConfig: oracleDaemonConfig.address,
+    accounting: accounting.address,
+    predepositGuarantee: predepositGuarantee.address,
+    wstETH: wstETH.address,
+    vaultHub: vaultHub.address,
+    operatorGrid: operatorGrid.address,
+    postTokenRebaseReceiver: ZeroAddress,
+    lazyOracle: lazyOracle.address,
+  };
+
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }
