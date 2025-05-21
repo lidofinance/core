@@ -39,7 +39,7 @@ const encodeEip7002Input = (pubkey: string, amount: bigint): string => {
 };
 
 // @TODO: test reentrancy attacks
-describe.only("StakingVault.sol", () => {
+describe("StakingVault.sol", () => {
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let operator: HardhatEthersSigner;
