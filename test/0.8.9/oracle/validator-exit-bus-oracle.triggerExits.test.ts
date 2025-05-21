@@ -232,4 +232,15 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       }),
     ).to.be.revertedWithCustomError(oracle, "InvalidExitDataIndexSortOrder");
   });
+
+  // it("should revert id request was not started to deliver", async () => {
+  //   await expect(
+  //     oracle.triggerExits(
+  //       { data: reportFields.data, dataFormat: reportFields.dataFormat },
+  //       [0, 1, 2, 3],
+  //       ZERO_ADDRESS,
+  //       { value: 4 },
+  //     ),
+  //   ).to.be.revertedWithCustomError(oracle, "DeliveryWasNotStarted");
+  // });
 });

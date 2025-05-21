@@ -426,16 +426,13 @@ describe("ExitLimitUtils.sol", () => {
 
       it("should revert if maxExitRequestsLimit is too large", async () => {
         const MAX_UINT32 = 2 ** 32;
-        await expect(exitLimit.setExitLimits(MAX_UINT32, 2, 10, 1000)).to.be.revertedWith(
+        await expect(exitLimit.setExitLimits(MAX_UINT32, 1, 10, 1000)).to.be.revertedWith(
           "TOO_LARGE_MAX_EXIT_REQUESTS_LIMIT",
         );
       });
 
-      it("should revert if exitsPerFrame is too large", async () => {
-        const MAX_UINT32 = 2 ** 32;
-        await expect(exitLimit.setExitLimits(100, MAX_UINT32, 10, 1000)).to.be.revertedWith(
-          "TOO_LARGE_EXITS_PER_FRAME",
-        );
+      it("should revert if exitsPerFrame bigger than maxExitRequestsLimit", async () => {
+        await expect(exitLimit.setExitLimits(100, 101, 10, 1000)).to.be.revertedWith("TOO_LARGE_EXITS_PER_FRAME");
       });
 
       it("should revert if frameDuration is too large", async () => {
