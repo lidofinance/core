@@ -190,9 +190,6 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev Returns an array of roles that need to confirm the call
      *      used for the `onlyConfirmed` modifier.
-     *      At this level, only the DEFAULT_ADMIN_ROLE is needed to confirm the call
-     *      but in inherited contracts, the function can be overridden to add more roles,
-     *      which are introduced further in the inheritance chain.
      * @return The roles that need to confirm the call.
      */
     function confirmingRoles() public pure virtual returns (bytes32[] memory);
