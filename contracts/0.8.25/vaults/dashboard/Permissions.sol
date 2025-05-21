@@ -6,8 +6,6 @@ pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
-import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
@@ -291,14 +289,14 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _newOwner The address to transfer the ownership to.
      */
     function _transferOwnership(address _newOwner) internal onlyRole(DEFAULT_ADMIN_ROLE) {
-        OwnableUpgradeable(address(_stakingVault())).transferOwnership(_newOwner);
+        _stakingVault().transferOwnership(_newOwner);
     }
 
     /**
      * @dev Checks the DEFAULT_ADMIN_ROLE and accepts the StakingVault ownership.
      */
     function _acceptOwnership() internal onlyRole(DEFAULT_ADMIN_ROLE) {
-        Ownable2StepUpgradeable(address(_stakingVault())).acceptOwnership();
+        _stakingVault().acceptOwnership();
     }
 
     /**
