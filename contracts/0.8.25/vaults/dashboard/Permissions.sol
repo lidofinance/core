@@ -309,7 +309,7 @@ abstract contract Permissions is AccessControlConfirmable {
         bytes calldata _pubkey,
         address _recipient
     ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
-        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee()).compensateDisprovenPredeposit(_pubkey, _recipient);
+        return VAULT_HUB.compensateDisprovenPredepositFromPDG(address(_stakingVault()), _pubkey, _recipient);
     }
 
     /**
@@ -318,9 +318,8 @@ abstract contract Permissions is AccessControlConfirmable {
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
     ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
-        IPredepositGuarantee predepositGuarantee = IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee());
         for (uint256 i = 0; i < _witnesses.length; i++) {
-            predepositGuarantee.proveUnknownValidator(_witnesses[i], _stakingVault());
+            VAULT_HUB.proveUnknownValidatorToPDG(address(_stakingVault()), _witnesses[i]);
         }
     }
 

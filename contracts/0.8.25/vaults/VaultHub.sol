@@ -13,6 +13,7 @@ import {ILido} from "../interfaces/ILido.sol";
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 import {LazyOracle} from "./LazyOracle.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
@@ -639,6 +640,32 @@ contract VaultHub is PausableUntilWithRoles {
 
         // TODO: add some gas compensation here
         _rebalance(_vault, record, Math256.min(fullRebalanceAmount, _vault.balance));
+    }
+
+    /// @notice Proves validators unknown to PDG that have correct vault WC
+    /// @param _vault vault address
+    /// @param _witness ValidatorWitness struct proving validator WC belonging to staking vault
+    function proveUnknownValidatorToPDG(
+        address _vault,
+        IPredepositGuarantee.ValidatorWitness calldata _witness
+    ) external {
+        _checkConnectionAndOwner(_vault);
+
+        IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee()).proveUnknownValidator(_witness, IStakingVault(_vault));
+    }
+
+    /// @notice Compensates disproven predeposit from PDG to the recipient
+    /// @param _vault vault address
+    /// @param _pubkey pubkey of the validator
+    /// @param _recipient address to compensate the disproven validator predeposit to
+    function compensateDisprovenPredepositFromPDG(
+        address _vault,
+        bytes calldata _pubkey,
+        address _recipient
+    ) external returns (uint256) {
+        _checkConnectionAndOwner(_vault);
+
+        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee()).compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     function _connectVault(
