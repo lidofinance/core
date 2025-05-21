@@ -53,8 +53,12 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 reserveRatioBP;
         /// @notice if vault's reserve decreases to this threshold, it should be force rebalanced
         uint16 forcedRebalanceThresholdBP;
-        /// @notice treasury fee in basis points
-        uint16 treasuryFeeBP;
+        /// @notice infra fee in basis points
+        uint16 infraFeeBP;
+        /// @notice liquidity fee in basis points
+        uint16 liquidityFeeBP;
+        /// @notice reservation fee in basis points
+        uint16 reservationFeeBP;
     }
 
     struct VaultRecord {
@@ -265,19 +269,31 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 shareLimit,
             uint256 reserveRatioBP,
             uint256 forcedRebalanceThresholdBP,
-            uint256 treasuryFeeBP
+            uint256 infraFeeBP,
+            uint256 liquidityFeeBP,
+            uint256 reservationFeeBP
         ) = _operatorGrid().vaultInfo(_vault);
 
         _connectVault(_vault,
             shareLimit,
             reserveRatioBP,
             forcedRebalanceThresholdBP,
-            treasuryFeeBP
+            infraFeeBP,
+            liquidityFeeBP,
+            reservationFeeBP
         );
 
         IStakingVault(_vault).acceptOwnership();
 
-        emit VaultConnected(_vault, shareLimit, reserveRatioBP, forcedRebalanceThresholdBP, treasuryFeeBP);
+        emit VaultConnected(
+            _vault,
+            shareLimit,
+            reserveRatioBP,
+            forcedRebalanceThresholdBP,
+            infraFeeBP,
+            liquidityFeeBP,
+            reservationFeeBP
+        );
     }
 
     /// @notice updates share limit for the vault
@@ -286,13 +302,38 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _shareLimit new share limit
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     function updateShareLimit(address _vault, uint256 _shareLimit) external onlyRole(VAULT_MASTER_ROLE) {
+        if (_vault == address(0)) revert ZeroArgument();
         if (_shareLimit > _maxSaneShareLimit()) revert ShareLimitTooHigh(_vault, _shareLimit, _maxSaneShareLimit());
 
         VaultConnection storage connection = _checkConnection(_vault);
-
         connection.shareLimit = uint96(_shareLimit);
 
         emit VaultShareLimitUpdated(_vault, _shareLimit);
+    }
+
+    /// @notice updates fees for the vault
+    /// @param _vault vault address
+    /// @param _infraFeeBP new infra fee in basis points
+    /// @param _liquidityFeeBP new liquidity fee in basis points
+    /// @param _reservationFeeBP new reservation fee in basis points
+    /// @dev msg.sender must have VAULT_MASTER_ROLE
+    function updateVaultFees(
+        address _vault,
+        uint256 _infraFeeBP,
+        uint256 _liquidityFeeBP,
+        uint256 _reservationFeeBP
+    ) external onlyRole(VAULT_MASTER_ROLE) {
+        if (_vault == address(0)) revert ZeroArgument();
+        if (_infraFeeBP > TOTAL_BASIS_POINTS) revert InfraFeeTooHigh(_vault, _infraFeeBP, TOTAL_BASIS_POINTS);
+        if (_liquidityFeeBP > TOTAL_BASIS_POINTS) revert LiquidityFeeTooHigh(_vault, _liquidityFeeBP, TOTAL_BASIS_POINTS);
+        if (_reservationFeeBP > TOTAL_BASIS_POINTS) revert ReservationFeeTooHigh(_vault, _reservationFeeBP, TOTAL_BASIS_POINTS);
+
+        VaultConnection storage connection = _checkConnection(_vault);
+        connection.infraFeeBP = uint16(_infraFeeBP);
+        connection.liquidityFeeBP = uint16(_liquidityFeeBP);
+        connection.reservationFeeBP = uint16(_reservationFeeBP);
+
+        emit VaultFeesUpdated(_vault, _infraFeeBP, _liquidityFeeBP, _reservationFeeBP);
     }
 
     /// @notice updates the vault's connection parameters
@@ -301,13 +342,17 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _shareLimit new share limit
     /// @param _reserveRatioBP new reserve ratio
     /// @param _forcedRebalanceThresholdBP new forced rebalance threshold
-    /// @param _treasuryFeeBP new treasury fee
+    /// @param _infraFeeBP new infra fee
+    /// @param _liquidityFeeBP new liquidity fee
+    /// @param _reservationFeeBP new reservation fee
     function updateConnection(
         address _vault,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
-        uint256 _treasuryFeeBP
+        uint256 _infraFeeBP,
+        uint256 _liquidityFeeBP,
+        uint256 _reservationFeeBP
     ) external {
         if (msg.sender != address(_operatorGrid())) revert NotAuthorized();
         if (_shareLimit > _maxSaneShareLimit()) revert ShareLimitTooHigh(_vault, _shareLimit, _maxSaneShareLimit());
@@ -325,9 +370,19 @@ contract VaultHub is PausableUntilWithRoles {
         connection.shareLimit = uint96(_shareLimit);
         connection.reserveRatioBP = uint16(_reserveRatioBP);
         connection.forcedRebalanceThresholdBP = uint16(_forcedRebalanceThresholdBP);
-        connection.treasuryFeeBP = uint16(_treasuryFeeBP);
+        connection.infraFeeBP = uint16(_infraFeeBP);
+        connection.liquidityFeeBP = uint16(_liquidityFeeBP);
+        connection.reservationFeeBP = uint16(_reservationFeeBP);
 
-        emit VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
+        emit VaultConnectionUpdated(
+            _vault,
+            _shareLimit,
+            _reserveRatioBP,
+            _forcedRebalanceThresholdBP,
+            _infraFeeBP,
+            _liquidityFeeBP,
+            _reservationFeeBP
+        );
     }
 
     /// @notice disconnect a vault from the hub
@@ -675,7 +730,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
-        uint256 _treasuryFeeBP
+        uint256 _infraFeeBP,
+        uint256 _liquidityFeeBP,
+        uint256 _reservationFeeBP
     ) internal {
         if (_reserveRatioBP == 0) revert ZeroArgument();
         if (_reserveRatioBP > TOTAL_BASIS_POINTS)
@@ -683,7 +740,9 @@ contract VaultHub is PausableUntilWithRoles {
         if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument();
         if (_forcedRebalanceThresholdBP > _reserveRatioBP)
             revert ForcedRebalanceThresholdTooHigh(_vault, _forcedRebalanceThresholdBP, _reserveRatioBP);
-        if (_treasuryFeeBP > TOTAL_BASIS_POINTS) revert TreasuryFeeTooHigh(_vault, _treasuryFeeBP, TOTAL_BASIS_POINTS);
+        if (_infraFeeBP > TOTAL_BASIS_POINTS) revert InfraFeeTooHigh(_vault, _infraFeeBP, TOTAL_BASIS_POINTS);
+        if (_liquidityFeeBP > TOTAL_BASIS_POINTS) revert LiquidityFeeTooHigh(_vault, _liquidityFeeBP, TOTAL_BASIS_POINTS);
+        if (_reservationFeeBP > TOTAL_BASIS_POINTS) revert ReservationFeeTooHigh(_vault, _reservationFeeBP, TOTAL_BASIS_POINTS);
         if (_shareLimit > _maxSaneShareLimit()) revert ShareLimitTooHigh(_vault, _shareLimit, _maxSaneShareLimit());
 
         Storage storage $ = _storage();
@@ -715,7 +774,9 @@ contract VaultHub is PausableUntilWithRoles {
             pendingDisconnect: false,
             reserveRatioBP: uint16(_reserveRatioBP),
             forcedRebalanceThresholdBP: uint16(_forcedRebalanceThresholdBP),
-            treasuryFeeBP: uint16(_treasuryFeeBP)
+            infraFeeBP: uint16(_infraFeeBP),
+            liquidityFeeBP: uint16(_liquidityFeeBP),
+            reservationFeeBP: uint16(_reservationFeeBP)
         });
 
         _addVault(_vault, connection, record);
@@ -914,7 +975,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 shareLimit,
         uint256 reserveRatioBP,
         uint256 forcedRebalanceThresholdBP,
-        uint256 treasuryFeeBP
+        uint256 infraFeeBP,
+        uint256 liquidityFeeBP,
+        uint256 reservationFeeBP
     );
 
     event VaultConnectionUpdated(
@@ -922,9 +985,12 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 shareLimit,
         uint256 reserveRatioBP,
         uint256 forcedRebalanceThresholdBP,
-        uint256 treasuryFeeBP
+        uint256 infraFeeBP,
+        uint256 liquidityFeeBP,
+        uint256 reservationFeeBP
     );
     event VaultShareLimitUpdated(address indexed vault, uint256 newShareLimit);
+    event VaultFeesUpdated(address indexed vault, uint256 infraFeeBP, uint256 liquidityFeeBP, uint256 reservationFeeBP);
     event VaultDisconnectInitiated(address indexed vault);
     event VaultDisconnectCompleted(address indexed vault);
     event VaultReportApplied(
@@ -1009,7 +1075,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 forcedRebalanceThresholdBP,
         uint256 maxForcedRebalanceThresholdBP
     );
-    error TreasuryFeeTooHigh(address vault, uint256 treasuryFeeBP, uint256 maxTreasuryFeeBP);
+    error InfraFeeTooHigh(address vault, uint256 infraFeeBP, uint256 maxInfraFeeBP);
+    error LiquidityFeeTooHigh(address vault, uint256 liquidityFeeBP, uint256 maxLiquidityFeeBP);
+    error ReservationFeeTooHigh(address vault, uint256 reservationFeeBP, uint256 maxReservationFeeBP);
     error InsufficientTotalValueToMint(address vault, uint256 totalValue);
     error AlreadyExists(bytes32 codehash);
     error NotFound(bytes32 codehash);
@@ -1026,4 +1094,5 @@ contract VaultHub is PausableUntilWithRoles {
     error UnhealthyVaultCannotDeposit(address vault);
     error VaultIsDisconnecting(address vault);
     error PartialValidatorWithdrawalNotAllowed();
+    error ArrayLengthMismatch();
 }

@@ -29,7 +29,9 @@ const SHARE_LIMIT = ether("1");
 const TOTAL_BASIS_POINTS = 10_000n;
 const RESERVE_RATIO_BP = 10_00n;
 const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
-const TREASURY_FEE_BP = 5_00n;
+const INFRA_FEE_BP = 5_00n;
+const LIQUIDITY_FEE_BP = 4_00n;
+const RESERVATION_FEE_BP = 1_00n;
 
 const FEE = 2n;
 
@@ -117,7 +119,9 @@ describe("VaultHub.sol:forceExit", () => {
       shareLimit: SHARE_LIMIT,
       reserveRatioBP: RESERVE_RATIO_BP,
       forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-      treasuryFeeBP: TREASURY_FEE_BP,
+      infraFeeBP: INFRA_FEE_BP,
+      liquidityFeeBP: LIQUIDITY_FEE_BP,
+      reservationFeeBP: RESERVATION_FEE_BP,
     });
 
     await vault.fund({ value: ether("1") });
@@ -237,7 +241,9 @@ describe("VaultHub.sol:forceExit", () => {
         shareLimit: cap,
         reserveRatioBP: 20_00n,
         forcedRebalanceThresholdBP: 20_00n,
-        treasuryFeeBP: 5_00n,
+        infraFeeBP: 5_00n,
+        liquidityFeeBP: 4_00n,
+        reservationFeeBP: 1_00n,
       });
 
       await vaultHub.connectVault(demoVaultAddress);
