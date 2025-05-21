@@ -18,7 +18,7 @@ import {
 
 import { Snapshot, Tracing } from "test/suite";
 
-describe.only("Integration: Vault obligations", () => {
+describe("Integration: Vault obligations", () => {
   let ctx: ProtocolContext;
 
   let vaultHub: VaultHub;
@@ -309,8 +309,7 @@ describe.only("Integration: Vault obligations", () => {
         await expect(reportVaultDataWithProof(ctx, stakingVault))
           .to.emit(vaultHub, "WithdrawalsObligationUpdated")
           .withArgs(stakingVaultAddress, maxPossibleWithdrawals - vaultBalance, vaultBalance)
-          .to.emit(vaultHub, "VaultRebalanced")
-          .withArgs(stakingVaultAddress, vaultBalance, vaultBalance);
+          .not.to.emit(vaultHub, "VaultRebalanced");
 
         const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
         expect(obligationsAfter.unsettledWithdrawals).to.equal(maxPossibleWithdrawals - vaultBalance);
@@ -325,8 +324,7 @@ describe.only("Integration: Vault obligations", () => {
         await expect(reportVaultDataWithProof(ctx, stakingVault))
           .to.emit(vaultHub, "WithdrawalsObligationUpdated")
           .withArgs(stakingVaultAddress, 0n, maxPossibleWithdrawals)
-          .to.emit(vaultHub, "VaultRebalanced")
-          .withArgs(stakingVaultAddress, maxPossibleWithdrawals, maxPossibleWithdrawals);
+          .not.to.emit(vaultHub, "VaultRebalanced");
 
         const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
         expect(obligationsAfter.unsettledWithdrawals).to.equal(0n);
@@ -358,10 +356,9 @@ describe.only("Integration: Vault obligations", () => {
         await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees }))
           .to.emit(vaultHub, "WithdrawalsObligationUpdated")
           .withArgs(stakingVaultAddress, unsettledWithdrawals, vaultBalance)
-          .to.emit(vaultHub, "VaultRebalanced")
-          .withArgs(stakingVaultAddress, vaultBalance, vaultBalance)
           .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
-          .withArgs(stakingVaultAddress, accruedTreasuryFees, 0n);
+          .withArgs(stakingVaultAddress, accruedTreasuryFees, 0n)
+          .not.to.emit(vaultHub, "VaultRebalanced");
 
         const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
         expect(obligationsAfter.unsettledWithdrawals).to.equal(unsettledWithdrawals);
@@ -382,12 +379,11 @@ describe.only("Integration: Vault obligations", () => {
         await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees }))
           .to.emit(vaultHub, "WithdrawalsObligationUpdated")
           .withArgs(stakingVaultAddress, 0, unsettledWithdrawals)
-          .to.emit(vaultHub, "VaultRebalanced")
-          .withArgs(stakingVaultAddress, unsettledWithdrawals, unsettledWithdrawals)
           .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
           .withArgs(stakingVaultAddress, expectedUnsettledTreasuryFees, expectedSettledTreasuryFees1)
           .to.emit(stakingVault, "EtherWithdrawn")
-          .withArgs(await ctx.contracts.locator.treasury(), expectedSettledTreasuryFees1);
+          .withArgs(await ctx.contracts.locator.treasury(), expectedSettledTreasuryFees1)
+          .not.to.emit(vaultHub, "VaultRebalanced");
 
         const obligationsAfterFunding = await vaultHub.vaultObligations(stakingVaultAddress);
         expect(obligationsAfterFunding.unsettledWithdrawals).to.equal(0n);

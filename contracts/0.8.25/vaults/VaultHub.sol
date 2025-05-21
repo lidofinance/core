@@ -470,7 +470,7 @@ contract VaultHub is PausableUntilWithRoles {
         record.locked = uint128(lockedEther);
 
         uint256 outstandingFees = _reportAccruedTreasuryFees - obligations.settledTreasuryFees;
-        _settleObligations(_vault, record, obligations, outstandingFees, liability);
+        _settleObligations(_vault, record, obligations, outstandingFees, liability, true);
 
         IStakingVault vault_ = IStakingVault(_vault);
         if (!_isVaultHealthy(connection, record) && !vault_.beaconChainDepositsPaused()) {
@@ -776,7 +776,8 @@ contract VaultHub is PausableUntilWithRoles {
             record,
             obligations,
             obligations.unsettledTreasuryFees,
-            _getPooledEthBySharesRoundUp(record.liabilityShares)
+            _getPooledEthBySharesRoundUp(record.liabilityShares),
+            false
         );
     }
 
@@ -799,7 +800,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage _record,
         VaultObligations storage _obligations,
         uint256 _outstandingFees,
-        uint256 _liability
+        uint256 _liability,
+        bool _isOnReport
     ) internal {
         (uint256 valueToRebalance, uint256 valueToTransfer) = _getSettlementValues(
             _vault,
@@ -808,10 +810,20 @@ contract VaultHub is PausableUntilWithRoles {
             _liability
         );
 
-        if (valueToRebalance > 0) _rebalance(_vault, _record, valueToRebalance);
+        if (valueToRebalance > 0) {
+            if (_isOnReport) {
+                uint256 sharesToBurn = _sharesToBurn(valueToRebalance);
+                _record.liabilityShares = uint96(_record.liabilityShares - sharesToBurn);
+                _withdrawFromVault(_vault, _record, address(this), valueToRebalance);
+                _rebalanceExternalEther(valueToRebalance);
+            } else {
+                _rebalance(_vault, _record, valueToRebalance);
+            }
+        }
+
         if (valueToTransfer > 0) {
             _withdrawFromVault(_vault, _record, LIDO_LOCATOR.treasury(), valueToTransfer);
-            _vaultObligations(_vault).settledTreasuryFees += uint128(valueToTransfer);
+            _obligations.settledTreasuryFees += uint128(valueToTransfer);
         }
     }
 
@@ -836,7 +848,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_shareLimit > _maxSaneShareLimit()) revert ShareLimitTooHigh(_vault, _shareLimit, _maxSaneShareLimit());
 
         Storage storage $ = _storage();
-        VaultConnection memory connection = $.connections[_vault];
+        VaultConnection memory connection = _vaultConnection(_vault);
         if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
         if (connection.vaultIndex != 0) revert AlreadyConnected(_vault, connection.vaultIndex);
         bytes32 codehash = address(_vault).codehash;
@@ -892,17 +904,25 @@ contract VaultHub is PausableUntilWithRoles {
         _connection.pendingDisconnect = true;
     }
 
+    function _sharesToBurn(uint256 _ether) internal view returns (uint256) {
+        return LIDO.getSharesByPooledEth(_ether);
+    }
+
+    function _rebalanceExternalEther(uint256 _ether) internal {
+        LIDO.rebalanceExternalEtherToInternal{value: _ether}();
+    }
+
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _ether) internal {
         uint256 totalValue_ = _totalValue(_record);
         if (_ether > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, _ether);
 
-        uint256 sharesToBurn = LIDO.getSharesByPooledEth(_ether);
+        uint256 sharesToBurn = _sharesToBurn(_ether);
         uint256 liabilityShares_ = _record.liabilityShares;
         if (liabilityShares_ < sharesToBurn) revert InsufficientSharesToBurn(msg.sender, liabilityShares_);
 
         _record.liabilityShares = uint96(liabilityShares_ - sharesToBurn);
         _withdrawFromVault(_vault, _record, address(this), _ether);
-        LIDO.rebalanceExternalEtherToInternal{value: _ether}();
+        _rebalanceExternalEther(_ether);
 
         _updateUnsettledWithdrawals(_vault, _record.liabilityShares);
 
