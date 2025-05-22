@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, PinnedBeaconProxy, StakingVault } from "typechain-types";
 
-import { ether, generateValidator } from "lib";
+import { ether, generatePredeposit, generateValidator } from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -107,29 +107,28 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .withArgs(dashboard, ether("100"));
 
       // 2. Setting stranger as a guarantor
-      await expect(predepositGuarantee.setNodeOperatorGuarantor(guarantor))
+      await expect(predepositGuarantee.connect(nodeOperator).setNodeOperatorGuarantor(guarantor))
         .to.emit(predepositGuarantee, "GuarantorSet")
-        .withArgs(owner, await guarantor.getAddress(), owner);
+        .withArgs(nodeOperator, await guarantor.getAddress(), nodeOperator);
 
-      expect(await predepositGuarantee.nodeOperatorGuarantor(nodeOperator)).to.equal(nodeOperator);
+      expect(await predepositGuarantee.nodeOperatorGuarantor(nodeOperator)).to.equal(guarantor);
 
       // 3. The Node Operator's guarantor tops up 1 ETH to the PDG contract, specifying the Node Operator's address. This serves as the predeposit guarantee collateral.
       //  Method called: PredepositGuarantee.topUpNodeOperatorBalance(nodeOperator) with ETH transfer.
-      await expect(predepositGuarantee.connect(guarantor).topUpNodeOperatorBalance(guarantor, { value: ether("1") }))
+      await expect(predepositGuarantee.connect(guarantor).topUpNodeOperatorBalance(nodeOperator, { value: ether("1") }))
         .to.emit(predepositGuarantee, "BalanceToppedUp")
-        .withArgs(guarantor, guarantor, ether("1"));
+        .withArgs(nodeOperator, guarantor, ether("1"));
 
       // 4. The Node Operator generates validator keys and predeposit data
       const withdrawalCredentials = await stakingVault.withdrawalCredentials();
       const validator = generateValidator(withdrawalCredentials);
 
-      const predepositData = await generatePredepositData(
-        predepositGuarantee,
-        dashboard,
-        roles,
-        nodeOperator,
-        validator,
-      );
+      // Pre-requisite: fund the vault to have enough balance to start a validator
+      await dashboard.connect(roles.funder).fund({ value: ether("32") });
+
+      const predepositData = await generatePredeposit(validator, {
+        depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
+      });
 
       // 5. The Node Operator predeposits 1 ETH from the vault balance to the validator via the PDG contract.
       //    same time the PDG locks 1 ETH from the Node Operator's guarantee collateral in the PDG.
@@ -160,22 +159,23 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .withArgs(nodeOperator, ether("1"), ether("0"));
 
       // 7. The Node Operator's guarantor withdraws the 1 ETH from the PDG contract or retains it for reuse with future validators.
-      const balanceBefore = await ethers.provider.getBalance(nodeOperator);
+      const balanceBefore = await ethers.provider.getBalance(guarantor);
       await expect(
-        predepositGuarantee.connect(guarantor).withdrawNodeOperatorBalance(guarantor, ether("1"), nodeOperator),
+        predepositGuarantee.connect(guarantor).withdrawNodeOperatorBalance(nodeOperator, ether("1"), guarantor),
       )
         .to.emit(predepositGuarantee, "BalanceWithdrawn")
-        .withArgs(guarantor, nodeOperator, ether("1"));
-      return { balanceBefore, postdeposit };
+        .withArgs(nodeOperator, guarantor, ether("1"));
+
+      const balanceAfter = await ethers.provider.getBalance(guarantor);
+      expect(balanceAfter).to.be.gt(balanceBefore); // Account for gas costs
+
+      return { postdeposit };
     }
 
     // https://docs.lido.fi/guides/stvaults/pdg#full-cycle-trustless-path-through-pdg
     it("Happy path", async () => {
-      const { balanceBefore, postdeposit } = await commonSteps();
+      const { postdeposit } = await commonSteps();
       const { predepositGuarantee } = ctx.contracts;
-
-      const balanceAfter = await ethers.provider.getBalance(nodeOperator);
-      expect(balanceAfter).to.be.gt(balanceBefore); // Account for gas costs
 
       // 8. The Node Operator makes a top-up deposit of the remaining 99 ETH from the vault balance to the validator through the PDG.
       //    Method called: PredepositGuarantee.depositToBeaconChain(stakingVault, deposits).
@@ -231,11 +231,8 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
     const predepositData = await generatePredepositData(predepositGuarantee, dashboard, roles, nodeOperator, validator);
 
-    //Tracing.enable();
-
     await dashboard.connect(owner).grantRole(await dashboard.FUND_ROLE(), proxy);
 
-    // todo: I suspect that this report is issued with some data that causes failure in thext method
     await reportVaultDataWithProof(stakingVault);
 
     // 4. The stVault's owner deposits 1 ETH from the vault balance directly to the validator, bypassing the PDG.

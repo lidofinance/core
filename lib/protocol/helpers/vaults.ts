@@ -365,15 +365,18 @@ export const generatePredepositData = async (
   roles: VaultRoles,
   nodeOperator: HardhatEthersSigner,
   validator: Validator,
+  guarantor?: HardhatEthersSigner,
 ): Promise<{
   deposit: StakingVaultDepositStruct;
   depositY: BLS12_381.DepositYStruct;
 }> => {
+  guarantor = guarantor ?? nodeOperator;
+
   // Pre-requisite: fund the vault to have enough balance to start a validator
   await dashboard.connect(roles.funder).fund({ value: ether("32") });
 
   // Step 1: Top up the node operator balance
-  await predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, {
+  await predepositGuarantee.connect(guarantor).topUpNodeOperatorBalance(nodeOperator, {
     value: ether("1"),
   });
 
