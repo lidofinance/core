@@ -265,11 +265,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
         uint32 lastDeliveredIndex = requestStatus.lastDeliveredExitDataIndex;
 
-        // maybe this check is extra
-        if (requestStatus.deliveryHistoryLength != 0 && lastDeliveredIndex >= totalItemsCount) {
-            revert DeliveredIndexOutOfBounds();
-        }
-
         uint256 startIndex = requestStatus.deliveryHistoryLength == 0 ? 0 : lastDeliveredIndex + 1;
         uint256 undeliveredItemsCount = totalItemsCount - startIndex;
 
@@ -315,7 +310,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         ExitRequestsData calldata exitsData,
         uint256[] calldata exitDataIndexes,
         address refundRecipient
-    ) external payable {
+    ) external payable whenResumed {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
         // If the refund recipient is not set, use the sender as the refund recipient

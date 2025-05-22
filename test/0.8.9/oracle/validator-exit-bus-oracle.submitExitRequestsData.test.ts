@@ -181,6 +181,46 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       .withArgs(2);
   });
 
+  it("Should revert if contains duplicates", async () => {
+    const requests = [
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[1] },
+    ];
+
+    const exitRequestData: ExitRequestData = {
+      dataFormat: 1,
+      data: encodeExitRequestsDataList(requests),
+    };
+    const hash = hashExitRequest(exitRequestData);
+    const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
+    await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
+
+    await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
+      oracle,
+      "InvalidRequestsDataSortOrder",
+    );
+  });
+
+  it("Should revert if data is not sorted in ascending order", async () => {
+    const requests = [
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+      { moduleId: 0, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[1] },
+    ];
+
+    const exitRequestData: ExitRequestData = {
+      dataFormat: 1,
+      data: encodeExitRequestsDataList(requests),
+    };
+    const hash = hashExitRequest(exitRequestData);
+    const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
+    await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
+
+    await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
+      oracle,
+      "InvalidRequestsDataSortOrder",
+    );
+  });
+
   describe("Exit Request Limits", function () {
     before(async () => {
       const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
@@ -301,6 +341,16 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       );
     });
 
+    it("Should not give to set new maximum requests per batch value without MAX_VALIDATORS_PER_BATCH_ROLE role", async () => {
+      const maxRequestsPerBatch = 4;
+      await expect(
+        oracle.connect(stranger).setMaxRequestsPerBatch(maxRequestsPerBatch),
+      ).to.be.revertedWithOZAccessControlError(
+        await stranger.getAddress(),
+        await oracle.MAX_VALIDATORS_PER_BATCH_ROLE(),
+      );
+    });
+
     it("Should revert if maxBatchSize exceeded", async () => {
       const role = await oracle.MAX_VALIDATORS_PER_BATCH_ROLE();
       await oracle.grantRole(role, authorizedEntity);
@@ -308,6 +358,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       const maxRequestsPerBatch = 4;
 
       await oracle.connect(authorizedEntity).setMaxRequestsPerBatch(maxRequestsPerBatch);
+      expect(await oracle.connect(authorizedEntity).getMaxRequestsPerBatch()).to.equal(maxRequestsPerBatch);
 
       const exitRequestsRandom = [
         { moduleId: 100, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
