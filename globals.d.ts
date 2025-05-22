@@ -72,6 +72,9 @@ declare namespace NodeJS {
     MAINNET_WITHDRAWAL_QUEUE_ADDRESS?: string;
     MAINNET_WITHDRAWAL_VAULT_ADDRESS?: string;
 
+    HOLESKY_RPC_URL?: string;
+    SEPOLIA_RPC_URL?: string;
+
     /* for contract sourcecode verification with `hardhat-verify` */
     ETHERSCAN_API_KEY?: string;
 
@@ -80,5 +83,12 @@ declare namespace NodeJS {
     LOCAL_DEVNET_CHAIN_ID?: string;
     LOCAL_DEVNET_EXPLORER_API_URL?: string;
     LOCAL_DEVNET_EXPLORER_URL?: string;
+
+    /* scratch deploy environment variables */
+    NETWORK_STATE_FILE?: string;
+
+    /* hardhat plugins options */
+    SKIP_CONTRACT_SIZE?: boolean;
+    SKIP_GAS_REPORT?: boolean;
   }
 }

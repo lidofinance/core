@@ -51,7 +51,7 @@ the [Lido Research Forum](https://research.lido.fi/).
 
 > [!TIP]
 > On macOS with Homebrew, it is recommended to install Node.js using [`n`](https://github.com/tj/n) or
-> [ >`nvm`](https://github.com/nvm-sh/nvm) version managers.
+> [`nvm`](https://github.com/nvm-sh/nvm) version managers.
 >
 > Example setup process using `n` package manager for zsh users:
 >
@@ -259,19 +259,19 @@ maintain optimal test performance.
 
 To enable tracing:
 
-- Wrap the code you want to trace with `Tracer.enable()` and `Tracer.disable()` functions.
+- Wrap the code you want to trace with `Tracing.enable()` and `Tracing.disable()` functions.
 - Run the tests with the appropriate command that enables tracing (e.g., `yarn test:trace`).
 
 Here's an example:
 
 ```typescript
-import { Tracer } from "test/suite";
+import { Tracing } from "test/suite";
 
 describe("MyContract", () => {
   it("should do something", async () => {
-    Tracer.enable();
+    Tracing.enable();
     // code to trace
-    Tracer.disable();
+    Tracing.disable();
   });
 });
 ```
