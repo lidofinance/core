@@ -173,7 +173,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacity() public view returns (uint256) {
-        return _totalMintingCapacity(0);
+        return _totalMintingCapacityShares(0);
     }
 
     /**
@@ -183,7 +183,7 @@ contract Dashboard is NodeOperatorFee {
      * @return the number of shares that can be minted using additional ether
      */
     function remainingMintingCapacity(uint256 _etherToFund) external view returns (uint256) {
-        uint256 totalShares = _totalMintingCapacity(_etherToFund);
+        uint256 totalShares = _totalMintingCapacityShares(_etherToFund);
         uint256 liabilityShares_ = VAULT_HUB.liabilityShares(address(_stakingVault()));
 
         if (totalShares < liabilityShares_) return 0;
@@ -577,11 +577,11 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @dev calculates the maximum number of stETH shares that can be minted by the vault
-     * @param _additionalFunding additional ether that may be funded to the vault
+     * @param _additionalEther additional ether that may be funded to the vault
      */
-    function _totalMintingCapacity(uint256 _additionalFunding) internal view returns (uint256) {
+    function _totalMintingCapacityShares(uint256 _additionalEther) internal view returns (uint256) {
         VaultHub.VaultConnection memory connection = vaultConnection();
-        uint256 maxMintableStETH = ((_mintableValue() + _additionalFunding) *
+        uint256 maxMintableStETH = ((_mintableValue() + _additionalEther) *
             (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), connection.shareLimit);
     }
