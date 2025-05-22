@@ -88,26 +88,26 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
     });
 
     it("Reverts if Locator is zero address", async () => {
-      await expect(nor.initialize(ZeroAddress, moduleType, 86400n, 86400n)).to.be.reverted;
+      await expect(nor.initialize(ZeroAddress, moduleType, 86400n)).to.be.reverted;
     });
 
     it("Reverts if was initialized with v1", async () => {
       await nor.harness__initialize(1n);
 
-      await expect(nor.initialize(locator, moduleType, 86400n, 86400n)).to.be.revertedWith("INIT_ALREADY_INITIALIZED");
+      await expect(nor.initialize(locator, moduleType, 86400n)).to.be.revertedWith("INIT_ALREADY_INITIALIZED");
     });
 
     it("Reverts if already initialized", async () => {
-      await nor.initialize(locator, encodeBytes32String("curated-onchain-v1"), 86400n, 86400n);
+      await nor.initialize(locator, encodeBytes32String("curated-onchain-v1"), 86400n);
 
-      await expect(nor.initialize(locator, moduleType, 86400n, 86400n)).to.be.revertedWith("INIT_ALREADY_INITIALIZED");
+      await expect(nor.initialize(locator, moduleType, 86400n)).to.be.revertedWith("INIT_ALREADY_INITIALIZED");
     });
 
     it("Makes the contract initialized to v4", async () => {
       const burnerAddress = await locator.burner();
       const latestBlock = BigInt(await time.latestBlock());
 
-      await expect(nor.initialize(locator, moduleType, 86400n, 86400n))
+      await expect(nor.initialize(locator, moduleType, 86400n))
         .to.emit(nor, "ContractVersionSet")
         .withArgs(contractVersionV2)
         .and.to.emit(nor, "LocatorContractSet")
@@ -115,7 +115,9 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
         .and.to.emit(nor, "StakingModuleTypeSet")
         .withArgs(moduleType)
         .to.emit(nor, "RewardDistributionStateChanged")
-        .withArgs(RewardDistributionState.Distributed);
+        .withArgs(RewardDistributionState.Distributed)
+        .to.emit(nor, "ExitDeadlineThresholdChanged")
+        .withArgs(86400n, 0n);
 
       expect(await nor.getLocator()).to.equal(await locator.getAddress());
       expect(await nor.getInitializationBlock()).to.equal(latestBlock + 1n);

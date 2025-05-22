@@ -246,8 +246,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     function initialize(
         address _locator,
         bytes32 _type,
-        uint256 _exitDeadlineThresholdInSeconds,
-        uint256 _reportingWindow
+        uint256 _exitDeadlineThresholdInSeconds
     ) public onlyInit {
         // Initializations for v1 --> v2
         _initialize_v2(_locator, _type);
@@ -256,7 +255,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _initialize_v3();
 
         // Initializations for v3 --> v4
-        _initialize_v4(_exitDeadlineThresholdInSeconds, _reportingWindow);
+        _initialize_v4(_exitDeadlineThresholdInSeconds);
 
         initialized();
     }
@@ -280,13 +279,11 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _updateRewardDistributionState(RewardDistributionState.Distributed);
     }
 
-    function _initialize_v4(
-        uint256 _exitDeadlineThresholdInSeconds,
-        uint256 _reportingWindow
-    ) internal {
+    function _initialize_v4(uint256 _exitDeadlineThresholdInSeconds) internal {
         _setContractVersion(4);
-
-        _setExitDeadlineThreshold(_exitDeadlineThresholdInSeconds, _reportingWindow);
+        /// @dev The reportingWindowThreshold is set to 0 because it is not required during cold start.
+        ///      This parameter is only relevant when changing _exitDeadlineThresholdInSeconds in future upgrades.
+        _setExitDeadlineThreshold(_exitDeadlineThresholdInSeconds, 0);
     }
 
     /// @notice A function to finalize upgrade to v2 (from v1). Can be called only once.
@@ -300,14 +297,10 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     /// @notice Finalizes upgrade to version 4 by initializing new exit-related parameters.
     /// @param _exitDeadlineThresholdInSeconds Exit deadline threshold in seconds for validator exits.
-    /// @param _exitPenaltyCutoffTimestamp Cutoff timestamp before which validators cannot be penalized.
-    function finalizeUpgrade_v4(
-        uint256 _exitDeadlineThresholdInSeconds,
-        uint256 _exitPenaltyCutoffTimestamp
-    ) external {
+    function finalizeUpgrade_v4(uint256 _exitDeadlineThresholdInSeconds) external {
         require(hasInitialized(), "CONTRACT_NOT_INITIALIZED");
         _checkContractVersion(3);
-        _initialize_v4(_exitDeadlineThresholdInSeconds, _exitPenaltyCutoffTimestamp);
+        _initialize_v4(_exitDeadlineThresholdInSeconds);
     }
 
     /// @notice Add node operator named `name` with reward address `rewardAddress` and staking limit = 0 validators
@@ -1073,20 +1066,31 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _removeUnusedSigningKeys(_nodeOperatorId, _fromIndex, _keysCount);
     }
 
-    function _isValidatorExitingKeyReported(bytes32 _keyHash) internal view returns (bool) {
-        return _validatorExitProcessedKeys[_keyHash];
+    /// @notice Returns true if the given validator public key has already been reported as exiting.
+    /// @dev The function hashes the input public key using keccak256 and checks if it exists in the _validatorExitProcessedKeys mapping.
+    /// @param _publicKey The BLS public key of the validator (serialized as bytes).
+    /// @return True if the validator exit for the provided key has been reported, false otherwise.
+    function isValidatorExitingKeyReported(bytes _publicKey) public view returns (bool) {
+        bytes32 processedKeyHash = keccak256(_publicKey);
+        return _validatorExitProcessedKeys[processedKeyHash];
     }
 
-    function _markValidatorExitingKeyAsReported(bytes32 _keyHash) internal {
+    function _markValidatorExitingKeyAsReported(bytes _publicKey) internal {
+        bytes32 processedKeyHash = keccak256(_publicKey);
         // Require that key is currently NotProcessed
-        require(_validatorExitProcessedKeys[_keyHash] == false,
+        require(_validatorExitProcessedKeys[processedKeyHash] == false,
             "VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
-        _validatorExitProcessedKeys[_keyHash] = true;
+        _validatorExitProcessedKeys[processedKeyHash] = true;
     }
 
     /// @notice Returns the number of seconds after which a validator is considered late.
+    /// @dev The operatorId argument is ignored and present only to comply with the IStakingModule interface.
     /// @return uint256 The exit deadline threshold in seconds for all node operators.
-    function exitDeadlineThreshold() public view returns (uint256) {
+    function exitDeadlineThreshold(uint256 /* operatorId */) public view returns (uint256) {
+        return _exitDeadlineThreshold();
+    }
+
+    function _exitDeadlineThreshold() internal view returns (uint256) {
         return EXIT_DELAY_THRESHOLD_SECONDS.getStorageUint256();
     }
 
@@ -1108,7 +1112,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     function _setExitDeadlineThreshold(uint256 _threshold, uint256 _reportingWindow) internal {
         require(_threshold > 0, "INVALID_EXIT_DELAY_THRESHOLD");
-        require(_reportingWindow > 0, "INVALID_REPORTING_WINDOW");
 
         EXIT_DELAY_THRESHOLD_SECONDS.setStorageUint256(_threshold);
 
@@ -1148,13 +1151,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         bytes _publicKey,
         uint256 _eligibleToExitInSec
     ) external view returns (bool) {
-        bytes32 processedKeyHash = keccak256(_publicKey);
         // Check if the key is already reported
-        if (_isValidatorExitingKeyReported(processedKeyHash)) {
+        if (isValidatorExitingKeyReported(_publicKey)) {
             return false;
         }
-        return _eligibleToExitInSec >= exitDeadlineThreshold()
-            && _proofSlotTimestamp >= exitPenaltyCutoffTimestamp();
+        return _eligibleToExitInSec >= _exitDeadlineThreshold()
+            && _proofSlotTimestamp - _eligibleToExitInSec >= exitPenaltyCutoffTimestamp();
     }
 
     /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
@@ -1174,11 +1176,10 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         require(_publicKey.length == 48, "INVALID_PUBLIC_KEY");
 
         // Check if exit delay exceeds the threshold
-        require(_eligibleToExitInSec >= exitDeadlineThreshold(), "EXIT_DELAY_BELOW_THRESHOLD");
-        require(_proofSlotTimestamp >= exitPenaltyCutoffTimestamp(), "EXIT_PENALTY_CUTOFF_NOT_REACHED");
+        require(_eligibleToExitInSec >= _exitDeadlineThreshold(), "EXIT_DELAY_BELOW_THRESHOLD");
+        require(_proofSlotTimestamp - _eligibleToExitInSec >= exitPenaltyCutoffTimestamp(), "TOO_LATE_FOR_EXIT_DELAY_REPORT");
 
-        bytes32 processedKeyHash = keccak256(_publicKey);
-        _markValidatorExitingKeyAsReported(processedKeyHash);
+        _markValidatorExitingKeyAsReported(_publicKey);
 
         emit ValidatorExitStatusUpdated(_nodeOperatorId, _publicKey, _eligibleToExitInSec, _proofSlotTimestamp);
     }
