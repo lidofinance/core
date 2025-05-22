@@ -13,6 +13,10 @@ import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
 
 import { DATA_FORMAT_LIST, deployVEBO, initVEBO, SECONDS_PER_FRAME } from "test/deploy";
 
+// -----------------------------------------------------------------------------
+// Constants & helpers
+// -----------------------------------------------------------------------------
+
 const PUBKEYS = [
   "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -23,6 +27,59 @@ const PUBKEYS = [
 
 const ZERO_ADDRESS = ethers.ZeroAddress;
 
+const LAST_PROCESSING_REF_SLOT = 1;
+
+// -----------------------------------------------------------------------------
+// Encoding
+// -----------------------------------------------------------------------------
+
+interface ExitRequest {
+  moduleId: number;
+  nodeOpId: number;
+  valIndex: number;
+  valPubkey: string;
+}
+
+interface ReportFields {
+  consensusVersion: bigint;
+  refSlot: bigint;
+  requestsCount: number;
+  dataFormat: number;
+  data: string;
+}
+
+const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
+  const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
+  const reportDataHash = ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
+  );
+  return reportDataHash;
+};
+
+const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
+  const pubkeyHex = de0x(valPubkey);
+  expect(pubkeyHex.length).to.equal(48 * 2);
+  return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
+};
+
+const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
+  return "0x" + requests.map(encodeExitRequestHex).join("");
+};
+
+const createValidatorDataList = (requests: ExitRequest[]) => {
+  return requests.map((request) => ({
+    stakingModuleId: request.moduleId,
+    nodeOperatorId: request.nodeOpId,
+    pubkey: request.valPubkey,
+  }));
+};
+
+const hashExitRequest = (request: { dataFormat: number; data: string }) => {
+  return ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [request.data, request.dataFormat]),
+  );
+};
+
 describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   let consensus: HashConsensus__Harness;
   let oracle: ValidatorsExitBus__Harness;
@@ -30,56 +87,11 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   let triggerableWithdrawalsGateway: TriggerableWithdrawalsGateway__MockForVEB;
 
   let oracleVersion: bigint;
-  let exitRequests: ExitRequest[];
-  let reportFields: ReportFields;
-  let reportHash: string;
 
   let member1: HardhatEthersSigner;
   let member2: HardhatEthersSigner;
   let member3: HardhatEthersSigner;
-
-  const LAST_PROCESSING_REF_SLOT = 1;
-
-  interface ExitRequest {
-    moduleId: number;
-    nodeOpId: number;
-    valIndex: number;
-    valPubkey: string;
-  }
-
-  interface ReportFields {
-    consensusVersion: bigint;
-    refSlot: bigint;
-    requestsCount: number;
-    dataFormat: number;
-    data: string;
-  }
-
-  const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
-    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
-    const reportDataHash = ethers.keccak256(
-      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
-    );
-    return reportDataHash;
-  };
-
-  const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
-    const pubkeyHex = de0x(valPubkey);
-    expect(pubkeyHex.length).to.equal(48 * 2);
-    return numberToHex(moduleId, 3) + numberToHex(nodeOpId, 5) + numberToHex(valIndex, 8) + pubkeyHex;
-  };
-
-  const encodeExitRequestsDataList = (requests: ExitRequest[]) => {
-    return "0x" + requests.map(encodeExitRequestHex).join("");
-  };
-
-  const createValidatorDataList = (requests: ExitRequest[]) => {
-    return requests.map((request) => ({
-      stakingModuleId: request.moduleId,
-      nodeOperatorId: request.nodeOpId,
-      pubkey: request.valPubkey,
-    }));
-  };
+  let authorizedEntity: HardhatEthersSigner;
 
   const deploy = async () => {
     const deployed = await deployVEBO(admin.address);
@@ -103,7 +115,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   };
 
   before(async () => {
-    [admin, member1, member2, member3] = await ethers.getSigners();
+    [admin, member1, member2, member3, authorizedEntity] = await ethers.getSigners();
 
     await deploy();
   });
@@ -115,132 +127,159 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
-  it("some time passes", async () => {
-    await consensus.advanceTimeBy(24 * 60 * 60);
-  });
-
-  it("committee reaches consensus on a report hash", async () => {
-    const { refSlot } = await consensus.getCurrentFrame();
-
-    exitRequests = [
+  describe("Submit via oracle flow ", async () => {
+    const exitRequests = [
       { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
       { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
       { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
       { moduleId: 2, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[3] },
     ];
 
-    reportFields = {
-      consensusVersion: CONSENSUS_VERSION,
-      refSlot: refSlot,
-      requestsCount: exitRequests.length,
+    let reportFields: ReportFields;
+    let reportHash: string;
+
+    it("some time passes", async () => {
+      await consensus.advanceTimeBy(24 * 60 * 60);
+    });
+
+    it("committee reaches consensus on a report hash", async () => {
+      const { refSlot } = await consensus.getCurrentFrame();
+
+      reportFields = {
+        consensusVersion: CONSENSUS_VERSION,
+        refSlot: refSlot,
+        requestsCount: exitRequests.length,
+        dataFormat: DATA_FORMAT_LIST,
+        data: encodeExitRequestsDataList(exitRequests),
+      };
+
+      reportHash = calcValidatorsExitBusReportDataHash(reportFields);
+
+      await triggerConsensusOnHash(reportHash);
+    });
+
+    it("some time passes", async () => {
+      await consensus.advanceTimeBy(SECONDS_PER_FRAME / 3n);
+    });
+
+    it("a committee member submits the report data, exit requests are emitted", async () => {
+      const tx = await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+
+      const timestamp = await oracle.getTime();
+
+      for (const request of exitRequests) {
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
+      }
+    });
+
+    it("should triggers exits for all validators in exit request", async () => {
+      const tx = await oracle.triggerExits(
+        { data: reportFields.data, dataFormat: reportFields.dataFormat },
+        [0, 1, 2, 3],
+        ZERO_ADDRESS,
+        { value: 4 },
+      );
+
+      const requests = createValidatorDataList(exitRequests);
+
+      await expect(tx)
+        .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
+        .withArgs(requests.length, admin.address, 1);
+    });
+
+    it("should triggers exits only for validators in selected request indexes", async () => {
+      const tx = await oracle.triggerExits(
+        { data: reportFields.data, dataFormat: reportFields.dataFormat },
+        [0, 1, 3],
+        ZERO_ADDRESS,
+        {
+          value: 10,
+        },
+      );
+
+      const requests = createValidatorDataList(exitRequests.filter((req, i) => [0, 1, 3].includes(i)));
+
+      await expect(tx)
+        .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
+        .withArgs(requests.length, admin.address, 1);
+    });
+
+    it("should revert with error if the hash of `requestsData` was not previously submitted in the VEB", async () => {
+      await expect(
+        oracle.triggerExits(
+          {
+            data: "0x0000030000000000000000000000005a894d712b61ee6d5da473f87d9c8175c4022fd05a8255b6713dc75388b099a85514ceca78a52b9122d09aecda9010c047",
+            dataFormat: reportFields.dataFormat,
+          },
+          [0],
+          ZERO_ADDRESS,
+          { value: 2 },
+        ),
+      ).to.be.revertedWithCustomError(oracle, "ExitHashNotSubmitted");
+    });
+
+    it("should revert with error if requested index out of range", async () => {
+      await expect(
+        oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [5], ZERO_ADDRESS, {
+          value: 2,
+        }),
+      )
+        .to.be.revertedWithCustomError(oracle, "ExitDataWasNotDelivered") // TODO: fix in code return "ExitDataIndexOutOfRange")
+        .withArgs(5, 3); // 4
+    });
+
+    it("should revert with an error if the key index array contains duplicates", async () => {
+      await expect(
+        oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [1, 2, 2], ZERO_ADDRESS, {
+          value: 2,
+        }),
+      ).to.be.revertedWithCustomError(oracle, "InvalidExitDataIndexSortOrder");
+    });
+
+    it("should revert with an error if the key index array is not strictly increasing", async () => {
+      await expect(
+        oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [1, 2, 2], ZERO_ADDRESS, {
+          value: 2,
+        }),
+      ).to.be.revertedWithCustomError(oracle, "InvalidExitDataIndexSortOrder");
+    });
+  });
+
+  // the only difference in this checks, is that it is possible to get DeliveryWasNotStarted error because of partial delivery
+  describe("Submit via trustfull method", () => {
+    const exitRequests = [
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+    ];
+
+    const exitRequest = {
       dataFormat: DATA_FORMAT_LIST,
       data: encodeExitRequestsDataList(exitRequests),
     };
 
-    reportHash = calcValidatorsExitBusReportDataHash(reportFields);
+    const exitRequestHash: string = hashExitRequest(exitRequest);
 
-    await triggerConsensusOnHash(reportHash);
+    it("Should store exit hash for authorized entity", async () => {
+      const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
+
+      await oracle.grantRole(role, authorizedEntity);
+
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
+
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
+    });
+
+    it("should revert if request was not started to deliver", async () => {
+      await expect(
+        oracle.triggerExits(
+          { data: exitRequest.data, dataFormat: exitRequest.dataFormat },
+          [0, 1, 2, 3],
+          ZERO_ADDRESS,
+          { value: 4 },
+        ),
+      ).to.be.revertedWithCustomError(oracle, "DeliveryWasNotStarted");
+    });
   });
-
-  it("some time passes", async () => {
-    await consensus.advanceTimeBy(SECONDS_PER_FRAME / 3n);
-  });
-
-  it("a committee member submits the report data, exit requests are emitted", async () => {
-    const tx = await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-
-    await expect(tx).to.emit(oracle, "ProcessingStarted").withArgs(reportFields.refSlot, reportHash);
-    expect((await oracle.getConsensusReport()).processingStarted).to.equal(true);
-
-    const timestamp = await oracle.getTime();
-
-    for (const request of exitRequests) {
-      await expect(tx)
-        .to.emit(oracle, "ValidatorExitRequest")
-        .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
-    }
-  });
-
-  it("should triggers exits for all validators in exit request", async () => {
-    const tx = await oracle.triggerExits(
-      { data: reportFields.data, dataFormat: reportFields.dataFormat },
-      [0, 1, 2, 3],
-      ZERO_ADDRESS,
-      { value: 4 },
-    );
-
-    const requests = createValidatorDataList(exitRequests);
-
-    await expect(tx)
-      .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
-      .withArgs(requests.length, admin.address, 1);
-  });
-
-  it("should triggers exits only for validators in selected request indexes", async () => {
-    const tx = await oracle.triggerExits(
-      { data: reportFields.data, dataFormat: reportFields.dataFormat },
-      [0, 1, 3],
-      ZERO_ADDRESS,
-      {
-        value: 10,
-      },
-    );
-
-    const requests = createValidatorDataList(exitRequests.filter((req, i) => [0, 1, 3].includes(i)));
-
-    await expect(tx)
-      .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
-      .withArgs(requests.length, admin.address, 1);
-  });
-
-  it("should revert with error if the hash of `requestsData` was not previously submitted in the VEB", async () => {
-    await expect(
-      oracle.triggerExits(
-        {
-          data: "0x0000030000000000000000000000005a894d712b61ee6d5da473f87d9c8175c4022fd05a8255b6713dc75388b099a85514ceca78a52b9122d09aecda9010c047",
-          dataFormat: reportFields.dataFormat,
-        },
-        [0],
-        ZERO_ADDRESS,
-        { value: 2 },
-      ),
-    ).to.be.revertedWithCustomError(oracle, "ExitHashNotSubmitted");
-  });
-
-  it("should revert with error if requested index out of range", async () => {
-    await expect(
-      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [5], ZERO_ADDRESS, {
-        value: 2,
-      }),
-    )
-      .to.be.revertedWithCustomError(oracle, "ExitDataWasNotDelivered") // TODO: fix in code return "ExitDataIndexOutOfRange")
-      .withArgs(5, 3); // 4
-  });
-
-  it("should revert with an error if the key index array contains duplicates", async () => {
-    await expect(
-      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [1, 2, 2], ZERO_ADDRESS, {
-        value: 2,
-      }),
-    ).to.be.revertedWithCustomError(oracle, "InvalidExitDataIndexSortOrder");
-  });
-
-  it("should revert with an error if the key index array is not strictly increasing", async () => {
-    await expect(
-      oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [1, 2, 2], ZERO_ADDRESS, {
-        value: 2,
-      }),
-    ).to.be.revertedWithCustomError(oracle, "InvalidExitDataIndexSortOrder");
-  });
-
-  // it("should revert id request was not started to deliver", async () => {
-  //   await expect(
-  //     oracle.triggerExits(
-  //       { data: reportFields.data, dataFormat: reportFields.dataFormat },
-  //       [0, 1, 2, 3],
-  //       ZERO_ADDRESS,
-  //       { value: 4 },
-  //     ),
-  //   ).to.be.revertedWithCustomError(oracle, "DeliveryWasNotStarted");
-  // });
 });
