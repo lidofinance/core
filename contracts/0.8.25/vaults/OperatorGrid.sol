@@ -4,9 +4,10 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {AccessControlConfirmableUpgradable} from "contracts/0.8.25/utils/AccessControlConfirmableUpgradable.sol";
+import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 
+import {Confirmable} from "contracts/0.8.25/utils/Confirmable.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultHub} from "./VaultHub.sol";
@@ -32,7 +33,7 @@ struct TierParams {
  * These parameters are determined by the Tier in which the Vault is registered.
  *
  */
-contract OperatorGrid is AccessControlConfirmableUpgradable {
+contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     /*
       Key concepts:
       1. Default Registration:
@@ -157,6 +158,7 @@ contract OperatorGrid is AccessControlConfirmableUpgradable {
         if (_admin == address(0)) revert ZeroArgument("_admin");
 
         __AccessControlEnumerable_init();
+        __Confirmations_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
         ERC7201Storage storage $ = _getStorage();
@@ -403,7 +405,8 @@ contract OperatorGrid is AccessControlConfirmableUpgradable {
         confirmers[0] = vaultOwner;
         confirmers[1] = nodeOperator;
 
-        if (!_checkConfirmations(confirmers)) return;
+        _setConfirmers(confirmers);
+        if (!_checkConfirmations(msg.data, confirmers.length)) return;
         if (_tierIdToConfirm == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
         ERC7201Storage storage $ = _getStorage();
