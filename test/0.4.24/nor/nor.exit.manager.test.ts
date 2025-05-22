@@ -57,11 +57,10 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
   const exitDeadlineThreshold = 86400n;
-  const reportingWindow = 86400n;
 
   const testPublicKey = "0x" + "0".repeat(48 * 2);
   const eligibleToExitInSec = 86400n; // 2 days
-  const proofSlotTimestamp = (1n << 256n) - 1n; // 2^256 - 1 max value for uint256
+  let proofSlotTimestamp = 0n;
   const withdrawalRequestPaidFee = 100000n;
   const exitType = 1n;
 
@@ -104,10 +103,10 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     locator = LidoLocator__factory.connect(await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy
-    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold, reportingWindow))
-      .to.emit(nor, "RewardDistributionStateChanged")
-      .withArgs(RewardDistributionState.Distributed);
-
+    const tx = nor.initialize(locator, moduleType, exitDeadlineThreshold);
+    await expect(tx).to.emit(nor, "RewardDistributionStateChanged").withArgs(RewardDistributionState.Distributed);
+    const txRes = await tx;
+    proofSlotTimestamp = BigInt((await txRes.getBlock())!.timestamp);
     // Add a node operator for testing
     expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.be.equal(
       firstNodeOperatorId,
@@ -176,7 +175,11 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     it("emits an event when called by sender with STAKING_ROUTER_ROLE", async () => {
       expect(await acl["hasPermission(address,address,bytes32)"](stakingRouter, nor, await nor.STAKING_ROUTER_ROLE()))
         .to.be.true;
-
+      console.log(
+        await nor.connect(stakingRouter).exitPenaltyCutoffTimestamp(),
+        proofSlotTimestamp,
+        eligibleToExitInSec,
+      );
       await expect(
         nor
           .connect(stakingRouter)
@@ -197,7 +200,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
   context("exitDeadlineThreshold", () => {
     it("returns the expected value", async () => {
-      const threshold = await nor.exitDeadlineThreshold();
+      const threshold = await nor.exitDeadlineThreshold(0);
       expect(threshold).to.equal(86400n);
     });
   });
@@ -234,7 +237,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
   context("exitPenaltyCutoffTimestamp", () => {
     const threshold = 86400n; // 1 day
-    // eslint-disable-next-line @typescript-eslint/no-shadow
+
     const reportingWindow = 3600n; // 1 hour
     // eslint-disable-next-line @typescript-eslint/no-shadow
     const eligibleToExitInSec = threshold + 100n;
@@ -290,8 +293,13 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
       await expect(
         nor
           .connect(stakingRouter)
-          .reportValidatorExitDelay(firstNodeOperatorId, cutoff - 1n, testPublicKey, eligibleToExitInSec),
-      ).to.be.revertedWith("EXIT_PENALTY_CUTOFF_NOT_REACHED");
+          .reportValidatorExitDelay(
+            firstNodeOperatorId,
+            cutoff - eligibleToExitInSec * 2n,
+            testPublicKey,
+            eligibleToExitInSec,
+          ),
+      ).to.be.revertedWith("TOO_LATE_FOR_EXIT_DELAY_REPORT");
     });
 
     it("emits event when reportValidatorExitDelay is called with _proofSlotTimestamp >= cutoff", async () => {

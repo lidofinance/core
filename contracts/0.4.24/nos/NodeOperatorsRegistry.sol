@@ -246,8 +246,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     function initialize(
         address _locator,
         bytes32 _type,
-        uint256 _exitDeadlineThresholdInSeconds,
-        uint256 _reportingWindowThresholdInSeconds
+        uint256 _exitDeadlineThresholdInSeconds
     ) public onlyInit {
         // Initializations for v1 --> v2
         _initialize_v2(_locator, _type);
@@ -256,7 +255,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _initialize_v3();
 
         // Initializations for v3 --> v4
-        _initialize_v4(_exitDeadlineThresholdInSeconds, _reportingWindowThresholdInSeconds);
+        _initialize_v4(_exitDeadlineThresholdInSeconds);
 
         initialized();
     }
@@ -280,13 +279,11 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _updateRewardDistributionState(RewardDistributionState.Distributed);
     }
 
-    function _initialize_v4(
-        uint256 _exitDeadlineThresholdInSeconds,
-        uint256 _reportingWindowThresholdInSeconds
-    ) internal {
+    function _initialize_v4(uint256 _exitDeadlineThresholdInSeconds) internal {
         _setContractVersion(4);
-
-        _setExitDeadlineThreshold(_exitDeadlineThresholdInSeconds, _reportingWindowThresholdInSeconds);
+        /// @dev The reportingWindowThreshold is set to 0 because it is not required during cold start.
+        ///      This parameter is only relevant when changing _exitDeadlineThresholdInSeconds in future upgrades.
+        _setExitDeadlineThreshold(_exitDeadlineThresholdInSeconds, 0);
     }
 
     /// @notice A function to finalize upgrade to v2 (from v1). Can be called only once.
@@ -300,14 +297,10 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     /// @notice Finalizes upgrade to version 4 by initializing new exit-related parameters.
     /// @param _exitDeadlineThresholdInSeconds Exit deadline threshold in seconds for validator exits.
-    /// @param _reportingWindowInSeconds Threshold in seconds for bot report.
-    function finalizeUpgrade_v4(
-        uint256 _exitDeadlineThresholdInSeconds,
-        uint256 _reportingWindowInSeconds
-    ) external {
+    function finalizeUpgrade_v4(uint256 _exitDeadlineThresholdInSeconds) external {
         require(hasInitialized(), "CONTRACT_NOT_INITIALIZED");
         _checkContractVersion(3);
-        _initialize_v4(_exitDeadlineThresholdInSeconds, _reportingWindowInSeconds);
+        _initialize_v4(_exitDeadlineThresholdInSeconds);
     }
 
     /// @notice Add node operator named `name` with reward address `rewardAddress` and staking limit = 0 validators
@@ -1184,7 +1177,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
         // Check if exit delay exceeds the threshold
         require(_eligibleToExitInSec >= _exitDeadlineThreshold(), "EXIT_DELAY_BELOW_THRESHOLD");
-        require(_proofSlotTimestamp + _eligibleToExitInSec >= exitPenaltyCutoffTimestamp(), "EXIT_PENALTY_CUTOFF_NOT_REACHED");
+        require(_proofSlotTimestamp + _eligibleToExitInSec >= exitPenaltyCutoffTimestamp(), "TOO_LATE_FOR_EXIT_DELAY_REPORT");
 
         _markValidatorExitingKeyAsReported(_publicKey);
 
