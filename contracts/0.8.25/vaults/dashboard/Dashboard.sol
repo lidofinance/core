@@ -179,7 +179,7 @@ contract Dashboard is NodeOperatorFee {
      * can return a value greater than the actual balance of the StakingVault.
      */
     function unreserved() public view returns (uint256) {
-        uint256 reserved = locked() + nodeOperatorUnclaimedFee();
+        uint256 reserved = locked() + nodeOperatorDisburseableFee();
         uint256 totalValue_ = totalValue();
 
         return reserved > totalValue_ ? 0 : totalValue_ - reserved;
@@ -213,11 +213,10 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Disconnects the staking vault from the vault hub.
-     * VaultHub stores data for calculating the node operator fee, so the fees should be claimed first.
+     * VaultHub stores data for calculating the node operator fee, so the fee is disbursed first.
      */
     function voluntaryDisconnect() external {
-        uint256 fee = nodeOperatorUnclaimedFee();
-        if (fee > 0) _disburseNodeOperatorFee(fee);
+        disburseNodeOperatorFee();
 
         _voluntaryDisconnect();
     }
@@ -524,7 +523,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The amount of ether in wei that can be used to mint shares.
      */
     function _mintableValue() internal view returns (uint256) {
-        return VAULT_HUB.totalValue(address(_stakingVault())) - nodeOperatorUnclaimedFee();
+        return VAULT_HUB.totalValue(address(_stakingVault())) - nodeOperatorDisburseableFee();
     }
 
     /**
