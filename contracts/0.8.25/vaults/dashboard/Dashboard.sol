@@ -182,7 +182,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _etherToFund the amount of ether to be funded, can be zero
      * @return the number of shares that can be minted using additional ether
      */
-    function remainingMintingCapacity(uint256 _etherToFund) external view returns (uint256) {
+    function remainingMintingCapacityShares(uint256 _etherToFund) external view returns (uint256) {
         uint256 totalShares = _totalMintingCapacityShares(_etherToFund);
         uint256 liabilityShares_ = VAULT_HUB.liabilityShares(address(_stakingVault()));
 
