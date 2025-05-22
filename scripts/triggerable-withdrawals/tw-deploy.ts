@@ -116,9 +116,9 @@ async function main() {
 
   const triggerableWithdrawalsGateway = await deployImplementation(
     Sk.triggerableWithdrawalsGateway,
-    "triggerableWithdrawalsGateway",
+    "TriggerableWithdrawalsGateway",
     deployer,
-    [deployer, locator.address],
+    [deployer, locator.address, 13000, 1, 48],
   );
   log.success(`TriggerableWithdrawalsGateway implementation address: ${triggerableWithdrawalsGateway.address}`);
   log.emptyLine();
