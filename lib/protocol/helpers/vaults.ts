@@ -1,20 +1,40 @@
 import { expect } from "chai";
-import { BytesLike, ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
+import { BytesLike, ContractTransactionReceipt, ContractTransactionResponse, hexlify } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 
-import { Dashboard, Permissions, PinnedBeaconProxy, StakingVault, VaultFactory } from "typechain-types";
+import {
+  Dashboard,
+  Permissions,
+  PinnedBeaconProxy,
+  PredepositGuarantee,
+  StakingVault,
+  VaultFactory,
+} from "typechain-types";
 
-import { days, findEventsWithInterfaces, getCurrentBlockTimestamp, impersonate } from "lib";
+import {
+  computeDepositDataRoot,
+  days,
+  de0x,
+  findEventsWithInterfaces,
+  generatePostDeposit,
+  generatePredeposit,
+  getCurrentBlockTimestamp,
+  impersonate,
+  prepareLocalMerkleTree,
+  Validator,
+} from "lib";
 
+import { BLS12_381 } from "../../../typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
+import { StakingVaultDepositStruct } from "../../../typechain-types/contracts/0.8.25/vaults/StakingVault";
 import { ether } from "../../units";
-import { ProtocolContext } from "../types";
+import { LoadedContract, ProtocolContext } from "../types";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
-const VAULT_CONNECTION_DEPOSIT = ether("1");
+export const VAULT_CONNECTION_DEPOSIT = ether("1");
 
 export type VaultRoles = {
   assetRecoverer: HardhatEthersSigner;
@@ -57,8 +77,9 @@ export interface VaultWithDashboard {
  * @param ctx Protocol context for event handling and contract interaction
  * @param stakingVaultFactory Factory contract used to create the vault
  * @param owner Address that will be set as the owner/admin of the vault
+ * @param nodeOperator Address of the node operator
  * @param nodeOperatorManager Address of the node operator manager contract
- * @param rolesOverrides Optional object to override default randomly generated role addresses
+ * @param roleAssignments Optional object to override default randomly generated role addresses
  * @param fee Node operator fee in basis points (default: 3% = 300 basis points)
  * @param confirmExpiry Time period for confirmation expiry (default: 7 days)
  * @returns Object containing the created StakingVault, Dashboard contract, and role addresses
@@ -190,43 +211,79 @@ export async function lockConnectionDeposit(ctx: ProtocolContext, dashboard: Das
   await stakingVault.connect(dashboardSigner).lock(ether("1"));
 }
 
-export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: StakingVault) {
+/**
+ * Generates fees to claim for the vault
+ * @param ctx Protocol context for contract interaction
+ * @param stakingVault Staking vault instance
+ * @param amount Amount of fees to claim
+ */
+export async function generateFeesToClaim(ctx: ProtocolContext, stakingVault: StakingVault, amount: bigint) {
   const { vaultHub } = ctx.contracts;
   const hubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-  const rewards = ether("1");
-  await stakingVault.connect(hubSigner).report(await getCurrentBlockTimestamp(), rewards, 0n, 0n);
+  await stakingVault.connect(hubSigner).report(await getCurrentBlockTimestamp(), amount, 0n, 0n);
 }
 
 // address, totalValue, inOutDelta, treasuryFees, liabilityShares
 export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
 
 export function createVaultsReportTree(vaults: VaultReportItem[]) {
-  const tree = StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256", "uint256"]);
-  return tree;
+  return StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256", "uint256"]);
 }
 
-export async function reportVaultDataWithProof(stakingVault: StakingVault) {
+export async function reportVaultDataWithProof(
+  stakingVault: StakingVault,
+  totalValue: bigint | null = null,
+  inOutDelta: bigint | null = null,
+) {
   const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
   const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
-  const vaultReport: VaultReportItem = [
-    await stakingVault.getAddress(),
-    await stakingVault.totalValue(),
-    await stakingVault.inOutDelta(),
-    0n,
-    0n,
-  ];
+  const totalValueArg = totalValue ?? (await stakingVault.totalValue());
+  const inOutDeltaArg = inOutDelta ?? (await stakingVault.inOutDelta());
+  const vaultReport: VaultReportItem = [await stakingVault.getAddress(), totalValueArg, inOutDeltaArg, 0n, 0n];
   const reportTree = createVaultsReportTree([vaultReport]);
 
   const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
   await vaultHub.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
   await vaultHub.updateVaultData(
     await stakingVault.getAddress(),
-    await stakingVault.totalValue(),
-    await stakingVault.inOutDelta(),
+    totalValueArg,
+    inOutDeltaArg,
     0n,
     0n,
     reportTree.getProof(0),
   );
+}
+
+export async function reportVaultWithoutProof(stakingVault: StakingVault) {
+  const reportTimestamp = await getCurrentBlockTimestamp();
+  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
+  const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
+  const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+  const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
+  await vaultHub.connect(accountingSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
+  await stakingVault
+    .connect(vaultHubSigner)
+    .report(
+      reportTimestamp,
+      await stakingVault.totalValue(),
+      await stakingVault.inOutDelta(),
+      await stakingVault.locked(),
+    );
+}
+
+export async function reportVaultWithMockedVaultHub(stakingVault: StakingVault) {
+  const reportTimestamp = await getCurrentBlockTimestamp();
+  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
+  const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+  await vaultHub.updateReportData(reportTimestamp, ethers.ZeroHash, "");
+  await stakingVault
+    .connect(vaultHubSigner)
+    .report(
+      reportTimestamp,
+      await stakingVault.totalValue(),
+      await stakingVault.inOutDelta(),
+      await stakingVault.locked(),
+    );
 }
 
 interface CreateVaultResponse {
@@ -286,3 +343,73 @@ export async function createVaultProxy(
     dashboard,
   };
 }
+
+export const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
+  const pubkeys = Array.from({ length: num }, (_, i) => {
+    const paddedIndex = (i + 1).toString().padStart(8, "0");
+    return `0x${paddedIndex.repeat(12)}`;
+  });
+
+  return {
+    pubkeys,
+    stringified: `0x${pubkeys.map(de0x).join("")}`,
+  };
+};
+
+export const generatePredepositData = async (
+  predepositGuarantee: LoadedContract<PredepositGuarantee>,
+  dashboard: Dashboard,
+  roles: VaultRoles,
+  nodeOperator: HardhatEthersSigner,
+  validator: Validator,
+): Promise<{
+  deposit: StakingVaultDepositStruct;
+  depositY: BLS12_381.DepositYStruct;
+}> => {
+  // Pre-requisite: fund the vault to have enough balance to start a validator
+  await dashboard.connect(roles.funder).fund({ value: ether("32") });
+
+  // Step 1: Top up the node operator balance
+  await predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, {
+    value: ether("1"),
+  });
+
+  // Step 2: Predeposit a validator
+  return await generatePredeposit(validator, {
+    depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
+  });
+};
+
+export const getProofAndDepositData = async (
+  predepositGuarantee: LoadedContract<PredepositGuarantee>,
+  validator: Validator,
+  withdrawalCredentials: string,
+) => {
+  // Step 3: Prove and deposit the validator
+  const pivot_slot = await predepositGuarantee.PIVOT_SLOT();
+
+  const mockCLtree = await prepareLocalMerkleTree(await predepositGuarantee.GI_FIRST_VALIDATOR_PREV());
+  const { validatorIndex } = await mockCLtree.addValidator(validator.container);
+  const { childBlockTimestamp, beaconBlockHeader } = await mockCLtree.commitChangesToBeaconRoot(
+    Number(pivot_slot) + 100,
+  );
+  const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
+
+  const postdeposit = generatePostDeposit(validator.container);
+  const pubkey = hexlify(validator.container.pubkey);
+  const signature = hexlify(postdeposit.signature);
+
+  postdeposit.depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, ether("31"));
+
+  const witnesses = [
+    {
+      proof,
+      pubkey,
+      validatorIndex,
+      childBlockTimestamp,
+      slot: beaconBlockHeader.slot,
+      proposerIndex: beaconBlockHeader.proposerIndex,
+    },
+  ];
+  return { witnesses, postdeposit };
+};

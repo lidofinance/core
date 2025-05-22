@@ -83,7 +83,7 @@ export async function main() {
     ens = await loadContract<ENS>("ENS", ensAddress);
     state = updateObjectInState(Sk.ens, {
       address: ensAddress,
-      constructorArgs: [deployer],
+      constructorArgs: [],
       contract: ens.contractPath,
     });
   }
@@ -147,7 +147,9 @@ export async function main() {
   if (state[Sk.miniMeTokenFactory].address) {
     log(`Using pre-deployed MiniMeTokenFactory: ${cy(state[Sk.miniMeTokenFactory].address)}`);
   } else {
-    await deployWithoutProxy(Sk.miniMeTokenFactory, "MiniMeTokenFactory", deployer);
+    await deployWithoutProxy(Sk.miniMeTokenFactory, "MiniMeTokenFactory", deployer, [], "address", true, {
+      contractName: "MiniMeTokenFactory",
+    });
   }
 
   // Deploy or load AragonID

@@ -517,9 +517,10 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Requests a change of tier on the OperatorGrid.
      * @param _tierId The tier to change to.
+     * @param _requestedShareLimit The requested share limit.
      */
-    function requestTierChange(uint256 _tierId) external {
-        _requestTierChange(_tierId);
+    function requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) external {
+        _requestTierChange(_tierId, _requestedShareLimit);
     }
 
     // ==================== Internal Functions ====================

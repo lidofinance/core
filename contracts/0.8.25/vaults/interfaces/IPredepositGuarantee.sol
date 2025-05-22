@@ -18,12 +18,16 @@ interface IPredepositGuarantee {
      * @custom:pubkey of validator to prove
      * @custom:validatorIndex of validator in CL state tree
      * @custom:childBlockTimestamp of EL block that has parent block beacon root in BEACON_ROOTS contract
+     * @custom:slot of the beacon block for which the proof is generated
+     * @custom:proposerIndex of the beacon block for which the proof is generated
      */
     struct ValidatorWitness {
         bytes32[] proof;
         bytes pubkey;
         uint256 validatorIndex;
         uint64 childBlockTimestamp;
+        uint64 slot;
+        uint64 proposerIndex;
     }
 
     function compensateDisprovenPredeposit(
