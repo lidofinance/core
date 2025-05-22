@@ -17,12 +17,16 @@ import { deployEIP7002WithdrawalRequestContract, EIP7002_ADDRESS, MAX_UINT256, p
 
 import { Snapshot } from "test/suite";
 
+import { advanceChainTime, getCurrentBlockTimestamp } from "../../../lib/time";
+
 import { encodeEIP7002Payload, findEIP7002MockEvents, testEIP7002Mock } from "./eip7002Mock";
 import { generateWithdrawalRequestPayload } from "./utils";
 
 const PETRIFIED_VERSION = MAX_UINT256;
 
 const ADD_WITHDRAWAL_REQUEST_ROLE = streccak("ADD_WITHDRAWAL_REQUEST_ROLE");
+const PAUSE_ROLE = streccak("PAUSE_ROLE");
+const RESUME_ROLE = streccak("RESUME_ROLE");
 
 describe("WithdrawalVault.sol", () => {
   let owner: HardhatEthersSigner;
@@ -603,6 +607,342 @@ describe("WithdrawalVault.sol", () => {
           vebInitialBalance -
             expectedTotalWithdrawalFee -
             receiptPartialWithdrawal.gasUsed * receiptPartialWithdrawal.gasPrice,
+        );
+      });
+    });
+  });
+
+  context("pausable until", () => {
+    beforeEach(async () => {
+      // Initialize the vault and set up necessary roles
+      await vault.initialize(owner);
+      await vault.connect(owner).grantRole(ADD_WITHDRAWAL_REQUEST_ROLE, validatorsExitBus);
+      await vault.connect(owner).grantRole(PAUSE_ROLE, owner);
+      await vault.connect(owner).grantRole(RESUME_ROLE, owner);
+    });
+
+    context("resume", () => {
+      it("should revert if the sender does not have the RESUME_ROLE", async () => {
+        // First pause the contract
+        await vault.connect(owner).pauseFor(1000n);
+
+        // Try to resume without the RESUME_ROLE
+        await expect(vault.connect(stranger).resume()).to.be.revertedWithOZAccessControlError(
+          stranger.address,
+          RESUME_ROLE,
+        );
+      });
+
+      it("should revert if the contract is not paused", async () => {
+        // Contract is initially not paused
+        await expect(vault.connect(owner).resume()).to.be.revertedWithCustomError(vault, "PausedExpected");
+      });
+
+      it("should resume the contract when paused and emit Resumed event", async () => {
+        // First pause the contract
+        await vault.connect(owner).pauseFor(1000n);
+        expect(await vault.isPaused()).to.equal(true);
+
+        // Resume the contract
+        await expect(vault.connect(owner).resume()).to.emit(vault, "Resumed");
+
+        // Verify contract is resumed
+        expect(await vault.isPaused()).to.equal(false);
+      });
+
+      it("should allow withdrawal requests after resuming", async () => {
+        const requestCount = 1;
+        const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // First pause and then resume the contract
+        await vault.connect(owner).pauseFor(1000n);
+        await vault.connect(owner).resume();
+
+        // Should be able to add withdrawal requests
+        await testEIP7002Mock(
+          () =>
+            vault
+              .connect(validatorsExitBus)
+              .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: expectedFee }),
+          pubkeys,
+          mixedWithdrawalAmounts,
+          expectedFee,
+        );
+      });
+    });
+
+    context("pauseFor", () => {
+      it("should revert if the sender does not have the PAUSE_ROLE", async () => {
+        await expect(vault.connect(stranger).pauseFor(1000n)).to.be.revertedWithOZAccessControlError(
+          stranger.address,
+          PAUSE_ROLE,
+        );
+      });
+
+      it("should revert if the contract is already paused", async () => {
+        // First pause the contract
+        await vault.connect(owner).pauseFor(1000n);
+
+        // Try to pause again
+        await expect(vault.connect(owner).pauseFor(500n)).to.be.revertedWithCustomError(vault, "ResumedExpected");
+      });
+
+      it("should revert if pause duration is zero", async () => {
+        await expect(vault.connect(owner).pauseFor(0n)).to.be.revertedWithCustomError(vault, "ZeroPauseDuration");
+      });
+
+      it("should pause the contract for the specified duration and emit Paused event", async () => {
+        await expect(vault.connect(owner).pauseFor(1000n)).to.emit(vault, "Paused").withArgs(1000n);
+
+        expect(await vault.isPaused()).to.equal(true);
+      });
+
+      it("should pause the contract indefinitely with PAUSE_INFINITELY", async () => {
+        const pauseInfinitely = await vault.PAUSE_INFINITELY();
+
+        // Pause the contract indefinitely
+        await expect(vault.connect(owner).pauseFor(pauseInfinitely)).to.emit(vault, "Paused").withArgs(pauseInfinitely);
+
+        // Verify contract is paused
+        expect(await vault.isPaused()).to.equal(true);
+
+        // Advance time significantly
+        await advanceChainTime(1_000_000_000n);
+
+        // Contract should still be paused
+        expect(await vault.isPaused()).to.equal(true);
+      });
+
+      it("should automatically resume after the pause duration passes", async () => {
+        // Pause the contract for 100 seconds
+        await vault.connect(owner).pauseFor(100n);
+        expect(await vault.isPaused()).to.equal(true);
+
+        // Advance time by 101 seconds
+        await advanceChainTime(101n);
+
+        // Contract should be automatically resumed
+        expect(await vault.isPaused()).to.equal(false);
+      });
+
+      it("should prevent withdrawal requests while paused", async () => {
+        const requestCount = 1;
+        const { pubkeysHexString, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Pause the contract
+        await vault.connect(owner).pauseFor(1000n);
+
+        // Try to add withdrawal request while paused
+        await expect(
+          vault
+            .connect(validatorsExitBus)
+            .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: expectedFee }),
+        ).to.be.revertedWithCustomError(vault, "ResumedExpected");
+      });
+    });
+
+    context("pauseUntil", () => {
+      it("should revert if the sender does not have the PAUSE_ROLE", async () => {
+        const timestamp = await getCurrentBlockTimestamp();
+        await expect(vault.connect(stranger).pauseUntil(timestamp + 1000n)).to.be.revertedWithOZAccessControlError(
+          stranger.address,
+          PAUSE_ROLE,
+        );
+      });
+
+      it("should revert if the contract is already paused", async () => {
+        const timestamp = await getCurrentBlockTimestamp();
+
+        // First pause the contract
+        await vault.connect(owner).pauseFor(1000n);
+
+        // Try to pause again with pauseUntil
+        await expect(vault.connect(owner).pauseUntil(timestamp + 500n)).to.be.revertedWithCustomError(
+          vault,
+          "ResumedExpected",
+        );
+      });
+
+      it("should revert if timestamp is in the past", async () => {
+        const timestamp = await getCurrentBlockTimestamp();
+
+        // Try to pause until a past timestamp
+        await expect(vault.connect(owner).pauseUntil(timestamp - 100n)).to.be.revertedWithCustomError(
+          vault,
+          "PauseUntilMustBeInFuture",
+        );
+      });
+
+      it("should pause the contract until the specified timestamp and emit Paused event", async () => {
+        const timestamp = await getCurrentBlockTimestamp();
+
+        // Pause the contract until timestamp + 1000
+        await expect(vault.connect(owner).pauseUntil(timestamp + 1000n)).to.emit(vault, "Paused");
+
+        // Verify contract is paused
+        expect(await vault.isPaused()).to.equal(true);
+      });
+
+      it("should pause the contract indefinitely with PAUSE_INFINITELY", async () => {
+        const pauseInfinitely = await vault.PAUSE_INFINITELY();
+
+        // Pause the contract indefinitely
+        await expect(vault.connect(owner).pauseUntil(pauseInfinitely)).to.emit(vault, "Paused");
+
+        // Verify contract is paused
+        expect(await vault.isPaused()).to.equal(true);
+
+        // Advance time significantly
+        await advanceChainTime(100000n);
+
+        // Contract should still be paused
+        expect(await vault.isPaused()).to.equal(true);
+      });
+
+      it("should automatically resume after the pause timestamp passes", async () => {
+        const timestamp = await getCurrentBlockTimestamp();
+
+        // Pause the contract until timestamp + 100
+        await vault.connect(owner).pauseUntil(timestamp + 100n);
+        expect(await vault.isPaused()).to.equal(true);
+
+        // Advance time by 101 seconds
+        await advanceChainTime(101n);
+
+        // Contract should be automatically resumed
+        expect(await vault.isPaused()).to.equal(false);
+      });
+    });
+
+    context("Interaction with addWithdrawalRequests", () => {
+      it("pauseFor: should prevent withdrawal requests immediately after pausing", async () => {
+        const requestCount = 1;
+        const { pubkeysHexString, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Initially contract should be resumed
+        expect(await vault.isPaused()).to.equal(false);
+
+        // Pause the contract
+        await vault.connect(owner).pauseFor(1000n);
+
+        // Attempt to add withdrawal request should fail
+        await expect(
+          vault
+            .connect(validatorsExitBus)
+            .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: expectedFee }),
+        ).to.be.revertedWithCustomError(vault, "ResumedExpected");
+      });
+
+      it("pauseUntil: should prevent withdrawal requests immediately after pausing", async () => {
+        const requestCount = 1;
+        const { pubkeysHexString, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Initially contract should be resumed
+        expect(await vault.isPaused()).to.equal(false);
+
+        // Pause the contract
+        const timestamp = await getCurrentBlockTimestamp();
+        await vault.connect(owner).pauseUntil(timestamp + 100n);
+
+        // Attempt to add withdrawal request should fail
+        await expect(
+          vault
+            .connect(validatorsExitBus)
+            .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: expectedFee }),
+        ).to.be.revertedWithCustomError(vault, "ResumedExpected");
+      });
+
+      it("pauseFor: should allow withdrawal requests immediately after resuming", async () => {
+        const requestCount = 1;
+        const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Pause and then resume the contract
+        await vault.connect(owner).pauseFor(1000n);
+        await vault.connect(owner).resume();
+
+        // Should be able to add withdrawal requests immediately
+        await testEIP7002Mock(
+          () =>
+            vault
+              .connect(validatorsExitBus)
+              .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: expectedFee }),
+          pubkeys,
+          mixedWithdrawalAmounts,
+          expectedFee,
+        );
+      });
+
+      it("pauseUntil: should allow withdrawal requests immediately after resuming", async () => {
+        const requestCount = 1;
+        const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Pause and then resume the contract
+        const timestamp = await getCurrentBlockTimestamp();
+        await vault.connect(owner).pauseUntil(timestamp + 100n);
+        await vault.connect(owner).resume();
+
+        // Should be able to add withdrawal requests immediately
+        await testEIP7002Mock(
+          () =>
+            vault
+              .connect(validatorsExitBus)
+              .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: expectedFee }),
+          pubkeys,
+          mixedWithdrawalAmounts,
+          expectedFee,
+        );
+      });
+
+      it("pauseFor: should allow withdrawal requests after pause duration automatically expires", async () => {
+        const requestCount = 1;
+        const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Pause for 100 seconds
+        await vault.connect(owner).pauseFor(100n);
+
+        // Advance time by 101 seconds
+        await advanceChainTime(101n);
+
+        // Should be able to add withdrawal requests after pause expires
+        await testEIP7002Mock(
+          () =>
+            vault
+              .connect(validatorsExitBus)
+              .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: expectedFee }),
+          pubkeys,
+          mixedWithdrawalAmounts,
+          expectedFee,
+        );
+      });
+
+      it("pauseUntil: should allow withdrawal requests after pause duration automatically expires", async () => {
+        const requestCount = 1;
+        const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Pause for 100 seconds
+        const timestamp = await getCurrentBlockTimestamp();
+        await vault.connect(owner).pauseUntil(timestamp + 100n);
+
+        // Advance time by 101 seconds
+        await advanceChainTime(101n);
+
+        // Should be able to add withdrawal requests after pause expires
+        await testEIP7002Mock(
+          () =>
+            vault
+              .connect(validatorsExitBus)
+              .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: expectedFee }),
+          pubkeys,
+          mixedWithdrawalAmounts,
+          expectedFee,
         );
       });
     });
