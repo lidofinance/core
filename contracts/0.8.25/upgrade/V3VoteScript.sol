@@ -6,7 +6,7 @@ import {IBurner} from "contracts/common/interfaces/IBurner.sol";
 import {OmnibusBase} from "./OmnibusBase.sol";
 import {IOssifiableProxy} from "./interfaces/IOssifiableProxy.sol";
 import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
-import {V3Addresses} from "./V3Addresses.sol";
+import {V3Template} from "./V3Template.sol";
 
 interface IRepo {
     function newVersion(uint16[3] calldata _newSemanticVersion, address _contractAddress, bytes calldata _contentURI) external;
@@ -21,17 +21,11 @@ interface IStakingRouter {
     function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
 }
 
-interface ITemplateV3 {
-    function startUpgrade() external;
-    function finishUpgrade() external;
-}
-
 /// @title V3VoteScript
 /// @notice Script for upgrading Lido protocol components
 contract V3VoteScript is OmnibusBase {
 
     struct ScriptParams {
-        address v3UpgradeAddresses;
         address upgradeTemplate;
         uint16[3] lidoAppNewVersion;
         bytes32 lidoAppId;
@@ -47,7 +41,7 @@ contract V3VoteScript is OmnibusBase {
     //
     // Immutables
     //
-    V3Addresses public immutable ADDRESSES;
+    V3Template public immutable TEMPLATE;
 
     //
     // Structured storage
@@ -56,8 +50,8 @@ contract V3VoteScript is OmnibusBase {
 
     constructor(
         ScriptParams memory _params
-    ) OmnibusBase(V3Addresses(_params.v3UpgradeAddresses).VOTING()) {
-        ADDRESSES = V3Addresses(_params.v3UpgradeAddresses);
+    ) OmnibusBase(V3Template(_params.upgradeTemplate).VOTING()) {
+        TEMPLATE = V3Template(_params.upgradeTemplate);
 
         params = _params;
     }
@@ -69,19 +63,19 @@ contract V3VoteScript is OmnibusBase {
         // Start the upgrade process
         voteItems[index++] = VoteItem({
             description: "1. Call UpgradeTemplateV3.startUpgrade",
-            call: _forwardCall(ADDRESSES.AGENT(), address(params.upgradeTemplate), abi.encodeCall(ITemplateV3.startUpgrade, ()))
+            call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.startUpgrade, ()))
         });
 
         // Upgrade LidoLocator implementation
         voteItems[index++] = VoteItem({
             description: "2. Upgrade LidoLocator implementation",
-            call: _forwardCall(ADDRESSES.AGENT(), ADDRESSES.LOCATOR(), abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (ADDRESSES.NEW_LOCATOR_IMPLEMENTATION())))
+            call: _forwardCall(TEMPLATE.AGENT(), TEMPLATE.LOCATOR(), abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (TEMPLATE.NEW_LOCATOR_IMPLEMENTATION())))
         });
 
         // Update Lido version in Lido App Repo
         voteItems[index++] = VoteItem({
             description: "3. Update Lido version in Lido App Repo",
-            call: _votingCall(ADDRESSES.ARAGON_APP_LIDO_REPO(), abi.encodeCall(IRepo.newVersion, (
+            call: _votingCall(TEMPLATE.ARAGON_APP_LIDO_REPO(), abi.encodeCall(IRepo.newVersion, (
                     params.lidoAppNewVersion,
                     params.newLidoImpl,
                     "0x"
@@ -92,19 +86,19 @@ contract V3VoteScript is OmnibusBase {
         voteItems[index++] = VoteItem({
             description: "4. Set Lido implementation in Kernel",
             call: _votingCall(
-                ADDRESSES.KERNEL(),
-                abi.encodeCall(IKernel.setApp, (IKernel(ADDRESSES.KERNEL()).APP_BASES_NAMESPACE(), params.lidoAppId, params.newLidoImpl))
+                TEMPLATE.KERNEL(),
+                abi.encodeCall(IKernel.setApp, (IKernel(TEMPLATE.KERNEL()).APP_BASES_NAMESPACE(), params.lidoAppId, params.newLidoImpl))
             )
         });
 
         // Revoke REQUEST_BURN_SHARES_ROLE from Lido
-        bytes32 requestBurnSharesRole = IBurner(ADDRESSES.OLD_BURNER()).REQUEST_BURN_SHARES_ROLE();
+        bytes32 requestBurnSharesRole = IBurner(TEMPLATE.OLD_BURNER()).REQUEST_BURN_SHARES_ROLE();
         voteItems[index++] = VoteItem({
             description: "5. Revoke REQUEST_BURN_SHARES_ROLE from Lido",
             call: _forwardCall(
-                ADDRESSES.AGENT(),
-                ADDRESSES.OLD_BURNER(),
-                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, ADDRESSES.LIDO()))
+                TEMPLATE.AGENT(),
+                TEMPLATE.OLD_BURNER(),
+                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, TEMPLATE.LIDO()))
             )
         });
 
@@ -112,9 +106,9 @@ contract V3VoteScript is OmnibusBase {
         voteItems[index++] = VoteItem({
             description: "6. Revoke REQUEST_BURN_SHARES_ROLE from Curated staking module",
             call: _forwardCall(
-                ADDRESSES.AGENT(),
-                ADDRESSES.OLD_BURNER(),
-                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, ADDRESSES.NODE_OPERATORS_REGISTRY()))
+                TEMPLATE.AGENT(),
+                TEMPLATE.OLD_BURNER(),
+                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, TEMPLATE.NODE_OPERATORS_REGISTRY()))
             )
         });
 
@@ -122,9 +116,9 @@ contract V3VoteScript is OmnibusBase {
         voteItems[index++] = VoteItem({
             description: "7. Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT",
             call: _forwardCall(
-                ADDRESSES.AGENT(),
-                ADDRESSES.OLD_BURNER(),
-                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, ADDRESSES.SIMPLE_DVT()))
+                TEMPLATE.AGENT(),
+                TEMPLATE.OLD_BURNER(),
+                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, TEMPLATE.SIMPLE_DVT()))
             )
         });
 
@@ -132,9 +126,9 @@ contract V3VoteScript is OmnibusBase {
         voteItems[index++] = VoteItem({
             description: "8. Revoke REQUEST_BURN_SHARES_ROLE from Community Staking Accounting",
             call: _forwardCall(
-                ADDRESSES.AGENT(),
-                ADDRESSES.OLD_BURNER(),
-                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, ADDRESSES.CSM_ACCOUNTING()))
+                TEMPLATE.AGENT(),
+                TEMPLATE.OLD_BURNER(),
+                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, TEMPLATE.CSM_ACCOUNTING()))
             )
         });
 
@@ -142,27 +136,27 @@ contract V3VoteScript is OmnibusBase {
         voteItems[index++] = VoteItem({
             description: "9. Upgrade AccountingOracle implementation",
             call: _forwardCall(
-                ADDRESSES.AGENT(),
-                ADDRESSES.ACCOUNTING_ORACLE(),
+                TEMPLATE.AGENT(),
+                TEMPLATE.ACCOUNTING_ORACLE(),
                 abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (params.newAccountingOracleImpl))
             )
         });
 
         // Grant REPORT_REWARDS_MINTED_ROLE to Accounting
-        bytes32 reportRewardsMintedRole = IStakingRouter(ADDRESSES.STAKING_ROUTER()).REPORT_REWARDS_MINTED_ROLE();
+        bytes32 reportRewardsMintedRole = IStakingRouter(TEMPLATE.STAKING_ROUTER()).REPORT_REWARDS_MINTED_ROLE();
         voteItems[index++] = VoteItem({
             description: "10. Grant REPORT_REWARDS_MINTED_ROLE to Accounting",
             call: _forwardCall(
-                ADDRESSES.AGENT(),
-                ADDRESSES.STAKING_ROUTER(),
-                abi.encodeCall(IAccessControl.grantRole, (reportRewardsMintedRole, ADDRESSES.ACCOUNTING()))
+                TEMPLATE.AGENT(),
+                TEMPLATE.STAKING_ROUTER(),
+                abi.encodeCall(IAccessControl.grantRole, (reportRewardsMintedRole, TEMPLATE.ACCOUNTING()))
             )
         });
 
         // Finish the upgrade process
         voteItems[index++] = VoteItem({
             description: "11. Call UpgradeTemplateV3.finishUpgrade",
-            call: _forwardCall(ADDRESSES.AGENT(), address(params.upgradeTemplate), abi.encodeCall(ITemplateV3.finishUpgrade, ()))
+            call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
         });
 
         assert(index == VOTE_ITEMS_COUNT);
