@@ -22,7 +22,6 @@ describe("Integration: Upgrade Template V3 tests", () => {
   let originalSnapshot: string;
   let template: V3Template;
   let deployer: HardhatEthersSigner;
-  let votingSigner: HardhatEthersSigner;
   let agentSigner: HardhatEthersSigner;
 
   before(async () => {
@@ -41,7 +40,6 @@ describe("Integration: Upgrade Template V3 tests", () => {
 
     ctx = await getProtocolContext(true);
 
-    votingSigner = await ctx.getSigner("voting");
     agentSigner = await ctx.getSigner("agent");
   });
 
@@ -71,7 +69,7 @@ describe("Integration: Upgrade Template V3 tests", () => {
 
   it_("should revert when startUpgrade is called after expiration", async function () {
     await time.setNextBlockTimestamp(await template.EXPIRE_SINCE_INCLUSIVE());
-    await expect(template.connect(votingSigner).startUpgrade()).to.be.revertedWithCustomError(template, "Expired");
+    await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(template, "Expired");
   });
 
   it_(
@@ -82,7 +80,7 @@ describe("Integration: Upgrade Template V3 tests", () => {
       await locatorProxy.connect(agentSigner).proxy__upgradeTo(unexpectedLocatorImplementation);
 
       // Attempt to start the upgrade, which should revert with IncorrectProxyImplementation
-      await expect(template.connect(votingSigner).startUpgrade()).to.be.revertedWithCustomError(
+      await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
         template,
         "IncorrectProxyImplementation",
       );
@@ -91,10 +89,10 @@ describe("Integration: Upgrade Template V3 tests", () => {
 
   it_("should revert when startUpgrade is called after it has already been started", async function () {
     // First call should succeed
-    await template.connect(votingSigner).startUpgrade();
+    await template.connect(agentSigner).startUpgrade();
 
     // Second call should revert with UpgradeAlreadyStarted
-    await expect(template.connect(votingSigner).startUpgrade()).to.be.revertedWithCustomError(
+    await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
       template,
       "UpgradeAlreadyStarted",
     );
