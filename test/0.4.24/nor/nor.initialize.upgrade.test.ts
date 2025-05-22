@@ -115,7 +115,9 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
         .and.to.emit(nor, "StakingModuleTypeSet")
         .withArgs(moduleType)
         .to.emit(nor, "RewardDistributionStateChanged")
-        .withArgs(RewardDistributionState.Distributed);
+        .withArgs(RewardDistributionState.Distributed)
+        .to.emit(nor, "ExitDeadlineThresholdChanged")
+        .withArgs(86400n, 0n);
 
       expect(await nor.getLocator()).to.equal(await locator.getAddress());
       expect(await nor.getInitializationBlock()).to.equal(latestBlock + 1n);

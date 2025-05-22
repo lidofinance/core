@@ -175,11 +175,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     it("emits an event when called by sender with STAKING_ROUTER_ROLE", async () => {
       expect(await acl["hasPermission(address,address,bytes32)"](stakingRouter, nor, await nor.STAKING_ROUTER_ROLE()))
         .to.be.true;
-      console.log(
-        await nor.connect(stakingRouter).exitPenaltyCutoffTimestamp(),
-        proofSlotTimestamp,
-        eligibleToExitInSec,
-      );
+
       await expect(
         nor
           .connect(stakingRouter)
