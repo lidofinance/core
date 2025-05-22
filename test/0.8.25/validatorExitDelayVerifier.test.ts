@@ -233,6 +233,69 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       );
     });
 
+    it("report exit delay with uses earliest possible voluntary exit time when it's greater than exit request timestamp", async () => {
+      const activationEpochTimestamp =
+        GENESIS_TIME + Number(ACTIVE_VALIDATOR_PROOF.validator.activationEpoch) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
+      const earliestPossibleVoluntaryExitTimestamp =
+        activationEpochTimestamp + Number(await validatorExitDelayVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS());
+      const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
+      const expectedSecondsSinceEligibleExit = proofSlotTimestamp - earliestPossibleVoluntaryExitTimestamp;
+
+      //The exit request happens before the earliest possible exit time!
+      const veboExitRequestTimestamp = earliestPossibleVoluntaryExitTimestamp - 1000;
+
+      const moduleId = 1;
+      const nodeOpId = 2;
+      const exitRequests: ExitRequest[] = [
+        {
+          moduleId,
+          nodeOpId,
+          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        },
+      ];
+      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+      await vebo.setExitRequests(
+        encodedExitRequestsHash,
+        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
+        exitRequests,
+      );
+
+      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+      const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+      const verifyExitDelayEvents = async (tx: ContractTransactionResponse) => {
+        const receipt = await tx.wait();
+        const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
+        expect(events.length).to.equal(1);
+
+        const event = events[0];
+        expect(event.args[0]).to.equal(moduleId);
+        expect(event.args[1]).to.equal(nodeOpId);
+        expect(event.args[2]).to.equal(proofSlotTimestamp);
+        expect(event.args[3]).to.equal(ACTIVE_VALIDATOR_PROOF.validator.pubkey);
+        expect(event.args[4]).to.equal(expectedSecondsSinceEligibleExit);
+      };
+
+      await verifyExitDelayEvents(
+        await validatorExitDelayVerifier.verifyValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          encodedExitRequests,
+        ),
+      );
+
+      await verifyExitDelayEvents(
+        await validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          encodedExitRequests,
+        ),
+      );
+    });
+
     it("reverts with 'UnsupportedSlot' when slot < FIRST_SUPPORTED_SLOT", async () => {
       // Use a slot smaller than FIRST_SUPPORTED_SLOT
       const invalidHeader = {
@@ -332,6 +395,52 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           EMPTY_REPORT,
         ),
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidBlockHeader");
+    });
+
+    it("reverts with 'ExitRequestNotEligibleOnProvableBeaconBlock' when the when proof slot is early then exit request time", async () => {
+      const intervalInSecondsAfterProofSlot = 1;
+
+      const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
+      const veboExitRequestTimestamp = proofSlotTimestamp + intervalInSecondsAfterProofSlot;
+
+      const moduleId = 1;
+      const nodeOpId = 2;
+      const exitRequests: ExitRequest[] = [
+        {
+          moduleId,
+          nodeOpId,
+          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        },
+      ];
+      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+      await vebo.setExitRequests(
+        encodedExitRequestsHash,
+        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
+        exitRequests,
+      );
+
+      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+
+      await expect(
+        validatorExitDelayVerifier.verifyValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          encodedExitRequests,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "ExitRequestNotEligibleOnProvableBeaconBlock");
+
+      const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+      await expect(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          encodedExitRequests,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "ExitRequestNotEligibleOnProvableBeaconBlock");
     });
 
     it("reverts if the validator proof is incorrect", async () => {
