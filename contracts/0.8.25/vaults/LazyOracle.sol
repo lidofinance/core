@@ -97,6 +97,7 @@ contract LazyOracle {
                 ILido(LIDO_LOCATOR.lido()).getSharesByPooledEth(maxMintableStETH),
                 connection.shareLimit
             );
+            uint256 mintedStETH = record.locked - connection.reserveRatioBP / TOTAL_BASIS_POINTS;
     
             batch[i] = VaultInfo(
                 vaultAddress,
@@ -105,7 +106,7 @@ contract LazyOracle {
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
                 connection.shareLimit,
-                record.locked,
+                mintedStETH,
                 mintableCapacityStETH,
                 connection.reserveRatioBP,
                 connection.forcedRebalanceThresholdBP,

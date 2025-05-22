@@ -711,7 +711,8 @@ contract VaultHub is PausableUntilWithRoles {
             liabilityShares: 0,
             reportTimestamp: uint64(block.timestamp),
             inOutDelta: report.inOutDelta,
-            feeSharesCharged: uint96(0)
+            feeSharesCharged: uint96(0),
+            reportedLiabilityShares: uint96(0)
         });
 
         _addVault(_vault, connection, record);
