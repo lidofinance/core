@@ -150,6 +150,18 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
           .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, "0x", eligibleToExitInSec),
       ).to.be.revertedWith("INVALID_PUBLIC_KEY");
     });
+
+    it("reverts when reporting the same validator key twice", async () => {
+      await nor
+        .connect(stakingRouter)
+        .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec);
+
+      await expect(
+        nor
+          .connect(stakingRouter)
+          .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec)
+      ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+    });
   });
 
   context("onValidatorExitTriggered", () => {
@@ -306,6 +318,35 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
       )
         .to.emit(nor, "ValidatorExitStatusUpdated")
         .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, cutoff);
+    });
+  });
+
+  context("isValidatorExitingKeyReported", () => {
+    it("returns false for keys that haven't been reported yet", async () => {
+      const result = await nor.isValidatorExitingKeyReported(testPublicKey);
+      expect(result).to.be.false;
+    });
+
+    it("returns true for keys that have been reported", async () => {
+      expect(await nor.isValidatorExitingKeyReported(testPublicKey)).to.be.false;
+
+      await nor
+        .connect(stakingRouter)
+        .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec);
+
+      expect(await nor.isValidatorExitingKeyReported(testPublicKey)).to.be.true;
+    });
+
+    it("correctly distinguishes between different validator keys", async () => {
+      const testPublicKey2 = "0x" + "1".repeat(48 * 2);
+
+      await nor
+        .connect(stakingRouter)
+        .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec);
+
+      expect(await nor.isValidatorExitingKeyReported(testPublicKey)).to.be.true;
+
+      expect(await nor.isValidatorExitingKeyReported(testPublicKey2)).to.be.false;
     });
   });
 });
