@@ -369,7 +369,7 @@ describe("Report Validator Exit Delay", () => {
     const proofSlotTimestamp =
       (await validatorExitDelayVerifier.GENESIS_TIME()) + BigInt(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * 12);
 
-    const exitDeadlineThreshold = await nor.exitDeadlineThreshold();
+    const exitDeadlineThreshold = await nor.exitDeadlineThreshold(0);
     await advanceChainTime(proofSlotTimestamp - currentBlockTimestamp - exitDeadlineThreshold);
 
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
