@@ -331,8 +331,13 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             memory triggerableExitData = new ITriggerableWithdrawalsGateway.ValidatorData[](exitDataIndexes.length);
 
         uint256 lastExitDataIndex = type(uint256).max;
+        uint256 requestsCount = exitsData.data.length / PACKED_REQUEST_LENGTH;
 
         for (uint256 i = 0; i < exitDataIndexes.length; i++) {
+            if (exitDataIndexes[i] >= requestsCount ) {
+                revert ExitDataIndexOutOfRange(exitDataIndexes[i], requestsCount);
+            }
+
             if (exitDataIndexes[i] > requestStatus.lastDeliveredExitDataIndex) {
                 revert ExitDataWasNotDelivered(exitDataIndexes[i], requestStatus.lastDeliveredExitDataIndex);
             }
