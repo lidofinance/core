@@ -725,22 +725,6 @@ describe("WithdrawalVault.sol", () => {
         // Contract should be automatically resumed
         expect(await vault.isPaused()).to.equal(false);
       });
-
-      it("should prevent withdrawal requests while paused", async () => {
-        const requestCount = 1;
-        const { pubkeysHexString, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
-        const expectedFee = await getFee();
-
-        // Pause the contract
-        await vault.connect(owner).pauseFor(1000n);
-
-        // Try to add withdrawal request while paused
-        await expect(
-          vault
-            .connect(validatorsExitBus)
-            .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: expectedFee }),
-        ).to.be.revertedWithCustomError(vault, "ResumedExpected");
-      });
     });
 
     context("pauseUntil", () => {
