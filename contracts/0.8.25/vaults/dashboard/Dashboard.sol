@@ -51,7 +51,8 @@ contract Dashboard is NodeOperatorFee {
      * @notice Slot for the fund-on-receive flag
      *         keccak256("vaults.Dashboard.fundOnReceive")
      */
-    bytes32 private constant FUND_ON_RECEIVE_FLAG_SLOT = 0x7408b7b034fda7051615c19182918ecb91d753231cffd86f81a45d996d63e038;
+    bytes32 private constant FUND_ON_RECEIVE_FLAG_SLOT =
+        0x7408b7b034fda7051615c19182918ecb91d753231cffd86f81a45d996d63e038;
 
     /**
      * @notice Constructor sets the stETH, and WSTETH token addresses,
@@ -61,8 +62,12 @@ contract Dashboard is NodeOperatorFee {
      * @param _vaultHub Address of the vault hub contract.
      * @param _lidoLocator Address of the Lido locator contract.
      */
-    constructor(address _stETH, address _wstETH, address _vaultHub, address _lidoLocator)
-        NodeOperatorFee(_vaultHub, _lidoLocator) {
+    constructor(
+        address _stETH,
+        address _wstETH,
+        address _vaultHub,
+        address _lidoLocator
+    ) NodeOperatorFee(_vaultHub, _lidoLocator) {
         if (_stETH == address(0)) revert ZeroArgument("_stETH");
         if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
 
@@ -186,26 +191,15 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the unreserved amount of ether,
-     * i.e. the amount of total value that is not locked in the StakingVault
-     * and not reserved for node operator fee.
-     * This amount does not account for the current balance of the StakingVault and
-     * can return a value greater than the actual balance of the StakingVault.
-     */
-    function unreserved() public view returns (uint256) {
-        uint256 reserved = locked() + nodeOperatorDisburseableFee();
-        uint256 totalValue_ = totalValue();
-
-        return reserved > totalValue_ ? 0 : totalValue_ - reserved;
-    }
-
-    /**
      * @notice Returns the amount of ether that can be instantly withdrawn from the staking vault.
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
      * @dev This method overrides the Dashboard's withdrawableEther() method
      */
-    function withdrawableEther() external view returns (uint256) {
-        return Math256.min(address(_stakingVault()).balance, unreserved());
+    function withdrawableEther() public view returns (uint256) {
+        uint256 totalValue_ = totalValue();
+        uint256 lockedPlusFee = locked() + nodeOperatorDisburseableFee();
+
+        return Math256.min(address(_stakingVault()).balance, totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
     }
 
     // ==================== Vault Management Functions ====================
@@ -279,10 +273,10 @@ contract Dashboard is NodeOperatorFee {
      * @param _ether Amount of ether to withdraw
      */
     function withdraw(address _recipient, uint256 _ether) external {
-        uint256 unreserved_ = unreserved();
+        uint256 withdrawableEther_ = withdrawableEther();
 
-        if (_ether > unreserved_) {
-            revert WithdrawalAmountExceedsUnreserved(_ether, unreserved_);
+        if (_ether > withdrawableEther_) {
+            revert WithdrawalExceedsWithdrawable(_ether, withdrawableEther_);
         }
 
         _withdraw(_recipient, _ether);
@@ -375,8 +369,9 @@ contract Dashboard is NodeOperatorFee {
             totalAmount += _deposits[i].amount;
         }
 
-        if (totalAmount > unreserved()) {
-            revert WithdrawalAmountExceedsUnreserved(totalAmount, unreserved());
+        uint256 withdrawableEther_ = withdrawableEther();
+        if (totalAmount > withdrawableEther_) {
+            revert WithdrawalExceedsWithdrawable(totalAmount, withdrawableEther_);
         }
 
         _disableFundOnReceive();
@@ -640,11 +635,11 @@ contract Dashboard is NodeOperatorFee {
     // ==================== Errors ====================
 
     /**
-     * @notice Emitted when the unreserved amount of ether is exceeded
+     * @notice Emitted when the withdrawable amount of ether is exceeded
      * @param amount The amount of ether that was attempted to be withdrawn
-     * @param unreserved The amount of unreserved ether available
+     * @param withdrawableEther The amount of withdrawable ether available
      */
-    error WithdrawalAmountExceedsUnreserved(uint256 amount, uint256 unreserved);
+    error WithdrawalExceedsWithdrawable(uint256 amount, uint256 withdrawableEther);
 
     /**
      * @notice Error thrown when recovery of ETH fails on transfer to recipient
