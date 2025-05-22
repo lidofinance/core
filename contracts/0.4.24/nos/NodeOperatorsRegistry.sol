@@ -1156,7 +1156,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
             return false;
         }
         return _eligibleToExitInSec >= _exitDeadlineThreshold()
-            && _proofSlotTimestamp + _eligibleToExitInSec >= exitPenaltyCutoffTimestamp();
+            && _proofSlotTimestamp - _eligibleToExitInSec >= exitPenaltyCutoffTimestamp();
     }
 
     /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
@@ -1177,7 +1177,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
         // Check if exit delay exceeds the threshold
         require(_eligibleToExitInSec >= _exitDeadlineThreshold(), "EXIT_DELAY_BELOW_THRESHOLD");
-        require(_proofSlotTimestamp + _eligibleToExitInSec >= exitPenaltyCutoffTimestamp(), "TOO_LATE_FOR_EXIT_DELAY_REPORT");
+        require(_proofSlotTimestamp - _eligibleToExitInSec >= exitPenaltyCutoffTimestamp(), "TOO_LATE_FOR_EXIT_DELAY_REPORT");
 
         _markValidatorExitingKeyAsReported(_publicKey);
 

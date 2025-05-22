@@ -59,7 +59,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
   const exitDeadlineThreshold = 86400n;
 
   const testPublicKey = "0x" + "0".repeat(48 * 2);
-  const eligibleToExitInSec = 86400n; // 2 days
+  const ONE_DAY = 86400n;
+  const eligibleToExitInSec = ONE_DAY;
+
   let proofSlotTimestamp = 0n;
   const withdrawalRequestPaidFee = 100000n;
   const exitType = 1n;
@@ -159,7 +161,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
       await expect(
         nor
           .connect(stakingRouter)
-          .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec)
+          .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec),
       ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
     });
   });
@@ -217,17 +219,17 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     it("returns true when eligible to exit time exceeds the threshold", async () => {
       const shouldPenalize = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
-        proofSlotTimestamp,
+        proofSlotTimestamp + ONE_DAY,
         testPublicKey,
-        172800n, // Equal to the threshold
+        eligibleToExitInSec, // Equal to the threshold
       );
       expect(shouldPenalize).to.be.true;
 
       const shouldPenalizeMore = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
-        proofSlotTimestamp,
+        proofSlotTimestamp + ONE_DAY,
         testPublicKey,
-        172801n, // Greater than the threshold
+        eligibleToExitInSec + 1n, // Greater than the threshold
       );
       expect(shouldPenalizeMore).to.be.true;
     });
@@ -235,7 +237,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     it("returns false when eligible to exit time is less than the threshold", async () => {
       const shouldPenalize = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
-        proofSlotTimestamp,
+        proofSlotTimestamp + ONE_DAY,
         testPublicKey,
         1n, // Less than the threshold
       );
@@ -244,11 +246,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
   });
 
   context("exitPenaltyCutoffTimestamp", () => {
-    const threshold = 86400n; // 1 day
+    const threshold = ONE_DAY;
 
     const reportingWindow = 3600n; // 1 hour
-    // eslint-disable-next-line @typescript-eslint/no-shadow
-    const eligibleToExitInSec = threshold + 100n;
 
     let cutoff: bigint;
 
@@ -270,9 +270,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     it("returns false when _proofSlotTimestamp < cutoff", async () => {
       const result = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
-        cutoff - eligibleToExitInSec - 1n,
+        cutoff + threshold - 1n,
         testPublicKey,
-        eligibleToExitInSec,
+        threshold,
       );
       expect(result).to.be.false;
     });
@@ -280,9 +280,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     it("returns true when _proofSlotTimestamp == cutoff", async () => {
       const result = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
-        cutoff,
+        cutoff + threshold,
         testPublicKey,
-        eligibleToExitInSec,
+        threshold,
       );
       expect(result).to.be.true;
     });
@@ -290,9 +290,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     it("returns true when _proofSlotTimestamp > cutoff", async () => {
       const result = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
-        cutoff + 1n,
+        cutoff + threshold + 1n,
         testPublicKey,
-        eligibleToExitInSec,
+        threshold,
       );
       expect(result).to.be.true;
     });
@@ -303,7 +303,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
           .connect(stakingRouter)
           .reportValidatorExitDelay(
             firstNodeOperatorId,
-            cutoff - eligibleToExitInSec * 2n,
+            cutoff + threshold - 1n,
             testPublicKey,
             eligibleToExitInSec,
           ),
@@ -314,10 +314,15 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
       await expect(
         nor
           .connect(stakingRouter)
-          .reportValidatorExitDelay(firstNodeOperatorId, cutoff, testPublicKey, eligibleToExitInSec),
+          .reportValidatorExitDelay(
+            firstNodeOperatorId,
+            cutoff + threshold,
+            testPublicKey,
+            eligibleToExitInSec,
+          ),
       )
         .to.emit(nor, "ValidatorExitStatusUpdated")
-        .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, cutoff);
+        .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, cutoff + threshold);
     });
   });
 
