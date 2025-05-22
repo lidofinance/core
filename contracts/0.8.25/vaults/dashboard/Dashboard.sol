@@ -130,10 +130,24 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the treasury fee basis points.
+     * @notice Returns the infra fee basis points.
      */
-    function treasuryFeeBP() external view returns (uint16) {
-        return vaultConnection().treasuryFeeBP;
+    function infraFeeBP() external view returns (uint16) {
+        return vaultConnection().infraFeeBP;
+    }
+
+    /**
+     * @notice Returns the liquidity fee basis points.
+     */
+    function liquidityFeeBP() external view returns (uint16) {
+        return vaultConnection().liquidityFeeBP;
+    }
+
+    /**
+     * @notice Returns the reservation fee basis points.
+     */
+    function reservationFeeBP() external view returns (uint16) {
+        return vaultConnection().reservationFeeBP;
     }
 
     /**
