@@ -180,7 +180,7 @@ contract NodeOperatorFee is Permissions {
      * although NODE_OPERATOR_MANAGER_ROLE is the admin role for NODE_OPERATOR_FEE_CLAIMER_ROLE.
      * @param _recipient The address to which the node operator fee will be sent.
      */
-    function claimNodeOperatorFee(address _recipient) external onlyRole(NODE_OPERATOR_FEE_CLAIM_ROLE) {
+    function claimNodeOperatorFee(address _recipient) external onlyRoleMemberOrAdmin(NODE_OPERATOR_FEE_CLAIM_ROLE) {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
         uint256 fee = nodeOperatorUnclaimedFee();
@@ -201,7 +201,7 @@ contract NodeOperatorFee is Permissions {
      */
     function increaseAccruedRewardsAdjustment(
         uint256 _adjustmentIncrease
-    ) external onlyRole(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
+    ) external onlyRoleMemberOrAdmin(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
         uint256 newAdjustment = accruedRewardsAdjustment + _adjustmentIncrease;
         // sanity check, though value will be cast safely during fee calculation
         if (newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
