@@ -285,15 +285,15 @@ contract VaultHub is PausableUntilWithRoles {
 
         IStakingVault(_vault).acceptOwnership();
 
-        emit VaultConnected(
-            _vault,
-            shareLimit,
-            reserveRatioBP,
-            forcedRebalanceThresholdBP,
-            infraFeeBP,
-            liquidityFeeBP,
-            reservationFeeBP
-        );
+        emit VaultConnected({
+            vault: _vault,
+            shareLimit: shareLimit,
+            reserveRatioBP: reserveRatioBP,
+            forcedRebalanceThresholdBP: forcedRebalanceThresholdBP,
+            infraFeeBP: infraFeeBP,
+            liquidityFeeBP: liquidityFeeBP,
+            reservationFeeBP: reservationFeeBP
+        });
     }
 
     /// @notice updates share limit for the vault
@@ -410,7 +410,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reportFeeSharesCharged,
         uint256 _reportLiabilityShares
     ) external whenResumed {
-        if (msg.sender != LIDO_LOCATOR.lazyOracle()) revert NotAuthorized();
+        if (msg.sender != address(_lazyOracle())) revert NotAuthorized();
 
         Storage storage $ = _storage();
 
@@ -470,17 +470,25 @@ contract VaultHub is PausableUntilWithRoles {
         LIDO.mintExternalShares(LIDO_LOCATOR.treasury(), _amountOfShares);
     }
 
-    /// @notice sets the owner of the vault
+    /// @notice transfer the ownership of the vault to a new owner
+    /// without disconnection it from the hub
     /// @param _vault vault address
-    /// @param _owner new owner address
+    /// @param _newOwner new owner address
     /// @dev msg.sender should be vault's owner
-    function setVaultOwner(address _vault, address _owner) external {
-        if (_owner == address(0)) revert ZeroArgument();
-        VaultConnection storage connection = _checkConnectionAndOwner(_vault);
+    function transferVaultOwnership(address _vault, address _newOwner) external {
+        if (_newOwner == address(0)) revert ZeroArgument();
+        VaultConnection storage connection = _checkConnection(_vault);
+        address oldOwner = connection.owner;
 
-        connection.owner = _owner;
+        if (oldOwner != msg.sender) revert NotAuthorized();
 
-        emit VaultOwnerSet(_vault, _owner);
+        connection.owner = _newOwner;
+
+        emit VaultOwnershipTransferred({
+            vault: _vault,
+            newOwner: _newOwner,
+            oldOwner: oldOwner
+        });
     }
 
     /// @notice disconnects a vault from the hub
@@ -753,6 +761,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 vaultBalance = _vault.balance;
         if (vaultBalance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, vaultBalance, CONNECT_DEPOSIT);
 
+        // Connecting a new vault with totalValue == balance
         Report memory report = Report({
             totalValue: uint128(vaultBalance),
             inOutDelta: int128(int256(vaultBalance))
@@ -762,7 +771,7 @@ contract VaultHub is PausableUntilWithRoles {
             report: report,
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
-            reportTimestamp: uint64(block.timestamp),
+            reportTimestamp: _lazyOracle().latestReportTimestamp(),
             inOutDelta: report.inOutDelta,
             feeSharesCharged: uint96(0)
         });
@@ -892,10 +901,10 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
-        uint256 latestReportTimestamp = LazyOracle(LIDO_LOCATOR.lazyOracle()).latestReportTimestamp();
+        uint256 latestReportTimestamp = _lazyOracle().latestReportTimestamp();
         return
-            // check if AccountingOracle brought fresh report, but allow freshly connected vaults
-            latestReportTimestamp <= _record.reportTimestamp &&
+            // check if AccountingOracle brought fresh report
+            latestReportTimestamp == _record.reportTimestamp &&
             // if Accounting Oracle stop bringing the report, last report is fresh for 2 days
             block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }
@@ -968,6 +977,10 @@ contract VaultHub is PausableUntilWithRoles {
         return OperatorGrid(LIDO_LOCATOR.operatorGrid());
     }
 
+    function _lazyOracle() internal view returns (LazyOracle) {
+        return LazyOracle(LIDO_LOCATOR.lazyOracle());
+    }
+
     event AllowedCodehashUpdated(bytes32 indexed codehash, bool allowed);
 
     event VaultConnected(
@@ -1011,9 +1024,10 @@ contract VaultHub is PausableUntilWithRoles {
     /**
      * @notice Emitted when the manager is set
      * @param vault The address of the vault
-     * @param owner The address of the owner
+     * @param newOwner The address of the new owner
+     * @param oldOwner The address of the old owner
      */
-    event VaultOwnerSet(address indexed vault, address indexed owner);
+    event VaultOwnershipTransferred(address indexed vault, address indexed newOwner, address indexed oldOwner);
 
     error ZeroIndex();
 

@@ -63,7 +63,7 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Node operator fee in basis points; cannot exceed 100.00%.
-     * The node operator's disburseable fee in ether is returned by `nodeOperatorDisburseableFee()`.
+     * The node operator's disbursable fee in ether is returned by `nodeOperatorDisbursableFee()`.
      */
     uint256 public nodeOperatorFeeBP;
 
@@ -144,17 +144,17 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice Returns the accumulated disburseable node operator fee in ether,
+     * @notice Returns the accumulated disbursable node operator fee in ether,
      * calculated as: D = ((R - A) * F) / T
      * where:
-     * - D is the node operator disburseable fee;
+     * - D is the node operator disbursable fee;
      * - R is the StakingVault rewards accrued between the last node operator fee disbursement and the latest report;
      * - F is `nodeOperatorFeeBP`;
      * - A is `accruedRewardsAdjustment`;
      * - T is the total basis points, 10,000.
-     * @return uint256: the amount of disburseable fee in ether.
+     * @return uint256: the amount of disbursable fee in ether.
      */
-    function nodeOperatorDisburseableFee() public view returns (uint256) {
+    function nodeOperatorDisbursableFee() public view returns (uint256) {
         VaultHub.Report memory latestReport_ = latestReport();
         VaultHub.Report storage _lastDisbursedReport = nodeOperatorFeeDisbursedReport;
 
@@ -188,6 +188,12 @@ contract NodeOperatorFee is Permissions {
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
     function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(confirmingRoles()) {
+        // the report must be fresh in order to prevent retroactive fees
+        if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
+
+        // if there is no fee to disburse, the report is still updated to prevent retroactive fees
+        if (disburseNodeOperatorFee() == 0) nodeOperatorFeeDisbursedReport = latestReport();
+
         _setNodeOperatorFeeBP(_newNodeOperatorFeeBP);
     }
 
@@ -205,7 +211,7 @@ contract NodeOperatorFee is Permissions {
      * @notice Disburses the node operator fee if there is any.
      */
     function disburseNodeOperatorFee() public returns (uint256 fee) {
-        fee = nodeOperatorDisburseableFee();
+        fee = nodeOperatorDisbursableFee();
 
         if (fee > 0) {
             nodeOperatorFeeDisbursedReport = latestReport();
@@ -249,11 +255,6 @@ contract NodeOperatorFee is Permissions {
 
     function _setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) internal {
         if (_newNodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
-        // the report must be fresh in order to prevent retroactive fees
-        if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
-
-        // if there is no fee to disburse, the report is still updated to prevent retroactive fees
-        if (disburseNodeOperatorFee() == 0) nodeOperatorFeeDisbursedReport = latestReport();
 
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
         nodeOperatorFeeBP = _newNodeOperatorFeeBP;

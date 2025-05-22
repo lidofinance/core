@@ -19,7 +19,7 @@ interface IReportReceiver {
 
 interface ILazyOracle {
     function updateReportData(
-        uint64 _timestamp,
+        uint256 _timestamp,
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataReportCid
     ) external;
@@ -508,7 +508,7 @@ contract AccountingOracle is BaseOracle {
         );
 
         ILazyOracle(LOCATOR.lazyOracle()).updateReportData(
-            uint64(GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT),
+            GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
             data.vaultsDataTreeRoot,
             data.vaultsDataTreeCid
         );

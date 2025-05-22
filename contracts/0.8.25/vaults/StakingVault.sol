@@ -457,6 +457,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
     /**
      * @notice Ossifies the current implementation. WARNING: This operation is irreversible.
+     * @dev vault can't be connected to the hub after ossification
      */
     function ossify() external onlyOwner {
         if (isOssified()) revert VaultOssified();
