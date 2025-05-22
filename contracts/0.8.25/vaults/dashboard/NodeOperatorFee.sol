@@ -126,7 +126,7 @@ contract NodeOperatorFee is Permissions {
      * @notice Returns the roles that can:
      * - change the confirm expiry;
      * - set the node operator fee;
-     * - transfer the ownership of the StakingVault.
+     * - set a new owner of the StakingVault.
      * @return roles is an array of roles that form the confirming roles.
      */
     function confirmingRoles() public pure override returns (bytes32[] memory roles) {
