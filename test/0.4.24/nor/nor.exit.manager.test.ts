@@ -270,7 +270,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     it("returns false when _proofSlotTimestamp < cutoff", async () => {
       const result = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
-        cutoff - 1n,
+        cutoff - eligibleToExitInSec - 1n,
         testPublicKey,
         eligibleToExitInSec,
       );

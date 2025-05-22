@@ -1156,7 +1156,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
             return false;
         }
         return _eligibleToExitInSec >= _exitDeadlineThreshold()
-            && _proofSlotTimestamp >= exitPenaltyCutoffTimestamp();
+            && _proofSlotTimestamp + _eligibleToExitInSec >= exitPenaltyCutoffTimestamp();
     }
 
     /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
