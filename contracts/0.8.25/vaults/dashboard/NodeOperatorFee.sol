@@ -135,6 +135,10 @@ contract NodeOperatorFee is Permissions {
         roles[1] = NODE_OPERATOR_MANAGER_ROLE;
     }
 
+    /**
+     * @notice Returns the latest report data containing the total value and in-out delta.
+     * @return report The latest report.
+     */
     function latestReport() public view returns (VaultHub.Report memory) {
         return VAULT_HUB.latestReport(address(_stakingVault()));
     }
