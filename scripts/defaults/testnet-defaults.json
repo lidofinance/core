@@ -90,7 +90,7 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
-      "consensusVersion": 2
+      "consensusVersion": 3
     }
   },
   "depositSecurityModule": {

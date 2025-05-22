@@ -428,7 +428,11 @@ contract Dashboard is NodeOperatorFee {
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(RECOVER_ASSETS_ROLE) {
+    function recoverERC20(
+        address _token,
+        address _recipient,
+        uint256 _amount
+    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount == 0) revert ZeroArgument("_amount");
@@ -455,7 +459,7 @@ contract Dashboard is NodeOperatorFee {
         address _token,
         uint256 _tokenId,
         address _recipient
-    ) external onlyRole(RECOVER_ASSETS_ROLE) {
+    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 

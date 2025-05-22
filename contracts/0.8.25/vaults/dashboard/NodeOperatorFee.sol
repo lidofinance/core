@@ -203,7 +203,7 @@ contract NodeOperatorFee is Permissions {
      */
     function setNodeOperatorFeeRecipient(
         address _newNodeOperatorFeeRecipient
-    ) external onlyRole(NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE) {
+    ) external onlyRoleMemberOrAdmin(NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE) {
         _setNodeOperatorFeeRecipient(_newNodeOperatorFeeRecipient);
     }
 
@@ -230,7 +230,7 @@ contract NodeOperatorFee is Permissions {
      */
     function increaseAccruedRewardsAdjustment(
         uint256 _adjustmentIncrease
-    ) external onlyRole(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
+    ) external onlyRoleMemberOrAdmin(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
         uint256 newAdjustment = accruedRewardsAdjustment + _adjustmentIncrease;
         // sanity check, though value will be cast safely during fee calculation
         if (newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
