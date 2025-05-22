@@ -473,10 +473,11 @@ describe("OperatorGrid.sol", () => {
         .withArgs("_vault");
     });
 
-    it("reverts if sender is not vault owner", async function () {
-      await expect(operatorGrid.connect(stranger).confirmTierChange(vault_NO1_V1, 1))
-        .to.be.revertedWithCustomError(operatorGrid, "NotAuthorized")
-        .withArgs("confirmTierChange", stranger);
+    it("reverts if sender is not vault owner or node operator", async function () {
+      await expect(operatorGrid.connect(stranger).confirmTierChange(vault_NO1_V1, 1)).to.be.revertedWithCustomError(
+        operatorGrid,
+        "SenderNotMember",
+      );
     });
 
     it("reverts if tierId is default tier", async function () {

@@ -7,6 +7,7 @@ pragma solidity 0.8.25;
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 
+import {Confirmable} from "contracts/0.8.25/utils/Confirmable.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultHub} from "./VaultHub.sol";
@@ -32,7 +33,7 @@ struct TierParams {
  * These parameters are determined by the Tier in which the Vault is registered.
  *
  */
-contract OperatorGrid is AccessControlEnumerableUpgradeable {
+contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     /*
       Key concepts:
       1. Default Registration:
@@ -157,6 +158,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         if (_admin == address(0)) revert ZeroArgument("_admin");
 
         __AccessControlEnumerable_init();
+        __Confirmations_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
         ERC7201Storage storage $ = _getStorage();
@@ -314,7 +316,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @param _requestedShareLimit requested share limit
     function requestTierChange(address _vault, uint256 _tierId, uint256 _requestedShareLimit) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
-        if (msg.sender != IStakingVault(_vault).owner()) revert NotAuthorized("requestTierChange", msg.sender);
+
+        address nodeOperator = IStakingVault(_vault).nodeOperator();
+        address vaultOwner = IStakingVault(_vault).owner();
+
+        if (msg.sender != nodeOperator && msg.sender != vaultOwner)
+            revert NotAuthorized("requestTierChange", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
         if (_tierId >= $.tiers.length) revert TierNotExists();
@@ -322,7 +329,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         Tier memory requestedTier = $.tiers[_tierId];
         address requestedTierOperator = requestedTier.operator;
-        address nodeOperator = IStakingVault(_vault).nodeOperator();
         if (nodeOperator != requestedTierOperator) revert TierNotInOperatorGroup();
         if (_requestedShareLimit > requestedTier.shareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
 
@@ -393,7 +399,14 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
         address nodeOperator = IStakingVault(_vault).nodeOperator();
-        if (msg.sender != nodeOperator) revert NotAuthorized("confirmTierChange", msg.sender);
+        address vaultOwner = IStakingVault(_vault).owner();
+
+        address[] memory confirmers = new address[](2);
+        confirmers[0] = vaultOwner;
+        confirmers[1] = nodeOperator;
+
+        _setConfirmers(confirmers);
+        if (!_checkConfirmations(msg.data, confirmers.length)) return;
         if (_tierIdToConfirm == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
         ERC7201Storage storage $ = _getStorage();
@@ -487,7 +500,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         Tier storage tier_ = $.tiers[tierId];
 
-        uint96 tierLiabilityShares = tier_.liabilityShares; //cache
+        uint96 tierLiabilityShares = tier_.liabilityShares;
         if (tierLiabilityShares + amount_ > tier_.shareLimit) revert TierLimitExceeded();
 
         tier_.liabilityShares = tierLiabilityShares + amount_;
