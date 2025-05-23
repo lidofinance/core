@@ -204,7 +204,7 @@ contract Dashboard is NodeOperatorFee {
      * @dev This amount is not available for minting shares.
      */
     function availableBalance() public view returns (uint256) {
-        return VAULT_HUB.availableBalance(address(_stakingVault())) - nodeOperatorUnclaimedFee();
+        return VAULT_HUB.availableBalance(address(_stakingVault())) - nodeOperatorDisbursableFee();
     }
 
     /**

@@ -139,7 +139,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .withArgs(nodeOperator, ether("1"), ether("1"));
 
       const { witnesses, postdeposit } = await getProofAndDepositData(
-        predepositGuarantee,
+        ctx,
         validator,
         withdrawalCredentials,
         ether("99"),
@@ -244,12 +244,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       .withArgs(await stakingVault.getAddress(), predepositData.deposit.pubkey, predepositData.deposit.amount)
       .not.to.emit(stakingVault, "DepositedToBeaconChain");
 
-    const { witnesses, postdeposit } = await getProofAndDepositData(
-      predepositGuarantee,
-      validator,
-      withdrawalCredentials,
-      ether("99"),
-    );
+    const { witnesses, postdeposit } = await getProofAndDepositData(ctx, validator, withdrawalCredentials, ether("99"));
 
     // 5. The stVault's owner submits a Merkle proof of the validator's appearing on the Consensus Layer to the Dashboard contract.
     await expect(dashboard.connect(roles.unknownValidatorProver).proveUnknownValidatorsToPDG([witnesses[0]]))
