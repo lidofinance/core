@@ -89,7 +89,7 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant PDG_PROVE_VALIDATOR_ROLE = keccak256("vaults.Permissions.PDGProveValidator");
 
     /**
-     * @notice Permission for unguarnateed deposit to trusted validators
+     * @notice Permission for unguaranteed deposit to trusted validators
      */
     bytes32 public constant UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE =
         keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
