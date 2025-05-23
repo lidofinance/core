@@ -428,7 +428,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@commitlint/cli@npm:19.8.1":
+"@commitlint/cli@npm:^19.8.1":
   version: 19.8.1
   resolution: "@commitlint/cli@npm:19.8.1"
   dependencies:
@@ -445,7 +445,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@commitlint/config-conventional@npm:19.8.1":
+"@commitlint/config-conventional@npm:^19.8.1":
   version: 19.8.1
   resolution: "@commitlint/config-conventional@npm:19.8.1"
   dependencies:
@@ -8590,8 +8590,8 @@ __metadata:
     "@aragon/os": "npm:4.4.0"
     "@chainsafe/blst": "npm:2.2.0"
     "@chainsafe/ssz": "npm:1.2.0"
-    "@commitlint/cli": "npm:19.8.1"
-    "@commitlint/config-conventional": "npm:19.8.1"
+    "@commitlint/cli": "npm:^19.8.1"
+    "@commitlint/config-conventional": "npm:^19.8.1"
     "@eslint/compat": "npm:1.2.9"
     "@eslint/js": "npm:9.27.0"
     "@nomicfoundation/ethereumjs-util": "npm:^9.0.4"

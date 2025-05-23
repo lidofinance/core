@@ -51,8 +51,8 @@
   "devDependencies": {
     "@chainsafe/blst": "2.2.0",
     "@chainsafe/ssz": "1.2.0",
-    "@commitlint/cli": "19.8.1",
-    "@commitlint/config-conventional": "19.8.1",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
     "@eslint/compat": "1.2.9",
     "@eslint/js": "9.27.0",
     "@nomicfoundation/ethereumjs-util": "^9.0.4",
