@@ -412,8 +412,6 @@ type HandleOracleReportParams = {
   elRewardsVaultBalance: bigint;
   vaultsTotalTreasuryFeesShares: bigint;
   vaultsTotalDeficit: bigint;
-  vaultsDataTreeRoot: string;
-  vaultsDataTreeCid: string;
 };
 
 export const handleOracleReport = async (
@@ -426,8 +424,6 @@ export const handleOracleReport = async (
     elRewardsVaultBalance,
     vaultsTotalTreasuryFeesShares,
     vaultsTotalDeficit,
-    vaultsDataTreeRoot,
-    vaultsDataTreeCid,
   }: HandleOracleReportParams,
 ): Promise<void> => {
   const { hashConsensus, accountingOracle, accounting } = ctx.contracts;
