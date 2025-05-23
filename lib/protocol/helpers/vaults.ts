@@ -59,6 +59,7 @@ export interface VaultWithDashboard {
   stakingVault: StakingVault;
   dashboard: Dashboard;
   roles: VaultRoles;
+  proxy: PinnedBeaconProxy;
 }
 
 /**
@@ -112,6 +113,7 @@ export async function createVaultWithDashboard(
 
   const stakingVault = await ethers.getContractAt("StakingVault", vaultAddress);
   const dashboard = await ethers.getContractAt("Dashboard", dashboardAddress);
+  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vaultAddress)) as PinnedBeaconProxy;
 
   const roleIds = await Promise.all([
     dashboard.RECOVER_ASSETS_ROLE(),
@@ -164,6 +166,7 @@ export async function createVaultWithDashboard(
   return {
     stakingVault,
     dashboard,
+    proxy,
     roles,
   };
 }
@@ -196,17 +199,19 @@ export async function reportVaultDataWithProof(
 
   const totalValueArg = totalValue ?? (await vaultHub.totalValue(stakingVault));
   const inOutDeltaArg = inOutDelta ?? (await vaultHub.vaultRecord(stakingVault)).inOutDelta;
-  const liabilitySharesArg = liabilityShares ?? await vaultHub.liabilityShares(stakingVault);
+  const liabilitySharesArg = liabilityShares ?? (await vaultHub.liabilityShares(stakingVault));
 
-  const vaultReport: VaultReportItem = [await stakingVault.getAddress(), totalValueArg, inOutDeltaArg, 0n, liabilitySharesArg];
+  const vaultReport: VaultReportItem = [
+    await stakingVault.getAddress(),
+    totalValueArg,
+    inOutDeltaArg,
+    0n,
+    liabilitySharesArg,
+  ];
   const reportTree = createVaultsReportTree([vaultReport]);
 
   const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
-  await lazyOracle.connect(accountingSigner).updateReportData(
-    await getCurrentBlockTimestamp(),
-    reportTree.root,
-    "",
-  );
+  await lazyOracle.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
 
   return await lazyOracle.updateVaultData(
     await stakingVault.getAddress(),
@@ -309,15 +314,18 @@ export const generatePredepositData = async (
   roles: VaultRoles,
   nodeOperator: HardhatEthersSigner,
   validator: Validator,
+  guarantor?: HardhatEthersSigner,
 ): Promise<{
   deposit: IStakingVault.DepositStruct;
   depositY: BLS12_381.DepositYStruct;
 }> => {
+  guarantor = guarantor ?? nodeOperator;
+
   // Pre-requisite: fund the vault to have enough balance to start a validator
   await dashboard.connect(roles.funder).fund({ value: ether("32") });
 
   // Step 1: Top up the node operator balance
-  await predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, {
+  await predepositGuarantee.connect(guarantor).topUpNodeOperatorBalance(nodeOperator, {
     value: ether("1"),
   });
 

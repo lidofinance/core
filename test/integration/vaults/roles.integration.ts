@@ -210,7 +210,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     describe("Verify ACL for methods that require only role", () => {
       describe("Dashboard methods", () => {
         it("claimNodeOperatorFee", async () => {
-
           // TODO:
           // await testMethod(
           //   testDashboard,

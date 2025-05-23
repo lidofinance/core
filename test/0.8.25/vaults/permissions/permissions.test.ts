@@ -129,27 +129,25 @@ describe("Permissions", () => {
     vaultFactory = await ethers.deployContract("VaultFactory__MockPermissions", [beacon, permissionsImpl, pdg]);
 
     // 7. Create StakingVault and Permissions proxies using VaultFactory
-    const vaultCreationTx = await vaultFactory.connect(deployer).createVaultWithPermissions(
-      {
-        defaultAdmin,
-        nodeOperator,
-        confirmExpiry: days(7n),
-        funder,
-        withdrawer,
-        minter,
-        burner,
-        rebalancer,
-        depositPauser,
-        depositResumer,
-        pdgCompensator,
-        unknownValidatorProver,
-        unguaranteedBeaconChainDepositor,
-        validatorExitRequester,
-        validatorWithdrawalTriggerer,
-        disconnecter,
-        tierChanger,
-      } as PermissionsConfigStruct,
-    );
+    const vaultCreationTx = await vaultFactory.connect(deployer).createVaultWithPermissions({
+      defaultAdmin,
+      nodeOperator,
+      confirmExpiry: days(7n),
+      funder,
+      withdrawer,
+      minter,
+      burner,
+      rebalancer,
+      depositPauser,
+      depositResumer,
+      pdgCompensator,
+      unknownValidatorProver,
+      unguaranteedBeaconChainDepositor,
+      validatorExitRequester,
+      validatorWithdrawalTriggerer,
+      disconnecter,
+      tierChanger,
+    } as PermissionsConfigStruct);
     const vaultCreationReceipt = await vaultCreationTx.wait();
     if (!vaultCreationReceipt) throw new Error("Vault creation failed");
 
@@ -210,27 +208,25 @@ describe("Permissions", () => {
   context("initialize()", () => {
     it("reverts if called twice", async () => {
       await expect(
-        vaultFactory.connect(deployer).revertCreateVaultWithPermissionsWithDoubleInitialize(
-          {
-            defaultAdmin,
-            nodeOperator,
-            confirmExpiry: days(7n),
-            funder,
-            withdrawer,
-            minter,
-            burner,
-            rebalancer,
-            depositPauser,
-            depositResumer,
-            pdgCompensator,
-            unknownValidatorProver,
-            unguaranteedBeaconChainDepositor,
-            validatorExitRequester,
-            validatorWithdrawalTriggerer,
-            disconnecter,
-            tierChanger,
-          } as PermissionsConfigStruct,
-        ),
+        vaultFactory.connect(deployer).revertCreateVaultWithPermissionsWithDoubleInitialize({
+          defaultAdmin,
+          nodeOperator,
+          confirmExpiry: days(7n),
+          funder,
+          withdrawer,
+          minter,
+          burner,
+          rebalancer,
+          depositPauser,
+          depositResumer,
+          pdgCompensator,
+          unknownValidatorProver,
+          unguaranteedBeaconChainDepositor,
+          validatorExitRequester,
+          validatorWithdrawalTriggerer,
+          disconnecter,
+          tierChanger,
+        } as PermissionsConfigStruct),
       ).to.be.revertedWithCustomError(permissions, "AlreadyInitialized");
     });
 
@@ -244,27 +240,25 @@ describe("Permissions", () => {
 
     it("reverts if zero address is passed as default admin", async () => {
       await expect(
-        vaultFactory.connect(deployer).revertCreateVaultWithPermissionsWithZeroDefaultAdmin(
-          {
-            defaultAdmin,
-            nodeOperator,
-            confirmExpiry: days(7n),
-            funder,
-            withdrawer,
-            minter,
-            burner,
-            rebalancer,
-            depositPauser,
-            depositResumer,
-            pdgCompensator,
-            unknownValidatorProver,
-            unguaranteedBeaconChainDepositor,
-            validatorExitRequester,
-            validatorWithdrawalTriggerer,
-            disconnecter,
-            tierChanger,
-          } as PermissionsConfigStruct,
-        ),
+        vaultFactory.connect(deployer).revertCreateVaultWithPermissionsWithZeroDefaultAdmin({
+          defaultAdmin,
+          nodeOperator,
+          confirmExpiry: days(7n),
+          funder,
+          withdrawer,
+          minter,
+          burner,
+          rebalancer,
+          depositPauser,
+          depositResumer,
+          pdgCompensator,
+          unknownValidatorProver,
+          unguaranteedBeaconChainDepositor,
+          validatorExitRequester,
+          validatorWithdrawalTriggerer,
+          disconnecter,
+          tierChanger,
+        } as PermissionsConfigStruct),
       )
         .to.be.revertedWithCustomError(permissions, "ZeroArgument")
         .withArgs("_defaultAdmin");
@@ -697,7 +691,6 @@ describe("Permissions", () => {
         .withArgs(stranger, await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE());
     });
   });
-
 
   // TODO: add tests for the following functions:
   // - requestTierChange()

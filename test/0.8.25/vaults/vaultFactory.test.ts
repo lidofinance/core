@@ -198,13 +198,9 @@ describe("VaultFactory.sol", () => {
         dashboard: dashboard_,
       } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), []);
 
-      await expect(tx)
-        .to.emit(vaultFactory, "VaultCreated")
-        .withArgs(vault);
+      await expect(tx).to.emit(vaultFactory, "VaultCreated").withArgs(vault);
 
-      await expect(tx)
-        .to.emit(vaultFactory, "DashboardCreated")
-        .withArgs(dashboard_, vault, vaultOwner1);
+      await expect(tx).to.emit(vaultFactory, "DashboardCreated").withArgs(dashboard_, vault, vaultOwner1);
 
       expect(await dashboard_.getAddress()).to.eq(await vault.owner());
     });
