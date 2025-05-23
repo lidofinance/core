@@ -203,7 +203,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return total value of the vault (as of the latest report received)
     /// @dev returns 0 if the vault is not connected
     function totalValue(address _vault) external view returns (uint256) {
-        return _grossTotalValue(_vaultRecord(_vault));
+        return _totalValue(_vaultRecord(_vault));
     }
 
     function netTotalValue(address _vault) external view returns (uint256) {
@@ -387,7 +387,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        uint256 totalValue_ = _grossTotalValue(record);
+        uint256 totalValue_ = _totalValue(record);
         uint256 liabilityShares_ = record.liabilityShares;
 
         if (_isThresholdBreached(totalValue_, liabilityShares_, _reserveRatioBP)) {
@@ -492,7 +492,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Updates the unsettled withdrawals obligation for the vault
     /// @param _vault The address of the vault
     /// @param _value The value of the unsettled withdrawals obligation
-    function updateUnsettledWithdrawals(address _vault, uint256 _value) external onlyRole(CORE_WITHDRAWAL_MANAGER_ROLE) {
+    function accrueWithdrawalsObligation(address _vault, uint256 _value) external onlyRole(CORE_WITHDRAWAL_MANAGER_ROLE) {
         uint256 liability = _getPooledEthBySharesRoundUp(_vaultRecord(_vault).liabilityShares);
         if (_value > liability) revert WithdrawalsObligationValueTooHigh(_vault, _value, liability);
 
@@ -568,7 +568,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _withdrawFromVault(_vault, record, _recipient, _ether);
 
-        if (_grossTotalValue(record) < record.locked) revert TotalValueBelowLockedAmount();
+        if (_totalValue(record) < record.locked) revert TotalValueBelowLockedAmount();
     }
 
     /// @notice Rebalances StakingVault by withdrawing ether to VaultHub
@@ -600,12 +600,12 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (!_isReportFresh(record)) revert VaultReportStale(_vault);
 
-        uint256 grossTotalValue_ = _grossTotalValue(record);
+        uint256 totalValue_ = _totalValue(record);
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - connection.reserveRatioBP;
-        uint256 maxMintableEther = (grossTotalValue_ * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 maxMintableEther = (totalValue_ * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
         uint256 stETHAfterMint = _getPooledEthBySharesRoundUp(vaultSharesAfterMint);
         if (stETHAfterMint > maxMintableEther) {
-            revert InsufficientTotalValueToMint(_vault, grossTotalValue_, _vaultObligations(_vault).unsettledTreasuryFees);
+            revert InsufficientTotalValueToMint(_vault, totalValue_, _vaultObligations(_vault).unsettledTreasuryFees);
         }
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
@@ -913,7 +913,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _ether) internal {
-        uint256 totalValue_ = _grossTotalValue(_record);
+        uint256 totalValue_ = _totalValue(_record);
         if (_ether > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, _ether);
 
         uint256 sharesToBurn = _getSharesToBurn(_ether);
@@ -947,7 +947,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
-        uint256 totalValue_ = _grossTotalValue(_record);
+        uint256 totalValue_ = _totalValue(_record);
         uint256 liabilityShares_ = _record.liabilityShares;
 
         bool isHealthy = !_isThresholdBreached(
@@ -997,7 +997,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _unlocked(VaultRecord storage _record) internal view returns (uint256) {
-        uint256 totalValue_ = _grossTotalValue(_record);
+        uint256 totalValue_ = _totalValue(_record);
         uint256 locked_ = _record.locked;
 
         if (locked_ > totalValue_) return 0;
@@ -1005,13 +1005,13 @@ contract VaultHub is PausableUntilWithRoles {
         return totalValue_ - locked_;
     }
 
-    function _grossTotalValue(VaultRecord storage _record) internal view returns (uint256) {
+    function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
         Report memory report = _record.report;
         return uint256(int256(uint256(report.totalValue)) + _record.inOutDelta - report.inOutDelta);
     }
 
     function _netTotalValue(address _vault) internal view returns (uint256) {
-        return _grossTotalValue(_vaultRecord(_vault)) - _vaultObligations(_vault).unsettledTreasuryFees;
+        return _totalValue(_vaultRecord(_vault)) - _vaultObligations(_vault).unsettledTreasuryFees;
     }
 
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
@@ -1028,7 +1028,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage _record
     ) internal view returns (bool) {
         return !_isThresholdBreached(
-            _grossTotalValue(_record),
+            _totalValue(_record),
             _record.liabilityShares,
             _connection.forcedRebalanceThresholdBP
         );

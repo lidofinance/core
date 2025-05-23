@@ -219,7 +219,7 @@ describe("Integration: Vault obligations", () => {
 
       expect((await vaultHub.vaultRecord(stakingVaultAddress)).liabilityShares).to.equal(0n);
 
-      await expect(vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, ether("1")))
+      await expect(vaultHub.connect(agentSigner).accrueWithdrawalsObligation(stakingVaultAddress, ether("1")))
         .to.be.revertedWithCustomError(vaultHub, "WithdrawalsObligationValueTooHigh")
         .withArgs(stakingVaultAddress, ether("1"), 0n);
 
@@ -242,14 +242,14 @@ describe("Integration: Vault obligations", () => {
 
       // Over the max possible withdrawals
       await expect(
-        vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals + 1n),
+        vaultHub.connect(agentSigner).accrueWithdrawalsObligation(stakingVaultAddress, maxPossibleWithdrawals + 1n),
       )
         .to.be.revertedWithCustomError(vaultHub, "WithdrawalsObligationValueTooHigh")
         .withArgs(stakingVaultAddress, maxPossibleWithdrawals + 1n, maxPossibleWithdrawals);
 
       // Set the max possible withdrawals
       await expect(
-        vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals),
+        vaultHub.connect(agentSigner).accrueWithdrawalsObligation(stakingVaultAddress, maxPossibleWithdrawals),
       )
         .to.emit(vaultHub, "WithdrawalsObligationUpdated")
         .withArgs(stakingVaultAddress, maxPossibleWithdrawals, 0n);
@@ -259,7 +259,7 @@ describe("Integration: Vault obligations", () => {
 
       // Decrease the obligation
       const newValue = maxPossibleWithdrawals / 10n;
-      await expect(vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, newValue))
+      await expect(vaultHub.connect(agentSigner).accrueWithdrawalsObligation(stakingVaultAddress, newValue))
         .to.emit(vaultHub, "WithdrawalsObligationUpdated")
         .withArgs(stakingVaultAddress, newValue, 0n);
 
@@ -267,7 +267,7 @@ describe("Integration: Vault obligations", () => {
       expect(obligationsAfterDecreased.unsettledWithdrawals).to.equal(newValue);
 
       // Remove the obligation
-      await expect(vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, 0))
+      await expect(vaultHub.connect(agentSigner).accrueWithdrawalsObligation(stakingVaultAddress, 0))
         .to.emit(vaultHub, "WithdrawalsObligationUpdated")
         .withArgs(stakingVaultAddress, 0, 0n);
 
@@ -283,7 +283,7 @@ describe("Integration: Vault obligations", () => {
         await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
 
         maxPossibleWithdrawals = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
-        await vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals);
+        await vaultHub.connect(agentSigner).accrueWithdrawalsObligation(stakingVaultAddress, maxPossibleWithdrawals);
       });
 
       it("On shares burned", async () => {
@@ -326,7 +326,7 @@ describe("Integration: Vault obligations", () => {
         await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
 
         maxPossibleWithdrawals = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
-        await vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals);
+        await vaultHub.connect(agentSigner).accrueWithdrawalsObligation(stakingVaultAddress, maxPossibleWithdrawals);
         Tracing.disable();
       });
 
@@ -383,7 +383,7 @@ describe("Integration: Vault obligations", () => {
       await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
 
       maxPossibleWithdrawals = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
-      await vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals);
+      await vaultHub.connect(agentSigner).accrueWithdrawalsObligation(stakingVaultAddress, maxPossibleWithdrawals);
     });
 
     it("Withdrawals before the treasury fees", async () => {
@@ -472,7 +472,7 @@ describe("Integration: Vault obligations", () => {
       ({ unsettledTreasuryFees } = await vaultHub.vaultObligations(stakingVaultAddress));
 
       maxPossibleWithdrawals = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
-      await vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals);
+      await vaultHub.connect(agentSigner).accrueWithdrawalsObligation(stakingVaultAddress, maxPossibleWithdrawals);
     });
 
     it("Reverts when vault balance is zero and no funding provided", async () => {
