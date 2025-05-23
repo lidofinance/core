@@ -5,7 +5,6 @@
 pragma solidity 0.8.25;
 
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
-import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 
 import {Confirmable} from "contracts/0.8.25/utils/Confirmable.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
@@ -77,8 +76,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         └──────────────────────────────────────────────────────┘
      */
 
-    using EnumerableSet for EnumerableSet.AddressSet;
-
     bytes32 public constant REGISTRY_ROLE = keccak256("vaults.OperatorsGrid.Registry");
 
     /// @notice Lido Locator contract
@@ -110,12 +107,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         uint16 treasuryFeeBP;
     }
 
-    struct VaultTier {
-        uint64 currentTierId;
-        uint64 requestedTierId;
-        uint96 requestedShareLimit;
-    }
-
     /**
      * @notice ERC-7201 storage namespace for the OperatorGrid
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
@@ -128,9 +119,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
      */
     struct ERC7201Storage {
         Tier[] tiers;
-        mapping(address vault => VaultTier) vaultTier;
+        mapping(address vault => uint64 tierId) vaultTier;
         mapping(address nodeOperator => Group) groups;
-        mapping(address nodeOperator => EnumerableSet.AddressSet) pendingRequests;
         address[] nodeOperators;
     }
 
@@ -310,46 +300,11 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         emit TierUpdated(_tierId, tier_.shareLimit, tier_.reserveRatioBP, tier_.forcedRebalanceThresholdBP, tier_.treasuryFeeBP);
     }
 
-    /// @notice Request to change tier
-    /// @param _vault address of the vault
-    /// @param _tierId id of the tier
-    /// @param _requestedShareLimit requested share limit
-    function requestTierChange(address _vault, uint256 _tierId, uint256 _requestedShareLimit) external {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
-
-        address nodeOperator = IStakingVault(_vault).nodeOperator();
-        address vaultOwner = IStakingVault(_vault).owner();
-
-        if (msg.sender != nodeOperator && msg.sender != vaultOwner)
-            revert NotAuthorized("requestTierChange", msg.sender);
-
-        ERC7201Storage storage $ = _getStorage();
-        if (_tierId >= $.tiers.length) revert TierNotExists();
-        if (_tierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
-
-        Tier memory requestedTier = $.tiers[_tierId];
-        address requestedTierOperator = requestedTier.operator;
-        if (nodeOperator != requestedTierOperator) revert TierNotInOperatorGroup();
-        if (_requestedShareLimit > requestedTier.shareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
-
-        uint64 tierId = uint64(_tierId);
-
-        VaultTier storage vaultTier = $.vaultTier[_vault];
-        if (vaultTier.currentTierId == tierId) revert TierAlreadySet();
-        if (vaultTier.requestedTierId == tierId && vaultTier.requestedShareLimit == uint96(_requestedShareLimit)) {
-            revert TierAlreadyRequested();
-        }
-
-        vaultTier.requestedTierId = tierId;
-        vaultTier.requestedShareLimit = uint96(_requestedShareLimit);
-        $.pendingRequests[nodeOperator].add(_vault); //returns true if the vault was not in the set
-
-        emit TierChangeRequested(_vault, vaultTier.currentTierId, _tierId);
-    }
-
     /// @notice Confirm tier change request
     /// @param _vault address of the vault
-    /// @param _tierIdToConfirm id of the tier to confirm
+    /// @param _requestedTierId id of the tier
+    /// @param _requestedShareLimit share limit to set
+
     ///
     /*
 
@@ -395,26 +350,23 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     NB: Cannot change from Tier2 to Tier4, because Tier4 has different operator.
 
     */
-    function confirmTierChange(address _vault, uint256 _tierIdToConfirm) external {
+    function confirmTierChange(address _vault, uint256 _requestedTierId, uint256 _requestedShareLimit) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
         address nodeOperator = IStakingVault(_vault).nodeOperator();
         address vaultOwner = IStakingVault(_vault).owner();
 
-        address[] memory confirmers = new address[](2);
-        confirmers[0] = vaultOwner;
-        confirmers[1] = nodeOperator;
+        bytes32[] memory confirmers = new bytes32[](2);
+        confirmers[0] = bytes32(uint256(uint160(vaultOwner)));
+        confirmers[1] = bytes32(uint256(uint160(nodeOperator)));
 
-        _setConfirmers(confirmers);
-        if (!_checkConfirmations(msg.data, confirmers.length)) return;
-        if (_tierIdToConfirm == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
+        if (!_checkConfirmations(msg.data, confirmers)) return;
+        if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
         ERC7201Storage storage $ = _getStorage();
-        VaultTier storage vaultTier = $.vaultTier[_vault];
-        uint64 requestedTierId = vaultTier.requestedTierId;
-        if (requestedTierId != _tierIdToConfirm) revert InvalidTierId(requestedTierId, _tierIdToConfirm);
+        uint64 vaultTierId = $.vaultTier[_vault];
 
-        Tier storage requestedTier = $.tiers[requestedTierId];
+        Tier storage requestedTier = $.tiers[uint64(_requestedTierId)];
 
         VaultHub vaultHub = VaultHub(LIDO_LOCATOR.vaultHub());
         VaultHub.VaultSocket memory vaultSocket = vaultHub.vaultSocket(_vault);
@@ -426,56 +378,28 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         // if the vault was in the default tier:
         // - that mean that the vault has no group, so we decrease only the minted shares of the default tier
         // - but need to check requested group limit exceeded
-        if (vaultTier.currentTierId == DEFAULT_TIER_ID) {
+        if (vaultTierId == DEFAULT_TIER_ID) {
             Group storage requestedGroup = $.groups[nodeOperator];
             if (requestedGroup.liabilityShares + vaultLiabilityShares > requestedGroup.shareLimit) revert GroupLimitExceeded();
             requestedGroup.liabilityShares += uint96(vaultLiabilityShares);
         }
 
-        Tier storage currentTier = $.tiers[vaultTier.currentTierId];
+        Tier storage currentTier = $.tiers[vaultTierId];
 
         currentTier.liabilityShares -= uint96(vaultLiabilityShares);
         requestedTier.liabilityShares += uint96(vaultLiabilityShares);
 
-        uint96 requestedShareLimit = vaultTier.requestedShareLimit;
-
-        vaultTier.currentTierId = requestedTierId;
-        vaultTier.requestedTierId = 0;
-        vaultTier.requestedShareLimit = 0;
-
-        $.pendingRequests[nodeOperator].remove(_vault);
+        $.vaultTier[_vault] = uint64(_requestedTierId);
 
         VaultHub(LIDO_LOCATOR.vaultHub()).updateConnection(
             _vault,
-            requestedShareLimit,
+            uint96(_requestedShareLimit),
             requestedTier.reserveRatioBP,
             requestedTier.forcedRebalanceThresholdBP,
             requestedTier.treasuryFeeBP
         );
 
-        emit TierChanged(_vault, requestedTierId);
-    }
-
-    /// @notice Returns pending requests for a node operator
-    /// @param _nodeOperator address of the node operator
-    /// @return vault addresses
-    function pendingRequests(address _nodeOperator) external view returns (address[] memory) {
-        return _getStorage().pendingRequests[_nodeOperator].values();
-    }
-
-    /// @notice Returns a pending request for a node operator
-    /// @param _nodeOperator address of the node operator
-    /// @param _index index of the pending request
-    /// @return vault address
-    function pendingRequest(address _nodeOperator, uint256 _index) external view returns (address) {
-        return _getStorage().pendingRequests[_nodeOperator].at(_index);
-    }
-
-    /// @notice Returns a pending requests count for a node operator
-    /// @param _nodeOperator address of the node operator
-    /// @return pending requests count
-    function pendingRequestsCount(address _nodeOperator) external view returns (uint256) {
-        return _getStorage().pendingRequests[_nodeOperator].length();
+        emit TierChanged(_vault, uint64(_requestedTierId));
     }
 
    // -----------------------------
@@ -493,9 +417,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
 
         ERC7201Storage storage $ = _getStorage();
 
-        VaultTier memory vaultTier = $.vaultTier[vaultAddr];
-        uint64 tierId = vaultTier.currentTierId;
-
+        uint64 tierId = $.vaultTier[vaultAddr];
         uint96 amount_ = uint96(amount);
 
         Tier storage tier_ = $.tiers[tierId];
@@ -525,8 +447,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
 
         ERC7201Storage storage $ = _getStorage();
 
-        VaultTier memory vaultTier = $.vaultTier[vaultAddr];
-        uint64 tierId = vaultTier.currentTierId;
+        uint64 tierId = $.vaultTier[vaultAddr];
 
         uint96 amount_ = uint96(amount);
 
@@ -564,8 +485,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     {
         ERC7201Storage storage $ = _getStorage();
 
-        VaultTier memory vaultTier = $.vaultTier[vaultAddr];
-        tierId = vaultTier.currentTierId;
+        tierId = $.vaultTier[vaultAddr];
 
         Tier memory t = $.tiers[tierId];
         nodeOperator = t.operator;

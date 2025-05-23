@@ -104,30 +104,31 @@ abstract contract Confirmations {
      *    - i.e. this optimization is beneficial for the deciding caller and
      *      saves 1 storage write for each role the deciding caller has
      *
-     * @param _confirmersCount Number of confirmers that must confirm the call in order to execute it
+     * @param _confirmers Array of confirmers that must confirm the call in order to execute it
      *
      * @notice Confirmations past their expiry are not counted and must be recast
      * @notice Only members of the specified roles can submit confirmations
      * @notice The order of confirmations does not matter
      *
      */
-    function _checkConfirmations(bytes calldata _calldata, uint256 _confirmersCount) internal returns (bool) {
-        if (_confirmersCount == 0) revert ZeroConfirmingRoles();
+    function _checkConfirmations(bytes calldata _calldata, bytes32[] memory _confirmers) internal returns (bool) {
+        if (_confirmers.length == 0) revert ZeroConfirmingRoles();
 
+        uint256 numberOfConfirmers = _confirmers.length;
         uint256 numberOfConfirms = 0;
-        bool[] memory deferredConfirms = new bool[](_confirmersCount);
+        bool[] memory deferredConfirms = new bool[](numberOfConfirmers);
         bool isRoleMember = false;
 
         ConfirmationStorage storage $ = _getConfirmationsStorage();
         uint256 expiryTimestamp = block.timestamp + $.confirmExpiry;
 
-        for (uint256 i = 0; i < _confirmersCount; ++i) {
-            if (_isValidConfirmer(i)) {
+        for (uint256 i = 0; i < numberOfConfirmers; ++i) {
+            if (_isValidConfirmer(i, _confirmers)) {
                 isRoleMember = true;
                 numberOfConfirms++;
                 deferredConfirms[i] = true;
 
-                _emitEventConfirmation(msg.sender, i, expiryTimestamp, _calldata);
+                _emitEventConfirmation(msg.sender, i, _confirmers, expiryTimestamp, _calldata);
             } else if ($.confirmations[_calldata][i] >= block.timestamp) {
                 numberOfConfirms++;
             }
@@ -135,13 +136,13 @@ abstract contract Confirmations {
 
         if (!isRoleMember) revert SenderNotMember();
 
-        if (numberOfConfirms == _confirmersCount) {
-            for (uint256 i = 0; i < _confirmersCount; ++i) {
+        if (numberOfConfirms == numberOfConfirmers) {
+            for (uint256 i = 0; i < numberOfConfirmers; ++i) {
                 delete $.confirmations[_calldata][i];
             }
             return true;
         } else {
-            for (uint256 i = 0; i < _confirmersCount; ++i) {
+            for (uint256 i = 0; i < numberOfConfirmers; ++i) {
                 if (deferredConfirms[i]) {
                     $.confirmations[_calldata][i] = expiryTimestamp;
                 }
@@ -153,9 +154,10 @@ abstract contract Confirmations {
     /**
      * @notice Checks if the caller is a valid confirmer
      * @param _confirmerIndex Index of the confirmer to check
+     * @param _confirmers Array of confirmers
      * @return bool True if the caller is a valid confirmer
      */
-    function _isValidConfirmer(uint256 _confirmerIndex) internal view virtual returns (bool);
+    function _isValidConfirmer(uint256 _confirmerIndex, bytes32[] memory _confirmers) internal view virtual returns (bool);
 
     /**
      * @dev Emitted when a role member confirms.
@@ -164,7 +166,7 @@ abstract contract Confirmations {
      * @param _expiryTimestamp The timestamp of the confirmation.
      * @param _data The msg.data of the confirmation (selector + arguments).
      */
-    function _emitEventConfirmation(address _confirmer, uint256 _confirmerIndex, uint256 _expiryTimestamp, bytes memory _data) internal virtual;
+    function _emitEventConfirmation(address _confirmer, uint256 _confirmerIndex, bytes32[] memory _confirmers, uint256 _expiryTimestamp, bytes memory _data) internal virtual;
 
     /**
      * @dev Sets the confirmation expiry.

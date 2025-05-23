@@ -11,30 +11,12 @@ import {Confirmations} from "./Confirmations.sol";
  * @notice An extension of Confirmations that allows exectuing functions by mutual confirmation.
  * @dev This contract extends Confirmations and adds a confirmation mechanism in the form of a modifier.
  */
-contract Confirmable is Confirmations {
-
-    function _setConfirmers(address[] memory _confirmers) internal {
-        uint256 len = _confirmers.length;
-        for (uint256 i = 0; i < len; ++i) {
-            bytes32 slot = keccak256(abi.encodePacked(CONFIRMERS_SLOT, i));
-            assembly {
-                tstore(slot, mload(add(add(_confirmers, 0x20), mul(i, 0x20))))
-            }
-        }
+abstract contract Confirmable is Confirmations {
+    function _isValidConfirmer(uint256 _confirmerIndex, bytes32[] memory _confirmers) internal view override returns (bool) {
+        return _confirmers[_confirmerIndex] == bytes32(uint256(uint160(msg.sender)));
     }
 
-    function _getConfirmerAt(uint256 index) internal view returns (address confirmer) {
-        bytes32 slot = keccak256(abi.encodePacked(CONFIRMERS_SLOT, index));
-        assembly {
-            confirmer := tload(slot)
-        }
-    }
-
-    function _isValidConfirmer(uint256 _confirmerIndex) internal view override returns (bool) {
-        return _getConfirmerAt(_confirmerIndex) == msg.sender;
-    }
-
-    function _emitEventConfirmation(address _sender, uint256 _index, uint256 _expiryTimestamp, bytes memory _data) internal override {
+    function _emitEventConfirmation(address _sender, uint256 _index, bytes32[] memory _confirmers, uint256 _expiryTimestamp, bytes memory _data) internal override {
         emit MemberConfirmed(_sender, _index, _expiryTimestamp, _data);
     }
 

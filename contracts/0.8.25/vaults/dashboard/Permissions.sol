@@ -408,7 +408,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _requestedShareLimit The requested share limit.
      */
     function _requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) internal onlyRole(REQUEST_TIER_CHANGE_ROLE) {
-        OperatorGrid(VAULT_HUB.operatorGrid()).requestTierChange(address(_stakingVault()), _tierId, _requestedShareLimit);
+        OperatorGrid(VAULT_HUB.operatorGrid()).confirmTierChange(address(_stakingVault()), _tierId, _requestedShareLimit);
     }
 
     /**
