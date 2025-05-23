@@ -223,20 +223,24 @@ export async function reportVaultDataWithProof(
   );
 }
 
-export async function reportVaultWithoutProof(stakingVault: StakingVault) {
+export async function reportVaultWithoutProof(ctx: ProtocolContext, stakingVault: StakingVault) {
+  const { vaultHub, lazyOracle } = ctx.contracts;
   const reportTimestamp = await getCurrentBlockTimestamp();
-  const vaultHub = await ethers.getContractAt("VaultHub", await stakingVault.vaultHub());
   const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
-  const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
+
   const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-  await vaultHub.connect(accountingSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
-  await stakingVault
-    .connect(vaultHubSigner)
-    .report(
+  const lazyOracleSigner = await impersonate(await locator.lazyOracle(), ether("100"));
+
+  await lazyOracle.connect(accountingSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
+  await vaultHub
+    .connect(lazyOracleSigner)
+    .applyVaultReport(
+      await stakingVault.getAddress(),
       reportTimestamp,
-      await stakingVault.totalValue(),
-      await stakingVault.inOutDelta(),
-      await stakingVault.locked(),
+      await vaultHub.totalValue(stakingVault),
+      (await vaultHub.vaultRecord(stakingVault)).inOutDelta,
+      0n,
+      (await vaultHub.vaultRecord(stakingVault)).liabilityShares,
     );
 }
 
