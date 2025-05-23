@@ -35,6 +35,7 @@ export async function main() {
   const exitBusOracleAdmin = testnetAdmin;
   const stakingRouterAdmin = testnetAdmin;
   const withdrawalQueueAdmin = testnetAdmin;
+  const withdrawalVaultAdmin = testnetAdmin;
 
   // Initialize NodeOperatorsRegistry
 
@@ -49,7 +50,7 @@ export async function main() {
     [
       lidoLocatorAddress,
       encodeStakingModuleTypeId(nodeOperatorsRegistryParams.stakingModuleTypeId),
-      nodeOperatorsRegistryParams.stuckPenaltyDelay,
+      nodeOperatorsRegistryParams.exitDeadlineThresholdInSeconds,
     ],
     { from: deployer },
   );
@@ -61,7 +62,7 @@ export async function main() {
     [
       lidoLocatorAddress,
       encodeStakingModuleTypeId(simpleDvtRegistryParams.stakingModuleTypeId),
-      simpleDvtRegistryParams.stuckPenaltyDelay,
+      simpleDvtRegistryParams.exitDeadlineThresholdInSeconds,
     ],
     { from: deployer },
   );
@@ -96,6 +97,10 @@ export async function main() {
 
   // Initialize ValidatorsExitBusOracle
   const validatorsExitBusOracle = await loadContract("ValidatorsExitBusOracle", ValidatorsExitBusOracleAddress);
+  const maxValidatorsPerBatch = 600;
+  const maxExitRequestsLimit = 13000;
+  const exitsPerFrame = 1;
+  const frameDuration = 48;
   await makeTx(
     validatorsExitBusOracle,
     "initialize",
@@ -104,13 +109,17 @@ export async function main() {
       hashConsensusForValidatorsExitBusOracleAddress,
       validatorsExitBusOracleParams.consensusVersion,
       zeroLastProcessingRefSlot,
+      maxValidatorsPerBatch,
+      maxExitRequestsLimit,
+      exitsPerFrame,
+      frameDuration,
     ],
     { from: deployer },
   );
 
   // Initialize WithdrawalVault
   const withdrawalVault = await loadContract("WithdrawalVault", withdrawalVaultAddress);
-  await makeTx(withdrawalVault, "initialize", [], { from: deployer });
+  await makeTx(withdrawalVault, "initialize", [withdrawalVaultAdmin], { from: deployer });
 
   // Initialize WithdrawalQueue
   const withdrawalQueue = await loadContract("WithdrawalQueueERC721", withdrawalQueueAddress);

@@ -84,6 +84,10 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
     ),
     burner: loadContract("Burner", config.get("burner") || (await locator.burner())),
     stakingRouter: loadContract("StakingRouter", config.get("stakingRouter") || (await locator.stakingRouter())),
+    validatorExitDelayVerifier: loadContract(
+      "ValidatorExitDelayVerifier",
+      config.get("validatorExitDelayVerifier") || (await locator.validatorExitDelayVerifier()),
+    ),
     validatorsExitBusOracle: loadContract(
       "ValidatorsExitBusOracle",
       config.get("validatorsExitBusOracle") || (await locator.validatorsExitBusOracle()),
@@ -175,6 +179,7 @@ export async function discover() {
     "Execution Layer Rewards Vault": foundationContracts.elRewardsVault.address,
     "Withdrawal Queue": foundationContracts.withdrawalQueue.address,
     "Withdrawal Vault": foundationContracts.withdrawalVault.address,
+    "Validator Exit Delay Verifier": foundationContracts.validatorExitDelayVerifier.address,
     "Validators Exit Bus Oracle": foundationContracts.validatorsExitBusOracle.address,
     "Oracle Daemon Config": foundationContracts.oracleDaemonConfig.address,
     "Oracle Report Sanity Checker": foundationContracts.oracleReportSanityChecker.address,
