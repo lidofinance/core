@@ -12,6 +12,8 @@ export const mochaRootHooks: Mocha.RootHookObject = {
    * This mine before all tests is to fix an error "No known hardfork for execution on historical block"
    * when forking other fork e.g. hardhat forking hardhat
    * See https://github.com/NomicFoundation/hardhat/issues/5511
+   *
+   * This is also used to add custom assertions to the Chai assertion library in the test suite when it's run in parallel mode.
    */
   async beforeAll() {
     await mine();
