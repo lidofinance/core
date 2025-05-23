@@ -269,11 +269,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   // skipping for now, going to update these tests later
   describe("If vault is unhealthy", () => {
     beforeEach(async () => {
-      console.log(await vaultHub.vaultRecord(stakingVault));
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
-      console.log(await vaultHub.vaultRecord(stakingVault));
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
-      console.log(await vaultHub.vaultRecord(stakingVault));
 
       await reportVaultDataWithProof(ctx, stakingVault, { totalValue: 1n }); // slashing to 1 wei
 
@@ -281,13 +278,11 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     });
 
     it("Can't mint until goes healthy", async () => {
-      console.log(await vaultHub.vaultRecord(stakingVault));
-
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
         .to.be.revertedWithCustomError(vaultHub, "InsufficientTotalValueToMint")
-        .withArgs(await stakingVault.getAddress(), ether("1") + 1n); // here + 1n is from the report
+        .withArgs(await stakingVault.getAddress(), ether("1") + 1n, 0n); // here + 1n is from the report
 
       await dashboard.connect(roles.funder).fund({ value: ether("2") });
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(true);

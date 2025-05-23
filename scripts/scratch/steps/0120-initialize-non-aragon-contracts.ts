@@ -31,7 +31,6 @@ export async function main() {
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const pdgAddress = state[Sk.predepositGuarantee].proxy.address;
   const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
-  const agentAddress = state[Sk.appAgent].proxy.address;
 
   // Set admin addresses (using deployer for testnet)
   const testnetAdmin = deployer;
@@ -144,7 +143,7 @@ export async function main() {
 
   // Initialize VaultHub
   const vaultHub = await loadContract("VaultHub", vaultHubAddress);
-  await makeTx(vaultHub, "initialize", [vaultHubAdmin, agentAddress], { from: deployer });
+  await makeTx(vaultHub, "initialize", [vaultHubAdmin], { from: deployer });
 
   // Initialize OperatorGrid
   const defaultTierParams = {

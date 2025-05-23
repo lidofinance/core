@@ -199,21 +199,35 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the amount of ether that is available for withdrawal from the staking vault taking into account
-     *         fees and obligations and not taking locked ether into account.
-     * @dev This amount is not available for minting shares.
+     * @notice Returns the unreserved amount of ether,
+     * i.e. the amount of total value that is not locked in the StakingVault
+     * and not reserved for node operator fee.
+     * This amount does not account for the current balance of the StakingVault and
+     * can return a value greater than the actual balance of the StakingVault.
      */
-    function availableBalance() public view returns (uint256) {
-        return VAULT_HUB.availableBalance(address(_stakingVault())) - nodeOperatorDisbursableFee();
+    function unreserved() public view returns (uint256) {
+        uint256 reserved = locked() + _feesAndObligations();
+        uint256 totalValue_ = totalValue();
+
+        return reserved > totalValue_ ? 0 : totalValue_ - reserved;
     }
 
-    /**
-     * @notice Utility function to get the total amount of obligations for the vault
-     * @return The total value of all obligations for the vault
-     */
-    function unsettledObligations() public view returns (uint256) {
-        return VAULT_HUB.unsettledObligations(address(_stakingVault()));
-    }
+    // /**
+    //  * @notice Returns the amount of ether that is available for withdrawal from the staking vault taking into account
+    //  *         fees and obligations and not taking locked ether into account.
+    //  * @dev This amount is not available for minting shares.
+    //  */
+    // function availableBalance() public view returns (uint256) {
+    //     return VAULT_HUB.availableBalance(address(_stakingVault())) - nodeOperatorUnclaimedFee();
+    // }
+
+    // /**
+    //  * @notice Utility function to get the total amount of obligations for the vault
+    //  * @return The total value of all obligations for the vault
+    //  */
+    // function unsettledObligations() public view returns (uint256) {
+    //     return VAULT_HUB.unsettledObligations(address(_stakingVault()));
+    // }
 
     /**
      * @notice Returns the amount of ether that can be instantly withdrawn from the staking vault.
@@ -224,7 +238,7 @@ contract Dashboard is NodeOperatorFee {
         uint256 totalValue_ = totalValue();
         uint256 lockedPlusFee = locked() + nodeOperatorDisbursableFee();
 
-        return Math256.min(availableBalance(), totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
+        return Math256.min(unreserved(), totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
     }
 
     // ==================== Vault Management Functions ====================
@@ -583,7 +597,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The total obligations value of the vault in wei.
      */
     function _feesAndObligations() internal view returns (uint256) {
-        return nodeOperatorDisbursableFee() + unsettledObligations();
+        return nodeOperatorDisbursableFee()/* + unsettledObligations()*/;
     }
 
     /**

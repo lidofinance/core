@@ -27,9 +27,13 @@ describe("Integration: Vault obligations", () => {
   let roles: VaultRoles;
 
   let stakingVaultAddress: string;
+  let treasuryAddress: string;
+  let vaultHubAddress: string;
 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
+  let withdrawalManager: HardhatEthersSigner;
+  let withdrawalExecutor: HardhatEthersSigner;
   let agentSigner: HardhatEthersSigner;
 
   let originalSnapshot: string;
@@ -44,7 +48,7 @@ describe("Integration: Vault obligations", () => {
 
     ({ vaultHub } = ctx.contracts);
 
-    [owner, nodeOperator] = await ethers.getSigners();
+    [owner, nodeOperator, withdrawalManager, withdrawalExecutor] = await ethers.getSigners();
 
     // Owner can create a vault with operator as a node operator
     ({ stakingVault, dashboard, roles } = await createVaultWithDashboard(
@@ -57,7 +61,13 @@ describe("Integration: Vault obligations", () => {
     ));
 
     stakingVaultAddress = await stakingVault.getAddress();
+    treasuryAddress = await ctx.contracts.locator.treasury();
+    vaultHubAddress = await vaultHub.getAddress();
+
     agentSigner = await ctx.getSigner("agent");
+
+    await vaultHub.connect(agentSigner).grantRole(await vaultHub.CORE_WITHDRAWAL_MANAGER_ROLE(), withdrawalManager);
+    await vaultHub.connect(agentSigner).grantRole(await vaultHub.CORE_WITHDRAWAL_EXECUTOR_ROLE(), withdrawalExecutor);
   });
 
   after(async () => await Snapshot.restore(originalSnapshot));
@@ -67,6 +77,26 @@ describe("Integration: Vault obligations", () => {
   afterEach(async () => await Snapshot.restore(snapshot));
 
   context("Treasury fees obligations", () => {
+    it("Will revert if accrued fees are less than the cumulative fees", async () => {
+      const accruedTreasuryFees = ether("1.1");
+
+      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsBefore.unsettledTreasuryFees).to.equal(0n);
+      expect(obligationsBefore.settledTreasuryFees).to.equal(0n);
+
+      // Report the vault data with accrued treasury fees
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees });
+
+      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsAfter.unsettledTreasuryFees).to.equal(ether("0.1"));
+      expect(obligationsAfter.settledTreasuryFees).to.equal(ether("1"));
+
+      // Try to lower the fees
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees: accruedTreasuryFees - 1n }))
+        .to.be.revertedWithCustomError(vaultHub, "InvalidFees")
+        .withArgs(stakingVaultAddress, accruedTreasuryFees - 1n, accruedTreasuryFees);
+    });
+
     it("Updated on the vault report for vault with no balance", async () => {
       const accruedTreasuryFees = ether("1");
 
@@ -100,7 +130,7 @@ describe("Integration: Vault obligations", () => {
         .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
         .withArgs(stakingVaultAddress, 0n, accruedTreasuryFees) // 0 unsettled
         .to.emit(stakingVault, "EtherWithdrawn")
-        .withArgs(await ctx.contracts.locator.treasury(), accruedTreasuryFees);
+        .withArgs(treasuryAddress, accruedTreasuryFees);
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.unsettledTreasuryFees).to.equal(0n);
@@ -124,7 +154,7 @@ describe("Integration: Vault obligations", () => {
         .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
         .withArgs(stakingVaultAddress, unsettledTreasuryFees, vaultBalance) // unsettled, settled
         .to.emit(stakingVault, "EtherWithdrawn")
-        .withArgs(await ctx.contracts.locator.treasury(), vaultBalance); // settled withrdrawal to treasury
+        .withArgs(treasuryAddress, vaultBalance); // settled withrdrawal to treasury
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.unsettledTreasuryFees).to.equal(unsettledTreasuryFees);
@@ -143,7 +173,7 @@ describe("Integration: Vault obligations", () => {
         .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
         .withArgs(stakingVaultAddress, unsettledTreasuryFees, vaultBalance)
         .to.emit(stakingVault, "EtherWithdrawn")
-        .withArgs(await ctx.contracts.locator.treasury(), vaultBalance);
+        .withArgs(treasuryAddress, vaultBalance);
 
       // 2nd report with no fees emit nothing because fees are not changed (reported value is cumulative)
       await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees })).not.to.emit(
@@ -171,7 +201,7 @@ describe("Integration: Vault obligations", () => {
         .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
         .withArgs(stakingVaultAddress, 0n, feesToSettle)
         .to.emit(stakingVault, "EtherWithdrawn")
-        .withArgs(await ctx.contracts.locator.treasury(), feesToSettle);
+        .withArgs(treasuryAddress, feesToSettle);
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.unsettledTreasuryFees).to.equal(0n);
@@ -189,7 +219,7 @@ describe("Integration: Vault obligations", () => {
 
       expect((await vaultHub.vaultRecord(stakingVaultAddress)).liabilityShares).to.equal(0n);
 
-      await expect(vaultHub.connect(agentSigner).setUnsettledWithdrawals(stakingVaultAddress, ether("1")))
+      await expect(vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, ether("1")))
         .to.be.revertedWithCustomError(vaultHub, "WithdrawalsObligationValueTooHigh")
         .withArgs(stakingVaultAddress, ether("1"), 0n);
 
@@ -203,7 +233,7 @@ describe("Integration: Vault obligations", () => {
       liabilityShares = 1000n;
 
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
-      await dashboard.connect(roles.minter).mintShares(roles.burner.address, liabilityShares);
+      await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
 
       maxPossibleWithdrawals = await lido.getPooledEthBySharesRoundUp(liabilityShares);
 
@@ -212,13 +242,15 @@ describe("Integration: Vault obligations", () => {
 
       // Over the max possible withdrawals
       await expect(
-        vaultHub.connect(agentSigner).setUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals + 1n),
+        vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals + 1n),
       )
         .to.be.revertedWithCustomError(vaultHub, "WithdrawalsObligationValueTooHigh")
         .withArgs(stakingVaultAddress, maxPossibleWithdrawals + 1n, maxPossibleWithdrawals);
 
       // Set the max possible withdrawals
-      await expect(vaultHub.connect(agentSigner).setUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals))
+      await expect(
+        vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals),
+      )
         .to.emit(vaultHub, "WithdrawalsObligationUpdated")
         .withArgs(stakingVaultAddress, maxPossibleWithdrawals, 0n);
 
@@ -227,7 +259,7 @@ describe("Integration: Vault obligations", () => {
 
       // Decrease the obligation
       const newValue = maxPossibleWithdrawals / 10n;
-      await expect(vaultHub.connect(agentSigner).setUnsettledWithdrawals(stakingVaultAddress, newValue))
+      await expect(vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, newValue))
         .to.emit(vaultHub, "WithdrawalsObligationUpdated")
         .withArgs(stakingVaultAddress, newValue, 0n);
 
@@ -235,7 +267,7 @@ describe("Integration: Vault obligations", () => {
       expect(obligationsAfterDecreased.unsettledWithdrawals).to.equal(newValue);
 
       // Remove the obligation
-      await expect(vaultHub.connect(agentSigner).setUnsettledWithdrawals(stakingVaultAddress, 0))
+      await expect(vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, 0))
         .to.emit(vaultHub, "WithdrawalsObligationUpdated")
         .withArgs(stakingVaultAddress, 0, 0n);
 
@@ -248,10 +280,10 @@ describe("Integration: Vault obligations", () => {
         liabilityShares = ether("1");
 
         await dashboard.connect(roles.funder).fund({ value: ether("1") });
-        await dashboard.connect(roles.minter).mintShares(roles.burner.address, liabilityShares);
+        await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
 
         maxPossibleWithdrawals = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
-        await vaultHub.connect(agentSigner).setUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals);
+        await vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals);
       });
 
       it("On shares burned", async () => {
@@ -276,6 +308,14 @@ describe("Integration: Vault obligations", () => {
         const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
         expect(obligationsAfter.unsettledWithdrawals).to.equal(maxPossibleWithdrawals / 2n);
       });
+
+      it("Should not increase on new minting", async () => {
+        await dashboard.connect(roles.funder).fund({ value: ether("1") });
+        await dashboard.connect(roles.minter).mintShares(roles.burner, ether("1"));
+
+        const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
+        expect(obligationsAfter.unsettledWithdrawals).to.equal(maxPossibleWithdrawals);
+      });
     });
 
     context("Must be settled on report", () => {
@@ -283,10 +323,10 @@ describe("Integration: Vault obligations", () => {
         liabilityShares = ether("1");
 
         await dashboard.connect(roles.funder).fund({ value: ether("1") });
-        await dashboard.connect(roles.minter).mintShares(roles.burner.address, liabilityShares);
+        await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
 
         maxPossibleWithdrawals = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
-        await vaultHub.connect(agentSigner).setUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals);
+        await vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals);
         Tracing.disable();
       });
 
@@ -330,85 +370,168 @@ describe("Integration: Vault obligations", () => {
         expect(obligationsAfter.unsettledWithdrawals).to.equal(0n);
       });
     });
+  });
 
-    context("In correct order", () => {
-      beforeEach(async () => {
-        liabilityShares = ether("1");
+  context("Report should settle obligations in correct order", () => {
+    let liabilityShares: bigint;
+    let maxPossibleWithdrawals: bigint;
 
-        await dashboard.connect(roles.funder).fund({ value: ether("1") });
-        await dashboard.connect(roles.minter).mintShares(roles.burner.address, liabilityShares);
+    beforeEach(async () => {
+      liabilityShares = ether("1");
 
-        maxPossibleWithdrawals = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
-        await vaultHub.connect(agentSigner).setUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals);
-      });
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
 
-      it("Should settle before the treasury fees", async () => {
-        const vaultBalance = ether("0.7");
-        await setBalance(stakingVaultAddress, vaultBalance);
+      maxPossibleWithdrawals = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
+      await vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals);
+    });
 
-        let accruedTreasuryFees = ether("1");
+    it("Withdrawals before the treasury fees", async () => {
+      const vaultBalance = ether("0.7");
+      await setBalance(stakingVaultAddress, vaultBalance);
 
-        const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsBefore.unsettledWithdrawals).to.equal(maxPossibleWithdrawals);
+      let accruedTreasuryFees = ether("1");
 
-        const unsettledWithdrawals = maxPossibleWithdrawals - vaultBalance;
+      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsBefore.unsettledWithdrawals).to.equal(maxPossibleWithdrawals);
 
-        await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees }))
-          .to.emit(vaultHub, "WithdrawalsObligationUpdated")
-          .withArgs(stakingVaultAddress, unsettledWithdrawals, vaultBalance)
-          .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
-          .withArgs(stakingVaultAddress, accruedTreasuryFees, 0n)
-          .not.to.emit(vaultHub, "VaultRebalanced");
+      const unsettledWithdrawals = maxPossibleWithdrawals - vaultBalance;
 
-        const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsAfter.unsettledWithdrawals).to.equal(unsettledWithdrawals);
-        expect(obligationsAfter.unsettledTreasuryFees).to.equal(accruedTreasuryFees);
-        expect(obligationsAfter.settledTreasuryFees).to.equal(0n);
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees }))
+        .to.emit(vaultHub, "WithdrawalsObligationUpdated")
+        .withArgs(stakingVaultAddress, unsettledWithdrawals, vaultBalance)
+        .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
+        .withArgs(stakingVaultAddress, accruedTreasuryFees, 0n)
+        .not.to.emit(vaultHub, "VaultRebalanced");
 
-        // fund to the vault to settle some obligations
-        const funded = ether("1");
-        const feesIncreased = ether("0.1");
-        await dashboard.connect(roles.funder).fund({ value: funded });
+      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsAfter.unsettledWithdrawals).to.equal(unsettledWithdrawals);
+      expect(obligationsAfter.unsettledTreasuryFees).to.equal(accruedTreasuryFees);
+      expect(obligationsAfter.settledTreasuryFees).to.equal(0n);
 
-        // add some treasury fees
-        accruedTreasuryFees += feesIncreased;
+      // fund to the vault to settle some obligations
+      const funded = ether("1");
+      const feesIncreased = ether("0.1");
+      await dashboard.connect(roles.funder).fund({ value: funded });
 
-        const expectedSettledTreasuryFees1 = funded - unsettledWithdrawals;
-        const expectedUnsettledTreasuryFees = accruedTreasuryFees - expectedSettledTreasuryFees1;
+      // add some treasury fees
+      accruedTreasuryFees += feesIncreased;
 
-        await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees }))
-          .to.emit(vaultHub, "WithdrawalsObligationUpdated")
-          .withArgs(stakingVaultAddress, 0, unsettledWithdrawals)
-          .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
-          .withArgs(stakingVaultAddress, expectedUnsettledTreasuryFees, expectedSettledTreasuryFees1)
-          .to.emit(stakingVault, "EtherWithdrawn")
-          .withArgs(await ctx.contracts.locator.treasury(), expectedSettledTreasuryFees1)
-          .not.to.emit(vaultHub, "VaultRebalanced");
+      const expectedSettledTreasuryFees1 = funded - unsettledWithdrawals;
+      const expectedUnsettledTreasuryFees = accruedTreasuryFees - expectedSettledTreasuryFees1;
 
-        const obligationsAfterFunding = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsAfterFunding.unsettledWithdrawals).to.equal(0n);
-        expect(obligationsAfterFunding.unsettledTreasuryFees).to.equal(expectedUnsettledTreasuryFees);
-        expect(obligationsAfterFunding.settledTreasuryFees).to.equal(expectedSettledTreasuryFees1);
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees }))
+        .to.emit(vaultHub, "WithdrawalsObligationUpdated")
+        .withArgs(stakingVaultAddress, 0, unsettledWithdrawals)
+        .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
+        .withArgs(stakingVaultAddress, expectedUnsettledTreasuryFees, expectedSettledTreasuryFees1)
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(treasuryAddress, expectedSettledTreasuryFees1)
+        .not.to.emit(vaultHub, "VaultRebalanced");
 
-        // fund to the vault to settle all the obligations
-        await dashboard.connect(roles.funder).fund({ value: funded });
+      const obligationsAfterFunding = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsAfterFunding.unsettledWithdrawals).to.equal(0n);
+      expect(obligationsAfterFunding.unsettledTreasuryFees).to.equal(expectedUnsettledTreasuryFees);
+      expect(obligationsAfterFunding.settledTreasuryFees).to.equal(expectedSettledTreasuryFees1);
 
-        accruedTreasuryFees += feesIncreased;
-        const expectedSettledTreasuryFees2 = expectedUnsettledTreasuryFees + feesIncreased;
-        const expectedTotalSettledTreasuryFees = expectedSettledTreasuryFees1 + expectedSettledTreasuryFees2;
+      // fund to the vault to settle all the obligations
+      await dashboard.connect(roles.funder).fund({ value: funded });
 
-        await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees }))
-          .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
-          .withArgs(stakingVaultAddress, 0n, expectedSettledTreasuryFees2)
-          .to.emit(stakingVault, "EtherWithdrawn")
-          .withArgs(await ctx.contracts.locator.treasury(), expectedSettledTreasuryFees2)
-          .not.to.emit(vaultHub, "WithdrawalsObligationUpdated");
+      accruedTreasuryFees += feesIncreased;
+      const expectedSettledTreasuryFees2 = expectedUnsettledTreasuryFees + feesIncreased;
+      const expectedTotalSettledTreasuryFees = expectedSettledTreasuryFees1 + expectedSettledTreasuryFees2;
 
-        const obligationsAfterReport = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsAfterReport.unsettledWithdrawals).to.equal(0n);
-        expect(obligationsAfterReport.unsettledTreasuryFees).to.equal(0);
-        expect(obligationsAfterReport.settledTreasuryFees).to.equal(expectedTotalSettledTreasuryFees);
-      });
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees }))
+        .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
+        .withArgs(stakingVaultAddress, 0n, expectedSettledTreasuryFees2)
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(treasuryAddress, expectedSettledTreasuryFees2)
+        .not.to.emit(vaultHub, "WithdrawalsObligationUpdated");
+
+      const obligationsAfterReport = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsAfterReport.unsettledWithdrawals).to.equal(0n);
+      expect(obligationsAfterReport.unsettledTreasuryFees).to.equal(0);
+      expect(obligationsAfterReport.settledTreasuryFees).to.equal(expectedTotalSettledTreasuryFees);
+    });
+  });
+
+  context("Manual settlement via dashboard", () => {
+    let liabilityShares: bigint;
+    let maxPossibleWithdrawals: bigint;
+    let accruedTreasuryFees: bigint;
+    let unsettledTreasuryFees: bigint;
+
+    beforeEach(async () => {
+      liabilityShares = ether("1");
+      accruedTreasuryFees = ether("2.1");
+
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.connect(roles.minter).mintShares(roles.burner.address, liabilityShares);
+
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees });
+      ({ unsettledTreasuryFees } = await vaultHub.vaultObligations(stakingVaultAddress));
+
+      maxPossibleWithdrawals = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
+      await vaultHub.connect(agentSigner).updateUnsettledWithdrawals(stakingVaultAddress, maxPossibleWithdrawals);
+    });
+
+    it("Reverts when vault balance is zero and no funding provided", async () => {
+      expect(unsettledTreasuryFees).to.equal(ether("0.1")); // 2 ether should be settled to the treasury
+
+      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsBefore.unsettledWithdrawals).to.equal(maxPossibleWithdrawals);
+      expect(obligationsBefore.unsettledTreasuryFees).to.equal(unsettledTreasuryFees);
+
+      await setBalance(stakingVaultAddress, 0);
+
+      await expect(dashboard.connect(owner).settleObligations()).to.be.revertedWithCustomError(vaultHub, "ZeroBalance");
+
+      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsAfter.unsettledWithdrawals).to.equal(maxPossibleWithdrawals);
+      expect(obligationsAfter.unsettledTreasuryFees).to.equal(unsettledTreasuryFees);
+    });
+
+    it("Partially settles obligations using existing balance", async () => {
+      const funding = ether("0.5");
+
+      await dashboard.connect(roles.funder).fund({ value: funding });
+
+      await expect(dashboard.connect(owner).settleObligations())
+        .to.emit(vaultHub, "WithdrawalsObligationUpdated")
+        .withArgs(stakingVaultAddress, maxPossibleWithdrawals - funding, funding)
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(vaultHubAddress, funding);
+
+      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsAfter.unsettledWithdrawals).to.equal(maxPossibleWithdrawals - funding);
+      expect(obligationsAfter.unsettledTreasuryFees).to.equal(unsettledTreasuryFees);
+    });
+
+    it("Fully settles obligations when funded and vault has some balance", async () => {
+      const funding = ether("0.5");
+
+      await dashboard.connect(roles.funder).fund({ value: funding });
+
+      const expectedSettledFees = maxPossibleWithdrawals + unsettledTreasuryFees;
+      const extraFunding = expectedSettledFees - funding + ether("1"); // 1 ether extra should stay in the vault
+
+      await expect(dashboard.connect(owner).settleObligations({ value: extraFunding }))
+        .to.emit(vaultHub, "WithdrawalsObligationUpdated")
+        .withArgs(stakingVaultAddress, 0n, maxPossibleWithdrawals)
+        .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
+        .withArgs(stakingVaultAddress, 0n, unsettledTreasuryFees)
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(vaultHubAddress, maxPossibleWithdrawals)
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(treasuryAddress, unsettledTreasuryFees)
+        .to.emit(vaultHub, "VaultRebalanced")
+        .withArgs(stakingVaultAddress, maxPossibleWithdrawals, maxPossibleWithdrawals);
+
+      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsAfter.unsettledWithdrawals).to.equal(0n);
+
+      const vaultBalanceAfter = await ethers.provider.getBalance(stakingVaultAddress);
+      expect(vaultBalanceAfter).to.equal(ether("1"));
     });
   });
 });
