@@ -66,6 +66,10 @@ contract Accounting {
         uint256 postInternalShares;
         /// @notice amount of ether under the protocol after the report is applied
         uint256 postInternalEther;
+        /// @notice total number of stETH shares before the report is applied
+        uint256 preTotalShares;
+        /// @notice amount of ether under the protocol before the report is applied
+        uint256 preTotalPooledEther;
         /// @notice total number of stETH shares after the report is applied
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
@@ -219,6 +223,9 @@ contract Accounting {
 
         update.postTotalShares = update.postInternalShares + externalShares;
         update.postTotalPooledEther = update.postInternalEther + externalShares * update.postInternalEther / update.postInternalShares;
+
+        update.preTotalShares = _pre.totalShares;
+        update.preTotalPooledEther = _pre.totalPooledEther;
     }
 
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
