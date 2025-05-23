@@ -205,13 +205,6 @@ contract NodeOperatorFee is Permissions {
      * @notice Disburses the node operator fee if there is any.
      */
     function disburseNodeOperatorFee() public {
-        // To disburse the fee, we must wait for the report FOLLOWING the adjustment (i.e. next report)
-        // to make sure that the adjustment is included in the total value.
-        // The adjustment is guaranteed in the next report because oracle includes both active validator balances and
-        // valid pending deposits, and pending deposits are observable from the very block they are submitted in.
-        if (rewardsAdjustment.timestamp < VAULT_HUB.vaultRecord(address(_stakingVault())).reportTimestamp)
-            revert ReportStale();
-
         uint256 fee = nodeOperatorDisburseableFee();
 
         // move the report to the latest disbursed report
@@ -262,7 +255,13 @@ contract NodeOperatorFee is Permissions {
         // the report must be fresh in order to prevent retroactive fees
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
 
-        // disburse the fee to prevent retroactive fees
+        // To change the fee, we must wait for the report FOLLOWING the adjustment (i.e. next report)
+        // to make sure that the adjustment is included in the total value.
+        // The adjustment is guaranteed in the next report because oracle includes both active validator balances
+        // and valid pending deposits, and pending deposits are observable from the very block they are submitted in.
+        if (rewardsAdjustment.timestamp < VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault())))
+            revert ReportStale();
+
         disburseNodeOperatorFee();
 
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
