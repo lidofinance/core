@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
 
 import {
-  CONSENSUS_VERSION,
+  BASE_CONSENSUS_VERSION,
   EPOCHS_PER_FRAME,
   GENESIS_TIME,
   INITIAL_EPOCH,
@@ -234,7 +234,7 @@ describe("HashConsensus.sol:frames", function () {
 
       const firstRefSlot = TEST_INITIAL_EPOCH * SLOTS_PER_EPOCH - 1n;
       await expect(
-        consensus.connect(member1).submitReport(firstRefSlot, HASH_1, CONSENSUS_VERSION),
+        consensus.connect(member1).submitReport(firstRefSlot, HASH_1, BASE_CONSENSUS_VERSION),
       ).to.be.revertedWithCustomError(consensus, "InitialEpochIsYetToArrive()");
     });
 
@@ -258,7 +258,7 @@ describe("HashConsensus.sol:frames", function () {
       expect(memberInfo.currentFrameRefSlot).to.equal(frame.refSlot);
       expect(memberInfo.lastMemberReportRefSlot).to.equal(0);
 
-      const tx = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, CONSENSUS_VERSION);
+      const tx = await consensus.connect(member1).submitReport(frame.refSlot, HASH_1, BASE_CONSENSUS_VERSION);
       await expect(tx)
         .to.emit(consensus, "ReportReceived")
         .withArgs(frame.refSlot, await member1.getAddress(), HASH_1);

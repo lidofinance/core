@@ -113,6 +113,7 @@ export async function deployWithoutProxy(
   constructorArgs: ConvertibleToString[] = [],
   addressFieldName = "address",
   withStateFile = true,
+  fields: Record<string, unknown> = {},
 ): Promise<DeployedContract> {
   logWithConstructorArgs(`Deploying: ${yl(artifactName)} (without proxy)`, constructorArgs);
 
@@ -124,6 +125,7 @@ export async function deployWithoutProxy(
       contract: contractPath,
       [addressFieldName]: contract.address,
       constructorArgs,
+      ...fields,
     });
   }
 
@@ -235,7 +237,6 @@ async function getLocatorConfig(locatorAddress: string) {
     "accountingOracle",
     "depositSecurityModule",
     "elRewardsVault",
-    "legacyOracle",
     "lido",
     "oracleReportSanityChecker",
     "postTokenRebaseReceiver",
@@ -246,6 +247,11 @@ async function getLocatorConfig(locatorAddress: string) {
     "withdrawalQueue",
     "withdrawalVault",
     "oracleDaemonConfig",
+    "accounting",
+    "wstETH",
+    "predepositGuarantee",
+    "vaultHub",
+    "operatorGrid",
   ] as (keyof LidoLocator.ConfigStruct)[];
 
   const configPromises = addresses.map((name) => locator[name]());

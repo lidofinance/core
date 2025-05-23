@@ -1,4 +1,4 @@
-import { ContractTransactionReceipt } from "ethers";
+import { ContractTransactionReceipt, Interface } from "ethers";
 import hre from "hardhat";
 
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
@@ -10,6 +10,10 @@ import { ProtocolContext, ProtocolContextFlags, ProtocolSigners, Signer } from "
 const getSigner = async (signer: Signer, balance = ether("100"), signers: ProtocolSigners) => {
   const signerAddress = signers[signer] ?? signer;
   return impersonate(signerAddress, balance);
+};
+
+export const withCSM = () => {
+  return process.env.INTEGRATION_WITH_CSM !== "off";
 };
 
 export const getProtocolContext = async (): Promise<ProtocolContext> => {
@@ -27,7 +31,7 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
 
   // By default, all flags are "on"
   const flags = {
-    withCSM: process.env.INTEGRATION_WITH_CSM !== "off",
+    withCSM: withCSM(),
   } as ProtocolContextFlags;
 
   log.debug("Protocol context flags", {
@@ -39,9 +43,10 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
     signers,
     interfaces,
     flags,
+    isScratch: true, // NB: gonna be updated upon merge of upgrade PR
     getSigner: async (signer: Signer, balance?: bigint) => getSigner(signer, balance, signers),
-    getEvents: (receipt: ContractTransactionReceipt, eventName: string) =>
-      findEventsWithInterfaces(receipt, eventName, interfaces),
+    getEvents: (receipt: ContractTransactionReceipt, eventName: string, extraInterfaces: Interface[] = []) =>
+      findEventsWithInterfaces(receipt, eventName, [...interfaces, ...extraInterfaces]),
   } as ProtocolContext;
 
   await provision(context);

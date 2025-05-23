@@ -18,7 +18,11 @@ type ProxyContract = {
   implementation: DeployedContract;
 };
 
-type Contract = DeployedContract | ProxyContract;
+type ImplementationContract = {
+  implementation: DeployedContract;
+};
+
+type Contract = DeployedContract | ProxyContract | ImplementationContract;
 
 type NetworkState = {
   deployer: string;
@@ -68,7 +72,7 @@ task("verify:deployed", "Verifies deployed contracts based on state file")
 
 async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnvironment) {
   if (!contract.contract) {
-    // TODO: In the case of state processing on the local devnet there are skips, we need to find the cause
+    log.warning("Skipping contract without contract name:", contract);
     return;
   }
 
@@ -99,6 +103,8 @@ async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnv
 function getDeployedContract(contract: Contract): DeployedContract[] {
   if ("proxy" in contract && "implementation" in contract) {
     return [contract.proxy, contract.implementation];
+  } else if ("implementation" in contract) {
+    return [contract.implementation];
   } else if ("contract" in contract && "address" in contract && "constructorArgs" in contract) {
     return [contract];
   }

@@ -13,6 +13,8 @@ jobs:
         image: ghcr.io/lidofinance/hardhat-node:2.24.0-scratch
         ports:
           - 8555:8545
+        env:
+          HARDFORK: "prague"
 
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +35,7 @@ jobs:
           GAS_PRIORITY_FEE: 1
           GAS_MAX_FEE: 100
           NETWORK_STATE_FILE: "deployed-local.json"
-          NETWORK_STATE_DEFAULTS_FILE: "scripts/scratch/deployed-testnet-defaults.json"
+          NETWORK_STATE_DEFAULTS_FILE: "scripts/defaults/testnet-defaults.json"
 
       - name: Finalize scratch deployment
         run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts

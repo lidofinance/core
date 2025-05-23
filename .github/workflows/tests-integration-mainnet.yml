@@ -1,9 +1,12 @@
 name: Integration Tests
 
-on:
-  push:
-  schedule:
-    - cron: "0 10 */2 * *"
+on: workflow_dispatch
+
+# TODO: uncomment
+#on:
+#  push:
+#  schedule:
+#    - cron: "0 10 */2 * *"
 
 jobs:
   test_hardhat_integration_fork:
@@ -18,6 +21,7 @@ jobs:
           - 8545:8545
         env:
           ETH_RPC_URL: "${{ secrets.ETH_RPC_URL }}"
+          HARDFORK: "prague"
 
     steps:
       - uses: actions/checkout@v4

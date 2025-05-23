@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { BaseOracle__Harness, ConsensusContract__Mock } from "typechain-types";
 
 import {
-  CONSENSUS_VERSION,
+  BASE_CONSENSUS_VERSION,
   EPOCHS_PER_FRAME,
   GENESIS_TIME,
   INITIAL_EPOCH,
@@ -84,7 +84,7 @@ describe("BaseOracle.sol:accessControl", () => {
         role,
       );
 
-      expect(await oracle.getConsensusVersion()).to.equal(CONSENSUS_VERSION);
+      expect(await oracle.getConsensusVersion()).to.equal(BASE_CONSENSUS_VERSION);
     });
 
     it("Updates consensus version with MANAGE_CONSENSUS_VERSION_ROLE", async () => {
