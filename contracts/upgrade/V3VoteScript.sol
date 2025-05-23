@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {IBurner} from "contracts/common/interfaces/IBurner.sol";
-
-import {OmnibusBase} from "./OmnibusBase.sol";
-import {IOssifiableProxy} from "./interfaces/IOssifiableProxy.sol";
 import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
+
+import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+
+import {OmnibusBase} from "./utils/OmnibusBase.sol";
 import {V3Template} from "./V3Template.sol";
 
 interface IRepo {

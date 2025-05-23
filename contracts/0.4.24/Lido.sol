@@ -225,7 +225,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _oldBurner The address of the old Burner contract to migrate from
      * @param _contractsWithBurnerAllowances Contracts that have allowances for the old burner to be migrated
      */
-    function finalizeUpgrade_v3(address _oldBurner, address[4] _contractsWithBurnerAllowances) external {
+    function finalizeUpgrade_v3(address _oldBurner, address[]  _contractsWithBurnerAllowances) external {
         require(hasInitialized(), "NOT_INITIALIZED");
         _checkContractVersion(2);
         require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");

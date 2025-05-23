@@ -1,13 +1,12 @@
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
+import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import { LidoLocator } from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
-
-import { readUpgradeParameters } from "../upgrade-utils";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;

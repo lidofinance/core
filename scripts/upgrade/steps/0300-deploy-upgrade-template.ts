@@ -1,12 +1,11 @@
 import { ethers } from "hardhat";
+import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import { IAragonAppRepo, IOssifiableProxy, OssifiableProxy__factory } from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { deployWithoutProxy } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
-
-import { readUpgradeParameters } from "../upgrade-utils";
 
 export async function main() {
   const deployerSigner = await ethers.provider.getSigner();

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
+import {IForwarder} from "contracts/common/interfaces/IForwarder.sol";
+import {IVoting} from "contracts/common/interfaces/IVoting.sol";
+
 import {CallsScriptBuilder} from "./CallScriptBuilder.sol";
 
-import {IVoting} from "./interfaces/IVoting.sol";
-import {IForwarder} from "./interfaces/IForwarder.sol";
 
 /// @title OmnibusBase
 /// @notice Abstract base contract for creating votes for the Aragon Voting.

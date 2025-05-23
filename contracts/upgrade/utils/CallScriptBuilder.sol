@@ -2,6 +2,7 @@
 pragma solidity 0.8.25;
 
 library CallsScriptBuilder {
+    // See https://github.com/aragon/aragonOS/pull/182
     bytes4 internal constant SPEC_ID = 0x00000001;
 
     struct Context {

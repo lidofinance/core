@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+pragma solidity >=0.4.24 <0.9.0;
 
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
 interface IOssifiableProxy {
     function proxy__upgradeTo(address newImplementation) external;
     function proxy__changeAdmin(address newAdmin) external;

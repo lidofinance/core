@@ -5,15 +5,16 @@
 pragma solidity 0.8.25;
 
 import {IAccessControlEnumerable} from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol";
+
 import {IBurner as IBurnerWithoutAccessControl} from "contracts/common/interfaces/IBurner.sol";
-import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
-import {IOssifiableProxy} from "./interfaces/IOssifiableProxy.sol";
-import {V3Addresses} from "./V3Addresses.sol";
+import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
-import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol";
+import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
+
 import {V3Addresses} from "./V3Addresses.sol";
 
 interface IBaseOracle is IAccessControlEnumerable, IVersioned {
@@ -30,7 +31,7 @@ interface IBurner is IBurnerWithoutAccessControl, IAccessControlEnumerable {
 }
 
 interface ILidoWithFinalizeUpgrade is ILido {
-    function finalizeUpgrade_v3(address _oldBurner, address[4] calldata _contractsWithBurnerAllowances) external;
+    function finalizeUpgrade_v3(address _oldBurner, address[] calldata _contractsWithBurnerAllowances) external;
 }
 
 interface IAccountingOracle is IBaseOracle {
@@ -135,12 +136,12 @@ contract V3Template is V3Addresses {
 
         isUpgradeFinished = true;
 
-        ILidoWithFinalizeUpgrade(LIDO).finalizeUpgrade_v3(OLD_BURNER, [
-            WITHDRAWAL_QUEUE,
-            NODE_OPERATORS_REGISTRY,
-            SIMPLE_DVT,
-            CSM_ACCOUNTING
-        ]);
+        address[] memory contracts = new address[](4);
+        contracts[0] = WITHDRAWAL_QUEUE;
+        contracts[1] = NODE_OPERATORS_REGISTRY;
+        contracts[2] = SIMPLE_DVT;
+        contracts[3] = CSM_ACCOUNTING;
+        ILidoWithFinalizeUpgrade(LIDO).finalizeUpgrade_v3(OLD_BURNER, contracts);
 
         IAccountingOracle(ACCOUNTING_ORACLE).finalizeUpgrade_v3(ACCOUNTING_ORACLE_CONSENSUS_VERSION);
 

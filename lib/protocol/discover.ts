@@ -211,12 +211,12 @@ export async function discover(skipV3Contracts: boolean) {
   log.debug("Contracts discovered", {
     "Locator": locator.address,
     "Lido": foundationContracts.lido.address,
-    "Accounting": foundationContracts.accounting && foundationContracts.accounting.address,
+    "Accounting": foundationContracts.accounting?.address,
     "Accounting Oracle": foundationContracts.accountingOracle.address,
     "Hash Consensus": contracts.hashConsensus.address,
     "Execution Layer Rewards Vault": foundationContracts.elRewardsVault.address,
     "Withdrawal Queue": foundationContracts.withdrawalQueue.address,
-    "Withdrawal Vault": foundationContracts.withdrawalVault && foundationContracts.withdrawalVault.address,
+    "Withdrawal Vault": foundationContracts.withdrawalVault?.address,
     "Validators Exit Bus Oracle": foundationContracts.validatorsExitBusOracle.address,
     "Oracle Daemon Config": foundationContracts.oracleDaemonConfig.address,
     "Oracle Report Sanity Checker": foundationContracts.oracleReportSanityChecker.address,
@@ -229,11 +229,11 @@ export async function discover(skipV3Contracts: boolean) {
     "Burner": foundationContracts.burner.address,
     "wstETH": contracts.wstETH.address,
     // Vaults
-    "Staking Vault Factory": contracts.stakingVaultFactory && contracts.stakingVaultFactory.address,
-    "Staking Vault Beacon": contracts.stakingVaultBeacon && contracts.stakingVaultBeacon.address,
-    "Vault Hub": contracts.vaultHub && contracts.vaultHub.address,
-    "Predeposit Guarantee": contracts.predepositGuarantee && contracts.predepositGuarantee.address,
-    "Operator Grid": contracts.operatorGrid && contracts.operatorGrid.address,
+    "Staking Vault Factory": contracts.stakingVaultFactory?.address,
+    "Staking Vault Beacon": contracts.stakingVaultBeacon?.address,
+    "Vault Hub": contracts.vaultHub?.address,
+    "Predeposit Guarantee": contracts.predepositGuarantee?.address,
+    "Operator Grid": contracts.operatorGrid?.address,
   });
 
   const signers = {
