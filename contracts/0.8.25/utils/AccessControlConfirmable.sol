@@ -9,7 +9,7 @@ import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/exten
 /**
  * @title AccessControlConfirmable
  * @author Lido
- * @notice An extension of AccessControlEnumerable that allows exectuing functions by mutual confirmation.
+ * @notice An extension of AccessControlEnumerable that allows executing functions by mutual confirmation.
  * @dev This contract extends AccessControlEnumerable and adds a confirmation mechanism in the form of a modifier.
  */
 abstract contract AccessControlConfirmable is AccessControlEnumerable {
