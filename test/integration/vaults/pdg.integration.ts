@@ -103,8 +103,8 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
       // 1. The stVault's owner supplies 100 ETH to the vault
       await expect(dashboard.connect(roles.funder).fund({ value: ether("100") }))
-        .to.emit(stakingVault, "Funded")
-        .withArgs(dashboard, ether("100"));
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(ether("100"));
 
       // 2. Setting stranger as a guarantor
       await expect(predepositGuarantee.connect(nodeOperator).setNodeOperatorGuarantor(guarantor))
@@ -138,7 +138,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
           .predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]),
       )
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(predepositGuarantee, 1, ether("1"))
+        .withArgs(1, ether("1"))
         .to.emit(predepositGuarantee, "BalanceLocked")
         .withArgs(nodeOperator, ether("1"), ether("1"));
 
@@ -181,7 +181,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       //    Method called: PredepositGuarantee.depositToBeaconChain(stakingVault, deposits).
       await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(predepositGuarantee, 1, ether("99"));
+        .withArgs(1, ether("99"));
     });
 
     it("Works with vaults deposit pauses", async () => {
@@ -195,10 +195,10 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       );
 
       // 9. The Node Operator tries to deposit the remaining 99 ETH from the vault balance to the validator through the PDG.
-      //    This reverts with the "BeaconChainDepositsPaused" error.
+      //    This reverts with the "BeaconChainDepositsOnPause" error.
       await expect(
         predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]),
-      ).to.be.revertedWithCustomError(stakingVault, "BeaconChainDepositsArePaused");
+      ).to.be.revertedWithCustomError(stakingVault, "BeaconChainDepositsOnPause");
 
       // 10. The stVault's owner resumes the vault's deposits.
       await expect(dashboard.connect(roles.depositResumer).resumeBeaconChainDeposits()).to.emit(
@@ -209,7 +209,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       // 11. The Node Operator deposits the remaining 99 ETH from the vault balance to the validator through the PDG.
       await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
         .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(predepositGuarantee, 1, ether("99"));
+        .withArgs(1, ether("99"));
     });
   });
 
@@ -219,8 +219,8 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
     // 1. The stVault's owner supplies 100 ETH to the vault.
     await expect(dashboard.connect(roles.funder).fund({ value: ether("100") }))
-      .to.emit(stakingVault, "Funded")
-      .withArgs(dashboard, ether("100"));
+      .to.emit(stakingVault, "EtherFunded")
+      .withArgs(ether("100"));
 
     // 2. The Node Operator generates validator keys and deposit data.
     const withdrawalCredentials = await stakingVault.withdrawalCredentials();
@@ -233,7 +233,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
     await dashboard.connect(owner).grantRole(await dashboard.FUND_ROLE(), proxy);
 
-    await reportVaultDataWithProof(stakingVault);
+    await reportVaultDataWithProof(ctx, stakingVault);
 
     // 4. The stVault's owner deposits 1 ETH from the vault balance directly to the validator, bypassing the PDG.
     //    Method called: Dashboard.unguaranteedDepositToBeaconChain(deposits).
@@ -244,15 +244,17 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .connect(roles.unguaranteedBeaconChainDepositor)
         .unguaranteedDepositToBeaconChain([predepositData.deposit]),
     )
-      .to.emit(stakingVault, "DepositedToBeaconChain")
-      .withArgs(dashboard, 1, ether("100"))
-      .to.emit(dashboard, "UnguaranteedDeposit");
+      .to.emit(dashboard, "UnguaranteedDeposit")
+      .withArgs(await stakingVault.getAddress(), predepositData.deposit.pubkey, predepositData.deposit.amount)
+      .not.to.emit(stakingVault, "DepositedToBeaconChain");
 
     const { witnesses, postdeposit } = await getProofAndDepositData(
       predepositGuarantee,
       validator,
       withdrawalCredentials,
+      ether("99"),
     );
+
     // 5. The stVault's owner submits a Merkle proof of the validator's appearing on the Consensus Layer to the Dashboard contract.
     await expect(dashboard.connect(roles.unknownValidatorProver).proveUnknownValidatorsToPDG([witnesses[0]]))
       .to.emit(predepositGuarantee, "ValidatorProven")
@@ -264,6 +266,6 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     // 7. The Node Operator deposits the remaining 99 ETH from the vault balance to the validator through the PDG.
     await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
       .to.emit(stakingVault, "DepositedToBeaconChain")
-      .withArgs(predepositGuarantee, 1, ether("99"));
+      .withArgs(1, ether("99"));
   });
 });
