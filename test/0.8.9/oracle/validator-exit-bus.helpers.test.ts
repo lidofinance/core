@@ -191,7 +191,7 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
       expect(firstDelivery.lastDeliveredExitDataIndex).to.equal(lastDeliveredExitDataIndex);
     });
 
-    it("Returns array with multiple reconrds if deliveryHistoryLength is equal to ", async () => {
+    it("Returns array with multiple records if deliveryHistoryLength is equal to ", async () => {
       const exitRequestsHash = keccak256("0x3333");
       const deliveryHistoryLength = 2;
       const timestamp = await oracle.getTime();
@@ -218,6 +218,24 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
 
       expect(secondDelivery.lastDeliveredExitDataIndex).to.equal(1);
       expect(secondDelivery.timestamp).to.equal(timestamp + 1n);
+    });
+
+    it("reverts if deliveryHistoryLength > 1 but actual history array is smaller", async () => {
+      const hash = keccak256("0xdead");
+      const contractVersion = 42;
+
+      await oracle.storeNewHashRequestStatus(
+        hash,
+        contractVersion,
+        2, // deliveryHistoryLength = 2
+        5,
+        123456,
+      );
+
+      // Only add 1 entry (mismatch)
+      await oracle.storeDeliveryEntry(hash, 1, 123456);
+
+      await expect(oracle.getExitRequestsDeliveryHistory(hash)).to.be.revertedWith("DeliveryHistoryMismatch");
     });
   });
 });

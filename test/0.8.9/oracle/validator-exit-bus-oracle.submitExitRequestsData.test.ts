@@ -225,7 +225,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       );
     });
 
-    it("Should revert with if length of requests is equal to 0", async () => {
+    it("Should revert with InvalidRequestsDataLength if length of requests is equal to 0", async () => {
       const exitRequestData: ExitRequestData = {
         dataFormat: 1,
         data: "0x",
@@ -241,7 +241,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       );
     });
 
-    it("Should revert with if length of requests is equal to 0", async () => {
+    it("Should revert with InvalidRequestsDataLength if length of requests is not divided by request length without remainder", async () => {
       // 64 - length of request in bytes
       const request =
         "0x00000100000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".slice(

@@ -291,6 +291,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             newLastDeliveredIndex,
             _getTimestamp()
         );
+
+        _validateDeliveryState(exitRequestsHash, requestStatus);
     }
 
     /**
@@ -334,7 +336,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 requestsCount = exitsData.data.length / PACKED_REQUEST_LENGTH;
 
         for (uint256 i = 0; i < exitDataIndexes.length; i++) {
-            if (exitDataIndexes[i] >= requestsCount ) {
+            if (exitDataIndexes[i] >= requestsCount) {
                 revert ExitDataIndexOutOfRange(exitDataIndexes[i], requestsCount);
             }
 
@@ -435,6 +437,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         if (storedRequest.contractVersion == 0) {
             revert ExitHashNotSubmitted();
         }
+
+        _validateDeliveryState(exitRequestsHash, storedRequest);
 
         if (storedRequest.deliveryHistoryLength == 0) {
             DeliveryHistory[] memory deliveryHistory;
@@ -647,6 +651,12 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         deliveryHistory.push(
             DeliveryHistory(uint32(lastDeliveredExitDataIndex), uint32(lastDeliveredExitDataTimestamp))
         );
+    }
+
+    function _validateDeliveryState(bytes32 hash, RequestStatus storage status) internal view {
+        if (status.deliveryHistoryLength > 1) {
+            require(_storageDeliveryHistory()[hash].length == status.deliveryHistoryLength, "DeliveryHistoryMismatch");
+        }
     }
 
     /// Methods for reading data from tightly packed validator exit requests
