@@ -41,6 +41,7 @@ export async function main() {
     state.accountingOracle.proxy.address,
     state.validatorsExitBusOracle.proxy.address,
     state.withdrawalQueueERC721.proxy.address,
+    state.accounting.proxy.address,
     state.vaultHub.proxy.address,
     state.predepositGuarantee.proxy.address,
     state.operatorGrid.proxy.address,
