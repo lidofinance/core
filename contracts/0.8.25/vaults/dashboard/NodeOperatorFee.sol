@@ -10,10 +10,10 @@ import {Permissions} from "./Permissions.sol";
 /**
  * @title NodeOperatorFee
  * @author Lido
- * @notice An accounting contract for a vault's node operator fee:  
- *   • Calculates the node operator’s share of each reward period,  
- *   • Ignores any vault value changes that aren’t true rewards,  
- *   • Permissionless on-demand fee disbursement,  
+ * @notice An accounting contract for a vault's node operator fee:
+ *   • Calculates the node operator's share of each reward period,
+ *   • Ignores any vault value changes that aren't true rewards,
+ *   • Permissionless on-demand fee disbursement,
  *   • Critical parameter changes require vault-owner<>node operator approval.
  */
 contract NodeOperatorFee is Permissions {
@@ -136,172 +136,92 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Calculates the node operator's disburseable fee.
-     * ═════════════════════════════════════════════════════════════════════════════
-     *                    nodeOperatorDisburseableFee — Calculation Logic
-     * ═════════════════════════════════════════════════════════════════════════════
-     * Return the amount of ether presently owed to the node-operator,
-     * computed as a proportion of *net* staking rewards accrued between
-     *   • `feePeriodStartReport`, and
-     *   • `latestReport()`.
+     * 
+     * The fee presently owed to the node-operator,
+     * computed as a portion of staking rewards accrued between
+     * `feePeriodStartReport` and `latestReport()`.
      *
-     * ─────────────────────────────────────────────────────────────────────────────
-     * Staking-rewards for an accounting interval are derived as:
-     *
-     * rewards = Δ(totalValue) − Δ(inOutDelta) − rewardsAdjustment
+     * Staking rewards for an accounting interval are derived as:
+     *     rewards = Δ(totalValue) − Δ(inOutDelta) − rewardsAdjustment
      *
      * where
      *  • Δ(totalValue)     — change in totalValue (CL + EL balances) between reports;
      *  • Δ(inOutDelta)     — net funds/withdrawals in the same interval;
      *  • rewardsAdjustment — rewards offset that excludes side deposits and consolidations
      *                        (e.g. CL topups that are not subject to node operator fee).
-     * 
+     *
      * If the rewards are negative, for the purposes of fee calculation, they are considered to be zero.
-     * The node-operator’s fee is therefore
-     *
+     * The node-operator's fee is therefore:
      *     fee = max(0, rewards) × nodeOperatorFeeBP / TOTAL_BASIS_POINTS
-     *
-     * ═════════════════════════════════════════════════════════════════════════════
+     * 
      * @return fee The node operator's disburseable fee.
      */
     function nodeOperatorDisburseableFee() public view returns (uint256) {
-        VaultHub.Report memory latestReport_ = latestReport();
-        VaultHub.Report storage _lastDisbursedReport = feePeriodStartReport;
-
-        // cast down safely clamping to int128.max
+        VaultHub.Report storage periodStart = feePeriodStartReport;
+        VaultHub.Report memory periodEnd = latestReport();
         int128 adjustment = _toSignedClamped(rewardsAdjustment.amount);
 
-        int128 adjustedRewards = int128(latestReport_.totalValue) -
-            int128(_lastDisbursedReport.totalValue) -
-            (latestReport_.inOutDelta - _lastDisbursedReport.inOutDelta) -
-            adjustment;
+        // the total increase/decrease of the vault value during the fee period
+        int128 growth = int128(periodEnd.totalValue) - int128(periodStart.totalValue) -
+                        (periodEnd.inOutDelta - periodStart.inOutDelta);
 
-        return adjustedRewards > 0 ? (uint256(uint128(adjustedRewards)) * nodeOperatorFeeBP) / TOTAL_BASIS_POINTS : 0;
+        // the actual rewards that are subject to the fee
+        int128 rewards = growth - adjustment;
+
+        return rewards <= 0 ? 0 : (uint256(uint128(rewards)) * nodeOperatorFeeBP) / TOTAL_BASIS_POINTS;
     }
 
     /**
-     * @notice Transfers the node-operator’s accrued fee (if any) and rolls the
-     *         accounting period forward.
-     * ═════════════════════════════════════════════════════════════════════════════
-     *                         disburseNodeOperatorFee — Logic
-     * ═════════════════════════════════════════════════════════════════════════════
-     *  General flow
-     *  ─────────────
+     * @notice Transfers the node-operator's accrued fee (if any).
+     * Steps:
      *  • Compute the current fee via `nodeOperatorDisburseableFee()`.
-     *  • Always move `feePeriodStartReport` to `latestReport()`,
-     *    thus closing the reward period.
-     *  • Always zero `rewardsAdjustment` (no matter whether the report includes the adjustment
-     *    because it will eventually be settled).
-     *  • Transfer `fee` wei to `nodeOperatorFeeRecipient` IF `fee > 0`.
-     *
-     *  The function is intentionally oblivious to whether the oracle’s most
-     *  recent report already reflects the adjustment that neutralises side
-     *  deposits. In case it does not, there are two scenarios:
-     *
-     *  ────────────────────────────────────────────────────────────────────────────
-     *  Case (i)  R ≤ A   — rewards cannot yet cover the adjustment
-     *  ────────────────────────────────────────────────────────────────────────────
-     *      adjustedRewards = R − A ≤ 0  ⇒  fee = 0
-     *      • No ether is sent.
-     *      • Snapshot still occurs; `rewardsAdjustment` is reset to 0.
-     *      • When the next oracle report arrives, it will include the top-up
-     *        that created A, converting the previously missing amount into
-     *        positive rewards.  With A now zero, the operator will then receive
-     *        the fee that was deferred.
-     *
-     *  ────────────────────────────────────────────────────────────────────────────
-     *  Case (ii) R > A   — rewards exceed the adjustment
-     *  ────────────────────────────────────────────────────────────────────────────
-     *      adjustedRewards = R − A > 0  ⇒  fee = (R − A) × BP / TOTAL_BASIS_POINTS
-     *      • The surplus portion (R − A) is paid out immediately.
-     *      • Snapshot + adjustment reset still execute, preventing the same
-     *        rewards from being charged twice.
-     *      • The forthcoming oracle report will now incorporate the side
-     *        deposit in `totalValue`.  Because A is already cleared, any
-     *        remaining genuine rewards flow to the operator in the standard
-     *        fashion.
-     *
-     *  In both cases:
-     *      1.  The fee period start is advanced, eliminating double-count risk.
-     *      2.  `rewardsAdjustment` is cleared, guaranteeing one-time use.
-     *
-     *  No timestamp gate is required here: the design is eventually consistent
-     *  and ensures the operator is never over- or under-paid across successive
-     *  disbursements.
-     * ═════════════════════════════════════════════════════════════════════════════
+     *  • If there are no rewards, do nothing.
+     *  • Otherwise, move `feePeriodStartReport` to `latestReport()`,
+     *    reset `rewardsAdjustment` and transfer `fee` wei to `nodeOperatorFeeRecipient`.
      */
     function disburseNodeOperatorFee() public {
         uint256 fee = nodeOperatorDisburseableFee();
+        // it's important not to revert here if there is no fee,
+        // because the fee is automatically disbursed during `voluntaryDisconnect`
+        if (fee == 0) return;
 
-        feePeriodStartReport = latestReport();
         if (rewardsAdjustment.amount != 0) _setRewardsAdjustment(0);
+        feePeriodStartReport = latestReport();
 
-        if (fee > 0) {
-            VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
-            emit NodeOperatorFeeDisbursed(msg.sender, fee);
-        }
+        VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
+        emit NodeOperatorFeeDisbursed(msg.sender, fee);
     }
 
     /**
-     * @notice Updates the node-operator’s fee rate (basis-points share). 
-     * ═════════════════════════════════════════════════════════════════════════════
-     *                         setNodeOperatorFeeBP Logic
-     * ═════════════════════════════════════════════════════════════════════════════
-     *  General flow
-     *  ─────────────
-     *  • Verify all guards (upper-bound, fresh report, adjustment-inclusion).  
-     *  • Settle any pending rewards at the *old* rate via `disburseNodeOperatorFee()`.  
-     *  • Write `_newNodeOperatorFeeBP` to storage.  
-     *  • Emit `NodeOperatorFeeBPSet`.  
-     *  Every call requires dual confirmation within `confirmExpiry`.
-     *
-     *  Preconditions
-     *  ─────────────
-     *  (a) `_newNodeOperatorFeeBP ≤ TOTAL_BASIS_POINTS`  
-     *      ↳ else `FeeValueExceed100Percent()`  
-     *
-     *  (b) `VAULT_HUB.isReportFresh(stakingVault) == true`  
-     *      ↳ blocks rate changes against stale oracle data.  
-     *
-     *  (c) `rewardsAdjustment.timestamp ≥ latestVaultReportTimestamp(stakingVault)`  
-     *      ↳ guarantees the oracle already captured any pending offset;  
-     *        otherwise `ReportStale()` prevents a retroactive fee hike.  
-     *
-     *  Why disburse *before* writing?
-     *  • Ensures the old rate never applies to future rewards.  
-     *  • Prevents the new rate from touching historical rewards.  
-     *
-     *  Schematic timeline
-     *  ──────────────────
-     *
-     *         time  ─────────────────────────────────────────────────────────▶
-     *
-     *         ┌──────┐  ┌────────┐  ┌───────┐  ┌────────────┐  ┌───────┐
-     *         │Rpt n │──│Adj set │──│Rpt n+1│──│setFeeBP()  │──│Rpt n+2│
-     *         └──────┘  └────────┘  └───────┘  └────────────┘  └───────┘
-     *                          │           │           │
-     *          A timestamp─────┘           │           │  old fee settled
-     *                                      │           └─ new BP stored
-     *                                      │
-     *          Latest report includes A────┘
-     *
-     *  The adjustment-inclusion fence blocks `_setNodeOperatorFeeBP()` if attempted between
-     *  *Adj set* and the first report that reflects the side deposit, removing
-     *  any retroactive-fee attack surface.
-     * ═════════════════════════════════════════════════════════════════════════════
+     * @notice Updates the node-operator's fee rate (basis-points share).
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
     function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(confirmingRoles()) {
-        // the report must be fresh in order to prevent retroactive fees
+        // The report must be fresh so that the total value of the vault is up to date 
+        // and all the node operator fees are paid out fairly up to the moment of the latest report
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
 
         // To change the fee, we must wait for the report FOLLOWING the adjustment (i.e. next report)
         // to make sure that the adjustment is included in the total value.
         // The adjustment is guaranteed in the next report because oracle includes both active validator balances
         // and valid pending deposits, and pending deposits are observable from the very block they are submitted in.
-        if (rewardsAdjustment.latestAdjustmentTimestamp >= VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault())))
-            revert RewardsAdjustedAfterLatestReport();
+        if (rewardsAdjustment.latestAdjustmentTimestamp >=
+            VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault()))
+        ) revert RewardsAdjustedAfterLatestReport();
 
-        disburseNodeOperatorFee();
+        // To follow the check-effects-interaction pattern, we need to remember the fee here
+        // because the fee calculation variables will be reset in the following lines
+        uint256 fee = nodeOperatorDisburseableFee();
+
+        // Adjustment is settled at this point thanks to the timestamp check above
+        if (rewardsAdjustment.amount != 0) _setRewardsAdjustment(0);
+        // Start a new fee period
+        feePeriodStartReport = latestReport();
+
+        if (fee > 0) {
+            VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
+            emit NodeOperatorFeeDisbursed(msg.sender, fee);
+        }
 
         _setNodeOperatorFeeBP(_newNodeOperatorFeeBP);
     }
@@ -443,4 +363,6 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the report is not fresh.
      */
     error RewardsAdjustedAfterLatestReport();
+
+    error AdjustmentGreaterThanGrowth();
 }
