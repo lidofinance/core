@@ -291,6 +291,18 @@ contract NodeOperatorFee is Permissions {
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
     function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(confirmingRoles()) {
+        // the report must be fresh in order to prevent retroactive fees
+        if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
+
+        // To change the fee, we must wait for the report FOLLOWING the adjustment (i.e. next report)
+        // to make sure that the adjustment is included in the total value.
+        // The adjustment is guaranteed in the next report because oracle includes both active validator balances
+        // and valid pending deposits, and pending deposits are observable from the very block they are submitted in.
+        if (rewardsAdjustment.latestAdjustmentTimestamp < VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault())))
+            revert RewardsAdjustedAfterLatestReport();
+
+        disburseNodeOperatorFee();
+
         _setNodeOperatorFeeBP(_newNodeOperatorFeeBP);
     }
 
@@ -346,17 +358,6 @@ contract NodeOperatorFee is Permissions {
 
     function _setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) internal {
         if (_newNodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
-        // the report must be fresh in order to prevent retroactive fees
-        if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
-
-        // To change the fee, we must wait for the report FOLLOWING the adjustment (i.e. next report)
-        // to make sure that the adjustment is included in the total value.
-        // The adjustment is guaranteed in the next report because oracle includes both active validator balances
-        // and valid pending deposits, and pending deposits are observable from the very block they are submitted in.
-        if (rewardsAdjustment.latestAdjustmentTimestamp < VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault())))
-            revert ReportStale();
-
-        disburseNodeOperatorFee();
 
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
         nodeOperatorFeeBP = _newNodeOperatorFeeBP;
@@ -437,4 +438,9 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the report is stale.
      */
     error ReportStale();
+
+    /**
+     * @dev Error emitted when the report is not fresh.
+     */
+    error RewardsAdjustedAfterLatestReport();
 }
