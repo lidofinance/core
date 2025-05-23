@@ -298,7 +298,7 @@ contract NodeOperatorFee is Permissions {
         // to make sure that the adjustment is included in the total value.
         // The adjustment is guaranteed in the next report because oracle includes both active validator balances
         // and valid pending deposits, and pending deposits are observable from the very block they are submitted in.
-        if (rewardsAdjustment.latestAdjustmentTimestamp < VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault())))
+        if (rewardsAdjustment.latestAdjustmentTimestamp >= VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault())))
             revert RewardsAdjustedAfterLatestReport();
 
         disburseNodeOperatorFee();
