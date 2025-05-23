@@ -451,7 +451,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     // Token master can approve the vault to burn the shares
     await lido.connect(owner).approve(dashboard, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
-    console.log("Burning shares", stakingVaultMaxMintingShares);
     await dashboard.connect(owner).burnShares(stakingVaultMaxMintingShares);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();
