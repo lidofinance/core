@@ -232,11 +232,7 @@ contract NodeOperatorFee is Permissions {
     function disburseNodeOperatorFee() public {
         uint256 fee = nodeOperatorDisburseableFee();
 
-        // move the report to the latest disbursed report
-        // no matter if there is a fee to disburse or not
         feePeriodStartReport = latestReport();
-        // because the adjustment is guaranteed to be included upon disbursement
-        // we can safely reset it to zero no matter if there is a fee to disburse or not
         if (rewardsAdjustment.amount != 0) _setRewardsAdjustment(0);
 
         if (fee > 0) {
