@@ -265,8 +265,6 @@ contract NodeOperatorFee is Permissions {
         // disburse the fee to prevent retroactive fees
         disburseNodeOperatorFee();
 
-        nodeOperatorFeeDisbursedReport = latestReport();
-
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
         nodeOperatorFeeBP = _newNodeOperatorFeeBP;
 
