@@ -32,14 +32,9 @@ contract NodeOperatorFee is Permissions {
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
 
     /**
-     * @notice Bitwise AND mask that clamps the value to positive int128 range
-     */
-    uint256 private constant ADJUSTMENT_CLAMP_MASK = uint256(uint128(type(int128).max));
-
-    /**
      * @notice Maximum value that can be set via manual adjustment
      */
-    uint256 public constant MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT = 10_000_000 ether;
+    uint128 public constant MANUAL_REWARDS_ADJUSTMENT_LIMIT = 10_000_000 ether;
 
     /**
      * @notice Node operator manager role:
@@ -77,16 +72,21 @@ contract NodeOperatorFee is Permissions {
      */
     address public nodeOperatorFeeRecipient;
 
+    struct RewardsAdjustment {
+        uint128 amount;
+        uint64 timestamp;
+    }
+
     /**
      * @notice Adjustment to allow fee correction during side deposits or consolidations.
-     *          - can be increased manually by `increaseAccruedRewardsAdjustment` by NODE_OPERATOR_REWARDS_ADJUST_ROLE
-     *          - can be set via `setAccruedRewardsAdjustment` by `confirmingRoles()`
+     *          - can be increased manually by `increaseRewardsAdjustment` by NODE_OPERATOR_REWARDS_ADJUST_ROLE
+     *          - can be set via `setRewardsAdjustment` by `confirmingRoles()`
      *          - increased automatically with `unguaranteedDepositToBeaconChain` by total ether amount of deposits
      *          - reset to zero after `disburseNodeOperatorFee`
      *        This amount will be deducted from rewards during NO fee calculation and can be used effectively write off NO's accrued fees.
      *
      */
-    uint256 public accruedRewardsAdjustment;
+    RewardsAdjustment public rewardsAdjustment;
 
     /**
      * @notice Passes the address of the vault hub up the inheritance chain.
@@ -150,7 +150,7 @@ contract NodeOperatorFee is Permissions {
      * - D is the node operator disburseable fee;
      * - R is the StakingVault rewards accrued between the last node operator fee disbursement and the latest report;
      * - F is `nodeOperatorFeeBP`;
-     * - A is `accruedRewardsAdjustment`;
+     * - A is `rewardsAdjustment`;
      * - T is the total basis points, 10,000.
      * @return uint256: the amount of disburseable fee in ether.
      */
@@ -159,7 +159,7 @@ contract NodeOperatorFee is Permissions {
         VaultHub.Report storage _lastDisbursedReport = nodeOperatorFeeDisbursedReport;
 
         // cast down safely clamping to int128.max
-        int128 adjustment = int128(int256(accruedRewardsAdjustment & ADJUSTMENT_CLAMP_MASK));
+        int128 adjustment = _toSignedClamped(rewardsAdjustment.amount);
 
         int128 adjustedRewards = int128(latestReport_.totalValue) -
             int128(_lastDisbursedReport.totalValue) -
@@ -204,47 +204,57 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Disburses the node operator fee if there is any.
      */
-    function disburseNodeOperatorFee() public returns (uint256 fee) {
-        fee = nodeOperatorDisburseableFee();
+    function disburseNodeOperatorFee() public {
+        // To disburse the fee, we must wait for the report FOLLOWING the adjustment (i.e. next report)
+        // to make sure that the adjustment is included in the total value.
+        // The adjustment is guaranteed in the next report because oracle includes both active validator balances and
+        // valid pending deposits, and pending deposits are observable from the very block they are submitted in.
+        if (rewardsAdjustment.timestamp < VAULT_HUB.vaultRecord(address(_stakingVault())).reportTimestamp)
+            revert ReportStale();
+
+        uint256 fee = nodeOperatorDisburseableFee();
+
+        // move the report to the latest disbursed report
+        // no matter if there is a fee to disburse or not
+        nodeOperatorFeeDisbursedReport = latestReport();
+        // because the adjustment is guaranteed to be included upon disbursement
+        // we can safely reset it to zero no matter if there is a fee to disburse or not
+        if (rewardsAdjustment.amount != 0) _setRewardsAdjustment(0);
 
         if (fee > 0) {
-            nodeOperatorFeeDisbursedReport = latestReport();
-            if (accruedRewardsAdjustment != 0) _setAccruedRewardsAdjustment(0);
-
             VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
-
             emit NodeOperatorFeeDisbursed(msg.sender, fee);
         }
     }
 
     /**
-     * @notice Increases accrued rewards adjustment to correct fee calculation due to non-rewards ether on CL
+     * @notice Increases rewards adjustment to correct fee calculation due to non-rewards ether on CL
      * @param _adjustmentIncrease amount to increase adjustment by
-     * @dev will revert if final adjustment is more than `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`
+     * @dev will revert if final adjustment is more than `MANUAL_REWARDS_ADJUSTMENT_LIMIT`
      */
-    function increaseAccruedRewardsAdjustment(
+    function increaseRewardsAdjustment(
         uint256 _adjustmentIncrease
     ) external onlyRole(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
-        uint256 newAdjustment = accruedRewardsAdjustment + _adjustmentIncrease;
+        uint256 newAdjustment = rewardsAdjustment.amount + _adjustmentIncrease;
         // sanity check, though value will be cast safely during fee calculation
-        if (newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
-        _setAccruedRewardsAdjustment(newAdjustment);
+        if (newAdjustment > MANUAL_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
+        _setRewardsAdjustment(uint128(newAdjustment));
     }
 
     /**
-     * @notice set `accruedRewardsAdjustment` to a new proposed value if `confirmingRoles()` agree
-     * @param _newAdjustment ew adjustment amount
+     * @notice set `rewardsAdjustment` to a new proposed value if `confirmingRoles()` agree
+     * @param _newAdjustment new adjustment amount
      * @param _currentAdjustment current adjustment value for invalidating old confirmations
-     * @dev will revert if new adjustment is more than `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`
+     * @dev will revert if new adjustment is more than `MANUAL_REWARDS_ADJUSTMENT_LIMIT`
      */
-    function setAccruedRewardsAdjustment(
+    function setRewardsAdjustment(
         uint256 _newAdjustment,
         uint256 _currentAdjustment
     ) external onlyConfirmed(confirmingRoles()) {
-        if (accruedRewardsAdjustment != _currentAdjustment)
-            revert InvalidatedAdjustmentVote(accruedRewardsAdjustment, _currentAdjustment);
-        if (_newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
-        _setAccruedRewardsAdjustment(_newAdjustment);
+        if (rewardsAdjustment.amount != _currentAdjustment)
+            revert InvalidatedAdjustmentVote(rewardsAdjustment.amount, _currentAdjustment);
+        if (_newAdjustment > MANUAL_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
+        _setRewardsAdjustment(uint128(_newAdjustment));
     }
 
     function _setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) internal {
@@ -252,8 +262,10 @@ contract NodeOperatorFee is Permissions {
         // the report must be fresh in order to prevent retroactive fees
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
 
-        // if there is no fee to disburse, the report is still updated to prevent retroactive fees
-        if (disburseNodeOperatorFee() == 0) nodeOperatorFeeDisbursedReport = latestReport();
+        // disburse the fee to prevent retroactive fees
+        disburseNodeOperatorFee();
+
+        nodeOperatorFeeDisbursedReport = latestReport();
 
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
         nodeOperatorFeeBP = _newNodeOperatorFeeBP;
@@ -266,19 +278,24 @@ contract NodeOperatorFee is Permissions {
         nodeOperatorFeeRecipient = _newNodeOperatorFeeRecipient;
     }
 
-
     /**
      * @notice sets InOut adjustment for correct fee calculation
      * @param _newAdjustment new adjustment value
      */
-    function _setAccruedRewardsAdjustment(uint256 _newAdjustment) internal {
-        uint256 oldAdjustment = accruedRewardsAdjustment;
+    function _setRewardsAdjustment(uint128 _newAdjustment) internal {
+        uint256 oldAdjustment = rewardsAdjustment.amount;
 
         if (_newAdjustment == oldAdjustment) revert SameAdjustment();
 
-        accruedRewardsAdjustment = _newAdjustment;
+        rewardsAdjustment.amount = _newAdjustment;
+        rewardsAdjustment.timestamp = uint64(block.timestamp);
 
-        emit AccruedRewardsAdjustmentSet(_newAdjustment, oldAdjustment);
+        emit RewardsAdjustmentSet(_newAdjustment, oldAdjustment);
+    }
+
+    function _toSignedClamped(uint128 _adjustment) internal pure returns (int128) {
+        if (_adjustment > uint128(type(int128).max)) return type(int128).max;
+        return int128(_adjustment);
     }
 
     // ==================== Events ====================
@@ -301,7 +318,7 @@ contract NodeOperatorFee is Permissions {
      * @param newAdjustment the new adjustment value
      * @param oldAdjustment previous adjustment value
      */
-    event AccruedRewardsAdjustmentSet(uint256 newAdjustment, uint256 oldAdjustment);
+    event RewardsAdjustmentSet(uint256 newAdjustment, uint256 oldAdjustment);
 
     // ==================== Errors ====================
 
@@ -311,7 +328,7 @@ contract NodeOperatorFee is Permissions {
     error FeeValueExceed100Percent();
 
     /**
-     * @dev Error emitted when the increased adjustment exceeds the `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`.
+     * @dev Error emitted when the increased adjustment exceeds the `MANUAL_REWARDS_ADJUSTMENT_LIMIT`.
      */
     error IncreasedOverLimit();
 
