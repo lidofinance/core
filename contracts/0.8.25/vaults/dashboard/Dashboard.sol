@@ -51,7 +51,8 @@ contract Dashboard is NodeOperatorFee {
      * @notice Slot for the fund-on-receive flag
      *         keccak256("vaults.Dashboard.fundOnReceive")
      */
-    bytes32 private constant FUND_ON_RECEIVE_FLAG_SLOT = 0x7408b7b034fda7051615c19182918ecb91d753231cffd86f81a45d996d63e038;
+    bytes32 private constant FUND_ON_RECEIVE_FLAG_SLOT =
+        0x7408b7b034fda7051615c19182918ecb91d753231cffd86f81a45d996d63e038;
 
     /**
      * @notice Constructor sets the stETH, and WSTETH token addresses,
@@ -179,8 +180,8 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
-    function totalMintingCapacity() public view returns (uint256) {
-        return _totalMintingCapacity(0);
+    function totalMintingCapacityShares() public view returns (uint256) {
+        return _totalMintingCapacityShares(0);
     }
 
     /**
@@ -189,26 +190,12 @@ contract Dashboard is NodeOperatorFee {
      * @param _etherToFund the amount of ether to be funded, can be zero
      * @return the number of shares that can be minted using additional ether
      */
-    function remainingMintingCapacity(uint256 _etherToFund) external view returns (uint256) {
-        uint256 totalShares = _totalMintingCapacity(_etherToFund);
+    function remainingMintingCapacityShares(uint256 _etherToFund) external view returns (uint256) {
+        uint256 totalShares = _totalMintingCapacityShares(_etherToFund);
         uint256 liabilityShares_ = VAULT_HUB.liabilityShares(address(_stakingVault()));
 
         if (totalShares < liabilityShares_) return 0;
         return totalShares - liabilityShares_;
-    }
-
-    /**
-     * @notice Returns the unreserved amount of ether,
-     * i.e. the amount of total value that is not locked in the StakingVault
-     * and not reserved for node operator fee.
-     * This amount does not account for the current balance of the StakingVault and
-     * can return a value greater than the actual balance of the StakingVault.
-     */
-    function unreserved() public view returns (uint256) {
-        uint256 reserved = locked() + _feesAndObligations();
-        uint256 totalValue_ = totalValue();
-
-        return reserved > totalValue_ ? 0 : totalValue_ - reserved;
     }
 
     /**
@@ -233,8 +220,11 @@ contract Dashboard is NodeOperatorFee {
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
      * @dev This method overrides the Dashboard's withdrawableEther() method
      */
-    function withdrawableEther() external view returns (uint256) {
-        return Math256.min(availableBalance(), unreserved());
+    function withdrawableEther() public view returns (uint256) {
+        uint256 totalValue_ = totalValue();
+        uint256 lockedPlusFee = locked() + nodeOperatorDisbursableFee();
+
+        return Math256.min(availableBalance(), totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
     }
 
     // ==================== Vault Management Functions ====================
@@ -247,29 +237,30 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Sets the owner of the staking vault.
+     * @notice Transfers the ownership of the underlying StakingVault from this contract to a new owner
+     *         without disconnecting it from the hub
      * @param _newOwner Address of the new owner.
      */
-    function setVaultOwner(address _newOwner) external {
-        _setVaultOwner(_newOwner);
+    function transferVaultOwnership(address _newOwner) external {
+        _transferVaultOwnership(_newOwner);
     }
 
     /**
-     * @notice Disconnects the staking vault from the vault hub.
-     * VaultHub stores data for calculating the node operator fee, so the fees should be claimed first.
+     * @notice Disconnects the underlying StakingVault from the hub. The ownership of the StakingVault is transferred
+     *         to this contract, so you need to use abandonDashboard() to transfer the ownership further.
+     *         VaultHub stores data for calculating the node operator fee, so the fee is disbursed first.
      */
     function voluntaryDisconnect() external {
-        uint256 fee = nodeOperatorUnclaimedFee();
-        if (fee > 0) _disburseNodeOperatorFee(fee);
+        disburseNodeOperatorFee();
 
         _voluntaryDisconnect();
     }
 
     /**
-     * @notice Accepts the ownership over the staking vault transferred from VaultHub on disconnect
+     * @notice Accepts the ownership over the StakingVault transferred from VaultHub on disconnect
      * and immediately transfers it to a new pending owner. This new owner will have to accept the ownership
-     * on the staking vault contract.
-     * @param _newOwner The address to transfer the staking vault ownership to.
+     * on the StakingVault contract.
+     * @param _newOwner The address to transfer the StakingVault ownership to.
      */
     function abandonDashboard(address _newOwner) external {
         address vaultAddress = address(_stakingVault());
@@ -280,9 +271,10 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Accepts the ownership over the staking vault and connects to VaultHub.
+     * @notice Accepts the ownership over the StakingVault and connects to VaultHub. Can be called to reconnect
+     *         to the hub after voluntaryDisconnect()
      */
-    function acceptOwnershipAndConnectToVaultHub() external payable {
+    function reconnectToVaultHub() external payable {
         _acceptOwnership();
         connectToVaultHub();
     }
@@ -309,10 +301,10 @@ contract Dashboard is NodeOperatorFee {
      * @param _ether Amount of ether to withdraw
      */
     function withdraw(address _recipient, uint256 _ether) external {
-        uint256 unreserved_ = unreserved();
+        uint256 withdrawableEther_ = withdrawableEther();
 
-        if (_ether > unreserved_) {
-            revert WithdrawalAmountExceedsUnreserved(_ether, unreserved_);
+        if (_ether > withdrawableEther_) {
+            revert WithdrawalExceedsWithdrawable(_ether, withdrawableEther_);
         }
 
         _withdraw(_recipient, _ether);
@@ -416,8 +408,9 @@ contract Dashboard is NodeOperatorFee {
             totalAmount += _deposits[i].amount;
         }
 
-        if (totalAmount > unreserved()) {
-            revert WithdrawalAmountExceedsUnreserved(totalAmount, unreserved());
+        uint256 withdrawableEther_ = withdrawableEther();
+        if (totalAmount > withdrawableEther_) {
+            revert WithdrawalExceedsWithdrawable(totalAmount, withdrawableEther_);
         }
 
         _disableFundOnReceive();
@@ -471,7 +464,11 @@ contract Dashboard is NodeOperatorFee {
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(RECOVER_ASSETS_ROLE) {
+    function recoverERC20(
+        address _token,
+        address _recipient,
+        uint256 _amount
+    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount == 0) revert ZeroArgument("_amount");
@@ -498,7 +495,7 @@ contract Dashboard is NodeOperatorFee {
         address _token,
         uint256 _tokenId,
         address _recipient
-    ) external onlyRole(RECOVER_ASSETS_ROLE) {
+    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
@@ -586,7 +583,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The total obligations value of the vault in wei.
      */
     function _feesAndObligations() internal view returns (uint256) {
-        return nodeOperatorUnclaimedFee() + unsettledObligations();
+        return nodeOperatorDisbursableFee() + unsettledObligations();
     }
 
     /**
@@ -631,11 +628,11 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @dev calculates the maximum number of stETH shares that can be minted by the vault
-     * @param _additionalFunding additional ether that may be funded to the vault
+     * @param _additionalEther additional ether that may be funded to the vault
      */
-    function _totalMintingCapacity(uint256 _additionalFunding) internal view returns (uint256) {
+    function _totalMintingCapacityShares(uint256 _additionalEther) internal view returns (uint256) {
         VaultHub.VaultConnection memory connection = vaultConnection();
-        uint256 maxMintableStETH = ((_mintableValue() + _additionalFunding) *
+        uint256 maxMintableStETH = ((_mintableValue() + _additionalEther) *
             (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), connection.shareLimit);
     }
@@ -689,11 +686,11 @@ contract Dashboard is NodeOperatorFee {
     // ==================== Errors ====================
 
     /**
-     * @notice Emitted when the unreserved amount of ether is exceeded
+     * @notice Emitted when the withdrawable amount of ether is exceeded
      * @param amount The amount of ether that was attempted to be withdrawn
-     * @param unreserved The amount of unreserved ether available
+     * @param withdrawableEther The amount of withdrawable ether available
      */
-    error WithdrawalAmountExceedsUnreserved(uint256 amount, uint256 unreserved);
+    error WithdrawalExceedsWithdrawable(uint256 amount, uint256 withdrawableEther);
 
     /**
      * @notice Error thrown when recovery of ETH fails on transfer to recipient

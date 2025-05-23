@@ -98,17 +98,22 @@ contract LazyOracle {
         return batch;
     }
 
+    /// @notice Store the report root and its meta information
+    /// @param _vaultsDataTimestamp the timestamp of the report
+    /// @param _vaultsDataTreeRoot the root of the report
+    /// @param _vaultsDataReportCid the CID of the report
     function updateReportData(
-        uint64 _vaultsDataTimestamp,
+        uint256 _vaultsDataTimestamp,
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataReportCid
     ) external {
         if (msg.sender != LIDO_LOCATOR.accountingOracle()) revert NotAuthorized();
 
         Storage storage $ = _storage();
-        $.vaultsDataTimestamp = _vaultsDataTimestamp;
+        $.vaultsDataTimestamp = uint64(_vaultsDataTimestamp);
         $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
         $.vaultsDataReportCid = _vaultsDataReportCid;
+
         emit VaultsReportDataUpdated(_vaultsDataTimestamp, _vaultsDataTreeRoot, _vaultsDataReportCid);
     }
 
@@ -149,7 +154,7 @@ contract LazyOracle {
         }
     }
 
-    event VaultsReportDataUpdated(uint64 timestamp, bytes32 root, string cid);
+    event VaultsReportDataUpdated(uint256 timestamp, bytes32 root, string cid);
 
     error NotAuthorized();
     error InvalidProof();

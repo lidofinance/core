@@ -10,19 +10,19 @@ import {Permissions} from "./Permissions.sol";
 /**
  * @title NodeOperatorFee
  * @author Lido
- * @notice This contract manages the node operator fee and claiming mechanism.
+ * @notice This contract manages the node operator fee.
  * It reserves a portion of the staking rewards for the node operator, and allows
- * the node operator to claim their fee.
+ * the node operator to disburse their fee.
  *
  * Key features:
  * - Tracks node operator fees based on staking rewards
- * - Provides fee claiming mechanism via role-based access control
- * - Restricts withdrawals based on the fee reserved for node operators
+ * - Provides fee disbursement mechanism via role-based access control
+ * - Restricts withdrawals based on the fee reserved for the node operator
  * - Requires both the node operator and default admin to confirm the fee changes
  *
  * Node operator fees are calculated as a percentage of the staking rewards accrued
- * between the last claimed report and the latest report in the StakingVault.
- * If the fee was never claimed, the percentage is calculated based on the total
+ * between the last disbursed report and the latest report in the StakingVault.
+ * If the fee was never disbursed, the percentage is calculated based on the total
  * rewards accrued since the StakingVault was created.
  */
 contract NodeOperatorFee is Permissions {
@@ -46,12 +46,12 @@ contract NodeOperatorFee is Permissions {
      * - confirms confirm expiry;
      * - confirms node operator fee changes;
      * - confirms the transfer of the StakingVault ownership;
-     * - is the admin role for NODE_OPERATOR_FEE_CLAIM_ROLE.
+     * - is the admin role for NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE.
      */
     bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.NodeOperatorFee.NodeOperatorManagerRole");
 
     /**
-     * @notice Claims node operator fee.
+     * @notice Sets the node operator fee recipient.
      */
     bytes32 public constant NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE =
         keccak256("vaults.NodeOperatorFee.SetFeeRecipientRole");
@@ -63,14 +63,14 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Node operator fee in basis points; cannot exceed 100.00%.
-     * The node operator's unclaimed fee in ether is returned by `nodeOperatorUnclaimedFee()`.
+     * The node operator's disbursable fee in ether is returned by `nodeOperatorDisbursableFee()`.
      */
     uint256 public nodeOperatorFeeBP;
 
     /**
-     * @notice The last report for which node operator fee was claimed. Updated on each claim.
+     * @notice The last report for which node operator fee was disbursed. Updated on each disbursement.
      */
-    VaultHub.Report public nodeOperatorFeeClaimedReport;
+    VaultHub.Report public nodeOperatorFeeDisbursedReport;
 
     /**
      * @notice The address of the node operator fee recipient.
@@ -82,7 +82,7 @@ contract NodeOperatorFee is Permissions {
      *          - can be increased manually by `increaseAccruedRewardsAdjustment` by NODE_OPERATOR_REWARDS_ADJUST_ROLE
      *          - can be set via `setAccruedRewardsAdjustment` by `confirmingRoles()`
      *          - increased automatically with `unguaranteedDepositToBeaconChain` by total ether amount of deposits
-     *          - reset to zero after `claimNodeOperatorFee`
+     *          - reset to zero after `disburseNodeOperatorFee`
      *        This amount will be deducted from rewards during NO fee calculation and can be used effectively write off NO's accrued fees.
      *
      */
@@ -126,7 +126,7 @@ contract NodeOperatorFee is Permissions {
      * @notice Returns the roles that can:
      * - change the confirm expiry;
      * - set the node operator fee;
-     * - transfer the ownership of the StakingVault.
+     * - set a new owner of the StakingVault.
      * @return roles is an array of roles that form the confirming roles.
      */
     function confirmingRoles() public pure override returns (bytes32[] memory roles) {
@@ -135,34 +135,38 @@ contract NodeOperatorFee is Permissions {
         roles[1] = NODE_OPERATOR_MANAGER_ROLE;
     }
 
+    /**
+     * @notice Returns the latest report data containing the total value and in-out delta.
+     * @return report The latest report.
+     */
     function latestReport() public view returns (VaultHub.Report memory) {
         return VAULT_HUB.latestReport(address(_stakingVault()));
     }
 
     /**
-     * @notice Returns the accumulated unclaimed node operator fee in ether,
-     * calculated as: U = ((R - A) * F) / T
+     * @notice Returns the accumulated disbursable node operator fee in ether,
+     * calculated as: D = ((R - A) * F) / T
      * where:
-     * - U is the node operator unclaimed fee;
-     * - R is the StakingVault rewards accrued since the last node operator fee claim;
+     * - D is the node operator disbursable fee;
+     * - R is the StakingVault rewards accrued between the last node operator fee disbursement and the latest report;
      * - F is `nodeOperatorFeeBP`;
      * - A is `accruedRewardsAdjustment`;
      * - T is the total basis points, 10,000.
-     * @return uint256: the amount of unclaimed fee in ether.
+     * @return uint256: the amount of disbursable fee in ether.
      */
-    function nodeOperatorUnclaimedFee() public view returns (uint256) {
+    function nodeOperatorDisbursableFee() public view returns (uint256) {
         VaultHub.Report memory latestReport_ = latestReport();
-        VaultHub.Report storage _lastClaimedReport = nodeOperatorFeeClaimedReport;
+        VaultHub.Report storage _lastDisbursedReport = nodeOperatorFeeDisbursedReport;
 
         // cast down safely clamping to int128.max
         int128 adjustment = int128(int256(accruedRewardsAdjustment & ADJUSTMENT_CLAMP_MASK));
 
-        int128 rewardsAccrued = int128(latestReport_.totalValue) -
-            int128(_lastClaimedReport.totalValue) -
-            (latestReport_.inOutDelta - _lastClaimedReport.inOutDelta) -
+        int128 adjustedRewards = int128(latestReport_.totalValue) -
+            int128(_lastDisbursedReport.totalValue) -
+            (latestReport_.inOutDelta - _lastDisbursedReport.inOutDelta) -
             adjustment;
 
-        return rewardsAccrued > 0 ? (uint256(uint128(rewardsAccrued)) * nodeOperatorFeeBP) / TOTAL_BASIS_POINTS : 0;
+        return adjustedRewards > 0 ? (uint256(uint128(adjustedRewards)) * nodeOperatorFeeBP) / TOTAL_BASIS_POINTS : 0;
     }
 
     /**
@@ -179,11 +183,17 @@ contract NodeOperatorFee is Permissions {
      * @notice Sets the node operator fee.
      * The node operator fee is the percentage (in basis points) of node operator's share of the StakingVault rewards.
      * The node operator fee cannot exceed 100%.
-     * Note that the function reverts if the node operator fee is unclaimed and all the confirms must be recasted to execute it again,
-     * which is why the deciding confirm must make sure that `nodeOperatorUnclaimedFee()` is 0 before calling this function.
+     * Note that the function reverts if the report is stale and all the confirms must be recasted to execute it again,
+     * which is why the deciding confirm must make sure that the report is fresh before calling this function.
      * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
      */
     function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(confirmingRoles()) {
+        // the report must be fresh in order to prevent retroactive fees
+        if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
+
+        // if there is no fee to disburse, the report is still updated to prevent retroactive fees
+        if (disburseNodeOperatorFee() == 0) nodeOperatorFeeDisbursedReport = latestReport();
+
         _setNodeOperatorFeeBP(_newNodeOperatorFeeBP);
     }
 
@@ -193,30 +203,34 @@ contract NodeOperatorFee is Permissions {
      */
     function setNodeOperatorFeeRecipient(
         address _newNodeOperatorFeeRecipient
-    ) external onlyRole(NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE) {
+    ) external onlyRoleMemberOrAdmin(NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE) {
         _setNodeOperatorFeeRecipient(_newNodeOperatorFeeRecipient);
     }
 
     /**
-     * @notice Claims the node operator fee.
+     * @notice Disburses the node operator fee if there is any.
      */
-    function disburseNodeOperatorFee() external {
-        uint256 fee = nodeOperatorUnclaimedFee();
-        if (fee == 0) revert NoUnclaimedFee();
+    function disburseNodeOperatorFee() public returns (uint256 fee) {
+        fee = nodeOperatorDisbursableFee();
 
-        _disburseNodeOperatorFee(fee);
+        if (fee > 0) {
+            nodeOperatorFeeDisbursedReport = latestReport();
+            if (accruedRewardsAdjustment != 0) _setAccruedRewardsAdjustment(0);
+
+            VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
+
+            emit NodeOperatorFeeDisbursed(msg.sender, fee);
+        }
     }
 
     /**
      * @notice Increases accrued rewards adjustment to correct fee calculation due to non-rewards ether on CL
-     *         Note that the authorized role is NODE_OPERATOR_FEE_CLAIM_ROLE, not NODE_OPERATOR_MANAGER_ROLE,
-     *         although NODE_OPERATOR_MANAGER_ROLE is the admin role for NODE_OPERATOR_FEE_CLAIM_ROLE.
      * @param _adjustmentIncrease amount to increase adjustment by
      * @dev will revert if final adjustment is more than `MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT`
      */
     function increaseAccruedRewardsAdjustment(
         uint256 _adjustmentIncrease
-    ) external onlyRole(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
+    ) external onlyRoleMemberOrAdmin(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
         uint256 newAdjustment = accruedRewardsAdjustment + _adjustmentIncrease;
         // sanity check, though value will be cast safely during fee calculation
         if (newAdjustment > MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
@@ -241,16 +255,8 @@ contract NodeOperatorFee is Permissions {
 
     function _setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) internal {
         if (_newNodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
-        uint256 fee = nodeOperatorUnclaimedFee();
-        if (fee > 0) _disburseNodeOperatorFee(fee);
 
         uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
-
-        // If fee is changing from 0, update the claimed report to current to prevent retroactive fees
-        if (oldNodeOperatorFeeBP == 0 && _newNodeOperatorFeeBP > 0) {
-            nodeOperatorFeeClaimedReport = latestReport();
-        }
-
         nodeOperatorFeeBP = _newNodeOperatorFeeBP;
 
         emit NodeOperatorFeeBPSet(msg.sender, oldNodeOperatorFeeBP, _newNodeOperatorFeeBP);
@@ -261,12 +267,6 @@ contract NodeOperatorFee is Permissions {
         nodeOperatorFeeRecipient = _newNodeOperatorFeeRecipient;
     }
 
-    function _disburseNodeOperatorFee(uint256 _fee) internal {
-        if (accruedRewardsAdjustment != 0) _setAccruedRewardsAdjustment(0);
-        nodeOperatorFeeClaimedReport = latestReport();
-
-        VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, _fee);
-    }
 
     /**
      * @notice sets InOut adjustment for correct fee calculation
@@ -292,6 +292,12 @@ contract NodeOperatorFee is Permissions {
     event NodeOperatorFeeBPSet(address indexed sender, uint256 oldNodeOperatorFeeBP, uint256 newNodeOperatorFeeBP);
 
     /**
+     * @dev Emitted when the node operator fee is disbursed.
+     * @param fee the amount of disbursed fee.
+     */
+    event NodeOperatorFeeDisbursed(address indexed sender, uint256 fee);
+
+    /**
      * @dev Emitted when the new rewards adjustment is set.
      * @param newAdjustment the new adjustment value
      * @param oldAdjustment previous adjustment value
@@ -299,16 +305,6 @@ contract NodeOperatorFee is Permissions {
     event AccruedRewardsAdjustmentSet(uint256 newAdjustment, uint256 oldAdjustment);
 
     // ==================== Errors ====================
-
-    /**
-     * @dev Error emitted when the node operator fee is unclaimed.
-     */
-    error NodeOperatorFeeUnclaimed();
-
-    /**
-     * @dev Error emitted when the fee is 0.
-     */
-    error NoUnclaimedFee();
 
     /**
      * @dev Error emitted when the combined feeBPs exceed 100%.
@@ -329,4 +325,9 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when trying to set same value for adjustment
      */
     error SameAdjustment();
+
+    /**
+     * @dev Error emitted when the report is stale.
+     */
+    error ReportStale();
 }

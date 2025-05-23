@@ -76,7 +76,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     it("Can reconnect the vault to the hub", async () => {
       const { vaultHub } = ctx.contracts;
 
-      await dashboard.acceptOwnershipAndConnectToVaultHub();
+      await dashboard.reconnectToVaultHub();
 
       expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
     });
@@ -120,7 +120,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
         const { vaultHub } = ctx.contracts;
 
-        await expect(dashboard.acceptOwnershipAndConnectToVaultHub())
+        await expect(dashboard.reconnectToVaultHub())
           .to.emit(stakingVault, "OwnershipTransferred")
           .withArgs(owner, dashboard)
           .to.emit(stakingVault, "OwnershipTransferStarted")

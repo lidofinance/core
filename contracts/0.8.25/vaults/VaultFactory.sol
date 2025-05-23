@@ -92,6 +92,7 @@ contract VaultFactory {
     /**
      * @notice Event emitted on a Dashboard creation
      * @param dashboard The address of the created Dashboard
+     * @param vault The address of the created Vault
      * @param admin The address of the Dashboard admin
      */
     event DashboardCreated(address indexed dashboard, address indexed vault, address indexed admin);
