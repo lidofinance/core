@@ -471,8 +471,8 @@ contract VaultHub is PausableUntilWithRoles {
         record.reportTimestamp = _reportTimestamp;
         record.locked = uint128(lockedEther);
 
-        uint256 outstandingFees = _reportAccruedTreasuryFees - obligations.settledTreasuryFees;
-        _settleObligations(_vault, record, obligations, outstandingFees, liability, true);
+        uint256 unsettledTreasuryFees = _reportAccruedTreasuryFees - obligations.settledTreasuryFees;
+        _settleObligations(_vault, record, obligations, unsettledTreasuryFees, liability, true);
 
         IStakingVault vault_ = IStakingVault(_vault);
         if (!_isVaultHealthy(connection, record) && !vault_.beaconChainDepositsPaused()) {
@@ -784,11 +784,12 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (_vault.balance == 0) revert ZeroBalance();
 
+        uint256 unsettledTreasuryFees = obligations.unsettledTreasuryFees;
         _settleObligations(
             _vault,
             record,
             obligations,
-            obligations.unsettledTreasuryFees,
+            unsettledTreasuryFees,
             _getPooledEthBySharesRoundUp(record.liabilityShares),
             false
         );
@@ -812,11 +813,16 @@ contract VaultHub is PausableUntilWithRoles {
         address _vault,
         VaultRecord storage _record,
         VaultObligations storage _obligations,
-        uint256 _outstandingFees,
-        uint256 _liability,
+        uint256 _unsettledFees,
+        uint256 _maxWithdrawals,
         bool _isOnReport
     ) internal {
-        (uint256 valueToRebalance, uint256 valueToTransfer) = _getSettlementValues(_vault, _obligations, _outstandingFees, _liability);
+        (uint256 valueToRebalance, uint256 valueToTransfer) = _getSettlementValues(
+            _vault,
+            _obligations,
+            _unsettledFees,
+            _maxWithdrawals
+        );
 
         if (valueToRebalance > 0) {
             if (_isOnReport) {
