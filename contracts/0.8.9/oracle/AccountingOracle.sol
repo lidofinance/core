@@ -17,6 +17,14 @@ interface IReportReceiver {
     function handleOracleReport(ReportValues memory values) external;
 }
 
+interface ILazyOracle {
+    function updateReportData(
+        uint256 _timestamp,
+        bytes32 _vaultsDataTreeRoot,
+        string memory _vaultsDataReportCid
+    ) external;
+}
+
 interface IOracleReportSanityChecker {
     function checkExitedValidatorsRatePerDay(uint256 _exitedValidatorsCount) external view;
 
@@ -495,10 +503,14 @@ contract AccountingOracle is BaseOracle {
                 data.sharesRequestedToBurn,
                 data.withdrawalFinalizationBatches,
                 data.vaultsTotalTreasuryFeesShares,
-                data.vaultsTotalDeficit,
-                data.vaultsDataTreeRoot,
-                data.vaultsDataTreeCid
+                data.vaultsTotalDeficit
             )
+        );
+
+        ILazyOracle(LOCATOR.lazyOracle()).updateReportData(
+            GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
+            data.vaultsDataTreeRoot,
+            data.vaultsDataTreeCid
         );
 
         _storageExtraDataProcessingState().value = ExtraDataProcessingState({

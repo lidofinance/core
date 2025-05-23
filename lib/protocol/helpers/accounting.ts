@@ -150,8 +150,6 @@ export const report = async (
       elRewardsVaultBalance,
       vaultsTotalTreasuryFeesShares,
       vaultsTotalDeficit,
-      vaultsDataTreeRoot,
-      vaultsDataTreeCid,
     });
 
     if (!simulatedReport) {
@@ -337,8 +335,6 @@ type SimulateReportParams = {
   elRewardsVaultBalance: bigint;
   vaultsTotalTreasuryFeesShares: bigint;
   vaultsTotalDeficit: bigint;
-  vaultsDataTreeRoot: string;
-  vaultsDataTreeCid: string;
 };
 
 type SimulateReportResult = {
@@ -361,8 +357,6 @@ const simulateReport = async (
     elRewardsVaultBalance,
     vaultsTotalTreasuryFeesShares,
     vaultsTotalDeficit,
-    vaultsDataTreeRoot,
-    vaultsDataTreeCid,
   }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
@@ -391,8 +385,6 @@ const simulateReport = async (
       withdrawalFinalizationBatches: [],
       vaultsTotalTreasuryFeesShares,
       vaultsTotalDeficit,
-      vaultsDataTreeRoot,
-      vaultsDataTreeCid,
     },
     0n,
   );
@@ -420,8 +412,6 @@ type HandleOracleReportParams = {
   elRewardsVaultBalance: bigint;
   vaultsTotalTreasuryFeesShares: bigint;
   vaultsTotalDeficit: bigint;
-  vaultsDataTreeRoot: string;
-  vaultsDataTreeCid: string;
 };
 
 export const handleOracleReport = async (
@@ -434,8 +424,6 @@ export const handleOracleReport = async (
     elRewardsVaultBalance,
     vaultsTotalTreasuryFeesShares,
     vaultsTotalDeficit,
-    vaultsDataTreeRoot,
-    vaultsDataTreeCid,
   }: HandleOracleReportParams,
 ): Promise<void> => {
   const { hashConsensus, accountingOracle, accounting } = ctx.contracts;
@@ -467,8 +455,6 @@ export const handleOracleReport = async (
       withdrawalFinalizationBatches: [],
       vaultsTotalTreasuryFeesShares,
       vaultsTotalDeficit,
-      vaultsDataTreeRoot,
-      vaultsDataTreeCid,
     });
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");

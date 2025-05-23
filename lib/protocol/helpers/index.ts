@@ -22,8 +22,6 @@ export {
   createVaultProxy,
   createVaultsReportTree,
   createVaultWithDashboard,
-  disconnectFromHub,
-  generateFeesToClaim,
   getPubkeys,
   reportVaultDataWithProof,
   setupLido,

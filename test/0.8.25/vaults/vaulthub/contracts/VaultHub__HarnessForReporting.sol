@@ -15,10 +15,10 @@ contract VaultHub__HarnessForReporting is VaultHub {
     constructor(
         ILidoLocator _locator,
         ILido _lido,
-        uint256 _relativeShareLimitBP
-    ) VaultHub(_locator, _lido, _relativeShareLimitBP) {}
+        uint256 _maxRelativeShareLimitBP
+    ) VaultHub(_locator, _lido, _maxRelativeShareLimitBP) {}
 
-    function harness_getVaultHubStorage() private pure returns (VaultHubStorage storage $) {
+    function harness_getVaultHubStorage() private pure returns (VaultHub.Storage storage $) {
         assembly {
             $.slot := VAULT_HUB_STORAGE_LOCATION
         }
@@ -29,30 +29,54 @@ contract VaultHub__HarnessForReporting is VaultHub {
     /// @param _shareLimit maximum number of stETH shares that can be minted by the vault
     /// @param _reserveRatioBP minimum reserve ratio in basis points
     /// @param _forcedRebalanceThresholdBP threshold to force rebalance on the vault in basis points
-    /// @param _treasuryFeeBP treasury fee in basis points
+    /// @param _infraFeeBP infra fee in basis points
+    /// @param _liquidityFeeBP liquidity fee in basis points
+    /// @param _reservationFeeBP reservation fee in basis points
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     function harness__connectVault(
         address _vault,
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
-        uint256 _treasuryFeeBP
+        uint256 _infraFeeBP,
+        uint256 _liquidityFeeBP,
+        uint256 _reservationFeeBP
     ) external {
-        VaultHubStorage storage $ = harness_getVaultHubStorage();
+        VaultHub.Storage storage $ = harness_getVaultHubStorage();
 
-        VaultSocket memory vsocket = VaultSocket(
-            _vault,
-            0, // liabilityShares
+        VaultHub.VaultConnection memory connection = VaultHub.VaultConnection(
+            address(0), // owner
             uint96(_shareLimit),
+            uint96($.vaults.length),
+            false, // pendingDisconnect
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
-            uint16(_treasuryFeeBP),
-            false, // pendingDisconnect
-            0
+            uint16(_infraFeeBP),
+            uint16(_liquidityFeeBP),
+            uint16(_reservationFeeBP)
         );
-        $.vaultIndex[_vault] = $.sockets.length;
-        $.sockets.push(vsocket);
+        $.connections[_vault] = connection;
 
-        emit VaultConnectionSet(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
+        VaultHub.VaultRecord memory record = VaultHub.VaultRecord(
+            VaultHub.Report(0, 0), // report
+            0, // locked
+            uint96(_shareLimit), // liabilityShares
+            uint64(block.timestamp), // reportTimestamp
+            0, // inOutDelta
+            0 // feeSharesCharged
+        );
+
+        $.records[_vault] = record;
+        $.vaults.push(_vault);
+
+        emit VaultConnected(
+            _vault,
+            _shareLimit,
+            _reserveRatioBP,
+            _forcedRebalanceThresholdBP,
+            _infraFeeBP,
+            _liquidityFeeBP,
+            _reservationFeeBP
+        );
     }
 }

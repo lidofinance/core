@@ -130,7 +130,7 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE())).to.equal(
         await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
       );
-      expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_FEE_CLAIM_ROLE())).to.equal(
+      expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE())).to.equal(
         await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
       );
       expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_REWARDS_ADJUST_ROLE())).to.equal(
@@ -139,8 +139,8 @@ describe("NodeOperatorFee.sol", () => {
 
       expect(await nodeOperatorFee.getConfirmExpiry()).to.equal(initialConfirmExpiry);
       expect(await nodeOperatorFee.nodeOperatorFeeBP()).to.equal(initialNodeOperatorFeeBP);
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(0n);
-      expect(await nodeOperatorFee.nodeOperatorFeeClaimedReport()).to.deep.equal([0n, 0n, 0n]);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorFeeDisbursedReport()).to.deep.equal([0n, 0n, 0n]);
     });
   });
 
@@ -203,7 +203,7 @@ describe("NodeOperatorFee.sol", () => {
     });
 
     it("reverts if there is no fee accumulated", async () => {
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
 
       await expect(
         nodeOperatorFee.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(recipient),
@@ -230,7 +230,7 @@ describe("NodeOperatorFee.sol", () => {
         .to.emit(vault, "Mock__Withdrawn")
         .withArgs(nodeOperatorFee, recipient, expectedNodeOperatorFee);
 
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
     });
   });
 
@@ -305,13 +305,13 @@ describe("NodeOperatorFee.sol", () => {
       });
 
       const expectedDue = (rewards * operatorFee) / BP_BASE;
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedDue);
 
       await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(expectedDue / 2n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedDue / 2n);
 
       await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
     });
 
     it("adjustment is reset after fee claim", async () => {
@@ -325,13 +325,13 @@ describe("NodeOperatorFee.sol", () => {
         timestamp: await getCurrentBlockTimestamp(),
       });
       const expectedDue = (rewards * operatorFee) / BP_BASE;
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedDue);
 
       await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
       expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(rewards / 2n);
 
       const adjustedDue = expectedDue / 2n;
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(adjustedDue);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(adjustedDue);
 
       await nodeOperatorFee
         .connect(nodeOperatorManager)

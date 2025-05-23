@@ -94,6 +94,7 @@ export enum Sk {
   dashboardImpl = "dashboardImpl",
   stakingVaultBeacon = "stakingVaultBeacon",
   operatorGrid = "operatorGrid",
+  lazyOracle = "lazyOracle",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -114,6 +115,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorsExitBusOracle:
     case Sk.withdrawalQueueERC721:
     case Sk.withdrawalVault:
+    case Sk.lazyOracle:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.burner:

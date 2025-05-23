@@ -28,11 +28,10 @@ import {
   EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
   ether,
   findEvents,
-  getCurrentBlockTimestamp,
   impersonate,
   randomValidatorPubkey,
 } from "lib";
-import { reportVaultWithMockedVaultHub, reportVaultWithoutProof } from "lib/protocol/helpers/vaults";
+import { reportVaultWithoutProof } from "lib/protocol/helpers/vaults";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -44,7 +43,6 @@ describe("Dashboard.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
-  let hubSigner: HardhatEthersSigner;
 
   let steth: StETHPermit__HarnessForDashboard;
   let weth: WETH9__MockForVault;
@@ -87,7 +85,6 @@ describe("Dashboard.sol", () => {
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth, predepositGuarantee: pdg });
 
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth, lidoLocator]);
-    hubSigner = await impersonate(await hub.getAddress(), ether("1000"));
     erc721 = await ethers.deployContract("ERC721__MockForDashboard");
 
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
@@ -108,7 +105,7 @@ describe("Dashboard.sol", () => {
 
     const createVaultTx = await factory
       .connect(vaultOwner)
-      .createVaultWithDashboard(vaultOwner, nodeOperator, nodeOperator, nodeOperatorFeeBP, confirmExpiry, [], "0x", {
+      .createVaultWithDashboard(vaultOwner, nodeOperator, nodeOperator, nodeOperatorFeeBP, confirmExpiry, [], {
         value: VAULT_CONNECTION_DEPOSIT,
       });
     const createVaultReceipt = await createVaultTx.wait();
@@ -119,7 +116,6 @@ describe("Dashboard.sol", () => {
 
     vaultAddress = vaultCreatedEvents[0].args.vault;
     vault = await ethers.getContractAt("StakingVault", vaultAddress, vaultOwner);
-    expect(await vault.vaultHub()).to.equal(hub);
 
     const dashboardCreatedEvents = findEvents(createVaultReceipt, "DashboardCreated");
     expect(dashboardCreatedEvents.length).to.equal(1);
@@ -131,7 +127,6 @@ describe("Dashboard.sol", () => {
     const defaultAdminRoles = await Promise.all([
       dashboard.FUND_ROLE(),
       dashboard.WITHDRAW_ROLE(),
-      dashboard.LOCK_ROLE(),
       dashboard.MINT_ROLE(),
       dashboard.BURN_ROLE(),
       dashboard.REBALANCE_ROLE(),
@@ -143,11 +138,6 @@ describe("Dashboard.sol", () => {
       dashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
       dashboard.PDG_PROVE_VALIDATOR_ROLE(),
       dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
-      dashboard.OSSIFY_ROLE(),
-      dashboard.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(),
-      dashboard.LIDO_VAULTHUB_AUTHORIZATION_ROLE(),
-      dashboard.SET_DEPOSITOR_ROLE(),
-      dashboard.RESET_LOCKED_ROLE(),
       dashboard.RECOVER_ASSETS_ROLE(),
     ]);
 
@@ -254,7 +244,9 @@ describe("Dashboard.sol", () => {
         shareLimit: 1000n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -266,7 +258,9 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.liabilityShares()).to.equal(sockets.liabilityShares);
       expect(await dashboard.reserveRatioBP()).to.equal(sockets.reserveRatioBP);
       expect(await dashboard.forcedRebalanceThresholdBP()).to.equal(sockets.forcedRebalanceThresholdBP);
-      expect(await dashboard.treasuryFeeBP()).to.equal(sockets.treasuryFeeBP);
+      expect(await dashboard.infraFeeBP()).to.equal(sockets.infraFeeBP);
+      expect(await dashboard.liquidityFeeBP()).to.equal(sockets.liquidityFeeBP);
+      expect(await dashboard.reservationFeeBP()).to.equal(sockets.reservationFeeBP);
     });
 
     it("totalValue", async () => {
@@ -277,7 +271,7 @@ describe("Dashboard.sol", () => {
 
   context("totalMintingCapacity", () => {
     it("returns the trivial max mintable shares", async () => {
-      const maxShares = await dashboard.totalMintingCapacity();
+      const maxShares = await dashboard.totalMintingCapacityShares();
 
       expect(maxShares).to.equal(0n);
     });
@@ -289,7 +283,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 555n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -298,7 +294,7 @@ describe("Dashboard.sol", () => {
 
       // await dashboard.connect(vaultOwner).fund({ value: 1000n });
 
-      const maxMintableShares = await dashboard.totalMintingCapacity();
+      const maxMintableShares = await dashboard.totalMintingCapacityShares();
       const maxStETHMinted = ((await vault.totalValue()) * (BP_BASE - sockets.reserveRatioBP)) / BP_BASE;
       const maxSharesMinted = await steth.getSharesByPooledEth(maxStETHMinted);
 
@@ -312,7 +308,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 0n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -321,7 +319,7 @@ describe("Dashboard.sol", () => {
 
       await dashboard.connect(vaultOwner).fund({ value: 1000n });
 
-      const availableMintableShares = await dashboard.totalMintingCapacity();
+      const availableMintableShares = await dashboard.totalMintingCapacityShares();
 
       expect(availableMintableShares).to.equal(sockets.shareLimit);
     });
@@ -333,7 +331,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 555n,
         reserveRatioBP: 10_000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -342,7 +342,7 @@ describe("Dashboard.sol", () => {
 
       await dashboard.connect(vaultOwner).fund({ value: 1000n });
 
-      const availableMintableShares = await dashboard.totalMintingCapacity();
+      const availableMintableShares = await dashboard.totalMintingCapacityShares();
 
       expect(availableMintableShares).to.equal(0n);
     });
@@ -354,7 +354,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 555n,
         reserveRatioBP: 0n,
         forcedRebalanceThresholdBP: 0n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -363,7 +365,7 @@ describe("Dashboard.sol", () => {
       const funding = 1000n;
       await dashboard.connect(vaultOwner).fund({ value: funding });
 
-      const availableMintableShares = await dashboard.totalMintingCapacity();
+      const availableMintableShares = await dashboard.totalMintingCapacityShares();
 
       const toShares = await steth.getSharesByPooledEth(funding);
       expect(availableMintableShares).to.equal(toShares);
@@ -372,7 +374,7 @@ describe("Dashboard.sol", () => {
 
   context("remainingMintingCapacity", () => {
     it("returns trivial can mint shares", async () => {
-      const canMint = await dashboard.remainingMintingCapacity(0n);
+      const canMint = await dashboard.remainingMintingCapacityShares(0n);
       expect(canMint).to.equal(0n);
     });
 
@@ -383,7 +385,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 0n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -392,13 +396,13 @@ describe("Dashboard.sol", () => {
 
       const funding = 1000n;
 
-      const preFundCanMint = await dashboard.remainingMintingCapacity(funding);
+      const preFundCanMint = await dashboard.remainingMintingCapacityShares(funding);
 
       await dashboard.connect(vaultOwner).fund({ value: funding });
 
-      const availableMintableShares = await dashboard.totalMintingCapacity();
+      const availableMintableShares = await dashboard.totalMintingCapacityShares();
 
-      const canMint = await dashboard.remainingMintingCapacity(0n);
+      const canMint = await dashboard.remainingMintingCapacityShares(0n);
       expect(canMint).to.equal(availableMintableShares);
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -410,7 +414,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 900n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -418,11 +424,11 @@ describe("Dashboard.sol", () => {
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
 
-      const preFundCanMint = await dashboard.remainingMintingCapacity(funding);
+      const preFundCanMint = await dashboard.remainingMintingCapacityShares(funding);
 
       await dashboard.connect(vaultOwner).fund({ value: funding });
 
-      const canMint = await dashboard.remainingMintingCapacity(0n);
+      const canMint = await dashboard.remainingMintingCapacityShares(0n);
       expect(canMint).to.equal(0n); // 1000 - 10% - 900 = 0
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -434,7 +440,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 10000n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -442,11 +450,11 @@ describe("Dashboard.sol", () => {
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 1000n;
 
-      const preFundCanMint = await dashboard.remainingMintingCapacity(funding);
+      const preFundCanMint = await dashboard.remainingMintingCapacityShares(funding);
 
       await dashboard.connect(vaultOwner).fund({ value: funding });
 
-      const canMint = await dashboard.remainingMintingCapacity(0n);
+      const canMint = await dashboard.remainingMintingCapacityShares(0n);
       expect(canMint).to.equal(0n);
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -458,7 +466,9 @@ describe("Dashboard.sol", () => {
         liabilityShares: 500n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
@@ -466,12 +476,12 @@ describe("Dashboard.sol", () => {
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 2000n;
 
-      const preFundCanMint = await dashboard.remainingMintingCapacity(funding);
+      const preFundCanMint = await dashboard.remainingMintingCapacityShares(funding);
       await dashboard.connect(vaultOwner).fund({ value: funding });
 
       const sharesFunded = await steth.getSharesByPooledEth((funding * (BP_BASE - sockets.reserveRatioBP)) / BP_BASE);
 
-      const canMint = await dashboard.remainingMintingCapacity(0n);
+      const canMint = await dashboard.remainingMintingCapacityShares(0n);
       expect(canMint).to.equal(sharesFunded - sockets.liabilityShares);
       expect(canMint).to.equal(preFundCanMint);
     });
@@ -483,34 +493,21 @@ describe("Dashboard.sol", () => {
         liabilityShares: 500n,
         reserveRatioBP: 1000n,
         forcedRebalanceThresholdBP: 800n,
-        treasuryFeeBP: 500n,
+        infraFeeBP: 500n,
+        liquidityFeeBP: 400n,
+        reservationFeeBP: 100n,
         pendingDisconnect: false,
         feeSharesCharged: 3000n,
       };
 
       await hub.mock__setVaultSocket(vault, sockets);
       const funding = 2000n;
-      const preFundCanMint = await dashboard.remainingMintingCapacity(funding);
+      const preFundCanMint = await dashboard.remainingMintingCapacityShares(funding);
       await dashboard.connect(vaultOwner).fund({ value: funding });
 
-      const canMint = await dashboard.remainingMintingCapacity(0n);
+      const canMint = await dashboard.remainingMintingCapacityShares(0n);
       expect(canMint).to.equal(0n);
       expect(canMint).to.equal(preFundCanMint);
-    });
-  });
-
-  context("unreserved", () => {
-    it("initially returns 0", async () => {
-      expect(await dashboard.unreserved()).to.equal(0n);
-    });
-
-    it("returns 0 if locked is greater than total value", async () => {
-      const totalValue = ether("2");
-      const inOutDelta = ether("2");
-
-      await vault.connect(hubSigner).report(await getCurrentBlockTimestamp(), totalValue, inOutDelta, totalValue + 1n);
-
-      expect(await dashboard.unreserved()).to.equal(0n);
     });
   });
 
@@ -529,7 +526,7 @@ describe("Dashboard.sol", () => {
       expect(withdrawableEther).to.equal(amount);
     });
 
-    it("funds and recieves external but and can only withdraw unlocked", async () => {
+    it("funds and receives external but and can only withdraw unlocked", async () => {
       const amount = ether("1");
       await dashboard.connect(vaultOwner).fund({ value: amount });
       await vaultOwner.sendTransaction({ to: vault.getAddress(), value: amount });
@@ -654,23 +651,6 @@ describe("Dashboard.sol", () => {
         .to.emit(vault, "Withdrawn")
         .withArgs(dashboard, recipient, amount);
       expect(await ethers.provider.getBalance(recipient)).to.equal(previousBalance + amount);
-    });
-  });
-
-  context("lock", () => {
-    it("increases the locked amount", async () => {
-      expect(await vault.locked()).to.equal(0n);
-
-      await dashboard.fund({ value: ether("1") });
-      await dashboard.lock(ether("1"));
-      expect(await vault.locked()).to.equal(ether("1"));
-    });
-
-    it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).lock(ether("1"))).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
     });
   });
 
@@ -1249,90 +1229,6 @@ describe("Dashboard.sol", () => {
       )
         .to.emit(vault, "ValidatorWithdrawalTriggered")
         .withArgs(dashboard, validatorPublicKeys, amounts, vaultOwner, 0n);
-    });
-  });
-
-  context("authorizeLidoVaultHub", () => {
-    it("authorizes the lido vault hub", async () => {
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
-      await hub.deleteVaultSocket(vault);
-      await dashboard.deauthorizeLidoVaultHub();
-
-      await expect(dashboard.authorizeLidoVaultHub()).to.emit(vault, "VaultHubAuthorizedSet");
-    });
-
-    it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).authorizeLidoVaultHub()).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
-    });
-  });
-
-  context("ossifyStakingVault", () => {
-    it("ossifies the staking vault", async () => {
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
-      await hub.deleteVaultSocket(vault);
-      await dashboard.deauthorizeLidoVaultHub();
-
-      await dashboard.ossifyStakingVault();
-
-      expect(await vault.ossified()).to.be.true;
-    });
-
-    it("reverts if called by a non-admin", async () => {
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
-      await hub.deleteVaultSocket(vault);
-      await dashboard.deauthorizeLidoVaultHub();
-
-      await expect(dashboard.connect(stranger).ossifyStakingVault()).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
-    });
-  });
-
-  context("setDepositor", () => {
-    it("sets the depositor", async () => {
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
-      await hub.deleteVaultSocket(vault);
-      await dashboard.deauthorizeLidoVaultHub();
-
-      await dashboard.setDepositor(vaultOwner);
-      expect(await vault.depositor()).to.equal(vaultOwner);
-    });
-
-    it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).setDepositor(vaultOwner)).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
-    });
-  });
-
-  context("resetLocked", () => {
-    it("resets the locked amount", async () => {
-      await dashboard.connect(vaultOwner).voluntaryDisconnect();
-      await hub.deleteVaultSocket(vault);
-      await dashboard.deauthorizeLidoVaultHub();
-
-      expect(await vault.locked()).to.equal(0n);
-      const amount = ether("1");
-
-      await dashboard.fund({ value: amount });
-      await dashboard.lock(amount);
-      expect(await vault.locked()).to.equal(amount);
-
-      expect(await vault.vaultHubAuthorized()).to.be.false;
-      await expect(dashboard.resetLocked()).to.emit(vault, "LockedReset");
-      expect(await vault.locked()).to.equal(0n);
-    });
-
-    it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).resetLocked()).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
-      );
     });
   });
 

@@ -10,4 +10,4 @@ export const SHARE_RATE_PRECISION = BigInt(10 ** 27);
 
 export const ZERO_HASH = new Uint8Array(32).fill(0);
 
-export const VAULTS_RELATIVE_SHARE_LIMIT_BP = 10_00n;
+export const VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP = 10_00n;
