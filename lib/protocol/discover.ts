@@ -227,6 +227,7 @@ export async function discover() {
     "Vault Hub": contracts.vaultHub.address,
     "Predeposit Guarantee": contracts.predepositGuarantee.address,
     "Operator Grid": contracts.operatorGrid.address,
+    "Lazy Oracle": contracts.lazyOracle.address,
   });
 
   const signers = {

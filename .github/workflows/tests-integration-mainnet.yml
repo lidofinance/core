@@ -21,7 +21,6 @@ jobs:
           - 8545:8545
         env:
           ETH_RPC_URL: "${{ secrets.ETH_RPC_URL }}"
-          HARDFORK: "prague"
 
     steps:
       - uses: actions/checkout@v4

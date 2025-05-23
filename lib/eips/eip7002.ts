@@ -24,9 +24,10 @@ export const ensureEIP7002WithdrawalRequestContractPresent = async (): Promise<v
   const code = await ethers.provider.getCode(EIP7002_ADDRESS);
 
   if (code === "0x") {
-    log.warning(`EIP7002 withdrawal request contract not found at ${EIP7002_ADDRESS}`);
-
     await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
-    log.success("EIP7002 withdrawal request contract is present");
+    log.debug("EIP7002 withdrawal request contract is deployed", {
+      address: EIP7002_ADDRESS,
+      fee: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+    });
   }
 };
