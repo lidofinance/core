@@ -502,7 +502,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice transfer the ownership of the vault to a new owner
-    /// without disconnection it from the hub
+    /// without disconnecting it from the hub
     /// @param _vault vault address
     /// @param _newOwner new owner address
     /// @dev msg.sender should be vault's owner

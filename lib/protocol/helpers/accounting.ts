@@ -147,8 +147,6 @@ export const report = async (
       withdrawalVaultBalance,
       elRewardsVaultBalance,
       vaultsTotalDeficit,
-      vaultsDataTreeRoot,
-      vaultsDataTreeCid,
     });
 
     if (!simulatedReport) {
@@ -332,8 +330,6 @@ type SimulateReportParams = {
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
   vaultsTotalDeficit: bigint;
-  vaultsDataTreeRoot: string;
-  vaultsDataTreeCid: string;
 };
 
 type SimulateReportResult = {
@@ -408,8 +404,6 @@ type HandleOracleReportParams = {
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
   vaultsTotalDeficit: bigint;
-  vaultsDataTreeRoot: string;
-  vaultsDataTreeCid: string;
 };
 
 export const handleOracleReport = async (
@@ -421,8 +415,6 @@ export const handleOracleReport = async (
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     vaultsTotalDeficit,
-    vaultsDataTreeRoot,
-    vaultsDataTreeCid,
   }: HandleOracleReportParams,
 ): Promise<void> => {
   const { hashConsensus, accountingOracle, accounting, lazyOracle } = ctx.contracts;

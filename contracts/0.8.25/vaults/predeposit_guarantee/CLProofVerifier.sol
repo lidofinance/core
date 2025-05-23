@@ -16,7 +16,7 @@ import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
  *
  * CLProofVerifier is base abstract contract that provides internal method to verify
  * merkle proofs of validator entry in CL. It uses concatenated proofs that prove
- * validator existence in CL just from pubkey and withdrawalCredentials againts Beacon block root
+ * validator existence in CL just from pubkey and withdrawalCredentials against Beacon block root
  * stored in BeaconRoots system contract (see EIP-4788).
  *
  */

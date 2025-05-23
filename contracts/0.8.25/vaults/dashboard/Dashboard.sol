@@ -99,7 +99,7 @@ contract Dashboard is NodeOperatorFee {
     // ==================== View Functions ====================
 
     /**
-     * @notice Returns the vault socket data for the staking vault.
+     * @notice Returns the vault connection data for the staking vault.
      * @return VaultConnection struct containing vault data
      */
     function vaultConnection() public view returns (VaultHub.VaultConnection memory) {
@@ -122,7 +122,7 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the number of stETHshares minted
+     * @notice Returns the number of stETH shares minted
      */
     function liabilityShares() public view returns (uint256) {
         return VAULT_HUB.liabilityShares(address(_stakingVault()));

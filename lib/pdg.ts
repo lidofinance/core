@@ -10,8 +10,6 @@ import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, imperso
 
 export type Validator = { container: SSZHelpers.ValidatorStruct; blsPrivateKey: SecretKey };
 
-export type LocalMerkle = Awaited<ReturnType<typeof prepareLocalMerkleTree>>;
-
 export const randomBytes32 = (): string => hexlify(randomBytes(32));
 export const randomValidatorPubkey = (): string => hexlify(randomBytes(48));
 
