@@ -45,6 +45,7 @@ export async function main() {
     state.vaultHub.proxy.address,
     state.predepositGuarantee.proxy.address,
     state.operatorGrid.proxy.address,
+    state.lazyOracle.proxy.address,
   ];
 
   for (const proxyAddress of ossifiableProxyAdminChanges) {
