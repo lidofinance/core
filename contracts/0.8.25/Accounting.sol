@@ -6,14 +6,17 @@ pragma solidity 0.8.25;
 
 import {VaultHub} from "./vaults/VaultHub.sol";
 
-import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
-import {IBurner} from "../common/interfaces/IBurner.sol";
+
 import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
 import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 import {IOracleReportSanityChecker} from "./interfaces/IOracleReportSanityChecker.sol";
 import {IWithdrawalQueue} from "./interfaces/IWithdrawalQueue.sol";
 import {ILido} from "./interfaces/ILido.sol";
-import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
+
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+import {ReportValues} from "contracts/common/types/ReportValues.sol";
+import {ShareRate} from "contracts/common/types/ShareRate.sol";
 
 /// @title Lido Accounting contract
 /// @author folkyatina
@@ -289,7 +292,8 @@ contract Accounting {
             _report.timestamp,
             _pre.clValidators,
             _report.clValidators,
-            _report.clBalance
+            _report.clBalance,
+            _report.vaultsTotalDeficit
         );
 
         if (_update.totalSharesToBurn > 0) {
