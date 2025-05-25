@@ -336,6 +336,44 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
     expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);
   });
 
+  it("should add unlimited amount of withdrawal requests", async () => {
+    const requests = [
+      { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+      { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+      { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
+      { moduleId: 2, nodeOpId: 1, valIndex: 1, valPubkey: PUBKEYS[2] },
+      { moduleId: 2, nodeOpId: 2, valIndex: 1, valPubkey: PUBKEYS[2] },
+      { moduleId: 2, nodeOpId: 3, valIndex: 1, valPubkey: PUBKEYS[2] },
+      { moduleId: 2, nodeOpId: 4, valIndex: 1, valPubkey: PUBKEYS[2] },
+      { moduleId: 2, nodeOpId: 5, valIndex: 1, valPubkey: PUBKEYS[2] },
+      { moduleId: 2, nodeOpId: 6, valIndex: 1, valPubkey: PUBKEYS[2] },
+      { moduleId: 2, nodeOpId: 7, valIndex: 1, valPubkey: PUBKEYS[2] },
+    ];
+
+    const requestData = createValidatorDataList(requests);
+
+    const tx = await triggerableWithdrawalsGateway
+      .connect(authorizedEntity)
+      .triggerFullWithdrawals(requestData, ZERO_ADDRESS, 0, { value: 10 });
+
+    const pubkeys =
+      "0x" +
+      requests
+        .map((request) => {
+          const pubkeyHex = de0x(request.valPubkey);
+          return pubkeyHex;
+        })
+        .join("");
+
+    for (const request of exitRequests) {
+      await expect(tx)
+        .to.emit(stakingRouter, "Mock__onValidatorExitTriggered")
+        .withArgs(request.moduleId, request.nodeOpId, request.valPubkey, 1, 0);
+
+      await expect(tx).to.emit(withdrawalVault, "AddFullWithdrawalRequestsCalled").withArgs(pubkeys);
+    }
+  });
+
   it("Should not allow to set exitsPerFrame bigger than maxExitRequestsLimit", async () => {
     await expect(
       triggerableWithdrawalsGateway.connect(authorizedEntity).setExitRequestLimit(0, 1, 48),
