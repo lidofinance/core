@@ -29,12 +29,4 @@ contract TriggerableWithdrawalsGateway__Harness is TriggerableWithdrawalsGateway
     function refundFee(uint256 fee, address recipient) external payable {
         _refundFee(fee, recipient);
     }
-
-    // function getCurrentExitLimit() external view returns (uint256) {
-    //     return _getCurrentExitLimit();
-    // }
-
-    // function checkExitRequestLimit(uint256 requestsCount) external {
-    //     _checkExitRequestLimit(requestsCount);
-    // }
 }
