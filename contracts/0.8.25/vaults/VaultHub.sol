@@ -14,6 +14,7 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 import {LazyOracle} from "./LazyOracle.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
+import {IConsensusContract} from "./interfaces/IConsensusContract.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
@@ -77,6 +78,10 @@ contract VaultHub is PausableUntilWithRoles {
         int128 inOutDelta;
         /// @notice fee shares charged for the vault
         uint96 feeSharesCharged;
+        /// @notice cached refSlot number of the latest report
+        uint256 cachedRefSlot;
+        /// @notice cached inOutDelta of the latest report
+        int128 cachedInOutDelta;
     }
 
     struct Report {
@@ -510,6 +515,7 @@ contract VaultHub is PausableUntilWithRoles {
         _checkConnectionAndOwner(_vault);
 
         VaultRecord storage record = _storage().records[_vault];
+        _cacheInOutDelta(record);
 
         int128 inOutDelta_ = record.inOutDelta + int128(int256(msg.value));
         record.inOutDelta = inOutDelta_;
@@ -825,6 +831,8 @@ contract VaultHub is PausableUntilWithRoles {
         address _recipient,
         uint256 _amount
     ) internal {
+        _cacheInOutDelta(_record);
+
         int128 inOutDelta_ = _record.inOutDelta - int128(int256(_amount));
         _record.inOutDelta = inOutDelta_;
 
@@ -965,6 +973,14 @@ contract VaultHub is PausableUntilWithRoles {
         if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
 
         return connection;
+    }
+
+    function _cacheInOutDelta(VaultRecord storage _record) internal {
+        (uint256 refSlot, ) = IConsensusContract(LIDO_LOCATOR.consensusContract()).getCurrentFrame();
+        if (_record.cachedRefSlot != refSlot) { // + 2100 gas
+            _record.cachedInOutDelta = _record.inOutDelta; // + 7100 gas
+            _record.cachedRefSlot = refSlot; // + 5000 gas
+        }
     }
 
     function _storage() internal pure returns (Storage storage $) {

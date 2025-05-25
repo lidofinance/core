@@ -6,8 +6,10 @@ pragma solidity 0.8.25;
 
 import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IConsensusContract} from "./interfaces/IConsensusContract.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
 
 contract LazyOracle {
     /// @custom:storage-location erc7201:LazyOracle
@@ -18,6 +20,13 @@ contract LazyOracle {
         string vaultsDataReportCid;
         /// @notice timestamp of the vaults data
         uint64 vaultsDataTimestamp;
+        /// @notice deposit quarantines for each vault
+        mapping(address => Quarantine) vaultQuarantines;
+    }
+
+    struct Quarantine {
+        uint256 totalValue;
+        uint256 timestamp;
     }
 
     struct VaultInfo {
@@ -38,6 +47,11 @@ contract LazyOracle {
     // keccak256(abi.encode(uint256(keccak256("LazyOracle")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant LAZY_ORACLE_STORAGE_LOCATION =
         0xe5459f2b48ec5df2407caac4ec464a5cb0f7f31a1f22f649728a9579b25c1d00;
+
+    uint256 public constant QUARANTINE_PERIOD = 5 days;
+    uint256 public constant TOTAL_VALUE_SPIKE_LIMIT_BP = 20_00; // 20%
+    uint256 public constant MAX_EL_CL_REWARDS_BP = 3_00; // 3%
+    uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
 
     ILidoLocator public immutable LIDO_LOCATOR;
 
@@ -137,6 +151,8 @@ contract LazyOracle {
         );
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
+        (_totalValue, _inOutDelta) = _handleSanityChecks(_vault, _totalValue, _liabilityShares);
+
         VaultHub(payable(LIDO_LOCATOR.vaultHub()))
             .applyVaultReport(
                 _vault,
@@ -148,6 +164,68 @@ contract LazyOracle {
             );
     }
 
+    /// @notice handle sanity checks for the vault lazy report data
+    /// @param _vault the address of the vault
+    /// @param _totalValue the total value of the vault in refSlot
+    /// @param _liabilityShares the liabilityShares of the vault in refSlot
+    /// @return the smoothed total value, inOutDelta in the refSlot
+    function _handleSanityChecks(address _vault, uint256 _totalValue, uint256 _liabilityShares) public view returns (uint256, int256 _inOutDelta) {
+        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        VaultHub.VaultConnection memory connection = vaultHub.vaultConnection(_vault);
+        VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
+
+        // CALCULATE INOUTDELTA IN THE REFSLOT ----------------------------------------------------
+        // ----------------------------------------------------------------------------------------
+
+        int256 curInOutDelta = record.inOutDelta;
+        (uint256 refSlot, ) = IConsensusContract(LIDO_LOCATOR.consensusContract()).getCurrentFrame();
+        if (record.cachedRefSlot == refSlot) {
+            _inOutDelta = record.cachedInOutDelta;
+        } else {
+            _inOutDelta = curInOutDelta;
+        }
+
+
+        // SANITY CHECK FOR TOTAL VALUE INCREASE --------------------------------------------------
+        // ----------------------------------------------------------------------------------------
+
+        uint256 refSlotTotalValue = record.report.totalValue + _inOutDelta - record.report.inOutDelta;
+        uint256 limit = refSlotTotalValue * (TOTAL_BASIS_POINTS + MAX_EL_CL_REWARDS_BP) / TOTAL_BASIS_POINTS;
+        if (_totalValue > limit) {
+            Quarantine storage quarantine = _storage().vaultQuarantines[_vault];
+            uint256 reportTimestamp = _storage().vaultsDataTimestamp;
+            // first overlimit report
+            if (quarantine.totalValue == 0 || _totalValue > quarantine.totalValue * (TOTAL_BASIS_POINTS + TOTAL_VALUE_SPIKE_LIMIT_BP) / TOTAL_BASIS_POINTS) {
+                quarantine.totalValue = _totalValue;
+                quarantine.timestamp = reportTimestamp;
+                emit QuarantinedDeposit(_vault, _totalValue);
+                _totalValue = limit;
+            } else { // subsequent overlimit reports
+                if (reportTimestamp - quarantine.timestamp < QUARANTINE_PERIOD) {
+                    _totalValue = limit;
+                } else {
+                    quarantine.totalValue = 0;
+                }
+            }
+        }
+
+
+        // SANITY CHECK FOR TOTAL VALUE UNDERFLOW -------------------------------------------------
+        // ----------------------------------------------------------------------------------------
+
+        // underflow check for: uint256(int256(uint256(report.totalValue)) + _record.inOutDelta - report.inOutDelta)
+        if (int256(_totalValue) + curInOutDelta - _inOutDelta < 0) revert UnderflowInTotalValueCalculation();
+
+
+        // SANITY CHECK FOR LIABILITY SHARES INCREASE ---------------------------------------------
+        // ----------------------------------------------------------------------------------------
+
+        uint256 maxLiabilityShares = Math256.max(connection.shareLimit, record.liabilityShares);
+        if (_liabilityShares > maxLiabilityShares) revert LiabilitySharesExceedsLimit();
+
+        return (_totalValue, _inOutDelta);
+    }
+
     function _storage() internal pure returns (Storage storage $) {
         assembly {
             $.slot := LAZY_ORACLE_STORAGE_LOCATION
@@ -155,7 +233,10 @@ contract LazyOracle {
     }
 
     event VaultsReportDataUpdated(uint256 timestamp, bytes32 root, string cid);
+    event QuarantinedDeposit(address vault, uint256 totalValue);
 
     error NotAuthorized();
     error InvalidProof();
+    error UnderflowInTotalValueCalculation();
+    error LiabilitySharesExceedsLimit();
 }
