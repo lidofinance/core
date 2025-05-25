@@ -132,8 +132,6 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
       .connect(authorizedEntity)
       .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 4 });
 
-    const timestamp = await triggerableWithdrawalsGateway.getTimestamp();
-
     const pubkeys =
       "0x" +
       exitRequests
@@ -207,8 +205,6 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
     const tx = await triggerableWithdrawalsGateway
       .connect(authorizedEntity)
       .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 4 });
-
-    const timestamp = await triggerableWithdrawalsGateway.getTimestamp();
 
     const pubkeys =
       "0x" +
