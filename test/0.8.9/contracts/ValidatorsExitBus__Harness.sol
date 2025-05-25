@@ -64,6 +64,25 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
     }
 
     function setContractVersion(uint256 version) external {
-        _updateContractVersion(version);
+        CONTRACT_VERSION_POSITION.setStorageUint256(version);
+    }
+
+    function updateRequestStatus(
+        bytes32 exitRequestHash,
+        uint256 deliveryHistoryLength,
+        uint256 lastDeliveredExitDataIndex,
+        uint256 lastDeliveredExitDataTimestamp
+    ) external {
+        RequestStatus storage requestStatus = _storageRequestStatus()[exitRequestHash];
+        _updateRequestStatus(
+            requestStatus,
+            deliveryHistoryLength,
+            lastDeliveredExitDataIndex,
+            lastDeliveredExitDataTimestamp
+        );
+    }
+
+    function getRequestStatus(bytes32 exitRequestHash) external view returns (RequestStatus memory requestStatus) {
+        requestStatus = _storageRequestStatus()[exitRequestHash];
     }
 }

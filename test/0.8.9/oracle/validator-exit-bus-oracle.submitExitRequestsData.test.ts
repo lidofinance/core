@@ -207,8 +207,8 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
     it("Should revert if data is not sorted in ascending order", async () => {
       const requests = [
-        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
-        { moduleId: 0, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[1] },
       ];
 
       const exitRequestData: ExitRequestData = {
@@ -225,7 +225,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       );
     });
 
-    it("Should revert with if length of requests is equal to 0", async () => {
+    it("Should revert with InvalidRequestsDataLength if length of requests is equal to 0", async () => {
       const exitRequestData: ExitRequestData = {
         dataFormat: 1,
         data: "0x",
@@ -241,7 +241,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       );
     });
 
-    it("Should revert with if length of requests is equal to 0", async () => {
+    it("Should revert with InvalidRequestsDataLength if length of requests is not divided by request length without remainder", async () => {
       // 64 - length of request in bytes
       const request =
         "0x00000100000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".slice(
@@ -261,6 +261,26 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
         oracle,
         "InvalidRequestsDataLength",
+      );
+    });
+
+    it("Should revert if module id is equal to 0", async () => {
+      const requests = [
+        { moduleId: 0, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[1] },
+      ];
+
+      const exitRequestData: ExitRequestData = {
+        dataFormat: 1,
+        data: encodeExitRequestsDataList(requests),
+      };
+      const hash = hashExitRequest(exitRequestData);
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
+
+      await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
+        oracle,
+        "InvalidRequestsData",
       );
     });
   });
@@ -300,6 +320,28 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     };
 
     const HASH_REQUEST_DELIVERED_BY_PARTS = hashExitRequest(REQUEST_DELIVERED_BY_PARTS);
+
+    it("Should not allow to set limit without role", async () => {
+      const reportLimitRole = await oracle.EXIT_REPORT_LIMIT_ROLE();
+
+      await expect(
+        oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION),
+      ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), reportLimitRole);
+    });
+
+    it("Should not allow to set limit without role", async () => {
+      const reportLimitRole = await oracle.EXIT_REPORT_LIMIT_ROLE();
+
+      await expect(
+        oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION),
+      ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), reportLimitRole);
+    });
+
+    it("Should not allow to set exits per frame bigger than max limit", async () => {
+      await expect(oracle.connect(authorizedEntity).setExitRequestLimit(10, 12, FRAME_DURATION)).to.be.revertedWith(
+        "TOO_LARGE_EXITS_PER_FRAME",
+      );
+    });
 
     it("Should deliver request fully as it is below limit", async () => {
       const exitLimitTx = await oracle

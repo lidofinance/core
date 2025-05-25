@@ -213,6 +213,15 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     // If deliveryHistoryLength == 1, delivery info is read from RequestStatus; otherwise, from DeliveryHistory[].
     // Both mappings use the same key (exitRequestsHash).
 
+    uint256 public constant EXIT_TYPE = 2;
+
+    /// @dev Ensures the contract’s ETH balance is unchanged.
+    modifier preservesEthBalance() {
+        uint256 balanceBeforeCall = address(this).balance - msg.value;
+        _;
+        assert(address(this).balance == balanceBeforeCall);
+    }
+
     constructor(address lidoLocator) {
         LOCATOR = ILidoLocator(lidoLocator);
     }
@@ -291,6 +300,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             newLastDeliveredIndex,
             _getTimestamp()
         );
+
+        // TODO: is this check extra?
+        _validateDeliveryState(exitRequestsHash, requestStatus);
     }
 
     /**
@@ -310,7 +322,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         ExitRequestsData calldata exitsData,
         uint256[] calldata exitDataIndexes,
         address refundRecipient
-    ) external payable whenResumed {
+    ) external payable whenResumed preservesEthBalance {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
         // If the refund recipient is not set, use the sender as the refund recipient
@@ -334,7 +346,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 requestsCount = exitsData.data.length / PACKED_REQUEST_LENGTH;
 
         for (uint256 i = 0; i < exitDataIndexes.length; i++) {
-            if (exitDataIndexes[i] >= requestsCount ) {
+            if (exitDataIndexes[i] >= requestsCount) {
                 revert ExitDataIndexOutOfRange(exitDataIndexes[i], requestsCount);
             }
 
@@ -349,6 +361,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             lastExitDataIndex = exitDataIndexes[i];
 
             ValidatorData memory validatorData = _getValidatorData(exitsData.data, exitDataIndexes[i]);
+
             if (validatorData.moduleId == 0) revert InvalidRequestsData();
 
             triggerableExitData[i] = ITriggerableWithdrawalsGateway.ValidatorData(
@@ -360,7 +373,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         ITriggerableWithdrawalsGateway(LOCATOR.triggerableWithdrawalsGateway()).triggerFullWithdrawals{
             value: msg.value
-        }(triggerableExitData, refundRecipient, 1);
+        }(triggerableExitData, refundRecipient, uint8(EXIT_TYPE));
     }
 
     /**
@@ -435,6 +448,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         if (storedRequest.contractVersion == 0) {
             revert ExitHashNotSubmitted();
         }
+
+        _validateDeliveryState(exitRequestsHash, storedRequest);
 
         if (storedRequest.deliveryHistoryLength == 0) {
             DeliveryHistory[] memory deliveryHistory;
@@ -569,7 +584,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     }
 
     function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration) internal {
-        require(maxExitRequestsLimit >= exitsPerFrame, "TOO_LARGE_TW_EXIT_REQUEST_LIMIT");
+        require(maxExitRequestsLimit >= exitsPerFrame, "TOO_LARGE_EXITS_PER_FRAME");
 
         uint256 timestamp = _getTimestamp();
 
@@ -649,6 +664,12 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         );
     }
 
+    function _validateDeliveryState(bytes32 hash, RequestStatus storage status) internal view {
+        if (status.deliveryHistoryLength > 1) {
+            require(_storageDeliveryHistory()[hash].length == status.deliveryHistoryLength, "DeliveryHistoryMismatch");
+        }
+    }
+
     /// Methods for reading data from tightly packed validator exit requests
     /// Format DATA_FORMAT_LIST = 1;
 
@@ -724,6 +745,13 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
                 // totalling to 64 bytes
                 offset := add(offset, 64)
             }
+
+            uint256 moduleId = uint24(dataWithoutPubkey >> (64 + 40));
+
+            if (moduleId == 0) {
+                revert InvalidRequestsData();
+            }
+
             //                              dataWithoutPubkey
             // MSB <---------------------------------------------------------------------- LSB
             // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
@@ -733,11 +761,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
             uint64 valIndex = uint64(dataWithoutPubkey);
             uint256 nodeOpId = uint40(dataWithoutPubkey >> 64);
-            uint256 moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-
-            if (moduleId == 0) {
-                revert InvalidRequestsData();
-            }
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);

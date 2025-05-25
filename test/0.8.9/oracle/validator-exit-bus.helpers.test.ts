@@ -191,7 +191,7 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
       expect(firstDelivery.lastDeliveredExitDataIndex).to.equal(lastDeliveredExitDataIndex);
     });
 
-    it("Returns array with multiple reconrds if deliveryHistoryLength is equal to ", async () => {
+    it("Returns array with multiple records if deliveryHistoryLength is equal to ", async () => {
       const exitRequestsHash = keccak256("0x3333");
       const deliveryHistoryLength = 2;
       const timestamp = await oracle.getTime();
@@ -218,6 +218,165 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
 
       expect(secondDelivery.lastDeliveredExitDataIndex).to.equal(1);
       expect(secondDelivery.timestamp).to.equal(timestamp + 1n);
+    });
+
+    it("reverts if deliveryHistoryLength > 1 but actual history array is smaller", async () => {
+      const hash = keccak256("0xdead");
+      const contractVersion = 42;
+
+      await oracle.storeNewHashRequestStatus(
+        hash,
+        contractVersion,
+        2, // deliveryHistoryLength = 2
+        5,
+        123456,
+      );
+
+      // Only add 1 entry (mismatch)
+      await oracle.storeDeliveryEntry(hash, 1, 123456);
+
+      await expect(oracle.getExitRequestsDeliveryHistory(hash)).to.be.revertedWith("DeliveryHistoryMismatch");
+    });
+  });
+
+  context("_updateRequestStatus", () => {
+    let originalState: string;
+
+    before(async () => {
+      originalState = await Snapshot.take();
+    });
+
+    after(async () => await Snapshot.restore(originalState));
+
+    it("updates fields correctly when valid values provided", async () => {
+      const hash = keccak256("0xaaaa");
+      const contractVersion = 42;
+      const deliveryHistoryLength = 0;
+      const lastDeliveredExitDataIndex = 0;
+      const timestamp = 0;
+
+      await oracle.storeNewHashRequestStatus(
+        hash,
+        contractVersion,
+        deliveryHistoryLength,
+        lastDeliveredExitDataIndex,
+        timestamp,
+      );
+
+      const newDeliveryHistoryLength = 10;
+      const newLastDeliveredExitDataIndex = 100;
+      const newLastDeliveredExitDataTimestamp = 12345;
+
+      await oracle.updateRequestStatus(
+        hash,
+        newDeliveryHistoryLength,
+        newLastDeliveredExitDataIndex,
+        newLastDeliveredExitDataTimestamp,
+      );
+
+      await expect(
+        oracle.updateRequestStatus(
+          hash,
+          newDeliveryHistoryLength,
+          newLastDeliveredExitDataIndex,
+          newLastDeliveredExitDataTimestamp,
+        ),
+      ).to.not.be.reverted;
+
+      const requestStatus = await oracle.getRequestStatus(hash);
+      expect(requestStatus.deliveryHistoryLength).to.equal(newDeliveryHistoryLength);
+      expect(requestStatus.lastDeliveredExitDataIndex).to.equal(newLastDeliveredExitDataIndex);
+      expect(requestStatus.lastDeliveredExitDataTimestamp).to.equal(newLastDeliveredExitDataTimestamp);
+    });
+
+    it("reverts if deliveryHistoryLength exceeds uint32 max", async () => {
+      const hash = keccak256("0xbbbb");
+      await expect(oracle.updateRequestStatus(hash, 2n ** 32n, 0, 0)).to.be.revertedWith(
+        "DELIVERY_HISTORY_LENGTH_OVERFLOW",
+      );
+    });
+
+    it("reverts if lastDeliveredExitDataIndex exceeds uint32 max", async () => {
+      const hash = keccak256("0xcccc");
+      await expect(oracle.updateRequestStatus(hash, 0, 2n ** 32n, 0)).to.be.revertedWith(
+        "LAST_DELIVERED_EXIT_DATA_INDEX_OVERFLOW",
+      );
+    });
+
+    it("reverts if lastDeliveredExitDataTimestamp exceeds uint32 max", async () => {
+      const hash = keccak256("0xdddd");
+      await expect(oracle.updateRequestStatus(hash, 0, 0, 2n ** 32n)).to.be.revertedWith(
+        "LAST_DELIVERED_EXIT_DATA_TIMESTAMP_OVERFLOW",
+      );
+    });
+  });
+
+  context("storeDeliveryEntry", () => {
+    let originalState: string;
+
+    before(async () => {
+      originalState = await Snapshot.take();
+    });
+
+    after(async () => await Snapshot.restore(originalState));
+
+    it("adds a delivery entry to an empty history", async () => {
+      const exitRequestsHash = keccak256("0x1111");
+      const lastDeliveredExitDataIndex = 0;
+      const lastDeliveredExitDataTimestamp = 123456;
+
+      await oracle.storeNewHashRequestStatus(
+        exitRequestsHash,
+        1,
+        1,
+        lastDeliveredExitDataIndex,
+        lastDeliveredExitDataTimestamp,
+      );
+      await oracle.storeDeliveryEntry(exitRequestsHash, lastDeliveredExitDataIndex, lastDeliveredExitDataTimestamp);
+
+      const history = await oracle.getExitRequestsDeliveryHistory(exitRequestsHash);
+      expect(history.length).to.equal(1);
+      expect(history[0].lastDeliveredExitDataIndex).to.equal(lastDeliveredExitDataIndex);
+      expect(history[0].timestamp).to.equal(lastDeliveredExitDataTimestamp);
+    });
+
+    it("appends multiple entries for the same hash", async () => {
+      const exitRequestsHash = keccak256("0x2222");
+
+      const lastDeliveredExitDataIndex = 1;
+      const lastDeliveredExitDataTimestamp = 12345;
+      const historyLength = 2;
+
+      await oracle.storeNewHashRequestStatus(
+        exitRequestsHash,
+        1,
+        historyLength,
+        lastDeliveredExitDataIndex,
+        lastDeliveredExitDataTimestamp,
+      );
+
+      await oracle.storeDeliveryEntry(exitRequestsHash, 0, lastDeliveredExitDataTimestamp - 1);
+      await oracle.storeDeliveryEntry(exitRequestsHash, lastDeliveredExitDataIndex, lastDeliveredExitDataTimestamp);
+
+      const history = await oracle.getExitRequestsDeliveryHistory(exitRequestsHash);
+      expect(history.length).to.equal(2);
+
+      expect(history[0].lastDeliveredExitDataIndex).to.equal(0);
+      expect(history[0].timestamp).to.equal(lastDeliveredExitDataTimestamp - 1);
+    });
+
+    it("reverts if lastDeliveredExitDataIndex exceeds uint32 max", async () => {
+      const exitRequestsHash = keccak256("0x3333");
+      await expect(oracle.storeDeliveryEntry(exitRequestsHash, 2n ** 32n, 0)).to.be.revertedWith(
+        "LAST_DELIVERED_EXIT_DATA_INDEX_OVERFLOW",
+      );
+    });
+
+    it("reverts if timestamp exceeds uint32 max", async () => {
+      const exitRequestsHash = keccak256("0x4444");
+      await expect(oracle.storeDeliveryEntry(exitRequestsHash, 0, 2n ** 32n)).to.be.revertedWith(
+        "LAST_DELIVERED_EXIT_DATA_TIMESTAMP_OVERFLOW",
+      );
     });
   });
 });
