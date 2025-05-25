@@ -56,19 +56,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      */
     error TriggerableWithdrawalFeeRefundFailed();
     /**
-     * @notice Emitted when an entity with the ADD_FULL_WITHDRAWAL_REQUEST_ROLE requests to process a TWR (triggerable withdrawal request).
-     * @param stakingModuleId Module id.
-     * @param nodeOperatorId Operator id.
-     * @param validatorPubkey Validator public key.
-     * @param timestamp Block timestamp.
-     */
-    event TriggerableExitRequest(
-        uint256 indexed stakingModuleId,
-        uint256 indexed nodeOperatorId,
-        bytes validatorPubkey,
-        uint256 timestamp
-    );
-    /**
      * @notice Emitted when maximum exit request limit and the frame during which a portion of the limit can be restored set.
      * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDuration)
      * @param exitsPerFrame The number of exits that can be restored per frame.
@@ -133,8 +120,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      * @param refundRecipient The address that will receive any excess ETH sent for fees.
      * @param exitType A parameter indicating the type of exit, passed to the Staking Module.
      *
-     * Emits `TriggerableExitRequest` event for each validator in list.
-     *
      * @notice Reverts if:
      *     - The caller does not have the `ADD_FULL_WITHDRAWAL_REQUEST_ROLE`
      *     - The total fee value sent is insufficient to cover all provided TW requests.
@@ -165,8 +150,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
             ValidatorData memory data = triggerableExitsData[i];
             _copyPubkey(data.pubkey, pubkeys, i);
             _notifyStakingModule(data.stakingModuleId, data.nodeOperatorId, data.pubkey, withdrawalFee, exitType);
-
-            emit TriggerableExitRequest(data.stakingModuleId, data.nodeOperatorId, data.pubkey, _getTimestamp());
         }
 
         _addWithdrawalRequest(requestsCount, withdrawalFee, pubkeys, refundRecipient);
@@ -260,7 +243,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         _refundFee(requestsCount * withdrawalFee, refundRecipient);
     }
 
-    function _refundFee(uint256 fee, address recipient) internal returns (uint256) {
+    function _refundFee(uint256 fee, address recipient) internal {
         uint256 refund = msg.value - fee;
 
         if (refund > 0) {
@@ -270,8 +253,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
                 revert TriggerableWithdrawalFeeRefundFailed();
             }
         }
-
-        return refund;
     }
 
     function _getTimestamp() internal view virtual returns (uint256) {

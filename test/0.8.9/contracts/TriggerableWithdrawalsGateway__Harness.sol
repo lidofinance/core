@@ -24,4 +24,17 @@ contract TriggerableWithdrawalsGateway__Harness is TriggerableWithdrawalsGateway
     function advanceTimeBy(uint256 timeAdvance) external {
         _time += timeAdvance;
     }
+
+    // Wrap internal functions for testing
+    function refundFee(uint256 fee, address recipient) external payable {
+        _refundFee(fee, recipient);
+    }
+
+    // function getCurrentExitLimit() external view returns (uint256) {
+    //     return _getCurrentExitLimit();
+    // }
+
+    // function checkExitRequestLimit(uint256 requestsCount) external {
+    //     _checkExitRequestLimit(requestsCount);
+    // }
 }
