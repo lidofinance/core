@@ -92,6 +92,8 @@ contract VaultHub is PausableUntilWithRoles {
 
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_LOCATION = 0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
+    /// keccak256("vaults.VaultHub.receiveEnabled")
+    bytes32 private constant RECEIVE_ENABLED_LOCATION = 0xd088e8aa1d712bc36d8a08d933bbf37eb46da705fff32b278dd92db003de79d7;
 
     /// @notice role that allows to connect vaults to the hub
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("vaults.VaultHub.VaultMasterRole");
@@ -137,7 +139,11 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @dev used to perform rebalance operations
-    receive() external payable {}
+    /// @dev disabled by default, preventing any stray ether transfers,
+    ///      enabled only when rebalancing the vault
+    receive() external payable {
+        if (!_isReceiveEnabled()) revert ReceiveDisabled();
+    }
 
     function initialize(address _admin) external initializer {
         if (_admin == address(0)) revert ZeroArgument();
@@ -813,7 +819,9 @@ contract VaultHub is PausableUntilWithRoles {
         if (liabilityShares_ < sharesToBurn) revert InsufficientSharesToBurn(msg.sender, liabilityShares_);
 
         _record.liabilityShares = uint96(liabilityShares_ - sharesToBurn);
+        _enableReceive();
         _withdrawFromVault(_vault, _record, address(this), _ether);
+        _disableReceive();
         LIDO.rebalanceExternalEtherToInternal{value: _ether}();
 
         emit VaultRebalanced(_vault, sharesToBurn, _ether);
@@ -981,6 +989,25 @@ contract VaultHub is PausableUntilWithRoles {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
+    /// the value is 0 by default, meaning the receive function is disabled by default
+    function _isReceiveEnabled() internal view returns (bool isEnabled) {
+        assembly {
+            isEnabled := tload(RECEIVE_ENABLED_LOCATION)
+        }
+    }
+
+    function _enableReceive() internal {
+        assembly {
+            tstore(RECEIVE_ENABLED_LOCATION, 1)
+        }
+    }
+
+    function _disableReceive() internal {
+        assembly {
+            tstore(RECEIVE_ENABLED_LOCATION, 0)
+        }
+    }
+
     event AllowedCodehashUpdated(bytes32 indexed codehash, bool allowed);
 
     event VaultConnected(
@@ -1109,4 +1136,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultIsDisconnecting(address vault);
     error PartialValidatorWithdrawalNotAllowed();
     error ArrayLengthMismatch();
+    error ReceiveDisabled();
 }
