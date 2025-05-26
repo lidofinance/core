@@ -22,6 +22,8 @@ contract LazyOracle {
         uint64 vaultsDataTimestamp;
         /// @notice deposit quarantines for each vault
         mapping(address => Quarantine) vaultQuarantines;
+        /// @notice sanity parameters
+        SanityParams sanityParams;
     }
 
     struct Quarantine {
@@ -44,19 +46,25 @@ contract LazyOracle {
         bool pendingDisconnect;
     }
 
+    struct SanityParams {
+        uint64 quarantinePeriod;
+        uint16 totalValueSpikeLimitBP;
+        uint16 maxElClRewardsBP;
+    }
+
     // keccak256(abi.encode(uint256(keccak256("LazyOracle")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant LAZY_ORACLE_STORAGE_LOCATION =
         0xe5459f2b48ec5df2407caac4ec464a5cb0f7f31a1f22f649728a9579b25c1d00;
 
-    uint256 public constant QUARANTINE_PERIOD = 5 days;
-    uint256 public constant TOTAL_VALUE_SPIKE_LIMIT_BP = 20_00; // 20%
-    uint256 public constant MAX_EL_CL_REWARDS_BP = 3_00; // 3%
-    uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
+    // total basis points = 100%
+    uint256 internal constant TOTAL_BP = 100_00;
 
     ILidoLocator public immutable LIDO_LOCATOR;
 
-    constructor(address _lidoLocator) {
+    constructor(address _lidoLocator, uint64 _quarantinePeriod, uint16 _totalValueSpikeLimitBP, uint16 _maxElClRewardsBP) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
+
+        _updateSanityParams(_quarantinePeriod, _totalValueSpikeLimitBP, _maxElClRewardsBP);
     }
 
     /// @notice returns the latest report data
@@ -110,6 +118,16 @@ contract LazyOracle {
             );
         }
         return batch;
+    }
+
+    /// @notice update the sanity parameters
+    /// @param _quarantinePeriod the quarantine period
+    /// @param _totalValueSpikeLimitBP the total value spike limit
+    /// @param _maxElClRewardsBP the max EL CL rewards
+    function updateSanityParams(uint64 _quarantinePeriod, uint16 _totalValueSpikeLimitBP, uint16 _maxElClRewardsBP) external {
+        if (msg.sender != LIDO_LOCATOR.lido()) revert NotAuthorized();
+
+        _updateSanityParams(_quarantinePeriod, _totalValueSpikeLimitBP, _maxElClRewardsBP);
     }
 
     /// @notice Store the report root and its meta information
@@ -189,19 +207,20 @@ contract LazyOracle {
         // SANITY CHECK FOR TOTAL VALUE INCREASE --------------------------------------------------
         // ----------------------------------------------------------------------------------------
 
-        uint256 refSlotTotalValue = record.report.totalValue + _inOutDelta - record.report.inOutDelta;
-        uint256 limit = refSlotTotalValue * (TOTAL_BASIS_POINTS + MAX_EL_CL_REWARDS_BP) / TOTAL_BASIS_POINTS;
+        uint256 refSlotTotalValue = uint256(int256(uint256(record.report.totalValue)) + _inOutDelta - record.report.inOutDelta);
+        Storage storage $ = _storage();
+        uint256 limit = refSlotTotalValue * (TOTAL_BP + $.sanityParams.maxElClRewardsBP) / TOTAL_BP;
         if (_totalValue > limit) {
-            Quarantine storage quarantine = _storage().vaultQuarantines[_vault];
-            uint256 reportTimestamp = _storage().vaultsDataTimestamp;
+            Quarantine storage quarantine = $.vaultQuarantines[_vault];
+            uint256 reportTimestamp = $.vaultsDataTimestamp;
             // first overlimit report
-            if (quarantine.totalValue == 0 || _totalValue > quarantine.totalValue * (TOTAL_BASIS_POINTS + TOTAL_VALUE_SPIKE_LIMIT_BP) / TOTAL_BASIS_POINTS) {
+            if (quarantine.totalValue == 0 || _totalValue > quarantine.totalValue * (TOTAL_BP + $.sanityParams.totalValueSpikeLimitBP) / TOTAL_BP) {
                 quarantine.totalValue = _totalValue;
                 quarantine.timestamp = reportTimestamp;
                 emit QuarantinedDeposit(_vault, _totalValue);
                 _totalValue = limit;
             } else { // subsequent overlimit reports
-                if (reportTimestamp - quarantine.timestamp < QUARANTINE_PERIOD) {
+                if (reportTimestamp - quarantine.timestamp < $.sanityParams.quarantinePeriod) {
                     _totalValue = limit;
                 } else {
                     quarantine.totalValue = 0;
@@ -226,6 +245,17 @@ contract LazyOracle {
         return (_totalValue, _inOutDelta);
     }
 
+    function _updateSanityParams(uint64 _quarantinePeriod, uint16 _totalValueSpikeLimitBP, uint16 _maxElClRewardsBP) internal {
+        Storage storage $ = _storage();
+        $.sanityParams = SanityParams({
+            quarantinePeriod: _quarantinePeriod,
+            totalValueSpikeLimitBP: _totalValueSpikeLimitBP,
+            maxElClRewardsBP: _maxElClRewardsBP
+        });
+
+        emit SanityParamsUpdated(_quarantinePeriod, _totalValueSpikeLimitBP, _maxElClRewardsBP);
+    }
+
     function _storage() internal pure returns (Storage storage $) {
         assembly {
             $.slot := LAZY_ORACLE_STORAGE_LOCATION
@@ -234,6 +264,7 @@ contract LazyOracle {
 
     event VaultsReportDataUpdated(uint256 timestamp, bytes32 root, string cid);
     event QuarantinedDeposit(address vault, uint256 totalValue);
+    event SanityParamsUpdated(uint64 quarantinePeriod, uint16 totalValueSpikeLimitBP, uint16 maxElClRewardsBP);
 
     error NotAuthorized();
     error InvalidProof();
