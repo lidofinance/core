@@ -300,29 +300,29 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         emit TierUpdated(_tierId, tier_.shareLimit, tier_.reserveRatioBP, tier_.forcedRebalanceThresholdBP, tier_.treasuryFeeBP);
     }
 
-    /// @notice Confirm tier change request
+    /// @notice Vault tier change with multi-role confirmation
     /// @param _vault address of the vault
     /// @param _requestedTierId id of the tier
     /// @param _requestedShareLimit share limit to set
-
     ///
     /*
 
     Legend:
     V = Vault1.liabilityShares
+    LS = liabilityShares
 
     Scheme1 - transfer Vault from default tier to Tier2
 
-                                         ┌────────────────────────────────┐
-                                         │           Group 1              │
-                                         │                                │
-    ┌────────────────────┐               │  ┌───────────┐  ┌───────────┐  │
-    │  Tier 1 (default)  │   confirm     │  │ Tier 2    │  │ Tier 3    │  │
-    │  minted: -V        │    ─────▶     │  │ minted:+V │  │           │  │
-    └────────────────────┘               │  └───────────┘  └───────────┘  │
-                                         │                                │
-                                         │   Group1.liabilityShares: +V   │
-                                         └────────────────────────────────┘
+                                         ┌──────────────────────────────┐
+                                         │           Group 1            │
+                                         │                              │
+    ┌────────────────────┐               │  ┌─────────┐  ┌───────────┐  │
+    │  Tier 1 (default)  │   confirm     │  │ Tier 2  │  │ Tier 3    │  │
+    │  LS: -V            │    ─────▶     │  │ LS:+V   │  │ LS: -V    │  │
+    └────────────────────┘               │  └─────────┘  └───────────┘  │
+                                         │                              │
+                                         │   Group1.liabilityShares: +V │
+                                         └──────────────────────────────┘
 
     After confirmation:
     - Tier 1.liabilityShares   = -V
@@ -337,7 +337,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     │                                │     │                                │
     │  ┌───────────┐  ┌───────────┐  │     │  ┌───────────┐                 │
     │  │ Tier 2    │  │ Tier 3    │  │     │  │ Tier 4    │                 │
-    │  │ minted:-V │  │ minted:+V │  │     │  │           │                 │
+    │  │ LS:-V     │  │ LS:+V     │  │     │  │ LS: -V    │                 │
     │  └───────────┘  └───────────┘  │     │  └───────────┘                 │
     │  operator1                     │     │  operator2                     │
     └────────────────────────────────┘     └────────────────────────────────┘
@@ -346,12 +346,16 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     - Tier 2.liabilityShares   = -V
     - Tier 3.liabilityShares   = +V
 
-    NB: Cannot change from Tier2 to Tier1, because Tier1 has no group. Reverts on `requestTierChange`
+    NB: Cannot change from Tier2 to Tier1, because Tier1 has no group
     NB: Cannot change from Tier2 to Tier4, because Tier4 has different operator.
 
     */
-    function confirmTierChange(address _vault, uint256 _requestedTierId, uint256 _requestedShareLimit) external {
+    function changeTier(address _vault, uint256 _requestedTierId, uint256 _requestedShareLimit) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
+
+        ERC7201Storage storage $ = _getStorage();
+        if (_requestedTierId >= $.tiers.length) revert TierNotExists();
+        if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
         address nodeOperator = IStakingVault(_vault).nodeOperator();
         address vaultOwner = IStakingVault(_vault).owner();
@@ -361,12 +365,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         confirmers[1] = bytes32(uint256(uint160(nodeOperator)));
 
         if (!_checkConfirmations(msg.data, confirmers)) return;
-        if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
-        ERC7201Storage storage $ = _getStorage();
         uint64 vaultTierId = $.vaultTier[_vault];
+        if (vaultTierId == _requestedTierId) revert TierAlreadySet();
 
         Tier storage requestedTier = $.tiers[uint64(_requestedTierId)];
+        if (nodeOperator != requestedTier.operator) revert TierNotInOperatorGroup();
+        if (_requestedShareLimit > requestedTier.shareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
 
         VaultHub vaultHub = VaultHub(LIDO_LOCATOR.vaultHub());
         VaultHub.VaultSocket memory vaultSocket = vaultHub.vaultSocket(_vault);
@@ -552,9 +557,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
 
     error TierNotExists();
     error TierAlreadySet();
-    error TierAlreadyRequested();
     error TierNotInOperatorGroup();
-    error InvalidTierId(uint256 requestedTierId, uint256 confirmedTierId);
     error CannotChangeToDefaultTier();
 
     error ReserveRatioTooHigh(uint256 tierId, uint256 reserveRatioBP, uint256 maxReserveRatioBP);

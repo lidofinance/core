@@ -234,7 +234,7 @@ describe("Permissions", () => {
       await checkSoleMember(ossifier, await permissions.OSSIFY_ROLE());
       await checkSoleMember(depositorSetter, await permissions.SET_DEPOSITOR_ROLE());
       await checkSoleMember(lockedResetter, await permissions.RESET_LOCKED_ROLE());
-      await checkSoleMember(tierChanger, await permissions.REQUEST_TIER_CHANGE_ROLE());
+      await checkSoleMember(tierChanger, await permissions.CHANGE_TIER_ROLE());
     });
   });
 
