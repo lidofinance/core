@@ -27,7 +27,7 @@ contract LazyOracle {
     }
 
     struct Quarantine {
-        uint256 totalValue;
+        uint256 delta;
         uint256 timestamp;
     }
 
@@ -48,7 +48,6 @@ contract LazyOracle {
 
     struct SanityParams {
         uint64 quarantinePeriod;
-        uint16 totalValueSpikeLimitBP;
         uint16 maxElClRewardsBP;
     }
 
@@ -61,10 +60,10 @@ contract LazyOracle {
 
     ILidoLocator public immutable LIDO_LOCATOR;
 
-    constructor(address _lidoLocator, uint64 _quarantinePeriod, uint16 _totalValueSpikeLimitBP, uint16 _maxElClRewardsBP) {
+    constructor(address _lidoLocator, uint64 _quarantinePeriod, uint16 _maxElClRewardsBP) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
 
-        _updateSanityParams(_quarantinePeriod, _totalValueSpikeLimitBP, _maxElClRewardsBP);
+        _updateSanityParams(_quarantinePeriod, _maxElClRewardsBP);
     }
 
     /// @notice returns the latest report data
@@ -122,12 +121,11 @@ contract LazyOracle {
 
     /// @notice update the sanity parameters
     /// @param _quarantinePeriod the quarantine period
-    /// @param _totalValueSpikeLimitBP the total value spike limit
     /// @param _maxElClRewardsBP the max EL CL rewards
-    function updateSanityParams(uint64 _quarantinePeriod, uint16 _totalValueSpikeLimitBP, uint16 _maxElClRewardsBP) external {
+    function updateSanityParams(uint64 _quarantinePeriod, uint16 _maxElClRewardsBP) external {
         if (msg.sender != LIDO_LOCATOR.lido()) revert NotAuthorized();
 
-        _updateSanityParams(_quarantinePeriod, _totalValueSpikeLimitBP, _maxElClRewardsBP);
+        _updateSanityParams(_quarantinePeriod, _maxElClRewardsBP);
     }
 
     /// @notice Store the report root and its meta information
@@ -211,28 +209,36 @@ contract LazyOracle {
         Storage storage $ = _storage();
         uint256 limit = refSlotTotalValue * (TOTAL_BP + $.sanityParams.maxElClRewardsBP) / TOTAL_BP;
         if (_totalValue > limit) {
-            Quarantine storage quarantine = $.vaultQuarantines[_vault];
+            Quarantine storage q = $.vaultQuarantines[_vault];
             uint256 reportTimestamp = $.vaultsDataTimestamp;
+            uint256 quarDelta = q.delta;
+            uint256 delta = _totalValue - refSlotTotalValue;
             // first overlimit report
-            if (quarantine.totalValue == 0 || _totalValue > quarantine.totalValue * (TOTAL_BP + $.sanityParams.totalValueSpikeLimitBP) / TOTAL_BP) {
-                quarantine.totalValue = _totalValue;
-                quarantine.timestamp = reportTimestamp;
-                emit QuarantinedDeposit(_vault, _totalValue);
-                _totalValue = limit;
+            if (quarDelta == 0) {
+                _totalValue = refSlotTotalValue;
+                q.delta = delta;
+                q.timestamp = reportTimestamp;
+                emit QuarantinedDeposit(_vault, delta);
             } else { // subsequent overlimit reports
-                if (reportTimestamp - quarantine.timestamp < $.sanityParams.quarantinePeriod) {
-                    _totalValue = limit;
+                if (reportTimestamp - q.timestamp < $.sanityParams.quarantinePeriod) {
+                    _totalValue = refSlotTotalValue;
                 } else {
-                    quarantine.totalValue = 0;
+                    if (delta < quarDelta + refSlotTotalValue * $.sanityParams.maxElClRewardsBP / TOTAL_BP) {
+                        q.delta = 0;
+                    } else {
+                        _totalValue = refSlotTotalValue + quarDelta;
+                        q.delta = delta - quarDelta;
+                        q.timestamp = reportTimestamp;
+                        emit QuarantinedDeposit(_vault, delta - quarDelta);
+                    }
                 }
             }
         }
 
 
-        // SANITY CHECK FOR TOTAL VALUE UNDERFLOW -------------------------------------------------
+        // SANITY CHECK FOR DYNAMIC TOTAL VALUE UNDERFLOW -----------------------------------------
         // ----------------------------------------------------------------------------------------
 
-        // underflow check for: uint256(int256(uint256(report.totalValue)) + _record.inOutDelta - report.inOutDelta)
         if (int256(_totalValue) + curInOutDelta - _inOutDelta < 0) revert UnderflowInTotalValueCalculation();
 
 
@@ -245,15 +251,14 @@ contract LazyOracle {
         return (_totalValue, _inOutDelta);
     }
 
-    function _updateSanityParams(uint64 _quarantinePeriod, uint16 _totalValueSpikeLimitBP, uint16 _maxElClRewardsBP) internal {
+    function _updateSanityParams(uint64 _quarantinePeriod, uint16 _maxElClRewardsBP) internal {
         Storage storage $ = _storage();
         $.sanityParams = SanityParams({
             quarantinePeriod: _quarantinePeriod,
-            totalValueSpikeLimitBP: _totalValueSpikeLimitBP,
             maxElClRewardsBP: _maxElClRewardsBP
         });
 
-        emit SanityParamsUpdated(_quarantinePeriod, _totalValueSpikeLimitBP, _maxElClRewardsBP);
+        emit SanityParamsUpdated(_quarantinePeriod, _maxElClRewardsBP);
     }
 
     function _storage() internal pure returns (Storage storage $) {
@@ -263,8 +268,8 @@ contract LazyOracle {
     }
 
     event VaultsReportDataUpdated(uint256 timestamp, bytes32 root, string cid);
-    event QuarantinedDeposit(address vault, uint256 totalValue);
-    event SanityParamsUpdated(uint64 quarantinePeriod, uint16 totalValueSpikeLimitBP, uint16 maxElClRewardsBP);
+    event QuarantinedDeposit(address vault, uint256 delta);
+    event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxElClRewardsBP);
 
     error NotAuthorized();
     error InvalidProof();
