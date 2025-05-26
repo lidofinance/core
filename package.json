@@ -111,6 +111,7 @@
     "@aragon/id": "2.1.1",
     "@aragon/minime": "1.0.0",
     "@aragon/os": "4.4.0",
+    "@noble/bls12-381": "^1.4.0",
     "@openzeppelin/contracts": "3.4.0",
     "@openzeppelin/contracts-v4.4": "npm:@openzeppelin/contracts@4.4.1",
     "@openzeppelin/contracts-v5.2": "npm:@openzeppelin/contracts@5.2.0",
