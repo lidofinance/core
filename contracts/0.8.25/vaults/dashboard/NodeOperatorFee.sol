@@ -378,7 +378,7 @@ contract NodeOperatorFee is Permissions {
     error ReportStale();
 
     /**
-     * @dev Error emitted when the report is not fresh.
+     * @dev Error emitted when the adjustment has been at or after the latest report.
      */
     error PendingAdjustment();
 }
