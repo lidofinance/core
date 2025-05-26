@@ -203,11 +203,12 @@ contract NodeOperatorFee is Permissions {
 
         // To change the fee, we must wait for the report FOLLOWING the adjustment (i.e. next report)
         // to make sure that the adjustment is included in the total value.
-        // The adjustment is guaranteed in the next report because oracle includes both active validator balances
-        // and valid pending deposits, and pending deposits are observable from the very block they are submitted in.
+        // Unguaranteed/side deposits are observable from the very block they are submitted in,
+        // so any pending deposits will be reflected in the reported total value.
+        // And consolidations must be completed before the report reference timestamp to be reflected in the total value.
         if (rewardsAdjustment.latestTimestamp >=
             VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault()))
-        ) revert RewardsAdjustedAfterLatestReport();
+        ) revert PendingAdjustment();
 
 
         // Adjustment is settled at this point thanks to the timestamp check above
@@ -380,7 +381,5 @@ contract NodeOperatorFee is Permissions {
     /**
      * @dev Error emitted when the report is not fresh.
      */
-    error RewardsAdjustedAfterLatestReport();
-
-    error AdjustmentGreaterThanGrowth();
+    error PendingAdjustment();
 }
