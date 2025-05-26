@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
@@ -14,7 +14,15 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { certainAddress, days, ether, findEvents, getCurrentBlockTimestamp, getNextBlockTimestamp } from "lib";
+import {
+  advanceChainTime,
+  certainAddress,
+  days,
+  ether,
+  findEvents,
+  getCurrentBlockTimestamp,
+  getNextBlockTimestamp,
+} from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -45,7 +53,7 @@ describe("NodeOperatorFee.sol", () => {
 
   let originalState: string;
 
-  const initialNodeOperatorFeeBP = 0n;
+  const nodeOperatorFeeRate = 10_00n; // 10%
   const initialConfirmExpiry = days(7n);
 
   before(async () => {
@@ -65,7 +73,7 @@ describe("NodeOperatorFee.sol", () => {
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth, predepositGuarantee: vaultDepositor });
     hub = await ethers.deployContract("VaultHub__MockForNodeOperatorFee", [lidoLocator, steth]);
 
-    nodeOperatorFeeImpl = await ethers.deployContract("NodeOperatorFee__Harness", [hub]);
+    nodeOperatorFeeImpl = await ethers.deployContract("NodeOperatorFee__Harness", [hub, lidoLocator]);
 
     vaultImpl = await ethers.deployContract("StakingVault__MockForNodeOperatorFee", [hub]);
 
@@ -78,7 +86,7 @@ describe("NodeOperatorFee.sol", () => {
 
     const vaultCreationTx = await factory
       .connect(vaultOwner)
-      .createVaultWithNodeOperatorFee(vaultOwner, nodeOperatorManager, initialNodeOperatorFeeBP, initialConfirmExpiry);
+      .createVaultWithNodeOperatorFee(vaultOwner, nodeOperatorManager, nodeOperatorFeeRate, initialConfirmExpiry);
 
     const vaultCreationReceipt = await vaultCreationTx.wait();
     if (!vaultCreationReceipt) throw new Error("Vault creation receipt not found");
@@ -93,6 +101,10 @@ describe("NodeOperatorFee.sol", () => {
     const nodeOperatorFeeAddress = vaultCreatedEvents[0].args.nodeOperatorFee;
     nodeOperatorFee = await ethers.getContractAt("NodeOperatorFee__Harness", nodeOperatorFeeAddress, vaultOwner);
     expect(await nodeOperatorFee.stakingVault()).to.equal(vault);
+
+    await nodeOperatorFee
+      .connect(nodeOperatorManager)
+      .grantRole(await nodeOperatorFee.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), nodeOperatorRewardAdjuster);
   });
 
   beforeEach(async () => {
@@ -104,7 +116,7 @@ describe("NodeOperatorFee.sol", () => {
   });
 
   it("hello", async () => {
-    expect(await vault.vaultHub()).to.equal(hub);
+    expect(await nodeOperatorFee.VAULT_HUB()).to.equal(hub);
   });
 
   context("initialize", () => {
@@ -115,7 +127,7 @@ describe("NodeOperatorFee.sol", () => {
     });
 
     it("reverts if called on the implementation", async () => {
-      const nodeOperatorFeeImpl_ = await ethers.deployContract("NodeOperatorFee__Harness", [hub]);
+      const nodeOperatorFeeImpl_ = await ethers.deployContract("NodeOperatorFee__Harness", [hub, lidoLocator]);
 
       await expect(
         nodeOperatorFeeImpl_.initialize(vaultOwner, nodeOperatorManager, 0n, days(7n)),
@@ -130,7 +142,7 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE())).to.equal(
         await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
       );
-      expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_FEE_CLAIM_ROLE())).to.equal(
+      expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE())).to.equal(
         await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
       );
       expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_REWARDS_ADJUST_ROLE())).to.equal(
@@ -138,9 +150,9 @@ describe("NodeOperatorFee.sol", () => {
       );
 
       expect(await nodeOperatorFee.getConfirmExpiry()).to.equal(initialConfirmExpiry);
-      expect(await nodeOperatorFee.nodeOperatorFeeBP()).to.equal(initialNodeOperatorFeeBP);
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(0n);
-      expect(await nodeOperatorFee.nodeOperatorFeeClaimedReport()).to.deep.equal([0n, 0n, 0n]);
+      expect(await nodeOperatorFee.nodeOperatorFeeRate()).to.equal(nodeOperatorFeeRate);
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
+      expect(await nodeOperatorFee.feePeriodStartReport()).to.deep.equal([0n, 0n]);
     });
   });
 
@@ -182,63 +194,145 @@ describe("NodeOperatorFee.sol", () => {
     });
   });
 
-  context("claimNodeOperatorFee", () => {
-    beforeEach(async () => {
-      await nodeOperatorFee
-        .connect(nodeOperatorManager)
-        .grantRole(await nodeOperatorFee.NODE_OPERATOR_FEE_CLAIM_ROLE(), nodeOperatorFeeClaimer);
+  context("disburseNodeOperatorFee", () => {
+    it("claims the fee", async () => {
+      // deposited 100 ETH, earned 1 ETH, fee is 10%
+      const report = {
+        totalValue: ether("101"),
+        inOutDelta: ether("100"),
+      };
+
+      await hub.setReport(report, await getCurrentBlockTimestamp(), true);
+
+      // at 10%, the fee is 0.1 ETH
+      const expectedNodeOperatorFee = ((report.totalValue - report.inOutDelta) * nodeOperatorFeeRate) / BP_BASE;
+
+      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee())
+        .to.emit(hub, "Mock__Withdrawn")
+        .withArgs(vault, nodeOperatorManager, expectedNodeOperatorFee);
+
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
     });
 
-    it("reverts if the caller does not have the operator due claim role", async () => {
-      await expect(nodeOperatorFee.connect(stranger).claimNodeOperatorFee(stranger)).to.be.revertedWithCustomError(
-        nodeOperatorFee,
-        "AccessControlUnauthorizedAccount",
+    it("does not disburse if there is no fee, updates the report", async () => {
+      const report = {
+        totalValue: ether("100"),
+        inOutDelta: ether("100"),
+      };
+
+      await hub.setReport(report, await getCurrentBlockTimestamp(), true);
+
+      // totalValue-inOutDelta is 0, so no fee
+      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee()).not.to.emit(
+        hub,
+        "Mock__Withdrawn",
       );
     });
 
-    it("reverts if the recipient is the zero address", async () => {
-      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(nodeOperatorFee, "ZeroArgument")
-        .withArgs("_recipient");
-    });
+    it("eventually settles fees if the actual rewards can cover the adjustment", async () => {
+      // side-deposited 1 eth
+      const sideDeposit = ether("1");
+      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(sideDeposit);
 
-    it("reverts if there is no fee accumulated", async () => {
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(0n);
-
-      await expect(
-        nodeOperatorFee.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(recipient),
-      ).to.be.revertedWithCustomError(nodeOperatorFee, "NoUnclaimedFee");
-    });
-
-    it("claims the fee", async () => {
-      const operatorFee = 10_00n; // 10%
-      await nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
-      await nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
-      expect(await nodeOperatorFee.nodeOperatorFeeBP()).to.equal(operatorFee);
-
+      // also earned 2 eth rewards
+      const inOutDelta = ether("10");
+      const realRewards = ether("2");
       const report = {
-        totalValue: ether("1.1"),
-        inOutDelta: ether("1"),
-        timestamp: await getCurrentBlockTimestamp(),
+        totalValue: inOutDelta + realRewards, // 12 now, but should be 13, but side deposit is not reflected in the report yet
+        inOutDelta,
       };
 
-      await vault.setLatestReport(report);
+      await hub.setReport(report, await getCurrentBlockTimestamp(), true);
 
-      const expectedNodeOperatorFee = ((report.totalValue - report.inOutDelta) * operatorFee) / BP_BASE;
+      // totalValue-inOutDelta-adjustment is 1, at 10%, the fee is 0.1 ETH
+      // so the fee for only 1 ETH is disbursed, the vault still owes the node operator the fee for the other 1 eth
+      const expectedNodeOperatorFee1 =
+        ((report.totalValue - report.inOutDelta - sideDeposit) * nodeOperatorFeeRate) / BP_BASE;
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedNodeOperatorFee1);
 
-      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(recipient))
-        .to.emit(vault, "Mock__Withdrawn")
-        .withArgs(nodeOperatorFee, recipient, expectedNodeOperatorFee);
+      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee())
+        .to.emit(hub, "Mock__Withdrawn")
+        .withArgs(vault, nodeOperatorManager, expectedNodeOperatorFee1);
 
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
+
+      // now comes the report that does include the side deposit
+      const report2 = {
+        totalValue: ether("13"),
+        inOutDelta: ether("10"),
+      };
+
+      await hub.setReport(report2, await getCurrentBlockTimestamp(), true);
+
+      // now the fee is disbursed
+      const expectedNodeOperatorFee2 =
+        ((report2.totalValue - report.totalValue - (report2.inOutDelta - report.inOutDelta)) * nodeOperatorFeeRate) /
+        BP_BASE;
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedNodeOperatorFee2);
+
+      expect(expectedNodeOperatorFee1 + expectedNodeOperatorFee2).to.equal(
+        (realRewards * nodeOperatorFeeRate) / BP_BASE,
+      );
+    });
+
+    it("eventually settles fee if the rewards cannot cover the adjustment", async () => {
+      // side-deposited 1 eth
+      const sideDeposit = ether("2");
+      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(sideDeposit);
+
+      const inOutDelta = ether("10");
+      const realRewards = ether("1");
+
+      const report = {
+        totalValue: inOutDelta + realRewards, // 11 now, but should be 13, but side deposit is not reflected in the report yet
+        inOutDelta,
+      };
+
+      await hub.setReport(report, await getCurrentBlockTimestamp(), true);
+
+      // 11 - 10 - 2 = -1, NO Rewards
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
+      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee()).not.to.emit(
+        hub,
+        "Mock__Withdrawn",
+      );
+
+      const report2 = {
+        totalValue: inOutDelta + realRewards + sideDeposit, // 13 now, it includes the side deposit
+        inOutDelta,
+      };
+
+      await hub.setReport(report2, await getCurrentBlockTimestamp(), true);
+
+      // now the fee is disbursed
+      // 13 - 12 - (10 - 10) = 1, at 10%, the fee is 0.1 ETH
+      const expectedNodeOperatorFee = (realRewards * nodeOperatorFeeRate) / BP_BASE;
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedNodeOperatorFee);
+
+      expect(expectedNodeOperatorFee).to.equal((realRewards * nodeOperatorFeeRate) / BP_BASE);
+
+      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee())
+        .to.emit(hub, "Mock__Withdrawn")
+        .withArgs(vault, nodeOperatorManager, expectedNodeOperatorFee);
+
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
     });
   });
 
   context("increaseAccruedRewardsAdjustment", () => {
     beforeEach(async () => {
+      await hub.setReport(
+        {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+        },
+        await getCurrentBlockTimestamp(),
+        true,
+      );
+
       const operatorFee = 10_00n; // 10%
-      await nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
-      await nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
+      await nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeRate(operatorFee);
+      await nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(operatorFee);
 
       await nodeOperatorFee
         .connect(nodeOperatorManager)
@@ -246,166 +340,173 @@ describe("NodeOperatorFee.sol", () => {
     });
 
     it("reverts if non NODE_OPERATOR_REWARDS_ADJUST_ROLE sets adjustment", async () => {
-      await expect(
-        nodeOperatorFee.connect(stranger).increaseAccruedRewardsAdjustment(100n),
-      ).to.be.revertedWithCustomError(nodeOperatorFee, "AccessControlUnauthorizedAccount");
+      await expect(nodeOperatorFee.connect(stranger).increaseRewardsAdjustment(100n)).to.be.revertedWithCustomError(
+        nodeOperatorFee,
+        "AccessControlUnauthorizedAccount",
+      );
     });
 
     it("revert for zero increase", async () => {
       await expect(
-        nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(0n),
+        nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(0n),
       ).to.be.revertedWithCustomError(nodeOperatorFee, "SameAdjustment");
     });
 
     it("reverts if manually adjust more than limit", async () => {
-      const LIMIT = await nodeOperatorFee.MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT();
+      const LIMIT = await nodeOperatorFee.MANUAL_REWARDS_ADJUSTMENT_LIMIT();
       const increase = ether("1");
 
       await expect(
-        nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(LIMIT + 1n),
+        nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(LIMIT + 1n),
       ).to.be.revertedWithCustomError(nodeOperatorFee, "IncreasedOverLimit");
 
-      expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(0n);
+      expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([0n, 0n]);
 
-      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase);
-      expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(increase);
+      const timestamp = await getNextBlockTimestamp();
+      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(increase);
+      expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([increase, timestamp]);
 
       await expect(
-        nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(LIMIT),
+        nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(LIMIT),
       ).to.be.revertedWithCustomError(nodeOperatorFee, "IncreasedOverLimit");
 
+      const timestamp2 = await getNextBlockTimestamp();
       const increase2 = LIMIT - increase;
-      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase2);
-      expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(LIMIT);
+      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(increase2);
+      expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([LIMIT, timestamp2]);
 
       await expect(
-        nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(1n),
+        nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(1n),
       ).to.be.revertedWithCustomError(nodeOperatorFee, "IncreasedOverLimit");
     });
 
     it("adjuster can increaseAccruedRewardsAdjustment", async () => {
       const increase = ether("10");
 
-      expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(0n);
-      const tx = await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase);
+      expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([0n, 0n]);
+      const timestamp = await getNextBlockTimestamp();
+      const tx = await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(increase);
 
-      await expect(tx).to.emit(nodeOperatorFee, "AccruedRewardsAdjustmentSet").withArgs(increase, 0n);
-
-      expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(increase);
+      await expect(tx).to.emit(nodeOperatorFee, "RewardsAdjustmentSet").withArgs(increase, 0n);
+      expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([increase, timestamp]);
     });
 
     it("manual increase can decrease NO fee", async () => {
-      const operatorFee = await nodeOperatorFee.nodeOperatorFeeBP();
+      const operatorFee = await nodeOperatorFee.nodeOperatorFeeRate();
 
       const rewards = ether("10");
-      await vault.setLatestReport({
-        totalValue: rewards,
-        inOutDelta: 0n,
-        timestamp: await getCurrentBlockTimestamp(),
-      });
+      await hub.setReport(
+        {
+          totalValue: rewards,
+          inOutDelta: 0n,
+        },
+        await getCurrentBlockTimestamp(),
+        true,
+      );
 
-      const expectedDue = (rewards * operatorFee) / BP_BASE;
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
+      const expectedFee = (rewards * operatorFee) / BP_BASE;
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedFee);
 
-      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(expectedDue / 2n);
+      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(rewards / 2n);
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedFee / 2n);
 
-      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(0n);
+      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(rewards / 2n);
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
     });
 
     it("adjustment is reset after fee claim", async () => {
-      const operatorFee = await nodeOperatorFee.nodeOperatorFeeBP();
+      const operatorFee = await nodeOperatorFee.nodeOperatorFeeRate();
 
       const rewards = ether("10");
 
-      await vault.setLatestReport({
-        totalValue: rewards,
-        inOutDelta: 0n,
-        timestamp: await getCurrentBlockTimestamp(),
-      });
-      const expectedDue = (rewards * operatorFee) / BP_BASE;
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(expectedDue);
+      await hub.setReport(
+        {
+          totalValue: rewards,
+          inOutDelta: 0n,
+        },
+        await getCurrentBlockTimestamp(),
+        true,
+      );
 
-      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(rewards / 2n);
-      expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(rewards / 2n);
+      const expectedFee = (rewards * operatorFee) / BP_BASE;
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedFee);
 
-      const adjustedDue = expectedDue / 2n;
-      expect(await nodeOperatorFee.nodeOperatorUnclaimedFee()).to.equal(adjustedDue);
+      const adjustment = rewards / 2n;
+      const timestamp = await getNextBlockTimestamp();
+      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(adjustment);
+      expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([adjustment, timestamp]);
 
-      await nodeOperatorFee
-        .connect(nodeOperatorManager)
-        .grantRole(await nodeOperatorFee.NODE_OPERATOR_FEE_CLAIM_ROLE(), nodeOperatorFeeClaimer);
+      const adjustedFee = expectedFee - (adjustment * operatorFee) / BP_BASE;
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(adjustedFee);
 
-      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).claimNodeOperatorFee(recipient))
-        .to.emit(vault, "Mock__Withdrawn")
-        .withArgs(nodeOperatorFee, recipient, adjustedDue)
-        .to.emit(nodeOperatorFee, "AccruedRewardsAdjustmentSet")
-        .withArgs(0n, rewards / 2n);
+      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee())
+        .to.emit(nodeOperatorFee, "NodeOperatorFeeDisbursed")
+        .withArgs(nodeOperatorFeeClaimer, adjustedFee);
+
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
     });
   });
 
   context("setAccruedRewardsAdjustment", () => {
-    beforeEach(async () => {
-      const operatorFee = 10_00n; // 10%
-      await nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeBP(operatorFee);
-      await nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeBP(operatorFee);
-    });
-
     it("reverts if called by not CONFORMING_ROLE", async () => {
-      await expect(
-        nodeOperatorFee.connect(stranger).setAccruedRewardsAdjustment(100n, 0n),
-      ).to.be.revertedWithCustomError(nodeOperatorFee, "SenderNotMember");
+      await expect(nodeOperatorFee.connect(stranger).setRewardsAdjustment(100n, 0n)).to.be.revertedWithCustomError(
+        nodeOperatorFee,
+        "SenderNotMember",
+      );
     });
 
     it("reverts if trying to set same adjustment", async () => {
-      const current = await nodeOperatorFee.accruedRewardsAdjustment();
-      await nodeOperatorFee.connect(nodeOperatorManager).setAccruedRewardsAdjustment(current, current);
+      const { amount: current } = await nodeOperatorFee.rewardsAdjustment();
+      await nodeOperatorFee.connect(nodeOperatorManager).setRewardsAdjustment(current, current);
 
       await expect(
-        nodeOperatorFee.connect(vaultOwner).setAccruedRewardsAdjustment(current, current),
+        nodeOperatorFee.connect(vaultOwner).setRewardsAdjustment(current, current),
       ).to.be.revertedWithCustomError(nodeOperatorFee, "SameAdjustment");
     });
 
     it("reverts if trying to set more than limit", async () => {
-      const current = await nodeOperatorFee.accruedRewardsAdjustment();
-      const LIMIT = await nodeOperatorFee.MANUAL_ACCRUED_REWARDS_ADJUSTMENT_LIMIT();
+      const { amount: current } = await nodeOperatorFee.rewardsAdjustment();
+      const LIMIT = await nodeOperatorFee.MANUAL_REWARDS_ADJUSTMENT_LIMIT();
 
-      await nodeOperatorFee.connect(nodeOperatorManager).setAccruedRewardsAdjustment(LIMIT + 1n, current);
+      await nodeOperatorFee.connect(nodeOperatorManager).setRewardsAdjustment(LIMIT + 1n, current);
 
       await expect(
-        nodeOperatorFee.connect(vaultOwner).setAccruedRewardsAdjustment(LIMIT + 1n, current),
+        nodeOperatorFee.connect(vaultOwner).setRewardsAdjustment(LIMIT + 1n, current),
       ).to.be.revertedWithCustomError(nodeOperatorFee, "IncreasedOverLimit");
     });
 
     it("reverts vote if AccruedRewardsAdjustment changes", async () => {
-      const current = await nodeOperatorFee.accruedRewardsAdjustment();
+      const { amount: current } = await nodeOperatorFee.rewardsAdjustment();
       expect(current).to.equal(0n);
+
       const proposed = 100n;
-      const increase = proposed - current + 100n;
+      const increase = proposed - current + 100n; // 200n
       const postIncrease = current + increase;
 
-      await nodeOperatorFee.connect(nodeOperatorManager).setAccruedRewardsAdjustment(proposed, current);
-      expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(current);
+      // still the same
+      await nodeOperatorFee.connect(nodeOperatorManager).setRewardsAdjustment(proposed, current);
+      expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([current, 0n]);
 
       await nodeOperatorFee
         .connect(nodeOperatorManager)
         .grantRole(await nodeOperatorFee.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), nodeOperatorRewardAdjuster);
 
-      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseAccruedRewardsAdjustment(increase);
-      expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(postIncrease);
+      // now the adjustment is updated
+      const timestamp = await getNextBlockTimestamp();
+      await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(increase);
+      expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([postIncrease, timestamp]);
 
-      await expect(nodeOperatorFee.connect(vaultOwner).setAccruedRewardsAdjustment(proposed, current))
+      await expect(nodeOperatorFee.connect(vaultOwner).setRewardsAdjustment(proposed, current))
         .to.be.revertedWithCustomError(nodeOperatorFee, "InvalidatedAdjustmentVote")
         .withArgs(postIncrease, current);
     });
 
     it("allows to set adjustment by committee", async () => {
-      const currentAdjustment = await nodeOperatorFee.accruedRewardsAdjustment();
+      const { amount: currentAdjustment } = await nodeOperatorFee.rewardsAdjustment();
       expect(currentAdjustment).to.equal(0n);
       const newAdjustment = 100n;
 
-      const msgData = nodeOperatorFee.interface.encodeFunctionData("setAccruedRewardsAdjustment", [
+      const msgData = nodeOperatorFee.interface.encodeFunctionData("setRewardsAdjustment", [
         newAdjustment,
         currentAdjustment,
       ]);
@@ -414,27 +515,153 @@ describe("NodeOperatorFee.sol", () => {
 
       const firstConfirmTx = await nodeOperatorFee
         .connect(nodeOperatorManager)
-        .setAccruedRewardsAdjustment(newAdjustment, currentAdjustment);
+        .setRewardsAdjustment(newAdjustment, currentAdjustment);
 
       await expect(firstConfirmTx)
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
         .withArgs(nodeOperatorManager, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, msgData);
 
-      expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(currentAdjustment);
+      expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([currentAdjustment, 0n]);
 
       confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
 
+      const timestamp = await getNextBlockTimestamp();
       const secondConfirmTx = await nodeOperatorFee
         .connect(vaultOwner)
-        .setAccruedRewardsAdjustment(newAdjustment, currentAdjustment);
+        .setRewardsAdjustment(newAdjustment, currentAdjustment);
 
       await expect(secondConfirmTx)
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
         .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData)
-        .to.emit(nodeOperatorFee, "AccruedRewardsAdjustmentSet")
+        .to.emit(nodeOperatorFee, "RewardsAdjustmentSet")
         .withArgs(newAdjustment, currentAdjustment);
 
-      expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(newAdjustment);
+      expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([newAdjustment, timestamp]);
+    });
+  });
+
+  context("setNodeOperatorFeeRate", () => {
+    it("reverts if called by not CONFIRMING_ROLE", async () => {
+      await expect(nodeOperatorFee.connect(stranger).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
+        nodeOperatorFee,
+        "SenderNotMember",
+      );
+    });
+
+    it("reverts if report is stale", async () => {
+      // grant vaultOwner the NODE_OPERATOR_MANAGER_ROLE to set the fee rate
+      // to simplify the test
+      await nodeOperatorFee
+        .connect(nodeOperatorManager)
+        .grantRole(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), vaultOwner);
+
+      const isReportFresh = false;
+      await hub.setReport(
+        {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+        },
+        await getCurrentBlockTimestamp(),
+        isReportFresh,
+      );
+
+      await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
+        nodeOperatorFee,
+        "ReportStale",
+      );
+    });
+
+    it("reverts if there is a pending adjustment", async () => {
+      // grant vaultOwner the NODE_OPERATOR_MANAGER_ROLE to set the fee rate
+      // to simplify the test
+      await nodeOperatorFee
+        .connect(nodeOperatorManager)
+        .grantRole(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), vaultOwner);
+
+      const { amount: currentAdjustment } = await nodeOperatorFee.rewardsAdjustment();
+
+      await hub.setReport(
+        {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+        },
+        await getNextBlockTimestamp(),
+        true,
+      );
+
+      await advanceChainTime(1n);
+
+      const newAdjustment = 100n;
+      await nodeOperatorFee.setRewardsAdjustment(newAdjustment, currentAdjustment);
+
+      await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
+        nodeOperatorFee,
+        "PendingAdjustment",
+      );
+    });
+
+    it("reverts if the adjustment is set in the same block (same timestamp)", async () => {
+      // grant vaultOwner the NODE_OPERATOR_MANAGER_ROLE to set the fee rate
+      // to simplify the test
+      await nodeOperatorFee
+        .connect(nodeOperatorManager)
+        .grantRole(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), vaultOwner);
+
+      const { amount: currentAdjustment } = await nodeOperatorFee.rewardsAdjustment();
+      expect(currentAdjustment).to.equal(0n);
+
+      const newAdjustment = 100n;
+      await nodeOperatorFee.connect(vaultOwner).setRewardsAdjustment(newAdjustment, currentAdjustment);
+      const { latestTimestamp } = await nodeOperatorFee.rewardsAdjustment();
+
+      await hub.setReport(
+        {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+        },
+        latestTimestamp,
+        true,
+      );
+
+      expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([newAdjustment, latestTimestamp]);
+      expect(await hub.latestVaultReportTimestamp(vault)).to.equal(latestTimestamp);
+
+      await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
+        nodeOperatorFee,
+        "PendingAdjustment",
+      );
+    });
+
+    it("disburses any pending node operator fee", async () => {
+      // grant vaultOwner the NODE_OPERATOR_MANAGER_ROLE to set the fee rate
+      // to simplify the test
+      await nodeOperatorFee
+        .connect(nodeOperatorManager)
+        .grantRole(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), vaultOwner);
+
+      const nodeOperatorFeeRate = await nodeOperatorFee.nodeOperatorFeeRate();
+
+      const rewards = ether("1");
+
+      await hub.setReport(
+        {
+          totalValue: rewards,
+          inOutDelta: 0n,
+        },
+        await getCurrentBlockTimestamp(),
+        true,
+      );
+
+      const expectedFee = (rewards * nodeOperatorFeeRate) / BP_BASE;
+
+      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedFee);
+
+      const newOperatorFeeRate = 5_00n; // 5%
+      await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(newOperatorFeeRate))
+        .to.emit(nodeOperatorFee, "NodeOperatorFeeDisbursed")
+        .withArgs(vaultOwner, expectedFee);
+
+        expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0);
     });
   });
 
