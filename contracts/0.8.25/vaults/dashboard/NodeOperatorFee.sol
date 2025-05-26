@@ -7,8 +7,6 @@ pragma solidity 0.8.25;
 import {VaultHub} from "../VaultHub.sol";
 import {Permissions} from "./Permissions.sol";
 
-import "hardhat/console.sol";
-
 /**
  * @title NodeOperatorFee
  * @author Lido
@@ -67,7 +65,7 @@ contract NodeOperatorFee is Permissions {
 
     struct RewardsAdjustment {
         uint128 amount;
-        uint64 latestAdjustmentTimestamp;
+        uint64 latestTimestamp;
     }
 
     /**
@@ -207,7 +205,7 @@ contract NodeOperatorFee is Permissions {
         // to make sure that the adjustment is included in the total value.
         // The adjustment is guaranteed in the next report because oracle includes both active validator balances
         // and valid pending deposits, and pending deposits are observable from the very block they are submitted in.
-        if (rewardsAdjustment.latestAdjustmentTimestamp >=
+        if (rewardsAdjustment.latestTimestamp >=
             VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault()))
         ) revert RewardsAdjustedAfterLatestReport();
 
@@ -307,7 +305,7 @@ contract NodeOperatorFee is Permissions {
         if (_newAdjustment == oldAdjustment) revert SameAdjustment();
 
         rewardsAdjustment.amount = _newAdjustment;
-        rewardsAdjustment.latestAdjustmentTimestamp = uint64(block.timestamp);
+        rewardsAdjustment.latestTimestamp = uint64(block.timestamp);
 
         emit RewardsAdjustmentSet(_newAdjustment, oldAdjustment);
     }
