@@ -107,9 +107,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice role that allows to set allowed codehashes
     bytes32 public constant VAULT_CODEHASH_SET_ROLE = keccak256("vaults.VaultHub.VaultCodehashSetRole");
     /// @notice role that allows to accrue withdrawals obligation on the vault
-    bytes32 public constant CORE_WITHDRAWAL_MANAGER_ROLE = keccak256("vaults.VaultHub.CoreWithdrawalManagerRole");
+    bytes32 public constant WITHDRAWAL_MANAGER_ROLE = keccak256("vaults.VaultHub.WithdrawalManagerRole");
     /// @notice role that allows to fulfill withdrawal obligations by exiting validators
-    bytes32 public constant CORE_WITHDRAWAL_EXECUTOR_ROLE = keccak256("vaults.VaultHub.CoreWithdrawalExecutorRole");
+    bytes32 public constant WITHDRAWAL_EXECUTOR_ROLE = keccak256("vaults.VaultHub.WithdrawalExecutorRole");
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     /// @notice The time delta for report freshness check
@@ -492,7 +492,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Updates the unsettled withdrawals obligation for the vault
     /// @param _vault The address of the vault
     /// @param _value The value of the unsettled withdrawals obligation
-    function accrueWithdrawalsObligation(address _vault, uint256 _value) external onlyRole(CORE_WITHDRAWAL_MANAGER_ROLE) {
+    function accrueWithdrawalsObligation(address _vault, uint256 _value) external onlyRole(WITHDRAWAL_MANAGER_ROLE) {
         uint256 liability = _getPooledEthBySharesRoundUp(_vaultRecord(_vault).liabilityShares);
         if (_value > liability) revert WithdrawalsObligationValueTooHigh(_vault, _value, liability);
 
@@ -683,7 +683,7 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).requestValidatorExit(_pubkeys);
     }
 
-    /// @notice Triggers validator exit for the vault using EIP-7002
+    /// @notice Triggers withdrawals for validators under vault control using EIP-7002
     /// @param _vault vault address
     /// @param _pubkeys array of public keys of the validators to exit
     /// @dev msg.sender should be vault's owner
@@ -694,10 +694,7 @@ contract VaultHub is PausableUntilWithRoles {
         address _refundRecipient
     ) external payable {
         VaultConnection storage connection = _checkConnection(_vault);
-
-        // bool isWithdrawalExecutor = hasRole(CORE_WITHDRAWAL_EXECUTOR_ROLE, msg.sender);
-        if (msg.sender != connection.owner /* && !isWithdrawalExecutor */) revert NotAuthorized();
-        // if (isWithdrawalExecutor && _vaultObligations(_vault).unsettledWithdrawals == 0) revert NotAuthorized();
+        if (msg.sender != connection.owner) revert NotAuthorized();
 
         VaultRecord storage record = _vaultRecord(_vault);
 
@@ -713,23 +710,26 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
-    /// @notice Triggers validator exit for the vault using EIP-7002 permissionlessly if the vault is unhealthy
+    /// @notice Exits validators under vault control using EIP-7002
     /// @param _vault address of the vault to exit validators from
     /// @param _pubkeys public keys of the validators to exit
     /// @param _refundRecipient address that will receive the refund for transaction costs
-    /// @dev    When the vault becomes unhealthy, anyone can force its validators to exit the beacon chain
+    /// @dev    When the vault becomes unhealthy, withdrawal comeetee can force its validators to exit the beacon chain
     ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
-    function forceValidatorExit(address _vault, bytes calldata _pubkeys, address _refundRecipient) external payable {
+    function forceValidatorExits(
+        address _vault,
+        bytes calldata _pubkeys,
+        address _refundRecipient
+    ) external payable onlyRole(WITHDRAWAL_EXECUTOR_ROLE) {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        if (_isVaultHealthy(connection, record)) revert AlreadyHealthy(_vault);
+        if (_isVaultHealthy(connection, record) && _vaultObligations(_vault).unsettledWithdrawals == 0) {
+            revert ForceValidatorExitNotAllowed();
+        }
 
         uint64[] memory amounts = new uint64[](0);
-
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, amounts, _refundRecipient);
-
-        emit ValidatorExitTriggered(_vault, _pubkeys, _refundRecipient, true);
     }
 
     /// @notice Permissionless rebalance for unhealthy vaults
@@ -784,12 +784,11 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (_vault.balance == 0) revert ZeroBalance();
 
-        uint256 unsettledTreasuryFees = obligations.unsettledTreasuryFees;
         _settleObligations(
             _vault,
             record,
             obligations,
-            unsettledTreasuryFees,
+            obligations.unsettledTreasuryFees,
             _getPooledEthBySharesRoundUp(record.liabilityShares),
             false
         );
@@ -1216,7 +1215,6 @@ contract VaultHub is PausableUntilWithRoles {
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned, uint256 etherWithdrawn);
     event VaultInOutDeltaUpdated(address indexed vault, int128 inOutDelta);
-    event ValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient, bool isForceExit);
 
     /**
      * @notice Emitted when the manager is set
@@ -1314,4 +1312,5 @@ contract VaultHub is PausableUntilWithRoles {
     error OutstandingObligationsExist(address vault, uint256 totalObligations);
     error ArrayLengthMismatch();
     error PartialValidatorWithdrawalNotAllowed();
+    error ForceValidatorExitNotAllowed();
 }

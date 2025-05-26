@@ -111,10 +111,10 @@ export async function main() {
   await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_CODEHASH_SET_ROLE(), deployer], {
     from: deployer,
   });
-  await makeTx(vaultHub, "grantRole", [await vaultHub.CORE_WITHDRAWAL_MANAGER_ROLE(), agentAddress], {
+  await makeTx(vaultHub, "grantRole", [await vaultHub.WITHDRAWAL_MANAGER_ROLE(), agentAddress], {
     from: deployer,
   });
-  await makeTx(vaultHub, "grantRole", [await vaultHub.CORE_WITHDRAWAL_EXECUTOR_ROLE(), agentAddress], {
+  await makeTx(vaultHub, "grantRole", [await vaultHub.WITHDRAWAL_EXECUTOR_ROLE(), agentAddress], {
     from: deployer,
   });
 

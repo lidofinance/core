@@ -66,8 +66,8 @@ describe("Integration: Vault obligations", () => {
 
     agentSigner = await ctx.getSigner("agent");
 
-    await vaultHub.connect(agentSigner).grantRole(await vaultHub.CORE_WITHDRAWAL_MANAGER_ROLE(), withdrawalManager);
-    await vaultHub.connect(agentSigner).grantRole(await vaultHub.CORE_WITHDRAWAL_EXECUTOR_ROLE(), withdrawalExecutor);
+    await vaultHub.connect(agentSigner).grantRole(await vaultHub.WITHDRAWAL_MANAGER_ROLE(), withdrawalManager);
+    await vaultHub.connect(agentSigner).grantRole(await vaultHub.WITHDRAWAL_EXECUTOR_ROLE(), withdrawalExecutor);
   });
 
   after(async () => await Snapshot.restore(originalSnapshot));
