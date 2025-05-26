@@ -7,6 +7,8 @@ pragma solidity 0.8.25;
 import {VaultHub} from "../VaultHub.sol";
 import {Permissions} from "./Permissions.sol";
 
+import "hardhat/console.sol";
+
 /**
  * @title NodeOperatorFee
  * @author Lido
@@ -51,7 +53,7 @@ contract NodeOperatorFee is Permissions {
      * @notice Node operator fee in basis points; cannot exceed 100.00%.
      * The node operator's disburseable fee in ether is returned by `nodeOperatorDisburseableFee()`.
      */
-    uint256 public nodeOperatorFeeBP;
+    uint256 public nodeOperatorFeeRate;
 
     /**
      * @notice The last report for which node operator fee was disbursed. Updated on each disbursement.
@@ -91,20 +93,20 @@ contract NodeOperatorFee is Permissions {
      * and makes the node operator manager the admin for the node operator roles.
      * @param _defaultAdmin The address of the default admin
      * @param _nodeOperatorManager The address of the node operator manager
-     * @param _nodeOperatorFeeBP The node operator fee in basis points
+     * @param _nodeOperatorFeeRate The node operator fee rate
      * @param _confirmExpiry The confirmation expiry time in seconds
      */
     function _initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
-        uint256 _nodeOperatorFeeBP,
+        uint256 _nodeOperatorFeeRate,
         uint256 _confirmExpiry
     ) internal {
         if (_nodeOperatorManager == address(0)) revert ZeroArgument("_nodeOperatorManager");
 
         super._initialize(_defaultAdmin, _confirmExpiry);
 
-        _setNodeOperatorFeeBP(_nodeOperatorFeeBP);
+        _setNodeOperatorFeeRate(_nodeOperatorFeeRate);
         _setNodeOperatorFeeRecipient(_nodeOperatorManager);
 
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
@@ -168,7 +170,7 @@ contract NodeOperatorFee is Permissions {
         // the actual rewards that are subject to the fee
         int128 rewards = growth - adjustment;
 
-        return rewards <= 0 ? 0 : (uint256(uint128(rewards)) * nodeOperatorFeeBP) / TOTAL_BASIS_POINTS;
+        return rewards <= 0 ? 0 : (uint256(uint128(rewards)) * nodeOperatorFeeRate) / TOTAL_BASIS_POINTS;
     }
 
     /**
@@ -194,9 +196,9 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Updates the node-operator's fee rate (basis-points share).
-     * @param _newNodeOperatorFeeBP The new node operator fee in basis points.
+     * @param _newNodeOperatorFeeRate The new node operator fee rate.
      */
-    function setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) external onlyConfirmed(confirmingRoles()) {
+    function setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) external onlyConfirmed(confirmingRoles()) {
         // The report must be fresh so that the total value of the vault is up to date 
         // and all the node operator fees are paid out fairly up to the moment of the latest report
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
@@ -209,21 +211,22 @@ contract NodeOperatorFee is Permissions {
             VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault()))
         ) revert RewardsAdjustedAfterLatestReport();
 
-        // To follow the check-effects-interaction pattern, we need to remember the fee here
-        // because the fee calculation variables will be reset in the following lines
-        uint256 fee = nodeOperatorDisburseableFee();
 
         // Adjustment is settled at this point thanks to the timestamp check above
         if (rewardsAdjustment.amount != 0) _setRewardsAdjustment(0);
         // Start a new fee period
         feePeriodStartReport = latestReport();
 
+        // To follow the check-effects-interaction pattern, we need to remember the fee here
+        // because the fee calculation variables will be reset in the following lines
+        uint256 fee = nodeOperatorDisburseableFee();
+
         if (fee > 0) {
             VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
             emit NodeOperatorFeeDisbursed(msg.sender, fee);
         }
 
-        _setNodeOperatorFeeBP(_newNodeOperatorFeeBP);
+        _setNodeOperatorFeeRate(_newNodeOperatorFeeRate);
     }
 
     /**
@@ -276,18 +279,22 @@ contract NodeOperatorFee is Permissions {
         _setRewardsAdjustment(uint128(_newAdjustment));
     }
 
-    function _setNodeOperatorFeeBP(uint256 _newNodeOperatorFeeBP) internal {
-        if (_newNodeOperatorFeeBP > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
+    function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
+        if (_newNodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
 
-        uint256 oldNodeOperatorFeeBP = nodeOperatorFeeBP;
-        nodeOperatorFeeBP = _newNodeOperatorFeeBP;
+        uint256 oldNodeOperatorFeeRate = nodeOperatorFeeRate;
+        nodeOperatorFeeRate = _newNodeOperatorFeeRate;
 
-        emit NodeOperatorFeeBPSet(msg.sender, oldNodeOperatorFeeBP, _newNodeOperatorFeeBP);
+        emit NodeOperatorFeeRateSet(msg.sender, oldNodeOperatorFeeRate, _newNodeOperatorFeeRate);
     }
 
     function _setNodeOperatorFeeRecipient(address _newNodeOperatorFeeRecipient) internal {
         if (_newNodeOperatorFeeRecipient == address(0)) revert ZeroArgument("nodeOperatorFeeRecipient");
+        if (_newNodeOperatorFeeRecipient == nodeOperatorFeeRecipient) revert SameRecipient();
+
+        address oldNodeOperatorFeeRecipient = nodeOperatorFeeRecipient;
         nodeOperatorFeeRecipient = _newNodeOperatorFeeRecipient;
+        emit NodeOperatorFeeRecipientSet(msg.sender, oldNodeOperatorFeeRecipient, _newNodeOperatorFeeRecipient);
     }
 
     /**
@@ -314,10 +321,10 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @dev Emitted when the node operator fee is set.
-     * @param oldNodeOperatorFeeBP The old node operator fee.
-     * @param newNodeOperatorFeeBP The new node operator fee.
+     * @param oldNodeOperatorFeeRate The old node operator fee rate.
+     * @param newNodeOperatorFeeRate The new node operator fee rate.
      */
-    event NodeOperatorFeeBPSet(address indexed sender, uint256 oldNodeOperatorFeeBP, uint256 newNodeOperatorFeeBP);
+    event NodeOperatorFeeRateSet(address indexed sender, uint256 oldNodeOperatorFeeRate, uint256 newNodeOperatorFeeRate);
 
     /**
      * @dev Emitted when the node operator fee is disbursed.
@@ -331,6 +338,14 @@ contract NodeOperatorFee is Permissions {
      * @param oldAdjustment previous adjustment value
      */
     event RewardsAdjustmentSet(uint256 newAdjustment, uint256 oldAdjustment);
+
+    /**
+     * @dev Emitted when the node operator fee recipient is set.
+     * @param sender the address of the sender who set the recipient
+     * @param oldNodeOperatorFeeRecipient the old node operator fee recipient
+     * @param newNodeOperatorFeeRecipient the new node operator fee recipient
+     */
+    event NodeOperatorFeeRecipientSet(address indexed sender, address oldNodeOperatorFeeRecipient, address newNodeOperatorFeeRecipient);
 
     // ==================== Errors ====================
 
@@ -353,6 +368,11 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when trying to set same value for adjustment
      */
     error SameAdjustment();
+
+    /**
+     * @dev Error emitted when trying to set same value for recipient
+     */
+    error SameRecipient();
 
     /**
      * @dev Error emitted when the report is stale.
