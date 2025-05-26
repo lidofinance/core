@@ -96,6 +96,7 @@ contract AccountingOracle is BaseOracle {
     error InvalidExitedValidatorsData();
     error UnsupportedExtraDataFormat(uint256 format);
     error UnsupportedExtraDataType(uint256 itemIndex, uint256 dataType);
+    error DeprecatedExtraDataType(uint256 itemIndex, uint256 dataType);
     error CannotSubmitExtraDataBeforeMainData();
     error ExtraDataAlreadyProcessed();
     error UnexpectedExtraDataHash(bytes32 consensusHash, bytes32 receivedHash);
@@ -815,9 +816,13 @@ contract AccountingOracle is BaseOracle {
             iter.itemType = itemType;
             iter.dataOffset = dataOffset;
 
-            if (itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS ||
-                itemType == EXTRA_DATA_TYPE_STUCK_VALIDATORS
-            ) {
+            /// @dev The EXTRA_DATA_TYPE_STUCK_VALIDATORS item type was deprecated in the Triggerable Withdrawals update.
+            ///      The mechanism for handling stuck validator keys is no longer supported and has been removed.
+            if (itemType == EXTRA_DATA_TYPE_STUCK_VALIDATORS) {
+                revert DeprecatedExtraDataType(index, itemType);
+            }
+
+            if (itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS) {
                 uint256 nodeOpsProcessed = _processExtraDataItem(data, iter);
 
                 if (nodeOpsProcessed > maxNodeOperatorsPerItem) {
@@ -912,13 +917,8 @@ contract AccountingOracle is BaseOracle {
             revert InvalidExtraDataItem(iter.index);
         }
 
-        if (iter.itemType == EXTRA_DATA_TYPE_STUCK_VALIDATORS) {
-            IStakingRouter(iter.stakingRouter)
-                .reportStakingModuleStuckValidatorsCountByNodeOperator(moduleId, nodeOpIds, valuesCounts);
-        } else {
-            IStakingRouter(iter.stakingRouter)
+        IStakingRouter(iter.stakingRouter)
                 .reportStakingModuleExitedValidatorsCountByNodeOperator(moduleId, nodeOpIds, valuesCounts);
-        }
 
         iter.dataOffset = dataOffset;
         return nodeOpsCount;
