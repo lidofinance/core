@@ -112,50 +112,48 @@ contract V3Addresses {
         if (params.newLocatorImplementation == params.oldLocatorImplementation) {
             revert NewAndOldLocatorImplementationsMustBeDifferent();
         }
-        ILidoLocator newLocatorImpl = ILidoLocator(params.newLocatorImplementation);
 
         //
-        // -------- Pre-upgrade old contracts --------
+        // Set directly from passed parameters
         //
+
+        ILidoLocator newLocatorImpl = ILidoLocator(params.newLocatorImplementation);
         OLD_LOCATOR_IMPLEMENTATION = params.oldLocatorImplementation;
-        OLD_BURNER = ILidoLocator(params.oldLocatorImplementation).burner();
         OLD_ACCOUNTING_ORACLE_IMPLEMENTATION = params.oldAccountingOracleImplementation;
         OLD_LIDO_IMPLEMENTATION = params.oldLidoImplementation;
-
-        //
-        // -------- Upgraded contracts --------
-        //
         LOCATOR = params.locator;
         NEW_LOCATOR_IMPLEMENTATION = params.newLocatorImplementation;
-        LIDO = newLocatorImpl.lido();
-        ACCOUNTING_ORACLE = newLocatorImpl.accountingOracle();
-        BURNER = newLocatorImpl.burner();
-        ORACLE_REPORT_SANITY_CHECKER = newLocatorImpl.oracleReportSanityChecker();
-
-        //
-        // -------- New V3 contracts --------
-        //
-        ACCOUNTING = newLocatorImpl.accounting();
-        VAULT_HUB = newLocatorImpl.vaultHub();
-        PREDEPOSIT_GUARANTEE = newLocatorImpl.predepositGuarantee();
-        OPERATOR_GRID = newLocatorImpl.operatorGrid();
+        KERNEL = params.kernel;
+        AGENT = params.agent;
+        ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
+        VOTING = params.voting;
         VAULT_FACTORY = params.vaultFactory;
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPLEMENTATION = params.stakingVaultImplementation;
         DASHBOARD_IMPLEMENTATION = params.dashboardImplementation;
 
         //
-        // -------- Unchanged contracts --------
+        // Discovered via other contracts
         //
-        KERNEL = params.kernel;
-        AGENT = params.agent;
-        ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
-        VOTING = params.voting;
+
+        OLD_BURNER = ILidoLocator(params.oldLocatorImplementation).burner();
+
+        LIDO = newLocatorImpl.lido();
+        ACCOUNTING_ORACLE = newLocatorImpl.accountingOracle();
+        BURNER = newLocatorImpl.burner();
+        ORACLE_REPORT_SANITY_CHECKER = newLocatorImpl.oracleReportSanityChecker();
+
+        ACCOUNTING = newLocatorImpl.accounting();
+        VAULT_HUB = newLocatorImpl.vaultHub();
+        PREDEPOSIT_GUARANTEE = newLocatorImpl.predepositGuarantee();
+        OPERATOR_GRID = newLocatorImpl.operatorGrid();
+
         EL_REWARDS_VAULT = newLocatorImpl.elRewardsVault();
         STAKING_ROUTER = newLocatorImpl.stakingRouter();
         VALIDATORS_EXIT_BUS_ORACLE = newLocatorImpl.validatorsExitBusOracle();
         WITHDRAWAL_QUEUE = newLocatorImpl.withdrawalQueue();
         WSTETH = newLocatorImpl.wstETH();
+
         {
             // Retrieve contracts with burner allowances to migrate: NOR, SDVT and CSM ACCOUNTING
             IStakingRouter.StakingModule[] memory stakingModules = IStakingRouter(STAKING_ROUTER).getStakingModules();
