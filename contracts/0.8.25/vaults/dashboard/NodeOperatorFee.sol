@@ -210,15 +210,14 @@ contract NodeOperatorFee is Permissions {
             VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault()))
         ) revert PendingAdjustment();
 
+        // To follow the check-effects-interaction pattern, we need to remember the fee here
+        // because the fee calculation variables will be reset in the following lines
+        uint256 fee = nodeOperatorDisburseableFee();
 
         // Adjustment is settled at this point thanks to the timestamp check above
         if (rewardsAdjustment.amount != 0) _setRewardsAdjustment(0);
         // Start a new fee period
         feePeriodStartReport = latestReport();
-
-        // To follow the check-effects-interaction pattern, we need to remember the fee here
-        // because the fee calculation variables will be reset in the following lines
-        uint256 fee = nodeOperatorDisburseableFee();
 
         if (fee > 0) {
             VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
