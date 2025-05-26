@@ -213,16 +213,19 @@ contract LazyOracle {
             uint256 reportTimestamp = $.vaultsDataTimestamp;
             uint256 quarDelta = q.delta;
             uint256 delta = _totalValue - refSlotTotalValue;
-            // first overlimit report
+
             if (quarDelta == 0) {
+                // first overlimit report
                 _totalValue = refSlotTotalValue;
                 q.delta = delta;
                 q.timestamp = reportTimestamp;
                 emit QuarantinedDeposit(_vault, delta);
-            } else { // subsequent overlimit reports
+            } else {
+                // subsequent overlimit reports
                 if (reportTimestamp - q.timestamp < $.sanityParams.quarantinePeriod) {
                     _totalValue = refSlotTotalValue;
                 } else {
+                    // quarantine period expired
                     if (delta < quarDelta + refSlotTotalValue * $.sanityParams.maxElClRewardsBP / TOTAL_BP) {
                         q.delta = 0;
                     } else {
