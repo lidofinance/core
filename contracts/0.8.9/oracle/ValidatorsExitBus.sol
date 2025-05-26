@@ -151,6 +151,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 valIndex;
         bytes pubkey;
     }
+
     struct RequestStatus {
         uint32 contractVersion;
         uint32 deliveryHistoryLength;
@@ -414,7 +415,10 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         exitsPerFrame = exitRequestLimitData.exitsPerFrame;
         frameDuration = exitRequestLimitData.frameDuration;
         prevExitRequestsLimit = exitRequestLimitData.prevExitRequestsLimit;
-        currentExitRequestsLimit = _getCurrentExitLimit();
+
+        currentExitRequestsLimit = exitRequestLimitData.isExitLimitSet()
+            ? exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp())
+            : type(uint256).max;
     }
 
     /**
@@ -560,15 +564,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         if (status.deliveryHistoryLength == 0) {
             revert DeliveryWasNotStarted();
         }
-    }
-
-    function _getCurrentExitLimit() internal view returns (uint256) {
-        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        if (!exitRequestLimitData.isExitLimitSet()) {
-            return type(uint256).max;
-        }
-
-        return exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
     }
 
     function _getTimestamp() internal view virtual returns (uint256) {

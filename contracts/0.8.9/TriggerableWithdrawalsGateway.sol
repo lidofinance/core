@@ -193,7 +193,10 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         exitsPerFrame = exitRequestLimitData.exitsPerFrame;
         frameDuration = exitRequestLimitData.frameDuration;
         prevExitRequestsLimit = exitRequestLimitData.prevExitRequestsLimit;
-        currentExitRequestsLimit = _getCurrentExitLimit();
+
+        currentExitRequestsLimit = exitRequestLimitData.isExitLimitSet()
+            ? exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp())
+            : type(uint256).max;
     }
 
     /// Internal functions
@@ -257,15 +260,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
 
     function _getTimestamp() internal view virtual returns (uint256) {
         return block.timestamp; // solhint-disable-line not-rely-on-time
-    }
-
-    function _getCurrentExitLimit() internal view returns (uint256) {
-        ExitRequestLimitData memory twrLimitData = TWR_LIMIT_POSITION.getStorageExitRequestLimit();
-        if (!twrLimitData.isExitLimitSet()) {
-            return type(uint256).max;
-        }
-
-        return twrLimitData.calculateCurrentExitLimit(_getTimestamp());
     }
 
     function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration) internal {
