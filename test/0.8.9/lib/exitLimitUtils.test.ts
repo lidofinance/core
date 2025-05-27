@@ -7,7 +7,7 @@ interface ExitRequestLimitData {
   maxExitRequestsLimit: bigint;
   prevExitRequestsLimit: bigint;
   prevTimestamp: bigint;
-  frameDuration: bigint;
+  frameDurationInSec: bigint;
   exitsPerFrame: bigint;
 }
 
@@ -28,7 +28,7 @@ describe("ExitLimitUtils.sol", () => {
         maxExitRequestsLimit: 0n,
         prevExitRequestsLimit: 0n,
         prevTimestamp: 0n,
-        frameDuration: 0n,
+        frameDurationInSec: 0n,
         exitsPerFrame: 0n,
       };
 
@@ -38,7 +38,7 @@ describe("ExitLimitUtils.sol", () => {
       expect(result.maxExitRequestsLimit).to.equal(0n);
       expect(result.prevExitRequestsLimit).to.equal(0n);
       expect(result.prevTimestamp).to.equal(0n);
-      expect(result.frameDuration).to.equal(0n);
+      expect(result.frameDurationInSec).to.equal(0n);
       expect(result.exitsPerFrame).to.equal(0n);
     });
 
@@ -49,7 +49,7 @@ describe("ExitLimitUtils.sol", () => {
         maxExitRequestsLimit: MAX_UINT32,
         prevExitRequestsLimit: MAX_UINT32,
         prevTimestamp: MAX_UINT32,
-        frameDuration: MAX_UINT32,
+        frameDurationInSec: MAX_UINT32,
         exitsPerFrame: MAX_UINT32,
       };
 
@@ -59,7 +59,7 @@ describe("ExitLimitUtils.sol", () => {
       expect(result.maxExitRequestsLimit).to.equal(MAX_UINT32);
       expect(result.prevExitRequestsLimit).to.equal(MAX_UINT32);
       expect(result.prevTimestamp).to.equal(MAX_UINT32);
-      expect(result.frameDuration).to.equal(MAX_UINT32);
+      expect(result.frameDurationInSec).to.equal(MAX_UINT32);
       expect(result.exitsPerFrame).to.equal(MAX_UINT32);
     });
 
@@ -67,14 +67,14 @@ describe("ExitLimitUtils.sol", () => {
       const maxExitRequestsLimit = 100n;
       const prevExitRequestsLimit = 9n;
       const prevTimestamp = 90n;
-      const frameDuration = 10n;
+      const frameDurationInSec = 10n;
       const exitsPerFrame = 1n;
 
       data = {
         maxExitRequestsLimit,
         prevExitRequestsLimit,
         prevTimestamp,
-        frameDuration,
+        frameDurationInSec,
         exitsPerFrame,
       };
 
@@ -84,7 +84,7 @@ describe("ExitLimitUtils.sol", () => {
       expect(result.maxExitRequestsLimit).to.equal(maxExitRequestsLimit);
       expect(result.prevExitRequestsLimit).to.equal(prevExitRequestsLimit);
       expect(result.prevTimestamp).to.equal(prevTimestamp);
-      expect(result.frameDuration).to.equal(frameDuration);
+      expect(result.frameDurationInSec).to.equal(frameDurationInSec);
       expect(result.exitsPerFrame).to.equal(exitsPerFrame);
     });
   });
@@ -100,13 +100,13 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 10;
         const prevExitRequestsLimit = 5; // remaining limit from prev usage
         const exitsPerFrame = 1;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           timestamp,
         );
 
@@ -119,13 +119,13 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 10;
         const prevExitRequestsLimit = 5; // remaining limit from prev usage
         const exitsPerFrame = 1;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           prevTimestamp,
         );
 
@@ -138,17 +138,17 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 10;
         const prevExitRequestsLimit = 5; // remaining limit from prev usage
         const exitsPerFrame = 1;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           prevTimestamp,
         );
 
-        const result = await exitLimit.calculateCurrentExitLimit(prevTimestamp + frameDuration);
+        const result = await exitLimit.calculateCurrentExitLimit(prevTimestamp + frameDurationInSec);
         expect(result).to.equal(prevExitRequestsLimit + 1);
       });
 
@@ -157,13 +157,13 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 20;
         const prevExitRequestsLimit = 5; // remaining limit from prev usage
         const exitsPerFrame = 1;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           prevTimestamp,
         );
         const result = await exitLimit.calculateCurrentExitLimit(prevTimestamp + 40);
@@ -175,13 +175,13 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 100;
         const prevExitRequestsLimit = 90; // remaining limit from prev usage
         const exitsPerFrame = 3;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           prevTimestamp,
         );
 
@@ -194,13 +194,13 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 100;
         const prevExitRequestsLimit = 7; // remaining limit from prev usage
         const exitsPerFrame = 0;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           prevTimestamp,
         );
 
@@ -213,13 +213,13 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 20;
         const prevExitRequestsLimit = 5; // remaining limit from prev usage
         const exitsPerFrame = 1;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           prevTimestamp,
         );
 
@@ -239,13 +239,13 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 10;
         const prevExitRequestsLimit = 5; // remaining limit from prev usage
         const exitsPerFrame = 1;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           prevTimestamp,
         );
 
@@ -258,13 +258,13 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 10;
         const prevExitRequestsLimit = 5; // remaining limit from prev usage
         const exitsPerFrame = 1;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           prevTimestamp,
         );
 
@@ -278,13 +278,13 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 10;
         const prevExitRequestsLimit = 5; // remaining limit from prev usage
         const exitsPerFrame = 1;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           prevTimestamp,
         );
 
@@ -298,13 +298,13 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 100;
         const prevExitRequestsLimit = 90; // remaining limit from prev usage
         const exitsPerFrame = 5;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           prevTimestamp,
         );
 
@@ -318,13 +318,13 @@ describe("ExitLimitUtils.sol", () => {
         const maxExitRequestsLimit = 50;
         const prevExitRequestsLimit = 25; // remaining limit from prev usage
         const exitsPerFrame = 2;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           maxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           prevTimestamp,
         );
 
@@ -343,13 +343,13 @@ describe("ExitLimitUtils.sol", () => {
         const timestamp = 1000;
         const maxExitRequestsLimit = 100;
         const exitsPerFrame = 2;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
-        const result = await exitLimit.setExitLimits(maxExitRequestsLimit, exitsPerFrame, frameDuration, timestamp);
+        const result = await exitLimit.setExitLimits(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp);
 
         expect(result.maxExitRequestsLimit).to.equal(maxExitRequestsLimit);
         expect(result.exitsPerFrame).to.equal(exitsPerFrame);
-        expect(result.frameDuration).to.equal(frameDuration);
+        expect(result.frameDurationInSec).to.equal(frameDurationInSec);
         expect(result.prevExitRequestsLimit).to.equal(maxExitRequestsLimit);
         expect(result.prevTimestamp).to.equal(timestamp);
       });
@@ -359,18 +359,18 @@ describe("ExitLimitUtils.sol", () => {
         const oldMaxExitRequestsLimit = 100;
         const prevExitRequestsLimit = 80;
         const exitsPerFrame = 2;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           oldMaxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           timestamp,
         );
 
         const newMaxExitRequestsLimit = 50;
-        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDuration, timestamp);
+        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp);
 
         expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
         expect(result.prevExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
@@ -382,19 +382,19 @@ describe("ExitLimitUtils.sol", () => {
         const oldMaxExitRequestsLimit = 100;
         const prevExitRequestsLimit = 80;
         const exitsPerFrame = 2;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           oldMaxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           timestamp,
         );
 
         const newMaxExitRequestsLimit = 150;
 
-        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDuration, timestamp);
+        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp);
 
         expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
         expect(result.prevExitRequestsLimit).to.equal(prevExitRequestsLimit);
@@ -406,18 +406,18 @@ describe("ExitLimitUtils.sol", () => {
         const oldMaxExitRequestsLimit = 0;
         const prevExitRequestsLimit = 0;
         const exitsPerFrame = 2;
-        const frameDuration = 10;
+        const frameDurationInSec = 10;
 
         await exitLimit.harness_setState(
           oldMaxExitRequestsLimit,
           prevExitRequestsLimit,
           exitsPerFrame,
-          frameDuration,
+          frameDurationInSec,
           timestamp,
         );
 
         const newMaxExitRequestsLimit = 77;
-        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDuration, timestamp);
+        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp);
 
         expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
         expect(result.prevExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
@@ -435,7 +435,7 @@ describe("ExitLimitUtils.sol", () => {
         await expect(exitLimit.setExitLimits(100, 101, 10, 1000)).to.be.revertedWith("TOO_LARGE_EXITS_PER_FRAME");
       });
 
-      it("should revert if frameDuration is too large", async () => {
+      it("should revert if frameDurationInSec is too large", async () => {
         const MAX_UINT32 = 2 ** 32;
         await expect(exitLimit.setExitLimits(100, 2, MAX_UINT32, 1000)).to.be.revertedWith("TOO_LARGE_FRAME_DURATION");
       });

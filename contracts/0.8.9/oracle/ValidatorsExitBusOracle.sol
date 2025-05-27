@@ -73,7 +73,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         uint256 maxValidatorsPerBatch,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
+        uint256 frameDurationInSec
     ) external {
         if (admin == address(0)) revert AdminCannotBeZero();
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
@@ -81,7 +81,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
 
-        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     /**
@@ -93,20 +93,20 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         uint256 maxValidatorsPerBatch,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
+        uint256 frameDurationInSec
     ) external {
-        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     function _initialize_v2(
         uint256 maxValidatorsPerBatch,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
+        uint256 frameDurationInSec
     ) internal {
         _updateContractVersion(2);
         _setMaxRequestsPerBatch(maxValidatorsPerBatch);
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     ///

@@ -100,7 +100,7 @@ interface VEBOConfig {
   maxRequestsPerBatch?: number;
   maxExitRequestsLimit?: number;
   exitsPerFrame?: number;
-  frameDuration?: number;
+  frameDurationInSec?: number;
 }
 
 export async function initVEBO({
@@ -114,7 +114,7 @@ export async function initVEBO({
   maxRequestsPerBatch = 600,
   maxExitRequestsLimit = 13000,
   exitsPerFrame = 1,
-  frameDuration = 48,
+  frameDurationInSec = 48,
 }: VEBOConfig) {
   const initTx = await oracle.initialize(
     admin,
@@ -124,7 +124,7 @@ export async function initVEBO({
     maxRequestsPerBatch,
     maxExitRequestsLimit,
     exitsPerFrame,
-    frameDuration,
+    frameDurationInSec,
   );
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);

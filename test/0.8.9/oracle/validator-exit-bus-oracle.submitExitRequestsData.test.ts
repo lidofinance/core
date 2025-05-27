@@ -290,7 +290,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       [admin, authorizedEntity, stranger] = await ethers.getSigners();
 
       await deploy();
-      const reportLimitRole = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
       await oracle.grantRole(reportLimitRole, authorizedEntity);
       await consensus.advanceTimeBy(24 * 60 * 60);
 
@@ -322,7 +322,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     const HASH_REQUEST_DELIVERED_BY_PARTS = hashExitRequest(REQUEST_DELIVERED_BY_PARTS);
 
     it("Should not allow to set limit without role", async () => {
-      const reportLimitRole = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
 
       await expect(
         oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION),
@@ -330,7 +330,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should not allow to set limit without role", async () => {
-      const reportLimitRole = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
 
       await expect(
         oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION),
@@ -398,7 +398,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
       expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       expect(data.currentExitRequestsLimit).to.equal(0);
     });
@@ -409,7 +409,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
       expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       expect(data.currentExitRequestsLimit).to.equal(2);
     });
@@ -503,7 +503,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(0);
       expect(data.exitsPerFrame).to.equal(0);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);
     });
@@ -537,7 +537,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(0);
       expect(data.exitsPerFrame).to.equal(0);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       // as time is mocked and we didnt change it since last consume, currentExitRequestsLimit was not increased
       expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);

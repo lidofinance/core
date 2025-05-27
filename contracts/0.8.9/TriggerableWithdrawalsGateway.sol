@@ -56,13 +56,13 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      */
     error FeeRefundFailed();
     /**
-     * @notice Emitted when maximum exit request limit and the frame during which a portion of the limit can be restored set.
-     * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDuration)
+     * @notice Emitted when limits configs are set.
+     * @param maxExitRequestsLimit The maximum number of exit requests.
      * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
 
-    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration);
+    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
     /**
      * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
      * @param requestsCount Amount of requests that were sent for processing
@@ -78,7 +78,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
     }
 
     bytes32 public constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
-    bytes32 public constant TW_EXIT_REPORT_LIMIT_ROLE = keccak256("TW_EXIT_REPORT_LIMIT_ROLE");
+    bytes32 public constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
 
     bytes32 public constant TWR_LIMIT_POSITION = keccak256("lido.TriggerableWithdrawalsGateway.maxExitRequestLimit");
 
@@ -101,13 +101,13 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         address lidoLocator,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
+        uint256 frameDurationInSec
     ) {
         if (admin == address(0)) revert AdminCannotBeZero();
         LOCATOR = ILidoLocator(lidoLocator);
 
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     /**
@@ -136,7 +136,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         uint256 requestsCount = validatorsData.length;
         if (requestsCount == 0) revert ZeroArgument("validatorsData");
 
-        _checkExitRequestLimit(requestsCount);
+        _consumeExitRequestLimit(requestsCount);
 
         IWithdrawalVault withdrawalVault = IWithdrawalVault(LOCATOR.withdrawalVault());
         uint256 fee = withdrawalVault.getWithdrawalRequestFee();
@@ -156,22 +156,22 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
 
     /**
      * @notice Sets the maximum exit request limit and the frame during which a portion of the limit can be restored.
-     * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDuration)
+     * @param maxExitRequestsLimit The maximum number of exit requests.
      * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
-    function setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration)
+    function setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec)
         external
-        onlyRole(TW_EXIT_REPORT_LIMIT_ROLE)
+        onlyRole(TW_EXIT_LIMIT_MANAGER_ROLE)
     {
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     /**
      * @notice Returns information about current limits data
      * @return maxExitRequestsLimit Maximum exit requests limit
      * @return exitsPerFrame The number of exits that can be restored per frame.
-     * @return frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @return frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      * @return prevExitRequestsLimit Limit left after previous requests
      * @return currentExitRequestsLimit Current exit requests limit
      */
@@ -181,7 +181,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         returns (
             uint256 maxExitRequestsLimit,
             uint256 exitsPerFrame,
-            uint256 frameDuration,
+            uint256 frameDurationInSec,
             uint256 prevExitRequestsLimit,
             uint256 currentExitRequestsLimit
         )
@@ -189,7 +189,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         ExitRequestLimitData memory exitRequestLimitData = TWR_LIMIT_POSITION.getStorageExitRequestLimit();
         maxExitRequestsLimit = exitRequestLimitData.maxExitRequestsLimit;
         exitsPerFrame = exitRequestLimitData.exitsPerFrame;
-        frameDuration = exitRequestLimitData.frameDuration;
+        frameDurationInSec = exitRequestLimitData.frameDurationInSec;
         prevExitRequestsLimit = exitRequestLimitData.prevExitRequestsLimit;
 
         currentExitRequestsLimit = exitRequestLimitData.isExitLimitSet()
@@ -241,23 +241,21 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         return block.timestamp; // solhint-disable-line not-rely-on-time
     }
 
-    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration)
+    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec)
         internal
     {
-        require(maxExitRequestsLimit >= exitsPerFrame, "TOO_LARGE_TW_EXIT_REQUEST_LIMIT");
-
         uint256 timestamp = _getTimestamp();
 
         TWR_LIMIT_POSITION.setStorageExitRequestLimit(
             TWR_LIMIT_POSITION.getStorageExitRequestLimit().setExitLimits(
-                maxExitRequestsLimit, exitsPerFrame, frameDuration, timestamp
+                maxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp
             )
         );
 
-        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
-    function _checkExitRequestLimit(uint256 requestsCount) internal {
+    function _consumeExitRequestLimit(uint256 requestsCount) internal {
         ExitRequestLimitData memory twrLimitData = TWR_LIMIT_POSITION.getStorageExitRequestLimit();
         if (!twrLimitData.isExitLimitSet()) {
             return;

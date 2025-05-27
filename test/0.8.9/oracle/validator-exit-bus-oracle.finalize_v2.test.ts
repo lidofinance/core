@@ -56,7 +56,7 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
     const exitRequestLimitData = await oracle.getExitRequestLimitFullInfo();
     expect(exitRequestLimitData.maxExitRequestsLimit).to.equal(150);
     expect(exitRequestLimitData.exitsPerFrame).to.equal(1);
-    expect(exitRequestLimitData.frameDuration).to.equal(48);
+    expect(exitRequestLimitData.frameDurationInSec).to.equal(48);
 
     expect(await oracle.getMaxRequestsPerBatch()).to.equal(15);
 

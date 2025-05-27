@@ -322,7 +322,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
     it("Should deliver part of requests", async () => {
       // set limit
-      const reportLimitRole = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
       await oracle.grantRole(reportLimitRole, authorizedEntity);
 
       await oracle

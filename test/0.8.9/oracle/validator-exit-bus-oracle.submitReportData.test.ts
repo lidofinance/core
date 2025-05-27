@@ -607,7 +607,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     });
 
     it("Set exit limit", async () => {
-      const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      const role = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
       await oracle.grantRole(role, admin);
       const exitLimitTx = await oracle.connect(admin).setExitRequestLimit(7, 1, 48);
       await expect(exitLimitTx).to.emit(oracle, "ExitRequestsLimitSet").withArgs(7, 1, 48);
