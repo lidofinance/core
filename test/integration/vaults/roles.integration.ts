@@ -254,7 +254,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         it("triggerValidatorWithdrawal", async () => {
           await testMethod(
             testDashboard,
-            "triggerValidatorWithdrawal",
+            "triggerValidatorWithdrawals",
             {
               successUsers: [validatorWithdrawalTriggerer, owner],
               failingUsers: allRoles.filter((r) => r !== validatorWithdrawalTriggerer && r !== owner),

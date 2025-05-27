@@ -568,6 +568,12 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address indexed refundRecipient
     );
 
+    /**
+     * @notice Emitted when validator ejections are triggered
+     * @param pubkeys Concatenated public keys of the validators to eject
+     * @param excess Amount of excess fee refunded to recipient
+     * @param refundRecipient Address to receive any excess withdrawal fee
+     */
     event ValidatorEjectionsTriggered(
         bytes pubkeys,
         uint256 excess,
@@ -643,7 +649,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _required Amount of ether required to cover the fee
      */
     error InsufficientValidatorWithdrawalFee(uint256 _passed, uint256 _required);
-
 
     /**
      * @notice Thrown when the vault is already ossified

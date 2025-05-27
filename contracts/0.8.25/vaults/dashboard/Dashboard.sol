@@ -9,6 +9,8 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
+import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
+
 import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
@@ -88,7 +90,7 @@ contract Dashboard is NodeOperatorFee {
         address _nodeOperatorManager,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry
-    ) public {
+    ) external {
         super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
         // reduces gas cost for `mintWsteth`
@@ -116,14 +118,14 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the number of stETH shares minted
      */
-    function liabilityShares() public view returns (uint256) {
+    function liabilityShares() external view returns (uint256) {
         return VAULT_HUB.liabilityShares(address(_stakingVault()));
     }
 
     /**
      * @notice Returns the reserve ratio of the vault in basis points
      */
-    function reserveRatioBP() public view returns (uint16) {
+    function reserveRatioBP() external view returns (uint16) {
         return vaultConnection().reserveRatioBP;
     }
 
@@ -172,7 +174,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
-    function totalMintingCapacityShares() public view returns (uint256) {
+    function totalMintingCapacityShares() external view returns (uint256) {
         return _totalMintingCapacityShares(0);
     }
 
@@ -222,9 +224,9 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Disconnects the underlying StakingVault from the hub. The ownership of the StakingVault is transferred
-     *         to this contract, so you need to use abandonDashboard() to transfer the ownership further.
-     *         VaultHub stores data for calculating the node operator fee, so the fee is disbursed first.
+     * @notice Disconnects the underlying StakingVault from the hub and passing its ownership to Dashboard.
+     *         After receiving the final report, you can call reconnectToVaultHub() to reconnect to the hub
+     *         or abandonDashboard() to transfer the ownership to a new owner.
      */
     function voluntaryDisconnect() external {
         disburseNodeOperatorFee();
@@ -250,7 +252,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Accepts the ownership over the StakingVault and connects to VaultHub. Can be called to reconnect
      *         to the hub after voluntaryDisconnect()
      */
-    function reconnectToVaultHub() external payable {
+    function reconnectToVaultHub() external {
         _acceptOwnership();
         connectToVaultHub();
     }
@@ -367,8 +369,9 @@ contract Dashboard is NodeOperatorFee {
      */
     function unguaranteedDepositToBeaconChain(
         IStakingVault.Deposit[] calldata _deposits
-    ) public returns (uint256 totalAmount) {
+    ) external returns (uint256 totalAmount) {
         IStakingVault stakingVault_ = _stakingVault();
+        IDepositContract depositContract = stakingVault_.DEPOSIT_CONTRACT();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
@@ -391,15 +394,15 @@ contract Dashboard is NodeOperatorFee {
         IStakingVault.Deposit calldata deposit;
         for (uint256 i = 0; i < _deposits.length; i++) {
             deposit = _deposits[i];
-            stakingVault_.DEPOSIT_CONTRACT().deposit{value: deposit.amount}(
+            depositContract.deposit{value: deposit.amount}(
                 deposit.pubkey,
                 withdrawalCredentials,
                 deposit.signature,
                 deposit.depositDataRoot
             );
-
-            emit UnguaranteedDeposit(address(stakingVault_), deposit.pubkey, deposit.amount);
         }
+
+        emit UnguaranteedDeposits(address(stakingVault_), _deposits.length, totalAmount);
     }
 
     /**
@@ -497,7 +500,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Initiates a withdrawal from validator(s) on the beacon chain using EIP-7002 triggerable withdrawals
-     *         Both partial withdrawals (disabled for unhealthy `StakingVault`) and full validator exits are supported.
+     *         Both partial withdrawals (disabled for if vault is unhealthy) and full validator exits are supported.
      * @param _pubkeys Concatenated validator public keys (48 bytes each).
      * @param _amounts Withdrawal amounts in wei for each validator key and must match _pubkeys length.
      *         Set amount to 0 for a full validator exit.
@@ -506,7 +509,7 @@ contract Dashboard is NodeOperatorFee {
      * @dev    A withdrawal fee must be paid via msg.value.
      *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee for the current block.
      */
-    function triggerValidatorWithdrawal(
+    function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
         address _refundRecipient
@@ -541,7 +544,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The amount of ether in wei that can be used to mint shares.
      */
     function _mintableValue() internal view returns (uint256) {
-        return VAULT_HUB.totalValue(address(_stakingVault())) - nodeOperatorDisbursableFee();
+        return totalValue() - nodeOperatorDisbursableFee();
     }
 
     /**
@@ -620,10 +623,10 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Emitted when ether was withdrawn from the staking vault and deposited to validators directly bypassing PDG
      * @param stakingVault the address of owned staking vault
-     * @param pubkey of the validator to be deposited
-     * @param amount of ether deposited to validator
+     * @param deposits the number of deposits
+     * @param totalAmount the total amount of ether deposited to beacon chain
      */
-    event UnguaranteedDeposit(address indexed stakingVault, bytes indexed pubkey, uint256 amount);
+    event UnguaranteedDeposits(address indexed stakingVault, uint256 deposits, uint256 totalAmount);
 
     /**
      * @notice Emitted when the ERC20 `token` or ether is recovered (i.e. transferred)

@@ -1068,7 +1068,7 @@ describe("Dashboard.sol", () => {
   context("triggerValidatorWithdrawal", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(
-        dashboard.connect(stranger).triggerValidatorWithdrawal("0x", [0n], vaultOwner),
+        dashboard.connect(stranger).triggerValidatorWithdrawals("0x", [0n], vaultOwner),
       ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
     });
 
@@ -1077,7 +1077,7 @@ describe("Dashboard.sol", () => {
       const amounts = [0n]; // 0 amount means full withdrawal
 
       await expect(
-        dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, {
+        dashboard.triggerValidatorWithdrawals(validatorPublicKeys, amounts, vaultOwner, {
           value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
         }),
       ).to.emit(hub, "Mock__ValidatorWithdrawalsTriggered");
@@ -1088,7 +1088,7 @@ describe("Dashboard.sol", () => {
       const amounts = [ether("0.1")];
 
       await expect(
-        dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, {
+        dashboard.triggerValidatorWithdrawals(validatorPublicKeys, amounts, vaultOwner, {
           value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
         }),
       ).to.emit(hub, "Mock__ValidatorWithdrawalsTriggered");
