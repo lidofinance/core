@@ -175,7 +175,7 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
     /// @notice An ACL role granting the permission to submit a hash of the exit requests data
     bytes32 public constant SUBMIT_REPORT_HASH_ROLE = keccak256("SUBMIT_REPORT_HASH_ROLE");
     /// @notice An ACL role granting the permission to set maximum exit request limit and the frame limit restoring values
-    bytes32 public constant EXIT_REPORT_LIMIT_ROLE = keccak256("EXIT_REPORT_LIMIT_ROLE");
+    bytes32 public constant EXIT_REQUEST_LIMIT_MANAGER_ROLE = keccak256("EXIT_REQUEST_LIMIT_MANAGER_ROLE");
     /// @notice An ACL role granting the permission to pause accepting validator exit requests
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     /// @notice An ACL role granting the permission to resume accepting validator exit requests
@@ -389,7 +389,7 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
         uint256 frameDurationInSec
-    ) external onlyRole(EXIT_REPORT_LIMIT_ROLE) {
+    ) external onlyRole(EXIT_REQUEST_LIMIT_MANAGER_ROLE) {
         _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 

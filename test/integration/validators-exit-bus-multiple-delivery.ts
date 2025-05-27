@@ -125,7 +125,7 @@ describe("ValidatorsExitBus integration", () => {
     const submitReportHashRole = await veb.SUBMIT_REPORT_HASH_ROLE();
     await veb.connect(agent).grantRole(submitReportHashRole, hashReporter);
 
-    const manageLimitRole = await veb.EXIT_REPORT_LIMIT_ROLE();
+    const manageLimitRole = await veb.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
     await veb.connect(agent).grantRole(manageLimitRole, limitManager);
 
     if (await veb.isPaused()) {

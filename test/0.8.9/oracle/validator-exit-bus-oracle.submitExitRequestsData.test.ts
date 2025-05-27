@@ -290,7 +290,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       [admin, authorizedEntity, stranger] = await ethers.getSigners();
 
       await deploy();
-      const reportLimitRole = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
       await oracle.grantRole(reportLimitRole, authorizedEntity);
       await consensus.advanceTimeBy(24 * 60 * 60);
 
@@ -322,7 +322,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     const HASH_REQUEST_DELIVERED_BY_PARTS = hashExitRequest(REQUEST_DELIVERED_BY_PARTS);
 
     it("Should not allow to set limit without role", async () => {
-      const reportLimitRole = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
 
       await expect(
         oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION),
@@ -330,7 +330,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should not allow to set limit without role", async () => {
-      const reportLimitRole = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
 
       await expect(
         oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION),
