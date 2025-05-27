@@ -104,15 +104,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      * @param remainingLimit Amount of requests that still can be processed at current day
      */
     error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
-
     /**
-     * @notice Thrown when the number of requests submitted via submitExitRequestsData exceeds the allowed maxRequestsPerBatch.
-     * @param requestsCount The number of requests included in the current call.
-     * @param maxRequestsPerBatch The maximum number of requests allowed per call to submitExitRequestsData.
+     * @notice Thrown when submitting was not started for request
      */
-    error MaxRequestsBatchSizeExceeded(uint256 requestsCount, uint256 maxRequestsPerBatch);
-
-    error DeliveredIndexOutOfBounds();
     error DeliveryWasNotStarted();
 
     /// @dev Events
@@ -259,7 +253,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         _checkExitSubmitted(requestStatus);
         _checkExitRequestData(request.data, request.dataFormat);
-        _checkMaxBatchSize(request.data);
         _checkContractVersion(requestStatus.contractVersion);
 
         uint256 totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
@@ -272,6 +265,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert RequestsAlreadyDelivered();
         }
 
+        // take min between requestsToDeliver and maxBatchSize
         uint256 requestsToDeliver = _consumeLimit(undeliveredItemsCount);
 
         _processExitRequestsList(request.data, startIndex, requestsToDeliver);
@@ -526,15 +520,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
     }
 
-    function _checkMaxBatchSize(bytes calldata requests) internal view {
-        uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
-        uint256 requestsCount = requests.length / PACKED_REQUEST_LENGTH;
-
-        if (requestsCount > maxRequestsPerBatch) {
-            revert MaxRequestsBatchSizeExceeded(requestsCount, maxRequestsPerBatch);
-        }
-    }
-
     function _checkExitSubmitted(RequestStatus storage requestStatus) internal view {
         if (requestStatus.contractVersion == 0) {
             revert ExitHashNotSubmitted();
@@ -585,10 +570,12 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
     }
 
-    function _consumeLimit(uint256 requestsCount) internal returns (uint256 requestsToDeliver) {
+    function _consumeLimit(uint256 requestsCount) internal returns (uint256) {
+        uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
+
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
         if (!exitRequestLimitData.isExitLimitSet()) {
-            return requestsCount;
+            return min(requestsCount, maxRequestsPerBatch);
         }
 
         uint256 limit = exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
@@ -596,11 +583,13 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         if (limit == 0) {
             revert ExitRequestsLimit(requestsCount, 0);
         }
+        uint256 requestsToDeliver = min(min(limit, requestsCount), maxRequestsPerBatch);
 
-        requestsToDeliver = limit >= requestsCount ? requestsCount : limit;
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
             exitRequestLimitData.updatePrevExitLimit(limit - requestsToDeliver, _getTimestamp())
         );
+
+        return requestsToDeliver;
     }
 
     function _storeNewHashRequestStatus(bytes32 exitRequestsHash, RequestStatus memory requestStatus) internal {
@@ -742,6 +731,10 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
         }
+    }
+
+    function min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
     }
 
     /// Storage helpers
