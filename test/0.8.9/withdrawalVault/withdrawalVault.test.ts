@@ -368,27 +368,27 @@ describe("WithdrawalVault.sol", () => {
         .withArgs(2n, 3n);
     });
 
-    it.skip("Should revert if pubkey is not 48 bytes", async function () {
+    it("Should revert if pubkey is not 48 bytes", async function () {
       // Invalid pubkey (only 2 bytes)
       const invalidPubkeyHexString = ["0x1234"];
 
       const fee = await getFee();
       await expect(
         vault.connect(validatorsExitBus).addWithdrawalRequests(invalidPubkeyHexString, [1n], { value: fee }),
-      ).to.be.revertedWithCustomError(vault, "MalformedPubkeysArray");
+      ).to.be.revertedWithPanic(1); // assertion
     });
 
-    it.skip("Should revert if last pubkey not 48 bytes", async function () {
+    it("Should revert if last pubkey not 48 bytes", async function () {
       const validPubey =
         "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
       const invalidPubkey = "1234";
-      const pubkeysHexArray = [`0x${validPubey}`, `${invalidPubkey}`];
+      const pubkeysHexArray = [`0x${validPubey}`, `0x${invalidPubkey}`];
 
-      const fee = await getFee();
+      const fee = (await getFee()) * 2n; // 2 requests
 
       await expect(
         vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, [1n, 2n], { value: fee }),
-      ).to.be.revertedWithCustomError(vault, "MalformedPubkeysArray");
+      ).to.be.revertedWithPanic(1); // assertion
     });
 
     it("Should revert if addition fails at the withdrawal request contract", async function () {
