@@ -16,7 +16,7 @@ struct ExitRequestData {
 }
 
 struct ValidatorWitness {
-    // The index of an exit request in the VEBO exit requests data
+    // The index of an exit request in the VEB exit requests data
     uint32 exitRequestIndex;
     // -------------------- Validator details -------------------
     bytes32 withdrawalCredentials;
