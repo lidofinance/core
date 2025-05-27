@@ -26,17 +26,4 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable, Confirmat
     function _isValidConfirmer(uint256 _confirmerIndex, bytes32[] memory _confirmers) internal view override returns (bool) {
         return hasRole(_confirmers[_confirmerIndex], msg.sender);
     }
-
-    function _emitEventConfirmation(address _sender, uint256 _index, bytes32[] memory _confirmers, uint256 _expiryTimestamp, bytes memory _data) internal override {
-        emit RoleMemberConfirmed(_sender, _confirmers[_index], _expiryTimestamp, _data);
-    }
-
-    /**
-     * @dev Emitted when a role member confirms.
-     * @param member The address of the confirming member.
-     * @param role The role of the confirming member.
-     * @param expiryTimestamp The timestamp of the confirmation.
-     * @param data The msg.data of the confirmation (selector + arguments).
-     */
-    event RoleMemberConfirmed(address indexed member, bytes32 indexed role, uint256 expiryTimestamp, bytes data);
 }

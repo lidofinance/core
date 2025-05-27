@@ -182,8 +182,8 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       },
     ]);
 
-    const ownerMemberIndex = 0;
-    const operatorMemberIndex = 1;
+    const ownerMemberIndex = ethers.zeroPadValue(await dashboard.getAddress(), 32);
+    const operatorMemberIndex = ethers.zeroPadValue(await nodeOperator.getAddress(), 32);
     let expiryTimestamp = (await getNextBlockTimestamp()) + (await operatorGrid.getConfirmExpiry());
     const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [await stakingVault.getAddress(), 1, 1000]);
 
@@ -459,7 +459,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     await expect(await dashboard.connect(nodeOperator).transferStakingVaultOwnership(newOwner)).to.emit(
       dashboard,
-      "RoleMemberConfirmed",
+      "MemberConfirmed",
     );
 
     await expect(dashboard.connect(owner).transferStakingVaultOwnership(newOwner))

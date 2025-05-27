@@ -95,7 +95,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         address operator;
         uint96 shareLimit;
         uint96 liabilityShares;
-        uint64[] tierIds;
+        uint256[] tierIds;
     }
 
     struct Tier {
@@ -119,7 +119,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
      */
     struct ERC7201Storage {
         Tier[] tiers;
-        mapping(address vault => uint64 tierId) vaultTier;
+        mapping(address vault => uint256 tierId) vaultTier;
         mapping(address nodeOperator => Group) groups;
         address[] nodeOperators;
     }
@@ -179,7 +179,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
             operator: _nodeOperator,
             shareLimit: uint96(_shareLimit),
             liabilityShares: 0,
-            tierIds: new uint64[](0)
+            tierIds: new uint256[](0)
         });
         $.nodeOperators.push(_nodeOperator);
 
@@ -236,7 +236,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         Group storage group_ = $.groups[_nodeOperator];
         if (group_.operator == address(0)) revert GroupNotExists();
 
-        uint64 tierId = uint64($.tiers.length);
+        uint256 tierId = $.tiers.length;
         uint256 length = _tiers.length;
         for (uint256 i = 0; i < length; i++) {
             _validateParams(tierId, _tiers[i].reserveRatioBP, _tiers[i].forcedRebalanceThresholdBP, _tiers[i].treasuryFeeBP);
@@ -366,10 +366,10 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
 
         if (!_checkConfirmations(msg.data, confirmers)) return;
 
-        uint64 vaultTierId = $.vaultTier[_vault];
+        uint256 vaultTierId = $.vaultTier[_vault];
         if (vaultTierId == _requestedTierId) revert TierAlreadySet();
 
-        Tier storage requestedTier = $.tiers[uint64(_requestedTierId)];
+        Tier storage requestedTier = $.tiers[_requestedTierId];
         if (nodeOperator != requestedTier.operator) revert TierNotInOperatorGroup();
         if (_requestedShareLimit > requestedTier.shareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
 
@@ -394,7 +394,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         currentTier.liabilityShares -= uint96(vaultLiabilityShares);
         requestedTier.liabilityShares += uint96(vaultLiabilityShares);
 
-        $.vaultTier[_vault] = uint64(_requestedTierId);
+        $.vaultTier[_vault] = _requestedTierId;
 
         if (vaultSocket.vault != address(0)) {
             VaultHub(LIDO_LOCATOR.vaultHub()).updateConnection(
@@ -406,7 +406,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
             );
         }
 
-        emit TierChanged(_vault, uint64(_requestedTierId));
+        emit TierChanged(_vault, _requestedTierId);
     }
 
    // -----------------------------
@@ -424,7 +424,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
 
         ERC7201Storage storage $ = _getStorage();
 
-        uint64 tierId = $.vaultTier[vaultAddr];
+        uint256 tierId = $.vaultTier[vaultAddr];
         uint96 amount_ = uint96(amount);
 
         Tier storage tier_ = $.tiers[tierId];
@@ -454,7 +454,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
 
         ERC7201Storage storage $ = _getStorage();
 
-        uint64 tierId = $.vaultTier[vaultAddr];
+        uint256 tierId = $.vaultTier[vaultAddr];
 
         uint96 amount_ = uint96(amount);
 

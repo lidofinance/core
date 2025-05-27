@@ -100,7 +100,7 @@ describe("AccessControlConfirmable.sol", () => {
       const msgData = harness.interface.encodeFunctionData("setNumber", [newNumber]);
 
       await expect(harness.connect(role1Member).setNumber(newNumber))
-        .to.emit(harness, "RoleMemberConfirmed")
+        .to.emit(harness, "MemberConfirmed")
         .withArgs(role1Member, await harness.ROLE_1(), expiryTimestamp, msgData);
       expect(await harness.confirmations(msgData, 0)).to.equal(expiryTimestamp);
       // still old number
@@ -110,7 +110,7 @@ describe("AccessControlConfirmable.sol", () => {
 
       const newExpiryTimestamp = (await getNextBlockTimestamp()) + (await harness.getConfirmExpiry());
       await expect(harness.connect(role2Member).setNumber(newNumber))
-        .to.emit(harness, "RoleMemberConfirmed")
+        .to.emit(harness, "MemberConfirmed")
         .withArgs(role2Member, await harness.ROLE_2(), newExpiryTimestamp, msgData);
       expect(await harness.confirmations(msgData, 1)).to.equal(newExpiryTimestamp);
       // still old number

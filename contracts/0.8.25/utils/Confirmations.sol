@@ -12,9 +12,6 @@ pragma solidity 0.8.25;
  */
 abstract contract Confirmations {
 
-    // @notice  keccak256("Lido.Confirmations.confirmers")
-    bytes32 internal constant CONFIRMERS_SLOT = 0x356ebac9cff6b130dd4e4529b15906e1f51fb138bb7b5e98bcda6136874c1dd0;
-
     /**
      * @notice Tracks confirmations
      * @dev We cannot set confirmExpiry to 0 because this means that all confirmations have to be in the same block,
@@ -117,24 +114,24 @@ abstract contract Confirmations {
         uint256 numberOfConfirmers = _confirmers.length;
         uint256 numberOfConfirms = 0;
         bool[] memory deferredConfirms = new bool[](numberOfConfirmers);
-        bool isRoleMember = false;
+        bool isMember = false;
 
         ConfirmationStorage storage $ = _getConfirmationsStorage();
         uint256 expiryTimestamp = block.timestamp + $.confirmExpiry;
 
         for (uint256 i = 0; i < numberOfConfirmers; ++i) {
             if (_isValidConfirmer(i, _confirmers)) {
-                isRoleMember = true;
+                isMember = true;
                 numberOfConfirms++;
                 deferredConfirms[i] = true;
 
-                _emitEventConfirmation(msg.sender, i, _confirmers, expiryTimestamp, _calldata);
+                emit MemberConfirmed(msg.sender, _confirmers[i], expiryTimestamp, _calldata);
             } else if ($.confirmations[_calldata][i] >= block.timestamp) {
                 numberOfConfirms++;
             }
         }
 
-        if (!isRoleMember) revert SenderNotMember();
+        if (!isMember) revert SenderNotMember();
 
         if (numberOfConfirms == numberOfConfirmers) {
             for (uint256 i = 0; i < numberOfConfirmers; ++i) {
@@ -158,15 +155,6 @@ abstract contract Confirmations {
      * @return bool True if the caller is a valid confirmer
      */
     function _isValidConfirmer(uint256 _confirmerIndex, bytes32[] memory _confirmers) internal view virtual returns (bool);
-
-    /**
-     * @dev Emitted when a role member confirms.
-     * @param _confirmer The index of the confirming member.
-     * @param _confirmerIndex The role of the confirming member.
-     * @param _expiryTimestamp The timestamp of the confirmation.
-     * @param _data The msg.data of the confirmation (selector + arguments).
-     */
-    function _emitEventConfirmation(address _confirmer, uint256 _confirmerIndex, bytes32[] memory _confirmers, uint256 _expiryTimestamp, bytes memory _data) internal virtual;
 
     /**
      * @dev Sets the confirmation expiry.
@@ -199,6 +187,15 @@ abstract contract Confirmations {
      * @param newConfirmExpiry The new confirmation expiry.
      */
     event ConfirmExpirySet(address indexed sender, uint256 oldConfirmExpiry, uint256 newConfirmExpiry);
+
+    /**
+     * @dev Emitted when a member confirms.
+     * @param member The address of the confirming member.
+     * @param confirmer The confirming member.
+     * @param expiryTimestamp The timestamp of the confirmation.
+     * @param data The msg.data of the confirmation (selector + arguments).
+     */
+    event MemberConfirmed(address indexed member, bytes32 indexed confirmer, uint256 expiryTimestamp, bytes data);
 
     /**
      * @dev Thrown when attempting to set confirmation expiry out of bounds.

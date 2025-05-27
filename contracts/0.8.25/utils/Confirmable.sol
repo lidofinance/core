@@ -15,17 +15,4 @@ abstract contract Confirmable is Confirmations {
     function _isValidConfirmer(uint256 _confirmerIndex, bytes32[] memory _confirmers) internal view override returns (bool) {
         return _confirmers[_confirmerIndex] == bytes32(uint256(uint160(msg.sender)));
     }
-
-    function _emitEventConfirmation(address _sender, uint256 _index, bytes32[] memory _confirmers, uint256 _expiryTimestamp, bytes memory _data) internal override {
-        emit MemberConfirmed(_sender, _index, _expiryTimestamp, _data);
-    }
-
-    /**
-     * @dev Emitted when a member confirms.
-     * @param member The address of the confirming member.
-     * @param index The index of the confirming member.
-     * @param expiryTimestamp The timestamp of the confirmation.
-     * @param data The msg.data of the confirmation (selector + arguments).
-     */
-    event MemberConfirmed(address indexed member, uint256 index, uint256 expiryTimestamp, bytes data);
 }

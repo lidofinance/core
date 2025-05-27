@@ -23,9 +23,9 @@ contract VaultHub__MockForOperatorGrid {
         bool pendingDisconnect;
         /// @notice last fees accrued on the vault
         uint96 feeSharesCharged;
-        /// @notice unused gap in the slot 2
-        /// uint8 _unused_gap_;
     }
+    /// @notice unused gap in the slot 2
+    /// uint8 _unused_gap_;
 
     mapping(address => VaultSocket) public vaultSockets;
 
@@ -44,6 +44,14 @@ contract VaultHub__MockForOperatorGrid {
         uint256 _forcedRebalanceThresholdBP,
         uint256 _treasuryFeeBP
     ) external {
+        VaultSocket storage socket = vaultSockets[_vault];
+        if (socket.vault == address(0)) revert NotConnectedToHub(_vault);
+
+        socket.shareLimit = uint96(_shareLimit);
+        socket.reserveRatioBP = uint16(_reserveRatioBP);
+        socket.forcedRebalanceThresholdBP = uint16(_forcedRebalanceThresholdBP);
+        socket.treasuryFeeBP = uint16(_treasuryFeeBP);
+
         emit VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _treasuryFeeBP);
     }
 
@@ -54,4 +62,6 @@ contract VaultHub__MockForOperatorGrid {
         uint256 forcedRebalanceThresholdBP,
         uint256 treasuryFeeBP
     );
+
+    error NotConnectedToHub(address vault);
 }

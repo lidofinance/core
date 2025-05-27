@@ -842,6 +842,17 @@ describe("OperatorGrid.sol", () => {
         },
       ]);
 
+      await vaultHub.mock__addVaultSocket(vault_NO1_V1, {
+        shareLimit: shareLimit,
+        reserveRatioBP: 2000,
+        forcedRebalanceThresholdBP: 1800,
+        treasuryFeeBP: 500,
+        vault: vault_NO1_V1,
+        liabilityShares: 0,
+        pendingDisconnect: false,
+        feeSharesCharged: 0,
+      });
+
       const vaultShareLimit = tierShareLimit / 2;
 
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, vaultShareLimit);
@@ -939,6 +950,17 @@ describe("OperatorGrid.sol", () => {
           treasuryFeeBP: treasuryFee,
         },
       ];
+
+      await vaultHub.mock__addVaultSocket(vault_NO1_V1, {
+        shareLimit: shareLimit,
+        reserveRatioBP: 2000,
+        forcedRebalanceThresholdBP: 1800,
+        treasuryFeeBP: 500,
+        vault: vault_NO1_V1,
+        liabilityShares: 0,
+        pendingDisconnect: false,
+        feeSharesCharged: 0,
+      });
 
       const tier_NO1_Id1 = 1;
 
