@@ -2,15 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import {UnstructuredStorage} from "./UnstructuredStorage.sol";
-
-// MSB ---------------------------------------------------------------------------------------> LSB
-// 160___________________128_____________________96______________64_____________32_______________ 0
-// |______________________|_______________________|_______________|_______________|_______________|
-// | maxExitRequestsLimit | prevExitRequestsLimit | prevTimestamp | frameDuration | exitsPerFrame |
-// |<------ 32 bits ----->|<------ 32 bits ------>|<-- 32 bits -->|<-- 32 bits -->|<-- 32 bits -->|
-//
-
 struct ExitRequestLimitData {
     uint32 maxExitRequestsLimit; // Maximum limit
     uint32 prevExitRequestsLimit; // Limit left after previous requests
@@ -20,32 +11,22 @@ struct ExitRequestLimitData {
 }
 
 library ExitLimitUtilsStorage {
-    using UnstructuredStorage for bytes32;
+    struct DataStorage {
+        ExitRequestLimitData _exitRequestLimitData;
+    }
 
-    uint256 internal constant EXITS_PER_FRAME_OFFSET = 0;
-    uint256 internal constant FRAME_DURATION_OFFSET = 32;
-    uint256 internal constant PREV_TIMESTAMP_OFFSET = 64;
-    uint256 internal constant PREV_EXIT_REQUESTS_LIMIT_OFFSET = 96;
-    uint256 internal constant MAX_EXIT_REQUESTS_LIMIT_OFFSET = 128;
-
-    function getStorageExitRequestLimit(bytes32 _position) internal view returns (ExitRequestLimitData memory data) {
-        uint256 slot = _position.getStorageUint256();
-
-        data.exitsPerFrame = uint32(slot >> EXITS_PER_FRAME_OFFSET);
-        data.frameDuration = uint32(slot >> FRAME_DURATION_OFFSET);
-        data.prevTimestamp = uint32(slot >> PREV_TIMESTAMP_OFFSET);
-        data.prevExitRequestsLimit = uint32(slot >> PREV_EXIT_REQUESTS_LIMIT_OFFSET);
-        data.maxExitRequestsLimit = uint32(slot >> MAX_EXIT_REQUESTS_LIMIT_OFFSET);
+    function getStorageExitRequestLimit(bytes32 _position) internal view returns (ExitRequestLimitData memory) {
+        return _getDataStorage(_position)._exitRequestLimitData;
     }
 
     function setStorageExitRequestLimit(bytes32 _position, ExitRequestLimitData memory _data) internal {
-        uint256 value = (uint256(_data.exitsPerFrame) << EXITS_PER_FRAME_OFFSET) |
-            (uint256(_data.frameDuration) << FRAME_DURATION_OFFSET) |
-            (uint256(_data.prevTimestamp) << PREV_TIMESTAMP_OFFSET) |
-            (uint256(_data.prevExitRequestsLimit) << PREV_EXIT_REQUESTS_LIMIT_OFFSET) |
-            (uint256(_data.maxExitRequestsLimit) << MAX_EXIT_REQUESTS_LIMIT_OFFSET);
+        _getDataStorage(_position)._exitRequestLimitData = _data;
+    }
 
-        _position.setStorageUint256(value);
+    function _getDataStorage(bytes32 _position) private pure returns (DataStorage storage $) {
+        assembly {
+            $.slot := _position
+        }
     }
 }
 

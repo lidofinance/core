@@ -9,8 +9,6 @@ import {
   WithdrawalVault__MockForTWG,
 } from "typechain-types";
 
-import { de0x } from "lib";
-
 import { deployLidoLocator, updateLidoLocatorImplementation } from "../deploy/locator";
 
 interface ExitRequest {
@@ -105,7 +103,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
         .connect(authorizedEntity)
         .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 1 }),
     )
-      .to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "InsufficientWithdrawalFee")
+      .to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "InsufficientFee")
       .withArgs(3, 1);
   });
 
@@ -132,14 +130,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
       .connect(authorizedEntity)
       .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 4 });
 
-    const pubkeys =
-      "0x" +
-      exitRequests
-        .map((request) => {
-          const pubkeyHex = de0x(request.valPubkey);
-          return pubkeyHex;
-        })
-        .join("");
+    const pubkeys = exitRequests.map((request) => request.valPubkey);
 
     for (const request of exitRequests) {
       await expect(tx)
@@ -206,14 +197,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
       .connect(authorizedEntity)
       .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 4 });
 
-    const pubkeys =
-      "0x" +
-      exitRequests
-        .map((request) => {
-          const pubkeyHex = de0x(request.valPubkey);
-          return pubkeyHex;
-        })
-        .join("");
+    const pubkeys = exitRequests.map((request) => request.valPubkey);
 
     for (const request of exitRequests) {
       await expect(tx)
@@ -320,7 +304,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
 
     await expect(
       triggerableWithdrawalsGateway.connect(authorizedEntity).refundFee(5, refundReverter.getAddress(), { value: 10 }),
-    ).to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "TriggerableWithdrawalFeeRefundFailed");
+    ).to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "FeeRefundFailed");
   });
 
   it("should set maxExitRequestsLimit equal to 0 and return as currentExitRequestsLimit type(uint256).max", async () => {
@@ -356,14 +340,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
       .connect(authorizedEntity)
       .triggerFullWithdrawals(requestData, ZERO_ADDRESS, 0, { value: 10 });
 
-    const pubkeys =
-      "0x" +
-      requests
-        .map((request) => {
-          const pubkeyHex = de0x(request.valPubkey);
-          return pubkeyHex;
-        })
-        .join("");
+    const pubkeys = requests.map((request) => request.valPubkey);
 
     for (const request of exitRequests) {
       await expect(tx)
