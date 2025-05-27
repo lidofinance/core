@@ -219,7 +219,11 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @dev reverts with `InvalidSignature` if the signature is invalid
      * @dev reverts with `InputHasInfinityPoints` if the input contains infinity points(zero values)
      */
-    function verifyDepositMessage(IStakingVault.Deposit calldata _deposit, BLS12_381.DepositY calldata _depositsY, bytes32 _withdrawalCredentials) public view {
+    function verifyDepositMessage(
+        IStakingVault.Deposit calldata _deposit,
+        BLS12_381.DepositY calldata _depositsY,
+        bytes32 _withdrawalCredentials
+    ) public view {
         BLS12_381.verifyDepositMessage(_deposit, _depositsY, _withdrawalCredentials, DEPOSIT_DOMAIN);
     }
 
