@@ -4,9 +4,10 @@
 pragma solidity ^0.8.0;
 
 import {Permissions} from "contracts/0.8.25/vaults/dashboard/Permissions.sol";
+import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
 
 contract Permissions__Harness is Permissions {
-    constructor(address _vaultHub) Permissions(_vaultHub) {}
+    constructor(address _vaultHub, address _lidoLocator) Permissions(_vaultHub, _lidoLocator) {}
 
     function initialize(address _defaultAdmin, uint256 _confirmExpiry) external {
         super._initialize(_defaultAdmin, _confirmExpiry);
@@ -29,10 +30,6 @@ contract Permissions__Harness is Permissions {
 
     function withdraw(address _recipient, uint256 _ether) external {
         _withdraw(_recipient, _ether);
-    }
-
-    function lock(uint256 _locked) external {
-        _lock(_locked);
     }
 
     function mintShares(address _recipient, uint256 _shares) external {
@@ -59,20 +56,16 @@ contract Permissions__Harness is Permissions {
         _requestValidatorExit(_pubkey);
     }
 
-    function triggerValidatorWithdrawal(
+    function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        _triggerValidatorWithdrawal(_pubkeys, _amounts, _refundRecipient);
+        _triggerValidatorWithdrawals(_pubkeys, _amounts, _refundRecipient);
     }
 
     function voluntaryDisconnect() external {
         _voluntaryDisconnect();
-    }
-
-    function transferStakingVaultOwnership(address _newOwner) external {
-        _transferStakingVaultOwnership(_newOwner);
     }
 
     function compensateDisprovenPredepositFromPDG(
@@ -82,23 +75,31 @@ contract Permissions__Harness is Permissions {
         return _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);
     }
 
-    function authorizeLidoVaultHub() external {
-        _authorizeLidoVaultHub();
-    }
-
-    function ossifyStakingVault() external {
-        _ossifyStakingVault();
-    }
-
-    function setDepositor(address _depositor) external {
-        _setDepositor(_depositor);
-    }
-
-    function resetLocked() external {
-        _resetLocked();
-    }
-
     function setConfirmExpiry(uint256 _newConfirmExpiry) external {
         _setConfirmExpiry(_newConfirmExpiry);
+    }
+
+    function transferOwnership(address _newOwner) external {
+        _transferOwnership(_newOwner);
+    }
+
+    function acceptOwnership() external {
+        _acceptOwnership();
+    }
+
+    function proveUnknownValidatorToPDG(IPredepositGuarantee.ValidatorWitness[] calldata _witnesses) external {
+        _proveUnknownValidatorsToPDG(_witnesses);
+    }
+
+    function withdrawForUnguaranteedDepositToBeaconChain(uint256 _ether) external {
+        _withdrawForUnguaranteedDepositToBeaconChain(_ether);
+    }
+    
+    function requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) external {
+        _requestTierChange(_tierId, _requestedShareLimit);
+    }
+
+    function transferVaultOwnership(address _newOwner) external {
+        _transferVaultOwnership(_newOwner);
     }
 }

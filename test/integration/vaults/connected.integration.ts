@@ -5,10 +5,9 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault, VaultHub } from "typechain-types";
 
-import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
+import { advanceChainTime, days, ether, impersonate, randomAddress } from "lib";
 import {
   createVaultWithDashboard,
-  disconnectFromHub,
   getProtocolContext,
   getPubkeys,
   ProtocolContext,
@@ -61,9 +60,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     ));
 
     agent = await ctx.getSigner("agent");
-
-    // make sure that the vault has a fresh report
-    await reportVaultDataWithProof(stakingVault);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -73,7 +69,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   after(async () => await Snapshot.restore(originalSnapshot));
 
   beforeEach(async () => {
-    expect(await vaultHub.isVaultHealthyAsOfLatestReport(stakingVault)).to.equal(true);
+    expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true, "Report is fresh after setup");
+    expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(true, "Vault is healthy after setup");
   });
 
   it("VaultHub is pausable and resumable", async () => {
@@ -97,7 +94,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     // check that minting is resumed
     await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
       .to.emit(vaultHub, "MintedSharesOnVault")
-      .withArgs(stakingVault, 1n);
+      .withArgs(stakingVault, 1n, ether("1"));
   });
 
   context("stETH minting", () => {
@@ -107,7 +104,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, 1n);
+        .withArgs(stakingVault, 1n, ether("1"));
     });
 
     // TODO: can mint within share limits of the vault
@@ -126,7 +123,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await dashboard.connect(roles.funder).fund({ value: ether("2") }); // try to fund to go healthy
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, 1n);
+        .withArgs(stakingVault, 1n, ether("1"));
     });
   });
 
@@ -148,50 +145,71 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     // 1. Mint some stETH
     // 2. transfer stETH to some other address
     // 3. try to burn stETH, get reject that nothing to burn
-    // 4. submit some ethe to lido (v2 core protocol) lido.submit(sender, { value: amount })
+    // 4. submit some eth to lido (v2 core protocol) lido.submit(sender, { value: amount })
     // 5. try to burn stETH again, now it should work
   });
 
-  context("validator withdrawal", () => {
+  context("Validator ejection", () => {
     it("Vault owner can request validator(s) exit", async () => {
       const keys = getPubkeys(2);
+
       await expect(dashboard.connect(roles.validatorExitRequester).requestValidatorExit(keys.stringified))
         .to.emit(stakingVault, "ValidatorExitRequested")
-        .withArgs(dashboard, keys.pubkeys[0], keys.pubkeys[0])
+        .withArgs(keys.pubkeys[0], keys.pubkeys[0])
         .to.emit(stakingVault, "ValidatorExitRequested")
-        .withArgs(dashboard, keys.pubkeys[1], keys.pubkeys[1]);
+        .withArgs(keys.pubkeys[1], keys.pubkeys[1]);
     });
 
-    it("Allows trigger validator withdrawal", async () => {
+    it("Allows trigger validator withdrawal for vault owner", async () => {
       await expect(
         dashboard
           .connect(roles.validatorWithdrawalTriggerer)
-          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
+          .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
       )
-        .to.emit(stakingVault, "ValidatorWithdrawalTriggered")
-        .withArgs(dashboard, SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, 0);
+        .to.emit(stakingVault, "ValidatorWithdrawalsTriggered")
+        .withArgs(SAMPLE_PUBKEY, [ether("1")], 0, roles.validatorWithdrawalTriggerer);
+    });
 
+    it("Does not allow trigger validator withdrawal for node operator", async () => {
       await expect(
         stakingVault
           .connect(nodeOperator)
-          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
-      ).to.emit(stakingVault, "ValidatorWithdrawalTriggered");
+          .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
+      )
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(nodeOperator.address);
+    });
+
+    it("Allows trigger validator ejection for node operator", async () => {
+      await expect(stakingVault.connect(nodeOperator).ejectValidators(SAMPLE_PUBKEY, nodeOperator, { value: 1n }))
+        .to.emit(stakingVault, "ValidatorEjectionsTriggered")
+        .withArgs(SAMPLE_PUBKEY, 0n, nodeOperator);
     });
   });
 
-  context("rebalancing", () => {
-    it("May rebalance debt to the protocol", async () => {
+  context("Rebalancing", () => {
+    it("Owner can rebalance debt to the protocol", async () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") }); // total value is 2 ether
-      await dashboard.connect(roles.locker).lock(ether("2")); // raise cap full capacity
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
 
       await expect(dashboard.connect(roles.rebalancer).rebalanceVault(ether(".5")))
-        .to.emit(stakingVault, "Withdrawn")
-        .withArgs(dashboard, vaultHub, ether(".5"))
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(vaultHub, ether(".5"))
+        .to.emit(vaultHub, "VaultInOutDeltaUpdated")
+        .withArgs(stakingVault, ether("1.5")) // 2 - 0.5
+        .to.emit(ctx.contracts.lido, "ExternalEtherTransferredToBuffer")
+        .withArgs(ether(".5"))
         .to.emit(vaultHub, "VaultRebalanced")
-        .withArgs(stakingVault, ether(".5"));
+        .withArgs(stakingVault, /* shares */ ether(".5"), /* ether */ ether(".5"));
 
-      expect(await stakingVault.totalValue()).to.equal(ether("1.5"));
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.5"));
+    });
+  });
+
+  describe("Reporting", () => {
+    it("updates report data and keep in fresh state for 1 day", async () => {
+      await advanceChainTime(days(1n));
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
     });
   });
 
@@ -208,120 +226,78 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
         value: maxStakeLimit,
       });
 
-      expect(await stakingVault.isReportFresh()).to.equal(false);
-      expect(await stakingVault.totalValue()).to.equal(ether("2"));
-      expect(await ethers.provider.getBalance(await stakingVault.getAddress())).to.equal(ether("2.5"));
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
     });
 
-    it("Can't lock more than amount on vault address", async () => {
-      await expect(dashboard.connect(roles.locker).lock(ether("2.6"))).to.be.revertedWithCustomError(
-        stakingVault,
-        "NewLockedExceedsTotalValue",
-      );
-      await expect(dashboard.connect(roles.locker).lock(ether("2.1")))
-        .to.emit(stakingVault, "LockedIncreased")
-        .withArgs(ether("2.1"));
-
-      expect(await stakingVault.locked()).to.equal(ether("2.1"));
-
-      // providing fresh report
-      await reportVaultDataWithProof(stakingVault);
-      expect(await stakingVault.isReportFresh()).to.equal(true);
-      expect(await stakingVault.totalValue()).to.equal(ether("2"));
-      expect(await ethers.provider.getBalance(await stakingVault.getAddress())).to.equal(ether("2.5"));
-
-      await expect(dashboard.connect(roles.locker).lock(ether("2.1"))).to.be.revertedWithCustomError(
-        stakingVault,
-        "NewLockedExceedsTotalValue",
-      );
-    });
-
-    // todo: add later
-    it.skip("Withdraw", async () => {
-      await expect(dashboard.connect(roles.locker).lock(ether("1.5")))
-        .to.emit(stakingVault, "LockedIncreased")
-        .withArgs(ether("2.1"));
-
-      await expect(dashboard.connect(roles.locker).withdraw(stranger, ether("1.3"))).to.be.revertedWithCustomError(
-        stakingVault,
-        "TotalValueBelowLockedAmount",
-      );
-    });
-
-    // todo: add later
-    it.skip("Can't triggerValidatorWithdrawal", () => {});
-
-    it("can't mintShares", async () => {
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n)).to.be.revertedWithCustomError(
+    it("Can't mint until brings the fresh report", async () => {
+      await expect(dashboard.connect(roles.minter).mintStETH(stranger, ether("1"))).to.be.revertedWithCustomError(
         vaultHub,
-        "VaultReportStaled",
+        "VaultReportStale",
       );
-      await reportVaultDataWithProof(stakingVault);
 
-      expect(await stakingVault.isReportFresh()).to.equal(true);
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
+      await reportVaultDataWithProof(ctx, stakingVault);
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+
+      await expect(dashboard.connect(roles.minter).mintStETH(stranger, ether("2.1"))).to.be.revertedWithCustomError(
+        vaultHub,
+        "InsufficientTotalValueToMint",
+      );
+
+      await expect(dashboard.connect(roles.minter).mintStETH(stranger, ether("0.1")))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, 1n);
+        .withArgs(stakingVault, ether("0.1"), ether("1")); // min 1 ether is locked in the vault
     });
+
+    it("Can't withdraw until brings the fresh report", async () => {
+      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3"))).to.be.revertedWithCustomError(
+        vaultHub,
+        "VaultReportStale",
+      );
+
+      await reportVaultDataWithProof(ctx, stakingVault);
+
+      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3")))
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(stranger, ether("0.3"));
+    });
+
+    // TODO: add later
+    it.skip("Can't triggerValidatorWithdrawal", () => {});
   });
 
   // skipping for now, going to update these tests later
-  describe.skip("If vault is unhealthy", () => {
+  describe("If vault is unhealthy", () => {
     beforeEach(async () => {
-      await dashboard.connect(roles.funder).fund({ value: ether("1") }); // total value is 2 ether
-      await dashboard.connect(roles.locker).lock(ether("2")); // raise cap full capacity
-      await dashboard.connect(roles.minter).mintStETH(stranger, ether("1")); // mint 1 ether
+      console.log(await vaultHub.vaultRecord(stakingVault));
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      console.log(await vaultHub.vaultRecord(stakingVault));
+      await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
+      console.log(await vaultHub.vaultRecord(stakingVault));
 
-      const vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("100"));
-      await stakingVault.connect(vaultHubSigner).report(await getCurrentBlockTimestamp(), 1n, ether("2"), ether("2")); // below the threshold
+      await reportVaultDataWithProof(ctx, stakingVault, 1n);
 
-      expect(await vaultHub.isVaultHealthyAsOfLatestReport(stakingVault)).to.equal(false);
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(false);
     });
 
-    it("Can't mint", async () => {
-      await dashboard.connect(roles.funder).fund({ value: ether("1") }); // try to fund to increase the total value (optional)
-      // Here now minted 1 stETH, total vault value is 1 wei, so any minting should fail
+    it("Can't mint until goes healthy", async () => {
+      console.log(await vaultHub.vaultRecord(stakingVault));
+
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
-        .to.be.revertedWithCustomError(ctx.contracts.vaultHub, "InsufficientTotalValueToMint")
+        .to.be.revertedWithCustomError(vaultHub, "InsufficientTotalValueToMint")
         .withArgs(await stakingVault.getAddress(), ether("1") + 1n); // here + 1n is from the report
-    });
 
-    it("Can mint if goes to healthy", async () => {
-      await dashboard.connect(roles.funder).fund({ value: ether("2") }); // try to fund to go healthy
-      expect(await vaultHub.isVaultHealthyAsOfLatestReport(stakingVault)).to.equal(true); // <-- should be healthy now, but the function name is weird
+      await dashboard.connect(roles.funder).fund({ value: ether("2") });
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(true);
 
-      // Here now minted 1 stETH, total vault value is 1 wei, so any minting should fail
+      // = (1 ether locked * 100%) / 80% = 1.25 ether
+      const reserve = ether("0.25");
+
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, 1n))
-        .to.be.revertedWithCustomError(ctx.contracts.vaultHub, "InsufficientTotalValueToMint")
-        .withArgs(await stakingVault.getAddress(), 1n); // here 1n is total value from report
-    });
-  });
-
-  describe("Authorize / Deauthorize Lido VaultHub", () => {
-    it("After creation via createVaultWithDelegation and connection vault is authorized", async () => {
-      expect(await stakingVault.vaultHubAuthorized()).to.equal(true);
-    });
-
-    it("Can't deauthorize Lido VaultHub if connected to Hub", async () => {
-      await expect(
-        dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub(),
-      ).to.be.revertedWithCustomError(stakingVault, "VaultConnected");
-    });
-
-    it("Can deauthorize Lido VaultHub if disconnected from Hub", async () => {
-      await disconnectFromHub(ctx, stakingVault);
-      await reportVaultDataWithProof(stakingVault); // required to disconnect from the hub
-
-      await expect(dashboard.connect(roles.lidoVaultHubDeauthorizer).deauthorizeLidoVaultHub())
-        .to.emit(stakingVault, "VaultHubAuthorizedSet")
-        .withArgs(false);
-    });
-  });
-
-  describe("Reporting", () => {
-    it("updates report data and keep in fresh state for 1 day", async () => {
-      await advanceChainTime(days(1n));
-      expect(await stakingVault.isReportFresh()).to.equal(true);
+        .to.emit(vaultHub, "MintedSharesOnVault")
+        .withArgs(stakingVault, 1n, ether("1") + reserve + 1n);
     });
   });
 });
