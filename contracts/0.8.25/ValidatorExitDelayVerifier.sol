@@ -104,6 +104,8 @@ contract ValidatorExitDelayVerifier {
         uint256 eligibleExitRequestTimestamp
     );
     error KeyWasNotUnpacked(uint256 keyIndex);
+    error NonMonotonicDeliveryHistory(uint256 index);
+    error EmptyDeliveryHistory();
 
     /**
      * @dev The previous and current forks can be essentially the same.
@@ -372,6 +374,23 @@ contract ValidatorExitDelayVerifier {
     ) internal view returns (DeliveryHistory[] memory) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
         DeliveryHistory[] memory history = vebo.getExitRequestsDeliveryHistory(exitRequestsHash);
+
+        if (history.length == 0) {
+            revert EmptyDeliveryHistory();
+        }
+
+        // Sanity check, delivery history is strictly monotonically increasing.
+        if (history.length > 1) {
+            for (uint256 i = 1; i < history.length; i++) {
+                // strictly increasing on both keys index and timestamps
+                if (
+                    history[i].lastDeliveredKeyIndex <= history[i - 1].lastDeliveredKeyIndex ||
+                    history[i].timestamp <= history[i - 1].timestamp
+                ) {
+                    revert NonMonotonicDeliveryHistory(i);
+                }
+            }
+        }
 
         return history;
     }
