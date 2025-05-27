@@ -104,9 +104,11 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      * @param remainingLimit Amount of requests that still can be processed at current day
      */
     error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
+
     /**
      * @notice Thrown when submitting was not started for request
      */
+
     error DeliveryWasNotStarted();
 
     /// @dev Events
@@ -145,6 +147,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 valIndex;
         bytes pubkey;
     }
+
     struct RequestStatus {
         uint32 contractVersion;
         uint32 deliveryHistoryLength;
@@ -274,8 +277,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert RequestsAlreadyDelivered();
         }
 
-        // take min between requestsToDeliver and maxBatchSize
-        uint256 requestsToDeliver = _consumeLimit(undeliveredItemsCount);
+        // take min between undeliveredItemsCount and maxBatchSize
+        uint256 requestsToDeliver = _consumeLimit(_applyMaxBatchSize(undeliveredItemsCount), _applyDeliverLimit);
 
         _processExitRequestsList(request.data, startIndex, requestsToDeliver);
 
@@ -408,7 +411,10 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         exitsPerFrame = exitRequestLimitData.exitsPerFrame;
         frameDuration = exitRequestLimitData.frameDuration;
         prevExitRequestsLimit = exitRequestLimitData.prevExitRequestsLimit;
-        currentExitRequestsLimit = _getCurrentExitLimit();
+
+        currentExitRequestsLimit = exitRequestLimitData.isExitLimitSet()
+            ? exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp())
+            : type(uint256).max;
     }
 
     /**
@@ -535,6 +541,11 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
     }
 
+    function _applyMaxBatchSize(uint256 requestsCount) internal view returns (uint256) {
+        uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
+        return min(requestsCount, maxRequestsPerBatch);
+    }
+
     function _checkExitSubmitted(RequestStatus storage requestStatus) internal view {
         if (requestStatus.contractVersion == 0) {
             revert ExitHashNotSubmitted();
@@ -545,15 +556,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         if (status.deliveryHistoryLength == 0) {
             revert DeliveryWasNotStarted();
         }
-    }
-
-    function _getCurrentExitLimit() internal view returns (uint256) {
-        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        if (!exitRequestLimitData.isExitLimitSet()) {
-            return type(uint256).max;
-        }
-
-        return exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
     }
 
     function _getTimestamp() internal view virtual returns (uint256) {
@@ -585,26 +587,25 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
     }
 
-    function _consumeLimit(uint256 requestsCount) internal returns (uint256) {
-        uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
-
+    function _consumeLimit(uint256 requestsCount, function(uint256, uint256) internal pure returns(uint256) applyLimit) internal returns (uint256 requestsLimitedCount) {
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
         if (!exitRequestLimitData.isExitLimitSet()) {
-            return min(requestsCount, maxRequestsPerBatch);
+            return requestsCount;
         }
 
         uint256 limit = exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
-
-        if (limit == 0) {
-            revert ExitRequestsLimit(requestsCount, 0);
-        }
-        uint256 requestsToDeliver = min(min(limit, requestsCount), maxRequestsPerBatch);
+        requestsLimitedCount = applyLimit(limit, requestsCount);
 
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            exitRequestLimitData.updatePrevExitLimit(limit - requestsToDeliver, _getTimestamp())
+            exitRequestLimitData.updatePrevExitLimit(limit - requestsLimitedCount, _getTimestamp())
         );
+    }
 
-        return requestsToDeliver;
+    function _applyDeliverLimit(uint256 limit, uint256 count) internal pure returns (uint256 limitedCount) {
+        if (limit == 0) {
+            revert ExitRequestsLimit(count, 0);
+        }
+        return min(limit, count);
     }
 
     function _storeNewHashRequestStatus(bytes32 exitRequestsHash, RequestStatus memory requestStatus) internal {
@@ -615,10 +616,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert ExitHashAlreadySubmitted();
         }
 
-        storedRequest.contractVersion = requestStatus.contractVersion;
-        storedRequest.deliveryHistoryLength = requestStatus.deliveryHistoryLength;
-        storedRequest.lastDeliveredExitDataIndex = requestStatus.lastDeliveredExitDataIndex;
-        storedRequest.lastDeliveredExitDataTimestamp = requestStatus.lastDeliveredExitDataTimestamp;
+        requestStatusMap[exitRequestsHash] = requestStatus;
 
         emit RequestsHashSubmitted(exitRequestsHash);
     }
