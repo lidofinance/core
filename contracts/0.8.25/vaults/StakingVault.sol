@@ -644,12 +644,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     error InsufficientValidatorWithdrawalFee(uint256 _passed, uint256 _required);
 
-    /**
-     * @notice Thrown when a validator withdrawal fee refund fails
-     * @param _sender Address that initiated the refund
-     * @param _amount Amount of ether to refund
-     */
-    error WithdrawalFeeRefundFailed(address _sender, uint256 _amount);
 
     /**
      * @notice Thrown when the vault is already ossified
