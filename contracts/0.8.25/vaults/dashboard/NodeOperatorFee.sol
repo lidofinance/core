@@ -32,15 +32,9 @@ contract NodeOperatorFee is Permissions {
      * - confirms confirm expiry;
      * - confirms node operator fee changes;
      * - confirms the transfer of the StakingVault ownership;
-     * - is the admin role for NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE.
+     * - sets the node operator fee recipient.
      */
     bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.NodeOperatorFee.NodeOperatorManagerRole");
-
-    /**
-     * @notice Sets the node operator fee recipient.
-     */
-    bytes32 public constant NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE =
-        keccak256("vaults.NodeOperatorFee.SetFeeRecipientRole");
 
     /**
      * @notice Adjusts rewards to allow fee correction during side deposits or consolidations
@@ -109,7 +103,6 @@ contract NodeOperatorFee is Permissions {
 
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
-        _setRoleAdmin(NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_REWARDS_ADJUST_ROLE, NODE_OPERATOR_MANAGER_ROLE);
     }
 
@@ -243,7 +236,7 @@ contract NodeOperatorFee is Permissions {
      */
     function setNodeOperatorFeeRecipient(
         address _newNodeOperatorFeeRecipient
-    ) external onlyRole(NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE) {
+    ) external onlyRole(NODE_OPERATOR_MANAGER_ROLE) {
         _setNodeOperatorFeeRecipient(_newNodeOperatorFeeRecipient);
     }
 
