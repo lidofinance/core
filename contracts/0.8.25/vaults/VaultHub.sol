@@ -17,7 +17,7 @@ import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
-/// Also, it passes the report from the accounting oracle to the vaults and charges Lido fees
+/// Also, it facilitates the individual per-vault reports from the lazy oracle to the vaults and charges Lido fees
 /// @author folkyatina
 contract VaultHub is PausableUntilWithRoles {
 
@@ -75,6 +75,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint64 reportTimestamp;
         /// @notice current inOutDelta of the vault (all deposits - all withdrawals)
         int128 inOutDelta;
+        // 64 bits of gap
+        // ### 4th slot
         /// @notice fee shares charged for the vault
         uint96 feeSharesCharged;
     }

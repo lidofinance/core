@@ -155,7 +155,7 @@ contract LazyOracle is ILazyOracle {
         }
     }
 
-    event VaultsReportDataUpdated(uint256 timestamp, bytes32 root, string cid);
+    event VaultsReportDataUpdated(uint256 indexed timestamp, bytes32 indexed root, string cid);
 
     error NotAuthorized();
     error InvalidProof();
