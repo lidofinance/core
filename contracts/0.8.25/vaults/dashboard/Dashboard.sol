@@ -306,15 +306,10 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Allows a vault owner to settle outstanding vault obligations
-     * @dev First funds the vault with the sent ETH, then triggers a settlement process
-     *      Settlement process uses the same logic as oracle reports
+     * @notice Settles outstanding vault obligations with funds from the vault or sent ETH
      */
-    // TODO: make role in Permissions
-    function settleObligations() external payable {
-        if (msg.value > 0) _fund(msg.value);
-
-        VAULT_HUB.settleObligations(address(_stakingVault()));
+    function settleObligations() external payable fundable {
+        _settleObligations();
     }
 
     /**

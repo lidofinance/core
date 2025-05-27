@@ -48,6 +48,11 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant BURN_ROLE = keccak256("vaults.Permissions.Burn");
 
     /**
+     * @notice Permission for settling obligations on the StakingVault.
+     */
+    bytes32 public constant SETTLE_OBLIGATIONS_ROLE = keccak256("vaults.Permissions.SettleObligations");
+
+    /**
      * @notice Permission for rebalancing the StakingVault.
      */
     bytes32 public constant REBALANCE_ROLE = keccak256("vaults.Permissions.Rebalance");
@@ -241,6 +246,14 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _burnShares(uint256 _shares) internal onlyRoleMemberOrAdmin(BURN_ROLE) {
         VAULT_HUB.burnShares(address(_stakingVault()), _shares);
+    }
+
+    /**
+     * @dev Checks the SETTLE_OBLIGATIONS_ROLE and settles obligations on the StakingVault.
+     * @dev The zero balance check is performed in the VaultHub contract.
+     */
+    function _settleObligations() internal onlyRoleMemberOrAdmin(SETTLE_OBLIGATIONS_ROLE) {
+        VAULT_HUB.settleObligations(address(_stakingVault()));
     }
 
     /**

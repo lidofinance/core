@@ -484,7 +484,10 @@ describe("Integration: Vault obligations", () => {
 
       await setBalance(stakingVaultAddress, 0);
 
-      await expect(dashboard.connect(owner).settleObligations()).to.be.revertedWithCustomError(vaultHub, "ZeroBalance");
+      await expect(dashboard.connect(roles.obligationsSettler).settleObligations()).to.be.revertedWithCustomError(
+        vaultHub,
+        "ZeroBalance",
+      );
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.unsettledWithdrawals).to.equal(maxPossibleWithdrawals);
@@ -496,7 +499,7 @@ describe("Integration: Vault obligations", () => {
 
       await dashboard.connect(roles.funder).fund({ value: funding });
 
-      await expect(dashboard.connect(owner).settleObligations())
+      await expect(dashboard.connect(roles.obligationsSettler).settleObligations())
         .to.emit(vaultHub, "WithdrawalsObligationUpdated")
         .withArgs(stakingVaultAddress, maxPossibleWithdrawals - funding, funding)
         .to.emit(stakingVault, "EtherWithdrawn")
@@ -515,6 +518,7 @@ describe("Integration: Vault obligations", () => {
       const expectedSettledFees = maxPossibleWithdrawals + unsettledTreasuryFees;
       const extraFunding = expectedSettledFees - funding + ether("1"); // 1 ether extra should stay in the vault
 
+      // here we use owner, because otherwise user has to have FUND_ROLE to be able to settle obligations
       await expect(dashboard.connect(owner).settleObligations({ value: extraFunding }))
         .to.emit(vaultHub, "WithdrawalsObligationUpdated")
         .withArgs(stakingVaultAddress, 0n, maxPossibleWithdrawals)

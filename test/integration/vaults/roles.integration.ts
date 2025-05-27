@@ -37,6 +37,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     assetRecoverer: HardhatEthersSigner,
     minter: HardhatEthersSigner,
     burner: HardhatEthersSigner,
+    obligationsSettler: HardhatEthersSigner,
     rebalancer: HardhatEthersSigner,
     depositPauser: HardhatEthersSigner,
     depositResumer: HardhatEthersSigner,
@@ -65,6 +66,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       withdrawer,
       minter,
       burner,
+      obligationsSettler,
       rebalancer,
       depositPauser,
       depositResumer,
@@ -131,6 +133,10 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         {
           account: burner,
           role: await testDashboard.BURN_ROLE(),
+        },
+        {
+          account: obligationsSettler,
+          role: await testDashboard.SETTLE_OBLIGATIONS_ROLE(),
         },
         {
           account: rebalancer,
@@ -261,6 +267,19 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
             },
             ["0x", [0n], stranger],
             await testDashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+          );
+        });
+
+        it("settleObligations", async () => {
+          await testMethod(
+            testDashboard,
+            "settleObligations",
+            {
+              successUsers: [obligationsSettler, owner],
+              failingUsers: allRoles.filter((r) => r !== obligationsSettler && r !== owner),
+            },
+            [],
+            await testDashboard.SETTLE_OBLIGATIONS_ROLE(),
           );
         });
 
@@ -544,6 +563,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         testDashboard.WITHDRAW_ROLE(),
         testDashboard.MINT_ROLE(),
         testDashboard.BURN_ROLE(),
+        testDashboard.SETTLE_OBLIGATIONS_ROLE(),
         testDashboard.REBALANCE_ROLE(),
         testDashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
         testDashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
