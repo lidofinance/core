@@ -195,6 +195,7 @@ contract Dashboard is NodeOperatorFee {
     //  *         fees and obligations and not taking locked ether into account.
     //  * @dev This amount is not available for minting shares.
     //  */
+    // TODO: restore if needed
     // function availableBalance() public view returns (uint256) {
     //     return VAULT_HUB.availableBalance(address(_stakingVault())) - nodeOperatorUnclaimedFee();
     // }
@@ -203,6 +204,7 @@ contract Dashboard is NodeOperatorFee {
     //  * @notice Utility function to get the total amount of obligations for the vault
     //  * @return The total value of all obligations for the vault
     //  */
+    // TODO: restore if needed
     // function unsettledObligations() public view returns (uint256) {
     //     return VAULT_HUB.unsettledObligations(address(_stakingVault()));
     // }
@@ -619,6 +621,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function _totalMintingCapacityShares(uint256 _additionalEther) internal view returns (uint256) {
         VaultHub.VaultConnection memory connection = vaultConnection();
+        // TODO: move to VaultHub and take into account obligations
         uint256 maxMintableStETH = ((_mintableValue() + _additionalEther) *
             (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), connection.shareLimit);

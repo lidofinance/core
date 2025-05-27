@@ -19,7 +19,7 @@ contract StakingVault__MockForVaultHub {
         withdrawalCredentials = bytes32((0x02 << 248) | uint160(address(this)));
     }
 
-    function initialize(address _owner, address _nodeOperator, address _depositor, bytes calldata) external {
+    function initialize(address _owner, address _nodeOperator, address _depositor) external {
         owner = _owner;
         nodeOperator = _nodeOperator;
         depositor_ = _depositor;
