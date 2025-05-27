@@ -334,7 +334,7 @@ contract ValidatorExitDelayVerifier {
 
     /**
      * @dev Determines how many seconds have passed since a validator was first eligible
-     *      to exit after ValidatorsExitBusOracle exit request.
+     *      to exit after VEB exit request.
      * @return uint256 The elapsed seconds since the earliest eligible exit request time.
      */
     function _getSecondsSinceExitRequestEligible(
