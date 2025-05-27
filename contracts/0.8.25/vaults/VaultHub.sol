@@ -118,6 +118,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice codehash of the account with no code
     bytes32 private constant EMPTY_CODEHASH = keccak256("");
 
+    /// @notice minimum gas overhead required for withdraw/fund/rebalance operations
+    uint256 internal constant MIN_GAS = 20_000;
+
     // -----------------------------
     //           IMMUTABLES
     // -----------------------------
@@ -142,6 +145,12 @@ contract VaultHub is PausableUntilWithRoles {
         LIDO = _lido;
 
         _disableInitializers();
+    }
+
+    /// @notice modifier to check if the gas is enough to cache inOutDelta in fund/withdraw/rebalance operations
+    modifier requireMinGas() {
+        _;
+        if (gasleft() < MIN_GAS) revert NeedMoreGas(MIN_GAS, gasleft());
     }
 
     /// @dev used to perform rebalance operations
@@ -514,7 +523,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice funds the vault passing ether as msg.value
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
-    function fund(address _vault) external payable whenResumed {
+    function fund(address _vault) external payable whenResumed requireMinGas {
         _checkConnectionAndOwner(_vault);
 
         VaultRecord storage record = _storage().records[_vault];
@@ -533,7 +542,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _recipient recipient address
     /// @param _ether amount of ether to withdraw
     /// @dev msg.sender should be vault's owner
-    function withdraw(address _vault, address _recipient, uint256 _ether) external whenResumed {
+    function withdraw(address _vault, address _recipient, uint256 _ether) external whenResumed requireMinGas {
         _checkConnectionAndOwner(_vault);
 
         VaultRecord storage record = _storage().records[_vault];
@@ -551,7 +560,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _ether amount of ether to rebalance
     /// @dev msg.sender should be vault's owner
-    function rebalance(address _vault, uint256 _ether) external whenResumed {
+    function rebalance(address _vault, uint256 _ether) external whenResumed requireMinGas {
         if (_ether == 0) revert ZeroArgument();
         if (_ether > _vault.balance) revert InsufficientBalance(_vault.balance, _ether);
         _checkConnectionAndOwner(_vault);
@@ -705,7 +714,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Permissionless rebalance for unhealthy vaults
     /// @param _vault vault address
     /// @dev rebalance all available amount of ether until the vault is healthy
-    function forceRebalance(address _vault) external {
+    function forceRebalance(address _vault) external requireMinGas {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _storage().records[_vault];
 
@@ -1131,4 +1140,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultIsDisconnecting(address vault);
     error PartialValidatorWithdrawalNotAllowed();
     error ArrayLengthMismatch();
+    error NeedMoreGas(uint256 minGas, uint256 gasLeft);
 }
