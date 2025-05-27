@@ -210,14 +210,15 @@ contract VaultHub is PausableUntilWithRoles {
         return _totalValue(_vaultRecord(_vault));
     }
 
-    /// @return net total value of the vault (total value without unsettled obligations)
-    function netTotalValue(address _vault) external view returns (uint256) {
-        return _netTotalValue(_vault);
+    /// @return amount of ether that is available for the vault to withdraw
+    /// @dev returns 0 if the vault is not connected
+    function availableBalance(address _vault) external view returns (uint256) {
+        return _availableBalance(_vault);
     }
 
     /// @return unsettled obligations of the vault
     /// @dev returns 0 if the vault is not connected
-    function unsettledObligations(address _vault) external view returns (uint256) {
+    function unsettledObligations(address _vault) public view returns (uint256) {
         VaultObligations memory obligations = _vaultObligations(_vault);
         return obligations.unsettledTreasuryFees + obligations.unsettledWithdrawals;
     }
@@ -573,8 +574,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 unlocked_ = _unlocked(record);
         if (_ether > unlocked_) revert InsufficientUnlocked(unlocked_, _ether);
 
-        // TODO: check balance on withdraw and not allow withdraw obligations
-        // _checkAvailableBalance(_vault, _ether);
+        _checkAvailableBalance(_vault, _ether);
 
         _withdraw(_vault, record, _recipient, _ether);
 
@@ -610,16 +610,17 @@ contract VaultHub is PausableUntilWithRoles {
         if (!_isReportFresh(record)) revert VaultReportStale(_vault);
 
         uint256 totalValue_ = _totalValue(record);
+        uint256 unsettledTreasuryFees = _vaultObligations(_vault).unsettledTreasuryFees;
+
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - connection.reserveRatioBP;
-        uint256 maxMintableEther = (totalValue_ * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 maxMintableEther = ((totalValue_ - unsettledTreasuryFees) * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
         uint256 stETHAfterMint = _getPooledEthBySharesRoundUp(vaultSharesAfterMint);
         if (stETHAfterMint > maxMintableEther) {
-            revert InsufficientTotalValueToMint(_vault, totalValue_, _vaultObligations(_vault).unsettledTreasuryFees);
+            revert InsufficientTotalValueToMint(_vault, totalValue_, unsettledTreasuryFees);
         }
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
         uint256 etherToLock = (stETHAfterMint * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
-
         if (etherToLock > record.locked) {
             record.locked = uint128(etherToLock);
         }
@@ -1027,11 +1028,6 @@ contract VaultHub is PausableUntilWithRoles {
         return uint256(int256(uint256(report.totalValue)) + _record.inOutDelta - report.inOutDelta);
     }
 
-    /// @dev unsettledWithdrawals must not be included in the total value because they are based on the liability shares
-    function _netTotalValue(address _vault) internal view returns (uint256) {
-        return _totalValue(_vaultRecord(_vault)) - _vaultObligations(_vault).unsettledTreasuryFees;
-    }
-
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
         uint256 latestReportTimestamp = _lazyOracle().latestReportTimestamp();
         return
@@ -1062,21 +1058,20 @@ contract VaultHub is PausableUntilWithRoles {
         return liability > _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
     }
 
-    // TODO: restore if needed
-    // function _availableBalance(address _vault) internal view returns (uint256) {
-    //     uint256 vaultBalance = _vault.balance;
-    //     uint256 outstandingObligations = unsettledObligations(_vault);
+    function _availableBalance(address _vault) internal view returns (uint256) {
+        if (_vaultConnection(_vault).vaultIndex == 0) return 0;
 
-    //     return outstandingObligations > vaultBalance ? 0 : vaultBalance - outstandingObligations;
-    // }
+        uint256 vaultBalance = _vault.balance;
+        uint256 unsettledObligations_ = unsettledObligations(_vault);
+        return unsettledObligations_ > vaultBalance ? 0 : vaultBalance - unsettledObligations_;
+    }
 
-    // TODO: restore if needed
-    // function _checkAvailableBalance(address _vault, uint256 _requiredBalance) internal view {
-    //     uint256 available = _availableBalance(_vault);
-    //     if (_requiredBalance > available) {
-    //         revert VaultInsufficientBalance(_vault, available, _requiredBalance);
-    //     }
-    // }
+    function _checkAvailableBalance(address _vault, uint256 _requiredBalance) internal view {
+        uint256 available = _availableBalance(_vault);
+        if (_requiredBalance > available) {
+            revert VaultInsufficientBalance(_vault, available, _requiredBalance);
+        }
+    }
 
     function _addVault(
         address _vault,

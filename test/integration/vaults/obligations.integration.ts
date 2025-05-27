@@ -18,7 +18,9 @@ import {
 
 import { Snapshot, Tracing } from "test/suite";
 
-describe("Integration: Vault obligations", () => {
+const TOTAL_BASIS_POINTS = 100_00n;
+
+describe.only("Integration: Vault obligations", () => {
   let ctx: ProtocolContext;
 
   let vaultHub: VaultHub;
@@ -35,6 +37,7 @@ describe("Integration: Vault obligations", () => {
   let withdrawalManager: HardhatEthersSigner;
   let withdrawalExecutor: HardhatEthersSigner;
   let agentSigner: HardhatEthersSigner;
+  let stranger: HardhatEthersSigner;
 
   let originalSnapshot: string;
   let snapshot: string;
@@ -48,7 +51,7 @@ describe("Integration: Vault obligations", () => {
 
     ({ vaultHub } = ctx.contracts);
 
-    [owner, nodeOperator, withdrawalManager, withdrawalExecutor] = await ethers.getSigners();
+    [owner, nodeOperator, withdrawalManager, withdrawalExecutor, stranger] = await ethers.getSigners();
 
     // Owner can create a vault with operator as a node operator
     ({ stakingVault, dashboard, roles } = await createVaultWithDashboard(
@@ -455,52 +458,6 @@ describe("Integration: Vault obligations", () => {
     });
   });
 
-  context("Getting obligations via dashboard", () => {
-    let totalValue: bigint;
-    let unsettledWithdrawals: bigint;
-
-    beforeEach(async () => {
-      const liabilityShares = ether("1");
-      const funding = ether("1");
-
-      totalValue = (await vaultHub.totalValue(stakingVaultAddress)) + funding;
-
-      await dashboard.connect(roles.funder).fund({ value: funding });
-      await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
-
-      unsettledWithdrawals = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
-      await vaultHub.connect(agentSigner).updateWithdrawalsObligation(stakingVaultAddress, unsettledWithdrawals);
-    });
-
-    it("Should return the correct view values", async () => {
-      const totalValueOnDashboardBefore = await dashboard.totalValue();
-      expect(totalValueOnDashboardBefore).to.equal(totalValue);
-
-      const unsettledObligationsBefore = await dashboard.unsettledObligations();
-      expect(unsettledObligationsBefore).to.equal(unsettledWithdrawals);
-
-      const netTotalValueOnDashboardBefore = await dashboard.netTotalValue();
-      expect(netTotalValueOnDashboardBefore).to.equal(totalValue); // no unsettled treasury fees
-
-      await setBalance(stakingVaultAddress, 0);
-
-      // add some treasury fees
-      const accruedTreasuryFees = ether("0.1");
-      await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees });
-
-      const netTotalValueOnDashboardAfter = await dashboard.netTotalValue();
-      expect(netTotalValueOnDashboardAfter).to.equal(totalValue - accruedTreasuryFees);
-
-      const unsettledObligationsAfter = await dashboard.unsettledObligations();
-      expect(unsettledObligationsAfter).to.equal(unsettledWithdrawals + accruedTreasuryFees);
-
-      const totalValueOnDashboardAfter = await dashboard.totalValue();
-      expect(totalValueOnDashboardAfter).to.equal(totalValue);
-
-      // TODO: add node operator fee and test it here
-    });
-  });
-
   context("Manual settlement via dashboard", () => {
     let liabilityShares: bigint;
     let maxPossibleWithdrawals: bigint;
@@ -583,5 +540,84 @@ describe("Integration: Vault obligations", () => {
       const vaultBalanceAfter = await ethers.provider.getBalance(stakingVaultAddress);
       expect(vaultBalanceAfter).to.equal(ether("1"));
     });
+  });
+
+  context("Minting with unsettled treasury fees", () => {
+    const accruedTreasuryFees = ether("0.1");
+
+    beforeEach(async () => {
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+
+      const balanceBefore = await ethers.provider.getBalance(stakingVaultAddress);
+      await setBalance(stakingVaultAddress, 0);
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees });
+      await setBalance(stakingVaultAddress, balanceBefore);
+    });
+
+    it("Should revert when trying to mint more than total value minus unsettled treasury fees", async () => {
+      const totalValue = await vaultHub.totalValue(stakingVaultAddress);
+      const reserveRatioBP = (await vaultHub.vaultConnection(stakingVaultAddress)).reserveRatioBP;
+      const maxMintableRatioBP = TOTAL_BASIS_POINTS - reserveRatioBP;
+      const maxLocked = totalValue - accruedTreasuryFees;
+      const maxMintableEther = (maxLocked * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+
+      await expect(
+        dashboard.connect(roles.minter).mintShares(roles.burner, maxMintableEther + 1n),
+      ).to.be.revertedWithCustomError(vaultHub, "InsufficientTotalValueToMint");
+
+      await expect(dashboard.connect(roles.minter).mintShares(roles.burner, maxMintableEther))
+        .to.emit(vaultHub, "MintedSharesOnVault")
+        .withArgs(stakingVaultAddress, maxMintableEther, maxLocked);
+    });
+
+    it("Should not take withdrals obligation into account", async () => {
+      const totalValue = await vaultHub.totalValue(stakingVaultAddress);
+      const reserveRatioBP = (await vaultHub.vaultConnection(stakingVaultAddress)).reserveRatioBP;
+      const maxMintableRatioBP = TOTAL_BASIS_POINTS - reserveRatioBP;
+      const maxLocked = totalValue - accruedTreasuryFees;
+      const maxMintableEther = (maxLocked * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+
+      const mintEth = maxMintableEther / 2n;
+      const mintShares = await ctx.contracts.lido.getPooledEthBySharesRoundUp(mintEth);
+
+      // Add 1/2 of the mintable ether to the vault as withdrawals obligation, so if withdrawals obligation is taken into account,
+      // the user will not be able to mint anything from this moment
+      await dashboard.connect(roles.minter).mintShares(roles.burner, mintShares);
+      await vaultHub.connect(agentSigner).updateWithdrawalsObligation(stakingVaultAddress, mintEth);
+
+      await expect(dashboard.connect(roles.minter).mintShares(roles.burner, mintShares))
+        .to.emit(vaultHub, "MintedSharesOnVault")
+        .withArgs(stakingVaultAddress, mintShares, maxLocked);
+    });
+  });
+
+  context("Withdrawal takes into account unsettled obligations", () => {
+    beforeEach(async () => {
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.connect(roles.minter).mintShares(roles.burner, ether("1"));
+
+      const obligation = ether("1");
+      await vaultHub.connect(agentSigner).updateWithdrawalsObligation(stakingVaultAddress, obligation);
+    });
+
+    it("Should work when trying to withdraw less than available balance", async () => {
+      const unlockedValue = await vaultHub.unlocked(stakingVaultAddress);
+
+      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, unlockedValue))
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(stranger, unlockedValue);
+    });
+
+    it("Should revert when trying to withdraw more than available balance", async () => {
+      // simulate deposit to Beacon chain -1 ether
+      await setBalance(stakingVaultAddress, ether("1"));
+      const unlockedValue = await vaultHub.unlocked(stakingVaultAddress);
+
+      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, unlockedValue))
+        .to.be.revertedWithCustomError(vaultHub, "VaultInsufficientBalance")
+        .withArgs(stakingVaultAddress, 0, unlockedValue);
+    });
+
+    // TODO: add test for node operator fees
   });
 });

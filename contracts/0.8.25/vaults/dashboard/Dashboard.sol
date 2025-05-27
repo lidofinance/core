@@ -163,14 +163,6 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the total value of the vault in ether minus the unsettled treasury and node operator fee.
-     *         This is the value that can be used to mint shares.
-     */
-    function netTotalValue() public view returns (uint256) {
-        return VAULT_HUB.netTotalValue(address(_stakingVault())) - nodeOperatorDisbursableFee();
-    }
-
-    /**
      * @notice Returns the overall unsettled obligations of the vault in ether
      * @dev includes the node operator fee
      */
