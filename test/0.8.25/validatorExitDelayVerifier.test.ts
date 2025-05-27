@@ -397,7 +397,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidBlockHeader");
     });
 
-    it("reverts with 'ExitRequestNotEligibleOnProvableBeaconBlock' when the when proof slot is early then exit request time", async () => {
+    it("reverts with 'ExitIstNotEligibleOnProvableBeaconBlock' when the when proof slot is early then exit request time", async () => {
       const intervalInSecondsAfterProofSlot = 1;
 
       const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
@@ -429,7 +429,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           encodedExitRequests,
         ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "ExitRequestNotEligibleOnProvableBeaconBlock");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "ExitIstNotEligibleOnProvableBeaconBlock");
 
       const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
@@ -440,7 +440,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
           encodedExitRequests,
         ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "ExitRequestNotEligibleOnProvableBeaconBlock");
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "ExitIstNotEligibleOnProvableBeaconBlock");
     });
 
     it("reverts if the validator proof is incorrect", async () => {
