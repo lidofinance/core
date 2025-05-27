@@ -194,21 +194,21 @@ contract NodeOperatorFee is Permissions {
         // and all the node operator fees are paid out fairly up to the moment of the latest report
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
 
-        // To change the fee, we must wait for the report FOLLOWING the adjustment (i.e. next report)
-        // to make sure that the adjustment is included in the total value.
+        // Before changing the fee rate, the adjustment must be settled:
+        // - the timestamp must be earlier than the latest report timestamp
+        //   to make sure that the adjustment is included in the total value,
+        // - the amount must be zero to make sure that the fee is settled by the old fee rate.
         // Unguaranteed/side deposits are observable from the very block they are submitted in,
         // so any pending deposits will be reflected in the reported total value.
         // And consolidations must be completed before the report reference timestamp to be reflected in the total value.
         if (rewardsAdjustment.latestTimestamp >=
-            VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault()))
+            VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault())) || rewardsAdjustment.amount != 0
         ) revert PendingAdjustment();
 
         // To follow the check-effects-interaction pattern, we need to remember the fee here
         // because the fee calculation variables will be reset in the following lines
         uint256 fee = nodeOperatorDisburseableFee();
 
-        // Adjustment is settled at this point thanks to the timestamp check above
-        if (rewardsAdjustment.amount != 0) _setRewardsAdjustment(0);
         // Start a new fee period
         feePeriodStartReport = latestReport();
 
