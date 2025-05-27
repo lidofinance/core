@@ -136,7 +136,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         uint256 requestsCount = validatorsData.length;
         if (requestsCount == 0) revert ZeroArgument("validatorsData");
 
-        _checkExitRequestLimit(requestsCount);
+        _consumeExitRequestLimit(requestsCount);
 
         IWithdrawalVault withdrawalVault = IWithdrawalVault(LOCATOR.withdrawalVault());
         uint256 fee = withdrawalVault.getWithdrawalRequestFee();
@@ -255,7 +255,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
-    function _checkExitRequestLimit(uint256 requestsCount) internal {
+    function _consumeExitRequestLimit(uint256 requestsCount) internal {
         ExitRequestLimitData memory twrLimitData = TWR_LIMIT_POSITION.getStorageExitRequestLimit();
         if (!twrLimitData.isExitLimitSet()) {
             return;
