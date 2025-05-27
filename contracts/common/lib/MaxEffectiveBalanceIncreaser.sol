@@ -57,16 +57,16 @@ contract MaxEffectiveBalanceIncreaser {
             revert MismatchingSourceAndTargetPubkeysCount(_sourcePubkeys.length, _targetPubkeys.length);
         }
 
-        uint256 totalPubkeysCount = 0;
+        uint256 totalSourcePubkeysCount = 0;
         for (uint256 i = 0; i < _sourcePubkeys.length; i++) {
-            totalPubkeysCount += _validateAndCountPubkeys(_sourcePubkeys[i]);
+            totalSourcePubkeysCount += _validateAndCountPubkeys(_sourcePubkeys[i]);
             if (_targetPubkeys[i].length != PUBLIC_KEY_LENGTH) {
                 revert MalformedTargetPubkey();
             }
         }
 
         uint256 feePerRequest = _getConsolidationRequestFee();
-        uint256 totalFee = totalPubkeysCount * feePerRequest;
+        uint256 totalFee = totalSourcePubkeysCount * feePerRequest;
         if (msg.value < totalFee) revert InsufficientValidatorConsolidationFee(msg.value, totalFee);
 
         bytes memory callData = new bytes(CONSOLIDATION_REQUEST_CALLDATA_LENGTH);

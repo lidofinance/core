@@ -210,6 +210,7 @@ describe("MaxEffectiveBalanceIncreaser.sol", () => {
         maxEffectiveBalanceIncreaser.addConsolidationRequests(sourcePubkeys, targetPubkeys, receiver.address, {
           value: fee * BigInt(totalSourcePubkeysCount),
         }),
+      await maxEffectiveBalanceIncreaser.getAddress(),
       sourcePubkeys,
       targetPubkeys,
       fee,
@@ -224,6 +225,7 @@ describe("MaxEffectiveBalanceIncreaser.sol", () => {
         maxEffectiveBalanceIncreaser.addConsolidationRequests(sourcePubkeys, targetPubkeys, receiver.address, {
           value: highFee * BigInt(totalSourcePubkeysCount),
         }),
+      await maxEffectiveBalanceIncreaser.getAddress(),
       sourcePubkeys,
       targetPubkeys,
       highFee,
@@ -242,6 +244,7 @@ describe("MaxEffectiveBalanceIncreaser.sol", () => {
         maxEffectiveBalanceIncreaser.addConsolidationRequests(sourcePubkeys, targetPubkeys, receiver.address, {
           value: excessFee * BigInt(totalSourcePubkeysCount),
         }),
+      await maxEffectiveBalanceIncreaser.getAddress(),
       sourcePubkeys,
       targetPubkeys,
       3n,
@@ -261,6 +264,7 @@ describe("MaxEffectiveBalanceIncreaser.sol", () => {
           .addConsolidationRequests(sourcePubkeys, targetPubkeys, receiver.address, {
             value: extremelyHighFee * BigInt(totalSourcePubkeysCount),
           }),
+      await maxEffectiveBalanceIncreaser.getAddress(),
       sourcePubkeys,
       targetPubkeys,
       3n,

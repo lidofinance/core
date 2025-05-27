@@ -13,7 +13,7 @@ contract EIP7251MaxEffectiveBalanceRequest__Mock {
 
     bool public constant MOCK = true;
 
-    event RequestAdded__Mock(bytes request, uint256 fee);
+    event ConsolidationRequestAdded__Mock(bytes request, address sender, uint256 fee);
 
     function mock__setFailOnAddRequest(bool _failOnAddRequest) external {
         mock__failOnAddRequest = _failOnAddRequest;
@@ -49,6 +49,6 @@ contract EIP7251MaxEffectiveBalanceRequest__Mock {
             revert("Insufficient value for fee");
         }
 
-        emit RequestAdded__Mock(input, msg.value);
+        emit ConsolidationRequestAdded__Mock(input, msg.sender, msg.value);
     }
 }
