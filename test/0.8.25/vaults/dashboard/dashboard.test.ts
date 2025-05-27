@@ -812,7 +812,7 @@ describe("Dashboard.sol", () => {
           // this share amount that is returned from wsteth on unwrap
           // because wsteth eats 1 share due to "rounding" (being a hungry-hungry wei gobler)
           const weiShareDown = await steth.getSharesByPooledEth(weiStethDown);
-          // steth value occuring only in events when rounding down from weiShareDown
+          // steth value occurring only in events when rounding down from weiShareDown
           const weiStethDownDown = await steth.getPooledEthByShares(weiShareDown);
 
           // approve for wsteth wrap
