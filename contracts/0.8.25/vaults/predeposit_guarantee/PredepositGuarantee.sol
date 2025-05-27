@@ -368,7 +368,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         }
 
         balance.locked += totalDepositAmount;
-        IStakingVault(_stakingVault).depositToBeaconChain(_deposits);
+        _stakingVault.depositToBeaconChain(_deposits);
 
         emit BalanceLocked(nodeOperator, balance.total, balance.locked);
     }

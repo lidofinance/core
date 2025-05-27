@@ -68,9 +68,9 @@ contract WstETH__MockForWithdrawalQueue {
         address spender,
         uint256 value,
         uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
+        uint8,
+        bytes32,
+        bytes32
     ) external {
         require(block.timestamp <= deadline, "ERC20Permit: expired deadline");
         require(isSignatureValid, "ERC20Permit: invalid signature");
