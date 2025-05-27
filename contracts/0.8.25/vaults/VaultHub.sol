@@ -824,7 +824,7 @@ contract VaultHub is PausableUntilWithRoles {
                 // Rebalance shortcut for on-report settlements
                 uint256 sharesToBurn = _getSharesToBurn(valueToRebalance);
                 _record.liabilityShares = uint96(_record.liabilityShares - sharesToBurn);
-                _withdrawFromVault(_vault, _record, address(this), valueToRebalance);
+                _withdraw(_vault, _record, address(this), valueToRebalance);
                 _rebalanceExternalEther(valueToRebalance);
             } else {
                 _rebalance(_vault, _record, valueToRebalance);
@@ -832,7 +832,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         if (valueToTransfer > 0) {
-            _withdrawFromVault(_vault, _record, LIDO_LOCATOR.treasury(), valueToTransfer);
+            _withdraw(_vault, _record, LIDO_LOCATOR.treasury(), valueToTransfer);
             _obligations.settledTreasuryFees += uint128(valueToTransfer);
         }
     }

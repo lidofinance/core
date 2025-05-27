@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 import { before } from "mocha";
 
@@ -11,7 +12,6 @@ import {
   OperatorGrid__MockForPermissions,
   Permissions__Harness,
   Permissions__Harness__factory,
-  PredepositGuarantee,
   PredepositGuarantee__MockPermissions,
   StakingVault,
   StakingVault__factory,
@@ -32,7 +32,6 @@ import {
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
-import { ZeroAddress } from "ethers";
 
 type PermissionsConfigStruct = {
   defaultAdmin: HardhatEthersSigner;
@@ -222,9 +221,9 @@ describe("Permissions", () => {
     it("reverts if the lido locator is the zero address", async () => {
       await expect(ethers.deployContract("Permissions__Harness", [vaultHub, ZeroAddress]))
         .to.be.revertedWithCustomError(permissions, "ZeroArgument")
-        .withArgs("_lidoLocator")
-    })
-  })
+        .withArgs("_lidoLocator");
+    });
+  });
 
   context("initialize()", () => {
     it("reverts if called twice", async () => {
@@ -505,8 +504,10 @@ describe("Permissions", () => {
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
       expect(await permissions.hasRole(await permissions.FUND_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.FUND_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
+      expect(await permissions.getRoleAdmin(await permissions.FUND_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
       await expect(permissions.connect(defaultAdmin).fund(ether("1"), { value: ether("1") }))
         .to.emit(vaultHub, "Mock__Funded")
         .withArgs(stakingVault, ether("1"));
@@ -535,8 +536,10 @@ describe("Permissions", () => {
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
       expect(await permissions.hasRole(await permissions.WITHDRAW_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.WITHDRAW_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
+      expect(await permissions.getRoleAdmin(await permissions.WITHDRAW_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
       await expect(permissions.connect(defaultAdmin).withdraw(stranger, ether("1")))
         .to.emit(vaultHub, "Mock__Withdrawn")
         .withArgs(stakingVault, stranger, ether("1"));
@@ -562,8 +565,10 @@ describe("Permissions", () => {
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
       expect(await permissions.hasRole(await permissions.MINT_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.MINT_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
+      expect(await permissions.getRoleAdmin(await permissions.MINT_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
       await expect(permissions.connect(defaultAdmin).mintShares(stranger, ether("1")))
         .to.emit(vaultHub, "Mock__SharesMinted")
         .withArgs(stakingVault, stranger, ether("1"));
@@ -585,12 +590,14 @@ describe("Permissions", () => {
         .to.emit(vaultHub, "Mock__SharesBurned")
         .withArgs(stakingVault, burnAmount);
     });
-    
+
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
       expect(await permissions.hasRole(await permissions.BURN_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.BURN_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
+      expect(await permissions.getRoleAdmin(await permissions.BURN_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
       const burnAmount = ether("1");
       await expect(permissions.connect(defaultAdmin).burnShares(burnAmount))
         .to.emit(vaultHub, "Mock__SharesBurned")
@@ -620,8 +627,10 @@ describe("Permissions", () => {
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
       expect(await permissions.hasRole(await permissions.REBALANCE_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.REBALANCE_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
+      expect(await permissions.getRoleAdmin(await permissions.REBALANCE_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
       await expect(permissions.connect(defaultAdmin).rebalanceVault(ether("1")))
         .to.emit(vaultHub, "Mock__Rebalanced")
         .withArgs(stakingVault, ether("1"));
@@ -647,10 +656,14 @@ describe("Permissions", () => {
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
       expect(await permissions.hasRole(await permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
-      await expect(permissions.connect(defaultAdmin).pauseBeaconChainDeposits())
-        .to.emit(vaultHub, "Mock__BeaconChainDepositsPaused");
+      expect(await permissions.getRoleAdmin(await permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
+      await expect(permissions.connect(defaultAdmin).pauseBeaconChainDeposits()).to.emit(
+        vaultHub,
+        "Mock__BeaconChainDepositsPaused",
+      );
     });
 
     it("reverts if the caller is not a member of the pause deposit role", async () => {
@@ -672,11 +685,16 @@ describe("Permissions", () => {
 
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
-      expect(await permissions.hasRole(await permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
-      await expect(permissions.connect(defaultAdmin).resumeBeaconChainDeposits())
-        .to.emit(vaultHub, "Mock__BeaconChainDepositsResumed");
+      expect(await permissions.hasRole(await permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), defaultAdmin)).to.be
+        .false;
+      expect(await permissions.getRoleAdmin(await permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
+      await expect(permissions.connect(defaultAdmin).resumeBeaconChainDeposits()).to.emit(
+        vaultHub,
+        "Mock__BeaconChainDepositsResumed",
+      );
     });
 
     it("reverts if the caller is not a member of the resume deposit role", async () => {
@@ -699,8 +717,10 @@ describe("Permissions", () => {
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
       expect(await permissions.hasRole(await permissions.REQUEST_VALIDATOR_EXIT_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.REQUEST_VALIDATOR_EXIT_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
+      expect(await permissions.getRoleAdmin(await permissions.REQUEST_VALIDATOR_EXIT_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
       await expect(permissions.connect(defaultAdmin).requestValidatorExit("0xabcdef"))
         .to.emit(vaultHub, "Mock__ValidatorExitRequested")
         .withArgs(stakingVault, "0xabcdef");
@@ -733,9 +753,12 @@ describe("Permissions", () => {
 
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
-      expect(await permissions.hasRole(await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
+      expect(await permissions.hasRole(await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), defaultAdmin)).to.be
+        .false;
+      expect(await permissions.getRoleAdmin(await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
       await expect(permissions.connect(defaultAdmin).triggerValidatorWithdrawals(pubkeys, [withdrawalAmount], stranger))
         .to.emit(vaultHub, "Mock__ValidatorWithdrawalsTriggered")
         .withArgs(stakingVault, pubkeys, [withdrawalAmount], stranger);
@@ -760,8 +783,10 @@ describe("Permissions", () => {
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
       expect(await permissions.hasRole(await permissions.VOLUNTARY_DISCONNECT_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.VOLUNTARY_DISCONNECT_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
+      expect(await permissions.getRoleAdmin(await permissions.VOLUNTARY_DISCONNECT_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
       await expect(permissions.connect(defaultAdmin).voluntaryDisconnect())
         .to.emit(vaultHub, "Mock__VoluntaryDisconnect")
         .withArgs(stakingVault);
@@ -788,8 +813,10 @@ describe("Permissions", () => {
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
       expect(await permissions.hasRole(await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
+      expect(await permissions.getRoleAdmin(await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
       await expect(permissions.connect(defaultAdmin).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
         .to.emit(vaultHub, "Mock__CompensateDisprovenPredepositFromPDG")
         .withArgs(stakingVault, pubkeys, stranger);
@@ -847,27 +874,54 @@ describe("Permissions", () => {
 
   context("proveUnknownValidatorToPDG()", () => {
     it("proves the unknown validator to PDG", async () => {
-      const witness: IPredepositGuarantee.ValidatorWitnessStruct = { pubkey: "0x" + "beef".repeat(24), proof: ["0x" + "ab".repeat(32)], validatorIndex: 0, childBlockTimestamp: 0, slot: 0, proposerIndex: 0 };
-      
-      await expect(permissions.connect(unknownValidatorProver).proveUnknownValidatorToPDG([witness]))
-        .to.emit(vaultHub, "Mock__ProveUnknownValidatorToPDG")
+      const witness: IPredepositGuarantee.ValidatorWitnessStruct = {
+        pubkey: "0x" + "beef".repeat(24),
+        proof: ["0x" + "ab".repeat(32)],
+        validatorIndex: 0,
+        childBlockTimestamp: 0,
+        slot: 0,
+        proposerIndex: 0,
+      };
+
+      await expect(permissions.connect(unknownValidatorProver).proveUnknownValidatorToPDG([witness])).to.emit(
+        vaultHub,
+        "Mock__ProveUnknownValidatorToPDG",
+      );
     });
 
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
       expect(await permissions.hasRole(await permissions.PDG_PROVE_VALIDATOR_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.PDG_PROVE_VALIDATOR_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
-      const witness: IPredepositGuarantee.ValidatorWitnessStruct = { pubkey: "0x" + "beef".repeat(24), proof: ["0x" + "ab".repeat(32)], validatorIndex: 0, childBlockTimestamp: 0, slot: 0, proposerIndex: 0 };
+      expect(await permissions.getRoleAdmin(await permissions.PDG_PROVE_VALIDATOR_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
 
-      await expect(permissions.connect(defaultAdmin).proveUnknownValidatorToPDG([witness]))
-        .to.emit(vaultHub, "Mock__ProveUnknownValidatorToPDG");
+      const witness: IPredepositGuarantee.ValidatorWitnessStruct = {
+        pubkey: "0x" + "beef".repeat(24),
+        proof: ["0x" + "ab".repeat(32)],
+        validatorIndex: 0,
+        childBlockTimestamp: 0,
+        slot: 0,
+        proposerIndex: 0,
+      };
+
+      await expect(permissions.connect(defaultAdmin).proveUnknownValidatorToPDG([witness])).to.emit(
+        vaultHub,
+        "Mock__ProveUnknownValidatorToPDG",
+      );
     });
 
     it("reverts if the caller is not a member of the prove unknown validator to PDG role", async () => {
       expect(await permissions.hasRole(await permissions.PDG_PROVE_VALIDATOR_ROLE(), stranger)).to.be.false;
 
-      const witness: IPredepositGuarantee.ValidatorWitnessStruct = { pubkey: "0x" + "beef".repeat(24), proof: ["0x" + "ab".repeat(32)], validatorIndex: 0, childBlockTimestamp: 0, slot: 0, proposerIndex: 0 };
+      const witness: IPredepositGuarantee.ValidatorWitnessStruct = {
+        pubkey: "0x" + "beef".repeat(24),
+        proof: ["0x" + "ab".repeat(32)],
+        validatorIndex: 0,
+        childBlockTimestamp: 0,
+        slot: 0,
+        proposerIndex: 0,
+      };
 
       await expect(permissions.connect(stranger).proveUnknownValidatorToPDG([witness]))
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
@@ -877,23 +931,29 @@ describe("Permissions", () => {
 
   context("withdrawForUnguaranteedDepositToBeaconChain()", () => {
     it("withdraws the StakingVault", async () => {
-      await expect(permissions.connect(unguaranteedBeaconChainDepositor).withdrawForUnguaranteedDepositToBeaconChain(ether("1")))
+      await expect(
+        permissions.connect(unguaranteedBeaconChainDepositor).withdrawForUnguaranteedDepositToBeaconChain(ether("1")),
+      )
         .to.emit(vaultHub, "Mock__Withdrawn")
         .withArgs(stakingVault, permissions, ether("1"));
     });
 
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
-      expect(await permissions.hasRole(await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
+      expect(await permissions.hasRole(await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(), defaultAdmin)).to.be
+        .false;
+      expect(await permissions.getRoleAdmin(await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
       await expect(permissions.connect(defaultAdmin).withdrawForUnguaranteedDepositToBeaconChain(ether("1")))
         .to.emit(vaultHub, "Mock__Withdrawn")
         .withArgs(stakingVault, permissions, ether("1"));
     });
 
     it("reverts if the caller is not a member of the withdraw for unguaranteed deposit to beacon chain role", async () => {
-      expect(await permissions.hasRole(await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(), stranger)).to.be.false;
+      expect(await permissions.hasRole(await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(), stranger)).to.be
+        .false;
 
       await expect(permissions.connect(stranger).withdrawForUnguaranteedDepositToBeaconChain(ether("1")))
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
@@ -911,8 +971,10 @@ describe("Permissions", () => {
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
       expect(await permissions.hasRole(await permissions.REQUEST_TIER_CHANGE_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.REQUEST_TIER_CHANGE_ROLE())).to.equal(await permissions.DEFAULT_ADMIN_ROLE());
-      
+      expect(await permissions.getRoleAdmin(await permissions.REQUEST_TIER_CHANGE_ROLE())).to.equal(
+        await permissions.DEFAULT_ADMIN_ROLE(),
+      );
+
       await expect(permissions.connect(defaultAdmin).requestTierChange(1, ether("1")))
         .to.emit(operatorGrid, "Mock__TierChangeRequested")
         .withArgs(stakingVault, 1, ether("1"));
@@ -937,8 +999,10 @@ describe("Permissions", () => {
     it("reverts if the caller is not a member of the confirming roles", async () => {
       expect(await permissions.confirmingRoles()).to.not.include(stranger);
 
-      await expect(permissions.connect(stranger).transferVaultOwnership(stranger))
-        .to.be.revertedWithCustomError(permissions, "SenderNotMember")
+      await expect(permissions.connect(stranger).transferVaultOwnership(stranger)).to.be.revertedWithCustomError(
+        permissions,
+        "SenderNotMember",
+      );
     });
   });
 
