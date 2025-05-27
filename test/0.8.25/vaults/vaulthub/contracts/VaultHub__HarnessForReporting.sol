@@ -63,6 +63,8 @@ contract VaultHub__HarnessForReporting is VaultHub {
             uint96(_shareLimit), // liabilityShares
             uint64(block.timestamp), // reportTimestamp
             0, // inOutDelta
+            0, // cachedInOutDelta
+            0, // cachedRefSlot
             0 // feeSharesCharged
         );
 

@@ -15,6 +15,7 @@ import {LazyOracle} from "./LazyOracle.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 import {IConsensusContract} from "./interfaces/IConsensusContract.sol";
+import {IBaseOracle} from "./interfaces/IBaseOracle.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
@@ -76,12 +77,14 @@ contract VaultHub is PausableUntilWithRoles {
         uint64 reportTimestamp;
         /// @notice current inOutDelta of the vault (all deposits - all withdrawals)
         int128 inOutDelta;
-        /// @notice fee shares charged for the vault
-        uint96 feeSharesCharged;
+        // ### 4th slot
         /// @notice cached refSlot number of the latest report
-        uint256 cachedRefSlot;
+        uint128 cachedRefSlot;
         /// @notice cached inOutDelta of the latest report
         int128 cachedInOutDelta;
+        // ### 5th slot
+        /// @notice fee shares charged for the vault
+        uint96 feeSharesCharged;
     }
 
     struct Report {
@@ -779,6 +782,8 @@ contract VaultHub is PausableUntilWithRoles {
             liabilityShares: 0,
             reportTimestamp: _lazyOracle().latestReportTimestamp(),
             inOutDelta: report.inOutDelta,
+            cachedInOutDelta: 0,
+            cachedRefSlot: 0,
             feeSharesCharged: uint96(0)
         });
 
@@ -976,10 +981,11 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _cacheInOutDelta(VaultRecord storage _record) internal {
-        (uint256 refSlot, ) = IConsensusContract(LIDO_LOCATOR.consensusContract()).getCurrentFrame();
+        IConsensusContract consensusContract = IConsensusContract(IBaseOracle(LIDO_LOCATOR.accountingOracle()).getConsensusContract());
+        (uint256 refSlot, ) = consensusContract.getCurrentFrame();
         if (_record.cachedRefSlot != refSlot) { // + 2100 gas
             _record.cachedInOutDelta = _record.inOutDelta; // + 7100 gas
-            _record.cachedRefSlot = refSlot; // + 5000 gas
+            _record.cachedRefSlot = uint128(refSlot);
         }
     }
 

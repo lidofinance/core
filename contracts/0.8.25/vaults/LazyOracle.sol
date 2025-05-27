@@ -7,6 +7,7 @@ pragma solidity 0.8.25;
 import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IConsensusContract} from "./interfaces/IConsensusContract.sol";
+import {IBaseOracle} from "./interfaces/IBaseOracle.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
@@ -151,31 +152,30 @@ contract LazyOracle is AccessControlEnumerable {
     /// @notice Permissionless update of the vault data
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault
-    /// @param _inOutDelta the inOutDelta of the vault
     /// @param _feeSharesCharged the feeSharesCharged of the vault
     /// @param _liabilityShares the liabilityShares of the vault
     /// @param _proof the proof of the reported data
     function updateVaultData(
         address _vault,
         uint256 _totalValue,
-        int256 _inOutDelta,
         uint256 _feeSharesCharged,
         uint256 _liabilityShares,
         bytes32[] calldata _proof
     ) external {
         bytes32 leaf = keccak256(
-            bytes.concat(keccak256(abi.encode(_vault, _totalValue, _inOutDelta, _feeSharesCharged, _liabilityShares)))
+            bytes.concat(keccak256(abi.encode(_vault, _totalValue, _feeSharesCharged, _liabilityShares)))
         );
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
-        (_totalValue, _inOutDelta) = _handleSanityChecks(_vault, _totalValue, _liabilityShares);
+        int256 inOutDelta;
+        (_totalValue, inOutDelta) = _handleSanityChecks(_vault, _totalValue, _liabilityShares);
 
         VaultHub(payable(LIDO_LOCATOR.vaultHub()))
             .applyVaultReport(
                 _vault,
                 _storage().vaultsDataTimestamp,
                 _totalValue,
-                _inOutDelta,
+                inOutDelta,
                 _feeSharesCharged,
                 _liabilityShares
             );
@@ -186,29 +186,41 @@ contract LazyOracle is AccessControlEnumerable {
     /// @param _totalValue the total value of the vault in refSlot
     /// @param _liabilityShares the liabilityShares of the vault in refSlot
     /// @return the smoothed total value, inOutDelta in the refSlot
-    function _handleSanityChecks(address _vault, uint256 _totalValue, uint256 _liabilityShares) public view returns (uint256, int256 _inOutDelta) {
+    function _handleSanityChecks(address _vault, uint256 _totalValue, uint256 _liabilityShares) public returns (uint256, int256 _inOutDelta) {
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
         VaultHub.VaultConnection memory connection = vaultHub.vaultConnection(_vault);
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
-        // CALCULATE INOUTDELTA IN THE REFSLOT ----------------------------------------------------
-        // ----------------------------------------------------------------------------------------
-
+        // 1. Calculate inOutDelta in the refSlot
         int256 curInOutDelta = record.inOutDelta;
-        (uint256 refSlot, ) = IConsensusContract(LIDO_LOCATOR.consensusContract()).getCurrentFrame();
+        IConsensusContract consensusContract = IConsensusContract(IBaseOracle(LIDO_LOCATOR.accountingOracle()).getConsensusContract());
+        (uint256 refSlot, ) = consensusContract.getCurrentFrame();
         if (record.cachedRefSlot == refSlot) {
             _inOutDelta = record.cachedInOutDelta;
         } else {
             _inOutDelta = curInOutDelta;
         }
 
+        // 2. Sanity check for total value increase
+        _totalValue = _checkTotalValue(_vault, _totalValue, _inOutDelta, record);
 
-        // SANITY CHECK FOR TOTAL VALUE INCREASE --------------------------------------------------
-        // ----------------------------------------------------------------------------------------
+        // 3. Sanity check for dynamic total value underflow
+        if (int256(_totalValue) + curInOutDelta - _inOutDelta < 0) revert UnderflowInTotalValueCalculation();
 
+        // 4. Sanity check for liability shares increase
+        uint256 maxLiabilityShares = Math256.max(connection.shareLimit, record.liabilityShares);
+        if (_liabilityShares > maxLiabilityShares) revert LiabilitySharesExceedsLimit();
+
+        return (_totalValue, _inOutDelta);
+    }
+
+    function _checkTotalValue(address _vault, uint256 _totalValue, int256 _inOutDelta, VaultHub.VaultRecord memory record) internal returns (uint256) {
         uint256 refSlotTotalValue = uint256(int256(uint256(record.report.totalValue)) + _inOutDelta - record.report.inOutDelta);
         Storage storage $ = _storage();
+
+        // small percentage of unsafe funds is allowed for the EL CL rewards handling
         uint256 limit = refSlotTotalValue * (TOTAL_BP + $.maxElClRewardsBP) / TOTAL_BP;
+
         if (_totalValue > limit) {
             Quarantine storage q = $.vaultQuarantines[_vault];
             uint256 reportTimestamp = $.vaultsDataTimestamp;
@@ -239,20 +251,7 @@ contract LazyOracle is AccessControlEnumerable {
             }
         }
 
-
-        // SANITY CHECK FOR DYNAMIC TOTAL VALUE UNDERFLOW -----------------------------------------
-        // ----------------------------------------------------------------------------------------
-
-        if (int256(_totalValue) + curInOutDelta - _inOutDelta < 0) revert UnderflowInTotalValueCalculation();
-
-
-        // SANITY CHECK FOR LIABILITY SHARES INCREASE ---------------------------------------------
-        // ----------------------------------------------------------------------------------------
-
-        uint256 maxLiabilityShares = Math256.max(connection.shareLimit, record.liabilityShares);
-        if (_liabilityShares > maxLiabilityShares) revert LiabilitySharesExceedsLimit();
-
-        return (_totalValue, _inOutDelta);
+        return _totalValue;
     }
 
     function _updateSanityParams(uint64 _quarantinePeriod, uint16 _maxElClRewardsBP) internal {
