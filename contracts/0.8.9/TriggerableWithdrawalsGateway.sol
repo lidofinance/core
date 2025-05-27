@@ -50,11 +50,11 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      * @param feeRequired Amount of fee required to cover withdrawal request
      * @param passedValue Amount of fee sent to cover withdrawal request
      */
-    error Insufficientfee(uint256 feeRequired, uint256 passedValue);
+    error InsufficientFee(uint256 feeRequired, uint256 passedValue);
     /**
      * @notice Thrown when a withdrawal fee refund failed
      */
-    error TriggerablefeeRefundFailed();
+    error FeeRefundFailed();
     /**
      * @notice Emitted when maximum exit request limit and the frame during which a portion of the limit can be restored set.
      * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDuration)
@@ -201,7 +201,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
 
     function _checkFee(uint256 fee) internal returns (uint256 refund) {
         if (msg.value < fee) {
-            revert Insufficientfee(fee, msg.value);
+            revert InsufficientFee(fee, msg.value);
         }
         unchecked {
             refund = msg.value - fee;
@@ -232,7 +232,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
 
             (bool success,) = recipient.call{value: refund}("");
             if (!success) {
-                revert TriggerablefeeRefundFailed();
+                revert FeeRefundFailed();
             }
         }
     }

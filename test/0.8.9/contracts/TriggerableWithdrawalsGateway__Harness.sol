@@ -27,6 +27,7 @@ contract TriggerableWithdrawalsGateway__Harness is TriggerableWithdrawalsGateway
 
     // Wrap internal functions for testing
     function refundFee(uint256 fee, address recipient) external payable {
-        _refundFee(fee, recipient);
+        uint256 refund = _checkFee(fee);
+        _refundFee(refund, recipient);
     }
 }
