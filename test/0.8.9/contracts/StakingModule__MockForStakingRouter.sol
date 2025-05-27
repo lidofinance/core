@@ -48,11 +48,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     uint256 private nodeOperatorNodeOperatorTotalDepositedValidators__mocked;
     uint256 private nodeOperatorNodeOperatorDepositableValidatorsCount__mocked;
 
-    function getNodeOperatorSummary(
-        uint256 _nodeOperatorId
-    )
-        external
-        view
+    function getNodeOperatorSummary(uint256) external view
         returns (
             uint256 targetLimitMode,
             uint256 targetValidatorsCount,
@@ -120,15 +116,15 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         activeNodeOperatorsCount__mocked = active;
     }
 
-    function getNodeOperatorIsActive(uint256 _nodeOperatorId) external view returns (bool) {
+    function getNodeOperatorIsActive(uint256) external view returns (bool) {
         return true;
     }
 
     uint256[] private nodeOperatorsIds__mocked;
 
     function getNodeOperatorIds(
-        uint256 _offset,
-        uint256 _limit
+        uint256,
+        uint256
     ) external view returns (uint256[] memory nodeOperatorIds) {
         return nodeOperatorsIds__mocked;
     }
@@ -150,9 +146,9 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         emit Mock__OnRewardsMinted(_totalShares);
     }
 
-    function mock__revertOnRewardsMinted(bool shouldRevert, bool shoudRunOutOfGas) external {
+    function mock__revertOnRewardsMinted(bool shouldRevert, bool shouldRunOutOfGas) external {
         onRewardsMintedShouldRevert = shouldRevert;
-        onRewardsMintedShouldRunOutGas = shoudRunOutOfGas;
+        onRewardsMintedShouldRunOutGas = shouldRunOutOfGas;
     }
 
     event Mock__VettedSigningKeysCountDecreased(bytes _nodeOperatorIds, bytes _stuckValidatorsCounts);
@@ -195,7 +191,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     event Mock__ValidatorsCountUnsafelyUpdated(
         uint256 _nodeOperatorId,
         uint256 _exitedValidatorsCount,
-        uint256 _stuckValidatorsCoun
+        uint256 _stuckValidatorsCount
     );
 
     function unsafeUpdateValidatorsCount(
@@ -208,7 +204,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
 
     function obtainDepositData(
         uint256 _depositsCount,
-        bytes calldata _depositCalldata
+        bytes calldata
     ) external returns (bytes memory publicKeys, bytes memory signatures) {
         publicKeys = new bytes(48 * _depositsCount);
         signatures = new bytes(96 * _depositsCount);

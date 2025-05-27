@@ -128,6 +128,8 @@ To do a testnet deployment, the following parameters must be set up via env vari
   adequate amount of ether. The total deployment gas cost is approximately 120,000,000 gas, and this cost can vary based
   on whether specific components of the environment, such as the DepositContract, are deployed or not.
 - `RPC_URL`. Address of the Ethereum RPC node to use, e.g.: `https://<network>.infura.io/v3/<yourProjectId>`
+- `GENESIS_FORK_VERSION`. Genesis fork version of the network to use, e.g. `0x00000000` for Mainnet, `0x90000069` for Sepolia,
+  `0x10000910` for Hoodi. Used to properly calculate the deposit domain for the network.
 - `GAS_PRIORITY_FEE`. Gas priority fee. By default set to `2`
 - `GAS_MAX_FEE`. Gas max fee. By default set to `100`
 - `GATE_SEAL_FACTORY`. Address of the [GateSeal Factory](https://github.com/lidofinance/gate-seals) contract. Must be

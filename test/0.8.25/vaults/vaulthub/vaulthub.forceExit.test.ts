@@ -16,12 +16,12 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { impersonate } from "lib";
+import { GENESIS_FORK_VERSION, impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
 
@@ -29,7 +29,9 @@ const SHARE_LIMIT = ether("1");
 const TOTAL_BASIS_POINTS = 10_000n;
 const RESERVE_RATIO_BP = 10_00n;
 const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
-const TREASURY_FEE_BP = 5_00n;
+const INFRA_FEE_BP = 5_00n;
+const LIQUIDITY_FEE_BP = 4_00n;
+const RESERVATION_FEE_BP = 1_00n;
 
 const FEE = 2n;
 
@@ -60,6 +62,7 @@ describe("VaultHub.sol:forceExit", () => {
     const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,
@@ -74,7 +77,7 @@ describe("VaultHub.sol:forceExit", () => {
     operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
     await operatorGridMock.initialize(ether("1"));
 
-    const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP]);
 
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
@@ -85,7 +88,7 @@ describe("VaultHub.sol:forceExit", () => {
     vaultHubAddress = await vaultHub.getAddress();
 
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), user);
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 
@@ -107,21 +110,21 @@ describe("VaultHub.sol:forceExit", () => {
     vaultAddress = await vault.getAddress();
 
     const codehash = keccak256(await ethers.provider.getCode(vaultAddress));
-    await vaultHub.connect(user).addVaultProxyCodehash(codehash);
+    await vaultHub.connect(user).setAllowedCodehash(codehash, true);
 
     const connectDeposit = ether("1.0");
     await vault.connect(user).fund({ value: connectDeposit });
-    await vault.connect(user).lock(connectDeposit);
 
     await operatorGridMock.changeVaultTierParams(vault, {
       shareLimit: SHARE_LIMIT,
       reserveRatioBP: RESERVE_RATIO_BP,
       forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-      treasuryFeeBP: TREASURY_FEE_BP,
+      infraFeeBP: INFRA_FEE_BP,
+      liquidityFeeBP: LIQUIDITY_FEE_BP,
+      reservationFeeBP: RESERVATION_FEE_BP,
     });
 
     await vault.fund({ value: ether("1") });
-    await vault.lock(ether("1"));
     await vaultHub.connect(user).connectVault(vaultAddress);
 
     vaultHubSigner = await impersonate(vaultHubAddress, ether("100"));
@@ -232,26 +235,27 @@ describe("VaultHub.sol:forceExit", () => {
 
       const totalValue = ether("100");
       await demoVault.fund({ value: totalValue });
-      await demoVault.connect(user).lock(totalValue);
       const cap = await steth.getSharesByPooledEth((totalValue * (TOTAL_BASIS_POINTS - 20_00n)) / TOTAL_BASIS_POINTS);
 
       await operatorGridMock.changeVaultTierParams(demoVault, {
         shareLimit: cap,
         reserveRatioBP: 20_00n,
         forcedRebalanceThresholdBP: 20_00n,
-        treasuryFeeBP: 5_00n,
+        infraFeeBP: 5_00n,
+        liquidityFeeBP: 4_00n,
+        reservationFeeBP: 1_00n,
       });
 
       await vaultHub.connectVault(demoVaultAddress);
       await vaultHub.mintShares(demoVaultAddress, user, cap);
 
-      expect((await vaultHub["vaultSocket(address)"](demoVaultAddress)).liabilityShares).to.equal(cap);
+      expect((await vaultHub.vaultRecord(demoVaultAddress)).liabilityShares).to.equal(cap);
 
       // decrease totalValue to trigger rebase
       const penalty = ether("1");
       await demoVault.mock__decreaseTotalValue(penalty);
 
-      expect(await vaultHub.isVaultHealthyAsOfLatestReport(demoVaultAddress)).to.be.false;
+      expect(await vaultHub.isVaultHealthy(demoVaultAddress)).to.be.false;
 
       await expect(vaultHub.forceValidatorExit(demoVaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
         .to.emit(vaultHub, "ForcedValidatorExitTriggered")

@@ -15,7 +15,7 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { impersonate } from "lib";
+import { GENESIS_FORK_VERSION, impersonate } from "lib";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
 
@@ -25,7 +25,9 @@ import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 const SHARE_LIMIT = ether("10");
 const RESERVE_RATIO_BP = 10_00n;
 const RESERVE_RATIO_THRESHOLD_BP = 8_00n;
-const TREASURY_FEE_BP = 5_00n;
+const INFRA_FEE_BP = 5_00n;
+const LIQUIDITY_FEE_BP = 4_00n;
+const RESERVATION_FEE_BP = 1_00n;
 
 describe("VaultHub.sol:forceRebalance", () => {
   let deployer: HardhatEthersSigner;
@@ -56,6 +58,7 @@ describe("VaultHub.sol:forceRebalance", () => {
     const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("1000.0") });
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,
@@ -82,7 +85,7 @@ describe("VaultHub.sol:forceRebalance", () => {
     vaultHubSigner = await impersonate(await vaultHub.getAddress(), ether("10000.0"));
 
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), user);
 
     const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract]);
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
@@ -104,7 +107,9 @@ describe("VaultHub.sol:forceRebalance", () => {
       shareLimit: SHARE_LIMIT,
       reserveRatioBP: RESERVE_RATIO_BP,
       forcedRebalanceThresholdBP: RESERVE_RATIO_THRESHOLD_BP,
-      treasuryFeeBP: TREASURY_FEE_BP,
+      infraFeeBP: INFRA_FEE_BP,
+      liquidityFeeBP: LIQUIDITY_FEE_BP,
+      reservationFeeBP: RESERVATION_FEE_BP,
     });
 
     const connectDeposit = ether("1.0");

@@ -1,7 +1,8 @@
 import * as process from "node:process";
 
 import "@nomicfoundation/hardhat-chai-matchers";
-import "@nomicfoundation/hardhat-toolbox";
+import "@nomicfoundation/ethereumjs-util";
+import "@nomicfoundation/hardhat-verify";
 import "@typechain/hardhat";
 
 import "dotenv/config";
@@ -60,6 +61,11 @@ const config: HardhatUserConfig = {
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
+    "hoodi": {
+      url: process.env.HOODI_RPC_URL || RPC_URL,
+      chainId: 560048,
+      accounts: loadAccounts("hoodi"),
+    },
     // forks
     "mainnet-fork": {
       url: process.env.MAINNET_RPC_URL || RPC_URL,
@@ -68,6 +74,10 @@ const config: HardhatUserConfig = {
     "sepolia-fork": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
+    },
+    "hoodi-fork": {
+      url: process.env.HOODI_RPC_URL || RPC_URL,
+      chainId: 560048,
     },
   },
   etherscan: {
@@ -78,6 +88,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "http://localhost:3080/api",
           browserURL: "http://localhost:3080",
+        },
+      },
+      {
+        network: "hoodi",
+        chainId: 560048,
+        urls: {
+          apiURL: "https://api-hoodi.etherscan.io/api",
+          browserURL: "https://hoodi.etherscan.io/",
         },
       },
       {

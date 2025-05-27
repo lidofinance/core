@@ -74,7 +74,7 @@
   },
   "vaultHub": {
     "deployParameters": {
-      "relativeShareLimitBP": 1000
+      "maxRelativeShareLimitBP": 1000
     }
   },
   "accountingOracle": {
@@ -90,7 +90,7 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
-      "consensusVersion": 2
+      "consensusVersion": 3
     }
   },
   "depositSecurityModule": {

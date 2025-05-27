@@ -1,6 +1,14 @@
 import hre from "hardhat";
 
-import { AccountingOracle, Lido, LidoLocator, StakingRouter, WithdrawalQueueERC721 } from "typechain-types";
+import {
+  AccountingOracle,
+  ICSModule,
+  Lido,
+  LidoLocator,
+  NodeOperatorsRegistry,
+  StakingRouter,
+  WithdrawalQueueERC721,
+} from "typechain-types";
 
 import { batch, log } from "lib";
 
@@ -120,11 +128,18 @@ const getAragonContracts = async (lido: LoadedContract<Lido>, config: ProtocolNe
  * Load staking modules contracts registered in the staking router.
  */
 const getStakingModules = async (stakingRouter: LoadedContract<StakingRouter>, config: ProtocolNetworkConfig) => {
-  const [nor, sdvt] = await stakingRouter.getStakingModules();
-  return (await batch({
+  const [nor, sdvt, csm] = await stakingRouter.getStakingModules();
+
+  const promises: { [key: string]: Promise<LoadedContract<NodeOperatorsRegistry | ICSModule>> } = {
     nor: loadContract("NodeOperatorsRegistry", config.get("nor") || nor.stakingModuleAddress),
     sdvt: loadContract("NodeOperatorsRegistry", config.get("sdvt") || sdvt.stakingModuleAddress),
-  })) as StakingModuleContracts;
+  };
+
+  if (csm) {
+    promises.csm = loadContract("ICSModule", config.get("csm") || csm.stakingModuleAddress);
+  }
+
+  return (await batch(promises)) as StakingModuleContracts;
 };
 
 /**
@@ -167,6 +182,7 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
       config.get("predepositGuarantee") || (await locator.predepositGuarantee()),
     ),
     operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid")),
+    lazyOracle: loadContract("LazyOracle", config.get("lazyOracle") || (await locator.lazyOracle())),
   })) as VaultsContracts;
 };
 

@@ -16,14 +16,13 @@ export {
 } from "./accounting";
 
 export { ensureDsmGuardians } from "./dsm";
-export { norEnsureOperators } from "./nor";
-export { sdvtEnsureOperators } from "./sdvt";
+export { norSdvtEnsureOperators } from "./nor-sdvt";
+export { calcNodeOperatorRewards } from "./staking-module";
 export {
   createVaultProxy,
   createVaultsReportTree,
   createVaultWithDashboard,
-  disconnectFromHub,
-  generateFeesToClaim,
+  getPubkeys,
   reportVaultDataWithProof,
   setupLido,
   VaultRoles,

@@ -21,6 +21,7 @@ export async function main() {
     "MinFirstAllocationStrategy",
     deployer,
   );
+
   await deployImplementation(Sk.appNodeOperatorsRegistry, "NodeOperatorsRegistry", deployer, [], {
     libraries: { MinFirstAllocationStrategy: minFirstAllocationStrategy.address },
   });

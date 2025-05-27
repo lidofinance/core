@@ -4,10 +4,10 @@
 pragma solidity 0.8.25;
 
 import {BLS12_381} from "contracts/0.8.25/lib/BLS.sol";
-import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 struct PrecomputedDepositMessage {
-    StakingVaultDeposit deposit;
+    IStakingVault.Deposit deposit;
     BLS12_381.DepositY depositYComponents;
     bytes32 withdrawalCredentials;
 }
@@ -16,22 +16,34 @@ struct PrecomputedDepositMessage {
 contract BLS__Harness {
     BLS__HarnessVerifier public verifier;
 
+    bytes32 public immutable DEPOSIT_DOMAIN;
+
     function verifyDepositMessage(
-        StakingVaultDeposit calldata deposit,
+        IStakingVault.Deposit calldata deposit,
         BLS12_381.DepositY calldata depositY,
         bytes32 withdrawalCredentials
     ) public view {
-        BLS12_381.verifyDepositMessage(deposit, depositY, withdrawalCredentials);
+        BLS12_381.verifyDepositMessage(deposit, depositY, withdrawalCredentials, DEPOSIT_DOMAIN);
     }
 
-    constructor() {
+    function verifyDepositMessageCustomDomain(
+        IStakingVault.Deposit calldata deposit,
+        BLS12_381.DepositY calldata depositY,
+        bytes32 withdrawalCredentials,
+        bytes32 customDomain
+    ) public view {
+        BLS12_381.verifyDepositMessage(deposit, depositY, withdrawalCredentials, customDomain);
+    }
+
+    constructor(bytes32 _depositDomain) {
+        DEPOSIT_DOMAIN = _depositDomain;
         verifier = new BLS__HarnessVerifier(this);
     }
 
     function LOCAL_MESSAGE_1() external pure returns (PrecomputedDepositMessage memory) {
         return
             PrecomputedDepositMessage(
-                StakingVaultDeposit(
+                IStakingVault.Deposit(
                     hex"b79902f435d268d6d37ac3ab01f4536a86c192fa07ba5b63b5f8e4d0e05755cfeab9d35fbedb9c02919fe02a81f8b06d",
                     hex"b357f146f53de27ae47d6d4bff5e8cc8342d94996143b2510452a3565701c3087a0ba04bed41d208eb7d2f6a50debeac09bf3fcf5c28d537d0fe4a52bb976d0c19ea37a31b6218f321a308f8017e5fd4de63df270f37df58c059c75f0f98f980",
                     1 ether,
@@ -67,6 +79,12 @@ contract BLS__HarnessVerifier {
 
     function verifyBLSSupport() external view {
         PrecomputedDepositMessage memory message = harness.LOCAL_MESSAGE_1();
-        harness.verifyDepositMessage(message.deposit, message.depositYComponents, message.withdrawalCredentials);
+        harness.verifyDepositMessageCustomDomain(
+            message.deposit,
+            message.depositYComponents,
+            message.withdrawalCredentials,
+            // mainnet domain
+            0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9
+        );
     }
 }
