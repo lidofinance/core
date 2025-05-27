@@ -52,13 +52,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     event TotalSigningKeysCountChanged(uint256 indexed nodeOperatorId, uint256 totalValidatorsCount);
 
     event NonceChanged(uint256 nonce);
-    event StuckPenaltyDelayChanged(uint256 stuckPenaltyDelay);
-    event StuckPenaltyStateChanged(
-        uint256 indexed nodeOperatorId,
-        uint256 stuckValidatorsCount,
-        uint256 refundedValidatorsCount,
-        uint256 stuckPenaltyEndTimestamp
-    );
     event TargetValidatorsCountChanged(uint256 indexed nodeOperatorId, uint256 targetValidatorsCount, uint256 targetLimitMode);
     event NodeOperatorPenalized(address indexed recipientAddress, uint256 sharesPenalizedAmount);
     event NodeOperatorPenaltyCleared(uint256 indexed nodeOperatorId);
@@ -124,22 +117,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @dev actual operators's number of keys which could be deposited
     uint8 internal constant MAX_VALIDATORS_COUNT_OFFSET = 2;
 
-    // StuckPenaltyStats
-    /// @dev stuck keys count from oracle report
-    /// @dev [DEPRECATED]
-    uint8 internal constant STUCK_VALIDATORS_COUNT_OFFSET = 0;
-    /// @dev refunded keys count from dao
-    /// @dev [DEPRECATED]
-    uint8 internal constant REFUNDED_VALIDATORS_COUNT_OFFSET = 1;
-    /// @dev extra penalty time after stuck keys resolved (refunded and/or exited)
-    /// @notice field is also used as flag for "half-cleaned" penalty status
-    ///         Operator is PENALIZED if `STUCK_VALIDATORS_COUNT > REFUNDED_VALIDATORS_COUNT` or
-    ///         `STUCK_VALIDATORS_COUNT <= REFUNDED_VALIDATORS_COUNT && STUCK_PENALTY_END_TIMESTAMP <= refund timestamp + STUCK_PENALTY_DELAY`
-    ///         When operator refund all stuck validators and time has pass STUCK_PENALTY_DELAY, but STUCK_PENALTY_END_TIMESTAMP not zeroed,
-    ///         then Operator can receive rewards but can't get new deposits until the new Oracle report or `clearNodeOperatorPenalty` is called.
-    /// @dev [DEPRECATED]
-    uint8 internal constant STUCK_PENALTY_END_TIMESTAMP_OFFSET = 2;
-
     // Summary SigningKeysStats
     uint8 internal constant SUMMARY_MAX_VALIDATORS_COUNT_OFFSET = 0;
     /// @dev Number of keys of all operators which were in the EXITED state for all time
@@ -175,9 +152,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @dev module type
     // bytes32 internal constant TYPE_POSITION = keccak256("lido.NodeOperatorsRegistry.type");
     bytes32 internal constant TYPE_POSITION = 0xbacf4236659a602d72c631ba0b0d67ec320aaf523f3ae3590d7faee4f42351d0;
-
-    // bytes32 internal constant STUCK_PENALTY_DELAY_POSITION = keccak256("lido.NodeOperatorsRegistry.stuckPenaltyDelay");
-    bytes32 internal constant STUCK_PENALTY_DELAY_POSITION = 0x8e3a1f3826a82c1116044b334cae49f3c3d12c3866a1c4b18af461e12e58a18e;
 
     // bytes32 internal constant REWARD_DISTRIBUTION_STATE = keccak256("lido.NodeOperatorsRegistry.rewardDistributionState");
     bytes32 internal constant REWARD_DISTRIBUTION_STATE = 0x4ddbb0dcdc5f7692e494c15a7fca1f9eb65f31da0b5ce1c3381f6a1a1fd579b6;
@@ -516,7 +490,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         uint256 validatorsCount;
         uint256 _nodeOperatorIdsOffset;
         uint256 _exitedValidatorsCountsOffset;
-        /// @dev see comments for `updateStuckValidatorsCount`
+
         assembly {
             _nodeOperatorIdsOffset := add(calldataload(4), 36) // arg1 calldata offset + 4 (signature len) + 32 (length slot)
             _exitedValidatorsCountsOffset := add(calldataload(36), 36) // arg2 calldata offset + 4 (signature len) + 32 (length slot))
@@ -581,7 +555,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _auth(STAKING_ROUTER_ROLE);
 
-        // _updateStuckValidatorsCount(_nodeOperatorId, _stuckValidatorsCount); // removed
         _updateExitedValidatorsCount(_nodeOperatorId, _exitedValidatorsCount, true /* _allowDecrease */ );
         _increaseValidatorsKeysNonce();
     }
@@ -1407,16 +1380,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         (address[] memory recipients, uint256[] memory shares,) =
             getRewardsDistribution(sharesToDistribute);
 
-        uint256 toBurn;
         for (uint256 idx; idx < recipients.length; ++idx) {
             /// @dev skip ultra-low amounts processing to avoid transfer zero amount in case of a penalty
             if (shares[idx] < 2) continue;
             stETH.transferShares(recipients[idx], shares[idx]);
             distributed = distributed.add(shares[idx]);
             emit RewardsDistributed(recipients[idx], shares[idx]);
-        }
-        if (toBurn > 0) {
-            IBurner(getLocator().burner()).requestBurnShares(address(this), toBurn);
         }
     }
 
