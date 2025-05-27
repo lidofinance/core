@@ -5,11 +5,14 @@ pragma solidity 0.8.25;
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
 
 contract IStETH {
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {}
 
     function burnExternalShares(uint256 _amountOfShares) external {}
+
+    function getSharesByPooledEthRoundedUp(uint256 _amountOfEther) external view returns (uint256) {}
 }
 
 contract VaultHub__MockForDashboard {
@@ -24,10 +27,6 @@ contract VaultHub__MockForDashboard {
         steth = _steth;
         LIDO_LOCATOR = _lidoLocator;
     }
-
-    event VaultConnected(address vault);
-    event Mock__VaultDisconnectInitiated(address vault);
-    event Mock__Rebalanced(uint256 amount);
 
     mapping(address => VaultHub.VaultConnection) public vaultConnections;
     mapping(address => VaultHub.VaultRecord) public vaultRecords;
@@ -48,6 +47,22 @@ contract VaultHub__MockForDashboard {
         return vaultRecords[vault];
     }
 
+    function totalValue(address vault) external view returns (uint256) {
+        return vaultRecords[vault].report.totalValue;
+    }
+
+    function locked(address vault) external view returns (uint256) {
+        return vaultRecords[vault].locked;
+    }
+
+    function liabilityShares(address _vault) external view returns (uint256) {
+        return vaultRecords[_vault].liabilityShares;
+    }
+
+    function latestReport(address _vault) external view returns (VaultHub.Report memory) {
+        return vaultRecords[_vault].report;
+    }
+
     function disconnect(address vault) external {
         emit Mock__VaultDisconnectInitiated(vault);
     }
@@ -58,7 +73,7 @@ contract VaultHub__MockForDashboard {
     }
 
     function connectVault(address vault) external {
-        emit VaultConnected(vault);
+        emit Mock__VaultConnected(vault);
     }
 
     function mintShares(address vault, address recipient, uint256 amount) external {
@@ -67,7 +82,7 @@ contract VaultHub__MockForDashboard {
         if (amount == 0) revert ZeroArgument("amount");
 
         steth.mintExternalShares(recipient, amount);
-        vaultRecords[vault].liabilityShares += uint96(amount);
+        emit Mock__MintedShares(vault, recipient, amount);
     }
 
     function burnShares(address _vault, uint256 _amountOfShares) external {
@@ -75,26 +90,68 @@ contract VaultHub__MockForDashboard {
         if (_amountOfShares == 0) revert ZeroArgument("_amountOfShares");
 
         steth.burnExternalShares(_amountOfShares);
-        vaultRecords[_vault].liabilityShares -= uint96(_amountOfShares);
+        emit Mock__BurnedShares(_vault, _amountOfShares);
     }
 
     function voluntaryDisconnect(address _vault) external {
         emit Mock__VaultDisconnectInitiated(_vault);
     }
 
-    function rebalance() external payable {
-        vaultRecords[msg.sender].liabilityShares = 0;
-
-        emit Mock__Rebalanced(msg.value);
+    function rebalance(address _vault, uint256 _amountOfEther) external payable {
+        emit Mock__Rebalanced(_vault, _amountOfEther);
     }
 
-    function updateReportData(uint64 timestamp, bytes32, string calldata) external {
-        latestReportDataTimestamp = timestamp;
+    function requestValidatorExit(address _vault, bytes calldata _pubkeys) external {
+        emit Mock__ValidatorExitRequested(_vault, _pubkeys);
     }
 
-    function latestReportData() external view returns (uint64 timestamp, bytes32 treeRoot, string memory reportCid) {
-        return (latestReportDataTimestamp, bytes32(0), "");
+    function triggerValidatorWithdrawals(address _vault, bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
+        emit Mock__ValidatorWithdrawalsTriggered(_vault, _pubkeys, _amounts, _refundRecipient);
     }
+
+    function pauseBeaconChainDeposits(address _vault) external {
+        emit Mock__BeaconChainDepositsPaused(_vault);
+    }
+
+    function resumeBeaconChainDeposits(address _vault) external {
+        emit Mock__BeaconChainDepositsResumed(_vault);
+    }
+
+    function fund(address _vault) external payable {
+        emit Mock__Funded(_vault, msg.value);
+    }
+
+    function withdraw(address _vault, address _recipient, uint256 _amount) external {
+        emit Mock__Withdrawn(_vault, _recipient, _amount);
+    }
+
+    function compensateDisprovenPredepositFromPDG(address _vault, bytes calldata _validatorPubkey, address _recipient) external returns (uint256) {
+        emit Mock__CompensatedDisprovenPredepositFromPDG(_vault, _validatorPubkey, _recipient);
+        return 1 ether;
+    }
+
+    function proveUnknownValidatorToPDG(address _vault, IPredepositGuarantee.ValidatorWitness calldata _witness) external {
+        emit Mock__ValidatorProvedToPDG(_vault, _witness);
+    }
+
+    function transferVaultOwnership(address _vault, address _newOwner) external {
+        emit Mock__VaultOwnershipTransferred(_vault, _newOwner);
+    }
+
+    event Mock__ValidatorExitRequested(address vault, bytes pubkeys);
+    event Mock__ValidatorWithdrawalsTriggered(address vault, bytes pubkeys, uint64[] amounts, address refundRecipient);
+    event Mock__BeaconChainDepositsPaused(address vault);
+    event Mock__BeaconChainDepositsResumed(address vault);
+    event Mock__Funded(address vault, uint256 amount);
+    event Mock__CompensatedDisprovenPredepositFromPDG(address vault, bytes validatorPubkey, address recipient);
+    event Mock__ValidatorProvedToPDG(address vault, IPredepositGuarantee.ValidatorWitness witness);
+    event Mock__VaultOwnershipTransferred(address vault, address newOwner);
+    event Mock__Withdrawn(address vault, address recipient, uint256 amount);
+    event Mock__MintedShares(address vault, address recipient, uint256 amount);
+    event Mock__BurnedShares(address vault, uint256 amount);
+    event Mock__VaultDisconnectInitiated(address vault);
+    event Mock__Rebalanced(address vault, uint256 amount);
+    event Mock__VaultConnected(address vault);
 
     error ZeroArgument(string argument);
 }

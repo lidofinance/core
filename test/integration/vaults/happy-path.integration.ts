@@ -419,11 +419,11 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(vaultReportedEvent.args?.reportLiabilityShares).to.equal(stakingVaultMaxMintingShares);
     // TODO: add assertions for fees
 
-    expect(await dashboard.nodeOperatorUnclaimedFee()).to.be.gt(0n);
+    expect(await dashboard.nodeOperatorDisbursableFee()).to.be.gt(0n);
   });
 
   it("Should allow Operator to claim performance fees", async () => {
-    const performanceFee = await dashboard.nodeOperatorUnclaimedFee();
+    const performanceFee = await dashboard.nodeOperatorDisbursableFee();
     log.debug("Staking Vault stats", {
       "Staking Vault performance fee": ethers.formatEther(performanceFee),
     });
@@ -451,7 +451,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     // Token master can approve the vault to burn the shares
     await lido.connect(owner).approve(dashboard, await lido.getPooledEthByShares(stakingVaultMaxMintingShares));
-    console.log("Burning shares", stakingVaultMaxMintingShares);
     await dashboard.connect(owner).burnShares(stakingVaultMaxMintingShares);
 
     const { elapsedProtocolReward, elapsedVaultReward } = await calculateReportParams();

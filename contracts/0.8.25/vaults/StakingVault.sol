@@ -346,7 +346,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _amounts Amounts of ether to withdraw. If array is empty or amount value is zero, triggers full withdrawals.
      * @param _excessRefundRecipient Address to receive any excess withdrawal fee
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
-     * @dev    You can use `calculateValidatorWithdrawalFee` to calculate the fee but it's actual only for the block
+     * @dev    You can use `calculateValidatorWithdrawalFee` to calculate the fee but it's accurate only for the block
      *         it's called. The fee may change from block to block, so it's recommended to send fee with some surplus.
      *         The excess amount will be refunded.
      */
@@ -457,6 +457,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
     /**
      * @notice Ossifies the current implementation. WARNING: This operation is irreversible.
+     * @dev vault can't be connected to the hub after ossification
      */
     function ossify() external onlyOwner {
         if (isOssified()) revert VaultOssified();

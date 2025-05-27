@@ -232,7 +232,6 @@ export async function updateProxyImplementation(
   }
 }
 
-
 async function getLocatorConfig(locatorAddress: string) {
   const locator = await ethers.getContractAt("LidoLocator", locatorAddress);
 

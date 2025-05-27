@@ -185,8 +185,10 @@ export type ProtocolContext = {
 };
 
 export type RequireAllKeys<O, A extends readonly (keyof O)[]> =
-  Exclude<keyof O, A[number]> extends never     // ← nothing missing?
-    ? (A[number] extends keyof O ? A : never)    //   and nothing extra?
+  Exclude<keyof O, A[number]> extends never // ← nothing missing?
+    ? A[number] extends keyof O
+      ? A
+      : never //   and nothing extra?
     : never;
 
 /**
@@ -195,7 +197,5 @@ export type RequireAllKeys<O, A extends readonly (keyof O)[]> =
  * @returns The array of keys
  */
 export function keysOf<O>() {
-  return <
-    const A extends readonly (keyof O)[]
-  >(arr: RequireAllKeys<O, A>) => arr;
+  return <const A extends readonly (keyof O)[]>(arr: RequireAllKeys<O, A>) => arr;
 }

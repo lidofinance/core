@@ -231,8 +231,7 @@ export async function main() {
   );
 
   // Update LidoLocator with valid implementation
-  const locatorConfig: LidoLocator.ConfigStruct =
-  {
+  const locatorConfig: LidoLocator.ConfigStruct = {
     accountingOracle: accountingOracle.address,
     depositSecurityModule: depositSecurityModuleAddress,
     elRewardsVault: elRewardsVault.address,

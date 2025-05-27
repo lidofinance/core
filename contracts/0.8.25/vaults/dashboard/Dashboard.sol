@@ -99,7 +99,7 @@ contract Dashboard is NodeOperatorFee {
     // ==================== View Functions ====================
 
     /**
-     * @notice Returns the vault socket data for the staking vault.
+     * @notice Returns the vault connection data for the staking vault.
      * @return VaultConnection struct containing vault data
      */
     function vaultConnection() public view returns (VaultHub.VaultConnection memory) {
@@ -114,7 +114,7 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the number of stETHshares minted
+     * @notice Returns the number of stETH shares minted
      */
     function liabilityShares() public view returns (uint256) {
         return VAULT_HUB.liabilityShares(address(_stakingVault()));
@@ -172,7 +172,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
-    function totalMintingCapacity() public view returns (uint256) {
+    function totalMintingCapacityShares() public view returns (uint256) {
         return _totalMintingCapacityShares(0);
     }
 
@@ -197,9 +197,10 @@ contract Dashboard is NodeOperatorFee {
      */
     function withdrawableEther() public view returns (uint256) {
         uint256 totalValue_ = totalValue();
-        uint256 lockedPlusFee = locked() + nodeOperatorDisburseableFee();
+        uint256 lockedPlusFee = locked() + nodeOperatorDisbursableFee();
 
-        return Math256.min(address(_stakingVault()).balance, totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
+        return Math256.min(address(_stakingVault()).balance,
+            totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
     }
 
     // ==================== Vault Management Functions ====================
@@ -212,16 +213,18 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Sets the owner of the staking vault.
+     * @notice Transfers the ownership of the underlying StakingVault from this contract to a new owner
+     *         without disconnecting it from the hub
      * @param _newOwner Address of the new owner.
      */
-    function setVaultOwner(address _newOwner) external {
-        _setVaultOwner(_newOwner);
+    function transferVaultOwnership(address _newOwner) external {
+        _transferVaultOwnership(_newOwner);
     }
 
     /**
-     * @notice Disconnects the staking vault from the vault hub.
-     * VaultHub stores data for calculating the node operator fee, so the fee is disbursed first.
+     * @notice Disconnects the underlying StakingVault from the hub. The ownership of the StakingVault is transferred
+     *         to this contract, so you need to use abandonDashboard() to transfer the ownership further.
+     *         VaultHub stores data for calculating the node operator fee, so the fee is disbursed first.
      */
     function voluntaryDisconnect() external {
         disburseNodeOperatorFee();
@@ -230,10 +233,10 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Accepts the ownership over the staking vault transferred from VaultHub on disconnect
+     * @notice Accepts the ownership over the StakingVault transferred from VaultHub on disconnect
      * and immediately transfers it to a new pending owner. This new owner will have to accept the ownership
-     * on the staking vault contract.
-     * @param _newOwner The address to transfer the staking vault ownership to.
+     * on the StakingVault contract.
+     * @param _newOwner The address to transfer the StakingVault ownership to.
      */
     function abandonDashboard(address _newOwner) external {
         address vaultAddress = address(_stakingVault());
@@ -244,9 +247,10 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Accepts the ownership over the staking vault and connects to VaultHub.
+     * @notice Accepts the ownership over the StakingVault and connects to VaultHub. Can be called to reconnect
+     *         to the hub after voluntaryDisconnect()
      */
-    function acceptOwnershipAndConnectToVaultHub() external payable {
+    function reconnectToVaultHub() external payable {
         _acceptOwnership();
         connectToVaultHub();
     }
@@ -307,7 +311,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfWstETH Amount of tokens to mint
      */
     function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundable {
-        _mintSharesWithinMintingCapacity(_recipient, _amountOfWstETH);
+        _mintSharesWithinMintingCapacity(address(this), _amountOfWstETH);
 
         uint256 mintedStETH = STETH.getPooledEthBySharesRoundUp(_amountOfWstETH);
 
@@ -316,7 +320,8 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Burns stETH shares from the sender backed by the vault. Expects corresponding amount of stETH approved to this contract.
+     * @notice Burns stETH shares from the sender backed by the vault.
+     *         Expects corresponding amount of stETH approved to this contract.
      * @param _amountOfShares Amount of stETH shares to burn
      */
     function burnShares(uint256 _amountOfShares) external {
@@ -425,7 +430,11 @@ contract Dashboard is NodeOperatorFee {
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(RECOVER_ASSETS_ROLE) {
+    function recoverERC20(
+        address _token,
+        address _recipient,
+        uint256 _amount
+    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount == 0) revert ZeroArgument("_amount");
@@ -452,7 +461,7 @@ contract Dashboard is NodeOperatorFee {
         address _token,
         uint256 _tokenId,
         address _recipient
-    ) external onlyRole(RECOVER_ASSETS_ROLE) {
+    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
@@ -532,7 +541,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The amount of ether in wei that can be used to mint shares.
      */
     function _mintableValue() internal view returns (uint256) {
-        return VAULT_HUB.totalValue(address(_stakingVault())) - nodeOperatorDisburseableFee();
+        return VAULT_HUB.totalValue(address(_stakingVault())) - nodeOperatorDisbursableFee();
     }
 
     /**

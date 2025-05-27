@@ -43,7 +43,7 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Node operator fee in basis points; cannot exceed 100.00%.
-     * The node operator's disburseable fee in ether is returned by `nodeOperatorDisburseableFee()`.
+     * The node operator's disbursable fee in ether is returned by `nodeOperatorDisbursableFee()`.
      */
     uint256 public nodeOperatorFeeRate;
 
@@ -236,7 +236,7 @@ contract NodeOperatorFee is Permissions {
      */
     function setNodeOperatorFeeRecipient(
         address _newNodeOperatorFeeRecipient
-    ) external onlyRole(NODE_OPERATOR_MANAGER_ROLE) {
+    ) external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
         _setNodeOperatorFeeRecipient(_newNodeOperatorFeeRecipient);
     }
 
@@ -247,7 +247,7 @@ contract NodeOperatorFee is Permissions {
      */
     function increaseRewardsAdjustment(
         uint256 _adjustmentIncrease
-    ) external onlyRole(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
+    ) external onlyRoleMemberOrAdmin(NODE_OPERATOR_REWARDS_ADJUST_ROLE) {
         uint256 newAdjustment = rewardsAdjustment.amount + _adjustmentIncrease;
         // sanity check, though value will be cast safely during fee calculation
         if (newAdjustment > MANUAL_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();

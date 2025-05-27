@@ -15,6 +15,7 @@ export async function main() {
   const wstethAddress = state[Sk.wstETH].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
+  const agentAddress = state[Sk.appAgent].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
 
@@ -31,7 +32,10 @@ export async function main() {
   ]);
   const dashboardAddress = await dashboard.getAddress();
 
-  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [impAddress, deployer]);
+  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
+    impAddress,
+    agentAddress,
+  ]);
   const beaconAddress = await beacon.getAddress();
 
   // Deploy BeaconProxy to get bytecode and add it to whitelist

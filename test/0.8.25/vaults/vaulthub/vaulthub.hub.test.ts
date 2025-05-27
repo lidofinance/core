@@ -1002,9 +1002,10 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("reverts if vault address is zero", async () => {
-      await expect(
-        vaultHub.connect(user).updateShareLimit(ZeroAddress, SHARE_LIMIT),
-      ).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
+      await expect(vaultHub.connect(user).updateShareLimit(ZeroAddress, SHARE_LIMIT)).to.be.revertedWithCustomError(
+        vaultHub,
+        "ZeroArgument",
+      );
     });
 
     it("reverts if share limit exceeds the maximum vault limit", async () => {
@@ -1042,17 +1043,13 @@ describe("VaultHub.sol:hub", () => {
 
     it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
       await expect(
-        vaultHub
-          .connect(stranger)
-          .updateVaultFees(vaultAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
+        vaultHub.connect(stranger).updateVaultFees(vaultAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
       ).to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount");
     });
 
     it("reverts if vault address is zero", async () => {
       await expect(
-        vaultHub
-          .connect(user)
-          .updateVaultFees(ZeroAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
+        vaultHub.connect(user).updateVaultFees(ZeroAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
       ).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
     });
 
@@ -1060,9 +1057,7 @@ describe("VaultHub.sol:hub", () => {
       const tooHighInfraFeeBP = TOTAL_BASIS_POINTS + 1n;
 
       await expect(
-        vaultHub
-          .connect(user)
-          .updateVaultFees(vaultAddress, tooHighInfraFeeBP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
+        vaultHub.connect(user).updateVaultFees(vaultAddress, tooHighInfraFeeBP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
       )
         .to.be.revertedWithCustomError(vaultHub, "InfraFeeTooHigh")
         .withArgs(vaultAddress, tooHighInfraFeeBP, TOTAL_BASIS_POINTS);
@@ -1072,9 +1067,7 @@ describe("VaultHub.sol:hub", () => {
       const tooHighLiquidityFeeBP = TOTAL_BASIS_POINTS + 1n;
 
       await expect(
-        vaultHub
-          .connect(user)
-          .updateVaultFees(vaultAddress, INFRA_FEE_BP, tooHighLiquidityFeeBP, RESERVATION_FEE_BP),
+        vaultHub.connect(user).updateVaultFees(vaultAddress, INFRA_FEE_BP, tooHighLiquidityFeeBP, RESERVATION_FEE_BP),
       )
         .to.be.revertedWithCustomError(vaultHub, "LiquidityFeeTooHigh")
         .withArgs(vaultAddress, tooHighLiquidityFeeBP, TOTAL_BASIS_POINTS);
@@ -1084,9 +1077,7 @@ describe("VaultHub.sol:hub", () => {
       const tooHighReservationFeeBP = TOTAL_BASIS_POINTS + 1n;
 
       await expect(
-        vaultHub
-          .connect(user)
-          .updateVaultFees(vaultAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, tooHighReservationFeeBP),
+        vaultHub.connect(user).updateVaultFees(vaultAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, tooHighReservationFeeBP),
       )
         .to.be.revertedWithCustomError(vaultHub, "ReservationFeeTooHigh")
         .withArgs(vaultAddress, tooHighReservationFeeBP, TOTAL_BASIS_POINTS);
@@ -1098,9 +1089,7 @@ describe("VaultHub.sol:hub", () => {
       const newReservationFeeBP = RESERVATION_FEE_BP * 2n;
 
       await expect(
-        vaultHub
-          .connect(user)
-          .updateVaultFees(vaultAddress, newInfraFeeBP, newLiquidityFeeBP, newReservationFeeBP),
+        vaultHub.connect(user).updateVaultFees(vaultAddress, newInfraFeeBP, newLiquidityFeeBP, newReservationFeeBP),
       )
         .to.emit(vaultHub, "VaultFeesUpdated")
         .withArgs(vaultAddress, newInfraFeeBP, newLiquidityFeeBP, newReservationFeeBP);
