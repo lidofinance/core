@@ -601,6 +601,87 @@ describe("Dashboard.sol", () => {
     });
   });
 
+  context("connectToVaultHub", () => {
+    let newVault: StakingVault;
+    let newDashboard: Dashboard;
+
+    beforeEach(async () => {
+      const defaultAdminRoles = await Promise.all([
+        { role: await dashboard.LIDO_VAULTHUB_AUTHORIZATION_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.FUND_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.WITHDRAW_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.LOCK_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.MINT_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.BURN_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.REBALANCE_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.REQUEST_VALIDATOR_EXIT_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.VOLUNTARY_DISCONNECT_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.PDG_PROVE_VALIDATOR_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.OSSIFY_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.LIDO_VAULTHUB_DEAUTHORIZATION_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.SET_DEPOSITOR_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.RESET_LOCKED_ROLE(), account: vaultOwner.address },
+        { role: await dashboard.RECOVER_ASSETS_ROLE(), account: vaultOwner.address },
+      ]);
+
+      // Create a new vault without hub connection
+      const createVaultTx = await factory.createVaultWithoutHubConnection(
+        vaultOwner.address,
+        nodeOperator.address,
+        nodeOperator.address,
+        nodeOperatorFeeBP,
+        confirmExpiry,
+        defaultAdminRoles,
+        "0x",
+      );
+      const createVaultReceipt = await createVaultTx.wait();
+      if (!createVaultReceipt) throw new Error("Vault creation receipt not found");
+
+      const vaultCreatedEvents = findEvents(createVaultReceipt, "VaultCreated");
+      expect(vaultCreatedEvents.length).to.equal(1);
+
+      const newVaultAddress = vaultCreatedEvents[0].args.vault;
+      newVault = await ethers.getContractAt("StakingVault", newVaultAddress, vaultOwner);
+
+      const dashboardCreatedEvents = findEvents(createVaultReceipt, "DashboardCreated");
+      expect(dashboardCreatedEvents.length).to.equal(1);
+
+      const newDashboardAddress = dashboardCreatedEvents[0].args.dashboard;
+      newDashboard = await ethers.getContractAt("Dashboard", newDashboardAddress, vaultOwner);
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      const connectDeposit = await hub.CONNECT_DEPOSIT();
+      await expect(
+        newDashboard.connect(stranger).connectToVaultHub({ value: connectDeposit }),
+      ).to.be.revertedWithCustomError(newDashboard, "AccessControlUnauthorizedAccount");
+    });
+
+    it("reverts if vault is not funded and locked", async () => {
+      const connectDeposit = await hub.CONNECT_DEPOSIT();
+      await expect(
+        newDashboard.connect(vaultOwner).connectToVaultHub({ value: connectDeposit - 1n }),
+      ).to.be.revertedWithCustomError(newDashboard, "InsufficientFunds");
+    });
+
+    it("connects the vault to the hub", async () => {
+      const connectDeposit = await hub.CONNECT_DEPOSIT();
+
+      expect(await newVault.vaultHubAuthorized()).to.equal(false);
+
+      await expect(newDashboard.connect(vaultOwner).connectToVaultHub({ value: connectDeposit }))
+        .to.emit(newVault, "VaultHubAuthorizedSet")
+        .withArgs(true);
+
+      expect(await newVault.vaultHubAuthorized()).to.equal(true);
+    });
+  });
+
   context("voluntaryDisconnect", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).voluntaryDisconnect())

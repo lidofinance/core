@@ -985,4 +985,48 @@ describe("OperatorGrid.sol", () => {
       expect(retTreasuryFee).to.equal(treasuryFee);
     });
   });
+
+  context("resetVaultTier", () => {
+    it("reverts if called by non-VaultHub", async () => {
+      await expect(operatorGrid.connect(stranger).resetVaultTier(vault_NO1_V1))
+        .to.be.revertedWithCustomError(operatorGrid, "NotAuthorized")
+        .withArgs("resetVaultTier", stranger);
+    });
+
+    it("does nothing if vault is already in default tier", async () => {
+      const vaultTierBefore = await operatorGrid.vaultInfo(vault_NO1_V1);
+      expect(vaultTierBefore.tierId).to.equal(await operatorGrid.DEFAULT_TIER_ID());
+
+      await operatorGrid.connect(vaultHubAsSigner).resetVaultTier(vault_NO1_V1);
+
+      const vaultTierAfter = await operatorGrid.vaultInfo(vault_NO1_V1);
+      expect(vaultTierAfter.tierId).to.equal(await operatorGrid.DEFAULT_TIER_ID());
+    });
+
+    it("resets vault's tier to default", async () => {
+      const shareLimit = 1000;
+      await operatorGrid.registerGroup(nodeOperator1, shareLimit);
+      await operatorGrid.registerTiers(nodeOperator1, [
+        {
+          shareLimit: shareLimit,
+          reserveRatioBP: 2000,
+          forcedRebalanceThresholdBP: 1800,
+          treasuryFeeBP: 500,
+        },
+      ]);
+
+      await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
+      await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit);
+
+      const vaultTierBefore = await operatorGrid.vaultInfo(vault_NO1_V1);
+      expect(vaultTierBefore.tierId).to.equal(1);
+
+      // Reset tier
+      await operatorGrid.connect(vaultHubAsSigner).resetVaultTier(vault_NO1_V1);
+
+      // Check final state
+      const vaultTierAfter = await operatorGrid.vaultInfo(vault_NO1_V1);
+      expect(vaultTierAfter.tierId).to.equal(await operatorGrid.DEFAULT_TIER_ID());
+    });
+  });
 });

@@ -81,7 +81,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     /// @notice Lido Locator contract
     ILidoLocator public immutable LIDO_LOCATOR;
 
-    /// @notice Default group address
     uint256 public constant DEFAULT_TIER_ID = 0;
     address public constant DEFAULT_TIER_OPERATOR = address(uint160(type(uint160).max));
 
@@ -409,76 +408,90 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         emit TierChanged(_vault, _requestedTierId);
     }
 
+    /// @notice Reset vault's tier to default
+    /// @param _vault address of the vault
+    function resetVaultTier(address _vault) external {
+        if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("resetVaultTier", msg.sender);
+
+        ERC7201Storage storage $ = _getStorage();
+
+        if ($.vaultTier[_vault] != DEFAULT_TIER_ID) {
+            $.vaultTier[_vault] = DEFAULT_TIER_ID;
+
+            emit TierChanged(_vault, DEFAULT_TIER_ID);
+        }
+    }
+
    // -----------------------------
    //     MINT / BURN
    // -----------------------------
 
     /// @notice Mint shares limit check
-    /// @param vaultAddr address of the vault
-    /// @param amount amount of shares will be minted
+    /// @param _vault address of the vault
+    /// @param _amount amount of shares will be minted
     function onMintedShares(
-        address vaultAddr,
-        uint256 amount
+        address _vault,
+        uint256 _amount
     ) external {
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("onMintedShares", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
 
-        uint256 tierId = $.vaultTier[vaultAddr];
-        uint96 amount_ = uint96(amount);
+        uint256 tierId = $.vaultTier[_vault];
+        uint96 amount = uint96(_amount);
 
         Tier storage tier_ = $.tiers[tierId];
 
         uint96 tierLiabilityShares = tier_.liabilityShares;
-        if (tierLiabilityShares + amount_ > tier_.shareLimit) revert TierLimitExceeded();
+        if (tierLiabilityShares + amount > tier_.shareLimit) revert TierLimitExceeded();
 
-        tier_.liabilityShares = tierLiabilityShares + amount_;
+        tier_.liabilityShares = tierLiabilityShares + amount;
 
         if (tierId != DEFAULT_TIER_ID) {
             Group storage group_ = $.groups[tier_.operator];
             uint96 groupMintedShares = group_.liabilityShares;
-            if (groupMintedShares + amount_ > group_.shareLimit) revert GroupLimitExceeded();
+            if (groupMintedShares + amount > group_.shareLimit) revert GroupLimitExceeded();
 
-            group_.liabilityShares = groupMintedShares + amount_;
+            group_.liabilityShares = groupMintedShares + amount;
         }
     }
 
     /// @notice Burn shares limit check
-    /// @param vaultAddr address of the vault
-    /// @param amount amount of shares to burn
+    /// @param _vault address of the vault
+    /// @param _amount amount of shares to burn
     function onBurnedShares(
-        address vaultAddr,
-        uint256 amount
+        address _vault,
+        uint256 _amount
     ) external {
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("burnShares", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
 
-        uint256 tierId = $.vaultTier[vaultAddr];
+        uint256 tierId = $.vaultTier[_vault];
 
-        uint96 amount_ = uint96(amount);
+        uint96 amount = uint96(_amount);
 
         Tier storage tier_ = $.tiers[tierId];
 
         // we skip the check for minted shared underflow, because it's done in the VaultHub.burnShares()
 
-        tier_.liabilityShares -= amount_;
+        tier_.liabilityShares -= amount;
 
         if (tierId != DEFAULT_TIER_ID) {
             Group storage group_ = $.groups[tier_.operator];
-            group_.liabilityShares -= amount_;
+            group_.liabilityShares -= amount;
         }
     }
 
     /// @notice Get vault limits
-    /// @param vaultAddr address of the vault
+    /// @param _vault address of the vault
     /// @return nodeOperator node operator of the vault
     /// @return tierId tier id of the vault
     /// @return shareLimit share limit of the vault
     /// @return reserveRatioBP reserve ratio of the vault
     /// @return forcedRebalanceThresholdBP forced rebalance threshold of the vault
     /// @return treasuryFeeBP treasury fee of the vault
-    function vaultInfo(address vaultAddr)
+    function vaultInfo(address _vault)
         external
         view
         returns (
@@ -492,7 +505,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     {
         ERC7201Storage storage $ = _getStorage();
 
-        tierId = $.vaultTier[vaultAddr];
+        tierId = $.vaultTier[_vault];
 
         Tier memory t = $.tiers[tierId];
         nodeOperator = t.operator;

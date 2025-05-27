@@ -6,6 +6,8 @@ pragma solidity ^0.8.0;
 import {TierParams} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 
 contract OperatorGrid__MockForVaultHub {
+    uint256 public constant DEFAULT_TIER_ID = 0;
+
     struct Tier {
         address operator;
         uint96 shareLimit;
@@ -31,7 +33,7 @@ contract OperatorGrid__MockForVaultHub {
     }
 
     function vaultInfo(
-        address vaultAddr
+        address _vault
     )
         external
         view
@@ -44,7 +46,7 @@ contract OperatorGrid__MockForVaultHub {
             uint256 treasuryFeeBP
         )
     {
-        Tier memory tierParams = tiers[vaultTier[vaultAddr]];
+        Tier memory tierParams = tiers[vaultTier[_vault]];
 
         groupId = 0;
         tierId = 0;
@@ -54,7 +56,13 @@ contract OperatorGrid__MockForVaultHub {
         treasuryFeeBP = tierParams.treasuryFeeBP;
     }
 
-    function onMintedShares(address vaultAddr, uint256 amount) external {}
+    function resetVaultTier(address _vault) external {
+        emit TierChanged(_vault, DEFAULT_TIER_ID);
+    }
 
-    function onBurnedShares(address vaultAddr, uint256 amount) external {}
+    function onMintedShares(address vault, uint256 amount) external {}
+
+    function onBurnedShares(address vault, uint256 amount) external {}
+
+    event TierChanged(address vault, uint256 indexed tierId);
 }

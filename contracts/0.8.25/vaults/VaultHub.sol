@@ -584,6 +584,8 @@ contract VaultHub is PausableUntilWithRoles {
 
         socket.pendingDisconnect = true;
 
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).resetVaultTier(_vault);
+
         emit VaultDisconnectInitiated(_vault);
     }
 
