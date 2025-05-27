@@ -164,7 +164,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await expect(
         dashboard
           .connect(roles.validatorWithdrawalTriggerer)
-          .triggerValidatorWithdrawal(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
+          .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [ether("1")], roles.validatorWithdrawalTriggerer, { value: 1n }),
       )
         .to.emit(stakingVault, "ValidatorWithdrawalsTriggered")
         .withArgs(SAMPLE_PUBKEY, [ether("1")], 0, roles.validatorWithdrawalTriggerer);

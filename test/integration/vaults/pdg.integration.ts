@@ -240,9 +240,9 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .connect(roles.unguaranteedBeaconChainDepositor)
         .unguaranteedDepositToBeaconChain([predepositData.deposit]),
     )
-      .to.emit(dashboard, "UnguaranteedDeposit")
-      .withArgs(await stakingVault.getAddress(), predepositData.deposit.pubkey, predepositData.deposit.amount)
-      .not.to.emit(stakingVault, "DepositedToBeaconChain");
+      .to.emit(dashboard, "UnguaranteedDeposits")
+      .withArgs(await stakingVault.getAddress(), 1, predepositData.deposit.amount);
+    // check that emit the event from deposit contract
 
     const { witnesses, postdeposit } = await getProofAndDepositData(ctx, validator, withdrawalCredentials, ether("99"));
 

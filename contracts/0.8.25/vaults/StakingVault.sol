@@ -552,7 +552,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param pubkeyRaw Raw public key of the validator to exit
      * @dev    Signals to node operators that they should exit this validator from the beacon chain
      */
-    event ValidatorExitRequested(bytes pubkey, bytes pubkeyRaw);
+    event ValidatorExitRequested(bytes indexed pubkey, bytes pubkeyRaw);
 
     /**
      * @notice Emitted when validator withdrawals are requested via EIP-7002
@@ -568,6 +568,12 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address indexed refundRecipient
     );
 
+    /**
+     * @notice Emitted when validator ejections are triggered
+     * @param pubkeys Concatenated public keys of the validators to eject
+     * @param excess Amount of excess fee refunded to recipient
+     * @param refundRecipient Address to receive any excess withdrawal fee
+     */
     event ValidatorEjectionsTriggered(
         bytes pubkeys,
         uint256 excess,
@@ -643,7 +649,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _required Amount of ether required to cover the fee
      */
     error InsufficientValidatorWithdrawalFee(uint256 _passed, uint256 _required);
-
 
     /**
      * @notice Thrown when the vault is already ossified

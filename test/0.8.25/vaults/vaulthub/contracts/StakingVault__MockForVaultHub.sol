@@ -41,7 +41,7 @@ contract StakingVault__MockForVaultHub {
         return depositor_;
     }
 
-    function triggerValidatorWithdrawal(
+    function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
         address _refundRecipient

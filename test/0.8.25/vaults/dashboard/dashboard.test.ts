@@ -323,7 +323,7 @@ describe("Dashboard.sol", () => {
         const totalValue = 1000n;
         await setup({ totalValue });
 
-        const maxStETHMinted = ((totalValue) * (BP_BASE - getBigInt(connection.reserveRatioBP))) / BP_BASE;
+        const maxStETHMinted = (totalValue * (BP_BASE - getBigInt(connection.reserveRatioBP))) / BP_BASE;
         const maxSharesMinted = await steth.getSharesByPooledEth(maxStETHMinted);
 
         const maxMintableShares = await dashboard.totalMintingCapacityShares();
@@ -383,7 +383,7 @@ describe("Dashboard.sol", () => {
         const preFundCanMint = await dashboard.remainingMintingCapacityShares(funding);
         await setup({ totalValue: 2000n, liabilityShares: 0n }); // fund 1000n
 
-        const maxStETHMinted = ((2000n) * (BP_BASE - getBigInt(connection.reserveRatioBP))) / BP_BASE;
+        const maxStETHMinted = (2000n * (BP_BASE - getBigInt(connection.reserveRatioBP))) / BP_BASE;
         const maxSharesMinted = await steth.getSharesByPooledEth(maxStETHMinted);
 
         const canMint = await dashboard.remainingMintingCapacityShares(0n);
@@ -393,7 +393,7 @@ describe("Dashboard.sol", () => {
 
       it("remaining capacity is 0 if liability shares is maxxed out", async () => {
         const totalValue = 1000n;
-        const liability = ((totalValue) * (BP_BASE - getBigInt(connection.reserveRatioBP))) / BP_BASE;
+        const liability = (totalValue * (BP_BASE - getBigInt(connection.reserveRatioBP))) / BP_BASE;
         const liabilityShares = await steth.getSharesByPooledEth(liability);
         await setup({ totalValue, liabilityShares });
 
@@ -609,9 +609,7 @@ describe("Dashboard.sol", () => {
       await steth.mintExternalShares(vaultOwner, amountShares);
       await steth.connect(vaultOwner).approve(dashboard, await steth.getPooledEthByShares(amountShares));
 
-      await expect(dashboard.burnShares(amountShares))
-        .to.emit(hub, "Mock__BurnedShares")
-        .withArgs(vault, amountShares);
+      await expect(dashboard.burnShares(amountShares)).to.emit(hub, "Mock__BurnedShares").withArgs(vault, amountShares);
     });
   });
 
@@ -812,7 +810,7 @@ describe("Dashboard.sol", () => {
           // this share amount that is returned from wsteth on unwrap
           // because wsteth eats 1 share due to "rounding" (being a hungry-hungry wei gobler)
           const weiShareDown = await steth.getSharesByPooledEth(weiStethDown);
-          // steth value occuring only in events when rounding down from weiShareDown
+          // steth value occurring only in events when rounding down from weiShareDown
           const weiStethDownDown = await steth.getPooledEthByShares(weiShareDown);
 
           // approve for wsteth wrap
@@ -869,9 +867,7 @@ describe("Dashboard.sol", () => {
 
     it("invokes the rebalance function on the vault hub", async () => {
       const amount = ether("1");
-      await expect(dashboard.rebalanceVault(amount))
-        .to.emit(hub, "Mock__Rebalanced")
-        .withArgs(vault, amount);
+      await expect(dashboard.rebalanceVault(amount)).to.emit(hub, "Mock__Rebalanced").withArgs(vault, amount);
     });
 
     it("fundable", async () => {
@@ -1068,7 +1064,7 @@ describe("Dashboard.sol", () => {
   context("triggerValidatorWithdrawal", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(
-        dashboard.connect(stranger).triggerValidatorWithdrawal("0x", [0n], vaultOwner),
+        dashboard.connect(stranger).triggerValidatorWithdrawals("0x", [0n], vaultOwner),
       ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
     });
 
@@ -1077,7 +1073,7 @@ describe("Dashboard.sol", () => {
       const amounts = [0n]; // 0 amount means full withdrawal
 
       await expect(
-        dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, {
+        dashboard.triggerValidatorWithdrawals(validatorPublicKeys, amounts, vaultOwner, {
           value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
         }),
       ).to.emit(hub, "Mock__ValidatorWithdrawalsTriggered");
@@ -1088,7 +1084,7 @@ describe("Dashboard.sol", () => {
       const amounts = [ether("0.1")];
 
       await expect(
-        dashboard.triggerValidatorWithdrawal(validatorPublicKeys, amounts, vaultOwner, {
+        dashboard.triggerValidatorWithdrawals(validatorPublicKeys, amounts, vaultOwner, {
           value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
         }),
       ).to.emit(hub, "Mock__ValidatorWithdrawalsTriggered");
