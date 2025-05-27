@@ -310,7 +310,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfWstETH Amount of tokens to mint
      */
     function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundable {
-        _mintSharesWithinMintingCapacity(_recipient, _amountOfWstETH);
+        _mintSharesWithinMintingCapacity(address(this), _amountOfWstETH);
 
         uint256 mintedStETH = STETH.getPooledEthBySharesRoundUp(_amountOfWstETH);
 
