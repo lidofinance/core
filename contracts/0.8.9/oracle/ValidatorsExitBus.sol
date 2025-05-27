@@ -8,7 +8,6 @@ import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
 import {Versioned} from "../utils/Versioned.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
 import {PausableUntil} from "../utils/PausableUntil.sol";
-import {IValidatorsExitBus} from "../interfaces/IValidatorsExitBus.sol";
 
 interface ITriggerableWithdrawalsGateway {
     struct ValidatorData {
@@ -28,9 +27,8 @@ interface ITriggerableWithdrawalsGateway {
  * @title ValidatorsExitBus
  * @notice An on-chain contract that serves as the central infrastructure for managing validator exit requests.
  * It stores report hashes, emits exit events, and maintains data and tools that enables anyone to prove a validator was requested to exit.
- * Unlike VEBO, it supports exit reports from a wide range of entities.
  */
-contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, PausableUntil, Versioned {
+contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;
@@ -141,6 +139,11 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      */
     event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration);
 
+    struct ExitRequestsData {
+        bytes data;
+        uint256 dataFormat;
+    }
+
     struct ValidatorData {
         uint256 nodeOpId;
         uint256 moduleId;
@@ -148,11 +151,25 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         bytes pubkey;
     }
 
+    // RequestStatus stores the last delivered index of the request, timestamp of delivery, and deliveryHistory length (number of deliveries).
+    // If a request is fully delivered in one step (as with oracle requests, which can't be delivered partially),
+    // only RequestStatus is used for efficiency.
+    // If a request is delivered in parts (e.g., due to limit constraints),
+    // DeliveryHistory[] stores full delivery records in addition to RequestStatus.
+    // If deliveryHistoryLength == 1, delivery info is read from RequestStatus; otherwise, from DeliveryHistory[].
+    // Both mappings use the same key (exitRequestsHash).
+
     struct RequestStatus {
         uint32 contractVersion;
         uint32 deliveryHistoryLength;
-        uint32 lastDeliveredExitDataIndex; // index of validator,  maximum 600 for example
+        uint32 lastDeliveredExitDataIndex; // index of validator in request
         uint32 lastDeliveredExitDataTimestamp;
+    }
+
+    struct DeliveryHistory {
+        // index in array of requests
+        uint32 lastDeliveredExitDataIndex;
+        uint32 timestamp;
     }
 
     /// @notice An ACL role granting the permission to submit a hash of the exit requests data
@@ -201,14 +218,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     bytes32 internal constant REQUEST_STATUS_POSITION = keccak256("lido.ValidatorsExitBus.requestStatus");
     // Storage slot for mapping(bytes32 => DeliveryHistory[]), keyed by exitRequestsHash
     bytes32 internal constant DELIVERY_HISTORY_POSITION = keccak256("lido.ValidatorsExitBus.deliveryHistory");
-
-    // RequestStatus stores the last delivered index of the request, timestamp of delivery, and deliveryHistory length (number of deliveries).
-    // If a request is fully delivered in one step (as with oracle requests, which can't be delivered partially),
-    // only RequestStatus is used for efficiency.
-    // If a request is delivered in parts (e.g., due to limit constraints),
-    // DeliveryHistory[] stores full delivery records in addition to RequestStatus.
-    // If deliveryHistoryLength == 1, delivery info is read from RequestStatus; otherwise, from DeliveryHistory[].
-    // Both mappings use the same key (exitRequestsHash).
 
     uint256 public constant EXIT_TYPE = 2;
 
@@ -297,9 +306,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             newLastDeliveredIndex,
             _getTimestamp()
         );
-
-        // TODO: is this check extra?
-        _validateDeliveryState(exitRequestsHash, requestStatus);
     }
 
     /**
@@ -449,8 +455,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert ExitHashNotSubmitted();
         }
 
-        _validateDeliveryState(exitRequestsHash, storedRequest);
-
         if (storedRequest.deliveryHistoryLength == 0) {
             DeliveryHistory[] memory deliveryHistory;
             return deliveryHistory;
@@ -571,8 +575,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     }
 
     function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration) internal {
-        require(maxExitRequestsLimit >= exitsPerFrame, "TOO_LARGE_EXITS_PER_FRAME");
-
         uint256 timestamp = _getTimestamp();
 
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
@@ -649,12 +651,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         deliveryHistory.push(
             DeliveryHistory(uint32(lastDeliveredExitDataIndex), uint32(lastDeliveredExitDataTimestamp))
         );
-    }
-
-    function _validateDeliveryState(bytes32 hash, RequestStatus storage status) internal view {
-        if (status.deliveryHistoryLength > 1) {
-            require(_storageDeliveryHistory()[hash].length == status.deliveryHistoryLength, "DeliveryHistoryMismatch");
-        }
     }
 
     /// Methods for reading data from tightly packed validator exit requests
