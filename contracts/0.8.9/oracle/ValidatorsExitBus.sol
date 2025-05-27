@@ -381,7 +381,7 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
 
     /**
      * @notice Sets the maximum exit request limit and the frame during which a portion of the limit can be restored.
-     * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDurationInSec)
+     * @param maxExitRequestsLimit The maximum number of exit requests.
      * @param exitsPerFrame The number of exits that can be restored per frame.
      * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
