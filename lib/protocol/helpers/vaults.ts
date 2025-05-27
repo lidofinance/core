@@ -223,27 +223,6 @@ export async function reportVaultDataWithProof(
   );
 }
 
-export async function reportVaultWithoutProof(ctx: ProtocolContext, stakingVault: StakingVault) {
-  const { vaultHub, lazyOracle } = ctx.contracts;
-  const reportTimestamp = await getCurrentBlockTimestamp();
-  const locator = await ethers.getContractAt("LidoLocator", await vaultHub.LIDO_LOCATOR());
-
-  const accountingSigner = await impersonate(await locator.accounting(), ether("100"));
-  const lazyOracleSigner = await impersonate(await locator.lazyOracle(), ether("100"));
-
-  await lazyOracle.connect(accountingSigner).updateReportData(reportTimestamp, ethers.ZeroHash, "");
-  await vaultHub
-    .connect(lazyOracleSigner)
-    .applyVaultReport(
-      await stakingVault.getAddress(),
-      reportTimestamp,
-      await vaultHub.totalValue(stakingVault),
-      (await vaultHub.vaultRecord(stakingVault)).inOutDelta,
-      0n,
-      (await vaultHub.vaultRecord(stakingVault)).liabilityShares,
-    );
-}
-
 interface CreateVaultResponse {
   tx: ContractTransactionResponse;
   proxy: PinnedBeaconProxy;
