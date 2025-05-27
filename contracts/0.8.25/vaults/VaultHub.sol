@@ -138,8 +138,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _maxRelativeShareLimitBP Maximum share limit relative to TVL in basis points
     constructor(ILidoLocator _locator, ILido _lido, uint256 _maxRelativeShareLimitBP) {
         if (_maxRelativeShareLimitBP == 0) revert ZeroArgument();
-        if (_maxRelativeShareLimitBP > TOTAL_BASIS_POINTS)
+        if (_maxRelativeShareLimitBP > TOTAL_BASIS_POINTS) {
             revert MaxRelativeShareLimitBPTooHigh(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
+        }
 
         MAX_RELATIVE_SHARE_LIMIT_BP = _maxRelativeShareLimitBP;
 
@@ -459,7 +460,8 @@ contract VaultHub is PausableUntilWithRoles {
         // locked ether can only be increased asynchronously once the oracle settled the new floor value
         // as of reference slot to prevent slashing upsides in between the report gathering and delivering
         uint256 lockedEther = Math256.max(
-            liability * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - connection.reserveRatioBP),
+            liability * TOTAL_BASIS_POINTS
+                    / (TOTAL_BASIS_POINTS - connection.reserveRatioBP),
             connection.pendingDisconnect ? 0 : CONNECT_DEPOSIT
         );
 
@@ -562,7 +564,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // _checkAvailableBalance(_vault, _ether);
 
-        _withdrawFromVault(_vault, record, _recipient, _ether);
+        _withdraw(_vault, record, _recipient, _ether);
 
         if (_totalValue(record) < record.locked) revert TotalValueBelowLockedAmount();
     }
@@ -678,10 +680,11 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).requestValidatorExit(_pubkeys);
     }
 
-    /// @notice Triggers withdrawals for validators under vault control using EIP-7002
+    /// @notice Triggers validator withdrawals for the vault using EIP-7002
     /// @param _vault vault address
     /// @param _pubkeys array of public keys of the validators to exit
     /// @dev msg.sender should be vault's owner
+    /// @dev partial withdrawals are not allowed when the vault is unhealthy
     function triggerValidatorWithdrawals(
         address _vault,
         bytes calldata _pubkeys,
@@ -703,7 +706,7 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
-    /// @notice Exits validators under vault control using EIP-7002
+    /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault is unhealthy
     /// @param _vault address of the vault to exit validators from
     /// @param _pubkeys public keys of the validators to exit
     /// @param _refundRecipient address that will receive the refund for transaction costs
@@ -739,7 +742,7 @@ contract VaultHub is PausableUntilWithRoles {
         _rebalance(_vault, record, Math256.min(fullRebalanceAmount, _vault.balance));
     }
 
-    /// @notice Proves validators unknown to PDG that have correct vault WC
+    /// @notice Proves that validators unknown to PDG have correct WC to participate in the vault
     /// @param _vault vault address
     /// @param _witness ValidatorWitness struct proving validator WC belonging to staking vault
     function proveUnknownValidatorToPDG(
@@ -843,16 +846,16 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _liquidityFeeBP,
         uint256 _reservationFeeBP
     ) internal {
+        if (_shareLimit > _maxSaneShareLimit()) revert ShareLimitTooHigh(_vault, _shareLimit, _maxSaneShareLimit());
         if (_reserveRatioBP == 0) revert ZeroArgument();
-        if (_reserveRatioBP > TOTAL_BASIS_POINTS)
-            revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
+        if (_reserveRatioBP > TOTAL_BASIS_POINTS) revert ReserveRatioTooHigh(_vault, _reserveRatioBP, TOTAL_BASIS_POINTS);
         if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument();
-        if (_forcedRebalanceThresholdBP > _reserveRatioBP)
+        if (_forcedRebalanceThresholdBP > _reserveRatioBP) {
             revert ForcedRebalanceThresholdTooHigh(_vault, _forcedRebalanceThresholdBP, _reserveRatioBP);
+        }
         if (_infraFeeBP > TOTAL_BASIS_POINTS) revert InfraFeeTooHigh(_vault, _infraFeeBP, TOTAL_BASIS_POINTS);
         if (_liquidityFeeBP > TOTAL_BASIS_POINTS) revert LiquidityFeeTooHigh(_vault, _liquidityFeeBP, TOTAL_BASIS_POINTS);
         if (_reservationFeeBP > TOTAL_BASIS_POINTS) revert ReservationFeeTooHigh(_vault, _reservationFeeBP, TOTAL_BASIS_POINTS);
-        if (_shareLimit > _maxSaneShareLimit()) revert ShareLimitTooHigh(_vault, _shareLimit, _maxSaneShareLimit());
 
         VaultConnection memory connection = _vaultConnection(_vault);
         if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
@@ -917,10 +920,10 @@ contract VaultHub is PausableUntilWithRoles {
 
         uint256 sharesToBurn = _getSharesToBurn(_ether);
         uint256 liabilityShares_ = _record.liabilityShares;
-        if (liabilityShares_ < sharesToBurn) revert InsufficientSharesToBurn(msg.sender, liabilityShares_);
+        if (liabilityShares_ < sharesToBurn) revert InsufficientSharesToBurn(_vault, liabilityShares_);
 
         _record.liabilityShares = uint96(liabilityShares_ - sharesToBurn);
-        _withdrawFromVault(_vault, _record, address(this), _ether);
+        _withdraw(_vault, _record, address(this), _ether);
         _rebalanceExternalEther(_ether);
 
         _ensureWithdrawalsObligationWithinLiability(_vault, _record.liabilityShares);
@@ -928,7 +931,7 @@ contract VaultHub is PausableUntilWithRoles {
         emit VaultRebalanced(_vault, sharesToBurn, _ether);
     }
 
-    function _withdrawFromVault(
+    function _withdraw(
         address _vault,
         VaultRecord storage _record,
         address _recipient,
@@ -1227,23 +1230,6 @@ contract VaultHub is PausableUntilWithRoles {
     error ZeroBalance();
 
     /**
-     * @notice Thrown when attempting to decrease the locked amount outside of a report
-     */
-    error NewLockedNotGreaterThanCurrent();
-
-    /**
-     * @notice Thrown when the locked amount exceeds the total value
-     */
-    error NewLockedExceedsTotalValue();
-
-    /**
-     * @notice Thrown when the transfer of ether to a recipient fails
-     * @param recipient Address that was supposed to receive the transfer
-     * @param amount Amount that failed to transfer
-     */
-    error TransferFailed(address recipient, uint256 amount);
-
-    /**
      * @notice Thrown when trying to withdraw more ether than the balance of `StakingVault`
      * @param balance Current balance
      */
@@ -1288,8 +1274,6 @@ contract VaultHub is PausableUntilWithRoles {
     error LiquidityFeeTooHigh(address vault, uint256 liquidityFeeBP, uint256 maxLiquidityFeeBP);
     error ReservationFeeTooHigh(address vault, uint256 reservationFeeBP, uint256 maxReservationFeeBP);
     error InsufficientTotalValueToMint(address vault, uint256 totalValue, uint256 obligationsValue);
-    error AlreadyExists(bytes32 codehash);
-    error NotFound(bytes32 codehash);
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
     error CodehashNotAllowed(address vault, bytes32 codehash);
     error MaxRelativeShareLimitBPTooHigh(uint256 maxRelativeShareLimitBP, uint256 totalBasisPoints);
