@@ -20,7 +20,6 @@ abstract contract WithdrawalVaultEIP7685 {
     error IncorrectFee(uint256 providedFee, uint256 requiredFee);
     error RequestAdditionFailed(bytes callData);
 
-
     /**
      * @dev Submits EIP-7002 full or partial withdrawal requests for the specified public keys.
      *      Each full withdrawal request instructs a validator to fully withdraw its stake and exit its duties as a validator.
@@ -49,7 +48,7 @@ abstract contract WithdrawalVaultEIP7685 {
         _checkFee(requestsCount * fee);
 
         for (uint256 i = 0; i < requestsCount; ++i) {
-            _callAddWithdrawalRequest(fee, abi.encodePacked(pubkeys[i], amounts[i]));
+            _callAddWithdrawalRequest(pubkeys[i], amounts[i], fee);
         }
     }
 
@@ -75,7 +74,11 @@ abstract contract WithdrawalVaultEIP7685 {
         return abi.decode(feeData, (uint256));
     }
 
-    function _callAddWithdrawalRequest(uint256 fee, bytes memory request) internal {
+    // function _callAddWithdrawalRequest(uint256 fee, bytes memory request) internal {
+    function _callAddWithdrawalRequest(bytes calldata pubkey, uint64 amount, uint256 fee) internal {
+        assert(pubkey.length == 48);
+
+        bytes memory request = abi.encodePacked(pubkey, amount);
         (bool success,) = WITHDRAWAL_REQUEST.call{value: fee}(request);
         if (!success) {
             revert RequestAdditionFailed(request);
