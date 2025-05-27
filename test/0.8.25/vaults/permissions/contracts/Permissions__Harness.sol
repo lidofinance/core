@@ -4,6 +4,7 @@
 pragma solidity ^0.8.0;
 
 import {Permissions} from "contracts/0.8.25/vaults/dashboard/Permissions.sol";
+import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
 
 contract Permissions__Harness is Permissions {
     constructor(address _vaultHub, address _lidoLocator) Permissions(_vaultHub, _lidoLocator) {}
@@ -76,5 +77,29 @@ contract Permissions__Harness is Permissions {
 
     function setConfirmExpiry(uint256 _newConfirmExpiry) external {
         _setConfirmExpiry(_newConfirmExpiry);
+    }
+
+    function transferOwnership(address _newOwner) external {
+        _transferOwnership(_newOwner);
+    }
+
+    function acceptOwnership() external {
+        _acceptOwnership();
+    }
+
+    function proveUnknownValidatorToPDG(IPredepositGuarantee.ValidatorWitness[] calldata _witnesses) external {
+        _proveUnknownValidatorsToPDG(_witnesses);
+    }
+
+    function withdrawForUnguaranteedDepositToBeaconChain(uint256 _ether) external {
+        _withdrawForUnguaranteedDepositToBeaconChain(_ether);
+    }
+    
+    function requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) external {
+        _requestTierChange(_tierId, _requestedShareLimit);
+    }
+
+    function transferVaultOwnership(address _newOwner) external {
+        _transferVaultOwnership(_newOwner);
     }
 }

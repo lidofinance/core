@@ -4,6 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IConsensusContract} from "./interfaces/IConsensusContract.sol";
@@ -13,7 +14,7 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
 
-contract LazyOracle is AccessControlEnumerable {
+contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     /// @custom:storage-location erc7201:LazyOracle
     struct Storage {
         /// @notice root of the vaults data tree
@@ -138,7 +139,7 @@ contract LazyOracle is AccessControlEnumerable {
         uint256 _vaultsDataTimestamp,
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataReportCid
-    ) external {
+    ) external override(ILazyOracle) {
         if (msg.sender != LIDO_LOCATOR.accountingOracle()) revert NotAuthorized();
 
         Storage storage $ = _storage();
@@ -267,7 +268,7 @@ contract LazyOracle is AccessControlEnumerable {
         }
     }
 
-    event VaultsReportDataUpdated(uint256 timestamp, bytes32 root, string cid);
+    event VaultsReportDataUpdated(uint256 indexed timestamp, bytes32 indexed root, string cid);
     event QuarantinedDeposit(address vault, uint256 delta);
     event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxElClRewardsBP);
 

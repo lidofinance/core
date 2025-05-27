@@ -199,7 +199,8 @@ contract Dashboard is NodeOperatorFee {
         uint256 totalValue_ = totalValue();
         uint256 lockedPlusFee = locked() + nodeOperatorDisbursableFee();
 
-        return Math256.min(address(_stakingVault()).balance, totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
+        return Math256.min(address(_stakingVault()).balance,
+            totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
     }
 
     // ==================== Vault Management Functions ====================
@@ -310,7 +311,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfWstETH Amount of tokens to mint
      */
     function mintWstETH(address _recipient, uint256 _amountOfWstETH) external payable fundable {
-        _mintSharesWithinMintingCapacity(_recipient, _amountOfWstETH);
+        _mintSharesWithinMintingCapacity(address(this), _amountOfWstETH);
 
         uint256 mintedStETH = STETH.getPooledEthBySharesRoundUp(_amountOfWstETH);
 
@@ -319,7 +320,8 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Burns stETH shares from the sender backed by the vault. Expects corresponding amount of stETH approved to this contract.
+     * @notice Burns stETH shares from the sender backed by the vault.
+     *         Expects corresponding amount of stETH approved to this contract.
      * @param _amountOfShares Amount of stETH shares to burn
      */
     function burnShares(uint256 _amountOfShares) external {
