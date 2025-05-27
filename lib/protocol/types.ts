@@ -14,6 +14,7 @@ import {
   Lido,
   LidoExecutionLayerRewardsVault,
   LidoLocator,
+  MaxEffectiveBalanceIncreaser,
   NodeOperatorsRegistry,
   OperatorGrid,
   OracleDaemonConfig,
@@ -64,6 +65,7 @@ export type ProtocolNetworkItems = {
   vaultHub: string;
   predepositGuarantee: string;
   operatorGrid: string;
+  maxEffectiveBalanceIncreaser: string;
 };
 
 export interface ContractTypes {
@@ -91,6 +93,7 @@ export interface ContractTypes {
   VaultHub: VaultHub;
   OperatorGrid: OperatorGrid;
   ICSModule: ICSModule;
+  MaxEffectiveBalanceIncreaser: MaxEffectiveBalanceIncreaser;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -145,6 +148,7 @@ export type VaultsContracts = {
   vaultHub: LoadedContract<VaultHub>;
   predepositGuarantee: LoadedContract<PredepositGuarantee>;
   operatorGrid: LoadedContract<OperatorGrid>;
+  maxEffectiveBalanceIncreaser: LoadedContract<MaxEffectiveBalanceIncreaser>;
 };
 
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &
