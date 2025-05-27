@@ -554,6 +554,63 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "EmptyDeliveryHistory");
     });
 
+    it("reverts with 'NonMonotonicDeliveryHistory' if delivery history is not strictly increasing.", async () => {
+      const exitRequests: ExitRequest[] = [
+        {
+          moduleId: 1,
+          nodeOpId: 1,
+          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        },
+      ];
+      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+      const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+      const nonMonotonicDeliveryHistory = [
+        [
+          { timestamp: 2, lastDeliveredKeyIndex: 2n },
+          { timestamp: 1, lastDeliveredKeyIndex: 1n },
+        ],
+        [
+          { timestamp: 1, lastDeliveredKeyIndex: 2n },
+          { timestamp: 1, lastDeliveredKeyIndex: 1n },
+        ],
+        [
+          { timestamp: 1, lastDeliveredKeyIndex: 1n },
+          { timestamp: 1, lastDeliveredKeyIndex: 1n },
+        ],
+      ];
+
+      async function testNonMonotonicDeliveryHistory(
+        deliveryHistory: { timestamp: number; lastDeliveredKeyIndex: bigint }[],
+      ) {
+        await vebo.setExitRequests(encodedExitRequestsHash, deliveryHistory, exitRequests);
+
+        await expect(
+          validatorExitDelayVerifier.verifyValidatorExitDelay(
+            toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+            [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+            encodedExitRequests,
+          ),
+        ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "NonMonotonicDeliveryHistory");
+
+        await expect(
+          validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+            toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
+            toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+            [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+            encodedExitRequests,
+          ),
+        ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "NonMonotonicDeliveryHistory");
+      }
+
+      for (const deliveryHistory of nonMonotonicDeliveryHistory) {
+        await testNonMonotonicDeliveryHistory(deliveryHistory);
+      }
+    });
+
     it("reverts with 'KeyWasNotUnpacked' if exit request index is not in delivery history", async () => {
       const nodeOpId = 2;
       const exitRequests: ExitRequest[] = [
