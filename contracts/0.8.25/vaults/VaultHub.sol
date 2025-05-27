@@ -204,14 +204,22 @@ contract VaultHub is PausableUntilWithRoles {
         return _vaultConnection(_vault).vaultIndex != 0;
     }
 
-    /// @return total value of the vault (as of the latest report received)
+    /// @return total value of the vault
     /// @dev returns 0 if the vault is not connected
     function totalValue(address _vault) external view returns (uint256) {
         return _totalValue(_vaultRecord(_vault));
     }
 
+    /// @return net total value of the vault (total value without unsettled obligations)
     function netTotalValue(address _vault) external view returns (uint256) {
         return _netTotalValue(_vault);
+    }
+
+    /// @return unsettled obligations of the vault
+    /// @dev returns 0 if the vault is not connected
+    function unsettledObligations(address _vault) external view returns (uint256) {
+        VaultObligations memory obligations = _vaultObligations(_vault);
+        return obligations.unsettledTreasuryFees + obligations.unsettledWithdrawals;
     }
 
     /// @return liability shares of the vault
@@ -1019,7 +1027,7 @@ contract VaultHub is PausableUntilWithRoles {
         return uint256(int256(uint256(report.totalValue)) + _record.inOutDelta - report.inOutDelta);
     }
 
-    // TODO: add docs
+    /// @dev unsettledWithdrawals must not be included in the total value because they are based on the liability shares
     function _netTotalValue(address _vault) internal view returns (uint256) {
         return _totalValue(_vaultRecord(_vault)) - _vaultObligations(_vault).unsettledTreasuryFees;
     }

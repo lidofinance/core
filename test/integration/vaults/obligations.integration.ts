@@ -455,6 +455,52 @@ describe("Integration: Vault obligations", () => {
     });
   });
 
+  context("Getting obligations via dashboard", () => {
+    let totalValue: bigint;
+    let unsettledWithdrawals: bigint;
+
+    beforeEach(async () => {
+      const liabilityShares = ether("1");
+      const funding = ether("1");
+
+      totalValue = (await vaultHub.totalValue(stakingVaultAddress)) + funding;
+
+      await dashboard.connect(roles.funder).fund({ value: funding });
+      await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
+
+      unsettledWithdrawals = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
+      await vaultHub.connect(agentSigner).updateWithdrawalsObligation(stakingVaultAddress, unsettledWithdrawals);
+    });
+
+    it("Should return the correct view values", async () => {
+      const totalValueOnDashboardBefore = await dashboard.totalValue();
+      expect(totalValueOnDashboardBefore).to.equal(totalValue);
+
+      const unsettledObligationsBefore = await dashboard.unsettledObligations();
+      expect(unsettledObligationsBefore).to.equal(unsettledWithdrawals);
+
+      const netTotalValueOnDashboardBefore = await dashboard.netTotalValue();
+      expect(netTotalValueOnDashboardBefore).to.equal(totalValue); // no unsettled treasury fees
+
+      await setBalance(stakingVaultAddress, 0);
+
+      // add some treasury fees
+      const accruedTreasuryFees = ether("0.1");
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees });
+
+      const netTotalValueOnDashboardAfter = await dashboard.netTotalValue();
+      expect(netTotalValueOnDashboardAfter).to.equal(totalValue - accruedTreasuryFees);
+
+      const unsettledObligationsAfter = await dashboard.unsettledObligations();
+      expect(unsettledObligationsAfter).to.equal(unsettledWithdrawals + accruedTreasuryFees);
+
+      const totalValueOnDashboardAfter = await dashboard.totalValue();
+      expect(totalValueOnDashboardAfter).to.equal(totalValue);
+
+      // TODO: add node operator fee and test it here
+    });
+  });
+
   context("Manual settlement via dashboard", () => {
     let liabilityShares: bigint;
     let maxPossibleWithdrawals: bigint;

@@ -163,6 +163,22 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Returns the total value of the vault in ether minus the unsettled treasury and node operator fee.
+     *         This is the value that can be used to mint shares.
+     */
+    function netTotalValue() public view returns (uint256) {
+        return VAULT_HUB.netTotalValue(address(_stakingVault())) - nodeOperatorDisbursableFee();
+    }
+
+    /**
+     * @notice Returns the overall unsettled obligations of the vault in ether
+     * @dev includes the node operator fee
+     */
+    function unsettledObligations() public view returns (uint256) {
+        return VAULT_HUB.unsettledObligations(address(_stakingVault())) + nodeOperatorDisbursableFee();
+    }
+
+    /**
      * @notice Returns the locked amount of ether for the vault
      */
     function locked() public view returns (uint256) {
@@ -189,25 +205,6 @@ contract Dashboard is NodeOperatorFee {
         if (totalShares < liabilityShares_) return 0;
         return totalShares - liabilityShares_;
     }
-
-    // /**
-    //  * @notice Returns the amount of ether that is available for withdrawal from the staking vault taking into account
-    //  *         fees and obligations and not taking locked ether into account.
-    //  * @dev This amount is not available for minting shares.
-    //  */
-    // TODO: restore if needed
-    // function availableBalance() public view returns (uint256) {
-    //     return VAULT_HUB.availableBalance(address(_stakingVault())) - nodeOperatorUnclaimedFee();
-    // }
-
-    // /**
-    //  * @notice Utility function to get the total amount of obligations for the vault
-    //  * @return The total value of all obligations for the vault
-    //  */
-    // TODO: restore if needed
-    // function unsettledObligations() public view returns (uint256) {
-    //     return VAULT_HUB.unsettledObligations(address(_stakingVault()));
-    // }
 
     /**
      * @notice Returns the amount of ether that can be instantly withdrawn from the staking vault.
@@ -309,7 +306,10 @@ contract Dashboard is NodeOperatorFee {
      * @notice Settles outstanding vault obligations with funds from the vault or sent ETH
      */
     function settleObligations() external payable fundable {
+        // First, settle accounting obligations
         _settleObligations();
+        // Then, disburse the node operator fees if any
+        disburseNodeOperatorFee();
     }
 
     /**
