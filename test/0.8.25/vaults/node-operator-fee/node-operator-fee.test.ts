@@ -26,6 +26,7 @@ import {
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
+import { ZeroAddress } from "ethers";
 
 const BP_BASE = 10000n;
 
@@ -33,7 +34,6 @@ describe("NodeOperatorFee.sol", () => {
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
-  let nodeOperatorFeeClaimer: HardhatEthersSigner;
   let nodeOperatorRewardAdjuster: HardhatEthersSigner;
   let vaultDepositor: HardhatEthersSigner;
 
@@ -64,7 +64,6 @@ describe("NodeOperatorFee.sol", () => {
       vaultDepositor,
       nodeOperatorManager,
       nodeOperatorRewardAdjuster,
-      nodeOperatorFeeClaimer,
     ] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForNodeOperatorFee");
@@ -142,9 +141,6 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE())).to.equal(
         await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
       );
-      expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE())).to.equal(
-        await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
-      );
       expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_REWARDS_ADJUST_ROLE())).to.equal(
         await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
       );
@@ -194,6 +190,30 @@ describe("NodeOperatorFee.sol", () => {
     });
   });
 
+  context("setNodeOperatorFeeRecipient", () => {
+    it("reverts if the caller is not a member of the node operator manager role", async () => {
+      await expect(nodeOperatorFee.connect(stranger).setNodeOperatorFeeRecipient(stranger)).to.be.revertedWithCustomError(
+        nodeOperatorFee,
+        "AccessControlUnauthorizedAccount",
+      ).withArgs(stranger, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE());
+    });
+
+    it("reverts if the new node operator fee recipient is the zero address", async () => {
+      await expect(nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeRecipient(ZeroAddress)).to.be.revertedWithCustomError(
+        nodeOperatorFee,
+        "ZeroArgument",
+      ).withArgs("nodeOperatorFeeRecipient");
+    });
+
+    it("sets the new node operator fee recipient", async () => {
+      await expect(nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeRecipient(stranger))
+        .to.emit(nodeOperatorFee, "NodeOperatorFeeRecipientSet")
+        .withArgs(nodeOperatorManager, nodeOperatorManager, stranger);
+
+      expect(await nodeOperatorFee.nodeOperatorFeeRecipient()).to.equal(stranger);
+    });
+  });
+
   context("disburseNodeOperatorFee", () => {
     it("claims the fee", async () => {
       // deposited 100 ETH, earned 1 ETH, fee is 10%
@@ -207,7 +227,7 @@ describe("NodeOperatorFee.sol", () => {
       // at 10%, the fee is 0.1 ETH
       const expectedNodeOperatorFee = ((report.totalValue - report.inOutDelta) * nodeOperatorFeeRate) / BP_BASE;
 
-      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee())
+      await expect(nodeOperatorFee.disburseNodeOperatorFee())
         .to.emit(hub, "Mock__Withdrawn")
         .withArgs(vault, nodeOperatorManager, expectedNodeOperatorFee);
 
@@ -223,7 +243,7 @@ describe("NodeOperatorFee.sol", () => {
       await hub.setReport(report, await getCurrentBlockTimestamp(), true);
 
       // totalValue-inOutDelta is 0, so no fee
-      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee()).not.to.emit(
+      await expect(nodeOperatorFee.disburseNodeOperatorFee()).not.to.emit(
         hub,
         "Mock__Withdrawn",
       );
@@ -250,7 +270,7 @@ describe("NodeOperatorFee.sol", () => {
         ((report.totalValue - report.inOutDelta - sideDeposit) * nodeOperatorFeeRate) / BP_BASE;
       expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedNodeOperatorFee1);
 
-      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee())
+      await expect(nodeOperatorFee.disburseNodeOperatorFee())
         .to.emit(hub, "Mock__Withdrawn")
         .withArgs(vault, nodeOperatorManager, expectedNodeOperatorFee1);
 
@@ -292,7 +312,7 @@ describe("NodeOperatorFee.sol", () => {
 
       // 11 - 10 - 2 = -1, NO Rewards
       expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
-      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee()).not.to.emit(
+      await expect(nodeOperatorFee.disburseNodeOperatorFee()).not.to.emit(
         hub,
         "Mock__Withdrawn",
       );
@@ -311,7 +331,7 @@ describe("NodeOperatorFee.sol", () => {
 
       expect(expectedNodeOperatorFee).to.equal((realRewards * nodeOperatorFeeRate) / BP_BASE);
 
-      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee())
+      await expect(nodeOperatorFee.disburseNodeOperatorFee())
         .to.emit(hub, "Mock__Withdrawn")
         .withArgs(vault, nodeOperatorManager, expectedNodeOperatorFee);
 
@@ -439,9 +459,9 @@ describe("NodeOperatorFee.sol", () => {
       const adjustedFee = expectedFee - (adjustment * operatorFee) / BP_BASE;
       expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(adjustedFee);
 
-      await expect(nodeOperatorFee.connect(nodeOperatorFeeClaimer).disburseNodeOperatorFee())
+      await expect(nodeOperatorFee.connect(stranger).disburseNodeOperatorFee())
         .to.emit(nodeOperatorFee, "NodeOperatorFeeDisbursed")
-        .withArgs(nodeOperatorFeeClaimer, adjustedFee);
+        .withArgs(stranger, adjustedFee);
 
       expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
     });
