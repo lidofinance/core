@@ -171,16 +171,16 @@ contract ValidatorExitDelayVerifier {
     ) external {
         _verifyBeaconBlockRoot(beaconBlock);
 
-        IValidatorsExitBus vebo = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
+        IValidatorsExitBus veb = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
+        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(veb, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(beaconBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
             ValidatorWitness calldata witness = validatorWitnesses[i];
 
-            (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = vebo.unpackExitRequest(
+            (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = veb.unpackExitRequest(
                 exitRequests.data,
                 exitRequests.dataFormat,
                 witness.exitRequestIndex
@@ -224,16 +224,16 @@ contract ValidatorExitDelayVerifier {
         _verifyBeaconBlockRoot(beaconBlock);
         _verifyHistoricalBeaconBlockRoot(beaconBlock, oldBlock);
 
-        IValidatorsExitBus vebo = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
+        IValidatorsExitBus veb = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
+        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(veb, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(oldBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
             ValidatorWitness calldata witness = validatorWitnesses[i];
 
-            (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = vebo.unpackExitRequest(
+            (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = veb.unpackExitRequest(
                 exitRequests.data,
                 exitRequests.dataFormat,
                 witness.exitRequestIndex
@@ -373,11 +373,11 @@ contract ValidatorExitDelayVerifier {
     }
 
     function _getExitRequestDeliveryHistory(
-        IValidatorsExitBus vebo,
+        IValidatorsExitBus veb,
         ExitRequestData calldata exitRequests
     ) internal view returns (DeliveryHistory[] memory) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
-        DeliveryHistory[] memory history = vebo.getExitRequestsDeliveryHistory(exitRequestsHash);
+        DeliveryHistory[] memory history = veb.getExitRequestsDeliveryHistory(exitRequestsHash);
 
         if (history.length == 0) {
             revert EmptyDeliveryHistory();
