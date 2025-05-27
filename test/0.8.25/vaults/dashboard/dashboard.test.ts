@@ -37,7 +37,7 @@ import { Snapshot } from "test/suite";
 
 const VAULT_CONNECTION_DEPOSIT = ether("1");
 
-describe.only("Dashboard.sol", () => {
+describe("Dashboard.sol", () => {
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
