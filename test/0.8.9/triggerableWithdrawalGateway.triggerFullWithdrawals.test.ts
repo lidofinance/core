@@ -107,8 +107,8 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
       .withArgs(3, 1);
   });
 
-  it("should not allow to set limit without role TW_EXIT_REPORT_LIMIT_ROLE", async () => {
-    const reportLimitRole = await triggerableWithdrawalsGateway.TW_EXIT_REPORT_LIMIT_ROLE();
+  it("should not allow to set limit without role TW_EXIT_LIMIT_MANAGER_ROLE", async () => {
+    const reportLimitRole = await triggerableWithdrawalsGateway.TW_EXIT_LIMIT_MANAGER_ROLE();
 
     await expect(
       triggerableWithdrawalsGateway.connect(stranger).setExitRequestLimit(4, 1, 48),
@@ -116,7 +116,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
   });
 
   it("set limit", async () => {
-    const role = await triggerableWithdrawalsGateway.TW_EXIT_REPORT_LIMIT_ROLE();
+    const role = await triggerableWithdrawalsGateway.TW_EXIT_LIMIT_MANAGER_ROLE();
     await triggerableWithdrawalsGateway.grantRole(role, authorizedEntity);
 
     const exitLimitTx = await triggerableWithdrawalsGateway.connect(authorizedEntity).setExitRequestLimit(4, 1, 48);
@@ -148,7 +148,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
     expect(data[0]).to.equal(4);
     // exitsPerFrame
     expect(data[1]).to.equal(1);
-    // frameDuration
+    // frameDurationInSec
     expect(data[2]).to.equal(48);
     // prevExitRequestsLimit
     // maxExitRequestsLimit (4) - exitRequests.length (3)
@@ -181,7 +181,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
     expect(data[0]).to.equal(4);
     // exitsPerFrame
     expect(data[1]).to.equal(1);
-    // frameDuration
+    // frameDurationInSec
     expect(data[2]).to.equal(48);
     // prevExitRequestsLimit
     // maxExitRequestsLimit (4) - exitRequests.length (3)
@@ -315,7 +315,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
 
     expect(data.maxExitRequestsLimit).to.equal(0);
     expect(data.exitsPerFrame).to.equal(0);
-    expect(data.frameDuration).to.equal(48);
+    expect(data.frameDurationInSec).to.equal(48);
     expect(data.prevExitRequestsLimit).to.equal(0);
     expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);
   });
@@ -354,6 +354,6 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
   it("Should not allow to set exitsPerFrame bigger than maxExitRequestsLimit", async () => {
     await expect(
       triggerableWithdrawalsGateway.connect(authorizedEntity).setExitRequestLimit(0, 1, 48),
-    ).to.be.revertedWith("TOO_LARGE_TW_EXIT_REQUEST_LIMIT");
+    ).to.be.revertedWith("TOO_LARGE_EXITS_PER_FRAME");
   });
 });

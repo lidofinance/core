@@ -132,12 +132,12 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
         uint256 timestamp
     );
     /**
-     * @notice Emitted when maximum exit request limit and the frame during which a portion of the limit can be restored set.
-     * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDuration)
+     * @notice Emitted when limits configs are set.
+     * @param maxExitRequestsLimit The maximum number of exit requests.
      * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
-    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration);
+    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
 
     struct ExitRequestsData {
         bytes data;
@@ -381,23 +381,23 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
 
     /**
      * @notice Sets the maximum exit request limit and the frame during which a portion of the limit can be restored.
-     * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDuration)
+     * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDurationInSec)
      * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
     function setExitRequestLimit(
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
+        uint256 frameDurationInSec
     ) external onlyRole(EXIT_REPORT_LIMIT_ROLE) {
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     /**
      * @notice Returns information about current limits data
      * @return maxExitRequestsLimit Maximum exit requests limit
      * @return exitsPerFrame The number of exits that can be restored per frame.
-     * @return frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @return frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      * @return prevExitRequestsLimit Limit left after previous requests
      * @return currentExitRequestsLimit Current exit requests limit
      */
@@ -407,7 +407,7 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
         returns (
             uint256 maxExitRequestsLimit,
             uint256 exitsPerFrame,
-            uint256 frameDuration,
+            uint256 frameDurationInSec,
             uint256 prevExitRequestsLimit,
             uint256 currentExitRequestsLimit
         )
@@ -415,7 +415,7 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
         maxExitRequestsLimit = exitRequestLimitData.maxExitRequestsLimit;
         exitsPerFrame = exitRequestLimitData.exitsPerFrame;
-        frameDuration = exitRequestLimitData.frameDuration;
+        frameDurationInSec = exitRequestLimitData.frameDurationInSec;
         prevExitRequestsLimit = exitRequestLimitData.prevExitRequestsLimit;
 
         currentExitRequestsLimit = exitRequestLimitData.isExitLimitSet()
@@ -574,19 +574,19 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
         return MAX_VALIDATORS_PER_BATCH_POSITION.getStorageUint256();
     }
 
-    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration) internal {
+    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec) internal {
         uint256 timestamp = _getTimestamp();
 
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
             EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitLimits(
                 maxExitRequestsLimit,
                 exitsPerFrame,
-                frameDuration,
+                frameDurationInSec,
                 timestamp
             )
         );
 
-        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     function _consumeLimit(uint256 requestsCount, function(uint256, uint256) internal pure returns(uint256) applyLimit) internal returns (uint256 requestsLimitedCount) {

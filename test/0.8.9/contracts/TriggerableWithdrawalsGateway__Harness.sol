@@ -10,8 +10,8 @@ contract TriggerableWithdrawalsGateway__Harness is TriggerableWithdrawalsGateway
         address lidoLocator,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
-    ) TriggerableWithdrawalsGateway(admin, lidoLocator, maxExitRequestsLimit, exitsPerFrame, frameDuration) {}
+        uint256 frameDurationInSec
+    ) TriggerableWithdrawalsGateway(admin, lidoLocator, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec) {}
 
     function getTimestamp() external view returns (uint256) {
         return _time;

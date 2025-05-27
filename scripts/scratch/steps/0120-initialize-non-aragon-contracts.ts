@@ -100,7 +100,7 @@ export async function main() {
   const maxValidatorsPerBatch = 600;
   const maxExitRequestsLimit = 13000;
   const exitsPerFrame = 1;
-  const frameDuration = 48;
+  const frameDurationInSec = 48;
   await makeTx(
     validatorsExitBusOracle,
     "initialize",
@@ -112,7 +112,7 @@ export async function main() {
       maxValidatorsPerBatch,
       maxExitRequestsLimit,
       exitsPerFrame,
-      frameDuration,
+      frameDurationInSec,
     ],
     { from: deployer },
   );

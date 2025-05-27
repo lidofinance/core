@@ -398,7 +398,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
       expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       expect(data.currentExitRequestsLimit).to.equal(0);
     });
@@ -409,7 +409,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
       expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       expect(data.currentExitRequestsLimit).to.equal(2);
     });
@@ -503,7 +503,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(0);
       expect(data.exitsPerFrame).to.equal(0);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);
     });
@@ -537,7 +537,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(0);
       expect(data.exitsPerFrame).to.equal(0);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       // as time is mocked and we didnt change it since last consume, currentExitRequestsLimit was not increased
       expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);

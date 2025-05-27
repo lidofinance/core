@@ -224,13 +224,13 @@ export async function main() {
   // Deploy Triggerable Withdrawals Gateway
   const maxExitRequestsLimit = 13000;
   const exitsPerFrame = 1;
-  const frameDuration = 48;
+  const frameDurationInSec = 48;
 
   const triggerableWithdrawalsGateway = await deployWithoutProxy(
     Sk.triggerableWithdrawalsGateway,
     "TriggerableWithdrawalsGateway",
     deployer,
-    [admin, locator.address, maxExitRequestsLimit, exitsPerFrame, frameDuration],
+    [admin, locator.address, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec],
   );
 
   // Update LidoLocator with valid implementation

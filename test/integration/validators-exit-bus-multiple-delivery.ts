@@ -144,8 +144,8 @@ describe("ValidatorsExitBus integration", () => {
     // --- Setup exit limit ---
     const maxLimit = 3;
     const exitsPerFrame = 1;
-    const frameDurationSeconds = 48;
-    await veb.connect(limitManager).setExitRequestLimit(maxLimit, exitsPerFrame, frameDurationSeconds);
+    const frameDurationInSec = 48;
+    await veb.connect(limitManager).setExitRequestLimit(maxLimit, exitsPerFrame, frameDurationInSec);
 
     // --- Prepare data ---
     const exitRequestsHash: string = hashExitRequest(exitRequests);
@@ -183,7 +183,7 @@ describe("ValidatorsExitBus integration", () => {
     expect(deliveryHistory1[0].lastDeliveredExitDataIndex).to.equal(maxLimit - 1);
 
     // --- 2nd delivery: only 1 request can be processed after 48 seconds ---
-    await advanceChainTime(BigInt(frameDurationSeconds));
+    await advanceChainTime(BigInt(frameDurationInSec));
 
     const tx2 = await veb.submitExitRequestsData(exitRequests);
     const receipt2 = await tx2.wait();
@@ -209,7 +209,7 @@ describe("ValidatorsExitBus integration", () => {
 
     // --- 3rd delivery: deliver remaining 6 requests after waiting (6 * 48) seconds ---
     let remainingRequestsCount = requests.length - (maxLimit + 1); // 10 - 4 = 6
-    await advanceChainTime(BigInt(frameDurationSeconds * remainingRequestsCount));
+    await advanceChainTime(BigInt(frameDurationInSec * remainingRequestsCount));
 
     const tx3 = await veb.submitExitRequestsData(exitRequests);
     const receipt3 = await tx3.wait();
@@ -236,7 +236,7 @@ describe("ValidatorsExitBus integration", () => {
 
     remainingRequestsCount = requests.length - (maxLimit * 2 + 1); // 3
 
-    await advanceChainTime(BigInt(frameDurationSeconds * remainingRequestsCount));
+    await advanceChainTime(BigInt(frameDurationInSec * remainingRequestsCount));
 
     const tx4 = await veb.submitExitRequestsData(exitRequests);
     const receipt4 = await tx4.wait();
