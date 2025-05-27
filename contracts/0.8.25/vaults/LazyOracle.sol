@@ -4,12 +4,13 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
-contract LazyOracle {
+contract LazyOracle is ILazyOracle {
     /// @custom:storage-location erc7201:LazyOracle
     struct Storage {
         /// @notice root of the vaults data tree
@@ -106,7 +107,7 @@ contract LazyOracle {
         uint256 _vaultsDataTimestamp,
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataReportCid
-    ) external {
+    ) external override(ILazyOracle) {
         if (msg.sender != LIDO_LOCATOR.accountingOracle()) revert NotAuthorized();
 
         Storage storage $ = _storage();
