@@ -269,10 +269,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         _checkExitSubmitted(requestStatus);
         _checkExitRequestData(request.data, request.dataFormat);
-        _checkMaxBatchSize(request.data);
+        uint256 totalItemsCount = _checkMaxBatchSize(request.data);
         _checkContractVersion(requestStatus.contractVersion);
 
-        uint256 totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
         uint32 lastDeliveredIndex = requestStatus.lastDeliveredExitDataIndex;
 
         uint256 startIndex = requestStatus.deliveryHistoryLength == 0 ? 0 : lastDeliveredIndex + 1;
@@ -282,7 +281,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert RequestsAlreadyDelivered();
         }
 
-        uint256 requestsToDeliver = _consumeLimit(undeliveredItemsCount);
+        uint256 requestsToDeliver = _consumeLimit(undeliveredItemsCount, _applyDeliverLimit);
 
         _processExitRequestsList(request.data, startIndex, requestsToDeliver);
 
@@ -545,9 +544,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
     }
 
-    function _checkMaxBatchSize(bytes calldata requests) internal view {
+    function _checkMaxBatchSize(bytes calldata requests) internal view returns (uint256 requestsCount) {
         uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
-        uint256 requestsCount = requests.length / PACKED_REQUEST_LENGTH;
+        requestsCount = requests.length / PACKED_REQUEST_LENGTH;
 
         if (requestsCount > maxRequestsPerBatch) {
             revert MaxRequestsBatchSizeExceeded(requestsCount, maxRequestsPerBatch);
@@ -595,22 +594,29 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
     }
 
-    function _consumeLimit(uint256 requestsCount) internal returns (uint256 requestsToDeliver) {
+    function _consumeLimit(uint256 requestsCount, function(uint256, uint256) internal pure returns(uint256) applyLimit) internal returns (uint256 requestsLimitedCount) {
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
         if (!exitRequestLimitData.isExitLimitSet()) {
             return requestsCount;
         }
 
         uint256 limit = exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
+        requestsLimitedCount = applyLimit(limit, requestsCount);
 
-        if (limit == 0) {
-            revert ExitRequestsLimit(requestsCount, 0);
-        }
-
-        requestsToDeliver = limit >= requestsCount ? requestsCount : limit;
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            exitRequestLimitData.updatePrevExitLimit(limit - requestsToDeliver, _getTimestamp())
+            exitRequestLimitData.updatePrevExitLimit(limit - requestsLimitedCount, _getTimestamp())
         );
+    }
+
+    function _applyDeliverLimit(uint256 limit, uint256 count)
+        internal
+        pure
+        returns (uint256 limitedCount)
+    {
+        if (limit == 0) {
+            revert ExitRequestsLimit(count, 0);
+        }
+        return limit >= count ? count : limit;
     }
 
     function _storeNewHashRequestStatus(bytes32 exitRequestsHash, RequestStatus memory requestStatus) internal {
@@ -621,10 +627,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert ExitHashAlreadySubmitted();
         }
 
-        storedRequest.contractVersion = requestStatus.contractVersion;
-        storedRequest.deliveryHistoryLength = requestStatus.deliveryHistoryLength;
-        storedRequest.lastDeliveredExitDataIndex = requestStatus.lastDeliveredExitDataIndex;
-        storedRequest.lastDeliveredExitDataTimestamp = requestStatus.lastDeliveredExitDataTimestamp;
+        requestStatusMap[exitRequestsHash] = requestStatus;
 
         emit RequestsHashSubmitted(exitRequestsHash);
     }
