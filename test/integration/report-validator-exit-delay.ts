@@ -306,7 +306,7 @@ describe("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorExitDelayVerifier, "KeyWasNotUnpacked");
+    ).to.be.revertedWithCustomError(await validatorExitDelayVerifier, "EmptyDeliveryHistory");
 
     const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
@@ -317,7 +317,7 @@ describe("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorExitDelayVerifier, "KeyWasNotUnpacked");
+    ).to.be.revertedWithCustomError(await validatorExitDelayVerifier, "EmptyDeliveryHistory");
   });
 
   it("Should revert when submitting validator exit delay with invalid beacon block root", async () => {
