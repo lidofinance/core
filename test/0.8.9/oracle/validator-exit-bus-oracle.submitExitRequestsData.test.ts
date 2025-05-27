@@ -414,7 +414,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       expect(data.currentExitRequestsLimit).to.equal(2);
     });
 
-    it("Should process remaining requests after a day passes", async () => {
+    it("Should process remaining requests after 2 frames passes", async () => {
       const emitTx = await oracle.submitExitRequestsData(REQUEST_DELIVERED_BY_PARTS);
       const timestamp = await oracle.getTime();
 
@@ -443,7 +443,11 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       );
     });
 
-    it("Should revert if maxBatchSize exceeded", async () => {
+    it("Should limit request by MAX_VALIDATORS_PER_BATCH if it is smaller than available vebo limit", async () => {
+      await consensus.advanceTimeBy(MAX_EXIT_REQUESTS_LIMIT * 4 * 12);
+      const data = await oracle.getExitRequestLimitFullInfo();
+      expect(data.currentExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
+
       const role = await oracle.MAX_VALIDATORS_PER_BATCH_ROLE();
       await oracle.grantRole(role, authorizedEntity);
 
@@ -469,19 +473,25 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHashRandom);
 
-      await expect(oracle.submitExitRequestsData(exitRequestRandom))
-        .to.be.revertedWithCustomError(oracle, "MaxRequestsBatchSizeExceeded")
-        .withArgs(exitRequestsRandom.length, maxRequestsPerBatch);
-    });
+      const tx = oracle.submitExitRequestsData(exitRequestRandom);
+      const timestamp = await oracle.getTime();
 
-    it("Current limit should be equal to 0", async () => {
-      const data = await oracle.getExitRequestLimitFullInfo();
+      for (let i = 0; i < maxRequestsPerBatch; i++) {
+        const request = exitRequestsRandom[i];
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
+      }
 
-      expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
-      expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(0);
-      expect(data.currentExitRequestsLimit).to.equal(0);
+      const history = await oracle.getExitRequestsDeliveryHistory(exitRequestHashRandom);
+
+      expect(history.length).to.be.equal(1);
+      expect(history[0].lastDeliveredExitDataIndex).to.be.equal(maxRequestsPerBatch - 1);
+
+      const data2 = await oracle.getExitRequestLimitFullInfo();
+
+      expect(data2.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
+      expect(data2.currentExitRequestsLimit).to.equal(1);
     });
 
     it("Should set maxExitRequestsLimit equal to 0 and return as currentExitRequestsLimit type(uint256).max", async () => {

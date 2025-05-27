@@ -106,13 +106,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
 
     /**
-     * @notice Thrown when the number of requests submitted via submitExitRequestsData exceeds the allowed maxRequestsPerBatch.
-     * @param requestsCount The number of requests included in the current call.
-     * @param maxRequestsPerBatch The maximum number of requests allowed per call to submitExitRequestsData.
+     * @notice Thrown when submitting was not started for request
      */
-    error MaxRequestsBatchSizeExceeded(uint256 requestsCount, uint256 maxRequestsPerBatch);
 
-    error DeliveredIndexOutOfBounds();
     error DeliveryWasNotStarted();
 
     /// @dev Events
@@ -269,9 +265,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         _checkExitSubmitted(requestStatus);
         _checkExitRequestData(request.data, request.dataFormat);
-        uint256 totalItemsCount = _checkMaxBatchSize(request.data);
         _checkContractVersion(requestStatus.contractVersion);
 
+        uint256 totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
         uint32 lastDeliveredIndex = requestStatus.lastDeliveredExitDataIndex;
 
         uint256 startIndex = requestStatus.deliveryHistoryLength == 0 ? 0 : lastDeliveredIndex + 1;
@@ -281,7 +277,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert RequestsAlreadyDelivered();
         }
 
-        uint256 requestsToDeliver = _consumeLimit(undeliveredItemsCount, _applyDeliverLimit);
+        // take min between undeliveredItemsCount and maxBatchSize
+        uint256 requestsToDeliver = _consumeLimit(_applyMaxBatchSize(undeliveredItemsCount), _applyDeliverLimit);
 
         _processExitRequestsList(request.data, startIndex, requestsToDeliver);
 
@@ -544,13 +541,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
     }
 
-    function _checkMaxBatchSize(bytes calldata requests) internal view returns (uint256 requestsCount) {
+    function _applyMaxBatchSize(uint256 requestsCount) internal view returns (uint256) {
         uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
-        requestsCount = requests.length / PACKED_REQUEST_LENGTH;
-
-        if (requestsCount > maxRequestsPerBatch) {
-            revert MaxRequestsBatchSizeExceeded(requestsCount, maxRequestsPerBatch);
-        }
+        return min(requestsCount, maxRequestsPerBatch);
     }
 
     function _checkExitSubmitted(RequestStatus storage requestStatus) internal view {
@@ -608,15 +601,11 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         );
     }
 
-    function _applyDeliverLimit(uint256 limit, uint256 count)
-        internal
-        pure
-        returns (uint256 limitedCount)
-    {
+    function _applyDeliverLimit(uint256 limit, uint256 count) internal pure returns (uint256 limitedCount) {
         if (limit == 0) {
             revert ExitRequestsLimit(count, 0);
         }
-        return limit >= count ? count : limit;
+        return min(limit, count);
     }
 
     function _storeNewHashRequestStatus(bytes32 exitRequestsHash, RequestStatus memory requestStatus) internal {
@@ -763,6 +752,10 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
         }
+    }
+
+    function min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
     }
 
     /// Storage helpers
