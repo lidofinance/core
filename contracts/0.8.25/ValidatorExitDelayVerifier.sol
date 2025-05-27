@@ -43,8 +43,9 @@ struct HistoricalHeaderWitness {
 
 /**
  * @title ValidatorExitDelayVerifier
- * @notice Verifies validator proofs to ensure they are unexited after an exit request.
- *         Allows permissionless report the status of validators which are assumed to have exited but have not.
+ * @notice Allows permissionless reporting of exit delays for validators that have been requested to exit
+ *         via the Validator Exit Bus.
+ *
  * @dev Uses EIP-4788 to confirm the correctness of a given beacon block root.
  */
 contract ValidatorExitDelayVerifier {
@@ -156,8 +157,9 @@ contract ValidatorExitDelayVerifier {
     // ------------------------- External Functions -------------------------
 
     /**
-     * @notice Verifies that provided validators are still active (not exited) at the given beacon block.
-     *         If they are unexpectedly still active, it reports them back to the Staking Router.
+     * @notice Verifies that the provided validators were not requested to exit on the CL after a VEB exit request.
+     *         Reports exit delays to the Staking Router.
+     * @dev Ensures that `exitEpoch` is equal to `FAR_FUTURE_EPOCH` at the given beacon block.
      * @param exitRequests The concatenated VEBO exit requests, each 64 bytes in length.
      * @param beaconBlock The block header and EIP-4788 timestamp to prove the block root is known.
      * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited.
@@ -203,8 +205,10 @@ contract ValidatorExitDelayVerifier {
     }
 
     /**
-     * @notice Verifies historical blocks (via historical_summaries) and checks that certain validators
-     *         are still active at that old block. If they're still active, it reports them to Staking Router.
+     * @notice Verifies that the provided validators were not requested to exit on the CL after a VEB exit request.
+     *         Reports exit delays to the Staking Router.
+     * @dev Ensures that `exitEpoch` is equal to `FAR_FUTURE_EPOCH` at the given beacon block.
+     * @dev Verifies historical blocks (via historical_summaries).
      * @dev The oldBlock.header must have slot >= FIRST_SUPPORTED_SLOT.
      * @param exitRequests The concatenated VEBO exit requests, each 64 bytes in length.
      * @param beaconBlock The block header and EIP-4788 timestamp to prove the block root is known.
