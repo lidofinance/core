@@ -149,7 +149,7 @@ contract NodeOperatorFee is Permissions {
      * 
      * @return fee The node operator's disburseable fee.
      */
-    function nodeOperatorDisburseableFee() public view returns (uint256) {
+    function nodeOperatorDisbursableFee() public view returns (uint256) {
         VaultHub.Report storage periodStart = feePeriodStartReport;
         VaultHub.Report memory periodEnd = latestReport();
         int128 adjustment = _toSignedClamped(rewardsAdjustment.amount);
@@ -173,7 +173,7 @@ contract NodeOperatorFee is Permissions {
      *    reset `rewardsAdjustment` and transfer `fee` wei to `nodeOperatorFeeRecipient`.
      */
     function disburseNodeOperatorFee() public {
-        uint256 fee = nodeOperatorDisburseableFee();
+        uint256 fee = nodeOperatorDisbursableFee();
         // it's important not to revert here if there is no fee,
         // because the fee is automatically disbursed during `voluntaryDisconnect`
         if (fee == 0) return;
@@ -207,7 +207,7 @@ contract NodeOperatorFee is Permissions {
 
         // To follow the check-effects-interaction pattern, we need to remember the fee here
         // because the fee calculation variables will be reset in the following lines
-        uint256 fee = nodeOperatorDisburseableFee();
+        uint256 fee = nodeOperatorDisbursableFee();
 
         // Start a new fee period
         feePeriodStartReport = latestReport();

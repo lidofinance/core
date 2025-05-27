@@ -197,7 +197,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function withdrawableEther() public view returns (uint256) {
         uint256 totalValue_ = totalValue();
-        uint256 lockedPlusFee = locked() + nodeOperatorDisburseableFee();
+        uint256 lockedPlusFee = locked() + nodeOperatorDisbursableFee();
 
         return Math256.min(address(_stakingVault()).balance,
             totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
@@ -541,7 +541,7 @@ contract Dashboard is NodeOperatorFee {
      * @return The amount of ether in wei that can be used to mint shares.
      */
     function _mintableValue() internal view returns (uint256) {
-        return VAULT_HUB.totalValue(address(_stakingVault())) - nodeOperatorDisburseableFee();
+        return VAULT_HUB.totalValue(address(_stakingVault())) - nodeOperatorDisbursableFee();
     }
 
     /**

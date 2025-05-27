@@ -179,7 +179,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     });
 
     it("Allows anyone to read public metrics of the vault", async () => {
-      expect(await testDashboard.connect(funder).nodeOperatorDisburseableFee()).to.equal(0);
+      expect(await testDashboard.connect(funder).nodeOperatorDisbursableFee()).to.equal(0);
       expect(await testDashboard.connect(funder).withdrawableEther()).to.equal(0);
     });
 
@@ -497,7 +497,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     });
 
     it("Allows anyone to read public metrics of the vault", async () => {
-      expect(await testDashboard.connect(funder).nodeOperatorDisburseableFee()).to.equal(0);
+      expect(await testDashboard.connect(funder).nodeOperatorDisbursableFee()).to.equal(0);
       expect(await testDashboard.connect(funder).withdrawableEther()).to.equal(0);
     });
 

@@ -419,11 +419,11 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(vaultReportedEvent.args?.reportLiabilityShares).to.equal(stakingVaultMaxMintingShares);
     // TODO: add assertions for fees
 
-    expect(await dashboard.nodeOperatorDisburseableFee()).to.be.gt(0n);
+    expect(await dashboard.nodeOperatorDisbursableFee()).to.be.gt(0n);
   });
 
   it("Should allow Operator to claim performance fees", async () => {
-    const performanceFee = await dashboard.nodeOperatorDisburseableFee();
+    const performanceFee = await dashboard.nodeOperatorDisbursableFee();
     log.debug("Staking Vault stats", {
       "Staking Vault performance fee": ethers.formatEther(performanceFee),
     });

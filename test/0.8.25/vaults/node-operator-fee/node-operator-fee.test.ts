@@ -139,7 +139,7 @@ describe("NodeOperatorFee.sol", () => {
 
       expect(await nodeOperatorFee.getConfirmExpiry()).to.equal(initialConfirmExpiry);
       expect(await nodeOperatorFee.nodeOperatorFeeRate()).to.equal(nodeOperatorFeeRate);
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
       expect(await nodeOperatorFee.feePeriodStartReport()).to.deep.equal([0n, 0n]);
     });
   });
@@ -221,7 +221,7 @@ describe("NodeOperatorFee.sol", () => {
         .to.emit(hub, "Mock__Withdrawn")
         .withArgs(vault, nodeOperatorManager, expectedNodeOperatorFee);
 
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
     });
 
     it("does not disburse if there is no fee, updates the report", async () => {
@@ -255,13 +255,13 @@ describe("NodeOperatorFee.sol", () => {
       // so the fee for only 1 ETH is disbursed, the vault still owes the node operator the fee for the other 1 eth
       const expectedNodeOperatorFee1 =
         ((report.totalValue - report.inOutDelta - sideDeposit) * nodeOperatorFeeRate) / BP_BASE;
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedNodeOperatorFee1);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedNodeOperatorFee1);
 
       await expect(nodeOperatorFee.disburseNodeOperatorFee())
         .to.emit(hub, "Mock__Withdrawn")
         .withArgs(vault, nodeOperatorManager, expectedNodeOperatorFee1);
 
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
 
       // now comes the report that does include the side deposit
       const report2 = {
@@ -275,7 +275,7 @@ describe("NodeOperatorFee.sol", () => {
       const expectedNodeOperatorFee2 =
         ((report2.totalValue - report.totalValue - (report2.inOutDelta - report.inOutDelta)) * nodeOperatorFeeRate) /
         BP_BASE;
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedNodeOperatorFee2);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedNodeOperatorFee2);
 
       expect(expectedNodeOperatorFee1 + expectedNodeOperatorFee2).to.equal(
         (realRewards * nodeOperatorFeeRate) / BP_BASE,
@@ -298,7 +298,7 @@ describe("NodeOperatorFee.sol", () => {
       await hub.setReport(report, await getCurrentBlockTimestamp(), true);
 
       // 11 - 10 - 2 = -1, NO Rewards
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
       await expect(nodeOperatorFee.disburseNodeOperatorFee()).not.to.emit(hub, "Mock__Withdrawn");
 
       const report2 = {
@@ -311,7 +311,7 @@ describe("NodeOperatorFee.sol", () => {
       // now the fee is disbursed
       // 13 - 12 - (10 - 10) = 1, at 10%, the fee is 0.1 ETH
       const expectedNodeOperatorFee = (realRewards * nodeOperatorFeeRate) / BP_BASE;
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedNodeOperatorFee);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedNodeOperatorFee);
 
       expect(expectedNodeOperatorFee).to.equal((realRewards * nodeOperatorFeeRate) / BP_BASE);
 
@@ -319,7 +319,7 @@ describe("NodeOperatorFee.sol", () => {
         .to.emit(hub, "Mock__Withdrawn")
         .withArgs(vault, nodeOperatorManager, expectedNodeOperatorFee);
 
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
     });
   });
 
@@ -409,13 +409,13 @@ describe("NodeOperatorFee.sol", () => {
       );
 
       const expectedFee = (rewards * operatorFee) / BP_BASE;
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedFee);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedFee);
 
       await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(rewards / 2n);
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedFee / 2n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedFee / 2n);
 
       await nodeOperatorFee.connect(nodeOperatorRewardAdjuster).increaseRewardsAdjustment(rewards / 2n);
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
     });
 
     it("adjustment is reset after fee claim", async () => {
@@ -433,7 +433,7 @@ describe("NodeOperatorFee.sol", () => {
       );
 
       const expectedFee = (rewards * operatorFee) / BP_BASE;
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedFee);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedFee);
 
       const adjustment = rewards / 2n;
       const timestamp = await getNextBlockTimestamp();
@@ -441,13 +441,13 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([adjustment, timestamp]);
 
       const adjustedFee = expectedFee - (adjustment * operatorFee) / BP_BASE;
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(adjustedFee);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(adjustedFee);
 
       await expect(nodeOperatorFee.connect(stranger).disburseNodeOperatorFee())
         .to.emit(nodeOperatorFee, "NodeOperatorFeeDisbursed")
         .withArgs(stranger, adjustedFee);
 
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0n);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
     });
   });
 
@@ -687,14 +687,14 @@ describe("NodeOperatorFee.sol", () => {
 
       const expectedFee = (rewards * nodeOperatorFeeRate) / BP_BASE;
 
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(expectedFee);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedFee);
 
       const newOperatorFeeRate = 5_00n; // 5%
       await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(newOperatorFeeRate))
         .to.emit(nodeOperatorFee, "NodeOperatorFeeDisbursed")
         .withArgs(vaultOwner, expectedFee);
 
-      expect(await nodeOperatorFee.nodeOperatorDisburseableFee()).to.equal(0);
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0);
     });
   });
 
