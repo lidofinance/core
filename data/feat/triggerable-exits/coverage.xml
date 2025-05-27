@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3296"  lines-covered="3238"  line-rate="0.9823999999999999"  branches-valid="1494"  branches-covered="1437"  branch-rate="0.9618000000000001"  timestamp="1748355245323" complexity="0" version="0.1">
+<coverage lines-valid="3295"  lines-covered="3237"  line-rate="0.9823999999999999"  branches-valid="1492"  branches-covered="1435"  branch-rate="0.9618000000000001"  timestamp="1748364476006" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -3189,7 +3189,7 @@
 			<line number="1516"  hits="0"  branch="false" />
 		</lines>
 		</class>
-		<class name="TriggerableWithdrawalsGateway.sol"  filename="contracts/0.8.9/TriggerableWithdrawalsGateway.sol"  line-rate="0.9818000000000001"  branch-rate="0.9286" >
+		<class name="TriggerableWithdrawalsGateway.sol"  filename="contracts/0.8.9/TriggerableWithdrawalsGateway.sol"  line-rate="0.9815"  branch-rate="0.9231" >
 		<methods>
 			<method name="preservesEthBalance"  hits="9"  signature="()V" >
 				<lines><line number="93"  hits="9" /></lines>
@@ -3221,8 +3221,8 @@
 			<method name="_setExitRequestLimit"  hits="5"  signature="()V" >
 				<lines><line number="244"  hits="5" /></lines>
 			</method>
-			<method name="_checkExitRequestLimit"  hits="8"  signature="()V" >
-				<lines><line number="260"  hits="8" /></lines>
+			<method name="_consumeExitRequestLimit"  hits="8"  signature="()V" >
+				<lines><line number="258"  hits="8" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -3270,17 +3270,16 @@
 			<line number="234"  hits="7"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="235"  hits="1"  branch="false" />
 			<line number="241"  hits="0"  branch="false" />
-			<line number="247"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="249"  hits="4"  branch="false" />
-			<line number="251"  hits="4"  branch="false" />
-			<line number="257"  hits="4"  branch="false" />
-			<line number="261"  hits="8"  branch="false" />
-			<line number="262"  hits="8"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="263"  hits="1"  branch="false" />
-			<line number="266"  hits="7"  branch="false" />
-			<line number="268"  hits="7"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="269"  hits="1"  branch="false" />
-			<line number="272"  hits="6"  branch="false" />
+			<line number="247"  hits="5"  branch="false" />
+			<line number="249"  hits="5"  branch="false" />
+			<line number="255"  hits="4"  branch="false" />
+			<line number="259"  hits="8"  branch="false" />
+			<line number="260"  hits="8"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="261"  hits="1"  branch="false" />
+			<line number="264"  hits="7"  branch="false" />
+			<line number="266"  hits="7"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="267"  hits="1"  branch="false" />
+			<line number="270"  hits="6"  branch="false" />
 		</lines>
 		</class>
 		<class name="WithdrawalQueue.sol"  filename="contracts/0.8.9/WithdrawalQueue.sol"  line-rate="1"  branch-rate="1" >
@@ -3996,14 +3995,14 @@
 	<classes>
 		<class name="ExitLimitUtils.sol"  filename="contracts/0.8.9/lib/ExitLimitUtils.sol"  line-rate="1"  branch-rate="0.95" >
 		<methods>
-			<method name="getStorageExitRequestLimit"  hits="91"  signature="()V" >
-				<lines><line number="18"  hits="91" /></lines>
+			<method name="getStorageExitRequestLimit"  hits="92"  signature="()V" >
+				<lines><line number="18"  hits="92" /></lines>
 			</method>
 			<method name="setStorageExitRequestLimit"  hits="75"  signature="()V" >
 				<lines><line number="22"  hits="75" /></lines>
 			</method>
-			<method name="_getDataStorage"  hits="166"  signature="()V" >
-				<lines><line number="26"  hits="166" /></lines>
+			<method name="_getDataStorage"  hits="167"  signature="()V" >
+				<lines><line number="26"  hits="167" /></lines>
 			</method>
 			<method name="calculateCurrentExitLimit"  hits="60"  signature="()V" >
 				<lines><line number="35"  hits="60" /></lines>
@@ -4011,17 +4010,17 @@
 			<method name="updatePrevExitLimit"  hits="48"  signature="()V" >
 				<lines><line number="56"  hits="48" /></lines>
 			</method>
-			<method name="setExitLimits"  hits="37"  signature="()V" >
-				<lines><line number="73"  hits="37" /></lines>
+			<method name="setExitLimits"  hits="38"  signature="()V" >
+				<lines><line number="73"  hits="38" /></lines>
 			</method>
 			<method name="isExitLimitSet"  hits="60"  signature="()V" >
 				<lines><line number="105"  hits="60" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="19"  hits="91"  branch="false" />
+			<line number="19"  hits="92"  branch="false" />
 			<line number="23"  hits="75"  branch="false" />
-			<line number="27"  hits="166"  branch="false" />
+			<line number="27"  hits="167"  branch="false" />
 			<line number="39"  hits="60"  branch="false" />
 			<line number="41"  hits="60"  branch="true"  condition-coverage="100% (4/4)" />
 			<line number="42"  hits="23"  branch="false" />
@@ -4038,9 +4037,9 @@
 			<line number="67"  hits="47"  branch="false" />
 			<line number="68"  hits="47"  branch="false" />
 			<line number="70"  hits="47"  branch="false" />
-			<line number="82"  hits="37"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="83"  hits="36"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="84"  hits="35"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="82"  hits="38"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="83"  hits="37"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="84"  hits="36"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="85"  hits="33"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="87"  hits="33"  branch="false" />
 			<line number="88"  hits="33"  branch="false" />
