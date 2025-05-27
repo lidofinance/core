@@ -16,7 +16,7 @@ import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
  *
  * CLProofVerifier is base abstract contract that provides internal method to verify
  * merkle proofs of validator entry in CL. It uses concatenated proofs that prove
- * validator existence in CL just from pubkey and withdrawalCredentials againts Beacon block root
+ * validator existence in CL just from pubkey and withdrawalCredentials against Beacon block root
  * stored in BeaconRoots system contract (see EIP-4788).
  *
  */
@@ -54,8 +54,8 @@ abstract contract CLProofVerifier {
                 ↑
        data to be proven
     */
-    uint8 public constant WC_PUBKEY_PARENT_DEPTH = 2;
-    uint256 public constant WC_PUBKEY_PARENT_POSITION = 0;
+    uint8 private constant WC_PUBKEY_PARENT_DEPTH = 2;
+    uint256 private constant WC_PUBKEY_PARENT_POSITION = 0;
 
     /// @notice GIndex of parent node for (Pubkey,WC) in validator container
     GIndex public immutable GI_PUBKEY_WC_PARENT =
@@ -83,11 +83,12 @@ abstract contract CLProofVerifier {
     */
 
     /// @notice GIndex of first validator in CL state tree
-    GIndex public immutable GI_FIRST_VALIDATOR;
-    /// @notice GIndex of first validator in CL state tree after change
-    GIndex public immutable GI_FIRST_VALIDATOR_AFTER_CHANGE;
-    /// @notice slot when change will occur
-    uint64 public immutable SLOT_CHANGE_GI_FIRST_VALIDATOR;
+    /// @dev This index is relative to a state like: `BeaconState.validators[0]`.
+    GIndex public immutable GI_FIRST_VALIDATOR_PREV;
+    /// @notice GIndex of first validator in CL state tree after PIVOT_SLOT
+    GIndex public immutable GI_FIRST_VALIDATOR_CURR;
+    /// @notice slot when GIndex change will occur due to the hardfork
+    uint64 public immutable PIVOT_SLOT;
 
     /**
      *   GIndex of stateRoot in Beacon Block state is
@@ -102,32 +103,35 @@ abstract contract CLProofVerifier {
                         │                                          │
                 ┌───────┴───────┐                          ┌───────┴───────┐
                 │               │                          │               │
-            proof[1]           node                      node             node     **DEPTH = 2
-                │               │                          │               │
+  used to -> proof[1]          node                      node             node     **DEPTH = 2
+  verify slot   │               │                          │               │
       ┌─────────┴─────┐   ┌─────┴───────────┐        ┌─────┴─────┐     ┌───┴──┐
       │               │   │                 │        │           │     │      │
     [slot]  [proposerInd] [parentRoot] [stateRoot]  [bodyRoot]  [0]   [0]    [0]   **DEPTH = 3
-                           (proof[0])       ↑
-                                        what needs to be proven
+       ↑                   (proof[0])       ↑
+    needed for GIndex                  what needs to be proven
      */
-    uint8 public constant STATE_ROOT_DEPTH = 3;
-    uint256 public constant STATE_ROOT_POSITION = 3;
+    uint8 private constant STATE_ROOT_DEPTH = 3;
+    uint256 private constant STATE_ROOT_POSITION = 3;
     /// @notice GIndex of state root in Beacon block header
     GIndex public immutable GI_STATE_ROOT = pack((1 << STATE_ROOT_DEPTH) + STATE_ROOT_POSITION, STATE_ROOT_DEPTH);
+
+    /// @notice location(from end) of parent node for (slot,proposerInd) in concatenated merkle proof
+    uint256 private constant SLOT_PROPOSER_PARENT_PROOF_OFFSET = 2;
 
     /// @notice see `BEACON_ROOTS_ADDRESS` constant in the EIP-4788.
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
     /**
-     * @param _gIFirstValidator packed(general index | depth in Merkle tree, see GIndex.sol) GIndex of first validator in CL state tree
-     * @param _gIFirstValidatorAfterChange packed GIndex of first validator after fork changes tree structure
-     * @param _changeSlot slot of the fork that alters first validator GIndex
-     * @dev if no fork changes are known,  _gIFirstValidatorAfterChange = _gIFirstValidator and _changeSlot = 0
+     * @param _gIFirstValidatorPrev packed(general index | depth in Merkle tree, see GIndex.sol) GIndex of first validator in CL state tree
+     * @param _gIFirstValidatorCurr packed GIndex of first validator after fork changes tree structure
+     * @param _pivotSlot slot of the fork that alters first validator GIndex
+     * @dev if no fork changes are known,  _gIFirstValidatorPrev = _gIFirstValidatorCurr and _changeSlot = 0
      */
-    constructor(GIndex _gIFirstValidator, GIndex _gIFirstValidatorAfterChange, uint64 _changeSlot) {
-        GI_FIRST_VALIDATOR = _gIFirstValidator;
-        GI_FIRST_VALIDATOR_AFTER_CHANGE = _gIFirstValidatorAfterChange;
-        SLOT_CHANGE_GI_FIRST_VALIDATOR = _changeSlot;
+    constructor(GIndex _gIFirstValidatorPrev, GIndex _gIFirstValidatorCurr, uint64 _pivotSlot) {
+        GI_FIRST_VALIDATOR_PREV = _gIFirstValidatorPrev;
+        GI_FIRST_VALIDATOR_CURR = _gIFirstValidatorCurr;
+        PIVOT_SLOT = _pivotSlot;
     }
 
     /**
@@ -137,6 +141,8 @@ abstract contract CLProofVerifier {
      *  `pubkey` - pubkey of the validator
      *  `validatorIndex` - numerical index of validator in CL
      *  `childBlockTimestamp` - timestamp of EL block that has Beacon root corresponding to proof
+     *  `slot` - slot of the Beacon block that has the state root
+     *  `proposerIndex` - proposer index of the Beacon block that has the state root
      * @param _withdrawalCredentials to verify proof with
      * @dev reverts with `InvalidProof` when provided input cannot be proven to Beacon block root
      */
@@ -144,11 +150,20 @@ abstract contract CLProofVerifier {
         IPredepositGuarantee.ValidatorWitness calldata _witness,
         bytes32 _withdrawalCredentials
     ) internal view {
+        // verifies user provided slot against user provided proof
+        // proof verification is done in `SSZ.verifyProof` and is not affected by slot
+        _verifySlot(_witness);
+
         // parent node for first two leaves in validator container tree: pubkey & wc
         // we use 'leaf' instead of 'node' due to proving a subtree where this node is a leaf
         bytes32 leaf = SSZ.sha256Pair(SSZ.pubkeyRoot(_witness.pubkey), _withdrawalCredentials);
-        // concatenated index for parent(pubkey + wc) ->  Validator Index in state tree -> stateView Index in Beacon block Tree
-        GIndex gIndex = concat(GI_STATE_ROOT, concat(_getValidatorGI(_witness.validatorIndex), GI_PUBKEY_WC_PARENT));
+
+        // concatenated GIndex for
+        // parent(pubkey + wc) ->  Validator Index in state tree -> stateView Index in Beacon block Tree
+        GIndex gIndex = concat(
+            GI_STATE_ROOT,
+            concat(_getValidatorGI(_witness.validatorIndex, _witness.slot), GI_PUBKEY_WC_PARENT)
+        );
 
         SSZ.verifyProof({
             proof: _witness.proof,
@@ -156,6 +171,33 @@ abstract contract CLProofVerifier {
             leaf: leaf,
             gIndex: gIndex
         });
+    }
+
+    /**
+     * @notice returns parent CL block root for given child block timestamp
+     * @param _witness object containing proof, slot and proposerIndex
+     * @dev checks slot and proposerIndex against proof[:-2] which latter is verified against Beacon block root
+     * This is a trivial case of multi Merkle proofs where a short proof branch proves slot
+     */
+    function _verifySlot(IPredepositGuarantee.ValidatorWitness calldata _witness) internal view {
+        bytes32 parentSlotProposer = SSZ.sha256Pair(
+            SSZ.toLittleEndian(_witness.slot),
+            SSZ.toLittleEndian(_witness.proposerIndex)
+        );
+        if (_witness.proof[_witness.proof.length - SLOT_PROPOSER_PARENT_PROOF_OFFSET] != parentSlotProposer) {
+            revert InvalidSlot();
+        }
+    }
+
+    /**
+     * @notice calculates general validator index in CL state tree by provided offset
+     * @param _offset from first validator (Validator Index)
+     * @param _provenSlot slot of the Beacon block for which proof is collected
+     * @return gIndex of container in CL state tree
+     */
+    function _getValidatorGI(uint256 _offset, uint64 _provenSlot) internal view returns (GIndex) {
+        GIndex gI = _provenSlot < PIVOT_SLOT ? GI_FIRST_VALIDATOR_PREV : GI_FIRST_VALIDATOR_CURR;
+        return gI.shr(_offset);
     }
 
     /**
@@ -174,19 +216,7 @@ abstract contract CLProofVerifier {
         return abi.decode(data, (bytes32));
     }
 
-    /**
-     * @notice calculates general validator index in CL state tree by provided offset
-     * @param _offset from first validator (Validator Index)
-     * @return gIndex of container in CL state tree
-     */
-    function _getValidatorGI(uint256 _offset) internal view returns (GIndex) {
-        // TODO get correct GI based on hardfork
-        // possible solutions:
-        // 1. allow permissionless proof of new GIndex
-        // 2. allow users to bring BeaconBlockHeader or Slot and verify it
-
-        return GI_FIRST_VALIDATOR.shr(_offset);
-    }
-
+    error InvalidTimestamp();
+    error InvalidSlot();
     error RootNotFound();
 }

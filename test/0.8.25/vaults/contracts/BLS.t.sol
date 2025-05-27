@@ -10,10 +10,10 @@ import {CommonBase} from "forge-std/Base.sol";
 import {StdAssertions} from "forge-std/StdAssertions.sol";
 
 import {BLS12_381, SSZ} from "contracts/0.8.25/lib/BLS.sol";
-import {IStakingVault, StakingVaultDeposit} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 struct PrecomputedDepositMessage {
-    StakingVaultDeposit deposit;
+    IStakingVault.Deposit deposit;
     BLS12_381.DepositY depositYComponents;
     bytes32 withdrawalCredentials;
 }
@@ -21,11 +21,21 @@ struct PrecomputedDepositMessage {
 // harness to test methods with calldata args
 contract BLSHarness {
     function verifyDepositMessage(PrecomputedDepositMessage calldata message) public view {
-        BLS12_381.verifyDepositMessage(message.deposit, message.depositYComponents, message.withdrawalCredentials);
+        BLS12_381.verifyDepositMessage(
+            message.deposit,
+            message.depositYComponents,
+            message.withdrawalCredentials,
+            0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9
+        );
     }
 
     function depositMessageSigningRoot(PrecomputedDepositMessage calldata message) public view returns (bytes32) {
-        return SSZ.depositMessageSigningRoot(message.deposit, message.withdrawalCredentials);
+        return
+            SSZ.depositMessageSigningRoot(
+                message.deposit,
+                message.withdrawalCredentials,
+                0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9
+            );
     }
 }
 
@@ -66,7 +76,7 @@ contract BLSVerifyingKeyTest is Test {
     function LOCAL_MESSAGE_1() internal pure returns (PrecomputedDepositMessage memory) {
         return
             PrecomputedDepositMessage(
-                StakingVaultDeposit(
+                IStakingVault.Deposit(
                     hex"b79902f435d268d6d37ac3ab01f4536a86c192fa07ba5b63b5f8e4d0e05755cfeab9d35fbedb9c02919fe02a81f8b06d",
                     hex"b357f146f53de27ae47d6d4bff5e8cc8342d94996143b2510452a3565701c3087a0ba04bed41d208eb7d2f6a50debeac09bf3fcf5c28d537d0fe4a52bb976d0c19ea37a31b6218f321a308f8017e5fd4de63df270f37df58c059c75f0f98f980",
                     1 ether,
@@ -91,7 +101,7 @@ contract BLSVerifyingKeyTest is Test {
     function LOCAL_MESSAGE_2() internal pure returns (PrecomputedDepositMessage memory) {
         return
             PrecomputedDepositMessage(
-                StakingVaultDeposit(
+                IStakingVault.Deposit(
                     hex"95886cccfd40156b84b29e22098f3b1b3d1811275507cdf10a3d4c29217635cc389156565a9e156c6f4797602520d959",
                     hex"87eb3d449f8b70f6aa46f7f204cdb100bdc2742fae3176cec9b864bfc5460907deed2bbb7dac911b4e79d5c9df86483c013c5ba55ab4691b6f8bd16197538c3f2413dc9c56f37cb6bd78f72dbe876f8ae2a597adbf7574eadab2dd2aad59a291",
                     1 ether,
@@ -121,7 +131,7 @@ contract BLSVerifyingKeyTest is Test {
     function BENCHMARK_MAINNET_MESSAGE() internal pure returns (PrecomputedDepositMessage memory) {
         return
             PrecomputedDepositMessage(
-                StakingVaultDeposit(
+                IStakingVault.Deposit(
                     hex"88841e426f271030ad2257537f4eabd216b891da850c1e0e2b92ee0d6e2052b1dac5f2d87bef51b8ac19d425ed024dd1",
                     hex"99a9e9abd7d4a4de2d33b9c3253ff8440ad237378ce37250d96d5833fe84ba87bbf288bf3825763c04c3b8cdba323a3b02d542cdf5940881f55e5773766b1b185d9ca7b6e239bdd3fb748f36c0f96f6a00d2e1d314760011f2f17988e248541d",
                     32 ether,

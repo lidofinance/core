@@ -42,7 +42,9 @@ describe("VaultHub.sol:pausableUntil", () => {
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
       reserveRatioBP: 2000n,
       forcedRebalanceThresholdBP: 1800n,
-      treasuryFeeBP: 500n,
+      infraFeeBP: 500n,
+      liquidityFeeBP: 400n,
+      reservationFeeBP: 100n,
     };
     await operatorGrid.initialize(user, defaultTierParams);
     await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);

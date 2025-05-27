@@ -3,6 +3,7 @@ import { ContractTransactionReceipt, keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setCode } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   ACL,
@@ -17,7 +18,7 @@ import {
   VaultHub__HarnessForReporting,
 } from "typechain-types";
 
-import { ether, findEvents, getCurrentBlockTimestamp, impersonate } from "lib";
+import { ether, findEvents, GENESIS_FORK_VERSION, getCurrentBlockTimestamp, impersonate } from "lib";
 import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
@@ -27,7 +28,9 @@ const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 const SHARE_LIMIT = ether("1");
 const RESERVE_RATIO_BP = 10_00n;
 const FORCED_REBALANCE_THRESHOLD_BP = 8_00n;
-const TREASURY_FEE_BP = 5_00n;
+const INFRA_FEE_BP = 5_00n;
+const LIQUIDITY_FEE_BP = 4_00n;
+const RESERVATION_FEE_BP = 1_00n;
 
 const TOTAL_BASIS_POINTS = 100_00n; // 100%
 const CONNECT_DEPOSIT = ether("1");
@@ -52,6 +55,7 @@ describe("VaultHub.sol:reporting", () => {
   let acl: ACL;
 
   let codehash: string;
+  let vaultCode: string;
 
   let originalState: string;
 
@@ -73,7 +77,9 @@ describe("VaultHub.sol:reporting", () => {
       shareLimit?: bigint;
       reserveRatioBP?: bigint;
       forcedRebalanceThresholdBP?: bigint;
-      treasuryFeeBP?: bigint;
+      infraFeeBP?: bigint;
+      liquidityFeeBP?: bigint;
+      reservationFeeBP?: bigint;
     },
   ) {
     const vault = await createVault(factory);
@@ -81,12 +87,19 @@ describe("VaultHub.sol:reporting", () => {
     await vault.connect(user).lock(CONNECT_DEPOSIT);
 
     const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
-    await operatorGrid.connect(user).alterTier(defaultTierId, {
-      shareLimit: options?.shareLimit ?? SHARE_LIMIT,
-      reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
-      forcedRebalanceThresholdBP: options?.forcedRebalanceThresholdBP ?? FORCED_REBALANCE_THRESHOLD_BP,
-      treasuryFeeBP: options?.treasuryFeeBP ?? TREASURY_FEE_BP,
-    });
+    await operatorGrid.connect(user).alterTiers(
+      [defaultTierId],
+      [
+        {
+          shareLimit: options?.shareLimit ?? SHARE_LIMIT,
+          reserveRatioBP: options?.reserveRatioBP ?? RESERVE_RATIO_BP,
+          forcedRebalanceThresholdBP: options?.forcedRebalanceThresholdBP ?? FORCED_REBALANCE_THRESHOLD_BP,
+          infraFeeBP: options?.infraFeeBP ?? INFRA_FEE_BP,
+          liquidityFeeBP: options?.liquidityFeeBP ?? LIQUIDITY_FEE_BP,
+          reservationFeeBP: options?.reservationFeeBP ?? RESERVATION_FEE_BP,
+        },
+      ],
+    );
     await vaultHub.connect(user).connectVault(vault);
 
     return vault;
@@ -96,6 +109,7 @@ describe("VaultHub.sol:reporting", () => {
     [deployer, user, whale] = await ethers.getSigners();
 
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,
@@ -127,7 +141,9 @@ describe("VaultHub.sol:reporting", () => {
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
       reserveRatioBP: 2000n,
       forcedRebalanceThresholdBP: 1800n,
-      treasuryFeeBP: 500n,
+      infraFeeBP: 500n,
+      liquidityFeeBP: 400n,
+      reservationFeeBP: 100n,
     };
     await operatorGrid.initialize(user, defaultTierParams);
     await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
@@ -147,7 +163,7 @@ describe("VaultHub.sol:reporting", () => {
     await vaultHubAdmin.grantRole(await vaultHub.PAUSE_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.RESUME_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await vaultHubAdmin.grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), user);
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 
@@ -159,7 +175,8 @@ describe("VaultHub.sol:reporting", () => {
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
     const vault = await createVault(vaultFactory);
 
-    codehash = keccak256(await ethers.provider.getCode(await vault.getAddress()));
+    vaultCode = await ethers.provider.getCode(await vault.getAddress());
+    codehash = keccak256(vaultCode);
     await vaultHub.connect(user).addVaultProxyCodehash(codehash);
   });
 
@@ -194,15 +211,17 @@ describe("VaultHub.sol:reporting", () => {
   });
 
   context("updateVaultData", () => {
-    it("accepts proved values", async () => {
+    it("reverts on invalid proof", async () => {
       const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
       await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
       await vaultHub.harness__connectVault(
         "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
-        99170000769726969624n,
-        33000000000000000000n,
-        0n,
-        0n,
+        SHARE_LIMIT,
+        RESERVE_RATIO_BP,
+        FORCED_REBALANCE_THRESHOLD_BP,
+        INFRA_FEE_BP,
+        LIQUIDITY_FEE_BP,
+        RESERVATION_FEE_BP,
       );
 
       await expect(
@@ -217,28 +236,83 @@ describe("VaultHub.sol:reporting", () => {
       ).to.be.revertedWithCustomError(vaultHub, "InvalidProof");
     });
 
-    it("accepts proved values", async () => {
-      const accountingAddress = await impersonate(await locator.accounting(), ether("1"));
-      await expect(vaultHub.connect(accountingAddress).updateReportData(0, TEST_ROOT, "")).to.not.reverted;
-
-      await vaultHub.harness__connectVault(
-        "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
-        99170000769726969624n,
-        33000000000000000000n,
-        0n,
-        0n,
-      );
-
-      await expect(
-        vaultHub.updateVaultData(
-          "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
-          99170000769726969624n,
-          33000000000000000000n,
+    it("accepts generated proof", async () => {
+      const vaultsReport: VaultReportItem[] = [
+        ["0xE312f1ed35c4dBd010A332118baAD69d45A0E302", 33000000000000000000n, 33000000000000000000n, 0n, 0n],
+        [
+          "0x652b70E0Ae932896035d553fEaA02f37Ab34f7DC",
+          3100000000000000000n,
+          3100000000000000000n,
           0n,
+          510300000000000000n,
+        ],
+        [
+          "0x20d34FD0482E3BdC944952D0277A306860be0014",
+          2580000000000012501n,
+          580000000000012501n,
           0n,
-          TEST_PROOF,
-        ),
-      ).to.be.reverted;
+          1449900000000010001n,
+        ],
+        ["0x60B614c42d92d6c2E68AF7f4b741867648aBf9A4", 1000000000000000000n, 1000000000000000000n, 0n, 0n],
+        [
+          "0xE6BdAFAac1d91605903D203539faEd173793b7D7",
+          1030000000000000000n,
+          1030000000000000000n,
+          0n,
+          400000000000000000n,
+        ],
+        ["0x34ebc5780F36d3fD6F1e7b43CF8DB4a80dCE42De", 1000000000000000000n, 1000000000000000000n, 0n, 0n],
+        [
+          "0x3018F0cC632Aa3805a8a676613c62F55Ae4018C7",
+          2000000000000000000n,
+          2000000000000000000n,
+          0n,
+          100000000000000000n,
+        ],
+        [
+          "0x40998324129B774fFc7cDA103A2d2cFd23EcB56e",
+          1000000000000000000n,
+          1000000000000000000n,
+          0n,
+          300000000000000000n,
+        ],
+        ["0x4ae099982712e2164fBb973554991111A418ab2B", 1000000000000000000n, 1000000000000000000n, 0n, 0n],
+        ["0x59536AC6211C1deEf1EE37CDC11242A0bDc7db83", 1000000000000000000n, 1000000000000000000n, 0n, 0n],
+      ];
+
+      const tree = createVaultsReportTree(vaultsReport);
+      const accountingAddress = await impersonate(await locator.accounting(), ether("100"));
+      await vaultHub.connect(accountingAddress).updateReportData(await getCurrentBlockTimestamp(), tree.root, "");
+
+      for (let index = 0; index < vaultsReport.length; index++) {
+        const vaultReport = vaultsReport[index];
+        await vaultHub.harness__connectVault(
+          vaultReport[0],
+          SHARE_LIMIT,
+          RESERVE_RATIO_BP,
+          FORCED_REBALANCE_THRESHOLD_BP,
+          INFRA_FEE_BP,
+          LIQUIDITY_FEE_BP,
+          RESERVATION_FEE_BP,
+        );
+        await setCode(vaultReport[0], vaultCode);
+        await vaultHub.updateVaultData(
+          vaultReport[0],
+          vaultReport[1],
+          vaultReport[2],
+          vaultReport[3],
+          vaultReport[4],
+          tree.getProof(index),
+        );
+      }
+
+      expect(tree.root).to.equal("0x305228cb82b2385b40ebeb7f0b805e58c2e9942bd84183eb1d603b765af94ca1");
+      const proof = tree.getProof(1);
+      expect(proof).to.deep.equal([
+        "0x3dfaa9117d824d40ae979f184ce0a9e60d7474912e7b53603e40b0b34cbba72f",
+        "0x33c5d49ae39b473dc097b8987ab2f876542ad500209b96af5600da11289fe643",
+        "0x5060c4e8e98281c0181273abcabb2e9e8f06fe6353e99f96606bb87635c9b090",
+      ]);
     });
 
     it("calculates merkle tree the same way as off-chain implementation", async () => {

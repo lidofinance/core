@@ -25,6 +25,7 @@ contract LidoLocator__MockMutable is ILidoLocator {
         address wstETH;
         address vaultHub;
         address operatorGrid;
+        address lazyOracle;
     }
 
     error ZeroAddress();
@@ -47,11 +48,8 @@ contract LidoLocator__MockMutable is ILidoLocator {
     address public immutable wstETH;
     address public immutable vaultHub;
     address public immutable operatorGrid;
-    /**
-     * @notice declare service locations
-     * @dev accepts a struct to avoid the "stack-too-deep" error
-     * @param _config struct of addresses
-     */
+    address public immutable lazyOracle;
+
     constructor(Config memory _config) {
         accountingOracle = _assertNonZero(_config.accountingOracle);
         depositSecurityModule = _assertNonZero(_config.depositSecurityModule);
@@ -71,6 +69,7 @@ contract LidoLocator__MockMutable is ILidoLocator {
         predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
         vaultHub = _assertNonZero(_config.vaultHub);
         operatorGrid = _assertNonZero(_config.operatorGrid);
+        lazyOracle = _assertNonZero(_config.lazyOracle);
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {

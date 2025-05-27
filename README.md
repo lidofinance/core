@@ -53,7 +53,7 @@ Users can deposit ether to the Lido smart contract and receive stETH tokens in r
 
 ## Bug Bounty
 
-Please refer to the [Lido Bug Bounry](/bugbounty.md).
+Please refer to the [Lido Bug Bounty](/bugbounty.md).
 
 ## Contributing
 

@@ -3,15 +3,12 @@ import { ethers } from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
 
-import { SSZHelpers, SSZMerkleTree } from "typechain-types";
+import { IStakingVault, SSZHelpers, SSZMerkleTree } from "typechain-types";
 import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
-import { StakingVaultDepositStruct } from "typechain-types/contracts/0.8.25/vaults/StakingVault";
 
 import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "lib";
 
 export type Validator = { container: SSZHelpers.ValidatorStruct; blsPrivateKey: SecretKey };
-
-export type LocalMerkle = Awaited<ReturnType<typeof prepareLocalMerkleTree>>;
 
 export const randomBytes32 = (): string => hexlify(randomBytes(32));
 export const randomValidatorPubkey = (): string => hexlify(randomBytes(48));
@@ -42,17 +39,24 @@ export const generateValidator = (customWC?: string): Validator => {
   };
 };
 
+type GeneratePredepositOptions = {
+  overrideAmount?: bigint;
+  depositDomain?: string;
+};
+
 export const generatePredeposit = async (
   validator: Validator,
-  overrideAmount?: bigint,
-): Promise<{ deposit: StakingVaultDepositStruct; depositY: BLS12_381.DepositYStruct }> => {
-  const amount = overrideAmount ?? ether("1");
+  options = {} as GeneratePredepositOptions,
+): Promise<{ deposit: IStakingVault.DepositStruct; depositY: BLS12_381.DepositYStruct }> => {
+  const { overrideAmount = ether("1"), depositDomain } = options;
+  const amount = overrideAmount;
   const pubkey = validator.blsPrivateKey.toPublicKey();
 
   const messageRoot = await computeDepositMessageRoot(
     pubkey.toHex(true),
     hexlify(validator.container.withdrawalCredentials),
     amount,
+    depositDomain,
   );
 
   const pubkeyY = pubkey.toBytes(false).slice(48);
@@ -103,7 +107,7 @@ export const generatePredeposit = async (
 export const generatePostDeposit = (
   validator: SSZHelpers.ValidatorStruct,
   amount = ether("31"),
-): StakingVaultDepositStruct => {
+): IStakingVault.DepositStruct => {
   // signature is not checked for post-deposit
   const signature = zeroPadBytes("0x00", 96);
   return {

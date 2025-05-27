@@ -22,7 +22,7 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import { days, ether, getCurrentBlockTimestamp, impersonate } from "lib";
+import { days, ether, GENESIS_FORK_VERSION, getCurrentBlockTimestamp, impersonate } from "lib";
 import { createVaultProxy, createVaultsReportTree } from "lib/protocol/helpers";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
@@ -68,6 +68,7 @@ describe("VaultHub.sol:deauthorize", () => {
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
 
     predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+      GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,
@@ -114,8 +115,8 @@ describe("VaultHub.sol:deauthorize", () => {
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
-    //add VAULT_REGISTRY_ROLE role to allow admin to add factory and vault implementation to the hub
-    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_REGISTRY_ROLE(), admin);
+    //add VAULT_CODEHASH_SET_ROLE role to allow admin to add factory and vault implementation to the hub
+    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), admin);
 
     //the initialize() function cannot be called on a contract
     await expect(implOld.initialize(stranger, operator, predepositGuarantee, "0x")).to.revertedWithCustomError(

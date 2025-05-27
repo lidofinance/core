@@ -76,8 +76,7 @@
   },
   "vaultHub": {
     "deployParameters": {
-      "connectedVaultsLimit": 500,
-      "relativeShareLimitBP": 1000
+      "maxRelativeShareLimitBP": 1000
     }
   },
   "accountingOracle": {
