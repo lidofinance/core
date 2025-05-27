@@ -530,9 +530,7 @@ describe.only("Integration: Vault obligations", () => {
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(vaultHubAddress, maxPossibleWithdrawals)
         .to.emit(stakingVault, "EtherWithdrawn")
-        .withArgs(treasuryAddress, unsettledTreasuryFees)
-        .to.emit(vaultHub, "VaultRebalanced")
-        .withArgs(stakingVaultAddress, maxPossibleWithdrawals, maxPossibleWithdrawals);
+        .withArgs(treasuryAddress, unsettledTreasuryFees);
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.unsettledWithdrawals).to.equal(0n);
