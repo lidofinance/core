@@ -229,10 +229,22 @@ abstract contract Permissions is AccessControlConfirmable {
     function confirmingRoles() public pure virtual returns (bytes32[] memory);
 
     /**
+     * @dev A custom modifier that checks if the caller has a role or the admin role for a given role.
+     * @param _role The role to check.
+     */
+    modifier onlyRoleMemberOrAdmin(bytes32 _role) {
+        if (hasRole(_role, msg.sender) || hasRole(getRoleAdmin(_role), msg.sender)) {
+            _;
+        } else {
+            revert AccessControlUnauthorizedAccount(msg.sender, _role);
+        }
+    }
+
+    /**
      * @dev Checks the FUND_ROLE and funds the StakingVault.
      * @param _ether The amount of ether to fund the StakingVault with.
      */
-    function _fund(uint256 _ether) internal onlyRole(FUND_ROLE) {
+    function _fund(uint256 _ether) internal onlyRoleMemberOrAdmin(FUND_ROLE) {
         _stakingVault().fund{value: _ether}();
     }
 
@@ -242,7 +254,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _ether The amount of ether to withdraw from the StakingVault.
      * @dev The zero checks for recipient and ether are performed in the StakingVault contract.
      */
-    function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRole(WITHDRAW_ROLE) {
+    function _withdraw(address _recipient, uint256 _ether) internal virtual onlyRoleMemberOrAdmin(WITHDRAW_ROLE) {
         _stakingVault().withdraw(_recipient, _ether);
     }
 
@@ -250,7 +262,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the LOCK_ROLE and increases the locked amount on the StakingVault.
      * @param _locked The amount of locked ether, must be greater or equal to the current locked amount.
      */
-    function _lock(uint256 _locked) internal onlyRole(LOCK_ROLE) {
+    function _lock(uint256 _locked) internal onlyRoleMemberOrAdmin(LOCK_ROLE) {
         _stakingVault().lock(_locked);
     }
 
@@ -260,7 +272,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _shares The amount of shares to mint.
      * @dev The zero checks for parameters are performed in the VaultHub contract.
      */
-    function _mintShares(address _recipient, uint256 _shares) internal onlyRole(MINT_ROLE) {
+    function _mintShares(address _recipient, uint256 _shares) internal onlyRoleMemberOrAdmin(MINT_ROLE) {
         VAULT_HUB.mintShares(address(_stakingVault()), _recipient, _shares);
     }
 
@@ -269,7 +281,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _shares The amount of shares to burn.
      * @dev The zero check for parameters is performed in the VaultHub contract.
      */
-    function _burnShares(uint256 _shares) internal onlyRole(BURN_ROLE) {
+    function _burnShares(uint256 _shares) internal onlyRoleMemberOrAdmin(BURN_ROLE) {
         VAULT_HUB.burnShares(address(_stakingVault()), _shares);
     }
 
@@ -278,21 +290,21 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _ether The amount of ether to rebalance the StakingVault with.
      * @dev The zero check for parameters is performed in the StakingVault contract.
      */
-    function _rebalanceVault(uint256 _ether) internal onlyRole(REBALANCE_ROLE) {
+    function _rebalanceVault(uint256 _ether) internal onlyRoleMemberOrAdmin(REBALANCE_ROLE) {
         _stakingVault().rebalance(_ether);
     }
 
     /**
      * @dev Checks the PAUSE_BEACON_CHAIN_DEPOSITS_ROLE and pauses beacon chain deposits on the StakingVault.
      */
-    function _pauseBeaconChainDeposits() internal onlyRole(PAUSE_BEACON_CHAIN_DEPOSITS_ROLE) {
+    function _pauseBeaconChainDeposits() internal onlyRoleMemberOrAdmin(PAUSE_BEACON_CHAIN_DEPOSITS_ROLE) {
         _stakingVault().pauseBeaconChainDeposits();
     }
 
     /**
      * @dev Checks the RESUME_BEACON_CHAIN_DEPOSITS_ROLE and resumes beacon chain deposits on the StakingVault.
      */
-    function _resumeBeaconChainDeposits() internal onlyRole(RESUME_BEACON_CHAIN_DEPOSITS_ROLE) {
+    function _resumeBeaconChainDeposits() internal onlyRoleMemberOrAdmin(RESUME_BEACON_CHAIN_DEPOSITS_ROLE) {
         _stakingVault().resumeBeaconChainDeposits();
     }
 
@@ -300,7 +312,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the REQUEST_VALIDATOR_EXIT_ROLE and requests validator exit on the StakingVault.
      * @dev The zero check for _pubkeys is performed in the StakingVault contract.
      */
-    function _requestValidatorExit(bytes calldata _pubkeys) internal onlyRole(REQUEST_VALIDATOR_EXIT_ROLE) {
+    function _requestValidatorExit(bytes calldata _pubkeys) internal onlyRoleMemberOrAdmin(REQUEST_VALIDATOR_EXIT_ROLE) {
         _stakingVault().requestValidatorExit(_pubkeys);
     }
 
@@ -312,14 +324,14 @@ abstract contract Permissions is AccessControlConfirmable {
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,
         address _refundRecipient
-    ) internal onlyRole(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
+    ) internal onlyRoleMemberOrAdmin(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
         _stakingVault().triggerValidatorWithdrawal{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
     /**
      * @dev Checks the VOLUNTARY_DISCONNECT_ROLE and voluntarily disconnects the StakingVault.
      */
-    function _voluntaryDisconnect() internal onlyRole(VOLUNTARY_DISCONNECT_ROLE) {
+    function _voluntaryDisconnect() internal onlyRoleMemberOrAdmin(VOLUNTARY_DISCONNECT_ROLE) {
         VAULT_HUB.voluntaryDisconnect(address(_stakingVault()));
     }
 
@@ -332,7 +344,7 @@ abstract contract Permissions is AccessControlConfirmable {
     function _compensateDisprovenPredepositFromPDG(
         bytes calldata _pubkey,
         address _recipient
-    ) internal onlyRole(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
+    ) internal onlyRoleMemberOrAdmin(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
         return IPredepositGuarantee(_stakingVault().depositor()).compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
@@ -341,7 +353,7 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
-    ) internal onlyRole(PDG_PROVE_VALIDATOR_ROLE) {
+    ) internal onlyRoleMemberOrAdmin(PDG_PROVE_VALIDATOR_ROLE) {
         IStakingVault vault = _stakingVault();
         IPredepositGuarantee pdg = IPredepositGuarantee(vault.depositor());
         for (uint256 i = 0; i < _witnesses.length; i++) {
@@ -354,7 +366,7 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _withdrawForUnguaranteedDepositToBeaconChain(
         uint256 _ether
-    ) internal onlyRole(UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE) {
+    ) internal onlyRoleMemberOrAdmin(UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE) {
         _stakingVault().withdraw(address(this), _ether);
     }
 
@@ -369,21 +381,21 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev Checks the LIDO_VAULTHUB_AUTHORIZATION_ROLE and authorizes Lido VaultHub on the StakingVault.
      */
-    function _authorizeLidoVaultHub() internal onlyRole(LIDO_VAULTHUB_AUTHORIZATION_ROLE) {
+    function _authorizeLidoVaultHub() internal onlyRoleMemberOrAdmin(LIDO_VAULTHUB_AUTHORIZATION_ROLE) {
         _stakingVault().authorizeLidoVaultHub();
     }
 
     /**
      * @dev Checks the LIDO_VAULTHUB_DEAUTHORIZATION_ROLE and deauthorizes Lido VaultHub from the StakingVault.
      */
-    function _deauthorizeLidoVaultHub() internal onlyRole(LIDO_VAULTHUB_DEAUTHORIZATION_ROLE) {
+    function _deauthorizeLidoVaultHub() internal onlyRoleMemberOrAdmin(LIDO_VAULTHUB_DEAUTHORIZATION_ROLE) {
         _stakingVault().deauthorizeLidoVaultHub();
     }
 
     /**
      * @dev Checks the OSSIFY_ROLE and ossifies the StakingVault.
      */
-    function _ossifyStakingVault() internal onlyRole(OSSIFY_ROLE) {
+    function _ossifyStakingVault() internal onlyRoleMemberOrAdmin(OSSIFY_ROLE) {
         _stakingVault().ossifyStakingVault();
     }
 
@@ -391,14 +403,14 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the SET_DEPOSITOR_ROLE and sets the depositor on the StakingVault.
      * @param _depositor The address to set the depositor to.
      */
-    function _setDepositor(address _depositor) internal onlyRole(SET_DEPOSITOR_ROLE) {
+    function _setDepositor(address _depositor) internal onlyRoleMemberOrAdmin(SET_DEPOSITOR_ROLE) {
         _stakingVault().setDepositor(_depositor);
     }
 
     /**
      * @dev Checks the RESET_LOCKED_ROLE and resets the locked amount on the disconnected StakingVault.
      */
-    function _resetLocked() internal onlyRole(RESET_LOCKED_ROLE) {
+    function _resetLocked() internal onlyRoleMemberOrAdmin(RESET_LOCKED_ROLE) {
         _stakingVault().resetLocked();
     }
 
@@ -407,7 +419,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
      */
-    function _changeTier(uint256 _tierId, uint256 _requestedShareLimit) internal onlyRole(CHANGE_TIER_ROLE) {
+    function _changeTier(uint256 _tierId, uint256 _requestedShareLimit) internal onlyRoleMemberOrAdmin(CHANGE_TIER_ROLE) {
         OperatorGrid(VAULT_HUB.operatorGrid()).changeTier(address(_stakingVault()), _tierId, _requestedShareLimit);
     }
 

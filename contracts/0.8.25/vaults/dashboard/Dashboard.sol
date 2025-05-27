@@ -206,6 +206,20 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Connects the vault to VaultHub
+     * @dev Requires msg.value to be at least CONNECT_DEPOSIT
+     */
+    function connectToVaultHub() external payable {
+        if (msg.value < VAULT_HUB.CONNECT_DEPOSIT()) revert InsufficientFunds();
+
+        _fund(msg.value);
+        _lock(VAULT_HUB.CONNECT_DEPOSIT());
+        _authorizeLidoVaultHub();
+
+        VAULT_HUB.connectVault(address(_stakingVault()));
+    }
+
+    /**
      * @notice Disconnects the staking vault from the vault hub.
      */
     function voluntaryDisconnect() external {
@@ -390,7 +404,11 @@ contract Dashboard is NodeOperatorFee {
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
      */
-    function recoverERC20(address _token, address _recipient, uint256 _amount) external onlyRole(RECOVER_ASSETS_ROLE) {
+    function recoverERC20(
+        address _token,
+        address _recipient,
+        uint256 _amount
+    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount == 0) revert ZeroArgument("_amount");
@@ -417,7 +435,7 @@ contract Dashboard is NodeOperatorFee {
         address _token,
         uint256 _tokenId,
         address _recipient
-    ) external onlyRole(RECOVER_ASSETS_ROLE) {
+    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
 
@@ -604,9 +622,8 @@ contract Dashboard is NodeOperatorFee {
      * @param _additionalFunding additional ether that may be funded to the vault
      */
     function _totalMintingCapacity(uint256 _additionalFunding) internal view returns (uint256) {
-        uint256 maxMintableStETH = ((_mintableValue() + _additionalFunding)
-            * (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP))
-            / TOTAL_BASIS_POINTS;
+        uint256 maxMintableStETH = ((_mintableValue() + _additionalFunding) *
+            (TOTAL_BASIS_POINTS - vaultSocket().reserveRatioBP)) / TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), vaultSocket().shareLimit);
     }
 
@@ -638,7 +655,7 @@ contract Dashboard is NodeOperatorFee {
 
     // ==================== Errors ====================
 
-        /**
+    /**
      * @notice Emitted when the unreserved amount of ether is exceeded
      * @param amount The amount of ether that was attempted to be withdrawn
      * @param unreserved The amount of unreserved ether available
@@ -654,4 +671,9 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error thrown when mintable total value is breached
      */
     error MintingCapacityExceeded(uint256 locked, uint256 mintableValue);
+
+    /**
+     * @notice Error thrown when insufficient funds are provided to connect to VaultHub
+     */
+    error InsufficientFunds();
 }

@@ -84,6 +84,59 @@ contract VaultFactory {
         // transfer ownership of the vault back to the dashboard
         OwnableUpgradeable(address(vault)).transferOwnership(address(dashboard));
 
+        _finalizeDashboard(
+            dashboard,
+            vault,
+            _defaultAdmin,
+            _nodeOperatorManager,
+            _nodeOperatorFeeBP,
+            _confirmExpiry,
+            _roleAssignments
+        );
+    }
+
+    function createVaultWithoutHubConnection(
+        address _defaultAdmin,
+        address _nodeOperator,
+        address _nodeOperatorManager,
+        uint256 _nodeOperatorFeeBP,
+        uint256 _confirmExpiry,
+        Permissions.RoleAssignment[] calldata _roleAssignments,
+        bytes calldata _extraParams
+    ) external returns (IStakingVault vault, Dashboard dashboard) {
+        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+
+        bytes memory immutableArgs = abi.encode(vault);
+        dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
+
+        vault.initialize(
+            address(dashboard),
+            _nodeOperator,
+            ILidoLocator(LIDO_LOCATOR).predepositGuarantee(),
+            _extraParams
+        );
+
+        _finalizeDashboard(
+            dashboard,
+            vault,
+            _defaultAdmin,
+            _nodeOperatorManager,
+            _nodeOperatorFeeBP,
+            _confirmExpiry,
+            _roleAssignments
+        );
+    }
+
+    function _finalizeDashboard(
+        Dashboard dashboard,
+        IStakingVault vault,
+        address _defaultAdmin,
+        address _nodeOperatorManager,
+        uint256 _nodeOperatorFeeBP,
+        uint256 _confirmExpiry,
+        Permissions.RoleAssignment[] calldata _roleAssignments
+    ) private {
+
         // If there are extra role assignments to be made,
         // we initialize the dashboard with the VaultFactory as the default admin,
         // grant the roles and revoke the VaultFactory's admin role.

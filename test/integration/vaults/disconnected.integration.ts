@@ -5,7 +5,15 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
-import { certainAddress, days, ether, generatePostDeposit, generateValidator, impersonate } from "lib";
+import {
+  certainAddress,
+  days,
+  ether,
+  generatePostDeposit,
+  generateValidator,
+  getNextBlockTimestamp,
+  impersonate,
+} from "lib";
 import {
   createVaultWithDashboard,
   disconnectFromHub,
@@ -160,13 +168,12 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     });
   });
 
-  it.skip("Can change the tier", async () => {
+  it("Can change the tier", async () => {
     const { operatorGrid } = ctx.contracts;
-    // need to add more tiers but how?
-    await operatorGrid.connect(owner).grantRole(await operatorGrid.REGISTRY_ROLE(), stranger);
+    const agentSigner = await ctx.getSigner("agent");
 
-    await operatorGrid.connect(stranger).registerGroup(nodeOperator, 1000);
-    await operatorGrid.connect(stranger).registerTiers(nodeOperator, [
+    await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, 1000);
+    await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
       {
         shareLimit: 1000,
         reserveRatioBP: 2000,
@@ -174,10 +181,20 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         treasuryFeeBP: 500,
       },
     ]);
-    await expect(dashboard.connect(roles.tierChanger).requestTierChange(1))
-      .to.emit(operatorGrid, "TierChangeRequested")
-      .withArgs(stakingVault, 1);
-    await expect(operatorGrid.connect(nodeOperator).confirmTierChange(stakingVault, 1))
+
+    const ownerMemberIndex = 0;
+    const operatorMemberIndex = 1;
+    let expiryTimestamp = (await getNextBlockTimestamp()) + (await operatorGrid.getConfirmExpiry());
+    const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [await stakingVault.getAddress(), 1, 1000]);
+
+    await expect(dashboard.connect(roles.tierChanger).changeTier(1n, 1000n))
+      .to.emit(operatorGrid, "MemberConfirmed")
+      .withArgs(dashboard, ownerMemberIndex, expiryTimestamp, msgData);
+
+    expiryTimestamp = (await getNextBlockTimestamp()) + (await operatorGrid.getConfirmExpiry());
+    await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n))
+      .to.emit(operatorGrid, "MemberConfirmed")
+      .withArgs(nodeOperator, operatorMemberIndex, expiryTimestamp, msgData)
       .to.emit(operatorGrid, "TierChanged")
       .withArgs(stakingVault, 1);
   });

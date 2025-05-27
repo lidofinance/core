@@ -396,13 +396,15 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
 
         $.vaultTier[_vault] = uint64(_requestedTierId);
 
-        VaultHub(LIDO_LOCATOR.vaultHub()).updateConnection(
-            _vault,
-            uint96(_requestedShareLimit),
-            requestedTier.reserveRatioBP,
-            requestedTier.forcedRebalanceThresholdBP,
-            requestedTier.treasuryFeeBP
-        );
+        if (vaultSocket.vault != address(0)) {
+            VaultHub(LIDO_LOCATOR.vaultHub()).updateConnection(
+                _vault,
+                uint96(_requestedShareLimit),
+                requestedTier.reserveRatioBP,
+                requestedTier.forcedRebalanceThresholdBP,
+                requestedTier.treasuryFeeBP
+            );
+        }
 
         emit TierChanged(_vault, uint64(_requestedTierId));
     }
