@@ -100,7 +100,7 @@ contract ValidatorExitDelayVerifier {
     error UnsupportedSlot(uint64 slot);
     error InvalidPivotSlot();
     error ZeroLidoLocatorAddress();
-    error ExitRequestNotEligibleOnProvableBeaconBlock(
+    error ExitIstNotEligibleOnProvableBeaconBlock(
         uint256 provableBeaconBlockTimestamp,
         uint256 eligibleExitRequestTimestamp
     );
@@ -186,7 +186,7 @@ contract ValidatorExitDelayVerifier {
                 witness.exitRequestIndex
             );
 
-            uint256 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
+            uint256 eligibleToExitInSec = _getSecondsSinceExitIsEligible(
                 requestsDeliveryHistory,
                 witness,
                 proofSlotTimestamp
@@ -194,13 +194,7 @@ contract ValidatorExitDelayVerifier {
 
             _verifyValidatorExitUnset(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
 
-            stakingRouter.reportValidatorExitDelay(
-                moduleId,
-                nodeOpId,
-                proofSlotTimestamp,
-                pubkey,
-                secondsSinceEligibleExitRequest
-            );
+            stakingRouter.reportValidatorExitDelay(moduleId, nodeOpId, proofSlotTimestamp, pubkey, eligibleToExitInSec);
         }
     }
 
@@ -239,7 +233,7 @@ contract ValidatorExitDelayVerifier {
                 witness.exitRequestIndex
             );
 
-            uint256 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
+            uint256 eligibleToExitInSec = _getSecondsSinceExitIsEligible(
                 requestsDeliveryHistory,
                 witness,
                 proofSlotTimestamp
@@ -247,13 +241,7 @@ contract ValidatorExitDelayVerifier {
 
             _verifyValidatorExitUnset(oldBlock.header, witness, pubkey, valIndex);
 
-            stakingRouter.reportValidatorExitDelay(
-                moduleId,
-                nodeOpId,
-                proofSlotTimestamp,
-                pubkey,
-                secondsSinceEligibleExitRequest
-            );
+            stakingRouter.reportValidatorExitDelay(moduleId, nodeOpId, proofSlotTimestamp, pubkey, eligibleToExitInSec);
         }
     }
 
@@ -337,7 +325,7 @@ contract ValidatorExitDelayVerifier {
      *      to exit after VEB exit request.
      * @return uint256 The elapsed seconds since the earliest eligible exit request time.
      */
-    function _getSecondsSinceExitRequestEligible(
+    function _getSecondsSinceExitIsEligible(
         DeliveryHistory[] memory history,
         ValidatorWitness calldata witness,
         uint256 referenceSlotTimestamp
@@ -357,7 +345,7 @@ contract ValidatorExitDelayVerifier {
             : earliestPossibleVoluntaryExitTimestamp;
 
         if (referenceSlotTimestamp < eligibleExitRequestTimestamp) {
-            revert ExitRequestNotEligibleOnProvableBeaconBlock(referenceSlotTimestamp, eligibleExitRequestTimestamp);
+            revert ExitIstNotEligibleOnProvableBeaconBlock(referenceSlotTimestamp, eligibleExitRequestTimestamp);
         }
 
         return referenceSlotTimestamp - eligibleExitRequestTimestamp;
