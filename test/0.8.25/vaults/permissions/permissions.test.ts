@@ -54,7 +54,7 @@ type PermissionsConfigStruct = {
   tierChanger: HardhatEthersSigner;
 };
 
-describe.only("Permissions", () => {
+describe("Permissions", () => {
   let deployer: HardhatEthersSigner;
   let defaultAdmin: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
