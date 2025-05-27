@@ -8,6 +8,7 @@ import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
+import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 
 import {UnstructuredStorage} from "contracts/0.8.9/lib/UnstructuredStorage.sol";
 
@@ -15,14 +16,6 @@ import {BaseOracle} from "./BaseOracle.sol";
 
 interface IReportReceiver {
     function handleOracleReport(ReportValues memory values) external;
-}
-
-interface ILazyOracle {
-    function updateReportData(
-        uint256 _timestamp,
-        bytes32 _vaultsDataTreeRoot,
-        string memory _vaultsDataReportCid
-    ) external;
 }
 
 interface IOracleReportSanityChecker {
