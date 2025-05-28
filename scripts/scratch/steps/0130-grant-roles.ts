@@ -55,7 +55,7 @@ export async function main() {
   await makeTx(
     stakingRouter,
     "grantRole",
-    [await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE(), triggerableWithdrawalsGatewayAddress],
+    [await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(), triggerableWithdrawalsGatewayAddress],
     { from: deployer },
   );
 
