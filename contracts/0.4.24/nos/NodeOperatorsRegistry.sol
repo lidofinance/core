@@ -1088,6 +1088,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
         // Set the cutoff timestamp to the current time minus the threshold and reportingWindow period
         uint256 currentCutoffTimestamp = block.timestamp - _threshold - _reportingWindow;
+        require(exitPenaltyCutoffTimestamp() <= currentCutoffTimestamp, "INVALID_EXIT_PENALTY_CUTOFF_TIMESTAMP");
 
         Packed64x4.Packed memory stats = Packed64x4.Packed(0);
         stats.set(EXIT_DELAY_THRESHOLD_OFFSET, _threshold);
