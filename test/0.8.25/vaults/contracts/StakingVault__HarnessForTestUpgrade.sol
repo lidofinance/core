@@ -110,12 +110,6 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function requestValidatorExit(bytes calldata _pubkeys) external {}
 
-    function triggerValidatorWithdrawal(
-        bytes calldata _pubkeys,
-        uint64[] calldata _amounts,
-        address _recipient
-    ) external payable {}
-
     function ossified() external pure returns (bool) {
         return false;
     }
