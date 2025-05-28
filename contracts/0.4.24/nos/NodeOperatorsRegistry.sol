@@ -11,7 +11,6 @@ import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStora
 import {Math256} from "../../common/lib/Math256.sol";
 import {MinFirstAllocationStrategy} from "../../common/lib/MinFirstAllocationStrategy.sol";
 import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
-import {IBurner} from "../../common/interfaces/IBurner.sol";
 import {SigningKeys} from "../lib/SigningKeys.sol";
 import {Packed64x4} from "../lib/Packed64x4.sol";
 import {Versioned} from "../utils/Versioned.sol";
@@ -52,16 +51,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     event TotalSigningKeysCountChanged(uint256 indexed nodeOperatorId, uint256 totalValidatorsCount);
 
     event NonceChanged(uint256 nonce);
-    event StuckPenaltyDelayChanged(uint256 stuckPenaltyDelay);
-    event StuckPenaltyStateChanged(
-        uint256 indexed nodeOperatorId,
-        uint256 stuckValidatorsCount,
-        uint256 refundedValidatorsCount,
-        uint256 stuckPenaltyEndTimestamp
-    );
     event TargetValidatorsCountChanged(uint256 indexed nodeOperatorId, uint256 targetValidatorsCount, uint256 targetLimitMode);
-    event NodeOperatorPenalized(address indexed recipientAddress, uint256 sharesPenalizedAmount);
-    event NodeOperatorPenaltyCleared(uint256 indexed nodeOperatorId);
 
     event ValidatorExitStatusUpdated(
         uint256 indexed nodeOperatorId,
@@ -124,22 +114,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @dev actual operators's number of keys which could be deposited
     uint8 internal constant MAX_VALIDATORS_COUNT_OFFSET = 2;
 
-    // StuckPenaltyStats
-    /// @dev stuck keys count from oracle report
-    /// @dev [DEPRECATED]
-    uint8 internal constant STUCK_VALIDATORS_COUNT_OFFSET = 0;
-    /// @dev refunded keys count from dao
-    /// @dev [DEPRECATED]
-    uint8 internal constant REFUNDED_VALIDATORS_COUNT_OFFSET = 1;
-    /// @dev extra penalty time after stuck keys resolved (refunded and/or exited)
-    /// @notice field is also used as flag for "half-cleaned" penalty status
-    ///         Operator is PENALIZED if `STUCK_VALIDATORS_COUNT > REFUNDED_VALIDATORS_COUNT` or
-    ///         `STUCK_VALIDATORS_COUNT <= REFUNDED_VALIDATORS_COUNT && STUCK_PENALTY_END_TIMESTAMP <= refund timestamp + STUCK_PENALTY_DELAY`
-    ///         When operator refund all stuck validators and time has pass STUCK_PENALTY_DELAY, but STUCK_PENALTY_END_TIMESTAMP not zeroed,
-    ///         then Operator can receive rewards but can't get new deposits until the new Oracle report or `clearNodeOperatorPenalty` is called.
-    /// @dev [DEPRECATED]
-    uint8 internal constant STUCK_PENALTY_END_TIMESTAMP_OFFSET = 2;
-
     // Summary SigningKeysStats
     uint8 internal constant SUMMARY_MAX_VALIDATORS_COUNT_OFFSET = 0;
     /// @dev Number of keys of all operators which were in the EXITED state for all time
@@ -176,18 +150,16 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     // bytes32 internal constant TYPE_POSITION = keccak256("lido.NodeOperatorsRegistry.type");
     bytes32 internal constant TYPE_POSITION = 0xbacf4236659a602d72c631ba0b0d67ec320aaf523f3ae3590d7faee4f42351d0;
 
-    // bytes32 internal constant STUCK_PENALTY_DELAY_POSITION = keccak256("lido.NodeOperatorsRegistry.stuckPenaltyDelay");
-    bytes32 internal constant STUCK_PENALTY_DELAY_POSITION = 0x8e3a1f3826a82c1116044b334cae49f3c3d12c3866a1c4b18af461e12e58a18e;
-
     // bytes32 internal constant REWARD_DISTRIBUTION_STATE = keccak256("lido.NodeOperatorsRegistry.rewardDistributionState");
     bytes32 internal constant REWARD_DISTRIBUTION_STATE = 0x4ddbb0dcdc5f7692e494c15a7fca1f9eb65f31da0b5ce1c3381f6a1a1fd579b6;
 
-    // Threshold in seconds after which a delayed exit is penalized
-    // bytes32 internal constant EXIT_DELAY_THRESHOLD_SECONDS = keccak256("lido.NodeOperatorsRegistry.exitDelayThresholdSeconds");
-    bytes32 internal constant EXIT_DELAY_THRESHOLD_SECONDS = 0x96656d3ece9cdbe3bd729ff6d7df8d0aeb457ff7c7c42372184ae30b10b37976;
-    // Cutoff timestamp used to protect validators from penalization after threshold changes
-    // bytes32 internal constant EXIT_PENALTY_CUTOFF_TIMESTAMP = keccak256("lido.NodeOperatorsRegistry.exitPenaltyCutoffTimestamp");
-    bytes32 internal constant EXIT_PENALTY_CUTOFF_TIMESTAMP = 0x93f1d4cdf7a6d0aac32b989ca335f5ae5f4322e4361b8f67a199fdda105f821b;
+    // bytes32 internal constant EXIT_DELAY_STATS = keccak256("lido.NodeOperatorsRegistry.exitDelayStats");
+    bytes32 internal constant EXIT_DELAY_STATS = 0x9fe52a88cbf7bfbe5e42abc45469ad27b2231a10bcbcd0a227c7ca0835cecbd8;
+    /// @dev Exit delay stats offsets in Packed64x4:
+    /// @dev The delay threshold in seconds after which a validator exit is considered late
+    uint8 internal constant EXIT_DELAY_THRESHOLD_OFFSET = 0;
+    /// @dev Timestamp before which validators reported as late will not result in penalties for their Node Operators.
+    uint8 internal constant EXIT_PENALTY_CUTOFF_TIMESTAMP_OFFSET = 1;
 
 
     //
@@ -516,7 +488,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         uint256 validatorsCount;
         uint256 _nodeOperatorIdsOffset;
         uint256 _exitedValidatorsCountsOffset;
-        /// @dev see comments for `updateStuckValidatorsCount`
+
         assembly {
             _nodeOperatorIdsOffset := add(calldataload(4), 36) // arg1 calldata offset + 4 (signature len) + 32 (length slot)
             _exitedValidatorsCountsOffset := add(calldataload(36), 36) // arg2 calldata offset + 4 (signature len) + 32 (length slot))
@@ -581,7 +553,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _auth(STAKING_ROUTER_ROLE);
 
-        // _updateStuckValidatorsCount(_nodeOperatorId, _stuckValidatorsCount); // removed
         _updateExitedValidatorsCount(_nodeOperatorId, _exitedValidatorsCount, true /* _allowDecrease */ );
         _increaseValidatorsKeysNonce();
     }
@@ -1091,18 +1062,17 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     }
 
     function _exitDeadlineThreshold() internal view returns (uint256) {
-        return EXIT_DELAY_THRESHOLD_SECONDS.getStorageUint256();
+        return Packed64x4.Packed(EXIT_DELAY_STATS.getStorageUint256()).get(EXIT_DELAY_THRESHOLD_OFFSET);
     }
 
-    /// @notice Returns the cutoff timestamp before which validators cannot be penalized for delayed exit.
+    /// @notice Returns the Timestamp before which validators reported as late will not result in penalties for their Node Operators..
     /// @return uint256 The cutoff timestamp used when evaluating late exits.
     function exitPenaltyCutoffTimestamp() public view returns (uint256) {
-        return EXIT_PENALTY_CUTOFF_TIMESTAMP.getStorageUint256();
+       return Packed64x4.Packed(EXIT_DELAY_STATS.getStorageUint256()).get(EXIT_PENALTY_CUTOFF_TIMESTAMP_OFFSET);
     }
 
     /// @notice Sets the validator exit deadline threshold and the reporting window for late exits.
-    /// @dev Updates the cutoff timestamp before which validators are protected from penalization.
-    ///      Prevents penalizing validators whose exit eligibility began before the new policy took effect.
+    /// @dev Updates the cutoff timestamp before which a validator that was requested to exit cannot be reported as late.
     /// @param _threshold Number of seconds a validator has to exit after becoming eligible.
     /// @param _reportingWindow Additional number of seconds during which a late exit can still be reported.
     function setExitDeadlineThreshold(uint256 _threshold, uint256 _reportingWindow) external {
@@ -1113,11 +1083,14 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     function _setExitDeadlineThreshold(uint256 _threshold, uint256 _reportingWindow) internal {
         require(_threshold > 0, "INVALID_EXIT_DELAY_THRESHOLD");
 
-        EXIT_DELAY_THRESHOLD_SECONDS.setStorageUint256(_threshold);
-
         // Set the cutoff timestamp to the current time minus the threshold and reportingWindow period
         uint256 currentCutoffTimestamp = block.timestamp - _threshold - _reportingWindow;
-        EXIT_PENALTY_CUTOFF_TIMESTAMP.setStorageUint256(currentCutoffTimestamp);
+        require(exitPenaltyCutoffTimestamp() <= currentCutoffTimestamp, "INVALID_EXIT_PENALTY_CUTOFF_TIMESTAMP");
+
+        Packed64x4.Packed memory stats = Packed64x4.Packed(0);
+        stats.set(EXIT_DELAY_THRESHOLD_OFFSET, _threshold);
+        stats.set(EXIT_PENALTY_CUTOFF_TIMESTAMP_OFFSET, currentCutoffTimestamp);
+        EXIT_DELAY_STATS.setStorageUint256(stats.v);
 
         emit ExitDeadlineThresholdChanged(_threshold, _reportingWindow);
     }
@@ -1159,7 +1132,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
             && _proofSlotTimestamp - _eligibleToExitInSec >= exitPenaltyCutoffTimestamp();
     }
 
-    /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
+    /// @notice Handles tracking and penalization logic for a node operator who failed to exit their validator within the defined exit window.
     /// @dev This function is called by the StakingRouter to report the current exit-related status of a validator
     ///      belonging to a specific node operator. It marks the validator as processed to avoid duplicate reports.
     /// @param _nodeOperatorId The ID of the node operator whose validator's status is being delivered.
@@ -1407,16 +1380,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         (address[] memory recipients, uint256[] memory shares,) =
             getRewardsDistribution(sharesToDistribute);
 
-        uint256 toBurn;
         for (uint256 idx; idx < recipients.length; ++idx) {
             /// @dev skip ultra-low amounts processing to avoid transfer zero amount in case of a penalty
             if (shares[idx] < 2) continue;
             stETH.transferShares(recipients[idx], shares[idx]);
             distributed = distributed.add(shares[idx]);
             emit RewardsDistributed(recipients[idx], shares[idx]);
-        }
-        if (toBurn > 0) {
-            IBurner(getLocator().burner()).requestBurnShares(address(this), toBurn);
         }
     }
 

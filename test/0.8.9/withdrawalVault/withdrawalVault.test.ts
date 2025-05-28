@@ -17,12 +17,16 @@ import { deployEIP7002WithdrawalRequestContract, EIP7002_ADDRESS, MAX_UINT256, p
 
 import { Snapshot } from "test/suite";
 
+import { advanceChainTime, getCurrentBlockTimestamp } from "../../../lib/time";
+
 import { encodeEIP7002Payload, findEIP7002MockEvents, testEIP7002Mock } from "./eip7002Mock";
 import { generateWithdrawalRequestPayload } from "./utils";
 
 const PETRIFIED_VERSION = MAX_UINT256;
 
 const ADD_WITHDRAWAL_REQUEST_ROLE = streccak("ADD_WITHDRAWAL_REQUEST_ROLE");
+const PAUSE_ROLE = streccak("PAUSE_ROLE");
+const RESUME_ROLE = streccak("RESUME_ROLE");
 
 describe("WithdrawalVault.sol", () => {
   let owner: HardhatEthersSigner;
@@ -313,45 +317,43 @@ describe("WithdrawalVault.sol", () => {
 
     it("Should revert if the caller is not Validator Exit Bus", async () => {
       await expect(
-        vault.connect(stranger).addWithdrawalRequests("0x1234", [1n]),
+        vault.connect(stranger).addWithdrawalRequests(["0x1234"], [1n]),
       ).to.be.revertedWithOZAccessControlError(stranger.address, ADD_WITHDRAWAL_REQUEST_ROLE);
     });
 
     it("Should revert if empty arrays are provided", async function () {
-      await expect(vault.connect(validatorsExitBus).addWithdrawalRequests("0x", [], { value: 1n }))
+      await expect(vault.connect(validatorsExitBus).addWithdrawalRequests([], [], { value: 1n }))
         .to.be.revertedWithCustomError(vault, "ZeroArgument")
         .withArgs("pubkeys");
     });
 
     it("Should revert if array lengths do not match", async function () {
       const requestCount = 2;
-      const { pubkeysHexString } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexArray } = generateWithdrawalRequestPayload(requestCount);
       const amounts = [1n];
 
       const totalWithdrawalFee = (await getFee()) * BigInt(requestCount);
 
       await expect(
-        vault
-          .connect(validatorsExitBus)
-          .addWithdrawalRequests(pubkeysHexString, amounts, { value: totalWithdrawalFee }),
+        vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, amounts, { value: totalWithdrawalFee }),
       )
         .to.be.revertedWithCustomError(vault, "ArraysLengthMismatch")
         .withArgs(requestCount, amounts.length);
 
       await expect(
-        vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexString, [], { value: totalWithdrawalFee }),
+        vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, [], { value: totalWithdrawalFee }),
       )
         .to.be.revertedWithCustomError(vault, "ArraysLengthMismatch")
         .withArgs(requestCount, 0);
     });
 
     it("Should revert if not enough fee is sent", async function () {
-      const { pubkeysHexString, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(1);
+      const { pubkeysHexArray, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(1);
 
       await withdrawalsPredeployed.mock__setFee(3n); // Set fee to 3 gwei
 
       // 1. Should revert if no fee is sent
-      await expect(vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts))
+      await expect(vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts))
         .to.be.revertedWithCustomError(vault, "IncorrectFee")
         .withArgs(0, 3n);
 
@@ -360,7 +362,7 @@ describe("WithdrawalVault.sol", () => {
       await expect(
         vault
           .connect(validatorsExitBus)
-          .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: insufficientFee }),
+          .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: insufficientFee }),
       )
         .to.be.revertedWithCustomError(vault, "IncorrectFee")
         .withArgs(2n, 3n);
@@ -368,57 +370,53 @@ describe("WithdrawalVault.sol", () => {
 
     it("Should revert if pubkey is not 48 bytes", async function () {
       // Invalid pubkey (only 2 bytes)
-      const invalidPubkeyHexString = "0x1234";
+      const invalidPubkeyHexString = ["0x1234"];
 
       const fee = await getFee();
       await expect(
         vault.connect(validatorsExitBus).addWithdrawalRequests(invalidPubkeyHexString, [1n], { value: fee }),
-      ).to.be.revertedWithCustomError(vault, "MalformedPubkeysArray");
+      ).to.be.revertedWithPanic(1); // assertion
     });
 
     it("Should revert if last pubkey not 48 bytes", async function () {
       const validPubey =
         "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
       const invalidPubkey = "1234";
-      const pubkeysHexString = `0x${validPubey}${invalidPubkey}`;
+      const pubkeysHexArray = [`0x${validPubey}`, `0x${invalidPubkey}`];
 
-      const fee = await getFee();
+      const fee = (await getFee()) * 2n; // 2 requests
 
       await expect(
-        vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexString, [1n, 2n], { value: fee }),
-      ).to.be.revertedWithCustomError(vault, "MalformedPubkeysArray");
+        vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, [1n, 2n], { value: fee }),
+      ).to.be.revertedWithPanic(1); // assertion
     });
 
     it("Should revert if addition fails at the withdrawal request contract", async function () {
-      const { pubkeysHexString, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(1);
+      const { pubkeysHexArray, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(1);
       const fee = await getFee();
 
       // Set mock to fail on add
       await withdrawalsPredeployed.mock__setFailOnAddRequest(true);
 
       await expect(
-        vault
-          .connect(validatorsExitBus)
-          .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: fee }),
+        vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: fee }),
       ).to.be.revertedWithCustomError(vault, "RequestAdditionFailed");
     });
 
     it("Should revert when fee read fails", async function () {
       await withdrawalsPredeployed.mock__setFailOnGetFee(true);
 
-      const { pubkeysHexString, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(2);
+      const { pubkeysHexArray, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(2);
       const fee = 10n;
 
       await expect(
-        vault
-          .connect(validatorsExitBus)
-          .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: fee }),
+        vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: fee }),
       ).to.be.revertedWithCustomError(vault, "FeeReadFailed");
     });
 
     it("Should revert when the provided fee exceeds the required amount", async function () {
       const requestCount = 3;
-      const { pubkeysHexString, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexArray, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
       await withdrawalsPredeployed.mock__setFee(fee);
@@ -427,7 +425,7 @@ describe("WithdrawalVault.sol", () => {
       await expect(
         vault
           .connect(validatorsExitBus)
-          .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: withdrawalFee }),
+          .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: withdrawalFee }),
       )
         .to.be.revertedWithCustomError(vault, "IncorrectFee")
         .withArgs(10n, 9n);
@@ -437,20 +435,20 @@ describe("WithdrawalVault.sol", () => {
       it(`Should revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
         await withdrawalsPredeployed.mock__setFeeRaw(unexpectedFee);
 
-        const { pubkeysHexString, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(2);
+        const { pubkeysHexArray, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(2);
         const fee = 10n;
 
         await expect(
           vault
             .connect(validatorsExitBus)
-            .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: fee }),
+            .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: fee }),
         ).to.be.revertedWithCustomError(vault, "FeeInvalidData");
       });
     });
 
     it("Should accept withdrawal requests when the provided fee matches the exact required amount", async function () {
       const requestCount = 3;
-      const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexArray, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
       await withdrawalsPredeployed.mock__setFee(3n);
@@ -458,7 +456,7 @@ describe("WithdrawalVault.sol", () => {
 
       await testEIP7002Mock(
         () =>
-          vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, {
+          vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, {
             value: expectedTotalWithdrawalFee,
           }),
         pubkeys,
@@ -473,7 +471,7 @@ describe("WithdrawalVault.sol", () => {
 
       await testEIP7002Mock(
         () =>
-          vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, {
+          vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, {
             value: expectedLargeTotalWithdrawalFee,
           }),
         pubkeys,
@@ -484,14 +482,14 @@ describe("WithdrawalVault.sol", () => {
 
     it("Should emit withdrawal event", async function () {
       const requestCount = 3;
-      const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexArray, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
       await withdrawalsPredeployed.mock__setFee(fee);
       const expectedTotalWithdrawalFee = 9n; // 3 requests * 3 gwei (fee) = 9 gwei
 
       await expect(
-        vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, {
+        vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, {
           value: expectedTotalWithdrawalFee,
         }),
       )
@@ -505,7 +503,7 @@ describe("WithdrawalVault.sol", () => {
 
     it("Should not affect contract balance", async function () {
       const requestCount = 3;
-      const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexArray, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
       await withdrawalsPredeployed.mock__setFee(fee);
@@ -515,7 +513,7 @@ describe("WithdrawalVault.sol", () => {
 
       await testEIP7002Mock(
         () =>
-          vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, {
+          vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, {
             value: expectedTotalWithdrawalFee,
           }),
         pubkeys,
@@ -527,7 +525,7 @@ describe("WithdrawalVault.sol", () => {
 
     it("Should transfer the total calculated fee to the EIP-7002 withdrawal contract", async function () {
       const requestCount = 3;
-      const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexArray, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const fee = 3n;
       await withdrawalsPredeployed.mock__setFee(3n);
@@ -536,7 +534,7 @@ describe("WithdrawalVault.sol", () => {
       const initialBalance = await getWithdrawalsPredeployedContractBalance();
       await testEIP7002Mock(
         () =>
-          vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, {
+          vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, {
             value: expectedTotalWithdrawalFee,
           }),
         pubkeys,
@@ -549,11 +547,11 @@ describe("WithdrawalVault.sol", () => {
 
     it("Should ensure withdrawal requests are encoded as expected with a 48-byte pubkey and 8-byte amount", async function () {
       const requestCount = 16;
-      const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+      const { pubkeysHexArray, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
 
       const tx = await vault
         .connect(validatorsExitBus)
-        .addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, { value: 16n });
+        .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: 16n });
 
       const receipt = await tx.wait();
 
@@ -581,7 +579,7 @@ describe("WithdrawalVault.sol", () => {
 
     testCasesForWithdrawalRequests.forEach(({ requestCount }) => {
       it(`Should successfully add ${requestCount} requests`, async () => {
-        const { pubkeysHexString, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const { pubkeysHexArray, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
         const expectedFee = await getFee();
         const expectedTotalWithdrawalFee = expectedFee * BigInt(requestCount);
 
@@ -590,7 +588,7 @@ describe("WithdrawalVault.sol", () => {
 
         const { receipt: receiptPartialWithdrawal } = await testEIP7002Mock(
           () =>
-            vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexString, mixedWithdrawalAmounts, {
+            vault.connect(validatorsExitBus).addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, {
               value: expectedTotalWithdrawalFee,
             }),
           pubkeys,
@@ -603,6 +601,326 @@ describe("WithdrawalVault.sol", () => {
           vebInitialBalance -
             expectedTotalWithdrawalFee -
             receiptPartialWithdrawal.gasUsed * receiptPartialWithdrawal.gasPrice,
+        );
+      });
+    });
+  });
+
+  context("pausable until", () => {
+    beforeEach(async () => {
+      // Initialize the vault and set up necessary roles
+      await vault.initialize(owner);
+      await vault.connect(owner).grantRole(ADD_WITHDRAWAL_REQUEST_ROLE, validatorsExitBus);
+      await vault.connect(owner).grantRole(PAUSE_ROLE, owner);
+      await vault.connect(owner).grantRole(RESUME_ROLE, owner);
+    });
+
+    context("resume", () => {
+      it("should revert if the sender does not have the RESUME_ROLE", async () => {
+        // First pause the contract
+        await vault.connect(owner).pauseFor(1000n);
+
+        // Try to resume without the RESUME_ROLE
+        await expect(vault.connect(stranger).resume()).to.be.revertedWithOZAccessControlError(
+          stranger.address,
+          RESUME_ROLE,
+        );
+      });
+
+      it("should revert if the contract is not paused", async () => {
+        // Contract is initially not paused
+        await expect(vault.connect(owner).resume()).to.be.revertedWithCustomError(vault, "PausedExpected");
+      });
+
+      it("should resume the contract when paused and emit Resumed event", async () => {
+        // First pause the contract
+        await vault.connect(owner).pauseFor(1000n);
+        expect(await vault.isPaused()).to.equal(true);
+
+        // Resume the contract
+        await expect(vault.connect(owner).resume()).to.emit(vault, "Resumed");
+
+        // Verify contract is resumed
+        expect(await vault.isPaused()).to.equal(false);
+      });
+
+      it("should allow withdrawal requests after resuming", async () => {
+        const requestCount = 1;
+        const { pubkeysHexArray, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // First pause and then resume the contract
+        await vault.connect(owner).pauseFor(1000n);
+        await vault.connect(owner).resume();
+
+        // Should be able to add withdrawal requests
+        await testEIP7002Mock(
+          () =>
+            vault
+              .connect(validatorsExitBus)
+              .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: expectedFee }),
+          pubkeys,
+          mixedWithdrawalAmounts,
+          expectedFee,
+        );
+      });
+    });
+
+    context("pauseFor", () => {
+      it("should revert if the sender does not have the PAUSE_ROLE", async () => {
+        await expect(vault.connect(stranger).pauseFor(1000n)).to.be.revertedWithOZAccessControlError(
+          stranger.address,
+          PAUSE_ROLE,
+        );
+      });
+
+      it("should revert if the contract is already paused", async () => {
+        // First pause the contract
+        await vault.connect(owner).pauseFor(1000n);
+
+        // Try to pause again
+        await expect(vault.connect(owner).pauseFor(500n)).to.be.revertedWithCustomError(vault, "ResumedExpected");
+      });
+
+      it("should revert if pause duration is zero", async () => {
+        await expect(vault.connect(owner).pauseFor(0n)).to.be.revertedWithCustomError(vault, "ZeroPauseDuration");
+      });
+
+      it("should pause the contract for the specified duration and emit Paused event", async () => {
+        await expect(vault.connect(owner).pauseFor(1000n)).to.emit(vault, "Paused").withArgs(1000n);
+
+        expect(await vault.isPaused()).to.equal(true);
+      });
+
+      it("should pause the contract indefinitely with PAUSE_INFINITELY", async () => {
+        const pauseInfinitely = await vault.PAUSE_INFINITELY();
+
+        // Pause the contract indefinitely
+        await expect(vault.connect(owner).pauseFor(pauseInfinitely)).to.emit(vault, "Paused").withArgs(pauseInfinitely);
+
+        // Verify contract is paused
+        expect(await vault.isPaused()).to.equal(true);
+
+        // Advance time significantly
+        await advanceChainTime(1_000_000_000n);
+
+        // Contract should still be paused
+        expect(await vault.isPaused()).to.equal(true);
+      });
+
+      it("should automatically resume after the pause duration passes", async () => {
+        // Pause the contract for 100 seconds
+        await vault.connect(owner).pauseFor(100n);
+        expect(await vault.isPaused()).to.equal(true);
+
+        // Advance time by 101 seconds
+        await advanceChainTime(101n);
+
+        // Contract should be automatically resumed
+        expect(await vault.isPaused()).to.equal(false);
+      });
+    });
+
+    context("pauseUntil", () => {
+      it("should revert if the sender does not have the PAUSE_ROLE", async () => {
+        const timestamp = await getCurrentBlockTimestamp();
+        await expect(vault.connect(stranger).pauseUntil(timestamp + 1000n)).to.be.revertedWithOZAccessControlError(
+          stranger.address,
+          PAUSE_ROLE,
+        );
+      });
+
+      it("should revert if the contract is already paused", async () => {
+        const timestamp = await getCurrentBlockTimestamp();
+
+        // First pause the contract
+        await vault.connect(owner).pauseFor(1000n);
+
+        // Try to pause again with pauseUntil
+        await expect(vault.connect(owner).pauseUntil(timestamp + 500n)).to.be.revertedWithCustomError(
+          vault,
+          "ResumedExpected",
+        );
+      });
+
+      it("should revert if timestamp is in the past", async () => {
+        const timestamp = await getCurrentBlockTimestamp();
+
+        // Try to pause until a past timestamp
+        await expect(vault.connect(owner).pauseUntil(timestamp - 100n)).to.be.revertedWithCustomError(
+          vault,
+          "PauseUntilMustBeInFuture",
+        );
+      });
+
+      it("should pause the contract until the specified timestamp and emit Paused event", async () => {
+        const timestamp = await getCurrentBlockTimestamp();
+
+        // Pause the contract until timestamp + 1000
+        await expect(vault.connect(owner).pauseUntil(timestamp + 1000n)).to.emit(vault, "Paused");
+
+        // Verify contract is paused
+        expect(await vault.isPaused()).to.equal(true);
+      });
+
+      it("should pause the contract indefinitely with PAUSE_INFINITELY", async () => {
+        const pauseInfinitely = await vault.PAUSE_INFINITELY();
+
+        // Pause the contract indefinitely
+        await expect(vault.connect(owner).pauseUntil(pauseInfinitely)).to.emit(vault, "Paused");
+
+        // Verify contract is paused
+        expect(await vault.isPaused()).to.equal(true);
+
+        // Advance time significantly
+        await advanceChainTime(100000n);
+
+        // Contract should still be paused
+        expect(await vault.isPaused()).to.equal(true);
+      });
+
+      it("should automatically resume after the pause timestamp passes", async () => {
+        const timestamp = await getCurrentBlockTimestamp();
+
+        // Pause the contract until timestamp + 100
+        await vault.connect(owner).pauseUntil(timestamp + 100n);
+        expect(await vault.isPaused()).to.equal(true);
+
+        // Advance time by 101 seconds
+        await advanceChainTime(101n);
+
+        // Contract should be automatically resumed
+        expect(await vault.isPaused()).to.equal(false);
+      });
+    });
+
+    context("Interaction with addWithdrawalRequests", () => {
+      it("pauseFor: should prevent withdrawal requests immediately after pausing", async () => {
+        const requestCount = 1;
+        const { pubkeysHexArray, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Initially contract should be resumed
+        expect(await vault.isPaused()).to.equal(false);
+
+        // Pause the contract
+        await vault.connect(owner).pauseFor(1000n);
+
+        // Attempt to add withdrawal request should fail
+        await expect(
+          vault
+            .connect(validatorsExitBus)
+            .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: expectedFee }),
+        ).to.be.revertedWithCustomError(vault, "ResumedExpected");
+      });
+
+      it("pauseUntil: should prevent withdrawal requests immediately after pausing", async () => {
+        const requestCount = 1;
+        const { pubkeysHexArray, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Initially contract should be resumed
+        expect(await vault.isPaused()).to.equal(false);
+
+        // Pause the contract
+        const timestamp = await getCurrentBlockTimestamp();
+        await vault.connect(owner).pauseUntil(timestamp + 100n);
+
+        // Attempt to add withdrawal request should fail
+        await expect(
+          vault
+            .connect(validatorsExitBus)
+            .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: expectedFee }),
+        ).to.be.revertedWithCustomError(vault, "ResumedExpected");
+      });
+
+      it("pauseFor: should allow withdrawal requests immediately after resuming", async () => {
+        const requestCount = 1;
+        const { pubkeysHexArray, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Pause and then resume the contract
+        await vault.connect(owner).pauseFor(1000n);
+        await vault.connect(owner).resume();
+
+        // Should be able to add withdrawal requests immediately
+        await testEIP7002Mock(
+          () =>
+            vault
+              .connect(validatorsExitBus)
+              .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: expectedFee }),
+          pubkeys,
+          mixedWithdrawalAmounts,
+          expectedFee,
+        );
+      });
+
+      it("pauseUntil: should allow withdrawal requests immediately after resuming", async () => {
+        const requestCount = 1;
+        const { pubkeysHexArray, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Pause and then resume the contract
+        const timestamp = await getCurrentBlockTimestamp();
+        await vault.connect(owner).pauseUntil(timestamp + 100n);
+        await vault.connect(owner).resume();
+
+        // Should be able to add withdrawal requests immediately
+        await testEIP7002Mock(
+          () =>
+            vault
+              .connect(validatorsExitBus)
+              .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: expectedFee }),
+          pubkeys,
+          mixedWithdrawalAmounts,
+          expectedFee,
+        );
+      });
+
+      it("pauseFor: should allow withdrawal requests after pause duration automatically expires", async () => {
+        const requestCount = 1;
+        const { pubkeysHexArray, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Pause for 100 seconds
+        await vault.connect(owner).pauseFor(100n);
+
+        // Advance time by 101 seconds
+        await advanceChainTime(101n);
+
+        // Should be able to add withdrawal requests after pause expires
+        await testEIP7002Mock(
+          () =>
+            vault
+              .connect(validatorsExitBus)
+              .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: expectedFee }),
+          pubkeys,
+          mixedWithdrawalAmounts,
+          expectedFee,
+        );
+      });
+
+      it("pauseUntil: should allow withdrawal requests after pause duration automatically expires", async () => {
+        const requestCount = 1;
+        const { pubkeysHexArray, pubkeys, mixedWithdrawalAmounts } = generateWithdrawalRequestPayload(requestCount);
+        const expectedFee = await getFee();
+
+        // Pause for 100 seconds
+        const timestamp = await getCurrentBlockTimestamp();
+        await vault.connect(owner).pauseUntil(timestamp + 100n);
+
+        // Advance time by 101 seconds
+        await advanceChainTime(101n);
+
+        // Should be able to add withdrawal requests after pause expires
+        await testEIP7002Mock(
+          () =>
+            vault
+              .connect(validatorsExitBus)
+              .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: expectedFee }),
+          pubkeys,
+          mixedWithdrawalAmounts,
+          expectedFee,
         );
       });
     });

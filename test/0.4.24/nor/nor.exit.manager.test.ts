@@ -246,33 +246,44 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
   });
 
   context("exitPenaltyCutoffTimestamp", () => {
-    const threshold = ONE_DAY;
 
     const reportingWindow = 3600n; // 1 hour
 
     let cutoff: bigint;
 
     beforeEach(async () => {
-      // Set threshold and grace period via contract method
-      const tx = await nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(threshold, reportingWindow);
+      await deployer.provider.send("hardhat_mine", [`0x${(BigInt(await deployer.provider.getBlockNumber()) + 3000n).toString(16)}`, 12000]);
+
+      const tx = await nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(exitDeadlineThreshold, reportingWindow);
 
       // Fetch actual cutoff timestamp from the contract
       cutoff = BigInt(await nor.exitPenaltyCutoffTimestamp());
 
       // Get the block timestamp of the transaction
       const block = await deployer.provider.getBlock(tx.blockNumber!);
-      const expectedCutoff = BigInt(block!.timestamp) - threshold - reportingWindow;
+      const expectedCutoff = BigInt(block!.timestamp) - exitDeadlineThreshold - reportingWindow;
 
       // Ensure cutoff was set correctly
       expect(cutoff).to.equal(expectedCutoff);
     });
 
+    it("reverts oldCutoffTimestamp <= currentCutoffTimestamp", async () => {
+      await expect(
+        nor
+          .connect(nodeOperatorsManager)
+          .setExitDeadlineThreshold(
+            eligibleToExitInSec,
+            eligibleToExitInSec + 100_000n,
+          ),
+      ).to.be.revertedWith("INVALID_EXIT_PENALTY_CUTOFF_TIMESTAMP");
+    });
+
     it("returns false when _proofSlotTimestamp < cutoff", async () => {
       const result = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
-        cutoff + threshold - 1n,
+        cutoff + exitDeadlineThreshold - 1n,
         testPublicKey,
-        threshold,
+        exitDeadlineThreshold,
       );
       expect(result).to.be.false;
     });
@@ -280,9 +291,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     it("returns true when _proofSlotTimestamp == cutoff", async () => {
       const result = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
-        cutoff + threshold,
+        cutoff + exitDeadlineThreshold,
         testPublicKey,
-        threshold,
+        exitDeadlineThreshold,
       );
       expect(result).to.be.true;
     });
@@ -290,9 +301,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
     it("returns true when _proofSlotTimestamp > cutoff", async () => {
       const result = await nor.isValidatorExitDelayPenaltyApplicable(
         firstNodeOperatorId,
-        cutoff + threshold + 1n,
+        cutoff + exitDeadlineThreshold + 1n,
         testPublicKey,
-        threshold,
+        exitDeadlineThreshold,
       );
       expect(result).to.be.true;
     });
@@ -303,7 +314,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
           .connect(stakingRouter)
           .reportValidatorExitDelay(
             firstNodeOperatorId,
-            cutoff + threshold - 1n,
+            cutoff + exitDeadlineThreshold - 1n,
             testPublicKey,
             eligibleToExitInSec,
           ),
@@ -316,13 +327,13 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
           .connect(stakingRouter)
           .reportValidatorExitDelay(
             firstNodeOperatorId,
-            cutoff + threshold,
+            cutoff + exitDeadlineThreshold,
             testPublicKey,
             eligibleToExitInSec,
           ),
       )
         .to.emit(nor, "ValidatorExitStatusUpdated")
-        .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, cutoff + threshold);
+        .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, cutoff + exitDeadlineThreshold);
     });
   });
 

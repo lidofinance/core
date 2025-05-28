@@ -28,12 +28,12 @@ contract ExitLimitUtils__Harness {
         uint32 maxExitRequestsLimit,
         uint32 prevExitRequestsLimit,
         uint32 exitsPerFrame,
-        uint32 frameDuration,
+        uint32 frameDurationInSec,
         uint32 timestamp
     ) external {
         state.maxExitRequestsLimit = maxExitRequestsLimit;
         state.exitsPerFrame = exitsPerFrame;
-        state.frameDuration = frameDuration;
+        state.frameDurationInSec = frameDurationInSec;
         state.prevExitRequestsLimit = prevExitRequestsLimit;
         state.prevTimestamp = timestamp;
     }
@@ -44,7 +44,7 @@ contract ExitLimitUtils__Harness {
                 state.maxExitRequestsLimit,
                 state.prevExitRequestsLimit,
                 state.prevTimestamp,
-                state.frameDuration,
+                state.frameDurationInSec,
                 state.exitsPerFrame
             );
     }
@@ -63,10 +63,10 @@ contract ExitLimitUtils__Harness {
     function setExitLimits(
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration,
+        uint256 frameDurationInSec,
         uint256 timestamp
     ) external view returns (ExitRequestLimitData memory) {
-        return state.setExitLimits(maxExitRequestsLimit, exitsPerFrame, frameDuration, timestamp);
+        return state.setExitLimits(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp);
     }
 
     function isExitLimitSet() external view returns (bool) {

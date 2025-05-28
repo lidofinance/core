@@ -10,8 +10,8 @@ contract TriggerableWithdrawalsGateway__Harness is TriggerableWithdrawalsGateway
         address lidoLocator,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
-    ) TriggerableWithdrawalsGateway(admin, lidoLocator, maxExitRequestsLimit, exitsPerFrame, frameDuration) {}
+        uint256 frameDurationInSec
+    ) TriggerableWithdrawalsGateway(admin, lidoLocator, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec) {}
 
     function getTimestamp() external view returns (uint256) {
         return _time;
@@ -23,5 +23,11 @@ contract TriggerableWithdrawalsGateway__Harness is TriggerableWithdrawalsGateway
 
     function advanceTimeBy(uint256 timeAdvance) external {
         _time += timeAdvance;
+    }
+
+    // Wrap internal functions for testing
+    function refundFee(uint256 fee, address recipient) external payable {
+        uint256 refund = _checkFee(fee);
+        _refundFee(refund, recipient);
     }
 }

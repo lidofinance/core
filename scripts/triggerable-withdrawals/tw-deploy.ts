@@ -42,6 +42,8 @@ async function main() {
 
   log(`Chain spec: ${JSON.stringify(chainSpec, null, 2)}`);
 
+  const agent = state["app:aragon-agent"].proxy.address;
+  log(`Using agent: ${agent}`);
   // Read contracts addresses from config
   const locator = await loadContract<LidoLocator>("LidoLocator", state[Sk.lidoLocator].proxy.address);
 
@@ -122,7 +124,7 @@ async function main() {
     Sk.triggerableWithdrawalsGateway,
     "TriggerableWithdrawalsGateway",
     deployer,
-    [deployer, locator.address, 13000, 1, 48],
+    [agent, locator.address, 13000, 1, 48],
   );
   log.success(`TriggerableWithdrawalsGateway implementation address: ${triggerableWithdrawalsGateway.address}`);
   log.emptyLine();

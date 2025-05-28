@@ -73,7 +73,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         uint256 maxValidatorsPerBatch,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
+        uint256 frameDurationInSec
     ) external {
         if (admin == address(0)) revert AdminCannotBeZero();
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
@@ -81,7 +81,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
 
-        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     /**
@@ -93,20 +93,20 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         uint256 maxValidatorsPerBatch,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
+        uint256 frameDurationInSec
     ) external {
-        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     function _initialize_v2(
         uint256 maxValidatorsPerBatch,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
+        uint256 frameDurationInSec
     ) internal {
         _updateContractVersion(2);
         _setMaxRequestsPerBatch(maxValidatorsPerBatch);
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     ///
@@ -264,26 +264,14 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
             revert InvalidRequestsDataLength();
         }
 
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker())
-            .checkExitBusOracleReport(data.requestsCount);
-
-        // Check VEB common limit
-
-        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        if (exitRequestLimitData.isExitLimitSet()) {
-           uint256 limit = exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
-           if (limit < data.requestsCount) {
-            revert ExitRequestsLimit(data.requestsCount, limit);
-           }
-           EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-             exitRequestLimitData.updatePrevExitLimit(limit - data.requestsCount, _getTimestamp())
-           );
-        }
-
         if (data.data.length / PACKED_REQUEST_LENGTH != data.requestsCount) {
             revert UnexpectedRequestsDataLength();
         }
 
+        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(data.requestsCount);
+
+        // Check VEB common limit
+        _consumeLimit(data.requestsCount, _applyOracleLimit);
         _processExitRequestsList(data.data, 0, data.requestsCount);
 
         _storageDataProcessingState().value = DataProcessingState({
@@ -302,7 +290,16 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         );
     }
 
-    function _storeOracleExitRequestHash(bytes32 exitRequestsHash, uint256 requestsCount, uint256 contractVersion) internal {
+    function _applyOracleLimit(uint256 limit, uint256 count) internal pure returns (uint256) {
+        if (limit < count) {
+            revert ExitRequestsLimitExceeded(count, limit);
+        }
+        return count;
+    }
+
+    function _storeOracleExitRequestHash(bytes32 exitRequestsHash, uint256 requestsCount, uint256 contractVersion)
+        internal
+    {
         if (requestsCount == 0) {
             return;
         }

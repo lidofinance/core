@@ -87,105 +87,215 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
   };
 
-  before(async () => {
-    [admin, authorizedEntity, stranger] = await ethers.getSigners();
+  describe("Common case", () => {
+    // tests in this section related to ExitRequestsData mistakes
+    // also here we tests successfull case
 
-    await deploy();
-  });
-
-  it("Initially, report was not submitted", async () => {
-    await expect(oracle.submitExitRequestsData(exitRequest))
-      .to.be.revertedWithCustomError(oracle, "ExitHashNotSubmitted")
-      .withArgs();
-  });
-
-  it("Should revert without SUBMIT_REPORT_HASH_ROLE role", async () => {
-    await expect(
-      oracle.connect(stranger).submitExitRequestsHash(exitRequestHash),
-    ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), await oracle.SUBMIT_REPORT_HASH_ROLE());
-  });
-
-  it("Should store exit hash for authorized entity", async () => {
-    const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
-
-    await oracle.grantRole(role, authorizedEntity);
-
-    const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
-
-    await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
-  });
-
-  it("Should revert if hash was already submitted", async () => {
-    await expect(
-      oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash),
-    ).to.be.revertedWithCustomError(oracle, "ExitHashAlreadySubmitted");
-  });
-
-  it("Emit ValidatorExit event", async () => {
-    const emitTx = await oracle.submitExitRequestsData(exitRequest);
-    const timestamp = await oracle.getTime();
-
-    await expect(emitTx)
-      .to.emit(oracle, "ValidatorExitRequest")
-      .withArgs(
-        exitRequests[0].moduleId,
-        exitRequests[0].nodeOpId,
-        exitRequests[0].valIndex,
-        exitRequests[0].valPubkey,
-        timestamp,
-      );
-
-    await expect(emitTx)
-      .to.emit(oracle, "ValidatorExitRequest")
-      .withArgs(
-        exitRequests[1].moduleId,
-        exitRequests[1].nodeOpId,
-        exitRequests[1].valIndex,
-        exitRequests[1].valPubkey,
-        timestamp,
-      );
-
-    await expect(emitTx)
-      .to.emit(oracle, "ValidatorExitRequest")
-      .withArgs(
-        exitRequests[2].moduleId,
-        exitRequests[2].nodeOpId,
-        exitRequests[2].valIndex,
-        exitRequests[2].valPubkey,
-        timestamp,
-      );
-
-    await expect(emitTx)
-      .to.emit(oracle, "ValidatorExitRequest")
-      .withArgs(
-        exitRequests[3].moduleId,
-        exitRequests[3].nodeOpId,
-        exitRequests[3].valIndex,
-        exitRequests[3].valPubkey,
-        timestamp,
-      );
-  });
-
-  it("Should revert if wrong DATA_FORMAT", async () => {
-    const exitRequestWrongDataFormat: ExitRequestData = {
-      dataFormat: 2,
-      data: encodeExitRequestsDataList(exitRequests),
-    };
-    const hash = hashExitRequest(exitRequestWrongDataFormat);
-    const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
-
-    await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
-
-    await expect(oracle.submitExitRequestsData(exitRequestWrongDataFormat))
-      .to.be.revertedWithCustomError(oracle, "UnsupportedRequestsDataFormat")
-      .withArgs(2);
-  });
-
-  describe("Exit Request Limits", function () {
     before(async () => {
-      const role = await oracle.EXIT_REPORT_LIMIT_ROLE();
+      [admin, authorizedEntity, stranger] = await ethers.getSigners();
+
+      await deploy();
+    });
+
+    it("Initially, report was not submitted", async () => {
+      await expect(oracle.submitExitRequestsData(exitRequest))
+        .to.be.revertedWithCustomError(oracle, "ExitHashNotSubmitted")
+        .withArgs();
+    });
+
+    it("Should revert without SUBMIT_REPORT_HASH_ROLE role", async () => {
+      await expect(
+        oracle.connect(stranger).submitExitRequestsHash(exitRequestHash),
+      ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), await oracle.SUBMIT_REPORT_HASH_ROLE());
+    });
+
+    it("Should store exit hash for authorized entity", async () => {
+      const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
+
       await oracle.grantRole(role, authorizedEntity);
+
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
+
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
+    });
+
+    it("Should revert if hash was already submitted", async () => {
+      await expect(
+        oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash),
+      ).to.be.revertedWithCustomError(oracle, "ExitHashAlreadySubmitted");
+    });
+
+    it("Emit ValidatorExit event", async () => {
+      const emitTx = await oracle.submitExitRequestsData(exitRequest);
+      const timestamp = await oracle.getTime();
+
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          exitRequests[0].moduleId,
+          exitRequests[0].nodeOpId,
+          exitRequests[0].valIndex,
+          exitRequests[0].valPubkey,
+          timestamp,
+        );
+
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          exitRequests[1].moduleId,
+          exitRequests[1].nodeOpId,
+          exitRequests[1].valIndex,
+          exitRequests[1].valPubkey,
+          timestamp,
+        );
+
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          exitRequests[2].moduleId,
+          exitRequests[2].nodeOpId,
+          exitRequests[2].valIndex,
+          exitRequests[2].valPubkey,
+          timestamp,
+        );
+
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          exitRequests[3].moduleId,
+          exitRequests[3].nodeOpId,
+          exitRequests[3].valIndex,
+          exitRequests[3].valPubkey,
+          timestamp,
+        );
+    });
+
+    it("Should revert if wrong DATA_FORMAT", async () => {
+      const exitRequestWrongDataFormat: ExitRequestData = {
+        dataFormat: 2,
+        data: encodeExitRequestsDataList(exitRequests),
+      };
+      const hash = hashExitRequest(exitRequestWrongDataFormat);
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
+
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
+
+      await expect(oracle.submitExitRequestsData(exitRequestWrongDataFormat))
+        .to.be.revertedWithCustomError(oracle, "UnsupportedRequestsDataFormat")
+        .withArgs(2);
+    });
+
+    it("Should revert if contains duplicates", async () => {
+      const requests = [
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[1] },
+      ];
+
+      const exitRequestData: ExitRequestData = {
+        dataFormat: 1,
+        data: encodeExitRequestsDataList(requests),
+      };
+      const hash = hashExitRequest(exitRequestData);
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
+
+      await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
+        oracle,
+        "InvalidRequestsDataSortOrder",
+      );
+    });
+
+    it("Should revert if data is not sorted in ascending order", async () => {
+      const requests = [
+        { moduleId: 2, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[1] },
+      ];
+
+      const exitRequestData: ExitRequestData = {
+        dataFormat: 1,
+        data: encodeExitRequestsDataList(requests),
+      };
+      const hash = hashExitRequest(exitRequestData);
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
+
+      await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
+        oracle,
+        "InvalidRequestsDataSortOrder",
+      );
+    });
+
+    it("Should revert with InvalidRequestsDataLength if length of requests is equal to 0", async () => {
+      const exitRequestData: ExitRequestData = {
+        dataFormat: 1,
+        data: "0x",
+      };
+      const hash = hashExitRequest(exitRequestData);
+
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
+
+      await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
+        oracle,
+        "InvalidRequestsDataLength",
+      );
+    });
+
+    it("Should revert with InvalidRequestsDataLength if length of requests is not divided by request length without remainder", async () => {
+      // 64 - length of request in bytes
+      const request =
+        "0x00000100000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".slice(
+          0,
+          2 + 64 * 2 - 4,
+        );
+
+      const exitRequestData: ExitRequestData = {
+        dataFormat: 1,
+        data: request,
+      };
+      const hash = hashExitRequest(exitRequestData);
+
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
+
+      await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
+        oracle,
+        "InvalidRequestsDataLength",
+      );
+    });
+
+    it("Should revert if module id is equal to 0", async () => {
+      const requests = [
+        { moduleId: 0, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[1] },
+      ];
+
+      const exitRequestData: ExitRequestData = {
+        dataFormat: 1,
+        data: encodeExitRequestsDataList(requests),
+      };
+      const hash = hashExitRequest(exitRequestData);
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(hash);
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(hash);
+
+      await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
+        oracle,
+        "InvalidRequestsData",
+      );
+    });
+  });
+
+  describe("Exit Request Limits", () => {
+    before(async () => {
+      [admin, authorizedEntity, stranger] = await ethers.getSigners();
+
+      await deploy();
+      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
+      await oracle.grantRole(reportLimitRole, authorizedEntity);
       await consensus.advanceTimeBy(24 * 60 * 60);
+
+      const submitRole = await oracle.SUBMIT_REPORT_HASH_ROLE();
+      await oracle.grantRole(submitRole, authorizedEntity);
     });
 
     // -----------------------------------------------------------------------------
@@ -210,6 +320,28 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     };
 
     const HASH_REQUEST_DELIVERED_BY_PARTS = hashExitRequest(REQUEST_DELIVERED_BY_PARTS);
+
+    it("Should not allow to set limit without role", async () => {
+      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
+
+      await expect(
+        oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION),
+      ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), reportLimitRole);
+    });
+
+    it("Should not allow to set limit without role", async () => {
+      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
+
+      await expect(
+        oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION),
+      ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), reportLimitRole);
+    });
+
+    it("Should not allow to set exits per frame bigger than max limit", async () => {
+      await expect(oracle.connect(authorizedEntity).setExitRequestLimit(10, 12, FRAME_DURATION)).to.be.revertedWith(
+        "TOO_LARGE_EXITS_PER_FRAME",
+      );
+    });
 
     it("Should deliver request fully as it is below limit", async () => {
       const exitLimitTx = await oracle
@@ -257,7 +389,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
     it("Should revert when limit exceeded for the frame", async () => {
       await expect(oracle.submitExitRequestsData(REQUEST_DELIVERED_BY_PARTS))
-        .to.be.revertedWithCustomError(oracle, "ExitRequestsLimit")
+        .to.be.revertedWithCustomError(oracle, "ExitRequestsLimitExceeded")
         .withArgs(2, 0);
     });
 
@@ -266,7 +398,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
       expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       expect(data.currentExitRequestsLimit).to.equal(0);
     });
@@ -277,12 +409,12 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
       expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       expect(data.currentExitRequestsLimit).to.equal(2);
     });
 
-    it("Should process remaining requests after a day passes", async () => {
+    it("Should process remaining requests after 2 frames passes", async () => {
       const emitTx = await oracle.submitExitRequestsData(REQUEST_DELIVERED_BY_PARTS);
       const timestamp = await oracle.getTime();
 
@@ -301,13 +433,28 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       );
     });
 
-    it("Should revert if maxBatchSize exceeded", async () => {
+    it("Should not give to set new maximum requests per batch value without MAX_VALIDATORS_PER_BATCH_ROLE role", async () => {
+      const maxRequestsPerBatch = 4;
+      await expect(
+        oracle.connect(stranger).setMaxRequestsPerBatch(maxRequestsPerBatch),
+      ).to.be.revertedWithOZAccessControlError(
+        await stranger.getAddress(),
+        await oracle.MAX_VALIDATORS_PER_BATCH_ROLE(),
+      );
+    });
+
+    it("Should limit request by MAX_VALIDATORS_PER_BATCH if it is smaller than available vebo limit", async () => {
+      await consensus.advanceTimeBy(MAX_EXIT_REQUESTS_LIMIT * 4 * 12);
+      const data = await oracle.getExitRequestLimitFullInfo();
+      expect(data.currentExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
+
       const role = await oracle.MAX_VALIDATORS_PER_BATCH_ROLE();
       await oracle.grantRole(role, authorizedEntity);
 
       const maxRequestsPerBatch = 4;
 
       await oracle.connect(authorizedEntity).setMaxRequestsPerBatch(maxRequestsPerBatch);
+      expect(await oracle.connect(authorizedEntity).getMaxRequestsPerBatch()).to.equal(maxRequestsPerBatch);
 
       const exitRequestsRandom = [
         { moduleId: 100, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
@@ -326,19 +473,25 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHashRandom);
 
-      await expect(oracle.submitExitRequestsData(exitRequestRandom))
-        .to.be.revertedWithCustomError(oracle, "MaxRequestsBatchSizeExceeded")
-        .withArgs(exitRequestsRandom.length, maxRequestsPerBatch);
-    });
+      const tx = oracle.submitExitRequestsData(exitRequestRandom);
+      const timestamp = await oracle.getTime();
 
-    it("Current limit should be equal to 0", async () => {
-      const data = await oracle.getExitRequestLimitFullInfo();
+      for (let i = 0; i < maxRequestsPerBatch; i++) {
+        const request = exitRequestsRandom[i];
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
+      }
 
-      expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
-      expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(0);
-      expect(data.currentExitRequestsLimit).to.equal(0);
+      const history = await oracle.getExitRequestsDeliveryHistory(exitRequestHashRandom);
+
+      expect(history.length).to.be.equal(1);
+      expect(history[0].lastDeliveredExitDataIndex).to.be.equal(maxRequestsPerBatch - 1);
+
+      const data2 = await oracle.getExitRequestLimitFullInfo();
+
+      expect(data2.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
+      expect(data2.currentExitRequestsLimit).to.equal(1);
     });
 
     it("Should set maxExitRequestsLimit equal to 0 and return as currentExitRequestsLimit type(uint256).max", async () => {
@@ -350,7 +503,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(0);
       expect(data.exitsPerFrame).to.equal(0);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);
     });
@@ -384,10 +537,53 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       expect(data.maxExitRequestsLimit).to.equal(0);
       expect(data.exitsPerFrame).to.equal(0);
-      expect(data.frameDuration).to.equal(FRAME_DURATION);
+      expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
       expect(data.prevExitRequestsLimit).to.equal(0);
       // as time is mocked and we didnt change it since last consume, currentExitRequestsLimit was not increased
       expect(data.currentExitRequestsLimit).to.equal(2n ** 256n - 1n);
+    });
+  });
+
+  describe("Version changed", () => {
+    // version can be changed during deploy
+    // but we will change it via accessing storage
+
+    const VALIDATORS: ExitRequest[] = [{ moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] }];
+
+    const REQUEST = {
+      dataFormat: DATA_FORMAT_LIST,
+      data: encodeExitRequestsDataList(VALIDATORS),
+    };
+
+    const HASH_REQUEST = hashExitRequest(REQUEST);
+
+    before(async () => {
+      [admin, authorizedEntity, stranger] = await ethers.getSigners();
+
+      await deploy();
+
+      const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
+      await oracle.grantRole(role, authorizedEntity);
+    });
+
+    it("Check version", async () => {
+      // set in initialize in deployVEBO
+      expect(await oracle.getContractVersion()).to.equal(2);
+    });
+
+    it("Store exit hash", async () => {
+      await oracle.connect(authorizedEntity).submitExitRequestsHash(HASH_REQUEST);
+    });
+
+    it("set new version", async () => {
+      await oracle.setContractVersion(3);
+      expect(await oracle.getContractVersion()).to.equal(3);
+    });
+
+    it("Should revert if request has old contract version", async () => {
+      await expect(oracle.submitExitRequestsData(REQUEST))
+        .to.be.revertedWithCustomError(oracle, "UnexpectedContractVersion")
+        .withArgs(3, 2);
     });
   });
 });

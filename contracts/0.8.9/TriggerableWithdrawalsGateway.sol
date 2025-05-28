@@ -7,7 +7,7 @@ import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "./lib/ExitLimitUtils.sol";
 
 interface IWithdrawalVault {
-    function addWithdrawalRequests(bytes calldata pubkeys, uint64[] calldata amounts) external payable;
+    function addWithdrawalRequests(bytes[] calldata pubkeys, uint64[] calldata amounts) external payable;
 
     function getWithdrawalRequestFee() external view returns (uint256);
 }
@@ -50,37 +50,25 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      * @param feeRequired Amount of fee required to cover withdrawal request
      * @param passedValue Amount of fee sent to cover withdrawal request
      */
-    error InsufficientWithdrawalFee(uint256 feeRequired, uint256 passedValue);
+    error InsufficientFee(uint256 feeRequired, uint256 passedValue);
     /**
      * @notice Thrown when a withdrawal fee refund failed
      */
-    error TriggerableWithdrawalFeeRefundFailed();
+    error FeeRefundFailed();
     /**
-     * @notice Emitted when an entity with the ADD_FULL_WITHDRAWAL_REQUEST_ROLE requests to process a TWR (triggerable withdrawal request).
-     * @param stakingModuleId Module id.
-     * @param nodeOperatorId Operator id.
-     * @param validatorPubkey Validator public key.
-     * @param timestamp Block timestamp.
-     */
-    event TriggerableExitRequest(
-        uint256 indexed stakingModuleId,
-        uint256 indexed nodeOperatorId,
-        bytes validatorPubkey,
-        uint256 timestamp
-    );
-    /**
-     * @notice Emitted when maximum exit request limit and the frame during which a portion of the limit can be restored set.
-     * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDuration)
+     * @notice Emitted when limits configs are set.
+     * @param maxExitRequestsLimit The maximum number of exit requests.
      * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
-    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration);
+
+    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
     /**
      * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
      * @param requestsCount Amount of requests that were sent for processing
      * @param remainingLimit Amount of requests that still can be processed at current day
      */
-    error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
+    error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
     struct ValidatorData {
         uint256 stakingModuleId;
@@ -89,7 +77,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
     }
 
     bytes32 public constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
-    bytes32 public constant TW_EXIT_REPORT_LIMIT_ROLE = keccak256("TW_EXIT_REPORT_LIMIT_ROLE");
+    bytes32 public constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
 
     bytes32 public constant TWR_LIMIT_POSITION = keccak256("lido.TriggerableWithdrawalsGateway.maxExitRequestLimit");
 
@@ -112,20 +100,20 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         address lidoLocator,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
+        uint256 frameDurationInSec
     ) {
         if (admin == address(0)) revert AdminCannotBeZero();
         LOCATOR = ILidoLocator(lidoLocator);
 
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     /**
      * @dev Submits Triggerable Withdrawal Requests to the Withdrawal Vault as full withdrawal requests
      *      for the specified validator public keys.
      *
-     * @param triggerableExitsData An array of `ValidatorData` structs, each representing a validator
+     * @param validatorsData An array of `ValidatorData` structs, each representing a validator
      * for which a withdrawal request will be submitted. Each entry includes:
      *   - `stakingModuleId`: ID of the staking module.
      *   - `nodeOperatorId`: ID of the node operator.
@@ -133,64 +121,56 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      * @param refundRecipient The address that will receive any excess ETH sent for fees.
      * @param exitType A parameter indicating the type of exit, passed to the Staking Module.
      *
-     * Emits `TriggerableExitRequest` event for each validator in list.
-     *
      * @notice Reverts if:
      *     - The caller does not have the `ADD_FULL_WITHDRAWAL_REQUEST_ROLE`
      *     - The total fee value sent is insufficient to cover all provided TW requests.
      *     - There is not enough limit quota left in the current frame to process all requests.
      */
     function triggerFullWithdrawals(
-        ValidatorData[] calldata triggerableExitsData,
+        ValidatorData[] calldata validatorsData,
         address refundRecipient,
         uint8 exitType
     ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance {
         if (msg.value == 0) revert ZeroArgument("msg.value");
+        uint256 requestsCount = validatorsData.length;
+        if (requestsCount == 0) revert ZeroArgument("validatorsData");
 
-        // If the refund recipient is not set, use the sender as the refund recipient
-        if (refundRecipient == address(0)) {
-            refundRecipient = msg.sender;
-        }
+        _consumeExitRequestLimit(requestsCount);
 
-        uint256 requestsCount = triggerableExitsData.length;
+        IWithdrawalVault withdrawalVault = IWithdrawalVault(LOCATOR.withdrawalVault());
+        uint256 fee = withdrawalVault.getWithdrawalRequestFee();
+        uint256 totalFee = requestsCount * fee;
+        uint256 refund = _checkFee(totalFee);
 
-        _checkExitRequestLimit(requestsCount);
-
-        uint256 withdrawalFee = IWithdrawalVault(LOCATOR.withdrawalVault()).getWithdrawalRequestFee();
-        _checkFee(requestsCount, withdrawalFee);
-
-        bytes memory pubkeys = new bytes(requestsCount * PUBLIC_KEY_LENGTH);
-
+        bytes[] memory pubkeys = new bytes[](requestsCount);
         for (uint256 i = 0; i < requestsCount; ++i) {
-            ValidatorData memory data = triggerableExitsData[i];
-            _copyPubkey(data.pubkey, pubkeys, i);
-            _notifyStakingModule(data.stakingModuleId, data.nodeOperatorId, data.pubkey, withdrawalFee, exitType);
-
-            emit TriggerableExitRequest(data.stakingModuleId, data.nodeOperatorId, data.pubkey, _getTimestamp());
+            pubkeys[i] = validatorsData[i].pubkey;
         }
 
-        _addWithdrawalRequest(requestsCount, withdrawalFee, pubkeys, refundRecipient);
+        withdrawalVault.addWithdrawalRequests{value: totalFee}(pubkeys, new uint64[](requestsCount));
+
+        _notifyStakingModules(validatorsData, fee, exitType);
+        _refundFee(refund, refundRecipient);
     }
 
     /**
      * @notice Sets the maximum exit request limit and the frame during which a portion of the limit can be restored.
-     * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDuration)
+     * @param maxExitRequestsLimit The maximum number of exit requests.
      * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
-    function setExitRequestLimit(
-        uint256 maxExitRequestsLimit,
-        uint256 exitsPerFrame,
-        uint256 frameDuration
-    ) external onlyRole(TW_EXIT_REPORT_LIMIT_ROLE) {
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+    function setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec)
+        external
+        onlyRole(TW_EXIT_LIMIT_MANAGER_ROLE)
+    {
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     /**
      * @notice Returns information about current limits data
      * @return maxExitRequestsLimit Maximum exit requests limit
      * @return exitsPerFrame The number of exits that can be restored per frame.
-     * @return frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @return frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      * @return prevExitRequestsLimit Limit left after previous requests
      * @return currentExitRequestsLimit Current exit requests limit
      */
@@ -200,7 +180,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         returns (
             uint256 maxExitRequestsLimit,
             uint256 exitsPerFrame,
-            uint256 frameDuration,
+            uint256 frameDurationInSec,
             uint256 prevExitRequestsLimit,
             uint256 currentExitRequestsLimit
         )
@@ -208,117 +188,86 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         ExitRequestLimitData memory exitRequestLimitData = TWR_LIMIT_POSITION.getStorageExitRequestLimit();
         maxExitRequestsLimit = exitRequestLimitData.maxExitRequestsLimit;
         exitsPerFrame = exitRequestLimitData.exitsPerFrame;
-        frameDuration = exitRequestLimitData.frameDuration;
+        frameDurationInSec = exitRequestLimitData.frameDurationInSec;
         prevExitRequestsLimit = exitRequestLimitData.prevExitRequestsLimit;
-        currentExitRequestsLimit = _getCurrentExitLimit();
+
+        currentExitRequestsLimit = exitRequestLimitData.isExitLimitSet()
+            ? exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp())
+            : type(uint256).max;
     }
 
     /// Internal functions
 
-    function _checkFee(uint256 requestsCount, uint256 withdrawalFee) internal {
-        if (msg.value < requestsCount * withdrawalFee) {
-            revert InsufficientWithdrawalFee(requestsCount * withdrawalFee, msg.value);
+    function _checkFee(uint256 fee) internal returns (uint256 refund) {
+        if (msg.value < fee) {
+            revert InsufficientFee(fee, msg.value);
+        }
+        unchecked {
+            refund = msg.value - fee;
         }
     }
 
-    function _copyPubkey(bytes memory pubkey, bytes memory pubkeys, uint256 index) internal pure {
-        assembly {
-            let pubkeyMemPtr := add(pubkey, 32)
-            let pubkeysOffset := add(pubkeys, add(32, mul(PUBLIC_KEY_LENGTH, index)))
-            mstore(pubkeysOffset, mload(pubkeyMemPtr))
-            mstore(add(pubkeysOffset, 32), mload(add(pubkeyMemPtr, 32)))
-        }
-    }
-
-    function _notifyStakingModule(
-        uint256 stakingModuleId,
-        uint256 nodeOperatorId,
-        bytes memory pubkey,
+    function _notifyStakingModules(
+        ValidatorData[] calldata validatorsData,
         uint256 withdrawalRequestPaidFee,
         uint8 exitType
     ) internal {
-        IStakingRouter(LOCATOR.stakingRouter()).onValidatorExitTriggered(
-            stakingModuleId,
-            nodeOperatorId,
-            pubkey,
-            withdrawalRequestPaidFee,
-            exitType
-        );
+        IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
+        ValidatorData calldata data;
+        for (uint256 i = 0; i < validatorsData.length; ++i) {
+            data = validatorsData[i];
+            stakingRouter.onValidatorExitTriggered(
+                data.stakingModuleId, data.nodeOperatorId, data.pubkey, withdrawalRequestPaidFee, exitType
+            );
+        }
     }
 
-    function _addWithdrawalRequest(
-        uint256 requestsCount,
-        uint256 withdrawalFee,
-        bytes memory pubkeys,
-        address refundRecipient
-    ) internal {
-        IWithdrawalVault(LOCATOR.withdrawalVault()).addWithdrawalRequests{value: requestsCount * withdrawalFee}(
-            pubkeys,
-            new uint64[](requestsCount)
-        );
-
-        _refundFee(requestsCount * withdrawalFee, refundRecipient);
-    }
-
-    function _refundFee(uint256 fee, address recipient) internal returns (uint256) {
-        uint256 refund = msg.value - fee;
-
+    function _refundFee(uint256 refund, address recipient) internal {
         if (refund > 0) {
-            (bool success, ) = recipient.call{value: refund}("");
+            // If the refund recipient is not set, use the sender as the refund recipient
+            if (recipient == address(0)) {
+                recipient = msg.sender;
+            }
 
+            (bool success,) = recipient.call{value: refund}("");
             if (!success) {
-                revert TriggerableWithdrawalFeeRefundFailed();
+                revert FeeRefundFailed();
             }
         }
-
-        return refund;
     }
 
     function _getTimestamp() internal view virtual returns (uint256) {
         return block.timestamp; // solhint-disable-line not-rely-on-time
     }
 
-    function _getCurrentExitLimit() internal view returns (uint256) {
-        ExitRequestLimitData memory twrLimitData = TWR_LIMIT_POSITION.getStorageExitRequestLimit();
-        if (!twrLimitData.isExitLimitSet()) {
-            return type(uint256).max;
-        }
-
-        return twrLimitData.calculateCurrentExitLimit(_getTimestamp());
-    }
-
-    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration) internal {
-        require(maxExitRequestsLimit >= exitsPerFrame, "TOO_LARGE_TW_EXIT_REQUEST_LIMIT");
-
+    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec)
+        internal
+    {
         uint256 timestamp = _getTimestamp();
 
         TWR_LIMIT_POSITION.setStorageExitRequestLimit(
             TWR_LIMIT_POSITION.getStorageExitRequestLimit().setExitLimits(
-                maxExitRequestsLimit,
-                exitsPerFrame,
-                frameDuration,
-                timestamp
+                maxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp
             )
         );
 
-        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
-    function _checkExitRequestLimit(uint256 requestsCount) internal {
+    function _consumeExitRequestLimit(uint256 requestsCount) internal {
         ExitRequestLimitData memory twrLimitData = TWR_LIMIT_POSITION.getStorageExitRequestLimit();
         if (!twrLimitData.isExitLimitSet()) {
             return;
         }
 
-        uint256 timestamp = _getTimestamp();
-        uint256 limit = twrLimitData.calculateCurrentExitLimit(timestamp);
+        uint256 limit = twrLimitData.calculateCurrentExitLimit(_getTimestamp());
 
         if (limit < requestsCount) {
-            revert ExitRequestsLimit(requestsCount, limit);
+            revert ExitRequestsLimitExceeded(requestsCount, limit);
         }
 
         TWR_LIMIT_POSITION.setStorageExitRequestLimit(
-            twrLimitData.updatePrevExitLimit(limit - requestsCount, timestamp)
+            twrLimitData.updatePrevExitLimit(limit - requestsCount, _getTimestamp())
         );
     }
 }

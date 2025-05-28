@@ -132,7 +132,8 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     bytes32 public constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
     bytes32 public constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
     bytes32 public constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
-    bytes32 public constant REPORT_EXITED_VALIDATORS_STATUS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_STATUS_ROLE");
+    bytes32 public constant REPORT_VALIDATOR_EXITING_STATUS_ROLE = keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
+    bytes32 public constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 public constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
     bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
 
@@ -1468,7 +1469,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         return stakingModule.getStakingModuleSummary();
     }
 
-    /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
+    /// @notice Handles tracking and penalization logic for a node operator who failed to exit their validator within the defined exit window.
     /// @dev This function is called to report the current exit-related status of a validator belonging to a specific node operator.
     ///      It accepts a validator's public key, associated with the duration (in seconds) it was eligible to exit but has not exited.
     ///      This data could be used to trigger penalties for the node operator if the validator has been non-exiting for too long.
@@ -1485,7 +1486,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         uint256 _eligibleToExitInSec
     )
         external
-        onlyRole(REPORT_EXITED_VALIDATORS_STATUS_ROLE)
+        onlyRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE)
     {
         _getIStakingModuleById(_stakingModuleId).reportValidatorExitDelay(
             _nodeOperatorId,
@@ -1511,7 +1512,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         uint256 _exitType
     )
         external
-        onlyRole(REPORT_EXITED_VALIDATORS_ROLE)
+        onlyRole(REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE)
     {
         _getIStakingModuleById(_stakingModuleId).onValidatorExitTriggered(
             _nodeOperatorId,

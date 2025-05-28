@@ -16,7 +16,7 @@ struct ExitRequestData {
 }
 
 struct ValidatorWitness {
-    // The index of an exit request in the VEBO exit requests data
+    // The index of an exit request in the VEB exit requests data
     uint32 exitRequestIndex;
     // -------------------- Validator details -------------------
     bytes32 withdrawalCredentials;
@@ -43,8 +43,9 @@ struct HistoricalHeaderWitness {
 
 /**
  * @title ValidatorExitDelayVerifier
- * @notice Verifies validator proofs to ensure they are unexited after an exit request.
- *         Allows permissionless report the status of validators which are assumed to have exited but have not.
+ * @notice Allows permissionless reporting of exit delays for validators that have been requested to exit
+ *         via the Validator Exit Bus.
+ *
  * @dev Uses EIP-4788 to confirm the correctness of a given beacon block root.
  */
 contract ValidatorExitDelayVerifier {
@@ -99,11 +100,13 @@ contract ValidatorExitDelayVerifier {
     error UnsupportedSlot(uint64 slot);
     error InvalidPivotSlot();
     error ZeroLidoLocatorAddress();
-    error ExitRequestNotEligibleOnProvableBeaconBlock(
+    error ExitIstNotEligibleOnProvableBeaconBlock(
         uint256 provableBeaconBlockTimestamp,
         uint256 eligibleExitRequestTimestamp
     );
     error KeyWasNotUnpacked(uint256 keyIndex);
+    error NonMonotonicDeliveryHistory(uint256 index);
+    error EmptyDeliveryHistory();
 
     /**
      * @dev The previous and current forks can be essentially the same.
@@ -154,8 +157,9 @@ contract ValidatorExitDelayVerifier {
     // ------------------------- External Functions -------------------------
 
     /**
-     * @notice Verifies that provided validators are still active (not exited) at the given beacon block.
-     *         If they are unexpectedly still active, it reports them back to the Staking Router.
+     * @notice Verifies that the provided validators were not requested to exit on the CL after a VEB exit request.
+     *         Reports exit delays to the Staking Router.
+     * @dev Ensures that `exitEpoch` is equal to `FAR_FUTURE_EPOCH` at the given beacon block.
      * @param exitRequests The concatenated VEBO exit requests, each 64 bytes in length.
      * @param beaconBlock The block header and EIP-4788 timestamp to prove the block root is known.
      * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited.
@@ -167,22 +171,22 @@ contract ValidatorExitDelayVerifier {
     ) external {
         _verifyBeaconBlockRoot(beaconBlock);
 
-        IValidatorsExitBus vebo = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
+        IValidatorsExitBus veb = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
+        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(veb, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(beaconBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
             ValidatorWitness calldata witness = validatorWitnesses[i];
 
-            (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = vebo.unpackExitRequest(
+            (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = veb.unpackExitRequest(
                 exitRequests.data,
                 exitRequests.dataFormat,
                 witness.exitRequestIndex
             );
 
-            uint256 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
+            uint256 eligibleToExitInSec = _getSecondsSinceExitIsEligible(
                 requestsDeliveryHistory,
                 witness,
                 proofSlotTimestamp
@@ -190,19 +194,15 @@ contract ValidatorExitDelayVerifier {
 
             _verifyValidatorExitUnset(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
 
-            stakingRouter.reportValidatorExitDelay(
-                moduleId,
-                nodeOpId,
-                proofSlotTimestamp,
-                pubkey,
-                secondsSinceEligibleExitRequest
-            );
+            stakingRouter.reportValidatorExitDelay(moduleId, nodeOpId, proofSlotTimestamp, pubkey, eligibleToExitInSec);
         }
     }
 
     /**
-     * @notice Verifies historical blocks (via historical_summaries) and checks that certain validators
-     *         are still active at that old block. If they're still active, it reports them to Staking Router.
+     * @notice Verifies that the provided validators were not requested to exit on the CL after a VEB exit request.
+     *         Reports exit delays to the Staking Router.
+     * @dev Ensures that `exitEpoch` is equal to `FAR_FUTURE_EPOCH` at the given beacon block.
+     * @dev Verifies historical blocks (via historical_summaries).
      * @dev The oldBlock.header must have slot >= FIRST_SUPPORTED_SLOT.
      * @param exitRequests The concatenated VEBO exit requests, each 64 bytes in length.
      * @param beaconBlock The block header and EIP-4788 timestamp to prove the block root is known.
@@ -218,22 +218,22 @@ contract ValidatorExitDelayVerifier {
         _verifyBeaconBlockRoot(beaconBlock);
         _verifyHistoricalBeaconBlockRoot(beaconBlock, oldBlock);
 
-        IValidatorsExitBus vebo = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
+        IValidatorsExitBus veb = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(vebo, exitRequests);
+        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(veb, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(oldBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
             ValidatorWitness calldata witness = validatorWitnesses[i];
 
-            (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = vebo.unpackExitRequest(
+            (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) = veb.unpackExitRequest(
                 exitRequests.data,
                 exitRequests.dataFormat,
                 witness.exitRequestIndex
             );
 
-            uint256 secondsSinceEligibleExitRequest = _getSecondsSinceExitRequestEligible(
+            uint256 eligibleToExitInSec = _getSecondsSinceExitIsEligible(
                 requestsDeliveryHistory,
                 witness,
                 proofSlotTimestamp
@@ -241,13 +241,7 @@ contract ValidatorExitDelayVerifier {
 
             _verifyValidatorExitUnset(oldBlock.header, witness, pubkey, valIndex);
 
-            stakingRouter.reportValidatorExitDelay(
-                moduleId,
-                nodeOpId,
-                proofSlotTimestamp,
-                pubkey,
-                secondsSinceEligibleExitRequest
-            );
+            stakingRouter.reportValidatorExitDelay(moduleId, nodeOpId, proofSlotTimestamp, pubkey, eligibleToExitInSec);
         }
     }
 
@@ -328,10 +322,10 @@ contract ValidatorExitDelayVerifier {
 
     /**
      * @dev Determines how many seconds have passed since a validator was first eligible
-     *      to exit after ValidatorsExitBusOracle exit request.
+     *      to exit after VEB exit request.
      * @return uint256 The elapsed seconds since the earliest eligible exit request time.
      */
-    function _getSecondsSinceExitRequestEligible(
+    function _getSecondsSinceExitIsEligible(
         DeliveryHistory[] memory history,
         ValidatorWitness calldata witness,
         uint256 referenceSlotTimestamp
@@ -351,7 +345,7 @@ contract ValidatorExitDelayVerifier {
             : earliestPossibleVoluntaryExitTimestamp;
 
         if (referenceSlotTimestamp < eligibleExitRequestTimestamp) {
-            revert ExitRequestNotEligibleOnProvableBeaconBlock(referenceSlotTimestamp, eligibleExitRequestTimestamp);
+            revert ExitIstNotEligibleOnProvableBeaconBlock(referenceSlotTimestamp, eligibleExitRequestTimestamp);
         }
 
         return referenceSlotTimestamp - eligibleExitRequestTimestamp;
@@ -367,11 +361,28 @@ contract ValidatorExitDelayVerifier {
     }
 
     function _getExitRequestDeliveryHistory(
-        IValidatorsExitBus vebo,
+        IValidatorsExitBus veb,
         ExitRequestData calldata exitRequests
     ) internal view returns (DeliveryHistory[] memory) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
-        DeliveryHistory[] memory history = vebo.getExitRequestsDeliveryHistory(exitRequestsHash);
+        DeliveryHistory[] memory history = veb.getExitRequestsDeliveryHistory(exitRequestsHash);
+
+        if (history.length == 0) {
+            revert EmptyDeliveryHistory();
+        }
+
+        // Sanity check, delivery history is strictly monotonically increasing.
+        if (history.length > 1) {
+            for (uint256 i = 1; i < history.length; i++) {
+                // strictly increasing on both keys index and timestamps
+                if (
+                    history[i].lastDeliveredKeyIndex <= history[i - 1].lastDeliveredKeyIndex ||
+                    history[i].timestamp <= history[i - 1].timestamp
+                ) {
+                    revert NonMonotonicDeliveryHistory(i);
+                }
+            }
+        }
 
         return history;
     }

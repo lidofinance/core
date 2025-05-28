@@ -8,7 +8,6 @@ import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
 import {Versioned} from "../utils/Versioned.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
 import {PausableUntil} from "../utils/PausableUntil.sol";
-import {IValidatorsExitBus} from "../interfaces/IValidatorsExitBus.sol";
 
 interface ITriggerableWithdrawalsGateway {
     struct ValidatorData {
@@ -26,11 +25,10 @@ interface ITriggerableWithdrawalsGateway {
 
 /**
  * @title ValidatorsExitBus
- * @notice An on-chain contract that serves as the central infrastructure for managing validator exit requests.
+ * @notice Сontract that serves as the central infrastructure for managing validator exit requests.
  * It stores report hashes, emits exit events, and maintains data and tools that enables anyone to prove a validator was requested to exit.
- * Unlike VEBO, it supports exit reports from a wide range of entities.
  */
-contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, PausableUntil, Versioned {
+contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;
@@ -103,16 +101,11 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
      * @param requestsCount Amount of requests that were sent for processing
      * @param remainingLimit Amount of requests that still can be processed at current day
      */
-    error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
+    error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
     /**
-     * @notice Thrown when the number of requests submitted via submitExitRequestsData exceeds the allowed maxRequestsPerBatch.
-     * @param requestsCount The number of requests included in the current call.
-     * @param maxRequestsPerBatch The maximum number of requests allowed per call to submitExitRequestsData.
+     * @notice Thrown when submitting was not started for request
      */
-    error MaxRequestsBatchSizeExceeded(uint256 requestsCount, uint256 maxRequestsPerBatch);
-
-    error DeliveredIndexOutOfBounds();
     error DeliveryWasNotStarted();
 
     /// @dev Events
@@ -138,12 +131,17 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 timestamp
     );
     /**
-     * @notice Emitted when maximum exit request limit and the frame during which a portion of the limit can be restored set.
-     * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDuration)
+     * @notice Emitted when limits configs are set.
+     * @param maxExitRequestsLimit The maximum number of exit requests.
      * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
-    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration);
+    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
+
+    struct ExitRequestsData {
+        bytes data;
+        uint256 dataFormat;
+    }
 
     struct ValidatorData {
         uint256 nodeOpId;
@@ -151,17 +149,32 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         uint256 valIndex;
         bytes pubkey;
     }
+
+    // RequestStatus stores the last delivered index of the request, timestamp of delivery, and deliveryHistory length (number of deliveries).
+    // If a request is fully delivered in one step (as with oracle requests, which can't be delivered partially),
+    // only RequestStatus is used for efficiency.
+    // If a request is delivered in parts (e.g., due to limit constraints),
+    // DeliveryHistory[] stores full delivery records in addition to RequestStatus.
+    // If deliveryHistoryLength == 1, delivery info is read from RequestStatus; otherwise, from DeliveryHistory[].
+    // Both mappings use the same key (exitRequestsHash).
+
     struct RequestStatus {
         uint32 contractVersion;
         uint32 deliveryHistoryLength;
-        uint32 lastDeliveredExitDataIndex; // index of validator,  maximum 600 for example
+        uint32 lastDeliveredExitDataIndex; // index of validator in request
         uint32 lastDeliveredExitDataTimestamp;
+    }
+
+    struct DeliveryHistory {
+        // index in array of requests
+        uint32 lastDeliveredExitDataIndex;
+        uint32 timestamp;
     }
 
     /// @notice An ACL role granting the permission to submit a hash of the exit requests data
     bytes32 public constant SUBMIT_REPORT_HASH_ROLE = keccak256("SUBMIT_REPORT_HASH_ROLE");
     /// @notice An ACL role granting the permission to set maximum exit request limit and the frame limit restoring values
-    bytes32 public constant EXIT_REPORT_LIMIT_ROLE = keccak256("EXIT_REPORT_LIMIT_ROLE");
+    bytes32 public constant EXIT_REQUEST_LIMIT_MANAGER_ROLE = keccak256("EXIT_REQUEST_LIMIT_MANAGER_ROLE");
     /// @notice An ACL role granting the permission to pause accepting validator exit requests
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     /// @notice An ACL role granting the permission to resume accepting validator exit requests
@@ -205,13 +218,14 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
     // Storage slot for mapping(bytes32 => DeliveryHistory[]), keyed by exitRequestsHash
     bytes32 internal constant DELIVERY_HISTORY_POSITION = keccak256("lido.ValidatorsExitBus.deliveryHistory");
 
-    // RequestStatus stores the last delivered index of the request, timestamp of delivery, and deliveryHistory length (number of deliveries).
-    // If a request is fully delivered in one step (as with oracle requests, which can't be delivered partially),
-    // only RequestStatus is used for efficiency.
-    // If a request is delivered in parts (e.g., due to limit constraints),
-    // DeliveryHistory[] stores full delivery records in addition to RequestStatus.
-    // If deliveryHistoryLength == 1, delivery info is read from RequestStatus; otherwise, from DeliveryHistory[].
-    // Both mappings use the same key (exitRequestsHash).
+    uint256 public constant EXIT_TYPE = 2;
+
+    /// @dev Ensures the contract’s ETH balance is unchanged.
+    modifier preservesEthBalance() {
+        uint256 balanceBeforeCall = address(this).balance - msg.value;
+        _;
+        assert(address(this).balance == balanceBeforeCall);
+    }
 
     constructor(address lidoLocator) {
         LOCATOR = ILidoLocator(lidoLocator);
@@ -259,16 +273,10 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         _checkExitSubmitted(requestStatus);
         _checkExitRequestData(request.data, request.dataFormat);
-        _checkMaxBatchSize(request.data);
         _checkContractVersion(requestStatus.contractVersion);
 
         uint256 totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
         uint32 lastDeliveredIndex = requestStatus.lastDeliveredExitDataIndex;
-
-        // maybe this check is extra
-        if (requestStatus.deliveryHistoryLength != 0 && lastDeliveredIndex >= totalItemsCount) {
-            revert DeliveredIndexOutOfBounds();
-        }
 
         uint256 startIndex = requestStatus.deliveryHistoryLength == 0 ? 0 : lastDeliveredIndex + 1;
         uint256 undeliveredItemsCount = totalItemsCount - startIndex;
@@ -277,7 +285,8 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert RequestsAlreadyDelivered();
         }
 
-        uint256 requestsToDeliver = _consumeLimit(undeliveredItemsCount);
+        // take min between undeliveredItemsCount and maxBatchSize
+        uint256 requestsToDeliver = _consumeLimit(_applyMaxBatchSize(undeliveredItemsCount), _applyDeliverLimit);
 
         _processExitRequestsList(request.data, startIndex, requestsToDeliver);
 
@@ -315,7 +324,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         ExitRequestsData calldata exitsData,
         uint256[] calldata exitDataIndexes,
         address refundRecipient
-    ) external payable {
+    ) external payable whenResumed preservesEthBalance {
         if (msg.value == 0) revert ZeroArgument("msg.value");
 
         // If the refund recipient is not set, use the sender as the refund recipient
@@ -336,8 +345,13 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             memory triggerableExitData = new ITriggerableWithdrawalsGateway.ValidatorData[](exitDataIndexes.length);
 
         uint256 lastExitDataIndex = type(uint256).max;
+        uint256 requestsCount = exitsData.data.length / PACKED_REQUEST_LENGTH;
 
         for (uint256 i = 0; i < exitDataIndexes.length; i++) {
+            if (exitDataIndexes[i] >= requestsCount) {
+                revert ExitDataIndexOutOfRange(exitDataIndexes[i], requestsCount);
+            }
+
             if (exitDataIndexes[i] > requestStatus.lastDeliveredExitDataIndex) {
                 revert ExitDataWasNotDelivered(exitDataIndexes[i], requestStatus.lastDeliveredExitDataIndex);
             }
@@ -349,6 +363,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             lastExitDataIndex = exitDataIndexes[i];
 
             ValidatorData memory validatorData = _getValidatorData(exitsData.data, exitDataIndexes[i]);
+
             if (validatorData.moduleId == 0) revert InvalidRequestsData();
 
             triggerableExitData[i] = ITriggerableWithdrawalsGateway.ValidatorData(
@@ -360,28 +375,28 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
 
         ITriggerableWithdrawalsGateway(LOCATOR.triggerableWithdrawalsGateway()).triggerFullWithdrawals{
             value: msg.value
-        }(triggerableExitData, refundRecipient, 1);
+        }(triggerableExitData, refundRecipient, uint8(EXIT_TYPE));
     }
 
     /**
      * @notice Sets the maximum exit request limit and the frame during which a portion of the limit can be restored.
-     * @param maxExitRequestsLimit The maximum number of exit requests. The period for which this value is valid can be calculated as: X = maxExitRequests / (exitsPerFrame * frameDuration)
+     * @param maxExitRequestsLimit The maximum number of exit requests.
      * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
     function setExitRequestLimit(
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
-        uint256 frameDuration
-    ) external onlyRole(EXIT_REPORT_LIMIT_ROLE) {
-        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        uint256 frameDurationInSec
+    ) external onlyRole(EXIT_REQUEST_LIMIT_MANAGER_ROLE) {
+        _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     /**
      * @notice Returns information about current limits data
      * @return maxExitRequestsLimit Maximum exit requests limit
      * @return exitsPerFrame The number of exits that can be restored per frame.
-     * @return frameDuration The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
+     * @return frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      * @return prevExitRequestsLimit Limit left after previous requests
      * @return currentExitRequestsLimit Current exit requests limit
      */
@@ -391,7 +406,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         returns (
             uint256 maxExitRequestsLimit,
             uint256 exitsPerFrame,
-            uint256 frameDuration,
+            uint256 frameDurationInSec,
             uint256 prevExitRequestsLimit,
             uint256 currentExitRequestsLimit
         )
@@ -399,9 +414,12 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
         maxExitRequestsLimit = exitRequestLimitData.maxExitRequestsLimit;
         exitsPerFrame = exitRequestLimitData.exitsPerFrame;
-        frameDuration = exitRequestLimitData.frameDuration;
+        frameDurationInSec = exitRequestLimitData.frameDurationInSec;
         prevExitRequestsLimit = exitRequestLimitData.prevExitRequestsLimit;
-        currentExitRequestsLimit = _getCurrentExitLimit();
+
+        currentExitRequestsLimit = exitRequestLimitData.isExitLimitSet()
+            ? exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp())
+            : type(uint256).max;
     }
 
     /**
@@ -526,13 +544,9 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
     }
 
-    function _checkMaxBatchSize(bytes calldata requests) internal view {
+    function _applyMaxBatchSize(uint256 requestsCount) internal view returns (uint256) {
         uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
-        uint256 requestsCount = requests.length / PACKED_REQUEST_LENGTH;
-
-        if (requestsCount > maxRequestsPerBatch) {
-            revert MaxRequestsBatchSizeExceeded(requestsCount, maxRequestsPerBatch);
-        }
+        return min(requestsCount, maxRequestsPerBatch);
     }
 
     function _checkExitSubmitted(RequestStatus storage requestStatus) internal view {
@@ -547,15 +561,6 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
     }
 
-    function _getCurrentExitLimit() internal view returns (uint256) {
-        ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
-        if (!exitRequestLimitData.isExitLimitSet()) {
-            return type(uint256).max;
-        }
-
-        return exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
-    }
-
     function _getTimestamp() internal view virtual returns (uint256) {
         return block.timestamp; // solhint-disable-line not-rely-on-time
     }
@@ -568,39 +573,40 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         return MAX_VALIDATORS_PER_BATCH_POSITION.getStorageUint256();
     }
 
-    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDuration) internal {
-        require(maxExitRequestsLimit >= exitsPerFrame, "TOO_LARGE_TW_EXIT_REQUEST_LIMIT");
-
+    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec) internal {
         uint256 timestamp = _getTimestamp();
 
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
             EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit().setExitLimits(
                 maxExitRequestsLimit,
                 exitsPerFrame,
-                frameDuration,
+                frameDurationInSec,
                 timestamp
             )
         );
 
-        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDuration);
+        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
-    function _consumeLimit(uint256 requestsCount) internal returns (uint256 requestsToDeliver) {
+    function _consumeLimit(uint256 requestsCount, function(uint256, uint256) internal pure returns(uint256) applyLimit) internal returns (uint256 requestsLimitedCount) {
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
         if (!exitRequestLimitData.isExitLimitSet()) {
             return requestsCount;
         }
 
         uint256 limit = exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
+        requestsLimitedCount = applyLimit(limit, requestsCount);
 
-        if (limit == 0) {
-            revert ExitRequestsLimit(requestsCount, 0);
-        }
-
-        requestsToDeliver = limit >= requestsCount ? requestsCount : limit;
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            exitRequestLimitData.updatePrevExitLimit(limit - requestsToDeliver, _getTimestamp())
+            exitRequestLimitData.updatePrevExitLimit(limit - requestsLimitedCount, _getTimestamp())
         );
+    }
+
+    function _applyDeliverLimit(uint256 limit, uint256 count) internal pure returns (uint256 limitedCount) {
+        if (limit == 0) {
+            revert ExitRequestsLimitExceeded(count, 0);
+        }
+        return min(limit, count);
     }
 
     function _storeNewHashRequestStatus(bytes32 exitRequestsHash, RequestStatus memory requestStatus) internal {
@@ -611,10 +617,7 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
             revert ExitHashAlreadySubmitted();
         }
 
-        storedRequest.contractVersion = requestStatus.contractVersion;
-        storedRequest.deliveryHistoryLength = requestStatus.deliveryHistoryLength;
-        storedRequest.lastDeliveredExitDataIndex = requestStatus.lastDeliveredExitDataIndex;
-        storedRequest.lastDeliveredExitDataTimestamp = requestStatus.lastDeliveredExitDataTimestamp;
+        requestStatusMap[exitRequestsHash] = requestStatus;
 
         emit RequestsHashSubmitted(exitRequestsHash);
     }
@@ -709,13 +712,16 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
         }
 
         bytes calldata pubkey;
+        uint256 dataWithoutPubkey;
+        uint256 moduleId;
+        uint256 nodeOpId;
+        uint64  valIndex;
 
         assembly {
             pubkey.length := 48
         }
 
         while (offset < offsetPastEnd) {
-            uint256 dataWithoutPubkey;
             assembly {
                 // 16 most significant bytes are taken by module id, node op id, and val index
                 dataWithoutPubkey := shr(128, calldataload(offset))
@@ -724,6 +730,13 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
                 // totalling to 64 bytes
                 offset := add(offset, 64)
             }
+
+            moduleId = uint24(dataWithoutPubkey >> (64 + 40));
+
+            if (moduleId == 0) {
+                revert InvalidRequestsData();
+            }
+
             //                              dataWithoutPubkey
             // MSB <---------------------------------------------------------------------- LSB
             // | 128 bits: zeros | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
@@ -731,17 +744,16 @@ contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, Pausa
                 revert InvalidRequestsDataSortOrder();
             }
 
-            uint64 valIndex = uint64(dataWithoutPubkey);
-            uint256 nodeOpId = uint40(dataWithoutPubkey >> 64);
-            uint256 moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-
-            if (moduleId == 0) {
-                revert InvalidRequestsData();
-            }
+            valIndex = uint64(dataWithoutPubkey);
+            nodeOpId = uint40(dataWithoutPubkey >> 64);
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
         }
+    }
+
+    function min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
     }
 
     /// Storage helpers

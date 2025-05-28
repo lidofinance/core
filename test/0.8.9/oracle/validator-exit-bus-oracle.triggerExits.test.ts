@@ -92,6 +92,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   let member2: HardhatEthersSigner;
   let member3: HardhatEthersSigner;
   let authorizedEntity: HardhatEthersSigner;
+  let stranger: HardhatEthersSigner;
 
   const deploy = async () => {
     const deployed = await deployVEBO(admin.address);
@@ -114,12 +115,6 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     await consensus.addMember(member3, 2);
   };
 
-  before(async () => {
-    [admin, member1, member2, member3, authorizedEntity] = await ethers.getSigners();
-
-    await deploy();
-  });
-
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
     await consensus.connect(member1).submitReport(refSlot, hash, CONSENSUS_VERSION);
@@ -137,6 +132,12 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
     let reportFields: ReportFields;
     let reportHash: string;
+
+    before(async () => {
+      [admin, member1, member2, member3, authorizedEntity, stranger] = await ethers.getSigners();
+
+      await deploy();
+    });
 
     it("some time passes", async () => {
       await consensus.advanceTimeBy(24 * 60 * 60);
@@ -174,19 +175,29 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       }
     });
 
-    it("should triggers exits for all validators in exit request", async () => {
+    it("should revert with ZeroArgument error if msg.value == 0", async () => {
+      await expect(
+        oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [0], ZERO_ADDRESS, {
+          value: 0,
+        }),
+      )
+        .to.be.revertedWithCustomError(oracle, "ZeroArgument")
+        .withArgs("msg.value");
+    });
+
+    it("should refund fee to recipient address", async () => {
       const tx = await oracle.triggerExits(
         { data: reportFields.data, dataFormat: reportFields.dataFormat },
         [0, 1, 2, 3],
-        ZERO_ADDRESS,
-        { value: 4 },
+        stranger,
+        { value: 6 },
       );
 
       const requests = createValidatorDataList(exitRequests);
 
       await expect(tx)
         .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
-        .withArgs(requests.length, admin.address, 1);
+        .withArgs(requests.length, stranger.address, await oracle.EXIT_TYPE());
     });
 
     it("should triggers exits only for validators in selected request indexes", async () => {
@@ -203,7 +214,23 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
       await expect(tx)
         .to.emit(triggerableWithdrawalsGateway, "Mock__triggerFullWithdrawalsTriggered")
-        .withArgs(requests.length, admin.address, 1);
+        .withArgs(requests.length, admin.address, await oracle.EXIT_TYPE());
+    });
+
+    it("preserves eth balance when calling triggerExits", async () => {
+      const ethBefore = await ethers.provider.getBalance(oracle.getAddress());
+
+      await oracle.triggerExits(
+        { data: reportFields.data, dataFormat: reportFields.dataFormat },
+        [0, 1, 3],
+        ZERO_ADDRESS,
+        {
+          value: 10,
+        },
+      );
+
+      const ethAfter = await ethers.provider.getBalance(oracle.getAddress());
+      expect(ethAfter).to.equal(ethBefore);
     });
 
     it("should revert with error if the hash of `requestsData` was not previously submitted in the VEB", async () => {
@@ -226,8 +253,8 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
           value: 2,
         }),
       )
-        .to.be.revertedWithCustomError(oracle, "ExitDataWasNotDelivered") // TODO: fix in code return "ExitDataIndexOutOfRange")
-        .withArgs(5, 3); // 4
+        .to.be.revertedWithCustomError(oracle, "ExitDataIndexOutOfRange")
+        .withArgs(5, 4);
     });
 
     it("should revert with an error if the key index array contains duplicates", async () => {
@@ -249,9 +276,14 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
   // the only difference in this checks, is that it is possible to get DeliveryWasNotStarted error because of partial delivery
   describe("Submit via trustfull method", () => {
+    const MAX_EXIT_REQUESTS_LIMIT = 2;
+    const EXITS_PER_FRAME = 1;
+    const FRAME_DURATION = 48;
+
     const exitRequests = [
       { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
       { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+      { moduleId: 2, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
     ];
 
     const exitRequest = {
@@ -260,6 +292,12 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
     };
 
     const exitRequestHash: string = hashExitRequest(exitRequest);
+
+    before(async () => {
+      [admin, member1, member2, member3, authorizedEntity] = await ethers.getSigners();
+
+      await deploy();
+    });
 
     it("Should store exit hash for authorized entity", async () => {
       const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
@@ -280,6 +318,142 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
           { value: 4 },
         ),
       ).to.be.revertedWithCustomError(oracle, "DeliveryWasNotStarted");
+    });
+
+    it("Should deliver part of requests", async () => {
+      // set limit
+      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
+      await oracle.grantRole(reportLimitRole, authorizedEntity);
+
+      await oracle
+        .connect(authorizedEntity)
+        .setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION);
+
+      const emitTx = await oracle.submitExitRequestsData(exitRequest);
+      const timestamp = await oracle.getTime();
+
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          exitRequests[0].moduleId,
+          exitRequests[0].nodeOpId,
+          exitRequests[0].valIndex,
+          exitRequests[0].valPubkey,
+          timestamp,
+        );
+
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          exitRequests[1].moduleId,
+          exitRequests[1].nodeOpId,
+          exitRequests[1].valIndex,
+          exitRequests[1].valPubkey,
+          timestamp,
+        );
+    });
+
+    it("should revert with error if requested index was not delivered yet", async () => {
+      await expect(
+        oracle.triggerExits({ data: exitRequest.data, dataFormat: exitRequest.dataFormat }, [0, 1, 2], ZERO_ADDRESS, {
+          value: 4,
+        }),
+      )
+        .to.be.revertedWithCustomError(oracle, "ExitDataWasNotDelivered")
+        .withArgs(2, 1);
+    });
+
+    it("some time passes", async () => {
+      await consensus.advanceTimeBy(2 * 48);
+    });
+
+    it("should revert with error if module id is equal to 0", async () => {
+      const requests = [
+        { moduleId: 0, nodeOpId: 1, valIndex: 0, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
+      ];
+
+      const request = {
+        dataFormat: DATA_FORMAT_LIST,
+        data: encodeExitRequestsDataList(requests),
+      };
+
+      const requestHash: string = hashExitRequest(request);
+
+      await oracle.storeNewHashRequestStatus(
+        requestHash,
+        2,
+        2, // deliveryHistoryLength = 2
+        1,
+        123456,
+      );
+
+      await expect(
+        oracle.triggerExits(request, [0, 1, 2], ZERO_ADDRESS, {
+          value: 4,
+        }),
+      ).to.be.revertedWithCustomError(oracle, "InvalidRequestsData");
+    });
+  });
+
+  describe("Version changed", () => {
+    // version can be changed during deploy
+    // but we will change it via accessing storage
+
+    const VALIDATORS: ExitRequest[] = [{ moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] }];
+
+    const REQUEST = {
+      dataFormat: DATA_FORMAT_LIST,
+      data: encodeExitRequestsDataList(VALIDATORS),
+    };
+
+    const HASH_REQUEST = hashExitRequest(REQUEST);
+
+    before(async () => {
+      [admin, authorizedEntity] = await ethers.getSigners();
+
+      await deploy();
+
+      const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
+      await oracle.grantRole(role, authorizedEntity);
+    });
+
+    it("Check version", async () => {
+      // set in initialize in deployVEBO
+      expect(await oracle.getContractVersion()).to.equal(2);
+    });
+
+    it("Store exit hash", async () => {
+      await oracle.connect(authorizedEntity).submitExitRequestsHash(HASH_REQUEST);
+
+      const emitTx = await oracle.submitExitRequestsData(REQUEST);
+      const timestamp = await oracle.getTime();
+
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          VALIDATORS[0].moduleId,
+          VALIDATORS[0].nodeOpId,
+          VALIDATORS[0].valIndex,
+          VALIDATORS[0].valPubkey,
+          timestamp,
+        );
+    });
+
+    it("set new version", async () => {
+      await oracle.setContractVersion(3);
+      expect(await oracle.getContractVersion()).to.equal(3);
+    });
+
+    it("Should revert if request has old contract version", async () => {
+      await expect(
+        oracle.triggerExits({ data: REQUEST.data, dataFormat: REQUEST.dataFormat }, [0], ZERO_ADDRESS, {
+          value: 4,
+        }),
+      )
+        .to.be.revertedWithCustomError(oracle, "UnexpectedContractVersion")
+        .withArgs(3, 2);
     });
   });
 });
