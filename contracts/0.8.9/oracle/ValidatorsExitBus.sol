@@ -28,7 +28,7 @@ interface ITriggerableWithdrawalsGateway {
  * @notice Сontract that serves as the central infrastructure for managing validator exit requests.
  * It stores report hashes, emits exit events, and maintains data and tools that enables anyone to prove a validator was requested to exit.
  */
-contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
+abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;
@@ -294,7 +294,7 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
 
         // if totalItemsCount ==  requestsToDeliver, we deliver it via one attempt and don't need to store deliveryHistory array
         // can store in RequestStatus via lastDeliveredExitDataIndex and lastDeliveredExitDataTimestamp fields
-        bool deliverFullyAtOnce = totalItemsCount == requestsToDeliver && requestStatus.deliveryHistoryLength == 0;
+        bool deliverFullyAtOnce = totalItemsCount == requestsToDeliver;
         if (!deliverFullyAtOnce) {
             _storeDeliveryEntry(exitRequestsHash, newLastDeliveredIndex, _getTimestamp());
         }
@@ -566,6 +566,8 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
     }
 
     function _setMaxRequestsPerBatch(uint256 value) internal {
+        require(value > 0, "MAX_BATCH_SIZE_ZERO");
+
         MAX_VALIDATORS_PER_BATCH_POSITION.setStorageUint256(value);
     }
 
