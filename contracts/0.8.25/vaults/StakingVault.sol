@@ -552,7 +552,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param pubkeyRaw Raw public key of the validator to exit
      * @dev    Signals to node operators that they should exit this validator from the beacon chain
      */
-    event ValidatorExitRequested(bytes pubkey, bytes pubkeyRaw);
+    event ValidatorExitRequested(bytes indexed pubkey, bytes pubkeyRaw);
 
     /**
      * @notice Emitted when validator withdrawals are requested via EIP-7002
