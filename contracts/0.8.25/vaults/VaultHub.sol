@@ -476,7 +476,7 @@ contract VaultHub is PausableUntilWithRoles {
                 inOutDelta: int128(_reportInOutDelta)
             });
 
-            uint256 unsettled = _handleObligationsOnReport(
+            uint256 unsettled = _settleObligationsOnReport(
                 _vault,
                 record,
                 obligations,
@@ -815,7 +815,7 @@ contract VaultHub is PausableUntilWithRoles {
         );
     }
 
-    function _handleObligationsOnReport(
+    function _settleObligationsOnReport(
         address _vault,
         VaultRecord storage _record,
         VaultObligations storage _obligations,
@@ -933,6 +933,9 @@ contract VaultHub is PausableUntilWithRoles {
             uint128 newUnsettled = uint128(_unsettledWithdrawals - _valueToRebalance);
             _obligations.unsettledWithdrawals = newUnsettled;
             emit WithdrawalsObligationUpdated(_vault, newUnsettled, _valueToRebalance);
+        } else if (_unsettledWithdrawals != _obligations.unsettledWithdrawals) {
+            _obligations.unsettledWithdrawals = uint128(_unsettledWithdrawals);
+            emit WithdrawalsObligationUpdated(_vault, _unsettledWithdrawals, 0);
         }
 
         if (_valueToTransferToTreasury > 0) {
