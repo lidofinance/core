@@ -443,13 +443,19 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       );
     });
 
+    it("Should not allow to set new maximum requests per batch value eq to 0", async () => {
+      const role = await oracle.MAX_VALIDATORS_PER_BATCH_ROLE();
+      await oracle.grantRole(role, authorizedEntity);
+
+      await expect(
+        oracle.connect(authorizedEntity).setMaxRequestsPerBatch(0),
+      ).to.be.revertedWith('MAX_BATCH_SIZE_ZERO');
+    });
+
     it("Should limit request by MAX_VALIDATORS_PER_BATCH if it is smaller than available vebo limit", async () => {
       await consensus.advanceTimeBy(MAX_EXIT_REQUESTS_LIMIT * 4 * 12);
       const data = await oracle.getExitRequestLimitFullInfo();
       expect(data.currentExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
-
-      const role = await oracle.MAX_VALIDATORS_PER_BATCH_ROLE();
-      await oracle.grantRole(role, authorizedEntity);
 
       const maxRequestsPerBatch = 4;
 
