@@ -168,9 +168,10 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the overall unsettled obligations of the vault in ether
      * @dev includes the node operator fee
      */
-    function unsettledObligations() public view returns (uint256) {
-        return VAULT_HUB.unsettledObligations(address(_stakingVault())) + nodeOperatorDisbursableFee();
-    }
+    // TODO: restore this function
+    // function unsettledObligations() public view returns (uint256) {
+    //     return VAULT_HUB.unsettledObligations(address(_stakingVault())) + nodeOperatorDisbursableFee();
+    // }
 
     /**
      * @notice Returns the locked amount of ether for the vault
@@ -300,9 +301,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Settles outstanding vault obligations with funds from the vault or sent ETH
      */
     function settleObligations() external payable fundable {
-        // First, settle accounting obligations
-        _settleObligations();
-        // Then, disburse the node operator fees if any
+        VAULT_HUB.settleObligations(address(_stakingVault()));
         disburseNodeOperatorFee();
     }
 

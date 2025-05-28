@@ -42,7 +42,6 @@ export type VaultRoles = {
   withdrawer: HardhatEthersSigner;
   minter: HardhatEthersSigner;
   burner: HardhatEthersSigner;
-  obligationsSettler: HardhatEthersSigner;
   rebalancer: HardhatEthersSigner;
   depositPauser: HardhatEthersSigner;
   depositResumer: HardhatEthersSigner;
@@ -122,7 +121,6 @@ export async function createVaultWithDashboard(
     dashboard.WITHDRAW_ROLE(),
     dashboard.MINT_ROLE(),
     dashboard.BURN_ROLE(),
-    dashboard.SETTLE_OBLIGATIONS_ROLE(),
     dashboard.REBALANCE_ROLE(),
     dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
     dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
@@ -143,18 +141,17 @@ export async function createVaultWithDashboard(
     withdrawer: signers[2],
     minter: signers[3],
     burner: signers[4],
-    obligationsSettler: signers[5],
-    rebalancer: signers[6],
-    depositPauser: signers[7],
-    depositResumer: signers[8],
-    pdgCompensator: signers[9],
-    unguaranteedBeaconChainDepositor: signers[10],
-    unknownValidatorProver: signers[11],
-    validatorExitRequester: signers[12],
-    validatorWithdrawalTriggerer: signers[13],
-    disconnecter: signers[14],
-    tierChanger: signers[15],
-    nodeOperatorRewardAdjuster: signers[16],
+    rebalancer: signers[5],
+    depositPauser: signers[6],
+    depositResumer: signers[7],
+    pdgCompensator: signers[8],
+    unguaranteedBeaconChainDepositor: signers[9],
+    unknownValidatorProver: signers[10],
+    validatorExitRequester: signers[11],
+    validatorWithdrawalTriggerer: signers[12],
+    disconnecter: signers[13],
+    tierChanger: signers[14],
+    nodeOperatorRewardAdjuster: signers[15],
   };
 
   for (let i = 0; i < roleIds.length; i++) {
