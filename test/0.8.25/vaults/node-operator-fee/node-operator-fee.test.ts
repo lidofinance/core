@@ -600,7 +600,7 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
         nodeOperatorFee,
-        "PendingAdjustment",
+        "AdjustmentNotReported",
       );
     });
 
@@ -629,7 +629,7 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
         nodeOperatorFee,
-        "PendingAdjustment",
+        "AdjustmentNotSettled",
       );
     });
 
@@ -661,7 +661,7 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
         nodeOperatorFee,
-        "PendingAdjustment",
+        "AdjustmentNotReported",
       );
     });
 

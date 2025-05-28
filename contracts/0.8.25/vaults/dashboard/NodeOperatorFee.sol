@@ -150,7 +150,7 @@ contract NodeOperatorFee is Permissions {
      * @return fee The node operator's disburseable fee.
      */
     function nodeOperatorDisbursableFee() public view returns (uint256) {
-        VaultHub.Report storage periodStart = feePeriodStartReport;
+        VaultHub.Report memory periodStart = feePeriodStartReport;
         VaultHub.Report memory periodEnd = latestReport();
         int128 adjustment = _toSignedClamped(rewardsAdjustment.amount);
 
@@ -191,19 +191,15 @@ contract NodeOperatorFee is Permissions {
      */
     function setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) external onlyConfirmed(confirmingRoles()) {
         // The report must be fresh so that the total value of the vault is up to date 
-        // and all the node operator fees are paid out fairly up to the moment of the latest report
+        // and all the node operator fees are paid out fairly up to the moment of the latest fresh report
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
 
-        // Before changing the fee rate, the adjustment must be settled:
-        // - the timestamp must be earlier than the latest report timestamp
-        //   to make sure that the adjustment is included in the total value,
-        // - the amount must be zero to make sure that the fee is settled by the old fee rate.
-        // Unguaranteed/side deposits are observable from the very block they are submitted in,
-        // so any pending deposits will be reflected in the reported total value.
-        // And consolidations must be completed before the report reference timestamp to be reflected in the total value.
-        if (rewardsAdjustment.latestTimestamp >=
-            VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault())) || rewardsAdjustment.amount != 0
-        ) revert PendingAdjustment();
+        // Latest adjustment must be earlier than the latest fresh report timestamp
+        if (rewardsAdjustment.latestTimestamp >= VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault())))
+            revert AdjustmentNotReported();
+
+        // Adjustment must be settled before the fee rate change
+        if (rewardsAdjustment.amount != 0) revert AdjustmentNotSettled();
 
         // To follow the check-effects-interaction pattern, we need to remember the fee here
         // because the fee calculation variables will be reset in the following lines
@@ -256,18 +252,18 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice set `rewardsAdjustment` to a new proposed value if `confirmingRoles()` agree
-     * @param _newAdjustment new adjustment amount
-     * @param _currentAdjustment current adjustment value for invalidating old confirmations
+     * @param _proposedAdjustment new adjustment amount
+     * @param _expectedAdjustment current adjustment value for invalidating old confirmations
      * @dev will revert if new adjustment is more than `MANUAL_REWARDS_ADJUSTMENT_LIMIT`
      */
     function setRewardsAdjustment(
-        uint256 _newAdjustment,
-        uint256 _currentAdjustment
+        uint256 _proposedAdjustment,
+        uint256 _expectedAdjustment
     ) external onlyConfirmed(confirmingRoles()) {
-        if (rewardsAdjustment.amount != _currentAdjustment)
-            revert InvalidatedAdjustmentVote(rewardsAdjustment.amount, _currentAdjustment);
-        if (_newAdjustment > MANUAL_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
-        _setRewardsAdjustment(uint128(_newAdjustment));
+        if (rewardsAdjustment.amount != _expectedAdjustment)
+            revert InvalidatedAdjustmentVote(rewardsAdjustment.amount, _expectedAdjustment);
+        if (_proposedAdjustment > MANUAL_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
+        _setRewardsAdjustment(uint128(_proposedAdjustment));
     }
 
     function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
@@ -371,7 +367,12 @@ contract NodeOperatorFee is Permissions {
     error ReportStale();
 
     /**
-     * @dev Error emitted when the adjustment has been at or after the latest report.
+     * @dev Error emitted when the adjustment has not been reported yet.
      */
-    error PendingAdjustment();
+    error AdjustmentNotReported();
+
+    /**
+     * @dev Error emitted when the adjustment is not settled.
+     */
+    error AdjustmentNotSettled();
 }
