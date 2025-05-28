@@ -101,12 +101,11 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
      * @param requestsCount Amount of requests that were sent for processing
      * @param remainingLimit Amount of requests that still can be processed at current day
      */
-    error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
+    error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
     /**
      * @notice Thrown when submitting was not started for request
      */
-
     error DeliveryWasNotStarted();
 
     /// @dev Events
@@ -605,7 +604,7 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
 
     function _applyDeliverLimit(uint256 limit, uint256 count) internal pure returns (uint256 limitedCount) {
         if (limit == 0) {
-            revert ExitRequestsLimit(count, 0);
+            revert ExitRequestsLimitExceeded(count, 0);
         }
         return min(limit, count);
     }
@@ -713,13 +712,16 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
         }
 
         bytes calldata pubkey;
+        uint256 dataWithoutPubkey;
+        uint256 moduleId;
+        uint256 nodeOpId;
+        uint64  valIndex;
 
         assembly {
             pubkey.length := 48
         }
 
         while (offset < offsetPastEnd) {
-            uint256 dataWithoutPubkey;
             assembly {
                 // 16 most significant bytes are taken by module id, node op id, and val index
                 dataWithoutPubkey := shr(128, calldataload(offset))
@@ -729,7 +731,7 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
                 offset := add(offset, 64)
             }
 
-            uint256 moduleId = uint24(dataWithoutPubkey >> (64 + 40));
+            moduleId = uint24(dataWithoutPubkey >> (64 + 40));
 
             if (moduleId == 0) {
                 revert InvalidRequestsData();
@@ -742,8 +744,8 @@ contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned 
                 revert InvalidRequestsDataSortOrder();
             }
 
-            uint64 valIndex = uint64(dataWithoutPubkey);
-            uint256 nodeOpId = uint40(dataWithoutPubkey >> 64);
+            valIndex = uint64(dataWithoutPubkey);
+            nodeOpId = uint40(dataWithoutPubkey >> 64);
 
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);

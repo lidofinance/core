@@ -664,7 +664,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const { reportData } = await prepareReportAndSubmitHash(requests);
 
       await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
-        .to.be.revertedWithCustomError(oracle, "ExitRequestsLimit")
+        .to.be.revertedWithCustomError(oracle, "ExitRequestsLimitExceeded")
         .withArgs(4, 3);
     });
 

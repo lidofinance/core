@@ -168,7 +168,6 @@ describe("ValidatorsExitBus integration", () => {
 
     for (let i = 0; i < maxLimit; i++) {
       const decoded = veb.interface.decodeEventLog("ValidatorExitRequest", logs1[i].data, logs1[i].topics);
-      console.log(decoded);
       const expected = requests[i];
       expect(decoded[0]).to.equal(expected.moduleId);
       expect(decoded[1]).to.equal(expected.nodeOpId);

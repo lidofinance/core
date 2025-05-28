@@ -389,7 +389,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
     it("Should revert when limit exceeded for the frame", async () => {
       await expect(oracle.submitExitRequestsData(REQUEST_DELIVERED_BY_PARTS))
-        .to.be.revertedWithCustomError(oracle, "ExitRequestsLimit")
+        .to.be.revertedWithCustomError(oracle, "ExitRequestsLimitExceeded")
         .withArgs(2, 0);
     });
 

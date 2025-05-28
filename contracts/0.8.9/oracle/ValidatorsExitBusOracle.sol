@@ -292,7 +292,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
 
     function _applyOracleLimit(uint256 limit, uint256 count) internal pure returns (uint256) {
         if (limit < count) {
-            revert ExitRequestsLimit(count, limit);
+            revert ExitRequestsLimitExceeded(count, limit);
         }
         return count;
     }

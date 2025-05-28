@@ -52,6 +52,13 @@ export async function main() {
   await makeTx(stakingRouter, "grantRole", [await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), agentAddress], {
     from: deployer,
   });
+  await makeTx(
+    stakingRouter,
+    "grantRole",
+    [await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE(), triggerableWithdrawalsGatewayAddress],
+    { from: deployer },
+  );
+
 
   // ValidatorsExitBusOracle
   if (gateSealAddress) {
@@ -104,7 +111,7 @@ export async function main() {
   await makeTx(
     withdrawalVault,
     "grantRole",
-    [await withdrawalVault.ADD_WITHDRAWAL_REQUEST_ROLE(), validatorsExitBusOracleAddress],
+    [await withdrawalVault.ADD_WITHDRAWAL_REQUEST_ROLE(), triggerableWithdrawalsGatewayAddress],
     {
       from: deployer,
     },
