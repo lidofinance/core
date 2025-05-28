@@ -156,12 +156,13 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     // bytes32 internal constant REWARD_DISTRIBUTION_STATE = keccak256("lido.NodeOperatorsRegistry.rewardDistributionState");
     bytes32 internal constant REWARD_DISTRIBUTION_STATE = 0x4ddbb0dcdc5f7692e494c15a7fca1f9eb65f31da0b5ce1c3381f6a1a1fd579b6;
 
-    // Threshold in seconds after which a delayed exit is penalized
-    // bytes32 internal constant EXIT_DELAY_THRESHOLD_SECONDS = keccak256("lido.NodeOperatorsRegistry.exitDelayThresholdSeconds");
-    bytes32 internal constant EXIT_DELAY_THRESHOLD_SECONDS = 0x96656d3ece9cdbe3bd729ff6d7df8d0aeb457ff7c7c42372184ae30b10b37976;
-    // Cutoff timestamp used to protect validators from penalization after threshold changes
-    // bytes32 internal constant EXIT_PENALTY_CUTOFF_TIMESTAMP = keccak256("lido.NodeOperatorsRegistry.exitPenaltyCutoffTimestamp");
-    bytes32 internal constant EXIT_PENALTY_CUTOFF_TIMESTAMP = 0x93f1d4cdf7a6d0aac32b989ca335f5ae5f4322e4361b8f67a199fdda105f821b;
+    // bytes32 internal constant EXIT_DELAY_STATS = keccak256("lido.NodeOperatorsRegistry.exitDelayStats");
+    bytes32 internal constant EXIT_DELAY_STATS = 0x9fe52a88cbf7bfbe5e42abc45469ad27b2231a10bcbcd0a227c7ca0835cecbd8;
+    /// @dev Exit delay stats offsets in Packed64x4:
+    /// @dev The delay threshold in seconds after which a validator exit is considered late
+    uint8 internal constant EXIT_DELAY_THRESHOLD_OFFSET = 0;
+    /// @dev Timestamp before which validators reported as late will not result in penalties for their Node Operators.
+    uint8 internal constant EXIT_PENALTY_CUTOFF_TIMESTAMP_OFFSET = 1;
 
 
     //
@@ -1064,18 +1065,17 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     }
 
     function _exitDeadlineThreshold() internal view returns (uint256) {
-        return EXIT_DELAY_THRESHOLD_SECONDS.getStorageUint256();
+        return Packed64x4.Packed(EXIT_DELAY_STATS.getStorageUint256()).get(EXIT_DELAY_THRESHOLD_OFFSET);
     }
 
-    /// @notice Returns the cutoff timestamp before which validators cannot be penalized for delayed exit.
+    /// @notice Returns the Timestamp before which validators reported as late will not result in penalties for their Node Operators..
     /// @return uint256 The cutoff timestamp used when evaluating late exits.
     function exitPenaltyCutoffTimestamp() public view returns (uint256) {
-        return EXIT_PENALTY_CUTOFF_TIMESTAMP.getStorageUint256();
+       return Packed64x4.Packed(EXIT_DELAY_STATS.getStorageUint256()).get(EXIT_PENALTY_CUTOFF_TIMESTAMP_OFFSET);
     }
 
     /// @notice Sets the validator exit deadline threshold and the reporting window for late exits.
-    /// @dev Updates the cutoff timestamp before which validators are protected from penalization.
-    ///      Prevents penalizing validators whose exit eligibility began before the new policy took effect.
+    /// @dev Updates the cutoff timestamp before which a validator that was requested to exit cannot be reported as late.
     /// @param _threshold Number of seconds a validator has to exit after becoming eligible.
     /// @param _reportingWindow Additional number of seconds during which a late exit can still be reported.
     function setExitDeadlineThreshold(uint256 _threshold, uint256 _reportingWindow) external {
@@ -1086,11 +1086,13 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     function _setExitDeadlineThreshold(uint256 _threshold, uint256 _reportingWindow) internal {
         require(_threshold > 0, "INVALID_EXIT_DELAY_THRESHOLD");
 
-        EXIT_DELAY_THRESHOLD_SECONDS.setStorageUint256(_threshold);
-
         // Set the cutoff timestamp to the current time minus the threshold and reportingWindow period
         uint256 currentCutoffTimestamp = block.timestamp - _threshold - _reportingWindow;
-        EXIT_PENALTY_CUTOFF_TIMESTAMP.setStorageUint256(currentCutoffTimestamp);
+
+        Packed64x4.Packed memory stats;
+        stats.set(EXIT_DELAY_THRESHOLD_OFFSET, _threshold);
+        stats.set(EXIT_PENALTY_CUTOFF_TIMESTAMP_OFFSET, currentCutoffTimestamp);
+        EXIT_DELAY_STATS.setStorageUint256(stats.v);
 
         emit ExitDeadlineThresholdChanged(_threshold, _reportingWindow);
     }
