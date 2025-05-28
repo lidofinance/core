@@ -45,7 +45,7 @@ describe("Report Validator Exit Delay", () => {
 
     await stakingRouter
       .connect(agentSigner)
-      .grantRole(await stakingRouter.REPORT_EXITED_VALIDATORS_STATUS_ROLE(), validatorExitDelayVerifier.address);
+      .grantRole(await stakingRouter.REPORT_VALIDATOR_EXITING_STATUS_ROLE(), validatorExitDelayVerifier.address);
 
     // Ensure that the validatorExitDelayVerifier contract and provided proof use same GI
     expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_CURR()).to.equal(
