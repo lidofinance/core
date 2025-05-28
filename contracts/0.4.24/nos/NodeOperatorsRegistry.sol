@@ -1134,7 +1134,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
             && _proofSlotTimestamp - _eligibleToExitInSec >= exitPenaltyCutoffTimestamp();
     }
 
-    /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
+    /// @notice Handles tracking and penalization logic for a node operator who failed to exit their validator within the defined exit window.
     /// @dev This function is called by the StakingRouter to report the current exit-related status of a validator
     ///      belonging to a specific node operator. It marks the validator as processed to avoid duplicate reports.
     /// @param _nodeOperatorId The ID of the node operator whose validator's status is being delivered.

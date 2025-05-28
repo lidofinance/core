@@ -1469,7 +1469,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         return stakingModule.getStakingModuleSummary();
     }
 
-    /// @notice Handles tracking and penalization logic for a validator that remains active beyond its eligible exit window.
+    /// @notice Handles tracking and penalization logic for a node operator who failed to exit their validator within the defined exit window.
     /// @dev This function is called to report the current exit-related status of a validator belonging to a specific node operator.
     ///      It accepts a validator's public key, associated with the duration (in seconds) it was eligible to exit but has not exited.
     ///      This data could be used to trigger penalties for the node operator if the validator has been non-exiting for too long.
