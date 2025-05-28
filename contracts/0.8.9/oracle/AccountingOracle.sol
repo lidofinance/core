@@ -68,12 +68,6 @@ interface IStakingRouter {
         bytes calldata exitedValidatorsCounts
     ) external;
 
-    function reportStakingModuleStuckValidatorsCountByNodeOperator(
-        uint256 stakingModuleId,
-        bytes calldata nodeOperatorIds,
-        bytes calldata stuckValidatorsCounts
-    ) external;
-
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
 }
 
@@ -822,15 +816,15 @@ contract AccountingOracle is BaseOracle {
                 revert DeprecatedExtraDataType(index, itemType);
             }
 
-            if (itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS) {
-                uint256 nodeOpsProcessed = _processExtraDataItem(data, iter);
-
-                if (nodeOpsProcessed > maxNodeOperatorsPerItem) {
-                    maxNodeOperatorsPerItem = nodeOpsProcessed;
-                    maxNodeOperatorItemIndex = index;
-                }
-            } else {
+            if (itemType != EXTRA_DATA_TYPE_EXITED_VALIDATORS) {
                 revert UnsupportedExtraDataType(index, itemType);
+            }
+
+            uint256 nodeOpsProcessed = _processExtraDataItem(data, iter);
+
+            if (nodeOpsProcessed > maxNodeOperatorsPerItem) {
+                maxNodeOperatorsPerItem = nodeOpsProcessed;
+                maxNodeOperatorItemIndex = index;
             }
 
             assert(iter.dataOffset > dataOffset);

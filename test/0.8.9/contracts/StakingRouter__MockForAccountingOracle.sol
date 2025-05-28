@@ -72,16 +72,6 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
         );
     }
 
-    function reportStakingModuleStuckValidatorsCountByNodeOperator(
-        uint256 stakingModuleId,
-        bytes calldata nodeOperatorIds,
-        bytes calldata stuckKeysCounts
-    ) external {
-        calls_reportStuckKeysByNodeOperator.push(
-            ReportKeysByNodeOperatorCallData(stakingModuleId, nodeOperatorIds, stuckKeysCounts)
-        );
-    }
-
     function onValidatorsCountsByNodeOperatorReportingFinished() external {
         ++totalCalls_onValidatorsCountsByNodeOperatorReportingFinished;
     }
