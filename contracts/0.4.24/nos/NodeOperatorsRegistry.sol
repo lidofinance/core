@@ -52,8 +52,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     event NonceChanged(uint256 nonce);
     event TargetValidatorsCountChanged(uint256 indexed nodeOperatorId, uint256 targetValidatorsCount, uint256 targetLimitMode);
-    event NodeOperatorPenalized(address indexed recipientAddress, uint256 sharesPenalizedAmount);
-    event NodeOperatorPenaltyCleared(uint256 indexed nodeOperatorId);
 
     event ValidatorExitStatusUpdated(
         uint256 indexed nodeOperatorId,
