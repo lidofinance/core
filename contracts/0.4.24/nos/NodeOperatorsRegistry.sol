@@ -11,7 +11,6 @@ import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStora
 import {Math256} from "../../common/lib/Math256.sol";
 import {MinFirstAllocationStrategy} from "../../common/lib/MinFirstAllocationStrategy.sol";
 import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
-import {IBurner} from "../../common/interfaces/IBurner.sol";
 import {SigningKeys} from "../lib/SigningKeys.sol";
 import {Packed64x4} from "../lib/Packed64x4.sol";
 import {Versioned} from "../utils/Versioned.sol";
