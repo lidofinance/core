@@ -166,7 +166,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
         .connect(authorizedEntity)
         .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 4 }),
     )
-      .to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "ExitRequestsLimit")
+      .to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "ExitRequestsLimitExceeded")
       .withArgs(3, 1);
   });
 

@@ -68,8 +68,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      * @param requestsCount Amount of requests that were sent for processing
      * @param remainingLimit Amount of requests that still can be processed at current day
      */
-
-    error ExitRequestsLimit(uint256 requestsCount, uint256 remainingLimit);
+    error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
     struct ValidatorData {
         uint256 stakingModuleId;
@@ -264,7 +263,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         uint256 limit = twrLimitData.calculateCurrentExitLimit(_getTimestamp());
 
         if (limit < requestsCount) {
-            revert ExitRequestsLimit(requestsCount, limit);
+            revert ExitRequestsLimitExceeded(requestsCount, limit);
         }
 
         TWR_LIMIT_POSITION.setStorageExitRequestLimit(
