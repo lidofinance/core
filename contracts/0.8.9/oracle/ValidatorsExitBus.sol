@@ -25,7 +25,7 @@ interface ITriggerableWithdrawalsGateway {
 
 /**
  * @title ValidatorsExitBus
- * @notice An on-chain contract that serves as the central infrastructure for managing validator exit requests.
+ * @notice Сontract that serves as the central infrastructure for managing validator exit requests.
  * It stores report hashes, emits exit events, and maintains data and tools that enables anyone to prove a validator was requested to exit.
  */
 contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
