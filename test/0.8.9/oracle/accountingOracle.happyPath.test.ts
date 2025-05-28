@@ -349,6 +349,11 @@ describe("AccountingOracle.sol:happyPath", () => {
       expect(call2.keysCounts).to.equal("0x" + [2].map((i) => numberToHex(i, 16)).join(""));
     });
 
+    it("Staking router was told that exited keys updating is finished", async () => {
+      const totalFinishedCalls = await mockStakingRouter.totalCalls_onValidatorsCountsByNodeOperatorReportingFinished();
+      expect(totalFinishedCalls).to.equal(1);
+    });
+
     it(`extra data for the same reference slot cannot be re-submitted`, async () => {
       await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList)).to.be.revertedWithCustomError(
         oracle,
@@ -435,6 +440,11 @@ describe("AccountingOracle.sol:happyPath", () => {
     it(`Staking router didn't get the exited keys by node op report`, async () => {
       const totalReportCalls = await mockStakingRouter.totalCalls_reportExitedKeysByNodeOperator();
       expect(totalReportCalls).to.equal(2);
+    });
+
+    it("Staking router was told that exited keys updating is finished", async () => {
+      const totalFinishedCalls = await mockStakingRouter.totalCalls_onValidatorsCountsByNodeOperatorReportingFinished();
+      expect(totalFinishedCalls).to.equal(2);
     });
 
     it(`extra data for the same reference slot cannot be re-submitted`, async () => {
