@@ -114,6 +114,8 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 public constant VALIDATOR_EXIT_ROLE = keccak256("vaults.VaultHub.ValidatorExitRole");
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
+    /// @notice amount unsettled obligations that will pause the beacon chain deposits
+    uint256 public constant UNSETTLED_OBLIGATIONS_THRESHOLD = 1 ether;
     /// @notice The time delta for report freshness check
     uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
 
@@ -485,7 +487,7 @@ contract VaultHub is PausableUntilWithRoles {
             );
 
             IStakingVault vault_ = IStakingVault(_vault);
-            bool shouldPause = unsettled > 0 || !_isVaultHealthy(connection, record);
+            bool shouldPause = unsettled >= UNSETTLED_OBLIGATIONS_THRESHOLD || !_isVaultHealthy(connection, record);
             if (shouldPause && !vault_.beaconChainDepositsPaused()) {
                 vault_.pauseBeaconChainDeposits();
             }
@@ -726,9 +728,8 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault is unhealthy
     /// @param _vault address of the vault to exit validators from
-    /// @param _pubkeys public keys of the validators to exit
     /// @param _refundRecipient address that will receive the refund for transaction costs
-    /// @dev    When the vault becomes unhealthy, withdrawal committee can force its validators to exit the beacon chain
+    /// @dev    When the vault becomes unhealthy, trusted actor with the role can force its validators to exit the beacon chain
     ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
     function forceValidatorExit(
         address _vault,
@@ -738,9 +739,10 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        if (_isVaultHealthy(connection, record) && _vaultObligations(_vault).unsettledWithdrawals == 0) {
-            revert ForceValidatorExitNotAllowed();
-        }
+        if (
+            _isVaultHealthy(connection, record) &&
+            _vaultObligations(_vault).unsettledWithdrawals < UNSETTLED_OBLIGATIONS_THRESHOLD
+        ) revert ForceValidatorExitNotAllowed();
 
         uint64[] memory amounts = new uint64[](0);
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, amounts, _refundRecipient);
