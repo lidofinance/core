@@ -38,6 +38,10 @@ async function main() {
   const state = readNetworkState();
   persistNetworkState(state);
 
+  const chainSpec = state[Sk.chainSpec];
+
+  log(`Chain spec: ${JSON.stringify(chainSpec, null, 2)}`);
+
   // Read contracts addresses from config
   const locator = await loadContract<LidoLocator>("LidoLocator", state[Sk.lidoLocator].proxy.address);
 
@@ -123,9 +127,22 @@ async function main() {
   log.success(`TriggerableWithdrawalsGateway implementation address: ${triggerableWithdrawalsGateway.address}`);
   log.emptyLine();
 
+  const accountingOracle = await deployImplementation(
+    Sk.accountingOracle,
+    "AccountingOracle",
+    deployer,
+    [
+      locator.address,
+      await locator.lido(),
+      await locator.legacyOracle(),
+      Number(chainSpec.secondsPerSlot),
+      Number(chainSpec.genesisTime),
+    ],
+  );
+
   // fetch contract addresses that will not changed
   const locatorConfig = [
-    await locator.accountingOracle(),
+    accountingOracle.address,
     await locator.depositSecurityModule(),
     await locator.elRewardsVault(),
     await locator.legacyOracle(),
@@ -148,6 +165,7 @@ async function main() {
   log(`Configuration for voting script:`);
   log(`
 LIDO_LOCATOR_IMPL = "${lidoLocator.address}"
+ACCOUNTING_ORACLE = "${accountingOracle.address}"
 VALIDATORS_EXIT_BUS_ORACLE_IMPL = "${validatorsExitBusOracle.address}"
 WITHDRAWAL_VAULT_IMPL = "${withdrawalVault.address}"
 STAKING_ROUTER_IMPL = "${stakingRouterAddress.address}"

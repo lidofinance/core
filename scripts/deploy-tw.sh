@@ -18,5 +18,5 @@ export NETWORK_STATE_FILE="deployed-hoodi.json"
 
 
 # Need this to get sure the last transactions are mined
-yarn hardhat --network $NETWORK run scripts/triggerable-withdrawals/tw-deploy.ts
+npx hardhat --network $NETWORK run scripts/triggerable-withdrawals/tw-deploy.ts
 
