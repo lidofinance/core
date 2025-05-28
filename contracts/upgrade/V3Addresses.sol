@@ -82,7 +82,7 @@ contract V3Addresses {
     // -------- New V3 contracts --------
     //
     address public immutable ACCOUNTING;
-    address public immutable VAULT_HUB;
+    address payable public immutable VAULT_HUB;
     address public immutable PREDEPOSIT_GUARANTEE;
     address public immutable OPERATOR_GRID;
     address public immutable VAULT_FACTORY;
@@ -144,7 +144,7 @@ contract V3Addresses {
         ORACLE_REPORT_SANITY_CHECKER = newLocatorImpl.oracleReportSanityChecker();
 
         ACCOUNTING = newLocatorImpl.accounting();
-        VAULT_HUB = newLocatorImpl.vaultHub();
+        VAULT_HUB = payable(newLocatorImpl.vaultHub());
         PREDEPOSIT_GUARANTEE = newLocatorImpl.predepositGuarantee();
         OPERATOR_GRID = newLocatorImpl.operatorGrid();
 

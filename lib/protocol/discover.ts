@@ -190,6 +190,7 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
       config.get("predepositGuarantee") || (await locator.predepositGuarantee()),
     ),
     operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid") || (await locator.operatorGrid())),
+    lazyOracle: loadContract("LazyOracle", config.get("lazyOracle") || (await locator.lazyOracle())),
   })) as VaultsContracts;
 };
 

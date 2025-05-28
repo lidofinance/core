@@ -11,7 +11,7 @@ import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRo
 
 import {CLProofVerifier} from "./CLProofVerifier.sol";
 
-import {IStakingVault, StakingVaultDeposit} from "../interfaces/IStakingVault.sol";
+import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
 /**
@@ -22,7 +22,7 @@ import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
  *         While only Staking Vault ether is used to deposit to the beacon chain, NO's ether is locked.
  *         And can only be unlocked if the validator is proven to have valid Withdrawal Credentials on Ethereum Consensus Layer.
  *         Merkle proofs against Beacon Block Root are used to prove either validator's validity or invalidity
- *         where invalid validators's ether can be compensated back to the staking vault owner.
+ *         where invalid validators' ether can be compensated back to the staking vault owner.
  *         A system of NO's guarantors can be used to allow NOs to handle deposits and verifications
  *         while guarantors provide ether.
  *
@@ -45,8 +45,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param NONE - initial stage
      * @param PREDEPOSITED - PREDEPOSIT_AMOUNT is deposited with this validator by the vault
      * @param PROVEN - validator is proven to be valid and can be used to deposit to beacon chain
-     * @param DISPROVEN - validator is proven to have wrong WC and it's PREDEPOSIT_AMOUNT can be compensated to staking vault owner
-     * @param COMPENSATED - disproven validator has it's PREDEPOSIT_AMOUNT ether compensated to staking vault owner and validator cannot be used in PDG anymore
+     * @param DISPROVEN - validator is proven to have wrong WC and its PREDEPOSIT_AMOUNT can be compensated to staking vault owner
+     * @param COMPENSATED - disproven validator has its PREDEPOSIT_AMOUNT ether compensated to staking vault owner and validator cannot be used in PDG anymore
      */
     enum ValidatorStage {
         NONE,
@@ -210,7 +210,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     function validatePubKeyWCProof(ValidatorWitness calldata _witness, bytes32 _withdrawalCredentials) public view {
         _validatePubKeyWCProof(_witness, _withdrawalCredentials);
     }
-    
+
     /**
      * @notice verifies the deposit message signature using BLS12-381 pairing check
      * @param _deposit staking vault deposit to verify
@@ -219,7 +219,11 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @dev reverts with `InvalidSignature` if the signature is invalid
      * @dev reverts with `InputHasInfinityPoints` if the input contains infinity points(zero values)
      */
-    function verifyDepositMessage(StakingVaultDeposit calldata _deposit, BLS12_381.DepositY calldata _depositsY, bytes32 _withdrawalCredentials) public view {
+    function verifyDepositMessage(
+        IStakingVault.Deposit calldata _deposit,
+        BLS12_381.DepositY calldata _depositsY,
+        bytes32 _withdrawalCredentials
+    ) public view {
         BLS12_381.verifyDepositMessage(_deposit, _depositsY, _withdrawalCredentials, DEPOSIT_DOMAIN);
     }
 
@@ -319,7 +323,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      */
     function predeposit(
         IStakingVault _stakingVault,
-        StakingVaultDeposit[] calldata _deposits,
+        IStakingVault.Deposit[] calldata _deposits,
         BLS12_381.DepositY[] calldata _depositsY
     ) external payable whenResumed {
         if (_deposits.length == 0) revert EmptyDeposits();
@@ -346,7 +350,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         if (unlocked < totalDepositAmount) revert NotEnoughUnlocked(unlocked, totalDepositAmount);
 
         for (uint256 i = 0; i < _deposits.length; i++) {
-            StakingVaultDeposit calldata _deposit = _deposits[i];
+            IStakingVault.Deposit calldata _deposit = _deposits[i];
 
             // this check isn't needed in  `depositToBeaconChain` because
             // Beacon Chain doesn't enforce the signature checks for existing validators and just top-ups to their balance
@@ -404,7 +408,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      */
     function depositToBeaconChain(
         IStakingVault _stakingVault,
-        StakingVaultDeposit[] calldata _deposits
+        IStakingVault.Deposit[] calldata _deposits
     ) public payable whenResumed {
         if (msg.sender != _stakingVault.nodeOperator()) {
             revert NotNodeOperator();
@@ -412,7 +416,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         ERC7201Storage storage $ = _getStorage();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
-            StakingVaultDeposit calldata _deposit = _deposits[i];
+            IStakingVault.Deposit calldata _deposit = _deposits[i];
 
             ValidatorStatus storage validator = $.validatorStatus[_deposit.pubkey];
 
@@ -446,7 +450,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      */
     function proveAndDeposit(
         ValidatorWitness[] calldata _witnesses,
-        StakingVaultDeposit[] calldata _deposits,
+        IStakingVault.Deposit[] calldata _deposits,
         IStakingVault _stakingVault
     ) external payable {
         for (uint256 i = 0; i < _witnesses.length; i++) {

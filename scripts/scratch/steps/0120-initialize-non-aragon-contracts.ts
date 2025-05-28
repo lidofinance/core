@@ -31,6 +31,7 @@ export async function main() {
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const pdgAddress = state[Sk.predepositGuarantee].proxy.address;
   const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
+  const operatorGridParams = state[Sk.operatorGrid].deployParameters;
 
   // Set admin addresses (using deployer for testnet)
   const testnetAdmin = deployer;
@@ -147,11 +148,14 @@ export async function main() {
 
   // Initialize OperatorGrid
   const defaultTierParams = {
-    shareLimit: ether("1000"),
-    reserveRatioBP: 2000n,
-    forcedRebalanceThresholdBP: 1800n,
-    treasuryFeeBP: 500n,
+    shareLimit: ether(operatorGridParams.defaultTierParams.shareLimitInEther),
+    reserveRatioBP: operatorGridParams.defaultTierParams.reserveRatioBP,
+    forcedRebalanceThresholdBP: operatorGridParams.defaultTierParams.forcedRebalanceThresholdBP,
+    infraFeeBP: operatorGridParams.defaultTierParams.infraFeeBP,
+    liquidityFeeBP: operatorGridParams.defaultTierParams.liquidityFeeBP,
+    reservationFeeBP: operatorGridParams.defaultTierParams.reservationFeeBP,
   };
+
   const operatorGrid = await loadContract("OperatorGrid", operatorGridAddress);
   await makeTx(operatorGrid, "initialize", [operatorGridAdmin, defaultTierParams], { from: deployer });
 

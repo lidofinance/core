@@ -23,6 +23,7 @@ interface ILidoLocator {
     function predepositGuarantee() external view returns (address);
     function wstETH() external view returns (address);
     function vaultHub() external view returns (address);
+    function lazyOracle() external view returns (address);
     function operatorGrid() external view returns (address);
 
     /// @notice Returns core Lido protocol component addresses in a single call

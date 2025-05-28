@@ -106,13 +106,16 @@ export async function main() {
     oracleReportSanityCheckerArgs,
   );
 
+  // Deploy LazyOracle
+  const lazyOracle = await deployWithoutProxy(Sk.lazyOracle, "LazyOracle", deployer, [locatorAddress]);
+
   // Deploy OperatorGrid
   const operatorGrid = await deployBehindOssifiableProxy(
     Sk.operatorGrid,
     "OperatorGrid",
     proxyContractsOwner,
     deployer,
-    [locator.address],
+    [locatorAddress],
   );
 
   // Deploy new LidoLocator implementation
@@ -134,13 +137,13 @@ export async function main() {
     predepositGuarantee.address,
     wstethAddress,
     vaultHub.address,
+    lazyOracle.address,
     operatorGrid.address,
   ];
   await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
 
   // Deploy StakingVault implementation contract
   const stakingVaultImpl = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
-    vaultHub.address,
     depositContract,
   ]);
   const stakingVaultImplAddress = await stakingVaultImpl.getAddress();
@@ -150,6 +153,7 @@ export async function main() {
     lidoAddress,
     wstethAddress,
     vaultHub.address,
+    locatorAddress,
   ]);
   const dashboardImplAddress = await dashboardImpl.getAddress();
 

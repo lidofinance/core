@@ -116,6 +116,7 @@ describe("OracleReportSanityChecker.sol", () => {
         wstETH: deployer.address,
         predepositGuarantee: deployer.address,
         operatorGrid: deployer.address,
+        lazyOracle: deployer.address,
       }),
     );
 

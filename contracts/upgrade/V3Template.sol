@@ -220,8 +220,9 @@ contract V3Template is V3Addresses {
         // VaultHub
         _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), DEFAULT_ADMIN_ROLE, agent);
         _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), agent);
-        _assertZeroOZRoleHolders(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_REGISTRY_ROLE());
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), agent);
         _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), agent);
+
         // TODO: add PausableUntilWithRoles checks when gate seal is added
 
         // AccountingOracle

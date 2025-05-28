@@ -8,6 +8,8 @@ import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
 
+import { readUpgradeParameters } from "../../utils/upgrade";
+
 const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
 
 export async function main(): Promise<void> {
@@ -22,6 +24,8 @@ export async function main(): Promise<void> {
   const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
   const predepositGuaranteeAddress = state[Sk.predepositGuarantee].proxy.address;
   const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
+
+  const upgradeParameters = readUpgradeParameters();
 
   // Deploy BeaconProxy to get bytecode and add it to whitelist
   const vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [stakingVaultBeaconAddress, "0x"]);
@@ -39,16 +43,15 @@ export async function main(): Promise<void> {
   log("VaultHub initialized with admin", vaultHubAdmin);
 
   const vaultMasterRole = await vaultHub.VAULT_MASTER_ROLE();
-  const vaultRegistryRole = await vaultHub.VAULT_REGISTRY_ROLE();
+  const vaultCodehashRole = await vaultHub.VAULT_CODEHASH_SET_ROLE();
 
-  // await makeTx(vaultHub, "grantRole", [vaultMasterRole, deployer], { from: deployer });
-  await makeTx(vaultHub, "grantRole", [vaultRegistryRole, deployer], { from: deployer });
-  await makeTx(vaultHub, "addVaultProxyCodehash", [vaultBeaconProxyCodeHash], { from: deployer });
-  // await makeTx(vaultHub, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
-  await makeTx(vaultHub, "renounceRole", [vaultRegistryRole, deployer], { from: deployer });
+  await makeTx(vaultHub, "grantRole", [vaultCodehashRole, deployer], { from: deployer });
+  await makeTx(vaultHub, "setAllowedCodehash", [vaultBeaconProxyCodeHash], { from: deployer });
+  await makeTx(vaultHub, "renounceRole", [vaultCodehashRole, deployer], { from: deployer });
 
   await makeTx(vaultHub, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
   await makeTx(vaultHub, "grantRole", [vaultMasterRole, agentAddress], { from: deployer });
+  await makeTx(vaultHub, "grantRole", [vaultCodehashRole, agentAddress], { from: deployer });
 
   await makeTx(vaultHub, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
 
@@ -77,12 +80,14 @@ export async function main(): Promise<void> {
   //
   // OperatorGrid
   //
-
+  const gridParams = upgradeParameters[Sk.operatorGrid].deployParameters;
   const defaultTierParams = {
-    shareLimit: ether("1000"),
-    reserveRatioBP: 2000n,
-    forcedRebalanceThresholdBP: 1800n,
-    treasuryFeeBP: 500n,
+    shareLimit: ether(gridParams.defaultTierParams.shareLimitInEther),
+    reserveRatioBP: gridParams.defaultTierParams.reserveRatioBP,
+    forcedRebalanceThresholdBP: gridParams.defaultTierParams.forcedRebalanceThresholdBP,
+    infraFeeBP: gridParams.defaultTierParams.infraFeeBP,
+    liquidityFeeBP: gridParams.defaultTierParams.liquidityFeeBP,
+    reservationFeeBP: gridParams.defaultTierParams.reservationFeeBP,
   };
   const operatorGrid = await loadContract<OperatorGrid>("OperatorGrid", operatorGridAddress);
   const operatorGridAdmin = deployer;

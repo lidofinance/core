@@ -36,5 +36,17 @@
   },
   "app:lido": {
     "newVersion": [5, 0, 0]
+  },
+  "operatorGrid": {
+    "deployParameters": {
+      "defaultTierParams": {
+        "shareLimitInEther": "1000",
+        "reserveRatioBP": 2000,
+        "forcedRebalanceThresholdBP": 1800,
+        "infraFeeBP": 500,
+        "liquidityFeeBP": 400,
+        "reservationFeeBP": 100
+      }
+    }
   }
 }

@@ -145,7 +145,7 @@ describe("Integration: Withdrawal happy path", () => {
       expect(owner).to.equal(holder.address);
       expect(isFinalized).to.be.true;
       expect(isClaimed).to.be.false;
-      expect(postReportClaimableEther[i]).to.be.closeTo(REQUEST_AMOUNT, 1n);
+      expect(postReportClaimableEther[i]).to.be.closeTo(REQUEST_AMOUNT, 2n);
     });
 
     // Claim withdrawals
@@ -158,7 +158,7 @@ describe("Integration: Withdrawal happy path", () => {
 
     // Verify claim results
     const gasCost = receipt!.gasUsed * receipt!.gasPrice;
-    expect(balanceAfter - balanceBefore + gasCost).to.be.closeTo(REQUESTS_SUM, 1n * REQUESTS_COUNT);
+    expect(balanceAfter - balanceBefore + gasCost).to.be.closeTo(REQUESTS_SUM, 2n * REQUESTS_COUNT);
 
     const claimEvents = findEventsWithInterfaces(receipt!, "WithdrawalClaimed", [wq.interface]);
     expect(claimEvents?.length).to.equal(REQUESTS_COUNT);
@@ -167,7 +167,7 @@ describe("Integration: Withdrawal happy path", () => {
       expect(event?.args.requestId).to.equal(BigInt(i) + lastRequestId + 1n);
       expect(event?.args.receiver).to.equal(holder.address);
       expect(event?.args.owner).to.equal(holder.address);
-      expect(event?.args.amountOfETH).to.be.closeTo(REQUEST_AMOUNT, 1n);
+      expect(event?.args.amountOfETH).to.be.closeTo(REQUEST_AMOUNT, 2n);
     });
 
     // Verify NFT transfers

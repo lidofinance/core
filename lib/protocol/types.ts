@@ -13,8 +13,10 @@ import {
   Burner,
   DepositSecurityModule,
   HashConsensus,
+  ICSModule,
   IStakingModule,
   Kernel,
+  LazyOracle,
   Lido,
   LidoExecutionLayerRewardsVault,
   LidoLocator,
@@ -68,6 +70,7 @@ export type ProtocolNetworkItems = {
   vaultHub: string;
   predepositGuarantee: string;
   operatorGrid: string;
+  lazyOracle: string;
 };
 
 export interface ContractTypes {
@@ -95,6 +98,8 @@ export interface ContractTypes {
   VaultHub: VaultHub;
   OperatorGrid: OperatorGrid;
   IStakingModule: IStakingModule;
+  ICSModule: ICSModule;
+  LazyOracle: LazyOracle;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -149,6 +154,7 @@ export type VaultsContracts = {
   vaultHub: LoadedContract<VaultHub>;
   predepositGuarantee: LoadedContract<PredepositGuarantee>;
   operatorGrid: LoadedContract<OperatorGrid>;
+  lazyOracle: LoadedContract<LazyOracle>;
 };
 
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &
@@ -183,3 +189,19 @@ export type ProtocolContext = {
     extraInterfaces?: Interface[], // additional interfaces to parse
   ) => LogDescriptionExtended[];
 };
+
+export type RequireAllKeys<O, A extends readonly (keyof O)[]> =
+  Exclude<keyof O, A[number]> extends never // ← nothing missing?
+    ? A[number] extends keyof O
+      ? A
+      : never //   and nothing extra?
+    : never;
+
+/**
+ * Helper function to ensure all keys of an object are present in an array
+ * @param arr - The array of keys to check
+ * @returns The array of keys
+ */
+export function keysOf<O>() {
+  return <const A extends readonly (keyof O)[]>(arr: RequireAllKeys<O, A>) => arr;
+}
