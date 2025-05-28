@@ -132,7 +132,8 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     bytes32 public constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
     bytes32 public constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
     bytes32 public constant REPORT_EXITED_VALIDATORS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_ROLE");
-    bytes32 public constant REPORT_EXITED_VALIDATORS_STATUS_ROLE = keccak256("REPORT_EXITED_VALIDATORS_STATUS_ROLE");
+    bytes32 public constant REPORT_VALIDATOR_EXITING_STATUS_ROLE = keccak256("REPORT_VALIDATOR_EXITING_STATUS_ROLE");
+    bytes32 public constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 public constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
     bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
 
@@ -1485,7 +1486,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         uint256 _eligibleToExitInSec
     )
         external
-        onlyRole(REPORT_EXITED_VALIDATORS_STATUS_ROLE)
+        onlyRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE)
     {
         _getIStakingModuleById(_stakingModuleId).reportValidatorExitDelay(
             _nodeOperatorId,
@@ -1511,7 +1512,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         uint256 _exitType
     )
         external
-        onlyRole(REPORT_EXITED_VALIDATORS_ROLE)
+        onlyRole(REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE)
     {
         _getIStakingModuleById(_stakingModuleId).onValidatorExitTriggered(
             _nodeOperatorId,
