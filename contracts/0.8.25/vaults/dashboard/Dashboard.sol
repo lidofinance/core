@@ -225,7 +225,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Disconnects the underlying StakingVault from the hub and passing its ownership to Dashboard.
-     *         After receiving the final report, you can call reconnectToVaultHub() to reconnect to the hub
+     *         After receiving the final report, one can call reconnectToVaultHub() to reconnect to the hub
      *         or abandonDashboard() to transfer the ownership to a new owner.
      */
     function voluntaryDisconnect() external {
