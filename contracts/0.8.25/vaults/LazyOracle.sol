@@ -122,7 +122,7 @@ contract LazyOracle is ILazyOracle {
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault
     /// @param _inOutDelta the inOutDelta of the vault
-    /// @param _accumulatedTreasuryFees the accumulated treasury fees accrued on the vault
+    /// @param _accumulatedTreasuryFees the accumulated treasury fees accrued on the vault (nominated in ether)
     /// @param _liabilityShares the liabilityShares of the vault
     /// @param _proof the proof of the reported data
     function updateVaultData(

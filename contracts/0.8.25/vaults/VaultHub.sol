@@ -32,7 +32,7 @@ contract VaultHub is PausableUntilWithRoles {
         mapping(address vault => VaultRecord) records;
         /// @notice connection parameters for each vault
         mapping(address vault => VaultConnection) connections;
-        /// @notice obligations parameters for each vault
+        /// @notice obligation values for each vault
         mapping(address vault => VaultObligations) obligations;
         /// @notice 1-based array of vaults connected to the hub. index 0 is reserved for not connected vaults
         address[] vaults;
@@ -108,10 +108,10 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 public constant VAULT_MASTER_ROLE = keccak256("vaults.VaultHub.VaultMasterRole");
     /// @notice role that allows to set allowed codehashes
     bytes32 public constant VAULT_CODEHASH_SET_ROLE = keccak256("vaults.VaultHub.VaultCodehashSetRole");
-    /// @notice role that allows to accrue withdrawals obligation on the vault
-    bytes32 public constant WITHDRAWAL_MANAGER_ROLE = keccak256("vaults.VaultHub.WithdrawalManagerRole");
-    /// @notice role that allows to fulfill withdrawal obligations by exiting validators
-    bytes32 public constant WITHDRAWAL_EXECUTOR_ROLE = keccak256("vaults.VaultHub.WithdrawalExecutorRole");
+    /// @notice role that allows to accrue Lido Core redemptions on the vault
+    bytes32 public constant REDEMPTION_MASTER_ROLE = keccak256("vaults.VaultHub.RedemptionMasterRole");
+    /// @notice role that allows to trigger validator exits under extreme conditions
+    bytes32 public constant VALIDATOR_EXIT_ROLE = keccak256("vaults.VaultHub.ValidatorExitRole");
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     /// @notice The time delta for report freshness check
@@ -504,11 +504,13 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Updates the unsettled withdrawals obligation on the vault
     /// @param _vault The address of the vault
     /// @param _value The value of the unsettled withdrawals obligation
-    function updateWithdrawalsObligation(address _vault, uint256 _value) external onlyRole(WITHDRAWAL_MANAGER_ROLE) {
+    function updateWithdrawalsObligation(address _vault, uint256 _value) external onlyRole(REDEMPTION_MASTER_ROLE) {
         uint256 liability = _getPooledEthBySharesRoundUp(_vaultRecord(_vault).liabilityShares);
         if (_value > liability) revert WithdrawalsObligationValueTooHigh(_vault, _value, liability);
 
         _vaultObligations(_vault).unsettledWithdrawals = uint128(_value);
+
+        // TODO: try to settle and pause the vault deposits if needed
 
         emit WithdrawalsObligationUpdated(_vault, _value, 0);
     }
@@ -732,7 +734,7 @@ contract VaultHub is PausableUntilWithRoles {
         address _vault,
         bytes calldata _pubkeys,
         address _refundRecipient
-    ) external payable onlyRole(WITHDRAWAL_EXECUTOR_ROLE) {
+    ) external payable onlyRole(VALIDATOR_EXIT_ROLE) {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
