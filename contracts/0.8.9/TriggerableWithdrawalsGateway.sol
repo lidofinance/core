@@ -178,7 +178,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
         ValidatorData[] calldata validatorsData,
         address refundRecipient,
         uint256 exitType
-    ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance {
+    ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance whenResumed {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         uint256 requestsCount = validatorsData.length;
         if (requestsCount == 0) revert ZeroArgument("validatorsData");
