@@ -32,7 +32,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;
 
-    /// @dev Errors
     /**
      * @notice Thrown when an invalid zero value is passed
      * @param name Name of the argument that was zero
@@ -77,6 +76,11 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      * @param remainingLimit Amount of requests that still can be processed at current day
      */
     error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
+
+    /**
+     * @notice Thrown when onValidatorExitTriggered() reverts with empty data (e.g., out-of-gas error)
+     */
+    error UnrecoverableModuleError();
 
     struct ValidatorData {
         uint256 stakingModuleId;
@@ -173,8 +177,8 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
     function triggerFullWithdrawals(
         ValidatorData[] calldata validatorsData,
         address refundRecipient,
-        uint8 exitType
-    ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance whenResumed {
+        uint256 exitType
+    ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         uint256 requestsCount = validatorsData.length;
         if (requestsCount == 0) revert ZeroArgument("validatorsData");
@@ -255,7 +259,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
     function _notifyStakingModules(
         ValidatorData[] calldata validatorsData,
         uint256 withdrawalRequestPaidFee,
-        uint8 exitType
+        uint256 exitType
     ) internal {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
         ValidatorData calldata data;
@@ -263,14 +267,20 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
             data = validatorsData[i];
 
             try
-                 stakingRouter.onValidatorExitTriggered(
+                stakingRouter.onValidatorExitTriggered(
                     data.stakingModuleId,
                     data.nodeOperatorId,
                     data.pubkey,
                     withdrawalRequestPaidFee,
                     exitType
-             )
-            {} catch {
+                )
+            {} catch (bytes memory lowLevelRevertData) {
+                /// @dev This check is required to prevent incorrect gas estimation of the method.
+                ///      Without it, Ethereum nodes that use binary search for gas estimation may
+                ///      return an invalid value when the onValidatorExitTriggered() reverts because of the
+                ///      "out of gas" error. Here we assume that the onValidatorExitTriggered() method doesn't
+                ///      have reverts with empty error data except "out of gas".
+                if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
                 emit StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
             }
         }

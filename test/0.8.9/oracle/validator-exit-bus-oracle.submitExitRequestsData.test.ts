@@ -280,7 +280,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
         oracle,
-        "InvalidRequestsData",
+        "InvalidModuleId",
       );
     });
   });
@@ -453,9 +453,9 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       const role = await oracle.MAX_VALIDATORS_PER_BATCH_ROLE();
       await oracle.grantRole(role, authorizedEntity);
 
-      await expect(
-        oracle.connect(authorizedEntity).setMaxRequestsPerBatch(0),
-      ).to.be.revertedWith('MAX_BATCH_SIZE_ZERO');
+      await expect(oracle.connect(authorizedEntity).setMaxRequestsPerBatch(0)).to.be.revertedWith(
+        "MAX_BATCH_SIZE_ZERO",
+      );
     });
 
     it("Should limit request by MAX_VALIDATORS_PER_BATCH if it is smaller than available vebo limit", async () => {
