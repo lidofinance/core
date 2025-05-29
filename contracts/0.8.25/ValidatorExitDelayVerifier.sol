@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 pragma solidity 0.8.25;
@@ -160,9 +160,9 @@ contract ValidatorExitDelayVerifier {
      * @notice Verifies that the provided validators were not requested to exit on the CL after a VEB exit request.
      *         Reports exit delays to the Staking Router.
      * @dev Ensures that `exitEpoch` is equal to `FAR_FUTURE_EPOCH` at the given beacon block.
-     * @param exitRequests The concatenated VEBO exit requests, each 64 bytes in length.
      * @param beaconBlock The block header and EIP-4788 timestamp to prove the block root is known.
      * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited.
+     * @param exitRequests The concatenated VEBO exit requests, each 64 bytes in length.
      */
     function verifyValidatorExitDelay(
         ProvableBeaconBlockHeader calldata beaconBlock,
@@ -204,10 +204,10 @@ contract ValidatorExitDelayVerifier {
      * @dev Ensures that `exitEpoch` is equal to `FAR_FUTURE_EPOCH` at the given beacon block.
      * @dev Verifies historical blocks (via historical_summaries).
      * @dev The oldBlock.header must have slot >= FIRST_SUPPORTED_SLOT.
-     * @param exitRequests The concatenated VEBO exit requests, each 64 bytes in length.
      * @param beaconBlock The block header and EIP-4788 timestamp to prove the block root is known.
      * @param oldBlock Historical block header witness data and its proof.
      * @param validatorWitnesses Array of validator proofs to confirm they are not yet exited in oldBlock.header.
+     * @param exitRequests The concatenated VEBO exit requests, each 64 bytes in length.
      */
     function verifyHistoricalValidatorExitDelay(
         ProvableBeaconBlockHeader calldata beaconBlock,
