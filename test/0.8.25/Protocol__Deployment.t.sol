@@ -14,7 +14,9 @@ import {LidoLocator} from "contracts/0.8.9/LidoLocator.sol";
 import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 
 import {StakingRouter__MockForLidoAccountingFuzzing} from "./contracts/StakingRouter__MockForLidoAccountingFuzzing.sol";
-import {SecondOpinionOracle__MockForAccountingFuzzing} from "./contracts/SecondOpinionOracle__MockForAccountingFuzzing.sol";
+import {
+    SecondOpinionOracle__MockForAccountingFuzzing
+} from "./contracts/SecondOpinionOracle__MockForAccountingFuzzing.sol";
 import {WithdrawalQueue, IWstETH} from "../../contracts/0.8.9/WithdrawalQueue.sol";
 import {WithdrawalQueueERC721} from "../../contracts/0.8.9/WithdrawalQueueERC721.sol";
 
@@ -408,6 +410,7 @@ contract BaseProtocolTest is Test {
             predepositGuarantee: makeAddr("dummy-locator:predeposit_guarantee"),
             wstETH: wstETHAdr,
             vaultHub: makeAddr("dummy-locator:vaultHub"),
+            lazyOracle: makeAddr("dummy-locator:lazyOracle"),
             operatorGrid: makeAddr("dummy-locator:operatorGrid")
         });
 
