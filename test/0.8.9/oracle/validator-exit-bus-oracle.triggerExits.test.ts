@@ -399,7 +399,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
         oracle.triggerExits(request, [0, 1, 2], ZERO_ADDRESS, {
           value: 4,
         }),
-      ).to.be.revertedWithCustomError(oracle, "InvalidRequestsData");
+      ).to.be.revertedWithCustomError(oracle, "InvalidModuleId");
     });
   });
 

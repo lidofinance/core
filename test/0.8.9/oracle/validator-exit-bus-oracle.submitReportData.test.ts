@@ -294,7 +294,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
 
       await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion)).to.be.revertedWithCustomError(
         oracle,
-        "InvalidRequestsData",
+        "InvalidModuleId",
       );
     });
 

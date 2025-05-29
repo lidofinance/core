@@ -19,7 +19,7 @@ interface ITriggerableWithdrawalsGateway {
     function triggerFullWithdrawals(
         ValidatorData[] calldata triggerableExitData,
         address refundRecipient,
-        uint8 exitType
+        uint256 exitType
     ) external payable;
 }
 
@@ -33,7 +33,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;
 
-    /// @dev Errors
     /**
      * @notice Thrown when an invalid zero value is passed
      * @param name Name of the argument that was zero
@@ -54,7 +53,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /**
      * @notice Thrown when module id equal to zero
      */
-    error InvalidRequestsData();
+    error InvalidModuleId();
 
     /**
      * @notice Thrown when data submitted for exit requests was not sorted in ascending order or contains duplicates
@@ -294,6 +293,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         address refundRecipient
     ) external payable whenResumed preservesEthBalance {
         if (msg.value == 0) revert ZeroArgument("msg.value");
+        if (exitDataIndexes.length == 0) revert ZeroArgument("exitDataIndexes");
 
         // If the refund recipient is not set, use the sender as the refund recipient
         if (refundRecipient == address(0)) {
@@ -328,7 +328,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
             ValidatorData memory validatorData = _getValidatorData(exitsData.data, exitDataIndexes[i]);
 
-            if (validatorData.moduleId == 0) revert InvalidRequestsData();
+            if (validatorData.moduleId == 0) revert InvalidModuleId();
 
             triggerableExitData[i] = ITriggerableWithdrawalsGateway.ValidatorData(
                 validatorData.moduleId,
@@ -339,7 +339,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
         ITriggerableWithdrawalsGateway(LOCATOR.triggerableWithdrawalsGateway()).triggerFullWithdrawals{
             value: msg.value
-        }(triggerableExitData, refundRecipient, uint8(EXIT_TYPE));
+        }(triggerableExitData, refundRecipient, EXIT_TYPE);
     }
 
     /**
@@ -670,7 +670,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             moduleId = uint24(dataWithoutPubkey >> (64 + 40));
 
             if (moduleId == 0) {
-                revert InvalidRequestsData();
+                revert InvalidModuleId();
             }
 
             //                              dataWithoutPubkey
