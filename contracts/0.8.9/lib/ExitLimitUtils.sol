@@ -77,8 +77,6 @@ library ExitLimitUtils {
         uint256 frameDurationInSec,
         uint256 timestamp
     ) internal pure returns (ExitRequestLimitData memory) {
-        // TODO:  do we allow maxExitRequests be equal to zero?
-        // require(maxExitRequests != 0, "ZERO_MAX_LIMIT");;
         require(maxExitRequestsLimit <= type(uint32).max, "TOO_LARGE_MAX_EXIT_REQUESTS_LIMIT");
         require(frameDurationInSec <= type(uint32).max, "TOO_LARGE_FRAME_DURATION");
         require(exitsPerFrame <= maxExitRequestsLimit, "TOO_LARGE_EXITS_PER_FRAME");
