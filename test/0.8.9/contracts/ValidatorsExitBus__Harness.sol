@@ -43,7 +43,7 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
     }
 
     function storeNewHashRequestStatus(bytes32 exitRequestHash, uint8 contractVersion, uint32 timestamp) external {
-        _storeNewHashRequestStatus(exitRequestHash, RequestStatus(contractVersion, timestamp));
+        _storeNewHashRequestStatus(exitRequestHash, contractVersion, timestamp);
     }
 
     function setContractVersion(uint256 version) external {
