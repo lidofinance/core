@@ -30,6 +30,8 @@ export async function main() {
 
     // New implementations
     state[Sk.lidoLocator].implementation.address,
+    state[Sk.appLido].implementation.address,
+    state[Sk.accountingOracle].implementation.address,
 
     // New non-proxy contracts
     state[Sk.stakingVaultFactory].address,
@@ -50,12 +52,6 @@ export async function main() {
   const template = await deployWithoutProxy(Sk.v3Template, "V3Template", deployer, [addressesParams]);
 
   await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [
-    [
-      template.address,
-      parameters[Sk.appLido].newVersion,
-      state[Sk.appLido].aragonApp.id,
-      state[Sk.appLido].implementation.address,
-      state[Sk.accountingOracle].implementation.address,
-    ],
+    [template.address, parameters[Sk.appLido].newVersion, state[Sk.appLido].aragonApp.id],
   ]);
 }

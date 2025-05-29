@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
 import {IAccessControlEnumerable} from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
@@ -31,26 +31,28 @@ interface ICSModule {
 /**
  * @title V3UpgradeAddresses
  * @notice Stores immutable addresses required for the V3 upgrade process.
- * This contract centralizes address management for UpgradeTemplateV3 and UpgradeV3VoteScript.
+ * This contract centralizes address management for V3Template and V3VoteScript.
  */
 contract V3Addresses {
 
     struct V3AddressesParams {
         // Old implementations
-        address oldLocatorImplementation;
-        address oldLidoImplementation;
-        address oldAccountingOracleImplementation;
+        address oldLocatorImpl;
+        address oldLidoImpl;
+        address oldAccountingOracleImpl;
 
         // New implementations
-        address newLocatorImplementation;
+        address newLocatorImpl;
+        address newLidoImpl;
+        address newAccountingOracleImpl;
 
         // New non-proxy contracts
         address vaultFactory;
 
         // New fancy proxy and blueprint contracts
         address upgradeableBeacon;
-        address stakingVaultImplementation;
-        address dashboardImplementation;
+        address stakingVaultImpl;
+        address dashboardImpl;
 
         // Existing proxies and contracts
         address kernel;
@@ -60,23 +62,30 @@ contract V3Addresses {
         address voting;
     }
 
+    string public constant CURATED_MODULE_NAME = "curated-onchain-v1";
+    string public constant SIMPLE_DVT_MODULE_NAME = "SimpleDVT";
+    string public constant CSM_MODULE_NAME = "Community Staking";
+
+
     //
     // -------- Pre-upgrade old contracts --------
     //
-    address public immutable OLD_LOCATOR_IMPLEMENTATION;
+    address public immutable OLD_LOCATOR_IMPL;
     address public immutable OLD_BURNER;
-    address public immutable OLD_ACCOUNTING_ORACLE_IMPLEMENTATION;
-    address public immutable OLD_LIDO_IMPLEMENTATION;
+    address public immutable OLD_ACCOUNTING_ORACLE_IMPL;
+    address public immutable OLD_LIDO_IMPL;
 
     //
     // -------- Upgraded contracts --------
     //
     address public immutable LOCATOR;
-    address public immutable NEW_LOCATOR_IMPLEMENTATION;
+    address public immutable NEW_LOCATOR_IMPL;
     address public immutable LIDO;
     address public immutable ACCOUNTING_ORACLE;
     address public immutable BURNER;
     address public immutable ORACLE_REPORT_SANITY_CHECKER;
+    address public immutable NEW_LIDO_IMPL;
+    address public immutable NEW_ACCOUNTING_ORACLE_IMPL;
 
     //
     // -------- New V3 contracts --------
@@ -87,8 +96,8 @@ contract V3Addresses {
     address public immutable OPERATOR_GRID;
     address public immutable VAULT_FACTORY;
     address public immutable UPGRADEABLE_BEACON;
-    address public immutable STAKING_VAULT_IMPLEMENTATION;
-    address public immutable DASHBOARD_IMPLEMENTATION;
+    address public immutable STAKING_VAULT_IMPL;
+    address public immutable DASHBOARD_IMPL;
 
     //
     // -------- Unchanged contracts --------
@@ -109,7 +118,7 @@ contract V3Addresses {
     constructor(
         V3AddressesParams memory params
     ) {
-        if (params.newLocatorImplementation == params.oldLocatorImplementation) {
+        if (params.newLocatorImpl == params.oldLocatorImpl) {
             revert NewAndOldLocatorImplementationsMustBeDifferent();
         }
 
@@ -117,26 +126,28 @@ contract V3Addresses {
         // Set directly from passed parameters
         //
 
-        ILidoLocator newLocatorImpl = ILidoLocator(params.newLocatorImplementation);
-        OLD_LOCATOR_IMPLEMENTATION = params.oldLocatorImplementation;
-        OLD_ACCOUNTING_ORACLE_IMPLEMENTATION = params.oldAccountingOracleImplementation;
-        OLD_LIDO_IMPLEMENTATION = params.oldLidoImplementation;
+        ILidoLocator newLocatorImpl = ILidoLocator(params.newLocatorImpl);
+        OLD_LOCATOR_IMPL = params.oldLocatorImpl;
+        OLD_ACCOUNTING_ORACLE_IMPL = params.oldAccountingOracleImpl;
+        OLD_LIDO_IMPL = params.oldLidoImpl;
         LOCATOR = params.locator;
-        NEW_LOCATOR_IMPLEMENTATION = params.newLocatorImplementation;
+        NEW_LOCATOR_IMPL = params.newLocatorImpl;
+        NEW_LIDO_IMPL = params.newLidoImpl;
+        NEW_ACCOUNTING_ORACLE_IMPL = params.newAccountingOracleImpl;
         KERNEL = params.kernel;
         AGENT = params.agent;
         ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
         VOTING = params.voting;
         VAULT_FACTORY = params.vaultFactory;
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
-        STAKING_VAULT_IMPLEMENTATION = params.stakingVaultImplementation;
-        DASHBOARD_IMPLEMENTATION = params.dashboardImplementation;
+        STAKING_VAULT_IMPL = params.stakingVaultImpl;
+        DASHBOARD_IMPL = params.dashboardImpl;
 
         //
         // Discovered via other contracts
         //
 
-        OLD_BURNER = ILidoLocator(params.oldLocatorImplementation).burner();
+        OLD_BURNER = ILidoLocator(params.oldLocatorImpl).burner();
 
         LIDO = newLocatorImpl.lido();
         ACCOUNTING_ORACLE = newLocatorImpl.accountingOracle();
@@ -158,15 +169,19 @@ contract V3Addresses {
             // Retrieve contracts with burner allowances to migrate: NOR, SDVT and CSM ACCOUNTING
             IStakingRouter.StakingModule[] memory stakingModules = IStakingRouter(STAKING_ROUTER).getStakingModules();
             IStakingRouter.StakingModule memory curated = stakingModules[0];
-            if (keccak256(abi.encodePacked(curated.name)) != keccak256("curated-onchain-v1")) revert IncorrectStakingModuleName(curated.name);
+            if (_hash(curated.name) != _hash(CURATED_MODULE_NAME)) revert IncorrectStakingModuleName(curated.name);
             NODE_OPERATORS_REGISTRY = curated.stakingModuleAddress;
             IStakingRouter.StakingModule memory simpleDvt = stakingModules[1];
-            if (keccak256(abi.encodePacked(simpleDvt.name)) != keccak256("SimpleDVT")) revert IncorrectStakingModuleName(simpleDvt.name);
+            if (_hash(simpleDvt.name) != _hash(SIMPLE_DVT_MODULE_NAME)) revert IncorrectStakingModuleName(simpleDvt.name);
             SIMPLE_DVT = simpleDvt.stakingModuleAddress;
             IStakingRouter.StakingModule memory csm = stakingModules[2];
-            if (keccak256(abi.encodePacked(csm.name)) != keccak256("Community Staking")) revert IncorrectStakingModuleName(csm.name);
+            if (_hash(csm.name) != _hash(CSM_MODULE_NAME)) revert IncorrectStakingModuleName(csm.name);
             CSM_ACCOUNTING = ICSModule(csm.stakingModuleAddress).accounting();
         }
+    }
+
+    function _hash(string memory input) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(input));
     }
 
     error NewAndOldLocatorImplementationsMustBeDifferent();

@@ -28,7 +28,7 @@ jobs:
       - name: Prepare network state file
         run: cp deployed-mainnet.json deployed-mainnet-upgrade.json
 
-      - name: Run upgrade
+      - name: Deploy upgrade
         run: yarn upgrade:deploy
         env:
           RPC_URL: http://localhost:8555
@@ -44,7 +44,7 @@ jobs:
           RPC_URL: http://localhost:8555
           NETWORK_STATE_FILE: deployed-mainnet-upgrade.json
 
-      - name: Finalize scratch deployment
+      - name: Workaround for not updated state error when forking a fork
         run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
         env:
           RPC_URL: http://localhost:8555

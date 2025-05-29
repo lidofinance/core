@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
 import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
@@ -30,8 +30,6 @@ contract V3VoteScript is OmnibusBase {
         address upgradeTemplate;
         uint16[3] lidoAppNewVersion;
         bytes32 lidoAppId;
-        address newLidoImpl;
-        address newAccountingOracleImpl;
     }
 
     //
@@ -70,7 +68,7 @@ contract V3VoteScript is OmnibusBase {
         // Upgrade LidoLocator implementation
         voteItems[index++] = VoteItem({
             description: "2. Upgrade LidoLocator implementation",
-            call: _forwardCall(TEMPLATE.AGENT(), TEMPLATE.LOCATOR(), abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (TEMPLATE.NEW_LOCATOR_IMPLEMENTATION())))
+            call: _forwardCall(TEMPLATE.AGENT(), TEMPLATE.LOCATOR(), abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (TEMPLATE.NEW_LOCATOR_IMPL())))
         });
 
         // Update Lido version in Lido App Repo
@@ -78,7 +76,7 @@ contract V3VoteScript is OmnibusBase {
             description: "3. Update Lido version in Lido App Repo",
             call: _votingCall(TEMPLATE.ARAGON_APP_LIDO_REPO(), abi.encodeCall(IRepo.newVersion, (
                     params.lidoAppNewVersion,
-                    params.newLidoImpl,
+                    TEMPLATE.NEW_LIDO_IMPL(),
                     "0x"
                 )))
         });
@@ -88,7 +86,7 @@ contract V3VoteScript is OmnibusBase {
             description: "4. Set Lido implementation in Kernel",
             call: _votingCall(
                 TEMPLATE.KERNEL(),
-                abi.encodeCall(IKernel.setApp, (IKernel(TEMPLATE.KERNEL()).APP_BASES_NAMESPACE(), params.lidoAppId, params.newLidoImpl))
+                abi.encodeCall(IKernel.setApp, (IKernel(TEMPLATE.KERNEL()).APP_BASES_NAMESPACE(), params.lidoAppId, TEMPLATE.NEW_LIDO_IMPL()))
             )
         });
 
@@ -139,7 +137,7 @@ contract V3VoteScript is OmnibusBase {
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ACCOUNTING_ORACLE(),
-                abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (params.newAccountingOracleImpl))
+                abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (TEMPLATE.NEW_ACCOUNTING_ORACLE_IMPL()))
             )
         });
 

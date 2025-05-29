@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {IForwarder} from "contracts/common/interfaces/IForwarder.sol";
-import {IVoting} from "contracts/common/interfaces/IVoting.sol";
+import {IForwarder} from "../interfaces/IForwarder.sol";
+import {IVoting} from "../interfaces/IVoting.sol";
 
 import {CallsScriptBuilder} from "./CallScriptBuilder.sol";
 
@@ -10,9 +10,19 @@ import {CallsScriptBuilder} from "./CallScriptBuilder.sol";
 /// @title OmnibusBase
 /// @notice Abstract base contract for creating votes for the Aragon Voting.
 ///
-/// @dev Inheriting contracts must implement:
-///     - getVoteItems() - to define the specific actions in the proposal
 /// @dev Originates from https://github.com/lidofinance/dual-governance/tree/98216fb2c9150b8111a14b06afd9d6e646f14c20/scripts/upgrade
+/// @dev The OmnibusBase contract serves as a foundational layer for creating governance proposals
+///     that are compatible with the Aragon Voting framework. It provides a structured approach
+///     to define and execute a series of actions (vote items) within a single governance vote.
+///     The contract leverages the CallsScriptBuilder library to construct EVM call scripts,
+///     ensuring that all actions are executed atomically and in the specified order.
+/// @dev This contract is designed to be extended and customized for specific governance
+///     scenarios, allowing developers to define complex multi-step proposals that can be
+///     executed within the Aragon governance ecosystem.
+/// @dev Inheriting contracts are expected to implement the `getVoteItems()` function, which
+///     outlines the specific actions to be included in the governance proposal. These actions
+///     are encapsulated in the `VoteItem` struct, which includes a human-readable description
+///     and the necessary EVM call data.
 abstract contract OmnibusBase {
     using CallsScriptBuilder for CallsScriptBuilder.Context;
 

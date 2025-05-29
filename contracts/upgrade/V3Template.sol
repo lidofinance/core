@@ -75,15 +75,16 @@ contract V3Template is V3Addresses {
     // Events
     //
 
+    event UpgradeStarted();
     event UpgradeFinished();
 
     //
     // -------- Constants --------
     //
 
-    uint256 internal constant ACCOUNTING_ORACLE_CONSENSUS_VERSION = 4;
-    uint256 internal constant EXPECTED_FINAL_LIDO_VERSION = 3;
-    uint256 internal constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
+    uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 3;
+    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
+    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 4;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
@@ -93,9 +94,9 @@ contract V3Template is V3Addresses {
     uint256 public constant EXPIRE_SINCE_INCLUSIVE = 1761868800; // 2025-10-31 00:00:00 UTC
 
     // Initial value of upgradeBlockNumber storage variable
-    uint256 internal constant UPGRADE_NOT_STARTED = 0;
+    uint256 public constant UPGRADE_NOT_STARTED = 0;
 
-    uint256 internal constant INFINITE_ALLOWANCE = type(uint256).max;
+    uint256 public constant INFINITE_ALLOWANCE = type(uint256).max;
 
     //
     // Structured storage
@@ -103,18 +104,23 @@ contract V3Template is V3Addresses {
 
     uint256 public upgradeBlockNumber = UPGRADE_NOT_STARTED;
     bool public isUpgradeFinished;
-    uint256 internal initialOldBurnerStethSharesBalance;
-    uint256 internal initialTotalShares;
-    uint256 internal initialTotalPooledEther;
+    uint256 public initialOldBurnerStethSharesBalance;
+    uint256 public initialTotalShares;
+    uint256 public initialTotalPooledEther;
+    address[] public contractsWithBurnerAllowances;
 
 
     /// @param _params Params required to initialize the addresses contract
     constructor(V3AddressesParams memory _params) V3Addresses(_params) {
+        contractsWithBurnerAllowances.push(WITHDRAWAL_QUEUE);
+        contractsWithBurnerAllowances.push(NODE_OPERATORS_REGISTRY);
+        contractsWithBurnerAllowances.push(SIMPLE_DVT);
+        contractsWithBurnerAllowances.push(CSM_ACCOUNTING);
     }
 
-    /// @notice Must be called after LidoLocator is upgraded
+    /// @notice Must be called before LidoLocator is upgraded
     function startUpgrade() external {
-        if (msg.sender != AGENT) revert OnlyVotingCanUpgrade();
+        if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
         if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
         if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
 
@@ -127,45 +133,36 @@ contract V3Template is V3Addresses {
 
         // Save initial state for the check after burner migration
         initialOldBurnerStethSharesBalance = ILidoWithFinalizeUpgrade(LIDO).sharesOf(OLD_BURNER);
+
+        emit UpgradeStarted();
     }
 
     function finishUpgrade() external {
-        if (msg.sender != AGENT) revert OnlyVotingCanUpgrade();
+        if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
         if (upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
         if (isUpgradeFinished) revert UpgradeAlreadyFinished();
 
         isUpgradeFinished = true;
 
-        address[] memory contracts = new address[](4);
-        contracts[0] = WITHDRAWAL_QUEUE;
-        contracts[1] = NODE_OPERATORS_REGISTRY;
-        contracts[2] = SIMPLE_DVT;
-        contracts[3] = CSM_ACCOUNTING;
-        ILidoWithFinalizeUpgrade(LIDO).finalizeUpgrade_v3(OLD_BURNER, contracts);
+        ILidoWithFinalizeUpgrade(LIDO).finalizeUpgrade_v3(OLD_BURNER, contractsWithBurnerAllowances);
 
-        IAccountingOracle(ACCOUNTING_ORACLE).finalizeUpgrade_v3(ACCOUNTING_ORACLE_CONSENSUS_VERSION);
+        IAccountingOracle(ACCOUNTING_ORACLE).finalizeUpgrade_v3(EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION);
 
         _assertPostUpgradeState();
 
         emit UpgradeFinished();
     }
-
     function _assertPreUpgradeState() internal view {
         // Check initial implementations of the proxies to be upgraded
-        _assertProxyImplementation(IOssifiableProxy(LOCATOR), OLD_LOCATOR_IMPLEMENTATION);
-        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), OLD_ACCOUNTING_ORACLE_IMPLEMENTATION);
-        _assertAragonAppImplementation(IAragonAppRepo(ARAGON_APP_LIDO_REPO), OLD_LIDO_IMPLEMENTATION);
+        _assertProxyImplementation(IOssifiableProxy(LOCATOR), OLD_LOCATOR_IMPL);
+        _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), OLD_ACCOUNTING_ORACLE_IMPL);
+        _assertAragonAppImplementation(IAragonAppRepo(ARAGON_APP_LIDO_REPO), OLD_LIDO_IMPL);
 
         // Check allowances of the old burner
-        address[4] memory contracts = [
-            WITHDRAWAL_QUEUE,
-            NODE_OPERATORS_REGISTRY,
-            SIMPLE_DVT,
-            CSM_ACCOUNTING
-        ];
-        for (uint256 i = 0; i < contracts.length; ++i) {
-            if (ILidoWithFinalizeUpgrade(LIDO).allowance(contracts[i], OLD_BURNER) != INFINITE_ALLOWANCE) {
-                revert IncorrectBurnerAllowance(contracts[i], OLD_BURNER);
+        address[] memory contractsWithBurnerAllowances_ = contractsWithBurnerAllowances;
+        for (uint256 i = 0; i < contractsWithBurnerAllowances_.length; ++i) {
+            if (ILidoWithFinalizeUpgrade(LIDO).allowance(contractsWithBurnerAllowances_[i], OLD_BURNER) != INFINITE_ALLOWANCE) {
+                revert IncorrectBurnerAllowance(contractsWithBurnerAllowances_[i], OLD_BURNER);
             }
         }
     }
@@ -178,7 +175,7 @@ contract V3Template is V3Addresses {
             revert TotalSharesOrPooledEtherChanged();
         }
 
-        _assertProxyImplementation(IOssifiableProxy(LOCATOR), NEW_LOCATOR_IMPLEMENTATION);
+        _assertProxyImplementation(IOssifiableProxy(LOCATOR), NEW_LOCATOR_IMPL);
 
         _assertContractVersion(IVersioned(LIDO), EXPECTED_FINAL_LIDO_VERSION);
         _assertContractVersion(IVersioned(ACCOUNTING_ORACLE), EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION);
@@ -190,14 +187,14 @@ contract V3Template is V3Addresses {
         if (VaultFactory(VAULT_FACTORY).BEACON() != UPGRADEABLE_BEACON) {
             revert IncorrectVaultFactoryBeacon(VAULT_FACTORY, UPGRADEABLE_BEACON);
         }
-        if (VaultFactory(VAULT_FACTORY).DASHBOARD_IMPL() != DASHBOARD_IMPLEMENTATION) {
-            revert IncorrectVaultFactoryDashboardImplementation(VAULT_FACTORY, DASHBOARD_IMPLEMENTATION);
+        if (VaultFactory(VAULT_FACTORY).DASHBOARD_IMPL() != DASHBOARD_IMPL) {
+            revert IncorrectVaultFactoryDashboardImplementation(VAULT_FACTORY, DASHBOARD_IMPL);
         }
         if (UpgradeableBeacon(UPGRADEABLE_BEACON).owner() != AGENT) {
             revert IncorrectUpgradeableBeaconOwner(UPGRADEABLE_BEACON, AGENT);
         }
-        if (UpgradeableBeacon(UPGRADEABLE_BEACON).implementation() != STAKING_VAULT_IMPLEMENTATION) {
-            revert IncorrectUpgradeableBeaconImplementation(UPGRADEABLE_BEACON, STAKING_VAULT_IMPLEMENTATION);
+        if (UpgradeableBeacon(UPGRADEABLE_BEACON).implementation() != STAKING_VAULT_IMPL) {
+            revert IncorrectUpgradeableBeaconImplementation(UPGRADEABLE_BEACON, STAKING_VAULT_IMPL);
         }
     }
 
@@ -285,18 +282,13 @@ contract V3Template is V3Addresses {
             revert IncorrectBurnerSharesMigration();
         }
 
-        address[4] memory contracts = [
-            WITHDRAWAL_QUEUE,
-            SIMPLE_DVT,
-            NODE_OPERATORS_REGISTRY,
-            CSM_ACCOUNTING
-        ];
-        for (uint256 i = 0; i < contracts.length; i++) {
-            if (ILidoWithFinalizeUpgrade(LIDO).allowance(contracts[i], OLD_BURNER) != 0) {
-                revert IncorrectBurnerAllowance(contracts[i], OLD_BURNER);
+        address[] memory contractsWithBurnerAllowances_ = contractsWithBurnerAllowances;
+        for (uint256 i = 0; i < contractsWithBurnerAllowances_.length; i++) {
+            if (ILidoWithFinalizeUpgrade(LIDO).allowance(contractsWithBurnerAllowances_[i], OLD_BURNER) != 0) {
+                revert IncorrectBurnerAllowance(contractsWithBurnerAllowances_[i], OLD_BURNER);
             }
-            if (ILidoWithFinalizeUpgrade(LIDO).allowance(contracts[i], BURNER) != INFINITE_ALLOWANCE) {
-                revert IncorrectBurnerAllowance(contracts[i], BURNER);
+            if (ILidoWithFinalizeUpgrade(LIDO).allowance(contractsWithBurnerAllowances_[i], BURNER) != INFINITE_ALLOWANCE) {
+                revert IncorrectBurnerAllowance(contractsWithBurnerAllowances_[i], BURNER);
             }
         }
     }
@@ -354,7 +346,7 @@ contract V3Template is V3Addresses {
         }
     }
 
-    error OnlyVotingCanUpgrade();
+    error OnlyAgentCanUpgrade();
     error UpgradeAlreadyStarted();
     error UpgradeAlreadyFinished();
     error IncorrectProxyAdmin(address proxy);
