@@ -64,11 +64,11 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
     event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
     /**
      * @notice Emitted when notifying a staking module about a validator exit fails.
-     * @param stakingModuleId The ID of the staking module that failed to process the exit notification.
-     * @param nodeOperatorId The ID of the node operator for the validator.
-     * @param pubkey The public key of the validator for which the exit notification failed.
+     * @param stakingModuleId Id of staking module.
+     * @param nodeOperatorId Id of node operator.
+     * @param validatorPubkey Public key of validator.
      */
-    event StakingModuleExitNotificationFailed(uint256 stakingModuleId, uint256 nodeOperatorId, bytes pubkey);
+    event StakingModuleExitNotificationFailed(uint256 stakingModuleId, uint256 nodeOperatorId, bytes validatorPubkey);
 
     /**
      * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
