@@ -129,22 +129,17 @@ async function main() {
   log.success(`TriggerableWithdrawalsGateway implementation address: ${triggerableWithdrawalsGateway.address}`);
   log.emptyLine();
 
-  const accountingOracle = await deployImplementation(
-    Sk.accountingOracle,
-    "AccountingOracle",
-    deployer,
-    [
-      locator.address,
-      await locator.lido(),
-      await locator.legacyOracle(),
-      Number(chainSpec.secondsPerSlot),
-      Number(chainSpec.genesisTime),
-    ],
-  );
+  const accountingOracle = await deployImplementation(Sk.accountingOracle, "AccountingOracle", deployer, [
+    locator.address,
+    await locator.lido(),
+    await locator.legacyOracle(),
+    Number(chainSpec.secondsPerSlot),
+    Number(chainSpec.genesisTime),
+  ]);
 
   // fetch contract addresses that will not changed
   const locatorConfig = [
-    accountingOracle.address,
+    await locator.accountingOracle(),
     await locator.depositSecurityModule(),
     await locator.elRewardsVault(),
     await locator.legacyOracle(),
