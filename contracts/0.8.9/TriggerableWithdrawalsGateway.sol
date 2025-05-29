@@ -76,6 +76,11 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      */
     error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
+    /**
+     * @notice Thrown when onValidatorExitTriggered() reverts with empty data (e.g., out-of-gas error)
+     */
+    error UnrecoverableModuleError();
+
     struct ValidatorData {
         uint256 stakingModuleId;
         uint256 nodeOperatorId;
@@ -225,13 +230,13 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
             data = validatorsData[i];
 
             try
-                 stakingRouter.onValidatorExitTriggered(
+                stakingRouter.onValidatorExitTriggered(
                     data.stakingModuleId,
                     data.nodeOperatorId,
                     data.pubkey,
                     withdrawalRequestPaidFee,
                     exitType
-             )
+                )
             {} catch (bytes memory lowLevelRevertData) {
                 /// @dev This check is required to prevent incorrect gas estimation of the method.
                 ///      Without it, Ethereum nodes that use binary search for gas estimation may
