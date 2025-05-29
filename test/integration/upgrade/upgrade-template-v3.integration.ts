@@ -63,7 +63,7 @@ describe("Integration: Upgrade Template V3 tests", () => {
   it_("should revert when startUpgrade is called by non-voting address", async function () {
     await expect(template.connect(deployer).startUpgrade()).to.be.revertedWithCustomError(
       template,
-      "OnlyVotingCanUpgrade",
+      "OnlyAgentCanUpgrade",
     );
   });
 
