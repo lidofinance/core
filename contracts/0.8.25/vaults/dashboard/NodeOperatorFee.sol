@@ -128,8 +128,8 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice Calculates the node operator's disburseable fee.
-     * 
+     * @notice Calculates the node operator's disbursable fee.
+     *
      * The fee presently owed to the node-operator,
      * computed as a portion of staking rewards accrued between
      * `feePeriodStartReport` and `latestReport()`.
@@ -146,8 +146,8 @@ contract NodeOperatorFee is Permissions {
      * If the rewards are negative, for the purposes of fee calculation, they are considered to be zero.
      * The node-operator's fee is therefore:
      *     fee = max(0, rewards) × nodeOperatorFeeBP / TOTAL_BASIS_POINTS
-     * 
-     * @return fee The node operator's disburseable fee.
+     *
+     * @return fee The node operator's disbursable fee.
      */
     function nodeOperatorDisbursableFee() public view returns (uint256) {
         VaultHub.Report memory periodStart = feePeriodStartReport;
@@ -167,7 +167,7 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Transfers the node-operator's accrued fee (if any).
      * Steps:
-     *  • Compute the current fee via `nodeOperatorDisburseableFee()`.
+     *  • Compute the current fee via `nodeOperatorDisbursableFee()`.
      *  • If there are no rewards, do nothing.
      *  • Otherwise, move `feePeriodStartReport` to `latestReport()`,
      *    reset `rewardsAdjustment` and transfer `fee` wei to `nodeOperatorFeeRecipient`.
@@ -190,7 +190,7 @@ contract NodeOperatorFee is Permissions {
      * @param _newNodeOperatorFeeRate The new node operator fee rate.
      */
     function setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) external onlyConfirmed(confirmingRoles()) {
-        // The report must be fresh so that the total value of the vault is up to date 
+        // The report must be fresh so that the total value of the vault is up to date
         // and all the node operator fees are paid out fairly up to the moment of the latest fresh report
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
 
