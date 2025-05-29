@@ -78,8 +78,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Thrown when index of request in submitted data for triggerable withdrawal is out of range
+     * @param exitDataIndex Index of request
+     * @param requestsCount Amount of requests that were sent for processing
      */
-    error ExitDataIndexOutOfRange(uint256 exitDataIndex, uint256 totalItemsCount);
+    error ExitDataIndexOutOfRange(uint256 exitDataIndex, uint256 requestsCount);
 
     /**
      * @notice Thrown when array of indexes of requests in submitted data for triggerable withdrawal is not is not strictly increasing array
@@ -100,8 +102,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Thrown when exit requests in report exceed the maximum allowed number of requests per batch.
+     * @param requestsCount  Amount of requests that were sent for processing
      */
-    error ToManyExitRequestsInReport(uint256 totalItemsCount, uint256 maxRequestsPerBatch);
+    error ToManyExitRequestsInReport(uint256 requestsCount, uint256 maxRequestsPerBatch);
 
     /// @dev Events
 
@@ -151,7 +154,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     // RequestStatus stores timestamp of delivery, and contract version.
-    // Mappings use exitRequestsHash as key
     struct RequestStatus {
         uint32 contractVersion;
         uint32 deliveredExitDataTimestamp;
@@ -229,7 +231,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      */
     function submitExitRequestsHash(bytes32 exitRequestsHash) external whenResumed onlyRole(SUBMIT_REPORT_HASH_ROLE) {
         uint256 contractVersion = getContractVersion();
-        _storeNewHashRequestStatus(exitRequestsHash, RequestStatus(uint32(contractVersion), 0));
+        _storeNewHashRequestStatus(exitRequestsHash, uint32(contractVersion), 0);
     }
 
     /**
@@ -257,16 +259,16 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         _checkExitRequestData(request.data, request.dataFormat);
         _checkContractVersion(requestStatus.contractVersion);
 
-        uint256 totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
+        uint256 requestsCount = request.data.length / PACKED_REQUEST_LENGTH;
         uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
 
-        if (totalItemsCount > maxRequestsPerBatch) {
-            revert ToManyExitRequestsInReport(totalItemsCount, maxRequestsPerBatch);
+        if (requestsCount > maxRequestsPerBatch) {
+            revert ToManyExitRequestsInReport(requestsCount, maxRequestsPerBatch);
         }
 
-        uint256 requestsToDeliver = _consumeLimit(totalItemsCount, _applyDeliverLimit);
+        _consumeLimit(requestsCount);
 
-        _processExitRequestsList(request.data, 0, requestsToDeliver);
+        _processExitRequestsList(request.data, 0, requestsCount);
 
         _updateRequestStatus(requestStatus, _getTimestamp());
 
@@ -401,22 +403,23 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     /**
-     * @notice Returns delivery history and current status for specific exitRequestsData
+     * @notice Timestamp
      *
      * @param exitRequestsHash - The exit requests hash.
      *
      * @dev Reverts if:
      *     - exitRequestsHash was not submited
+     *     - Request was not delivered
      */
     function getExitRequestsDeliveryHistory(
+        // TODO: rename
         bytes32 exitRequestsHash
     ) external view returns (uint256 deliveryDateTimestamp) {
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
         RequestStatus storage storedRequest = requestStatusMap[exitRequestsHash];
 
-        if (storedRequest.contractVersion == 0) {
-            revert ExitHashNotSubmitted();
-        }
+        _checkExitSubmitted(storedRequest);
+        _checkDelivered(storedRequest);
 
         return storedRequest.deliveredExitDataTimestamp;
     }
@@ -544,45 +547,44 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
-    function _consumeLimit(
-        uint256 requestsCount,
-        function(uint256, uint256) internal pure returns (uint256) applyLimit
-    ) internal returns (uint256 requestsLimitedCount) {
+    function _consumeLimit(uint256 requestsCount) internal returns (uint256 requestsLimitedCount) {
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
         if (!exitRequestLimitData.isExitLimitSet()) {
             return requestsCount;
         }
 
         uint256 limit = exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
-        requestsLimitedCount = applyLimit(limit, requestsCount);
+
+        if (requestsCount > limit) {
+            revert ExitRequestsLimitExceeded(requestsCount, limit);
+        }
 
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
-            exitRequestLimitData.updatePrevExitLimit(limit - requestsLimitedCount, _getTimestamp())
+            exitRequestLimitData.updatePrevExitLimit(limit - requestsCount, _getTimestamp())
         );
     }
 
-    function _applyDeliverLimit(uint256 limit, uint256 count) internal pure returns (uint256 limitedCount) {
-        if (limit == 0) {
-            revert ExitRequestsLimitExceeded(count, 0);
-        }
-        return min(limit, count);
-    }
-
-    function _storeNewHashRequestStatus(bytes32 exitRequestsHash, RequestStatus memory requestStatus) internal {
+    function _storeNewHashRequestStatus(
+        bytes32 exitRequestsHash,
+        uint32 contractVersion,
+        uint32 deliveredExitDataTimestamp
+    ) internal {
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
-        RequestStatus storage storedRequest = requestStatusMap[exitRequestsHash];
 
-        if (storedRequest.contractVersion != 0) {
+        if (requestStatusMap[exitRequestsHash].contractVersion != 0) {
             revert ExitHashAlreadySubmitted();
         }
 
-        requestStatusMap[exitRequestsHash] = requestStatus;
+        requestStatusMap[exitRequestsHash] = RequestStatus({
+            contractVersion: contractVersion,
+            deliveredExitDataTimestamp: deliveredExitDataTimestamp
+        });
 
         emit RequestsHashSubmitted(exitRequestsHash);
     }
 
     function _updateRequestStatus(RequestStatus storage requestStatus, uint256 deliveredExitDataTimestamp) internal {
-        require(deliveredExitDataTimestamp <= type(uint32).max, "LAST_DELIVERED_EXIT_DATA_TIMESTAMP_OVERFLOW");
+        require(deliveredExitDataTimestamp <= type(uint32).max, "DELIVERED_EXIT_DATA_TIMESTAMP_OVERFLOW");
 
         requestStatus.deliveredExitDataTimestamp = uint32(deliveredExitDataTimestamp);
     }
@@ -685,10 +687,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             lastDataWithoutPubkey = dataWithoutPubkey;
             emit ValidatorExitRequest(moduleId, nodeOpId, valIndex, pubkey, timestamp);
         }
-    }
-
-    function min(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a < b ? a : b;
     }
 
     /// Storage helpers

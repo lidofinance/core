@@ -92,11 +92,12 @@ describe("ValidatorsExitBus integration", () => {
       .to.emit(veb, "ValidatorExitRequest")
       .withArgs(moduleId, nodeOpId, valIndex, pubkey, blockTimestamp);
 
-    const deliveryHistory = await veb.getExitRequestsDeliveryHistory(exitRequestsHash);
-    expect(deliveryHistory.length).to.equal(1);
-    expect(deliveryHistory[0].lastDeliveredExitDataIndex).to.equal(0);
+    const timestamp = await veb.getExitRequestsDeliveryHistory(exitRequestsHash);
+    expect(timestamp).to.equal(blockTimestamp);
 
-    await expect(veb.triggerExits(exitRequest, [0], refundRecipient, {value: 10}))
-      .to.emit(wv, "WithdrawalRequestAdded");
+    await expect(veb.triggerExits(exitRequest, [0], refundRecipient, { value: 10 })).to.emit(
+      wv,
+      "WithdrawalRequestAdded",
+    );
   });
 });

@@ -255,7 +255,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(data.requestsCount);
 
         // Check VEB common limit
-        _consumeLimit(data.requestsCount, _applyOracleLimit);
+        _consumeLimit(data.requestsCount);
         _processExitRequestsList(data.data, 0, data.requestsCount);
 
         _storageDataProcessingState().value = DataProcessingState({
@@ -274,15 +274,8 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         );
     }
 
-    function _applyOracleLimit(uint256 limit, uint256 count) internal pure returns (uint256) {
-        if (limit < count) {
-            revert ExitRequestsLimitExceeded(count, limit);
-        }
-        return count;
-    }
-
     function _storeOracleExitRequestHash(bytes32 exitRequestsHash, uint256 contractVersion) internal {
-        _storeNewHashRequestStatus(exitRequestsHash, RequestStatus(uint32(contractVersion), uint32(_getTime())));
+        _storeNewHashRequestStatus(exitRequestsHash, uint32(contractVersion), uint32(_getTime()));
     }
 
     ///

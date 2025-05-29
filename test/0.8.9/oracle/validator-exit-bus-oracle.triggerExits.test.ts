@@ -276,7 +276,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
   // the only difference in this checks, is that it is possible to get DeliveryWasNotStarted error because of partial delivery
   describe("Submit via trustfull method", () => {
-    const MAX_EXIT_REQUESTS_LIMIT = 2;
+    const MAX_EXIT_REQUESTS_LIMIT = 3;
     const EXITS_PER_FRAME = 1;
     const FRAME_DURATION = 48;
 
@@ -299,6 +299,17 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       await deploy();
     });
 
+    it("should revert if request was not submitted", async () => {
+      await expect(
+        oracle.triggerExits(
+          { data: exitRequest.data, dataFormat: exitRequest.dataFormat },
+          [0, 1, 2, 3],
+          ZERO_ADDRESS,
+          { value: 4 },
+        ),
+      ).to.be.revertedWithCustomError(oracle, "ExitHashNotSubmitted");
+    });
+
     it("Should store exit hash for authorized entity", async () => {
       const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
 
@@ -317,10 +328,10 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
           ZERO_ADDRESS,
           { value: 4 },
         ),
-      ).to.be.revertedWithCustomError(oracle, "DeliveryWasNotStarted");
+      ).to.be.revertedWithCustomError(oracle, "RequestsNotDelivered");
     });
 
-    it("Should deliver part of requests", async () => {
+    it("Should deliver request", async () => {
       // set limit
       const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
       await oracle.grantRole(reportLimitRole, authorizedEntity);
@@ -351,16 +362,16 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
           exitRequests[1].valPubkey,
           timestamp,
         );
-    });
 
-    it("should revert with error if requested index was not delivered yet", async () => {
-      await expect(
-        oracle.triggerExits({ data: exitRequest.data, dataFormat: exitRequest.dataFormat }, [0, 1, 2], ZERO_ADDRESS, {
-          value: 4,
-        }),
-      )
-        .to.be.revertedWithCustomError(oracle, "ExitDataWasNotDelivered")
-        .withArgs(2, 1);
+      await expect(emitTx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          exitRequests[2].moduleId,
+          exitRequests[2].nodeOpId,
+          exitRequests[2].valIndex,
+          exitRequests[2].valPubkey,
+          timestamp,
+        );
     });
 
     it("some time passes", async () => {
@@ -381,13 +392,8 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
       const requestHash: string = hashExitRequest(request);
 
-      await oracle.storeNewHashRequestStatus(
-        requestHash,
-        2,
-        2, // deliveryHistoryLength = 2
-        1,
-        123456,
-      );
+      // will store request data to mock exit delivery with wrong module id
+      await oracle.storeNewHashRequestStatus(requestHash, 2, 123456);
 
       await expect(
         oracle.triggerExits(request, [0, 1, 2], ZERO_ADDRESS, {
