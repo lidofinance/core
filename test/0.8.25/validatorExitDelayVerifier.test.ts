@@ -518,7 +518,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       // Report not unpacked, deliveryTimestamp == 0
       await vebo.setExitRequests(encodedExitRequestsHash, 0, exitRequests);
-      expect(await vebo.getExitRequestsDeliveryHistory(encodedExitRequestsHash)).to.equal(0);
+      expect(await vebo.getDeliveryTime(encodedExitRequestsHash)).to.equal(0);
 
       await expect(
         validatorExitDelayVerifier.verifyValidatorExitDelay(

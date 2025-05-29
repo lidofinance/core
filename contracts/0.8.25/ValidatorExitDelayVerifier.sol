@@ -361,7 +361,7 @@ contract ValidatorExitDelayVerifier {
         ExitRequestData calldata exitRequests
     ) internal view returns (uint256 deliveryTimestamp) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
-        deliveryTimestamp = veb.getExitRequestsDeliveryHistory(exitRequestsHash);
+        deliveryTimestamp = veb.getDeliveryTime(exitRequestsHash);
 
         if (deliveryTimestamp == 0) {
             revert EmptyDeliveryHistory();

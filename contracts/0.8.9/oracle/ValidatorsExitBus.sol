@@ -403,7 +403,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     /**
-     * @notice Timestamp
+     * @notice Returns the timestamp when the exit request was delivered.
      *
      * @param exitRequestsHash - The exit requests hash.
      *
@@ -411,8 +411,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      *     - exitRequestsHash was not submited
      *     - Request was not delivered
      */
-    function getExitRequestsDeliveryHistory(
-        // TODO: rename
+    function getDeliveryTime(
         bytes32 exitRequestsHash
     ) external view returns (uint256 deliveryDateTimestamp) {
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();

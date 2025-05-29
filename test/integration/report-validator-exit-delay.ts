@@ -85,7 +85,7 @@ describe("Report Validator Exit Delay", () => {
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
     await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
-    const deliveryTimestamp = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
+    const deliveryTimestamp = await validatorsExitBusOracle.getDeliveryTime(encodedExitRequestsHash);
     const eligibleToExitInSec = proofSlotTimestamp - deliveryTimestamp;
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
@@ -152,7 +152,7 @@ describe("Report Validator Exit Delay", () => {
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
     await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
-    const deliveryTimestamp = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
+    const deliveryTimestamp = await validatorsExitBusOracle.getDeliveryTime(encodedExitRequestsHash);
     const eligibleToExitInSec = proofSlotTimestamp - deliveryTimestamp;
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
@@ -306,7 +306,7 @@ describe("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorExitDelayVerifier, "EmptyDeliveryHistory");
+    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "RequestsNotDelivered");
 
     const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
@@ -317,7 +317,7 @@ describe("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWithCustomError(await validatorExitDelayVerifier, "EmptyDeliveryHistory");
+    ).to.be.revertedWithCustomError(await validatorsExitBusOracle, "RequestsNotDelivered");
   });
 
   it("Should revert when submitting validator exit delay with invalid beacon block root", async () => {
@@ -375,7 +375,7 @@ describe("Report Validator Exit Delay", () => {
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
     await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
-    const deliveryTimestamp = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
+    const deliveryTimestamp = await validatorsExitBusOracle.getDeliveryTime(encodedExitRequestsHash);
     const eligibleToExitInSec = proofSlotTimestamp - deliveryTimestamp;
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
