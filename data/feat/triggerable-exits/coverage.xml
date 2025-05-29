@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3309"  lines-covered="3250"  line-rate="0.9822"  branches-valid="1500"  branches-covered="1441"  branch-rate="0.9606999999999999"  timestamp="1748522191175" complexity="0" version="0.1">
+<coverage lines-valid="3308"  lines-covered="3249"  line-rate="0.9822"  branches-valid="1498"  branches-covered="1439"  branch-rate="0.9606"  timestamp="1748522640489" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1717,9 +1717,9 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25"  line-rate="1"  branch-rate="0.8529000000000001" >
+	<package name="0.8.25"  line-rate="1"  branch-rate="0.8438" >
 	<classes>
-		<class name="ValidatorExitDelayVerifier.sol"  filename="contracts/0.8.25/ValidatorExitDelayVerifier.sol"  line-rate="1"  branch-rate="0.8529000000000001" >
+		<class name="ValidatorExitDelayVerifier.sol"  filename="contracts/0.8.25/ValidatorExitDelayVerifier.sol"  line-rate="1"  branch-rate="0.8438" >
 		<methods>
 			<method name="constructor"  hits="4"  signature="()V" >
 				<lines><line number="125"  hits="4" /></lines>
@@ -1752,10 +1752,10 @@
 				<lines><line number="363"  hits="18" /></lines>
 			</method>
 			<method name="_getExitRequestTimestamp"  hits="12"  signature="()V" >
-				<lines><line number="390"  hits="12" /></lines>
+				<lines><line number="387"  hits="12" /></lines>
 			</method>
 			<method name="_slotToTimestamp"  hits="10"  signature="()V" >
-				<lines><line number="403"  hits="10" /></lines>
+				<lines><line number="400"  hits="10" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -1823,16 +1823,15 @@
 			<line number="368"  hits="18"  branch="false" />
 			<line number="370"  hits="18"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="371"  hits="2"  branch="false" />
-			<line number="375"  hits="16"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="376"  hits="6"  branch="false" />
-			<line number="378"  hits="6"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="382"  hits="6"  branch="false" />
-			<line number="387"  hits="10"  branch="false" />
-			<line number="394"  hits="12"  branch="false" />
-			<line number="395"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="396"  hits="10"  branch="false" />
-			<line number="400"  hits="2"  branch="false" />
-			<line number="404"  hits="10"  branch="false" />
+			<line number="375"  hits="16"  branch="false" />
+			<line number="376"  hits="6"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="380"  hits="6"  branch="false" />
+			<line number="384"  hits="10"  branch="false" />
+			<line number="391"  hits="12"  branch="false" />
+			<line number="392"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="393"  hits="10"  branch="false" />
+			<line number="397"  hits="2"  branch="false" />
+			<line number="401"  hits="10"  branch="false" />
 		</lines>
 		</class>
 	</classes>
