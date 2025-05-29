@@ -31,7 +31,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;
 
-    /// @dev Errors
     /**
      * @notice Thrown when an invalid zero value is passed
      * @param name Name of the argument that was zero
@@ -136,7 +135,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
     function triggerFullWithdrawals(
         ValidatorData[] calldata validatorsData,
         address refundRecipient,
-        uint8 exitType
+        uint256 exitType
     ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         uint256 requestsCount = validatorsData.length;
@@ -218,7 +217,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
     function _notifyStakingModules(
         ValidatorData[] calldata validatorsData,
         uint256 withdrawalRequestPaidFee,
-        uint8 exitType
+        uint256 exitType
     ) internal {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
         ValidatorData calldata data;
@@ -233,7 +232,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
                     withdrawalRequestPaidFee,
                     exitType
              )
-            {} catch {
+            {} catch { // (bytes memory lowLevelRevertData)
                 emit StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
             }
         }

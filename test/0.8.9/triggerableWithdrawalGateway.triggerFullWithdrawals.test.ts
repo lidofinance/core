@@ -356,4 +356,40 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
       triggerableWithdrawalsGateway.connect(authorizedEntity).setExitRequestLimit(0, 1, 48),
     ).to.be.revertedWith("TOO_LARGE_EXITS_PER_FRAME");
   });
+
+  it("should emit StakingModuleExitNotificationFailed if onValidatorExitTriggered reverts", async () => {
+    const requests = createValidatorDataList(exitRequests);
+
+    await stakingRouter.setShouldRevert(true);
+
+    const tx = await triggerableWithdrawalsGateway
+      .connect(authorizedEntity)
+      .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 4 });
+
+    for (const request of exitRequests) {
+      await expect(tx)
+        .to.emit(triggerableWithdrawalsGateway, "StakingModuleExitNotificationFailed")
+        .withArgs(request.moduleId, request.nodeOpId, request.valPubkey);
+    }
+
+    await stakingRouter.connect(admin).setShouldRevert(false);
+  });
+
+  it("should emit StakingModuleExitNotificationFailed with custom error revert reason", async () => {
+    const requests = createValidatorDataList(exitRequests);
+
+    await stakingRouter.setShouldRevertWithCustomError(true);
+
+    const tx = await triggerableWithdrawalsGateway
+      .connect(authorizedEntity)
+      .triggerFullWithdrawals(requests, ZERO_ADDRESS, 0, { value: 4 });
+
+    for (const request of exitRequests) {
+      await expect(tx)
+        .to.emit(triggerableWithdrawalsGateway, "StakingModuleExitNotificationFailed")
+        .withArgs(request.moduleId, request.nodeOpId, request.valPubkey);
+    }
+
+    await stakingRouter.setShouldRevertWithCustomError(false);
+  });
 });

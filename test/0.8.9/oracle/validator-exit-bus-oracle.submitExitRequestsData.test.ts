@@ -280,7 +280,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       await expect(oracle.submitExitRequestsData(exitRequestData)).to.be.revertedWithCustomError(
         oracle,
-        "InvalidRequestsData",
+        "InvalidModuleId",
       );
     });
   });
