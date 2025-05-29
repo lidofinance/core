@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3307"  lines-covered="3250"  line-rate="0.9828"  branches-valid="1500"  branches-covered="1441"  branch-rate="0.9606999999999999"  timestamp="1748448966360" complexity="0" version="0.1">
+<coverage lines-valid="3307"  lines-covered="3249"  line-rate="0.9825"  branches-valid="1500"  branches-covered="1441"  branch-rate="0.9606999999999999"  timestamp="1748516125103" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -419,8 +419,8 @@
 			<method name="allowance"  hits="210"  signature="()V" >
 				<lines><line number="196"  hits="210" /></lines>
 			</method>
-			<method name="approve"  hits="105"  signature="()V" >
-				<lines><line number="212"  hits="105" /></lines>
+			<method name="approve"  hits="96"  signature="()V" >
+				<lines><line number="212"  hits="96" /></lines>
 			</method>
 			<method name="transferFrom"  hits="63"  signature="()V" >
 				<lines><line number="237"  hits="63" /></lines>
@@ -452,8 +452,8 @@
 			<method name="_transfer"  hits="85"  signature="()V" >
 				<lines><line number="375"  hits="85" /></lines>
 			</method>
-			<method name="_approve"  hits="206"  signature="()V" >
-				<lines><line number="393"  hits="206" /></lines>
+			<method name="_approve"  hits="197"  signature="()V" >
+				<lines><line number="393"  hits="197" /></lines>
 			</method>
 			<method name="_spendAllowance"  hits="77"  signature="()V" >
 				<lines><line number="409"  hits="77" /></lines>
@@ -493,8 +493,8 @@
 			<line number="186"  hits="26"  branch="false" />
 			<line number="187"  hits="21"  branch="false" />
 			<line number="197"  hits="210"  branch="false" />
-			<line number="213"  hits="105"  branch="false" />
-			<line number="214"  hits="103"  branch="false" />
+			<line number="213"  hits="96"  branch="false" />
+			<line number="214"  hits="94"  branch="false" />
 			<line number="238"  hits="63"  branch="false" />
 			<line number="239"  hits="59"  branch="false" />
 			<line number="240"  hits="55"  branch="false" />
@@ -520,10 +520,10 @@
 			<line number="376"  hits="85"  branch="false" />
 			<line number="377"  hits="85"  branch="false" />
 			<line number="378"  hits="76"  branch="false" />
-			<line number="394"  hits="206"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="395"  hits="205"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="397"  hits="204"  branch="false" />
-			<line number="398"  hits="204"  branch="false" />
+			<line number="394"  hits="197"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="395"  hits="196"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="397"  hits="195"  branch="false" />
+			<line number="398"  hits="195"  branch="false" />
 			<line number="410"  hits="77"  branch="false" />
 			<line number="411"  hits="77"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="412"  hits="54"  branch="true"  condition-coverage="100% (2/2)" />
@@ -759,9 +759,9 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.4.24.nos"  line-rate="0.977"  branch-rate="0.92" >
+	<package name="0.4.24.nos"  line-rate="0.9747"  branch-rate="0.92" >
 	<classes>
-		<class name="NodeOperatorsRegistry.sol"  filename="contracts/0.4.24/nos/NodeOperatorsRegistry.sol"  line-rate="0.977"  branch-rate="0.92" >
+		<class name="NodeOperatorsRegistry.sol"  filename="contracts/0.4.24/nos/NodeOperatorsRegistry.sol"  line-rate="0.9747"  branch-rate="0.92" >
 		<methods>
 			<method name="initialize"  hits="10"  signature="()V" >
 				<lines><line number="222"  hits="10" /></lines>
@@ -770,13 +770,13 @@
 				<lines><line number="235"  hits="10" /></lines>
 			</method>
 			<method name="_initialize_v3"  hits="9"  signature="()V" >
-				<lines><line number="249"  hits="9" /></lines>
+				<lines><line number="246"  hits="9" /></lines>
 			</method>
 			<method name="_initialize_v4"  hits="9"  signature="()V" >
-				<lines><line number="254"  hits="9" /></lines>
+				<lines><line number="251"  hits="9" /></lines>
 			</method>
 			<method name="finalizeUpgrade_v4"  hits="0"  signature="()V" >
-				<lines><line number="272"  hits="0" /></lines>
+				<lines><line number="269"  hits="0" /></lines>
 			</method>
 			<method name="addNodeOperator"  hits="394"  signature="()V" >
 				<lines><line number="282"  hits="394" /></lines>
@@ -967,8 +967,8 @@
 			<method name="_distributeRewards"  hits="4"  signature="()V" >
 				<lines><line number="1372"  hits="4" /></lines>
 			</method>
-			<method name="getLocator"  hits="422"  signature="()V" >
-				<lines><line number="1392"  hits="422" /></lines>
+			<method name="getLocator"  hits="404"  signature="()V" >
+				<lines><line number="1392"  hits="404" /></lines>
 			</method>
 			<method name="getStuckPenaltyDelay"  hits="0"  signature="()V" >
 				<lines><line number="1398"  hits="0" /></lines>
@@ -1043,14 +1043,14 @@
 			<line number="237"  hits="9"  branch="false" />
 			<line number="238"  hits="9"  branch="false" />
 			<line number="240"  hits="9"  branch="false" />
+			<line number="242"  hits="9"  branch="false" />
 			<line number="243"  hits="9"  branch="false" />
-			<line number="245"  hits="9"  branch="false" />
-			<line number="246"  hits="9"  branch="false" />
-			<line number="250"  hits="9"  branch="false" />
-			<line number="251"  hits="9"  branch="false" />
+			<line number="247"  hits="9"  branch="false" />
+			<line number="248"  hits="9"  branch="false" />
+			<line number="252"  hits="9"  branch="false" />
 			<line number="255"  hits="9"  branch="false" />
-			<line number="258"  hits="9"  branch="false" />
-			<line number="273"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="270"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="271"  hits="0"  branch="false" />
 			<line number="274"  hits="0"  branch="false" />
 			<line number="275"  hits="0"  branch="false" />
 			<line number="283"  hits="394"  branch="false" />
@@ -1439,7 +1439,7 @@
 			<line number="1386"  hits="4"  branch="false" />
 			<line number="1387"  hits="4"  branch="false" />
 			<line number="1388"  hits="4"  branch="false" />
-			<line number="1393"  hits="422"  branch="false" />
+			<line number="1393"  hits="404"  branch="false" />
 			<line number="1399"  hits="0"  branch="false" />
 			<line number="1405"  hits="11"  branch="false" />
 			<line number="1406"  hits="11"  branch="false" />
