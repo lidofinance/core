@@ -372,6 +372,8 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
           .to.emit(oracle, "ValidatorExitRequest")
           .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
       }
+
+      await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(exitRequestHash, 0, 1);
     });
 
     it("Should deliver part of request equal to remaining limit", async () => {
@@ -385,6 +387,8 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
           .to.emit(oracle, "ValidatorExitRequest")
           .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
       }
+
+      await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(HASH_REQUEST_DELIVERED_BY_PARTS, 0, 2);
     });
 
     it("Should revert when limit exceeded for the frame", async () => {
@@ -424,6 +428,8 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
           .to.emit(oracle, "ValidatorExitRequest")
           .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
       }
+
+      await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(HASH_REQUEST_DELIVERED_BY_PARTS, 3, 4);
     });
 
     it("Should revert when no new requests to deliver", async () => {
@@ -489,6 +495,10 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
           .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
       }
 
+      await expect(tx)
+        .to.emit(oracle, "ExitDataProcessing")
+        .withArgs(exitRequestHashRandom, 0, maxRequestsPerBatch - 1);
+
       const history = await oracle.getExitRequestsDeliveryHistory(exitRequestHashRandom);
 
       expect(history.length).to.be.equal(1);
@@ -538,6 +548,8 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
           .to.emit(oracle, "ValidatorExitRequest")
           .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
       }
+
+      await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(exitRequestRandomHash, 0, 1);
 
       const data = await oracle.getExitRequestLimitFullInfo();
 

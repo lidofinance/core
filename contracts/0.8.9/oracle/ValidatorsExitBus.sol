@@ -112,7 +112,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Emitted when an entity with the SUBMIT_REPORT_HASH_ROLE role submits a hash of the exit requests data.
-     * @param exitRequestsHash - keccak256 hash of the encoded validators list
+     * @param exitRequestsHash keccak256 hash of the encoded validators list
      */
     event RequestsHashSubmitted(bytes32 exitRequestsHash);
     /**
@@ -137,6 +137,13 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
     event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
+    /**
+     * @notice Emitted when exit requests were delivered
+     * @param exitRequestsHash keccak256 hash of the encoded validators list
+     * @param startIndex Start index of request in submitted data that will be delivered
+     * @param endIndex End index of request in submitted data that will be delivered
+     */
+    event ExitDataProcessing(bytes32 exitRequestsHash, uint256 startIndex, uint256 endIndex);
 
     struct ExitRequestsData {
         bytes data;
@@ -305,6 +312,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             newLastDeliveredIndex,
             _getTimestamp()
         );
+
+        emit ExitDataProcessing(exitRequestsHash, startIndex, newLastDeliveredIndex);
     }
 
     /**
