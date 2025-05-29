@@ -66,6 +66,18 @@ export async function main() {
     dummyContract.address,
   );
 
+  // Deploy Triggerable Withdrawals Gateway
+  const maxExitRequestsLimit = 13000;
+  const exitsPerFrame = 1;
+  const frameDurationInSec = 48;
+
+  const triggerableWithdrawalsGateway = await deployWithoutProxy(
+    Sk.triggerableWithdrawalsGateway,
+    "TriggerableWithdrawalsGateway",
+    deployer,
+    [admin, locator.address, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec],
+  );
+
   // Deploy EIP712StETH
   await deployWithoutProxy(Sk.eip712StETH, "EIP712StETH", deployer, [lidoAddress]);
 
@@ -85,6 +97,7 @@ export async function main() {
   const withdrawalVaultImpl = await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [
     lidoAddress,
     treasuryAddress,
+    triggerableWithdrawalsGateway.address,
   ]);
 
   const withdrawalsManagerProxyConstructorArgs = [votingAddress, withdrawalVaultImpl.address];
@@ -219,18 +232,6 @@ export async function main() {
       // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
       2 ** 8 * 32 * 12, // uint32 shardCommitteePeriodInSeconds
     ],
-  );
-
-  // Deploy Triggerable Withdrawals Gateway
-  const maxExitRequestsLimit = 13000;
-  const exitsPerFrame = 1;
-  const frameDurationInSec = 48;
-
-  const triggerableWithdrawalsGateway = await deployWithoutProxy(
-    Sk.triggerableWithdrawalsGateway,
-    "TriggerableWithdrawalsGateway",
-    deployer,
-    [admin, locator.address, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec],
   );
 
   // Update LidoLocator with valid implementation
