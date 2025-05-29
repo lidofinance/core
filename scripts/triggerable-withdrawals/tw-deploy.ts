@@ -144,7 +144,7 @@ async function main() {
 
   // fetch contract addresses that will not changed
   const locatorConfig = [
-    accountingOracle.address,
+    await locator.accountingOracle(),
     await locator.depositSecurityModule(),
     await locator.elRewardsVault(),
     await locator.legacyOracle(),
