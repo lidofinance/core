@@ -16,7 +16,7 @@ import {
   VaultRoles,
 } from "lib/protocol";
 
-import { Snapshot, Tracing } from "test/suite";
+import { Snapshot } from "test/suite";
 
 const TOTAL_BASIS_POINTS = 100_00n;
 
@@ -79,10 +79,10 @@ describe("Integration: Vault obligations", () => {
 
   afterEach(async () => await Snapshot.restore(snapshot));
 
-  async function updateRedemptionsObligation(value: bigint) {
+  async function addRedemptionsObligation(value: bigint) {
     const balanceBefore = await ethers.provider.getBalance(stakingVaultAddress);
     await setBalance(stakingVaultAddress, 0); // hack: deposit to beacon chain
-    await vaultHub.connect(agentSigner).updateRedemptionsObligation(stakingVaultAddress, value);
+    await vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, value);
     await setBalance(stakingVaultAddress, balanceBefore); // restore balance
   }
 
@@ -219,7 +219,7 @@ describe("Integration: Vault obligations", () => {
     });
   });
 
-  context("Core redemptions obligations", () => {
+  context("Setting redemptions obligations", () => {
     let liabilityShares: bigint;
     let maxRedemptions: bigint;
 
@@ -229,9 +229,10 @@ describe("Integration: Vault obligations", () => {
 
       expect((await vaultHub.vaultRecord(stakingVaultAddress)).liabilityShares).to.equal(0n);
 
-      await expect(
-        vaultHub.connect(agentSigner).updateRedemptionsObligation(stakingVaultAddress, ether("1")),
-      ).not.to.emit(vaultHub, "RedemptionsObligationUpdated");
+      await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, ether("1"))).not.to.emit(
+        vaultHub,
+        "RedemptionsObligationUpdated",
+      );
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.redemptions).to.equal(0n);
@@ -256,12 +257,12 @@ describe("Integration: Vault obligations", () => {
       expect(obligationsBefore.redemptions).to.equal(0n);
 
       // Over the max possible withdrawals
-      await expect(vaultHub.connect(agentSigner).updateRedemptionsObligation(stakingVaultAddress, maxRedemptions + 1n))
+      await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions + 1n))
         .to.emit(vaultHub, "RedemptionsObligationUpdated")
         .withArgs(stakingVaultAddress, 0, maxRedemptions);
 
       // Set the max possible withdrawals
-      await expect(vaultHub.connect(agentSigner).updateRedemptionsObligation(stakingVaultAddress, maxRedemptions))
+      await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions))
         .to.emit(vaultHub, "RedemptionsObligationUpdated")
         .withArgs(stakingVaultAddress, maxRedemptions, 0n);
 
@@ -270,7 +271,7 @@ describe("Integration: Vault obligations", () => {
 
       // Decrease the obligation
       const newValue = maxRedemptions / 10n;
-      await expect(vaultHub.connect(agentSigner).updateRedemptionsObligation(stakingVaultAddress, newValue))
+      await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, newValue))
         .to.emit(vaultHub, "RedemptionsObligationUpdated")
         .withArgs(stakingVaultAddress, newValue, 0n);
 
@@ -278,7 +279,7 @@ describe("Integration: Vault obligations", () => {
       expect(obligationsAfterDecreased.redemptions).to.equal(newValue);
 
       // Remove the obligation
-      await expect(vaultHub.connect(agentSigner).updateRedemptionsObligation(stakingVaultAddress, 0))
+      await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, 0))
         .to.emit(vaultHub, "RedemptionsObligationUpdated")
         .withArgs(stakingVaultAddress, 0, 0n);
 
@@ -294,7 +295,7 @@ describe("Integration: Vault obligations", () => {
         await dashboard.connect(roles.funder).fund({ value: ether("1") });
         await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
 
-        await updateRedemptionsObligation(maxRedemptions);
+        await addRedemptionsObligation(maxRedemptions);
       });
 
       it("On shares burned", async () => {
@@ -343,7 +344,7 @@ describe("Integration: Vault obligations", () => {
         await dashboard.connect(roles.funder).fund({ value: ether("1") });
         await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
 
-        await updateRedemptionsObligation(maxRedemptions);
+        await addRedemptionsObligation(maxRedemptions);
       });
 
       it("Should not change on report when vault has no balance", async () => {
@@ -398,7 +399,7 @@ describe("Integration: Vault obligations", () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
       await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
 
-      await updateRedemptionsObligation(maxRedemptions);
+      await addRedemptionsObligation(maxRedemptions);
     });
 
     it("Withdrawals before the treasury fees", async () => {
@@ -487,7 +488,7 @@ describe("Integration: Vault obligations", () => {
       ({ treasuryFees } = await vaultHub.vaultObligations(stakingVaultAddress));
 
       maxRedemptions = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabilityShares);
-      await updateRedemptionsObligation(maxRedemptions);
+      await addRedemptionsObligation(maxRedemptions);
     });
 
     it("Reverts when vault balance is zero and no funding provided", async () => {
@@ -499,7 +500,10 @@ describe("Integration: Vault obligations", () => {
 
       await setBalance(stakingVaultAddress, 0);
 
-      await expect(dashboard.settleObligations()).to.be.revertedWithCustomError(vaultHub, "ZeroBalance");
+      await expect(vaultHub.settleVaultObligations(stakingVaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "ZeroBalance",
+      );
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.redemptions).to.equal(maxRedemptions);
@@ -511,7 +515,7 @@ describe("Integration: Vault obligations", () => {
 
       await dashboard.connect(roles.funder).fund({ value: funding });
 
-      await expect(dashboard.settleObligations())
+      await expect(vaultHub.settleVaultObligations(stakingVaultAddress))
         .to.emit(vaultHub, "RedemptionsObligationUpdated")
         .withArgs(stakingVaultAddress, maxRedemptions - funding, funding)
         .to.emit(stakingVault, "EtherWithdrawn")
@@ -522,16 +526,14 @@ describe("Integration: Vault obligations", () => {
       expect(obligationsAfter.treasuryFees).to.equal(treasuryFees);
     });
 
-    it("Fully settles obligations when funded and vault has some balance", async () => {
-      const funding = ether("0.5");
-
-      await dashboard.connect(roles.funder).fund({ value: funding });
-
+    it("Fully settles obligations when funded", async () => {
       const expectedSettledFees = maxRedemptions + treasuryFees;
-      const extraFunding = expectedSettledFees - funding + ether("1"); // 1 ether extra should stay in the vault
+      const extraFunding = expectedSettledFees + ether("1"); // 1 ether extra should stay in the vault
+
+      await dashboard.connect(roles.funder).fund({ value: extraFunding });
 
       // here we use owner, because otherwise user has to have FUND_ROLE to be able to settle obligations
-      await expect(dashboard.connect(owner).settleObligations({ value: extraFunding }))
+      await expect(vaultHub.settleVaultObligations(stakingVaultAddress))
         .to.emit(vaultHub, "RedemptionsObligationUpdated")
         .withArgs(stakingVaultAddress, 0n, maxRedemptions)
         .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
@@ -591,7 +593,7 @@ describe("Integration: Vault obligations", () => {
       // the user will not be able to mint anything from this moment
       await dashboard.connect(roles.minter).mintShares(roles.burner, mintShares);
 
-      await updateRedemptionsObligation(mintEth);
+      await addRedemptionsObligation(mintEth);
 
       await expect(dashboard.connect(roles.minter).mintShares(roles.burner, mintShares))
         .to.emit(vaultHub, "MintedSharesOnVault")
@@ -606,7 +608,7 @@ describe("Integration: Vault obligations", () => {
 
       const obligation = ether("1");
 
-      await updateRedemptionsObligation(obligation);
+      await addRedemptionsObligation(obligation);
     });
 
     it("Should work when trying to withdraw less than available balance", async () => {

@@ -298,14 +298,6 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Settles outstanding vault obligations with funds from the vault or sent ETH
-     */
-    function settleObligations() external payable fundable {
-        VAULT_HUB.settleObligations(address(_stakingVault()));
-        disburseNodeOperatorFee();
-    }
-
-    /**
      * @notice Mints stETH shares backed by the vault to the recipient.
      * @param _recipient Address of the recipient
      * @param _amountOfShares Amount of stETH shares to mint
