@@ -372,15 +372,12 @@ contract ValidatorExitDelayVerifier {
         }
 
         // Sanity check, delivery history is strictly monotonically increasing.
-        if (history.length > 1) {
-            for (uint256 i = 1; i < history.length; i++) {
-                // strictly increasing on both keys index and timestamps
-                if (
-                    history[i].lastDeliveredKeyIndex <= history[i - 1].lastDeliveredKeyIndex ||
-                    history[i].timestamp <= history[i - 1].timestamp
-                ) {
-                    revert NonMonotonicDeliveryHistory(i);
-                }
+        for (uint256 i = 1; i < history.length; i++) {
+            if (
+                history[i].lastDeliveredKeyIndex <= history[i - 1].lastDeliveredKeyIndex ||
+                history[i].timestamp <= history[i - 1].timestamp
+            ) {
+                revert NonMonotonicDeliveryHistory(i);
             }
         }
 
