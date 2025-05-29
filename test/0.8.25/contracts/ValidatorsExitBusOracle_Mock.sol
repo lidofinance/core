@@ -12,20 +12,17 @@ struct MockExitRequestData {
 
 contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
     bytes32 _hash;
-    DeliveryHistory[] private _deliveryHistory;
+    uint256 private _deliveryTimestamp;
     MockExitRequestData[] private _data;
 
     function setExitRequests(
         bytes32 exitRequestsHash,
-        DeliveryHistory[] calldata deliveryHistory,
+        uint256 deliveryTimestamp,
         MockExitRequestData[] calldata data
     ) external {
         _hash = exitRequestsHash;
 
-        delete _deliveryHistory;
-        for (uint256 i = 0; i < deliveryHistory.length; i++) {
-            _deliveryHistory.push(deliveryHistory[i]);
-        }
+        _deliveryTimestamp = deliveryTimestamp;
 
         delete _data;
         for (uint256 i = 0; i < data.length; i++) {
@@ -33,9 +30,9 @@ contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
         }
     }
 
-    function getExitRequestsDeliveryHistory(bytes32 exitRequestsHash) external view returns (DeliveryHistory[] memory) {
+    function getExitRequestsDeliveryHistory(bytes32 exitRequestsHash) external view returns (uint256 timestamp) {
         require(exitRequestsHash == _hash, "Mock error, Invalid exitRequestsHash");
-        return _deliveryHistory;
+        return _deliveryTimestamp;
     }
 
     function unpackExitRequest(

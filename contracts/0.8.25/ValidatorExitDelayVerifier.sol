@@ -174,7 +174,7 @@ contract ValidatorExitDelayVerifier {
         IValidatorsExitBus veb = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(veb, exitRequests);
+        uint256 deliveredTimestamp = _getExitRequestDeliveryHistory(veb, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(beaconBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
@@ -187,7 +187,7 @@ contract ValidatorExitDelayVerifier {
             );
 
             uint256 eligibleToExitInSec = _getSecondsSinceExitIsEligible(
-                requestsDeliveryHistory,
+                deliveredTimestamp,
                 witness,
                 proofSlotTimestamp
             );
@@ -221,7 +221,7 @@ contract ValidatorExitDelayVerifier {
         IValidatorsExitBus veb = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(veb, exitRequests);
+        uint256 deliveredTimestamp = _getExitRequestDeliveryHistory(veb, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(oldBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
@@ -234,7 +234,7 @@ contract ValidatorExitDelayVerifier {
             );
 
             uint256 eligibleToExitInSec = _getSecondsSinceExitIsEligible(
-                requestsDeliveryHistory,
+                deliveredTimestamp,
                 witness,
                 proofSlotTimestamp
             );
@@ -326,12 +326,10 @@ contract ValidatorExitDelayVerifier {
      * @return uint256 The elapsed seconds since the earliest eligible exit request time.
      */
     function _getSecondsSinceExitIsEligible(
-        DeliveryHistory[] memory history,
+        uint256 deliveredTimestamp,
         ValidatorWitness calldata witness,
         uint256 referenceSlotTimestamp
     ) internal view returns (uint256) {
-        uint256 validatorExitRequestTimestamp = _getExitRequestTimestamp(history, witness.exitRequestIndex);
-
         // The earliest a validator can voluntarily exit is after the Shard Committee Period
         // subsequent to its activation epoch.
         uint256 earliestPossibleVoluntaryExitTimestamp = GENESIS_TIME +
@@ -340,8 +338,8 @@ contract ValidatorExitDelayVerifier {
 
         // The actual eligible timestamp is the max between the exit request submission time
         // and the earliest possible voluntary exit time.
-        uint256 eligibleExitRequestTimestamp = validatorExitRequestTimestamp > earliestPossibleVoluntaryExitTimestamp
-            ? validatorExitRequestTimestamp
+        uint256 eligibleExitRequestTimestamp = deliveredTimestamp > earliestPossibleVoluntaryExitTimestamp
+            ? deliveredTimestamp
             : earliestPossibleVoluntaryExitTimestamp;
 
         if (referenceSlotTimestamp < eligibleExitRequestTimestamp) {
@@ -363,25 +361,9 @@ contract ValidatorExitDelayVerifier {
     function _getExitRequestDeliveryHistory(
         IValidatorsExitBus veb,
         ExitRequestData calldata exitRequests
-    ) internal view returns (DeliveryHistory[] memory) {
+    ) internal view returns (uint256 timestamp) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
-        DeliveryHistory[] memory history = veb.getExitRequestsDeliveryHistory(exitRequestsHash);
-
-        if (history.length == 0) {
-            revert EmptyDeliveryHistory();
-        }
-
-        // Sanity check, delivery history is strictly monotonically increasing.
-        for (uint256 i = 1; i < history.length; i++) {
-            if (
-                history[i].lastDeliveredKeyIndex <= history[i - 1].lastDeliveredKeyIndex ||
-                history[i].timestamp <= history[i - 1].timestamp
-            ) {
-                revert NonMonotonicDeliveryHistory(i);
-            }
-        }
-
-        return history;
+        return veb.getExitRequestsDeliveryHistory(exitRequestsHash);
     }
 
     function _getExitRequestTimestamp(

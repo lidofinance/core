@@ -62,11 +62,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     error InvalidRequestsDataSortOrder();
 
     /**
-     * @notice Thrown when pubkeys of invalid length are provided
-     */
-    error InvalidPubkeysArray();
-
-    /**
      * Thrown when there are attempt to send exit events for request that was not submitted earlier by trusted entities
      */
     error ExitHashNotSubmitted();
@@ -80,11 +75,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @notice Throw when in submitExitRequestsData all requests were already delivered
      */
     error RequestsAlreadyDelivered();
-
-    /**
-     * @notice Thrown when any of the provided `exitDataIndexes` refers to a validator that was not yet delivered (i.e., exit request not emitted)
-     */
-    error ExitDataWasNotDelivered(uint256 exitDataIndex, uint256 lastDeliveredExitDataIndex);
 
     /**
      * @notice Thrown when index of request in submitted data for triggerable withdrawal is out of range
@@ -106,7 +96,12 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /**
      * @notice Thrown when submitting was not started for request
      */
-    error DeliveryWasNotStarted();
+    error RequestsNotDelivered();
+
+    /**
+     * @notice Thrown when exit requests in report exceed the maximum allowed number of requests per batch.
+     */
+    error ToManyExitRequestsInReport(uint256 totalItemsCount, uint256 maxRequestsPerBatch);
 
     /// @dev Events
 
@@ -140,10 +135,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /**
      * @notice Emitted when exit requests were delivered
      * @param exitRequestsHash keccak256 hash of the encoded validators list
-     * @param startIndex Start index of request in submitted data that will be delivered
-     * @param endIndex End index of request in submitted data that will be delivered
      */
-    event ExitDataProcessing(bytes32 exitRequestsHash, uint256 startIndex, uint256 endIndex);
+    event ExitDataProcessing(bytes32 exitRequestsHash);
 
     struct ExitRequestsData {
         bytes data;
@@ -157,25 +150,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         bytes pubkey;
     }
 
-    // RequestStatus stores the last delivered index of the request, timestamp of delivery, and deliveryHistory length (number of deliveries).
-    // If a request is fully delivered in one step (as with oracle requests, which can't be delivered partially),
-    // only RequestStatus is used for efficiency.
-    // If a request is delivered in parts (e.g., due to limit constraints),
-    // DeliveryHistory[] stores full delivery records in addition to RequestStatus.
-    // If deliveryHistoryLength == 1, delivery info is read from RequestStatus; otherwise, from DeliveryHistory[].
-    // Both mappings use the same key (exitRequestsHash).
-
+    // RequestStatus stores timestamp of delivery, and contract version.
+    // Mappings use exitRequestsHash as key
     struct RequestStatus {
         uint32 contractVersion;
-        uint32 deliveryHistoryLength;
-        uint32 lastDeliveredExitDataIndex; // index of validator in request
-        uint32 lastDeliveredExitDataTimestamp;
-    }
-
-    struct DeliveryHistory {
-        // index in array of requests
-        uint32 lastDeliveredExitDataIndex;
-        uint32 timestamp;
+        uint32 deliveredExitDataTimestamp;
     }
 
     /// @notice An ACL role granting the permission to submit a hash of the exit requests data
@@ -222,8 +201,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     // Storage slot for mapping(bytes32 => RequestStatus), keyed by exitRequestsHash
     bytes32 internal constant REQUEST_STATUS_POSITION = keccak256("lido.ValidatorsExitBus.requestStatus");
-    // Storage slot for mapping(bytes32 => DeliveryHistory[]), keyed by exitRequestsHash
-    bytes32 internal constant DELIVERY_HISTORY_POSITION = keccak256("lido.ValidatorsExitBus.deliveryHistory");
 
     uint256 public constant EXIT_TYPE = 2;
 
@@ -252,10 +229,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      */
     function submitExitRequestsHash(bytes32 exitRequestsHash) external whenResumed onlyRole(SUBMIT_REPORT_HASH_ROLE) {
         uint256 contractVersion = getContractVersion();
-        _storeNewHashRequestStatus(
-            exitRequestsHash,
-            RequestStatus(uint32(contractVersion), 0, type(uint32).max, type(uint32).max)
-        );
+        _storeNewHashRequestStatus(exitRequestsHash, RequestStatus(uint32(contractVersion), 0));
     }
 
     /**
@@ -279,41 +253,24 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         RequestStatus storage requestStatus = _storageRequestStatus()[exitRequestsHash];
 
         _checkExitSubmitted(requestStatus);
+        _checkNotDelivered(requestStatus);
         _checkExitRequestData(request.data, request.dataFormat);
         _checkContractVersion(requestStatus.contractVersion);
 
         uint256 totalItemsCount = request.data.length / PACKED_REQUEST_LENGTH;
-        uint32 lastDeliveredIndex = requestStatus.lastDeliveredExitDataIndex;
+        uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
 
-        uint256 startIndex = requestStatus.deliveryHistoryLength == 0 ? 0 : lastDeliveredIndex + 1;
-        uint256 undeliveredItemsCount = totalItemsCount - startIndex;
-
-        if (undeliveredItemsCount == 0) {
-            revert RequestsAlreadyDelivered();
+        if (totalItemsCount > maxRequestsPerBatch) {
+            revert ToManyExitRequestsInReport(totalItemsCount, maxRequestsPerBatch);
         }
 
-        // take min between undeliveredItemsCount and maxBatchSize
-        uint256 requestsToDeliver = _consumeLimit(_applyMaxBatchSize(undeliveredItemsCount), _applyDeliverLimit);
+        uint256 requestsToDeliver = _consumeLimit(totalItemsCount, _applyDeliverLimit);
 
-        _processExitRequestsList(request.data, startIndex, requestsToDeliver);
+        _processExitRequestsList(request.data, 0, requestsToDeliver);
 
-        uint256 newLastDeliveredIndex = startIndex + requestsToDeliver - 1;
+        _updateRequestStatus(requestStatus, _getTimestamp());
 
-        // if totalItemsCount ==  requestsToDeliver, we deliver it via one attempt and don't need to store deliveryHistory array
-        // can store in RequestStatus via lastDeliveredExitDataIndex and lastDeliveredExitDataTimestamp fields
-        bool deliverFullyAtOnce = totalItemsCount == requestsToDeliver;
-        if (!deliverFullyAtOnce) {
-            _storeDeliveryEntry(exitRequestsHash, newLastDeliveredIndex, _getTimestamp());
-        }
-
-        _updateRequestStatus(
-            requestStatus,
-            requestStatus.deliveryHistoryLength + 1,
-            newLastDeliveredIndex,
-            _getTimestamp()
-        );
-
-        emit ExitDataProcessing(exitRequestsHash, startIndex, newLastDeliveredIndex);
+        emit ExitDataProcessing(exitRequestsHash);
     }
 
     /**
@@ -346,7 +303,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         ];
 
         _checkExitSubmitted(requestStatus);
-        _checkDeliveryStarted(requestStatus);
+        _checkDelivered(requestStatus);
         _checkExitRequestData(exitsData.data, exitsData.dataFormat);
         _checkContractVersion(requestStatus.contractVersion);
 
@@ -359,10 +316,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         for (uint256 i = 0; i < exitDataIndexes.length; i++) {
             if (exitDataIndexes[i] >= requestsCount) {
                 revert ExitDataIndexOutOfRange(exitDataIndexes[i], requestsCount);
-            }
-
-            if (exitDataIndexes[i] > requestStatus.lastDeliveredExitDataIndex) {
-                revert ExitDataWasNotDelivered(exitDataIndexes[i], requestStatus.lastDeliveredExitDataIndex);
             }
 
             if (i > 0 && exitDataIndexes[i] <= lastExitDataIndex) {
@@ -455,7 +408,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @dev Reverts if:
      *     - exitRequestsHash was not submited
      */
-    function getExitRequestsDeliveryHistory(bytes32 exitRequestsHash) external view returns (DeliveryHistory[] memory) {
+    function getExitRequestsDeliveryHistory(
+        bytes32 exitRequestsHash
+    ) external view returns (uint256 deliveryDateTimestamp) {
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
         RequestStatus storage storedRequest = requestStatusMap[exitRequestsHash];
 
@@ -463,22 +418,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
             revert ExitHashNotSubmitted();
         }
 
-        if (storedRequest.deliveryHistoryLength == 0) {
-            DeliveryHistory[] memory deliveryHistory;
-            return deliveryHistory;
-        }
-
-        if (storedRequest.deliveryHistoryLength == 1) {
-            DeliveryHistory[] memory deliveryHistory = new DeliveryHistory[](1);
-            deliveryHistory[0] = DeliveryHistory(
-                storedRequest.lastDeliveredExitDataIndex,
-                storedRequest.lastDeliveredExitDataTimestamp
-            );
-            return deliveryHistory;
-        }
-
-        mapping(bytes32 => DeliveryHistory[]) storage deliveryHistoryMap = _storageDeliveryHistory();
-        return deliveryHistoryMap[exitRequestsHash];
+        return storedRequest.deliveredExitDataTimestamp;
     }
 
     /**
@@ -553,20 +493,21 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         }
     }
 
-    function _applyMaxBatchSize(uint256 requestsCount) internal view returns (uint256) {
-        uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
-        return min(requestsCount, maxRequestsPerBatch);
-    }
-
     function _checkExitSubmitted(RequestStatus storage requestStatus) internal view {
         if (requestStatus.contractVersion == 0) {
             revert ExitHashNotSubmitted();
         }
     }
 
-    function _checkDeliveryStarted(RequestStatus storage status) internal view {
-        if (status.deliveryHistoryLength == 0) {
-            revert DeliveryWasNotStarted();
+    function _checkNotDelivered(RequestStatus storage status) internal view {
+        if (status.deliveredExitDataTimestamp != 0) {
+            revert RequestsAlreadyDelivered();
+        }
+    }
+
+    function _checkDelivered(RequestStatus storage status) internal view {
+        if (status.deliveredExitDataTimestamp == 0) {
+            revert RequestsNotDelivered();
         }
     }
 
@@ -584,7 +525,11 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         return MAX_VALIDATORS_PER_BATCH_POSITION.getStorageUint256();
     }
 
-    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec) internal {
+    function _setExitRequestLimit(
+        uint256 maxExitRequestsLimit,
+        uint256 exitsPerFrame,
+        uint256 frameDurationInSec
+    ) internal {
         uint256 timestamp = _getTimestamp();
 
         EXIT_REQUEST_LIMIT_POSITION.setStorageExitRequestLimit(
@@ -599,7 +544,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
-    function _consumeLimit(uint256 requestsCount, function(uint256, uint256) internal pure returns(uint256) applyLimit) internal returns (uint256 requestsLimitedCount) {
+    function _consumeLimit(
+        uint256 requestsCount,
+        function(uint256, uint256) internal pure returns (uint256) applyLimit
+    ) internal returns (uint256 requestsLimitedCount) {
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
         if (!exitRequestLimitData.isExitLimitSet()) {
             return requestsCount;
@@ -633,34 +581,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         emit RequestsHashSubmitted(exitRequestsHash);
     }
 
-    function _updateRequestStatus(
-        RequestStatus storage requestStatus,
-        uint256 deliveryHistoryLength,
-        uint256 lastDeliveredExitDataIndex,
-        uint256 lastDeliveredExitDataTimestamp
-    ) internal {
-        require(deliveryHistoryLength <= type(uint32).max, "DELIVERY_HISTORY_LENGTH_OVERFLOW");
-        require(lastDeliveredExitDataIndex <= type(uint32).max, "LAST_DELIVERED_EXIT_DATA_INDEX_OVERFLOW");
-        require(lastDeliveredExitDataTimestamp <= type(uint32).max, "LAST_DELIVERED_EXIT_DATA_TIMESTAMP_OVERFLOW");
+    function _updateRequestStatus(RequestStatus storage requestStatus, uint256 deliveredExitDataTimestamp) internal {
+        require(deliveredExitDataTimestamp <= type(uint32).max, "LAST_DELIVERED_EXIT_DATA_TIMESTAMP_OVERFLOW");
 
-        requestStatus.deliveryHistoryLength = uint32(deliveryHistoryLength);
-        requestStatus.lastDeliveredExitDataIndex = uint32(lastDeliveredExitDataIndex);
-        requestStatus.lastDeliveredExitDataTimestamp = uint32(lastDeliveredExitDataTimestamp);
-    }
-
-    function _storeDeliveryEntry(
-        bytes32 exitRequestsHash,
-        uint256 lastDeliveredExitDataIndex,
-        uint256 lastDeliveredExitDataTimestamp
-    ) internal {
-        require(lastDeliveredExitDataIndex <= type(uint32).max, "LAST_DELIVERED_EXIT_DATA_INDEX_OVERFLOW");
-        require(lastDeliveredExitDataTimestamp <= type(uint32).max, "LAST_DELIVERED_EXIT_DATA_TIMESTAMP_OVERFLOW");
-
-        mapping(bytes32 => DeliveryHistory[]) storage deliveryHistoryMap = _storageDeliveryHistory();
-        DeliveryHistory[] storage deliveryHistory = deliveryHistoryMap[exitRequestsHash];
-        deliveryHistory.push(
-            DeliveryHistory(uint32(lastDeliveredExitDataIndex), uint32(lastDeliveredExitDataTimestamp))
-        );
+        requestStatus.deliveredExitDataTimestamp = uint32(deliveredExitDataTimestamp);
     }
 
     /// Methods for reading data from tightly packed validator exit requests
@@ -726,7 +650,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         uint256 dataWithoutPubkey;
         uint256 moduleId;
         uint256 nodeOpId;
-        uint64  valIndex;
+        uint64 valIndex;
 
         assembly {
             pubkey.length := 48
@@ -771,13 +695,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     function _storageRequestStatus() internal pure returns (mapping(bytes32 => RequestStatus) storage r) {
         bytes32 position = REQUEST_STATUS_POSITION;
-        assembly {
-            r.slot := position
-        }
-    }
-
-    function _storageDeliveryHistory() internal pure returns (mapping(bytes32 => DeliveryHistory[]) storage r) {
-        bytes32 position = DELIVERY_HISTORY_POSITION;
         assembly {
             r.slot := position
         }
