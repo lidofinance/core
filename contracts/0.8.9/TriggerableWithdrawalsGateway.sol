@@ -61,8 +61,15 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      * @param exitsPerFrame The number of exits that can be restored per frame.
      * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
-
     event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
+    /**
+     * @notice Emitted when notifying a staking module about a validator exit fails.
+     * @param stakingModuleId The ID of the staking module that failed to process the exit notification.
+     * @param nodeOperatorId The ID of the node operator for the validator.
+     * @param pubkey The public key of the validator for which the exit notification failed.
+     */
+    event StakingModuleExitNotificationFailed(uint256 stakingModuleId, uint256 nodeOperatorId, bytes pubkey);
+
     /**
      * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
      * @param requestsCount Amount of requests that were sent for processing
@@ -159,10 +166,11 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
      * @param exitsPerFrame The number of exits that can be restored per frame.
      * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
-    function setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec)
-        external
-        onlyRole(TW_EXIT_LIMIT_MANAGER_ROLE)
-    {
+    function setExitRequestLimit(
+        uint256 maxExitRequestsLimit,
+        uint256 exitsPerFrame,
+        uint256 frameDurationInSec
+    ) external onlyRole(TW_EXIT_LIMIT_MANAGER_ROLE) {
         _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
@@ -216,9 +224,18 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         ValidatorData calldata data;
         for (uint256 i = 0; i < validatorsData.length; ++i) {
             data = validatorsData[i];
-            stakingRouter.onValidatorExitTriggered(
-                data.stakingModuleId, data.nodeOperatorId, data.pubkey, withdrawalRequestPaidFee, exitType
-            );
+
+            try
+                 stakingRouter.onValidatorExitTriggered(
+                    data.stakingModuleId,
+                    data.nodeOperatorId,
+                    data.pubkey,
+                    withdrawalRequestPaidFee,
+                    exitType
+             )
+            {} catch {
+                emit StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
+            }
         }
     }
 
@@ -229,7 +246,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
                 recipient = msg.sender;
             }
 
-            (bool success,) = recipient.call{value: refund}("");
+            (bool success, ) = recipient.call{value: refund}("");
             if (!success) {
                 revert FeeRefundFailed();
             }
@@ -240,14 +257,19 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         return block.timestamp; // solhint-disable-line not-rely-on-time
     }
 
-    function _setExitRequestLimit(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec)
-        internal
-    {
+    function _setExitRequestLimit(
+        uint256 maxExitRequestsLimit,
+        uint256 exitsPerFrame,
+        uint256 frameDurationInSec
+    ) internal {
         uint256 timestamp = _getTimestamp();
 
         TWR_LIMIT_POSITION.setStorageExitRequestLimit(
             TWR_LIMIT_POSITION.getStorageExitRequestLimit().setExitLimits(
-                maxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp
+                maxExitRequestsLimit,
+                exitsPerFrame,
+                frameDurationInSec,
+                timestamp
             )
         );
 
