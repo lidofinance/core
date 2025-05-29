@@ -15,7 +15,6 @@ import {LazyOracle} from "./LazyOracle.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 import {IConsensusContract} from "./interfaces/IConsensusContract.sol";
-import {IBaseOracle} from "./interfaces/IBaseOracle.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
@@ -131,11 +130,12 @@ contract VaultHub is PausableUntilWithRoles {
 
     ILido public immutable LIDO;
     ILidoLocator public immutable LIDO_LOCATOR;
+    IConsensusContract public immutable CONSENSUS_CONTRACT;
 
     /// @param _locator Lido Locator contract
     /// @param _lido Lido stETH contract
     /// @param _maxRelativeShareLimitBP Maximum share limit relative to TVL in basis points
-    constructor(ILidoLocator _locator, ILido _lido, uint256 _maxRelativeShareLimitBP) {
+    constructor(ILidoLocator _locator, ILido _lido, IConsensusContract _consensusContract, uint256 _maxRelativeShareLimitBP) {
         if (_maxRelativeShareLimitBP == 0) revert ZeroArgument();
         if (_maxRelativeShareLimitBP > TOTAL_BASIS_POINTS) {
             revert MaxRelativeShareLimitBPTooHigh(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
@@ -145,7 +145,8 @@ contract VaultHub is PausableUntilWithRoles {
 
         LIDO_LOCATOR = _locator;
         LIDO = _lido;
-
+        CONSENSUS_CONTRACT = _consensusContract;
+        
         _disableInitializers();
     }
 
@@ -987,10 +988,9 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _cacheInOutDelta(VaultRecord storage _record) internal {
-        IConsensusContract consensusContract = IConsensusContract(IBaseOracle(LIDO_LOCATOR.accountingOracle()).getConsensusContract());
-        (uint256 refSlot, ) = consensusContract.getCurrentFrame();
-        if (_record.cachedRefSlot != refSlot) { // + 2100 gas
-            _record.cachedInOutDelta = _record.inOutDelta; // + 7100 gas
+        (uint256 refSlot, ) = CONSENSUS_CONTRACT.getCurrentFrame();
+        if (_record.cachedRefSlot != refSlot) {
+            _record.cachedInOutDelta = _record.inOutDelta;
             _record.cachedRefSlot = uint128(refSlot);
         }
     }

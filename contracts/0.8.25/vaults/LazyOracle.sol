@@ -8,7 +8,6 @@ import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IConsensusContract} from "./interfaces/IConsensusContract.sol";
-import {IBaseOracle} from "./interfaces/IBaseOracle.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
@@ -61,9 +60,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     uint256 internal constant TOTAL_BP = 100_00;
 
     ILidoLocator public immutable LIDO_LOCATOR;
+    IConsensusContract public immutable CONSENSUS_CONTRACT;
 
-    constructor(address _lidoLocator, address _admin, uint64 _quarantinePeriod, uint16 _maxElClRewardsBP) {
+    constructor(address _lidoLocator, address _consensusContract, address _admin, uint64 _quarantinePeriod, uint16 _maxElClRewardsBP) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
+        CONSENSUS_CONTRACT = IConsensusContract(_consensusContract);
 
         _updateSanityParams(_quarantinePeriod, _maxElClRewardsBP);
 
@@ -194,8 +195,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
 
         // 1. Calculate inOutDelta in the refSlot
         int256 curInOutDelta = record.inOutDelta;
-        IConsensusContract consensusContract = IConsensusContract(IBaseOracle(LIDO_LOCATOR.accountingOracle()).getConsensusContract());
-        (uint256 refSlot, ) = consensusContract.getCurrentFrame();
+        (uint256 refSlot, ) = CONSENSUS_CONTRACT.getCurrentFrame();
         if (record.cachedRefSlot == refSlot) {
             _inOutDelta = record.cachedInOutDelta;
         } else {
