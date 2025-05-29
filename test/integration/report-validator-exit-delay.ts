@@ -85,8 +85,8 @@ describe("Report Validator Exit Delay", () => {
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
     await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
-    const deliveryHistory = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
-    const eligibleToExitInSec = proofSlotTimestamp - deliveryHistory[0].timestamp;
+    const deliveryTimestamp = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
+    const eligibleToExitInSec = proofSlotTimestamp - deliveryTimestamp;
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
@@ -152,8 +152,8 @@ describe("Report Validator Exit Delay", () => {
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
     await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
-    const deliveryHistory = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
-    const eligibleToExitInSec = proofSlotTimestamp - deliveryHistory[0].timestamp;
+    const deliveryTimestamp = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
+    const eligibleToExitInSec = proofSlotTimestamp - deliveryTimestamp;
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
@@ -375,8 +375,8 @@ describe("Report Validator Exit Delay", () => {
     await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
     await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
-    const deliveryHistory = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
-    const eligibleToExitInSec = proofSlotTimestamp - deliveryHistory[0].timestamp;
+    const deliveryTimestamp = await validatorsExitBusOracle.getExitRequestsDeliveryHistory(encodedExitRequestsHash);
+    const eligibleToExitInSec = proofSlotTimestamp - deliveryTimestamp;
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
