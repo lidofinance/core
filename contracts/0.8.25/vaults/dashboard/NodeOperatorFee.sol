@@ -208,12 +208,12 @@ contract NodeOperatorFee is Permissions {
         // Start a new fee period
         feePeriodStartReport = latestReport();
 
+        _setNodeOperatorFeeRate(_newNodeOperatorFeeRate);
+
         if (fee > 0) {
             VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
             emit NodeOperatorFeeDisbursed(msg.sender, fee);
         }
-
-        _setNodeOperatorFeeRate(_newNodeOperatorFeeRate);
     }
 
     /**
