@@ -500,6 +500,44 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidGIndex");
     });
 
+    it("reverts with 'EmptyDeliveryHistory' if exit request index is not in delivery history", async () => {
+      const exitRequests: ExitRequest[] = [
+        {
+          moduleId: 1,
+          nodeOpId: 1,
+          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+        },
+      ];
+      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
+      const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
+
+      const unpackedExitRequestIndex = 0;
+
+      // Report not unpacked, deliveryTimestamp == 0
+      await vebo.setExitRequests(encodedExitRequestsHash, 0, exitRequests);
+      expect(await vebo.getExitRequestsDeliveryHistory(encodedExitRequestsHash)).to.equal(0);
+
+      await expect(
+        validatorExitDelayVerifier.verifyValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
+          encodedExitRequests,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "EmptyDeliveryHistory");
+
+      await expect(
+        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
+          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
+          encodedExitRequests,
+        ),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "EmptyDeliveryHistory");
+    });
+
     it("reverts if the oldBlock proof is corrupted", async () => {
       const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 

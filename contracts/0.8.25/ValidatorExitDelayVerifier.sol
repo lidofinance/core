@@ -104,7 +104,7 @@ contract ValidatorExitDelayVerifier {
         uint256 provableBeaconBlockTimestamp,
         uint256 eligibleExitRequestTimestamp
     );
-    error NonMonotonicDeliveryHistory(uint256 index);
+    error EmptyDeliveryHistory();
 
     /**
      * @dev The previous and current forks can be essentially the same.
@@ -172,7 +172,7 @@ contract ValidatorExitDelayVerifier {
         IValidatorsExitBus veb = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        uint256 deliveredTimestamp = _getExitRequestDeliveryHistory(veb, exitRequests);
+        uint256 deliveredTimestamp = _getExitRequestDeliveryTimestamp(veb, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(beaconBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
@@ -219,7 +219,7 @@ contract ValidatorExitDelayVerifier {
         IValidatorsExitBus veb = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        uint256 deliveredTimestamp = _getExitRequestDeliveryHistory(veb, exitRequests);
+        uint256 deliveredTimestamp = _getExitRequestDeliveryTimestamp(veb, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(oldBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
@@ -356,12 +356,16 @@ contract ValidatorExitDelayVerifier {
         return stateSlot < PIVOT_SLOT ? GI_HISTORICAL_SUMMARIES_PREV : GI_HISTORICAL_SUMMARIES_CURR;
     }
 
-    function _getExitRequestDeliveryHistory(
+    function _getExitRequestDeliveryTimestamp(
         IValidatorsExitBus veb,
         ExitRequestData calldata exitRequests
-    ) internal view returns (uint256 timestamp) {
+    ) internal view returns (uint256 deliveryTimestamp) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
-        return veb.getExitRequestsDeliveryHistory(exitRequestsHash);
+        deliveryTimestamp = veb.getExitRequestsDeliveryHistory(exitRequestsHash);
+
+        if (deliveryTimestamp == 0) {
+            revert EmptyDeliveryHistory();
+        }
     }
 
     function _slotToTimestamp(uint64 slot) internal view returns (uint256) {
