@@ -186,11 +186,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ];
       const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
 
-      await vebo.setExitRequests(
-        encodedExitRequestsHash,
-        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-        exitRequests,
-      );
+      await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
 
       const verifyExitDelayEvents = async (tx: ContractTransactionResponse) => {
         const receipt = await tx.wait();
@@ -256,11 +252,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ];
       const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
 
-      await vebo.setExitRequests(
-        encodedExitRequestsHash,
-        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-        exitRequests,
-      );
+      await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
 
       const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
       const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
@@ -415,11 +407,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ];
       const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
 
-      await vebo.setExitRequests(
-        encodedExitRequestsHash,
-        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-        exitRequests,
-      );
+      await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
 
       const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
@@ -460,11 +448,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ];
       const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
 
-      await vebo.setExitRequests(
-        encodedExitRequestsHash,
-        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-        exitRequests,
-      );
+      await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
 
       const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
@@ -516,152 +500,6 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidGIndex");
     });
 
-    it("reverts with 'EmptyDeliveryHistory' if exit request index is not in delivery history", async () => {
-      const exitRequests: ExitRequest[] = [
-        {
-          moduleId: 1,
-          nodeOpId: 1,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
-        },
-      ];
-      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
-
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-      const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
-
-      const unpackedExitRequestIndex = 0;
-
-      // Report not unpacked.
-      await vebo.setExitRequests(encodedExitRequestsHash, [], exitRequests);
-      expect((await vebo.getExitRequestsDeliveryHistory(encodedExitRequestsHash)).length).to.equal(0);
-
-      await expect(
-        validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
-          encodedExitRequests,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "EmptyDeliveryHistory");
-
-      await expect(
-        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
-          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
-          encodedExitRequests,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "EmptyDeliveryHistory");
-    });
-
-    it("reverts with 'NonMonotonicDeliveryHistory' if delivery history is not strictly increasing.", async () => {
-      const exitRequests: ExitRequest[] = [
-        {
-          moduleId: 1,
-          nodeOpId: 1,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
-        },
-      ];
-      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
-
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-      const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
-
-      const nonMonotonicDeliveryHistory = [
-        [
-          { timestamp: 2, lastDeliveredKeyIndex: 2n },
-          { timestamp: 1, lastDeliveredKeyIndex: 1n },
-        ],
-        [
-          { timestamp: 1, lastDeliveredKeyIndex: 2n },
-          { timestamp: 1, lastDeliveredKeyIndex: 1n },
-        ],
-        [
-          { timestamp: 1, lastDeliveredKeyIndex: 1n },
-          { timestamp: 1, lastDeliveredKeyIndex: 1n },
-        ],
-      ];
-
-      async function testNonMonotonicDeliveryHistory(
-        deliveryHistory: { timestamp: number; lastDeliveredKeyIndex: bigint }[],
-      ) {
-        await vebo.setExitRequests(encodedExitRequestsHash, deliveryHistory, exitRequests);
-
-        await expect(
-          validatorExitDelayVerifier.verifyValidatorExitDelay(
-            toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-            [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-            encodedExitRequests,
-          ),
-        ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "NonMonotonicDeliveryHistory");
-
-        await expect(
-          validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-            toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
-            toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-            [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-            encodedExitRequests,
-          ),
-        ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "NonMonotonicDeliveryHistory");
-      }
-
-      for (const deliveryHistory of nonMonotonicDeliveryHistory) {
-        await testNonMonotonicDeliveryHistory(deliveryHistory);
-      }
-    });
-
-    it("reverts with 'KeyWasNotUnpacked' if exit request index is not in delivery history", async () => {
-      const nodeOpId = 2;
-      const exitRequests: ExitRequest[] = [
-        {
-          moduleId: 1,
-          nodeOpId,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
-        },
-        {
-          moduleId: 2,
-          nodeOpId,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
-        },
-        {
-          moduleId: 3,
-          nodeOpId,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
-        },
-      ];
-      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
-
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-      const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
-
-      const unpackedExitRequestIndex = 2;
-
-      // Report not fully unpacked.
-      await vebo.setExitRequests(encodedExitRequestsHash, [{ timestamp: 0n, lastDeliveredKeyIndex: 1n }], exitRequests);
-      expect((await vebo.getExitRequestsDeliveryHistory(encodedExitRequestsHash)).length).to.equal(1);
-
-      await expect(
-        validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
-          encodedExitRequests,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "KeyWasNotUnpacked");
-
-      await expect(
-        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
-          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
-          encodedExitRequests,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "KeyWasNotUnpacked");
-    });
-
     it("reverts if the oldBlock proof is corrupted", async () => {
       const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
@@ -700,11 +538,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ];
       const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
 
-      await vebo.setExitRequests(
-        encodedExitRequestsHash,
-        [{ timestamp: veboExitRequestTimestamp, lastDeliveredKeyIndex: 1n }],
-        exitRequests,
-      );
+      await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
 
       const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 

@@ -7,7 +7,7 @@ import {BeaconBlockHeader, Validator} from "./lib/BeaconTypes.sol";
 import {GIndex} from "./lib/GIndex.sol";
 import {SSZ} from "./lib/SSZ.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
-import {IValidatorsExitBus, DeliveryHistory} from "./interfaces/IValidatorsExitBus.sol";
+import {IValidatorsExitBus} from "./interfaces/IValidatorsExitBus.sol";
 import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 
 struct ExitRequestData {
@@ -104,9 +104,7 @@ contract ValidatorExitDelayVerifier {
         uint256 provableBeaconBlockTimestamp,
         uint256 eligibleExitRequestTimestamp
     );
-    error KeyWasNotUnpacked(uint256 keyIndex);
     error NonMonotonicDeliveryHistory(uint256 index);
-    error EmptyDeliveryHistory();
 
     /**
      * @dev The previous and current forks can be essentially the same.
@@ -364,19 +362,6 @@ contract ValidatorExitDelayVerifier {
     ) internal view returns (uint256 timestamp) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
         return veb.getExitRequestsDeliveryHistory(exitRequestsHash);
-    }
-
-    function _getExitRequestTimestamp(
-        DeliveryHistory[] memory deliveryHistory,
-        uint256 index
-    ) internal pure returns (uint256 validatorExitRequestTimestamp) {
-        for (uint256 i = 0; i < deliveryHistory.length; i++) {
-            if (deliveryHistory[i].lastDeliveredKeyIndex >= index) {
-                return deliveryHistory[i].timestamp;
-            }
-        }
-
-        revert KeyWasNotUnpacked(index);
     }
 
     function _slotToTimestamp(uint64 slot) internal view returns (uint256) {
