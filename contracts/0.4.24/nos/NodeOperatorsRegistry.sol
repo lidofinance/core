@@ -238,9 +238,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         TYPE_POSITION.setStorageBytes32(_type);
 
         _setContractVersion(2);
-        // set unlimited allowance for burner from staking router
-        // to burn stuck keys penalized shares
-        IStETH(getLocator().lido()).approve(getLocator().burner(), ~uint256(0));
 
         emit LocatorContractSet(_locator);
         emit StakingModuleTypeSet(_type);
@@ -272,6 +269,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     function finalizeUpgrade_v4(uint256 _exitDeadlineThresholdInSeconds) external {
         require(hasInitialized(), "CONTRACT_NOT_INITIALIZED");
         _checkContractVersion(3);
+
+        // Set allowance to 0 since the stuck keys logic has been removed and burning shares is no longer needed
+        IStETH(getLocator().lido()).approve(getLocator().burner(), 0);
         _initialize_v4(_exitDeadlineThresholdInSeconds);
     }
 
