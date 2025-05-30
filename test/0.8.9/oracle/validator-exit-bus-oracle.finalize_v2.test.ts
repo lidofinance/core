@@ -58,7 +58,7 @@ describe("ValidatorsExitBusOracle.sol:finalizeUpgrade_v2", () => {
     expect(exitRequestLimitData.exitsPerFrame).to.equal(1);
     expect(exitRequestLimitData.frameDurationInSec).to.equal(48);
 
-    expect(await oracle.getMaxRequestsPerBatch()).to.equal(15);
+    expect(await oracle.getMaxValidatorsPerReport()).to.equal(15);
 
     // should not allow to run finalizeUpgrade_v2 again
     await expect(oracle.finalizeUpgrade_v2(10, 100, 1, 48)).to.be.revertedWithCustomError(

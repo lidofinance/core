@@ -100,10 +100,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     error RequestsNotDelivered();
 
     /**
-     * @notice Thrown when exit requests in report exceed the maximum allowed number of requests per batch.
+     * @notice Thrown when exit requests in report exceed the maximum allowed number of requests per report.
      * @param requestsCount  Amount of requests that were sent for processing
      */
-    error ToManyExitRequestsInReport(uint256 requestsCount, uint256 maxRequestsPerBatch);
+    error ToManyExitRequestsInReport(uint256 requestsCount, uint256 maxRequestsPerReport);
 
     /// @dev Events
 
@@ -166,8 +166,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     /// @notice An ACL role granting the permission to resume accepting validator exit requests
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
-    /// @notice An ACL role granting the permission to set MAX_VALIDATORS_PER_BATCH value
-    bytes32 public constant MAX_VALIDATORS_PER_BATCH_ROLE = keccak256("MAX_VALIDATORS_PER_BATCH_ROLE");
+    /// @notice An ACL role granting the permission to set MAX_VALIDATORS_PER_REPORT value
+    bytes32 public constant MAX_VALIDATORS_PER_REPORT_ROLE = keccak256("MAX_VALIDATORS_PER_REPORT_ROLE");
 
     /// Length in bytes of packed request
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
@@ -196,9 +196,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     // Storage slot for exit request limit configuration and current quota tracking
     bytes32 internal constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestLimit");
-    // Storage slot for the maximum number of validator exit requests allowed per processing batch
-    bytes32 internal constant MAX_VALIDATORS_PER_BATCH_POSITION =
-        keccak256("lido.ValidatorsExitBus.maxValidatorsPerBatch");
+    // Storage slot for the maximum number of validator exit requests allowed per processing report
+    bytes32 internal constant MAX_VALIDATORS_PER_REPORT_POSITION =
+        keccak256("lido.ValidatorsExitBus.maxValidatorsPerReport");
 
     // Storage slot for mapping(bytes32 => RequestStatus), keyed by exitRequestsHash
     bytes32 internal constant REQUEST_STATUS_POSITION = keccak256("lido.ValidatorsExitBus.requestStatus");
@@ -259,10 +259,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         _checkContractVersion(requestStatus.contractVersion);
 
         uint256 requestsCount = request.data.length / PACKED_REQUEST_LENGTH;
-        uint256 maxRequestsPerBatch = _getMaxRequestsPerBatch();
+        uint256 maxRequestsPerReport = _getMaxValidatorsPerReport();
 
-        if (requestsCount > maxRequestsPerBatch) {
-            revert ToManyExitRequestsInReport(requestsCount, maxRequestsPerBatch);
+        if (requestsCount > maxRequestsPerReport) {
+            revert ToManyExitRequestsInReport(requestsCount, maxRequestsPerReport);
         }
 
         _consumeLimit(requestsCount);
@@ -387,19 +387,19 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     /**
-     * @notice Sets the maximum allowed number of validator exit requests to process in a single batch.
-     * @param maxRequests The new maximum number of exit requests allowed per batch.
+     * @notice Sets the maximum allowed number of validator exit requests to process in a single report.
+     * @param maxRequests The new maximum number of exit requests allowed per report.
      */
-    function setMaxRequestsPerBatch(uint256 maxRequests) external onlyRole(MAX_VALIDATORS_PER_BATCH_ROLE) {
-        _setMaxRequestsPerBatch(maxRequests);
+    function setMaxValidatorsPerReport(uint256 maxRequests) external onlyRole(MAX_VALIDATORS_PER_REPORT_ROLE) {
+        _setMaxValidatorsPerReport(maxRequests);
     }
 
     /**
-     * @notice Returns information about allowed number of validator exit requests to process in a single batch.
-     * @return The new maximum number of exit requests allowed per batch
+     * @notice Returns information about allowed number of validator exit requests to process in a single report.
+     * @return The new maximum number of exit requests allowed per report
      */
-    function getMaxRequestsPerBatch() external view returns (uint256) {
-        return _getMaxRequestsPerBatch();
+    function getMaxValidatorsPerReport() external view returns (uint256) {
+        return _getMaxValidatorsPerReport();
     }
 
     /**
@@ -517,14 +517,14 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         return block.timestamp; // solhint-disable-line not-rely-on-time
     }
 
-    function _setMaxRequestsPerBatch(uint256 value) internal {
-        require(value > 0, "MAX_BATCH_SIZE_ZERO");
+    function _setMaxValidatorsPerReport(uint256 value) internal {
+        require(value > 0, "ZERO_MAX_VALIDATORS_PER_REPORT");
 
-        MAX_VALIDATORS_PER_BATCH_POSITION.setStorageUint256(value);
+        MAX_VALIDATORS_PER_REPORT_POSITION.setStorageUint256(value);
     }
 
-    function _getMaxRequestsPerBatch() internal view returns (uint256) {
-        return MAX_VALIDATORS_PER_BATCH_POSITION.getStorageUint256();
+    function _getMaxValidatorsPerReport() internal view returns (uint256) {
+        return MAX_VALIDATORS_PER_REPORT_POSITION.getStorageUint256();
     }
 
     function _setExitRequestLimit(
