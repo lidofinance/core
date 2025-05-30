@@ -513,10 +513,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         return uint32(block.timestamp); // solhint-disable-line not-rely-on-time
     }
 
-    function _setMaxValidatorsPerReport(uint256 value) internal {
-        if (value == 0) revert ZeroArgument("maxValidatorsPerReport");
+    function _setMaxValidatorsPerReport(uint256 maxValidatorsPerReport) internal {
+        if (maxValidatorsPerReport == 0) revert ZeroArgument("maxValidatorsPerReport");
 
-        MAX_VALIDATORS_PER_REPORT_POSITION.setStorageUint256(value);
+        MAX_VALIDATORS_PER_REPORT_POSITION.setStorageUint256(maxValidatorsPerReport);
     }
 
     function _getMaxValidatorsPerReport() internal view returns (uint256) {
