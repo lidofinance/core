@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, OracleReportSanityChecker, ValidatorsExitBus__Harness } from "typechain-types";
 
-import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
 import { computeTimestampAtSlot, DATA_FORMAT_LIST, deployVEBO, initVEBO } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -71,8 +71,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
 
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
-    await consensus.connect(member1).submitReport(refSlot, hash, CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, hash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
@@ -83,7 +83,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     const { refSlot } = await consensus.getCurrentFrame();
 
     const reportData = {
-      consensusVersion: CONSENSUS_VERSION,
+      consensusVersion: VEBO_CONSENSUS_VERSION,
       dataFormat: DATA_FORMAT_LIST,
       refSlot,
       requestsCount: requests.length,
@@ -103,7 +103,9 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     return (await oracle.getLastRequestedValidatorIndices(moduleId, [nodeOpId]))[0];
   }
 
-  const deploy = async () => {
+  before(async () => {
+    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
+
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
@@ -122,12 +124,6 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
     await consensus.addMember(member1, 1);
     await consensus.addMember(member2, 2);
     await consensus.addMember(member3, 2);
-  };
-
-  before(async () => {
-    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
-
-    await deploy();
   });
 
   context("discarded report prevents data submit", () => {
@@ -146,7 +142,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const { refSlot } = await consensus.getCurrentFrame();
 
       // change of mind
-      const tx = await consensus.connect(member3).submitReport(refSlot, HASH_1, CONSENSUS_VERSION);
+      const tx = await consensus.connect(member3).submitReport(refSlot, HASH_1, VEBO_CONSENSUS_VERSION);
 
       await expect(tx).to.emit(oracle, "ReportDiscarded").withArgs(refSlot, reportHash);
     });
@@ -553,7 +549,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       const { refSlot } = await consensus.getCurrentFrame();
       // change pubkey
       const reportData = {
-        consensusVersion: CONSENSUS_VERSION,
+        consensusVersion: VEBO_CONSENSUS_VERSION,
         dataFormat: DATA_FORMAT_LIST,
         refSlot,
         requestsCount: newRequests.length,

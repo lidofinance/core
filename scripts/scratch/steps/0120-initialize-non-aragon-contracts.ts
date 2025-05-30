@@ -1,5 +1,6 @@
 import { ethers } from "hardhat";
 
+import { ether } from "lib";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
@@ -11,7 +12,6 @@ export async function main() {
 
   // Extract addresses from state
   const lidoAddress = state[Sk.appLido].proxy.address;
-  const legacyOracleAddress = state[Sk.appOracle].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const nodeOperatorsRegistryParams = state[Sk.nodeOperatorsRegistry].deployParameters;
   const simpleDvtRegistryAddress = state[Sk.appSimpleDvt].proxy.address;
@@ -28,6 +28,10 @@ export async function main() {
   const eip712StETHAddress = state[Sk.eip712StETH].address;
   const withdrawalVaultAddress = state[Sk.withdrawalVault].proxy.address;
   const oracleDaemonConfigAddress = state[Sk.oracleDaemonConfig].address;
+  const vaultHubAddress = state[Sk.vaultHub].proxy.address;
+  const pdgAddress = state[Sk.predepositGuarantee].proxy.address;
+  const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
+  const operatorGridParams = state[Sk.operatorGrid].deployParameters;
 
   // Set admin addresses (using deployer for testnet)
   const testnetAdmin = deployer;
@@ -35,7 +39,9 @@ export async function main() {
   const exitBusOracleAdmin = testnetAdmin;
   const stakingRouterAdmin = testnetAdmin;
   const withdrawalQueueAdmin = testnetAdmin;
-
+  const vaultHubAdmin = testnetAdmin;
+  const pdgAdmin = testnetAdmin;
+  const operatorGridAdmin = testnetAdmin;
   // Initialize NodeOperatorsRegistry
 
   // https://github.com/ethereum/solidity-examples/blob/master/docs/bytes/Bytes.md#description
@@ -74,17 +80,13 @@ export async function main() {
     from: deployer,
   });
 
-  // Initialize LegacyOracle
-  const legacyOracle = await loadContract("LegacyOracle", legacyOracleAddress);
-  await makeTx(legacyOracle, "initialize", [lidoLocatorAddress, hashConsensusForAccountingAddress], { from: deployer });
-
   const zeroLastProcessingRefSlot = 0;
 
   // Initialize AccountingOracle
   const accountingOracle = await loadContract("AccountingOracle", accountingOracleAddress);
   await makeTx(
     accountingOracle,
-    "initializeWithoutMigration",
+    "initialize",
     [
       accountingOracleAdmin,
       hashConsensusForAccountingAddress,
@@ -107,10 +109,6 @@ export async function main() {
     ],
     { from: deployer },
   );
-
-  // Initialize WithdrawalVault
-  const withdrawalVault = await loadContract("WithdrawalVault", withdrawalVaultAddress);
-  await makeTx(withdrawalVault, "initialize", [], { from: deployer });
 
   // Initialize WithdrawalQueue
   const withdrawalQueue = await loadContract("WithdrawalQueueERC721", withdrawalQueueAddress);
@@ -143,4 +141,25 @@ export async function main() {
   }
 
   await makeTx(oracleDaemonConfig, "renounceRole", [CONFIG_MANAGER_ROLE, testnetAdmin], { from: testnetAdmin });
+
+  // Initialize VaultHub
+  const vaultHub = await loadContract("VaultHub", vaultHubAddress);
+  await makeTx(vaultHub, "initialize", [vaultHubAdmin], { from: deployer });
+
+  // Initialize OperatorGrid
+  const defaultTierParams = {
+    shareLimit: ether(operatorGridParams.defaultTierParams.shareLimitInEther),
+    reserveRatioBP: operatorGridParams.defaultTierParams.reserveRatioBP,
+    forcedRebalanceThresholdBP: operatorGridParams.defaultTierParams.forcedRebalanceThresholdBP,
+    infraFeeBP: operatorGridParams.defaultTierParams.infraFeeBP,
+    liquidityFeeBP: operatorGridParams.defaultTierParams.liquidityFeeBP,
+    reservationFeeBP: operatorGridParams.defaultTierParams.reservationFeeBP,
+  };
+
+  const operatorGrid = await loadContract("OperatorGrid", operatorGridAddress);
+  await makeTx(operatorGrid, "initialize", [operatorGridAdmin, defaultTierParams], { from: deployer });
+
+  // Initialize PDG
+  const pdg = await loadContract("PredepositGuarantee", pdgAddress);
+  await makeTx(pdg, "initialize", [pdgAdmin], { from: deployer });
 }

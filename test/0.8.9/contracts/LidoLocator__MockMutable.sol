@@ -3,12 +3,13 @@
 
 pragma solidity 0.8.9;
 
-contract LidoLocator__MockMutable {
+import {ILidoLocator} from "../../../contracts/common/interfaces/ILidoLocator.sol";
+
+contract LidoLocator__MockMutable is ILidoLocator {
     struct Config {
         address accountingOracle;
         address depositSecurityModule;
         address elRewardsVault;
-        address legacyOracle;
         address lido;
         address oracleReportSanityChecker;
         address postTokenRebaseReceiver;
@@ -19,6 +20,12 @@ contract LidoLocator__MockMutable {
         address withdrawalQueue;
         address withdrawalVault;
         address oracleDaemonConfig;
+        address accounting;
+        address predepositGuarantee;
+        address wstETH;
+        address vaultHub;
+        address operatorGrid;
+        address lazyOracle;
     }
 
     error ZeroAddress();
@@ -26,7 +33,6 @@ contract LidoLocator__MockMutable {
     address public accountingOracle;
     address public immutable depositSecurityModule;
     address public immutable elRewardsVault;
-    address public immutable legacyOracle;
     address public immutable lido;
     address public immutable oracleReportSanityChecker;
     address public postTokenRebaseReceiver;
@@ -37,17 +43,17 @@ contract LidoLocator__MockMutable {
     address public immutable withdrawalQueue;
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
+    address public immutable accounting;
+    address public immutable predepositGuarantee;
+    address public immutable wstETH;
+    address public immutable vaultHub;
+    address public immutable operatorGrid;
+    address public immutable lazyOracle;
 
-    /**
-     * @notice declare service locations
-     * @dev accepts a struct to avoid the "stack-too-deep" error
-     * @param _config struct of addresses
-     */
     constructor(Config memory _config) {
         accountingOracle = _assertNonZero(_config.accountingOracle);
         depositSecurityModule = _assertNonZero(_config.depositSecurityModule);
         elRewardsVault = _assertNonZero(_config.elRewardsVault);
-        legacyOracle = _assertNonZero(_config.legacyOracle);
         lido = _assertNonZero(_config.lido);
         oracleReportSanityChecker = _assertNonZero(_config.oracleReportSanityChecker);
         postTokenRebaseReceiver = _assertNonZero(_config.postTokenRebaseReceiver);
@@ -58,25 +64,31 @@ contract LidoLocator__MockMutable {
         withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
+        accounting = _assertNonZero(_config.accounting);
+        wstETH = _assertNonZero(_config.wstETH);
+        predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
+        vaultHub = _assertNonZero(_config.vaultHub);
+        operatorGrid = _assertNonZero(_config.operatorGrid);
+        lazyOracle = _assertNonZero(_config.lazyOracle);
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {
         return (elRewardsVault, oracleReportSanityChecker, stakingRouter, treasury, withdrawalQueue, withdrawalVault);
     }
 
-    function oracleReportComponentsForLido()
+    function oracleReportComponents()
         external
         view
         returns (address, address, address, address, address, address, address)
     {
         return (
             accountingOracle,
-            elRewardsVault,
             oracleReportSanityChecker,
             burner,
             withdrawalQueue,
-            withdrawalVault,
-            postTokenRebaseReceiver
+            postTokenRebaseReceiver,
+            stakingRouter,
+            vaultHub
         );
     }
 

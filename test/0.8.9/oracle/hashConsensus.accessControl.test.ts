@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HashConsensus, ReportProcessor__Mock } from "typechain-types";
 
-import { CONSENSUS_VERSION, DEFAULT_ADMIN_ROLE, EPOCHS_PER_FRAME, streccak } from "lib";
+import { BASE_CONSENSUS_VERSION, DEFAULT_ADMIN_ROLE, EPOCHS_PER_FRAME, streccak } from "lib";
 
 import { deployHashConsensus, DeployHashConsensusParams } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -41,7 +41,7 @@ describe("HashConsensus.sol:accessControl", function () {
     consensus = deployed.consensus;
     reportProcessor = deployed.reportProcessor;
 
-    reportProcessor2 = await ethers.deployContract("ReportProcessor__Mock", [CONSENSUS_VERSION], admin);
+    reportProcessor2 = await ethers.deployContract("ReportProcessor__Mock", [BASE_CONSENSUS_VERSION], admin);
 
     snapshot = await Snapshot.take();
   };
