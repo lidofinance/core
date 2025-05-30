@@ -776,7 +776,8 @@ contract VaultHub is PausableUntilWithRoles {
             liabilityShares: 0,
             reportTimestamp: _lazyOracle().latestReportTimestamp(),
             inOutDelta: report.inOutDelta,
-            feeSharesCharged: uint96(0)
+            feeSharesCharged: uint96(0),
+            reportedLiabilityShares: uint96(0)
         });
 
         connection = VaultConnection({
