@@ -48,7 +48,6 @@ describe("PredepositGuarantee.sol", () => {
   let locator: LidoLocator;
   let sszMerkleTree: SSZMerkleTree;
   let stakingVault: StakingVault__MockForPDG;
-  let depositContract: DepositContract__MockForStakingVault;
   let rejector: EthRejector;
 
   let firstValidatorLeafIndex: bigint;
@@ -65,9 +64,6 @@ describe("PredepositGuarantee.sol", () => {
 
     // eth rejector
     rejector = await ethers.deployContract("EthRejector");
-
-    // ether deposit contract
-    depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
 
     // staking vault
     stakingVault = await ethers.deployContract("StakingVault__MockForPDG", [vaultOwner, vaultOperator]);
