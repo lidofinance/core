@@ -53,7 +53,8 @@ contract VaultHub__HarnessForReporting is VaultHub {
             uint16(_forcedRebalanceThresholdBP),
             uint16(_infraFeeBP),
             uint16(_liquidityFeeBP),
-            uint16(_reservationFeeBP)
+            uint16(_reservationFeeBP),
+            false // manuallyPausedBeaconChainDeposits
         );
         $.connections[_vault] = connection;
 

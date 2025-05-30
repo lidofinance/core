@@ -61,6 +61,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 liquidityFeeBP;
         /// @notice reservation fee in basis points
         uint16 reservationFeeBP;
+        /// @notice if true, vault owner manually paused the beacon chain deposits
+        bool manuallyPausedBeaconChainDeposits;
     }
 
     struct VaultRecord {
@@ -126,6 +128,9 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice codehash of the account with no code
     bytes32 private constant EMPTY_CODEHASH = keccak256("");
+
+    /// @notice max allowed unsettled obligations
+    uint256 internal constant MAX_UINT256 = type(uint256).max;
 
     // -----------------------------
     //           IMMUTABLES
@@ -481,7 +486,7 @@ contract VaultHub is PausableUntilWithRoles {
                 _vault,
                 record,
                 _reportAccumulatedTreasuryFees - obligations.totalSettledTreasuryFees, // new unsettled treasury fees
-                false
+                MAX_UINT256
             );
 
             IStakingVault vault_ = IStakingVault(_vault);
@@ -655,8 +660,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     function pauseBeaconChainDeposits(address _vault) external {
-        _checkConnectionAndOwner(_vault);
+        VaultConnection storage connection = _checkConnectionAndOwner(_vault);
 
+        connection.manuallyPausedBeaconChainDeposits = true;
         IStakingVault(_vault).pauseBeaconChainDeposits();
     }
 
@@ -666,14 +672,12 @@ contract VaultHub is PausableUntilWithRoles {
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
 
-        if (!_isVaultHealthy(connection, _vaultRecord(_vault))) revert UnhealthyVaultCannotDeposit(_vault);
+        VaultRecord storage record = _vaultRecord(_vault);
+        if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
 
-        // TODO: do not revert if unsettled is less than OBLIGATIONS_THRESHOLD
-        VaultObligations storage obligations = _vaultObligations(_vault);
-        if (obligations.treasuryFees > 0 || obligations.redemptions > 0) {
-            _settleObligations(_vault, _vaultRecord(_vault), obligations.treasuryFees, true);
-        }
+        _settleObligationsIfNeeded(_vault, record, OBLIGATIONS_THRESHOLD);
 
+        connection.manuallyPausedBeaconChainDeposits = false;
         IStakingVault(_vault).resumeBeaconChainDeposits();
     }
 
@@ -759,12 +763,12 @@ contract VaultHub is PausableUntilWithRoles {
 
             // redemptions can't be greater than the liability of the vault, so must be capped
             uint256 redemptions = Math256.min(_value, liability);
-            VaultObligations storage obligations = _vaultObligations(_vault);
 
+            VaultObligations storage obligations = _vaultObligations(_vault);
             obligations.redemptions = uint64(redemptions);
 
             // current unsettled treasury fees are used here, because no new fees provided
-            _settleObligations(_vault, _vaultRecord(_vault), obligations.treasuryFees, false);
+            _settleObligations(_vault, _vaultRecord(_vault), obligations.treasuryFees, MAX_UINT256);
         }
     }
 
@@ -778,7 +782,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultObligations storage obligations = _vaultObligations(_vault);
 
         // current unsettled treasury fees are used here, because no new fees provided
-        _settleObligations(_vault, record, obligations.treasuryFees, false);
+        _settleObligations(_vault, record, obligations.treasuryFees, MAX_UINT256);
     }
 
     /// @notice Proves that validators unknown to PDG have correct WC to participate in the vault
@@ -860,7 +864,8 @@ contract VaultHub is PausableUntilWithRoles {
             forcedRebalanceThresholdBP: uint16(_forcedRebalanceThresholdBP),
             infraFeeBP: uint16(_infraFeeBP),
             liquidityFeeBP: uint16(_liquidityFeeBP),
-            reservationFeeBP: uint16(_reservationFeeBP)
+            reservationFeeBP: uint16(_reservationFeeBP),
+            manuallyPausedBeaconChainDeposits: false
         });
 
         _addVault(_vault, connection, record);
@@ -876,11 +881,7 @@ contract VaultHub is PausableUntilWithRoles {
             revert NoLiabilitySharesShouldBeLeft(_vault, liabilityShares_);
         }
 
-        VaultObligations storage obligations = _vaultObligations(_vault);
-        if (obligations.treasuryFees > 0 || obligations.redemptions > 0) {
-            _settleObligations(_vault, _record, obligations.treasuryFees, true);
-        }
-
+        _settleObligationsIfNeeded(_vault, _record, 0);
         _connection.pendingDisconnect = true;
     }
 
@@ -1074,11 +1075,22 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
+    function _settleObligationsIfNeeded(
+        address _vault,
+        VaultRecord storage _record,
+        uint256 _maxAllowedUnsettled
+    ) internal {
+        VaultObligations storage obligations = _vaultObligations(_vault);
+        if (obligations.treasuryFees > 0 || obligations.redemptions > 0) {
+            _settleObligations(_vault, _record, obligations.treasuryFees, _maxAllowedUnsettled);
+        }
+    }
+
     function _settleObligations(
         address _vault,
         VaultRecord storage _record,
         uint256 _treasuryFees,
-        bool _shouldRevert
+        uint256 _maxAllowedUnsettled
     ) internal {
         (
             uint256 valueToRebalance,
@@ -1086,17 +1098,25 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 unsettled
         ) = _updateObligationsValues(_vault, _treasuryFees);
 
-        if (_shouldRevert && unsettled > 0) {
-            revert VaultHasUnsettledObligations(_vault, unsettled);
+        if (unsettled > _maxAllowedUnsettled) revert VaultHasUnsettledObligations(_vault, unsettled);
+
+        if (valueToRebalance > 0) {
+            uint256 sharesToBurn = _getSharesByPooledEth(valueToRebalance);
+            _rebalanceEther(_vault, _record, valueToRebalance, sharesToBurn);
         }
 
-        _processObligationsSettlement(
-            _vault,
-            _record,
-            valueToRebalance,
-            valueToTransferToTreasury,
-            unsettled
-        );
+        if (valueToTransferToTreasury > 0) {
+            _withdraw(_vault, _record, LIDO_LOCATOR.treasury(), valueToTransferToTreasury);
+        }
+
+        IStakingVault vault_ = IStakingVault(_vault);
+        VaultConnection storage connection = _vaultConnection(_vault);
+        bool isBeaconChainDepositsPaused = vault_.beaconChainDepositsPaused();
+
+        if (!isBeaconChainDepositsPaused && unsettled >= OBLIGATIONS_THRESHOLD)
+            vault_.pauseBeaconChainDeposits();
+        if (isBeaconChainDepositsPaused && unsettled == 0 && !connection.manuallyPausedBeaconChainDeposits)
+            vault_.resumeBeaconChainDeposits();
     }
 
     function _updateObligationsValues(
@@ -1129,27 +1149,6 @@ contract VaultHub is PausableUntilWithRoles {
             if (valueToTransferToTreasury > 0)
                 obligations.totalSettledTreasuryFees += uint128(valueToTransferToTreasury);
             emit TreasuryFeesObligationUpdated(_vault, unsettledTreasuryFees, valueToTransferToTreasury);
-        }
-    }
-
-    function _processObligationsSettlement(
-        address _vault,
-        VaultRecord storage _record,
-        uint256 _valueToRebalance,
-        uint256 _valueToTransferToTreasury,
-        uint256 _postTotalUnsettled
-    ) internal {
-        if (_valueToRebalance > 0) {
-            uint256 sharesToBurn = _getSharesByPooledEth(_valueToRebalance);
-            _rebalanceEther(_vault, _record, _valueToRebalance, sharesToBurn);
-        }
-
-        if (_valueToTransferToTreasury > 0) {
-            _withdraw(_vault, _record, LIDO_LOCATOR.treasury(), _valueToTransferToTreasury);
-        }
-
-        if (_postTotalUnsettled >= OBLIGATIONS_THRESHOLD) {
-            // TODO: pause beacon chain deposits if not already paused
         }
     }
 
