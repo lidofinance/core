@@ -546,10 +546,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
-    function _consumeLimit(uint256 requestsCount) internal returns (uint256 requestsLimitedCount) {
+    function _consumeLimit(uint256 requestsCount) internal {
         ExitRequestLimitData memory exitRequestLimitData = EXIT_REQUEST_LIMIT_POSITION.getStorageExitRequestLimit();
         if (!exitRequestLimitData.isExitLimitSet()) {
-            return requestsCount;
+            return;
         }
 
         uint256 limit = exitRequestLimitData.calculateCurrentExitLimit(_getTimestamp());
