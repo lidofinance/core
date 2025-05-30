@@ -152,6 +152,7 @@ contract V3Template is V3Addresses {
 
         emit UpgradeFinished();
     }
+
     function _assertPreUpgradeState() internal view {
         // Check initial implementations of the proxies to be upgraded
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), OLD_LOCATOR_IMPL);
