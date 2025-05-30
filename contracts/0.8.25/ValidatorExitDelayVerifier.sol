@@ -55,7 +55,7 @@ contract ValidatorExitDelayVerifier {
     /// @notice EIP-4788 contract address that provides a mapping of timestamp -> known beacon block root.
     address public constant BEACON_ROOTS = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
-    uint64 constant FAR_FUTURE_EPOCH = type(uint64).max;
+    uint64 private constant FAR_FUTURE_EPOCH = type(uint64).max;
 
     uint64 public immutable GENESIS_TIME;
     uint32 public immutable SLOTS_PER_EPOCH;

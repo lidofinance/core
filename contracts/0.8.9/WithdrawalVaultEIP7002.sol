@@ -8,7 +8,7 @@ pragma solidity 0.8.9;
  * @title A base contract for a withdrawal vault, enables to submit EIP-7002 withdrawal requests.
  */
 abstract contract WithdrawalVaultEIP7002 {
-    address constant WITHDRAWAL_REQUEST = 0x00000961Ef480Eb55e80D19ad83579A64c007002;
+    address public constant WITHDRAWAL_REQUEST = 0x00000961Ef480Eb55e80D19ad83579A64c007002;
 
     event WithdrawalRequestAdded(bytes request);
 
