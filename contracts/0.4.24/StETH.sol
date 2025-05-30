@@ -193,7 +193,7 @@ contract StETH is IERC20, Pausable {
      *
      * @dev This value changes when `approve` or `transferFrom` is called.
      */
-    function allowance(address _owner, address _spender) external view returns (uint256) {
+    function allowance(address _owner, address _spender) public view returns (uint256) {
         return allowances[_owner][_spender];
     }
 

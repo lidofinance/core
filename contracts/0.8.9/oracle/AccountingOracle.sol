@@ -8,6 +8,7 @@ import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
+import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 
 import {UnstructuredStorage} from "contracts/0.8.9/lib/UnstructuredStorage.sol";
 
@@ -495,10 +496,14 @@ contract AccountingOracle is BaseOracle {
                 data.sharesRequestedToBurn,
                 data.withdrawalFinalizationBatches,
                 data.vaultsTotalTreasuryFeesShares,
-                data.vaultsTotalDeficit,
-                data.vaultsDataTreeRoot,
-                data.vaultsDataTreeCid
+                data.vaultsTotalDeficit
             )
+        );
+
+        ILazyOracle(LOCATOR.lazyOracle()).updateReportData(
+            GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
+            data.vaultsDataTreeRoot,
+            data.vaultsDataTreeCid
         );
 
         _storageExtraDataProcessingState().value = ExtraDataProcessingState({

@@ -5,7 +5,6 @@
 pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 
 import {VaultHub} from "./VaultHub.sol";
@@ -47,7 +46,6 @@ contract VaultFactory {
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry in seconds
      * @param _roleAssignments The optional role assignments to be made
-     * @param _extraParams The extra params for the StakingVault
      */
     function createVaultWithDashboard(
         address _defaultAdmin,
@@ -55,120 +53,49 @@ contract VaultFactory {
         address _nodeOperatorManager,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry,
-        Permissions.RoleAssignment[] calldata _roleAssignments,
-        bytes calldata _extraParams
-    ) external payable returns (IStakingVault vault, Dashboard dashboard) {
-        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
-
-        uint256 connectDeposit = VaultHub(vault.vaultHub()).CONNECT_DEPOSIT();
-        if (msg.value < connectDeposit) revert InsufficientFunds();
-
-        bytes memory immutableArgs = abi.encode(vault);
-        dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
-
-        // initialize StakingVault
-        vault.initialize(
-            address(this),
-            _nodeOperator,
-            ILidoLocator(LIDO_LOCATOR).predepositGuarantee(),
-            _extraParams
-        );
-
-        vault.fund{value: msg.value}();
-        vault.lock(connectDeposit);
-        vault.authorizeLidoVaultHub();
-
-        // connect to hub
-        VaultHub(vault.vaultHub()).connectVault(address(vault));
-
-        // transfer ownership of the vault back to the dashboard
-        OwnableUpgradeable(address(vault)).transferOwnership(address(dashboard));
-
-        _finalizeDashboard(
-            dashboard,
-            vault,
-            _defaultAdmin,
-            _nodeOperatorManager,
-            _nodeOperatorFeeBP,
-            _confirmExpiry,
-            _roleAssignments
-        );
-    }
-
-    function createVaultWithoutHubConnection(
-        address _defaultAdmin,
-        address _nodeOperator,
-        address _nodeOperatorManager,
-        uint256 _nodeOperatorFeeBP,
-        uint256 _confirmExpiry,
-        Permissions.RoleAssignment[] calldata _roleAssignments,
-        bytes calldata _extraParams
-    ) external returns (IStakingVault vault, Dashboard dashboard) {
-        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
-
-        bytes memory immutableArgs = abi.encode(vault);
-        dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
-
-        vault.initialize(
-            address(dashboard),
-            _nodeOperator,
-            ILidoLocator(LIDO_LOCATOR).predepositGuarantee(),
-            _extraParams
-        );
-
-        _finalizeDashboard(
-            dashboard,
-            vault,
-            _defaultAdmin,
-            _nodeOperatorManager,
-            _nodeOperatorFeeBP,
-            _confirmExpiry,
-            _roleAssignments
-        );
-    }
-
-    function _finalizeDashboard(
-        Dashboard dashboard,
-        IStakingVault vault,
-        address _defaultAdmin,
-        address _nodeOperatorManager,
-        uint256 _nodeOperatorFeeBP,
-        uint256 _confirmExpiry,
         Permissions.RoleAssignment[] calldata _roleAssignments
-    ) private {
+    ) external payable returns (IStakingVault vault, Dashboard dashboard) {
+        // check if the msg.value is enough to cover the connect deposit
+        ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
+        if (msg.value < VaultHub(payable(locator.vaultHub())).CONNECT_DEPOSIT()) revert InsufficientFunds();
 
-        // If there are extra role assignments to be made,
-        // we initialize the dashboard with the VaultFactory as the default admin,
-        // grant the roles and revoke the VaultFactory's admin role.
-        // Otherwise, we initialize the dashboard with the default admin.
-        if (_roleAssignments.length > 0) {
-            dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
-            // will revert if any role is not controlled by the default admin
-            dashboard.grantRoles(_roleAssignments);
+        // create the vault proxy
+        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
 
-            dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
-            dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
-        } else {
-            dashboard.initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
-        }
+        // create the dashboard proxy
+        bytes memory immutableArgs = abi.encode(address(vault));
+        dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
-        emit VaultCreated(address(vault), address(dashboard));
-        emit DashboardCreated(address(dashboard), _defaultAdmin);
+        // initialize StakingVault with the dashboard address as the owner
+        vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
+
+        // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
+        dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+
+        if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
+
+        dashboard.connectToVaultHub{value: msg.value}();
+
+        dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
+        dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
+
+        emit VaultCreated(address(vault));
+        emit DashboardCreated(address(dashboard), address(vault), _defaultAdmin);
     }
 
     /**
      * @notice Event emitted on a Vault creation
      * @param vault The address of the created Vault
-     * @param owner The address of the owner of the Vault
      */
-    event VaultCreated(address indexed vault, address indexed owner);
+    event VaultCreated(address indexed vault);
 
     /**
      * @notice Event emitted on a Dashboard creation
      * @param dashboard The address of the created Dashboard
+     * @param vault The address of the created Vault
      * @param admin The address of the Dashboard admin
      */
-    event DashboardCreated(address indexed dashboard, address indexed admin);
+    event DashboardCreated(address indexed dashboard, address indexed vault, address indexed admin);
 
     /**
      * @notice Error thrown for when a given value cannot be zero

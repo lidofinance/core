@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { batch, ether, impersonate, log, updateBalance } from "lib";
+import { advanceChainTime, batch, ether, impersonate, log, updateBalance } from "lib";
 import {
   finalizeWithdrawalQueue,
   getProtocolContext,
@@ -15,6 +15,8 @@ import {
 } from "lib/protocol";
 
 import { bailOnFailure, MAX_DEPOSIT, Snapshot, ZERO_HASH } from "test/suite";
+
+import { LogDescriptionExtended } from "../../../lib/protocol/types";
 
 const AMOUNT = ether("100");
 
@@ -33,6 +35,8 @@ describe("Scenario: Protocol Happy Path", () => {
     ctx = await getProtocolContext();
 
     [stEthHolder, stranger] = await ethers.getSigners();
+    await updateBalance(stranger.address, ether("100000000"));
+    await updateBalance(stEthHolder.address, ether("100000000"));
 
     snapshot = await Snapshot.take();
   });
@@ -86,8 +90,6 @@ describe("Scenario: Protocol Happy Path", () => {
   it("Should allow ETH holders to submit 100 ETH stake", async () => {
     const { lido } = ctx.contracts;
 
-    await updateBalance(stranger.address, ether("1000000"));
-
     const strangerBalancesBeforeSubmit = await getBalances(stranger);
 
     log.debug("Stranger before submit", {
@@ -97,7 +99,7 @@ describe("Scenario: Protocol Happy Path", () => {
     });
 
     expect(strangerBalancesBeforeSubmit.stETH).to.equal(0n, "stETH balance before submit");
-    expect(strangerBalancesBeforeSubmit.ETH).to.equal(ether("1000000"), "ETH balance before submit");
+    expect(strangerBalancesBeforeSubmit.ETH).to.equal(ether("100000000"), "ETH balance before submit");
 
     const stakeLimitInfoBefore = await lido.getStakeLimitFullInfo();
 
@@ -292,20 +294,19 @@ describe("Scenario: Protocol Happy Path", () => {
       clAppearedValidators: depositCount,
     };
 
-    const { reportTx, extraDataTx } = (await report(ctx, reportData)) as {
-      reportTx: TransactionResponse;
-      extraDataTx: TransactionResponse;
-    };
+    await advanceChainTime(12n * 60n * 60n);
+    const { reportTx, extraDataTx, data } = await report(ctx, reportData);
+    const wereWithdrawalsFinalized = data.withdrawalFinalizationBatches.length > 0;
 
     log.debug("Oracle report", {
-      "Report transaction": reportTx.hash,
-      "Extra data transaction": extraDataTx.hash,
+      "Report transaction": reportTx!.hash,
+      "Extra data transaction": extraDataTx!.hash,
     });
 
     const strangerBalancesAfterRebase = await getBalances(stranger);
     const treasuryBalanceAfterRebase = await lido.sharesOf(treasuryAddress);
 
-    const reportTxReceipt = (await reportTx.wait()) as ContractTransactionReceipt;
+    const reportTxReceipt = (await reportTx!.wait()) as ContractTransactionReceipt;
 
     const tokenRebasedEvent = ctx.getEvents(reportTxReceipt, "TokenRebased")[0];
 
@@ -313,21 +314,32 @@ describe("Scenario: Protocol Happy Path", () => {
 
     const transferEvents = ctx.getEvents(reportTxReceipt, "Transfer");
 
-    const toBurnerTransfer = transferEvents[0];
-    const toNorTransfer = transferEvents[1];
-    const toSdvtTransfer = transferEvents[2];
-    const toTreasuryTransfer = transferEvents[ctx.flags.withCSM ? 4 : 3];
-    const expectedTransferEvents = ctx.flags.withCSM ? 6 : 4; // +2 events for CSM: 1 extra event to CSM, 1 for extra transfer inside CSM
+    let toBurnerTransfer, toNorTransfer, toSdvtTransfer, toTreasuryTransfer: LogDescriptionExtended | undefined;
+    let numExpectedTransferEvents = 3;
+    if (wereWithdrawalsFinalized) {
+      numExpectedTransferEvents += 1;
+      [toBurnerTransfer, toNorTransfer, toSdvtTransfer] = transferEvents;
+    } else {
+      [toNorTransfer, toSdvtTransfer] = transferEvents;
+    }
+    if (ctx.flags.withCSM) {
+      toTreasuryTransfer = transferEvents[numExpectedTransferEvents];
+      numExpectedTransferEvents += 2;
+    } else {
+      toTreasuryTransfer = transferEvents[numExpectedTransferEvents - 1];
+    }
 
-    expect(transferEvents.length).to.equal(expectedTransferEvents, "Transfer events count");
+    expect(transferEvents.length).to.equal(numExpectedTransferEvents, "Transfer events count");
 
-    expect(toBurnerTransfer?.args.toObject()).to.include(
-      {
-        from: withdrawalQueue.address,
-        to: burner.address,
-      },
-      "Transfer to burner",
-    );
+    if (toBurnerTransfer) {
+      expect(toBurnerTransfer?.args.toObject()).to.include(
+        {
+          from: withdrawalQueue.address,
+          to: burner.address,
+        },
+        "Transfer to burner",
+      );
+    }
 
     expect(toNorTransfer?.args.toObject()).to.include(
       {
@@ -386,13 +398,17 @@ describe("Scenario: Protocol Happy Path", () => {
     });
 
     expect(ctx.getEvents(reportTxReceipt, "TokenRebased")[0]).not.to.be.undefined;
-    expect(ctx.getEvents(reportTxReceipt, "WithdrawalsFinalized")[0]).not.to.be.undefined;
+    if (wereWithdrawalsFinalized) {
+      expect(ctx.getEvents(reportTxReceipt, "WithdrawalsFinalized")[0]).not.to.be.undefined;
+    }
 
-    const burntSharesEvent = ctx.getEvents(reportTxReceipt, "StETHBurnt")[0];
+    let burntShares = 0n;
+    if (wereWithdrawalsFinalized) {
+      const burntSharesEvent = ctx.getEvents(reportTxReceipt, "StETHBurnt")[0];
+      expect(burntSharesEvent).not.to.be.undefined;
+      burntShares = burntSharesEvent.args[2];
+    }
 
-    expect(burntSharesEvent).not.to.be.undefined;
-
-    const burntShares: bigint = burntSharesEvent.args[2];
     const [, , preTotalShares, , postTotalShares, , sharesMintedAsFees] = tokenRebasedEvent.args;
 
     expect(postTotalShares).to.equal(preTotalShares + sharesMintedAsFees - burntShares, "Post total shares");

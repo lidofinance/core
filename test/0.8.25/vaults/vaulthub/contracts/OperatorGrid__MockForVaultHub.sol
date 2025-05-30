@@ -14,14 +14,16 @@ contract OperatorGrid__MockForVaultHub {
         uint96 liabilityShares;
         uint16 reserveRatioBP;
         uint16 forcedRebalanceThresholdBP;
-        uint16 treasuryFeeBP;
+        uint16 infraFeeBP;
+        uint16 liquidityFeeBP;
+        uint16 reservationFeeBP;
     }
 
     Tier[] public tiers;
     mapping(address vault => uint256 tierId) public vaultTier;
 
     function initialize(uint256 _defaultShareLimit) external {
-        tiers.push(Tier(address(1), uint96(_defaultShareLimit), 0, 2000, 1800, 500));
+        tiers.push(Tier(address(1), uint96(_defaultShareLimit), 0, 2000, 1800, 500, 100, 100));
     }
 
     function changeVaultTierParams(address _vault, TierParams calldata _tierParams) external {
@@ -29,7 +31,9 @@ contract OperatorGrid__MockForVaultHub {
         tierParams.shareLimit = uint96(_tierParams.shareLimit);
         tierParams.reserveRatioBP = uint16(_tierParams.reserveRatioBP);
         tierParams.forcedRebalanceThresholdBP = uint16(_tierParams.forcedRebalanceThresholdBP);
-        tierParams.treasuryFeeBP = uint16(_tierParams.treasuryFeeBP);
+        tierParams.infraFeeBP = uint16(_tierParams.infraFeeBP);
+        tierParams.liquidityFeeBP = uint16(_tierParams.liquidityFeeBP);
+        tierParams.reservationFeeBP = uint16(_tierParams.reservationFeeBP);
     }
 
     function vaultInfo(
@@ -43,7 +47,9 @@ contract OperatorGrid__MockForVaultHub {
             uint256 shareLimit,
             uint256 reserveRatioBP,
             uint256 forcedRebalanceThresholdBP,
-            uint256 treasuryFeeBP
+            uint256 infraFeeBP,
+            uint256 liquidityFeeBP,
+            uint256 reservationFeeBP
         )
     {
         Tier memory tierParams = tiers[vaultTier[_vault]];
@@ -53,7 +59,9 @@ contract OperatorGrid__MockForVaultHub {
         shareLimit = tierParams.shareLimit;
         reserveRatioBP = tierParams.reserveRatioBP;
         forcedRebalanceThresholdBP = tierParams.forcedRebalanceThresholdBP;
-        treasuryFeeBP = tierParams.treasuryFeeBP;
+        infraFeeBP = tierParams.infraFeeBP;
+        liquidityFeeBP = tierParams.liquidityFeeBP;
+        reservationFeeBP = tierParams.reservationFeeBP;
     }
 
     function resetVaultTier(address _vault) external {

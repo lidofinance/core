@@ -15,8 +15,7 @@ contract VaultFactory__MockForStakingVault is UpgradeableBeacon {
 
     function createVault(address _owner, address _operator, address _depositor) external {
         IStakingVault vault = IStakingVault(address(new BeaconProxy(address(this), "")));
-        vault.initialize(address(this), _operator, _depositor, "");
-        vault.authorizeLidoVaultHub();
+        vault.initialize(address(this), _operator, _depositor);
         OwnableUpgradeable(address(vault)).transferOwnership(_owner);
 
         emit VaultCreated(address(vault));

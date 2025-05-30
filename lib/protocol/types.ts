@@ -2,6 +2,10 @@ import { BaseContract as EthersBaseContract, ContractTransactionReceipt, Interfa
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
+export type LogDescriptionExtended = LogDescription & {
+  address?: string;
+};
+
 import {
   Accounting,
   AccountingOracle,
@@ -10,7 +14,9 @@ import {
   DepositSecurityModule,
   HashConsensus,
   ICSModule,
+  IStakingModule,
   Kernel,
+  LazyOracle,
   Lido,
   LidoExecutionLayerRewardsVault,
   LidoLocator,
@@ -64,6 +70,7 @@ export type ProtocolNetworkItems = {
   vaultHub: string;
   predepositGuarantee: string;
   operatorGrid: string;
+  lazyOracle: string;
 };
 
 export interface ContractTypes {
@@ -90,7 +97,9 @@ export interface ContractTypes {
   UpgradeableBeacon: UpgradeableBeacon;
   VaultHub: VaultHub;
   OperatorGrid: OperatorGrid;
+  IStakingModule: IStakingModule;
   ICSModule: ICSModule;
+  LazyOracle: LazyOracle;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -126,7 +135,7 @@ export type AragonContracts = {
 export type StakingModuleContracts = {
   nor: LoadedContract<NodeOperatorsRegistry>;
   sdvt: LoadedContract<NodeOperatorsRegistry>;
-  csm?: LoadedContract<ICSModule>;
+  csm?: LoadedContract<IStakingModule>;
 };
 
 export type StakingModuleName = "nor" | "sdvt";
@@ -145,6 +154,7 @@ export type VaultsContracts = {
   vaultHub: LoadedContract<VaultHub>;
   predepositGuarantee: LoadedContract<PredepositGuarantee>;
   operatorGrid: LoadedContract<OperatorGrid>;
+  lazyOracle: LoadedContract<LazyOracle>;
 };
 
 export type ProtocolContracts = { locator: LoadedContract<LidoLocator> } & CoreContracts &
@@ -177,5 +187,21 @@ export type ProtocolContext = {
     receipt: ContractTransactionReceipt,
     eventName: string,
     extraInterfaces?: Interface[], // additional interfaces to parse
-  ) => LogDescription[];
+  ) => LogDescriptionExtended[];
 };
+
+export type RequireAllKeys<O, A extends readonly (keyof O)[]> =
+  Exclude<keyof O, A[number]> extends never // ← nothing missing?
+    ? A[number] extends keyof O
+      ? A
+      : never //   and nothing extra?
+    : never;
+
+/**
+ * Helper function to ensure all keys of an object are present in an array
+ * @param arr - The array of keys to check
+ * @returns The array of keys
+ */
+export function keysOf<O>() {
+  return <const A extends readonly (keyof O)[]>(arr: RequireAllKeys<O, A>) => arr;
+}

@@ -8,7 +8,6 @@ import {StETHPermit} from "contracts/0.4.24/StETHPermit.sol";
 contract StETHPermit__HarnessForDashboard is StETHPermit {
     uint256 public totalPooledEther;
     uint256 public totalShares;
-    mapping(address => uint256) private shares;
 
     constructor() public {
         _resume();

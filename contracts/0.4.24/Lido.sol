@@ -15,6 +15,11 @@ import {StETHPermit} from "./StETHPermit.sol";
 
 import {Versioned} from "./utils/Versioned.sol";
 
+
+interface IBurnerMigration {
+    function migrate(address _oldBurner) external;
+}
+
 interface IStakingRouter {
     function deposit(uint256 _depositsCount, uint256 _stakingModuleId, bytes _depositCalldata) external payable;
 
@@ -29,10 +34,7 @@ interface IStakingRouter {
 
     function getWithdrawalCredentials() external view returns (bytes32);
 
-    function getStakingFeeAggregateDistributionE4Precision()
-        external
-        view
-        returns (uint16 modulesFee, uint16 treasuryFee);
+    function getStakingFeeAggregateDistributionE4Precision() external view returns (uint16 modulesFee, uint16 treasuryFee);
 }
 
 interface IWithdrawalQueue {
@@ -210,11 +212,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         emit LidoLocatorSet(_lidoLocator);
         _initializeEIP712StETH(_eip712StETH);
 
-        // set infinite allowance for burner from withdrawal queue
-        // to burn finalized requests' shares
-        _approve(ILidoLocator(_lidoLocator).withdrawalQueue(), ILidoLocator(_lidoLocator).burner(), INFINITE_ALLOWANCE);
+        _setContractVersion(3);
 
-        _initialize_v3();
+        _approve(getLidoLocator().withdrawalQueue(), getLidoLocator().burner(), INFINITE_ALLOWANCE);
         initialized();
     }
 
@@ -222,19 +222,35 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @notice A function to finalize upgrade to v3 (from v2). Can be called only once
      *
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
+     * @param _oldBurner The address of the old Burner contract to migrate from
+     * @param _contractsWithBurnerAllowances Contracts that have allowances for the old burner to be migrated
      */
-    function finalizeUpgrade_v3() external {
+    function finalizeUpgrade_v3(address _oldBurner, address[] _contractsWithBurnerAllowances) external {
         require(hasInitialized(), "NOT_INITIALIZED");
         _checkContractVersion(2);
+        require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
+        address burner = getLidoLocator().burner();
+        require(_oldBurner != burner, "OLD_BURNER_SAME_AS_NEW");
 
-        _initialize_v3();
-    }
-
-    /**
-     * initializer for the Lido version "3"
-     */
-    function _initialize_v3() internal {
         _setContractVersion(3);
+
+        // migrate burner stETH balance
+        uint256 oldBurnerShares = _sharesOf(_oldBurner);
+        if (oldBurnerShares > 0) {
+            uint256 oldBurnerBalance = getPooledEthByShares(oldBurnerShares);
+            _transferShares(_oldBurner, burner, oldBurnerShares);
+            _emitTransferEvents(_oldBurner, burner, oldBurnerBalance, oldBurnerShares);
+        }
+
+        // initialize new burner with state from the old burner
+        IBurnerMigration(burner).migrate(_oldBurner);
+
+        // migrating allowances
+        for (uint256 i = 0; i < _contractsWithBurnerAllowances.length; i++) {
+            uint256 oldAllowance = allowance(_contractsWithBurnerAllowances[i], _oldBurner);
+            _approve(_contractsWithBurnerAllowances[i], _oldBurner, 0);
+            _approve(_contractsWithBurnerAllowances[i], burner, oldAllowance);
+        }
     }
 
     /**
