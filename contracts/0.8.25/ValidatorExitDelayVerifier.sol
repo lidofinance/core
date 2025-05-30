@@ -100,7 +100,7 @@ contract ValidatorExitDelayVerifier {
     error UnsupportedSlot(uint64 slot);
     error InvalidPivotSlot();
     error ZeroLidoLocatorAddress();
-    error ExitIstNotEligibleOnProvableBeaconBlock(
+    error ExitIsNotEligibleOnProvableBeaconBlock(
         uint256 provableBeaconBlockTimestamp,
         uint256 eligibleExitRequestTimestamp
     );
@@ -341,7 +341,7 @@ contract ValidatorExitDelayVerifier {
             : earliestPossibleVoluntaryExitTimestamp;
 
         if (referenceSlotTimestamp < eligibleExitRequestTimestamp) {
-            revert ExitIstNotEligibleOnProvableBeaconBlock(referenceSlotTimestamp, eligibleExitRequestTimestamp);
+            revert ExitIsNotEligibleOnProvableBeaconBlock(referenceSlotTimestamp, eligibleExitRequestTimestamp);
         }
 
         return referenceSlotTimestamp - eligibleExitRequestTimestamp;
