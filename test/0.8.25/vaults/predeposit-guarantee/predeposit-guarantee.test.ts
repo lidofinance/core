@@ -12,17 +12,12 @@ import {
   OssifiableProxy,
   PredepositGuarantee,
   SSZMerkleTree,
-  StakingVault,
-  StakingVault__factory,
-  StakingVault__MockForVaultHub,
-  VaultFactory__MockForStakingVault,
-  VaultHub__MockForStakingVault,
+  StakingVault__MockForPDG,
 } from "typechain-types";
 
 import {
   addressToWC,
   ether,
-  findEvents,
   generateBeaconHeader,
   generatePostDeposit,
   generatePredeposit,
@@ -50,42 +45,14 @@ describe("PredepositGuarantee.sol", () => {
   let pdgImpl: PredepositGuarantee;
   let pdg: PredepositGuarantee;
   let locator: LidoLocator;
-  let vaultHub: VaultHub__MockForStakingVault;
   let sszMerkleTree: SSZMerkleTree;
-  let stakingVault: StakingVault;
-  let wcMockStakingVault: StakingVault__MockForVaultHub;
+  let stakingVault: StakingVault__MockForPDG;
   let depositContract: DepositContract__MockForStakingVault;
   let rejector: EthRejector;
 
   let firstValidatorLeafIndex: bigint;
 
   let originalState: string;
-
-  async function deployStakingVault(
-    owner: HardhatEthersSigner,
-    operator: HardhatEthersSigner,
-    vaultHub_: VaultHub__MockForStakingVault,
-  ): Promise<StakingVault> {
-    const stakingVaultImplementation_ = await ethers.deployContract("StakingVault", [vaultHub_, depositContract]);
-
-    // deploying factory/beacon
-    const vaultFactory_: VaultFactory__MockForStakingVault = await ethers.deployContract(
-      "VaultFactory__MockForStakingVault",
-      [await stakingVaultImplementation_.getAddress()],
-    );
-
-    // deploying beacon proxy
-    const vaultCreation = await vaultFactory_.createVault(owner, operator, pdg).then((tx) => tx.wait());
-    if (!vaultCreation) throw new Error("Vault creation failed");
-    const events = findEvents(vaultCreation, "VaultCreated");
-    if (events.length != 1) throw new Error("There should be exactly one VaultCreated event");
-    const vaultCreatedEvent = events[0];
-
-    const stakingVault_ = StakingVault__factory.connect(vaultCreatedEvent.args.vault, owner);
-    expect(await stakingVault_.owner()).to.equal(owner);
-
-    return stakingVault_;
-  }
 
   before(async () => {
     [deployer, admin, vaultOwner, vaultOperator, vaultOperatorGuarantor, pauser, stranger] = await ethers.getSigners();
@@ -100,6 +67,9 @@ describe("PredepositGuarantee.sol", () => {
 
     // ether deposit contract
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
+
+    // staking vault
+    stakingVault = await ethers.deployContract("StakingVault__MockForPDG", [vaultOwner, vaultOperator]);
 
     // PDG
     pdgImpl = await ethers.deployContract(
@@ -117,10 +87,6 @@ describe("PredepositGuarantee.sol", () => {
     // PDG dependants
     locator = await deployLidoLocator({ predepositGuarantee: pdg });
     expect(await locator.predepositGuarantee()).to.equal(await pdg.getAddress());
-    vaultHub = await ethers.deployContract("VaultHub__MockForStakingVault", [locator]);
-    stakingVault = await deployStakingVault(vaultOwner, vaultOperator, vaultHub);
-    wcMockStakingVault = await ethers.deployContract("StakingVault__MockForVaultHub", [vaultHub, depositContract]);
-    await wcMockStakingVault.initialize(vaultOwner, vaultOperator, pdg, "0x00");
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -190,10 +156,8 @@ describe("PredepositGuarantee.sol", () => {
       await expect(predepositTX)
         .to.emit(pdg, "ValidatorPreDeposited")
         .withArgs(deposit.pubkey, vaultOperator, stakingVault, vaultWC)
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(pdg, 1, deposit.amount)
-        .to.emit(depositContract, "DepositEvent")
-        .withArgs(deposit.pubkey, vaultWC, deposit.signature, deposit.depositDataRoot);
+        .to.emit(stakingVault, "Mock_depositToBeaconChain")
+        .withArgs(pdg, 1, deposit.amount);
 
       [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
@@ -237,10 +201,8 @@ describe("PredepositGuarantee.sol", () => {
       await expect(proveAndDepositTx)
         .to.emit(pdg, "ValidatorProven")
         .withArgs(validator.container.pubkey, vaultOperator, stakingVault, vaultWC)
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(pdg, 1, postDepositData.amount)
-        .to.emit(depositContract, "DepositEvent")
-        .withArgs(postDepositData.pubkey, vaultWC, postDepositData.signature, postDepositData.depositDataRoot);
+        .to.emit(stakingVault, "Mock_depositToBeaconChain")
+        .withArgs(pdg, 1, postDepositData.amount);
 
       [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
@@ -585,10 +547,10 @@ describe("PredepositGuarantee.sol", () => {
         );
         await expect(
           pdg.connect(vaultOwner).predeposit(stakingVault, [deposit], [depositY]),
-        ).to.be.revertedWithCustomError(pdg, "NotNodeOperator");
+        ).to.be.revertedWithCustomError(pdg, "NotDepositor");
         await expect(
           pdg.connect(stranger).predeposit(stakingVault, [deposit], [depositY]),
-        ).to.be.revertedWithCustomError(pdg, "NotNodeOperator");
+        ).to.be.revertedWithCustomError(pdg, "NotDepositor");
       });
 
       it("reverts when using locked balance", async () => {
@@ -729,7 +691,7 @@ describe("PredepositGuarantee.sol", () => {
         await expect(predepositTX)
           .to.emit(pdg, "BalanceLocked")
           .withArgs(vaultOperator, totalBalance, totalBalance)
-          .to.emit(stakingVault, "DepositedToBeaconChain")
+          .to.emit(stakingVault, "Mock_depositToBeaconChain")
           .withArgs(pdg, batchCount, totalBalance);
 
         expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([totalBalance, totalBalance]);
@@ -739,7 +701,7 @@ describe("PredepositGuarantee.sol", () => {
 
     context("invalid WC vault", () => {
       it("reverts when vault has WC with wrong version", async () => {
-        let wc = await wcMockStakingVault.withdrawalCredentials();
+        let wc = await stakingVault.withdrawalCredentials();
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("200") });
 
         const min = await pdg.MIN_SUPPORTED_WC_VERSION();
@@ -751,39 +713,39 @@ describe("PredepositGuarantee.sol", () => {
         for (let version = 0n; version < 5n; version++) {
           wc = `0x0${version.toString()}` + wc.slice(4);
           const predeposit = await generatePredeposit(generateValidator(wc));
-          await wcMockStakingVault.mock__setWithdrawalCredentials(wc);
+          await stakingVault.mock__setWithdrawalCredentials(wc);
 
           const shouldRevert = version < min || version > max;
 
           if (shouldRevert) {
-            await expect(pdg.predeposit(wcMockStakingVault, [predeposit.deposit], [predeposit.depositY]))
+            await expect(pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]))
               .to.be.revertedWithCustomError(pdg, "WithdrawalCredentialsInvalidVersion")
               .withArgs(version);
           } else {
-            await pdg.predeposit(wcMockStakingVault, [predeposit.deposit], [predeposit.depositY]);
+            await pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]);
           }
         }
       });
 
       it("reverts when WC are misformed", async () => {
-        let wc = await wcMockStakingVault.withdrawalCredentials();
+        let wc = await stakingVault.withdrawalCredentials();
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("200") });
         wc = wc.slice(0, 4) + "ff" + wc.slice(6);
-        await wcMockStakingVault.mock__setWithdrawalCredentials(wc);
+        await stakingVault.mock__setWithdrawalCredentials(wc);
         const predeposit = await generatePredeposit(generateValidator(wc));
-        await expect(pdg.predeposit(wcMockStakingVault, [predeposit.deposit], [predeposit.depositY]))
+        await expect(pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]))
           .to.be.revertedWithCustomError(pdg, "WithdrawalCredentialsMisformed")
           .withArgs(wc);
       });
 
       it("reverts when WC do not belong to the vault", async () => {
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("200") });
-        await wcMockStakingVault.mock__setWithdrawalCredentials(addressToWC(stranger.address));
-        const wc = await wcMockStakingVault.withdrawalCredentials();
+        await stakingVault.mock__setWithdrawalCredentials(addressToWC(stranger.address));
+        const wc = await stakingVault.withdrawalCredentials();
         const predeposit = await generatePredeposit(generateValidator(wc));
-        await expect(pdg.predeposit(wcMockStakingVault, [predeposit.deposit], [predeposit.depositY]))
+        await expect(pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY]))
           .to.be.revertedWithCustomError(pdg, "WithdrawalCredentialsMismatch")
-          .withArgs(await wcMockStakingVault.getAddress(), stranger.address);
+          .withArgs(await stakingVault.getAddress(), stranger.address);
       });
     });
 
@@ -990,13 +952,13 @@ describe("PredepositGuarantee.sol", () => {
 
         await expect(pdg.connect(stranger).depositToBeaconChain(stakingVault, [deposit])).to.be.revertedWithCustomError(
           pdg,
-          "NotNodeOperator",
+          "NotDepositor",
         );
       });
 
       it("reverts to deposit someone else validators", async () => {
-        const sideStakingVault = await deployStakingVault(stranger, stranger, vaultHub);
-        const sameNOVault = await deployStakingVault(stranger, vaultOperator, vaultHub);
+        const sideStakingVault = await ethers.deployContract("StakingVault__MockForPDG", [stranger, stranger]);
+        const sameNOVault = await ethers.deployContract("StakingVault__MockForPDG", [stranger, vaultOperator]);
         const sideValidator = generateValidator(await sideStakingVault.withdrawalCredentials());
         const mainValidator = generateValidator(await stakingVault.withdrawalCredentials());
         const sameNOValidator = generateValidator(await sameNOVault.withdrawalCredentials());
@@ -1080,7 +1042,7 @@ describe("PredepositGuarantee.sol", () => {
 
         await expect(pdg.depositToBeaconChain(stakingVault, [mainDeposit, sideDeposit])).to.be.revertedWithCustomError(
           pdg,
-          "NotNodeOperator",
+          "NotDepositor",
         );
 
         await expect(pdg.depositToBeaconChain(stakingVault, [mainDeposit, sameNoDeposit]))
