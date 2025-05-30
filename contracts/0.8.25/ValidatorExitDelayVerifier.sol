@@ -186,7 +186,7 @@ contract ValidatorExitDelayVerifier {
 
             uint256 eligibleToExitInSec = _getSecondsSinceExitIsEligible(
                 deliveredTimestamp,
-                witness,
+                witness.activationEpoch,
                 proofSlotTimestamp
             );
 
@@ -233,7 +233,7 @@ contract ValidatorExitDelayVerifier {
 
             uint256 eligibleToExitInSec = _getSecondsSinceExitIsEligible(
                 deliveredTimestamp,
-                witness,
+                witness.activationEpoch,
                 proofSlotTimestamp
             );
 
@@ -325,13 +325,13 @@ contract ValidatorExitDelayVerifier {
      */
     function _getSecondsSinceExitIsEligible(
         uint256 deliveredTimestamp,
-        ValidatorWitness calldata witness,
+        uint256 activationEpoch,
         uint256 referenceSlotTimestamp
     ) internal view returns (uint256) {
         // The earliest a validator can voluntarily exit is after the Shard Committee Period
         // subsequent to its activation epoch.
         uint256 earliestPossibleVoluntaryExitTimestamp = GENESIS_TIME +
-            (witness.activationEpoch * SLOTS_PER_EPOCH * SECONDS_PER_SLOT) +
+            (activationEpoch * SLOTS_PER_EPOCH * SECONDS_PER_SLOT) +
             SHARD_COMMITTEE_PERIOD_IN_SECONDS;
 
         // The actual eligible timestamp is the max between the exit request submission time
