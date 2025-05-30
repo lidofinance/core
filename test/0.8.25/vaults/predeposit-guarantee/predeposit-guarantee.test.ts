@@ -17,6 +17,7 @@ import {
 
 import {
   addressToWC,
+  certainAddress,
   ether,
   generateBeaconHeader,
   generatePostDeposit,
@@ -956,6 +957,13 @@ describe("PredepositGuarantee.sol", () => {
         );
       });
 
+      it("reverts when deposits are delegated to a depositor", async () => {
+        await pdg.connect(vaultOperator).setNodeOperatorDepositor(stranger);
+        const validator = generateValidator();
+        const deposit = generatePostDeposit(validator.container);
+        await expect(pdg.connect(vaultOperator).depositToBeaconChain(stakingVault, [deposit])).to.be.revertedWithCustomError(pdg, "NotDepositor");
+      });
+
       it("reverts to deposit someone else validators", async () => {
         const sideStakingVault = await ethers.deployContract("StakingVault__MockForPDG", [stranger, stranger]);
         const sameNOVault = await ethers.deployContract("StakingVault__MockForPDG", [stranger, vaultOperator]);
@@ -1402,6 +1410,26 @@ describe("PredepositGuarantee.sol", () => {
         validatorStatus = await pdg.validatorStatus(invalidValidator.container.pubkey);
         expect(validatorStatus.stage).to.equal(4n); // 4n is COMPENSATED
       });
+    });
+  });
+
+  context("nodeOperatorDepositor", () => {
+    it("returns the node operator if not set", async () => {
+      expect(await pdg.nodeOperatorDepositor(vaultOperator)).to.equal(vaultOperator);
+    });
+
+    it("returns the depositor if set", async () => {
+      const depositor = certainAddress("depositor");
+      await expect(pdg.setNodeOperatorDepositor(depositor)).to.emit(pdg, "DepositorSet").withArgs(vaultOperator, depositor, vaultOperator);
+      expect(await pdg.nodeOperatorDepositor(vaultOperator)).to.equal(depositor);
+    });
+
+    it("reverts if trying to set the same depositor", async () => {
+      await expect(pdg.setNodeOperatorDepositor(vaultOperator)).to.be.revertedWithCustomError(pdg, "SameDepositor");
+    });
+
+    it("reverts if trying to set the depositor to zero address", async () => {
+      await expect(pdg.setNodeOperatorDepositor(ZeroAddress)).to.be.revertedWithCustomError(pdg, "ZeroArgument");
     });
   });
 
