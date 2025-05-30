@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { AccessControlConfirmable__Harness } from "typechain-types";
 
-import { advanceChainTime, days, getNextBlockTimestamp } from "lib";
+import { advanceChainTime, days, getNextBlockTimestamp,hours } from "lib";
 
 describe("AccessControlConfirmable.sol", () => {
   let harness: AccessControlConfirmable__Harness;
@@ -33,7 +33,7 @@ describe("AccessControlConfirmable.sol", () => {
 
   context("constants", () => {
     it("returns the correct constants", async () => {
-      expect(await harness.MIN_CONFIRM_EXPIRY()).to.equal(days(1n));
+      expect(await harness.MIN_CONFIRM_EXPIRY()).to.equal(hours(1n));
       expect(await harness.MAX_CONFIRM_EXPIRY()).to.equal(days(30n));
     });
   });

@@ -224,6 +224,20 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Connects the vault to VaultHub
+     * @dev Requires msg.value to be at least CONNECT_DEPOSIT
+     */
+    function connectToVaultHub() external payable {
+        if (msg.value < VAULT_HUB.CONNECT_DEPOSIT()) revert InsufficientFunds();
+
+        _fund(msg.value);
+        _lock(VAULT_HUB.CONNECT_DEPOSIT());
+        _authorizeLidoVaultHub();
+
+        VAULT_HUB.connectVault(address(_stakingVault()));
+    }
+
+    /**
      * @notice Disconnects the underlying StakingVault from the hub and passing its ownership to Dashboard.
      *         After receiving the final report, one can call reconnectToVaultHub() to reconnect to the hub
      *         or abandonDashboard() to transfer the ownership to a new owner.
@@ -522,8 +536,8 @@ contract Dashboard is NodeOperatorFee {
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
      */
-    function requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) external {
-        _requestTierChange(_tierId, _requestedShareLimit);
+    function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external {
+        _changeTier(_tierId, _requestedShareLimit);
     }
 
     // ==================== Internal Functions ====================
@@ -667,4 +681,9 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error when the StakingVault is still connected to the VaultHub.
      */
     error ConnectedToVaultHub();
+
+    /**
+     * @notice Error thrown when insufficient funds are provided to connect to VaultHub
+     */
+    error InsufficientFunds();
 }

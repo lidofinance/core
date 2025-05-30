@@ -207,7 +207,7 @@ describe("Permissions", () => {
       await checkSoleMember(validatorExitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
       await checkSoleMember(validatorWithdrawalTriggerer, await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await checkSoleMember(disconnecter, await permissions.VOLUNTARY_DISCONNECT_ROLE());
-      await checkSoleMember(tierChanger, await permissions.REQUEST_TIER_CHANGE_ROLE());
+      await checkSoleMember(tierChanger, await permissions.CHANGE_TIER_ROLE());
     });
   });
 

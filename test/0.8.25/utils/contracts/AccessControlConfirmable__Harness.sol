@@ -13,6 +13,7 @@ contract AccessControlConfirmable__Harness is AccessControlConfirmable {
 
     constructor(address _admin) {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        __Confirmations_init();
     }
 
     function confirmingRoles() public pure returns (bytes32[] memory) {

@@ -54,6 +54,14 @@ contract VaultHub__MockForOperatorGrid {
         uint256 _liquidityFeeBP,
         uint256 _reservationFeeBP
     ) external {
+        VaultSocket storage socket = vaultSockets[_vault];
+        if (socket.vault == address(0)) revert NotConnectedToHub(_vault);
+
+        socket.shareLimit = uint96(_shareLimit);
+        socket.reserveRatioBP = uint16(_reserveRatioBP);
+        socket.forcedRebalanceThresholdBP = uint16(_forcedRebalanceThresholdBP);
+        socket.treasuryFeeBP = uint16(_treasuryFeeBP);
+
         emit VaultConnectionUpdated(
             _vault,
             _shareLimit,
@@ -74,4 +82,6 @@ contract VaultHub__MockForOperatorGrid {
         uint256 liquidityFeeBP,
         uint256 reservationFeeBP
     );
+
+    error NotConnectedToHub(address vault);
 }

@@ -5,7 +5,14 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
-import { certainAddress, ether, generatePostDeposit, generatePredeposit, generateValidator } from "lib";
+import {
+  certainAddress,
+  ether,
+  generatePostDeposit,
+  generatePredeposit,
+  generateValidator,
+  getNextBlockTimestamp,
+} from "lib";
 import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLido } from "lib/protocol";
 import { getProofAndDepositData, getPubkeys, reportVaultDataWithProof, VaultRoles } from "lib/protocol/helpers/vaults";
 
@@ -131,10 +138,70 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       });
     });
 
+    it("Can change the tier", async () => {
+      const { operatorGrid } = ctx.contracts;
+      const agentSigner = await ctx.getSigner("agent");
+
+      await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, 1000);
+      await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
+        {
+          shareLimit: 1000,
+          reserveRatioBP: 2000,
+          forcedRebalanceThresholdBP: 1800,
+          treasuryFeeBP: 500,
+        },
+      ]);
+
+      const ownerMemberIndex = ethers.zeroPadValue(await dashboard.getAddress(), 32);
+      const operatorMemberIndex = ethers.zeroPadValue(await nodeOperator.getAddress(), 32);
+      let expiryTimestamp = (await getNextBlockTimestamp()) + (await operatorGrid.getConfirmExpiry());
+      const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
+        await stakingVault.getAddress(),
+        1,
+        1000,
+      ]);
+
+      await expect(dashboard.connect(roles.tierChanger).changeTier(1n, 1000n))
+        .to.emit(operatorGrid, "RoleMemberConfirmed")
+        .withArgs(dashboard, ownerMemberIndex, expiryTimestamp, msgData);
+
+      expiryTimestamp = (await getNextBlockTimestamp()) + (await operatorGrid.getConfirmExpiry());
+      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n))
+        .to.emit(operatorGrid, "RoleMemberConfirmed")
+        .withArgs(nodeOperator, operatorMemberIndex, expiryTimestamp, msgData)
+        .to.emit(operatorGrid, "TierChanged")
+        .withArgs(stakingVault, 1);
+    });
+
     describe("Funding", () => {
       it("Can fund the vault", async () => {
         const amount = ether("10");
         const balance = await ethers.provider.getBalance(stakingVault);
+
+        await expect(stakingVault.connect(owner).fund({ value: amount }))
+          .to.emit(stakingVault, "EtherFunded")
+          .withArgs(amount);
+
+        expect(await ethers.provider.getBalance(stakingVault)).to.equal(balance + amount);
+      });
+
+      it("Can withdraw the funds", async () => {
+        const balance = await ethers.provider.getBalance(stranger);
+        const amount = await ethers.provider.getBalance(stakingVault);
+
+        await expect(stakingVault.connect(owner).withdraw(stranger, amount))
+          .to.emit(stakingVault, "EtherWithdrawn")
+          .withArgs(stranger, amount);
+
+        expect(await ethers.provider.getBalance(stranger)).to.equal(balance + amount);
+      });
+    });
+
+    describe("Locking", () => {
+      it("Rejects to lock more than funded", async () => {
+        const amount = ether("10");
+
+        await dashboard.connect(roles.funder).fund({ value: amount });
 
         await expect(stakingVault.connect(owner).fund({ value: amount }))
           .to.emit(stakingVault, "EtherFunded")

@@ -130,7 +130,7 @@ export async function createVaultWithDashboard(
     dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
     dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
     dashboard.VOLUNTARY_DISCONNECT_ROLE(),
-    dashboard.REQUEST_TIER_CHANGE_ROLE(),
+    dashboard.CHANGE_TIER_ROLE(),
     dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
   ]);
 

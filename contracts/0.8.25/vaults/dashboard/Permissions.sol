@@ -97,7 +97,7 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev Permission for requesting change of tier on the OperatorGrid.
      */
-    bytes32 public constant REQUEST_TIER_CHANGE_ROLE = keccak256("vaults.Permissions.RequestTierChange");
+    bytes32 public constant CHANGE_TIER_ROLE = keccak256("vaults.Permissions.ChangeTier");
 
     /**
      * @notice Address of the implementation contract
@@ -350,16 +350,12 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the REQUEST_TIER_CHANGE_ROLE and requests a change of the tier on the OperatorGrid.
+     * @dev Checks the CHANGE_TIER_ROLE and requests a change of the tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
      */
-    function _requestTierChange(
-        uint256 _tierId,
-        uint256 _requestedShareLimit
-    ) internal onlyRoleMemberOrAdmin(REQUEST_TIER_CHANGE_ROLE) {
-        OperatorGrid(LIDO_LOCATOR.operatorGrid())
-            .requestTierChange(address(_stakingVault()), _tierId, _requestedShareLimit);
+    function _changeTier(uint256 _tierId, uint256 _requestedShareLimit) internal onlyRoleMemberOrAdmin(CHANGE_TIER_ROLE) {
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).changeTier(address(_stakingVault()), _tierId, _requestedShareLimit);
     }
 
     /**
