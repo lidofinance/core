@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -14,18 +15,10 @@ import {
   WstETH__HarnessForVault,
 } from "typechain-types";
 
-import {
-  advanceChainTime,
-  days,
-  ether,
-  findEvents,
-  getCurrentBlockTimestamp,
-  getNextBlockTimestamp,
-} from "lib";
+import { advanceChainTime, days, ether, findEvents, getCurrentBlockTimestamp, getNextBlockTimestamp } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
-import { ZeroAddress } from "ethers";
 
 const BP_BASE = 10000n;
 
@@ -672,7 +665,7 @@ describe("NodeOperatorFee.sol", () => {
         .connect(nodeOperatorManager)
         .grantRole(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), vaultOwner);
 
-      const nodeOperatorFeeRate = await nodeOperatorFee.nodeOperatorFeeRate();
+      const noFeeRate = await nodeOperatorFee.nodeOperatorFeeRate();
 
       const rewards = ether("1");
 
@@ -685,7 +678,7 @@ describe("NodeOperatorFee.sol", () => {
         true,
       );
 
-      const expectedFee = (rewards * nodeOperatorFeeRate) / BP_BASE;
+      const expectedFee = (rewards * noFeeRate) / BP_BASE;
 
       expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedFee);
 
