@@ -222,6 +222,7 @@ export async function reportVaultDataWithProof(
     inOutDeltaArg,
     params.accruedTreasuryFees ?? 0n,
     liabilitySharesArg,
+    0n,
     reportTree.getProof(0),
   );
 }

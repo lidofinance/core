@@ -131,10 +131,11 @@ contract LazyOracle is ILazyOracle {
         int256 _inOutDelta,
         uint256 _accumulatedTreasuryFees,
         uint256 _liabilityShares,
+        uint256 _slashingReserve,
         bytes32[] calldata _proof
     ) external {
         bytes32 leaf = keccak256(
-            bytes.concat(keccak256(abi.encode(_vault, _totalValue, _inOutDelta, _accumulatedTreasuryFees, _liabilityShares)))
+            bytes.concat(keccak256(abi.encode(_vault, _totalValue, _inOutDelta, _accumulatedTreasuryFees, _liabilityShares, _slashingReserve)))
         );
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
@@ -145,7 +146,8 @@ contract LazyOracle is ILazyOracle {
                 _totalValue,
                 _inOutDelta,
                 _accumulatedTreasuryFees,
-                _liabilityShares
+                _liabilityShares,
+                _slashingReserve
             );
     }
 

@@ -114,6 +114,8 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 public constant REDEMPTION_MASTER_ROLE = keccak256("vaults.VaultHub.RedemptionMasterRole");
     /// @notice role that allows to trigger validator exits under extreme conditions
     bytes32 public constant VALIDATOR_EXIT_ROLE = keccak256("vaults.VaultHub.ValidatorExitRole");
+    /// @notice role that allows to bail out vaults with bad debt
+    bytes32 public constant SOCIALIZE_BAD_DEBT_ROLE = keccak256("vaults.VaultHub.SocializeBadDebtRole");
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     /// @notice amount of the unsettled obligations that will pause the beacon chain deposits
@@ -279,6 +281,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Set if a vault proxy codehash is allowed to be connected to the hub
     /// @param _codehash vault proxy codehash
     /// @param _allowed true to add, false to remove
+    /// @dev msg.sender must have VAULT_CODEHASH_SET_ROLE
     function setAllowedCodehash(bytes32 _codehash, bool _allowed) external onlyRole(VAULT_CODEHASH_SET_ROLE) {
         if (_codehash == bytes32(0)) revert ZeroArgument();
         if (_codehash == EMPTY_CODEHASH) revert ZeroCodehash();
@@ -444,7 +447,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reportTotalValue,
         int256 _reportInOutDelta,
         uint256 _reportAccumulatedTreasuryFees,
-        uint256 _reportLiabilityShares
+        uint256 _reportLiabilityShares,
+        uint256 _reportSlashingReserve
     ) external whenResumed {
         if (msg.sender != address(_lazyOracle())) revert NotAuthorized();
 
@@ -461,14 +465,18 @@ contract VaultHub is PausableUntilWithRoles {
 
         // here we don't check the reported values but rely on the oracle to preserve vault indexes
         if (connection.pendingDisconnect) {
-            // settle all the fees, but not more than we have in the vault and revert if some obligations remain
-            _settleObligations(_vault, record, Math256.min(accruedTreasuryFees, _vault.balance), 0);
+            if (_reportSlashingReserve == 0) {
+                // settle all the fees, but not more than we have in the vault and revert if some obligations remain
+                _settleObligations(_vault, record, Math256.min(accruedTreasuryFees, _vault.balance), 0);
 
-            IStakingVault(_vault).transferOwnership(connection.owner);
-            // we rely on the oracle to preserve vault index
-            _deleteVault(_vault, connection);
+                IStakingVault(_vault).transferOwnership(connection.owner);
+                // we rely on the oracle to preserve vault index
+                _deleteVault(_vault, connection);
 
-            emit VaultDisconnectCompleted(_vault);
+                emit VaultDisconnectCompleted(_vault);
+            } else {
+                revert WaitingForSlashingResolution(_vault, _reportSlashingReserve);
+            }
         } else {
             uint256 liabilityShares_ = Math256.max(record.liabilityShares, _reportLiabilityShares);
             // locked ether can only be increased asynchronously once the oracle settled the new floor value
@@ -476,7 +484,7 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 lockedEther = Math256.max(
                 _getPooledEthBySharesRoundUp(liabilityShares_) * TOTAL_BASIS_POINTS
                     / (TOTAL_BASIS_POINTS - connection.reserveRatioBP),
-                connection.pendingDisconnect ? 0 : CONNECT_DEPOSIT
+                Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve)
             );
 
             record.locked = uint128(lockedEther);
@@ -499,9 +507,64 @@ contract VaultHub is PausableUntilWithRoles {
                 reportTotalValue: _reportTotalValue,
                 reportInOutDelta: _reportInOutDelta,
                 reportAccumulatedTreasuryFees: _reportAccumulatedTreasuryFees,
-                reportLiabilityShares: _reportLiabilityShares
+                reportLiabilityShares: _reportLiabilityShares,
+                reportSlashingReserve: _reportSlashingReserve
             });
         }
+    }
+
+    /// @notice Socializes bad debt between two vaults
+    /// @param _vaultAcceptor The address of the vault that accepts the bad debt
+    /// @param _vaultDonor The address of the vault that donates the bad debt
+    /// @param _amountOfSharesToSocialize The amount of shares to socialize
+    /// @dev msg.sender must have SOCIALIZE_BAD_DEBT_ROLE
+    function socializeBadDebt(
+        address _vaultAcceptor,
+        address _vaultDonor,
+        uint256 _amountOfSharesToSocialize
+    ) external onlyRole(SOCIALIZE_BAD_DEBT_ROLE) {
+        if (_vaultAcceptor == address(0)) revert VaultZeroAddress();
+        if (_amountOfSharesToSocialize == 0) revert ZeroArgument();
+
+        VaultConnection storage connectionAcceptor = _vaultConnection(_vaultAcceptor);
+        if (connectionAcceptor.vaultIndex == 0) revert NotConnectedToHub(_vaultAcceptor);
+
+        VaultConnection storage connectionDonor = _vaultConnection(_vaultDonor);
+        if (connectionDonor.vaultIndex == 0) revert NotConnectedToHub(_vaultDonor);
+
+        VaultRecord storage recordDonor = _vaultRecord(_vaultDonor);
+
+        uint256 donorLiabilityShares_ = recordDonor.liabilityShares;
+        uint256 donorTotalValueShares = _getSharesByPooledEth(_totalValue(recordDonor));
+        if (donorTotalValueShares > donorLiabilityShares_) {
+            revert NoBadDebtToSocialize(_vaultDonor, donorTotalValueShares, donorLiabilityShares_);
+        }
+
+        uint256 badDebtShares = donorLiabilityShares_ - donorTotalValueShares;
+
+        VaultRecord storage recordAcceptor = _vaultRecord(_vaultAcceptor);
+
+        uint256 acceptorLockedShares = _getSharesByPooledEth(recordAcceptor.locked);
+        uint256 acceptorLiabilityShares = recordAcceptor.liabilityShares;
+        uint256 acceptorNewLiabilityShares = acceptorLiabilityShares + badDebtShares;
+        if (acceptorLockedShares < acceptorNewLiabilityShares) {
+            revert SocializeIsLimitedByReserve({
+                vault: _vaultAcceptor,
+                reserveShares:
+                    acceptorLockedShares > acceptorLiabilityShares ? acceptorLockedShares - acceptorLiabilityShares : 0,
+                amountOfSharesToSocialize: _amountOfSharesToSocialize
+            });
+        }
+
+        recordAcceptor.liabilityShares = uint96(acceptorNewLiabilityShares);
+        uint256 acceptorNewLocked = _getPooledEthBySharesRoundUp(acceptorNewLiabilityShares);
+        if (acceptorNewLocked > recordAcceptor.locked) {
+            recordAcceptor.locked = uint128(acceptorNewLocked);
+        }
+
+        recordDonor.liabilityShares = uint96(donorLiabilityShares_ - badDebtShares);
+
+        emit SocializedBadDebt(_vaultAcceptor, _vaultDonor, badDebtShares);
     }
 
     /// @notice transfer the ownership of the vault to a new owner without disconnecting it from the hub
@@ -1228,6 +1291,10 @@ contract VaultHub is PausableUntilWithRoles {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
+    function _predepositGuarantee() internal view returns (IPredepositGuarantee) {
+        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee());
+    }
+
     function _getSharesByPooledEth(uint256 _ether) internal view returns (uint256) {
         return LIDO.getSharesByPooledEth(_ether);
     }
@@ -1271,7 +1338,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 reportTotalValue,
         int256 reportInOutDelta,
         uint256 reportAccumulatedTreasuryFees,
-        uint256 reportLiabilityShares
+        uint256 reportLiabilityShares,
+        uint256 reportSlashingReserve
     );
 
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares, uint256 lockedAmount);
@@ -1289,6 +1357,8 @@ contract VaultHub is PausableUntilWithRoles {
 
     event TreasuryFeesObligationUpdated(address indexed vault, uint256 unsettled, uint256 settled);
     event RedemptionsObligationUpdated(address indexed vault, uint256 unsettled, uint256 settled);
+
+    event SocializedBadDebt(address indexed vaultAcceptor, address indexed vaultDonor, uint256 badDebtShares);
 
     error RedemptionsObligationValueTooHigh(address vault, uint256 value, uint256 liability);
 
@@ -1355,4 +1425,7 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultHasUnsettledObligations(address vault, uint256 unsettledObligations);
     error PartialValidatorWithdrawalNotAllowed();
     error ForceValidatorExitNotAllowed();
+    error WaitingForSlashingResolution(address vault, uint256 slashingReserve);
+    error NoBadDebtToSocialize(address vault, uint256 totalValueShares, uint256 liabilityShares);
+    error SocializeIsLimitedByReserve(address vault, uint256 reserveShares, uint256 amountOfSharesToSocialize);
 }
