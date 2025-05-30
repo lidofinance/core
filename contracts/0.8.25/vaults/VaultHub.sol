@@ -466,51 +466,46 @@ contract VaultHub is PausableUntilWithRoles {
         // here we don't check the reported values but rely on the oracle to preserve vault indexes
         if (connection.pendingDisconnect) {
             if (_reportSlashingReserve == 0) {
-                // settle all the fees, but not more than we have in the vault and revert if some obligations remain
-                _settleObligations(_vault, record, Math256.min(accruedTreasuryFees, _vault.balance), 0);
-
-                IStakingVault(_vault).transferOwnership(connection.owner);
-                // we rely on the oracle to preserve vault index
-                _deleteVault(_vault, connection);
-
-                emit VaultDisconnectCompleted(_vault);
+                _completeDisconnection(_vault, connection, record, accruedTreasuryFees);
+                return;
             } else {
-                revert WaitingForSlashingResolution(_vault, _reportSlashingReserve);
+                // we revert the disconnect as there is a slashing conflict yet to be resolved
+                connection.pendingDisconnect = false;
+                emit VaultDisconnectAborted(_vault, _reportSlashingReserve);
             }
-        } else {
-            uint256 liabilityShares_ = Math256.max(record.liabilityShares, _reportLiabilityShares);
-            // locked ether can only be increased asynchronously once the oracle settled the new floor value
-            // as of reference slot to prevent slashing upsides in between the report gathering and delivering
-            uint256 lockedEther = Math256.max(
-                _getPooledEthBySharesRoundUp(liabilityShares_) * TOTAL_BASIS_POINTS
-                    / (TOTAL_BASIS_POINTS - connection.reserveRatioBP),
-                Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve)
-            );
-
-            record.locked = uint128(lockedEther);
-            record.reportTimestamp = _reportTimestamp;
-            record.report = Report({
-                totalValue: uint128(_reportTotalValue),
-                inOutDelta: int128(_reportInOutDelta)
-            });
-
-            _settleObligations(_vault, record, accruedTreasuryFees, MAX_UINT256);
-
-            IStakingVault vault_ = IStakingVault(_vault);
-            if (!_isVaultHealthy(connection, record) && !vault_.beaconChainDepositsPaused()) {
-                vault_.pauseBeaconChainDeposits();
-            }
-
-            emit VaultReportApplied({
-                vault: _vault,
-                reportTimestamp: _reportTimestamp,
-                reportTotalValue: _reportTotalValue,
-                reportInOutDelta: _reportInOutDelta,
-                reportAccumulatedTreasuryFees: _reportAccumulatedTreasuryFees,
-                reportLiabilityShares: _reportLiabilityShares,
-                reportSlashingReserve: _reportSlashingReserve
-            });
         }
+        uint256 liabilityShares_ = Math256.max(record.liabilityShares, _reportLiabilityShares);
+        // locked ether can only be increased asynchronously once the oracle settled the new floor value
+        // as of reference slot to prevent slashing upsides in between the report gathering and delivering
+        uint256 lockedEther = Math256.max(
+            _getPooledEthBySharesRoundUp(liabilityShares_) * TOTAL_BASIS_POINTS
+                / (TOTAL_BASIS_POINTS - connection.reserveRatioBP),
+            Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve)
+        );
+
+        record.locked = uint128(lockedEther);
+        record.reportTimestamp = _reportTimestamp;
+        record.report = Report({
+            totalValue: uint128(_reportTotalValue),
+            inOutDelta: int128(_reportInOutDelta)
+        });
+
+        _settleObligations(_vault, record, accruedTreasuryFees, MAX_UINT256);
+
+        IStakingVault vault_ = IStakingVault(_vault);
+        if (!_isVaultHealthy(connection, record) && !vault_.beaconChainDepositsPaused()) {
+            vault_.pauseBeaconChainDeposits();
+        }
+
+        emit VaultReportApplied({
+            vault: _vault,
+            reportTimestamp: _reportTimestamp,
+            reportTotalValue: _reportTotalValue,
+            reportInOutDelta: _reportInOutDelta,
+            reportAccumulatedTreasuryFees: _reportAccumulatedTreasuryFees,
+            reportLiabilityShares: _reportLiabilityShares,
+            reportSlashingReserve: _reportSlashingReserve
+        });
     }
 
     /// @notice Socializes bad debt between two vaults
@@ -950,6 +945,22 @@ contract VaultHub is PausableUntilWithRoles {
         _connection.pendingDisconnect = true;
     }
 
+    function _completeDisconnection(
+        address _vault,
+        VaultConnection storage _connection,
+        VaultRecord storage _record,
+        uint256 _accruedTreasuryFees
+    ) internal {
+        // settle all the fees, but not more than we have in the vault and revert if some obligations remain
+        _settleObligations(_vault, _record, Math256.min(_accruedTreasuryFees, _vault.balance), 0);
+
+        IStakingVault(_vault).transferOwnership(_connection.owner);
+        // we rely on the oracle to preserve vault index
+        _deleteVault(_vault, _connection);
+
+        emit VaultDisconnectCompleted(_vault);
+    }
+
     function _rebalanceEther(
         address _vault,
         VaultRecord storage _record,
@@ -1332,6 +1343,7 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultFeesUpdated(address indexed vault, uint256 infraFeeBP, uint256 liquidityFeeBP, uint256 reservationFeeBP);
     event VaultDisconnectInitiated(address indexed vault);
     event VaultDisconnectCompleted(address indexed vault);
+    event VaultDisconnectAborted(address indexed vault, uint256 slashingReserve);
     event VaultReportApplied(
         address indexed vault,
         uint256 reportTimestamp,
