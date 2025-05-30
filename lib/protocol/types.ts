@@ -2,6 +2,10 @@ import { BaseContract as EthersBaseContract, ContractTransactionReceipt, Interfa
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
+export type LogDescriptionExtended = LogDescription & {
+  address?: string;
+};
+
 import {
   Accounting,
   AccountingOracle,
@@ -10,6 +14,7 @@ import {
   DepositSecurityModule,
   HashConsensus,
   ICSModule,
+  IStakingModule,
   Kernel,
   LazyOracle,
   Lido,
@@ -92,6 +97,7 @@ export interface ContractTypes {
   UpgradeableBeacon: UpgradeableBeacon;
   VaultHub: VaultHub;
   OperatorGrid: OperatorGrid;
+  IStakingModule: IStakingModule;
   ICSModule: ICSModule;
   LazyOracle: LazyOracle;
 }
@@ -129,7 +135,7 @@ export type AragonContracts = {
 export type StakingModuleContracts = {
   nor: LoadedContract<NodeOperatorsRegistry>;
   sdvt: LoadedContract<NodeOperatorsRegistry>;
-  csm?: LoadedContract<ICSModule>;
+  csm?: LoadedContract<IStakingModule>;
 };
 
 export type StakingModuleName = "nor" | "sdvt";
@@ -181,7 +187,7 @@ export type ProtocolContext = {
     receipt: ContractTransactionReceipt,
     eventName: string,
     extraInterfaces?: Interface[], // additional interfaces to parse
-  ) => LogDescription[];
+  ) => LogDescriptionExtended[];
 };
 
 export type RequireAllKeys<O, A extends readonly (keyof O)[]> =

@@ -2,8 +2,6 @@ import { ethers } from "hardhat";
 
 import { EIP7002WithdrawalRequest__Mock } from "typechain-types";
 
-import { log } from "lib";
-
 // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7002.md#configuration
 export const EIP7002_ADDRESS = "0x00000961Ef480Eb55e80D19ad83579A64c007002";
 export const EIP7002_MIN_WITHDRAWAL_REQUEST_FEE = 1n;
@@ -18,16 +16,4 @@ export const deployEIP7002WithdrawalRequestContract = async (fee: bigint): Promi
   await contract.mock__setFee(fee);
 
   return contract;
-};
-
-export const ensureEIP7002WithdrawalRequestContractPresent = async (): Promise<void> => {
-  const code = await ethers.provider.getCode(EIP7002_ADDRESS);
-
-  if (code === "0x") {
-    await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
-    log.debug("EIP7002 withdrawal request contract is deployed", {
-      address: EIP7002_ADDRESS,
-      fee: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
-    });
-  }
 };

@@ -7,11 +7,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { ACL, Lido, LidoLocator } from "typechain-types";
 
 import { ether, impersonate, MAX_UINT256 } from "lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao } from "test/deploy";
 import { Snapshot } from "test/suite";
-
-const TOTAL_BASIS_POINTS = 10000n;
 
 describe("Lido.sol:externalShares", () => {
   let deployer: HardhatEthersSigner;

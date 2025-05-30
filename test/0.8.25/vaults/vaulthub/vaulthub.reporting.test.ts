@@ -19,6 +19,7 @@ import {
 } from "typechain-types";
 
 import { ether, findEvents, GENESIS_FORK_VERSION, getCurrentBlockTimestamp, impersonate } from "lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
 import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
@@ -32,7 +33,6 @@ const INFRA_FEE_BP = 5_00n;
 const LIQUIDITY_FEE_BP = 4_00n;
 const RESERVATION_FEE_BP = 1_00n;
 
-const TOTAL_BASIS_POINTS = 100_00n; // 100%
 const CONNECT_DEPOSIT = ether("1");
 
 const TEST_ROOT = "0x4d7731e031705b521abbc5848458dc64ab85c2c3262be16f57bf5ea82a82178a";

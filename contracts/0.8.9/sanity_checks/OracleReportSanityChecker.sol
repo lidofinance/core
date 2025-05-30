@@ -170,20 +170,23 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ISecondOpinionOracle public secondOpinionOracle;
 
     /// @param _lidoLocator address of the LidoLocator instance
+    /// @param _accountingOracle address of the AccountingOracle instance
+    /// @param _accounting address of the Accounting instance
     /// @param _admin address to grant DEFAULT_ADMIN_ROLE of the AccessControl contract
     /// @param _limitsList initial values to be set for the limits list
     constructor(
         address _lidoLocator,
+        address _accountingOracle,
+        address _accounting,
         address _admin,
         LimitsList memory _limitsList
     ) {
         if (_admin == address(0)) revert AdminCannotBeZero();
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
 
-        address accountingOracle = LIDO_LOCATOR.accountingOracle();
-        GENESIS_TIME = IBaseOracle(accountingOracle).GENESIS_TIME();
-        SECONDS_PER_SLOT = IBaseOracle(accountingOracle).SECONDS_PER_SLOT();
-        ACCOUNTING_ADDRESS = LIDO_LOCATOR.accounting();
+        GENESIS_TIME = IBaseOracle(_accountingOracle).GENESIS_TIME();
+        SECONDS_PER_SLOT = IBaseOracle(_accountingOracle).SECONDS_PER_SLOT();
+        ACCOUNTING_ADDRESS = _accounting;
 
         _updateLimits(_limitsList);
 
