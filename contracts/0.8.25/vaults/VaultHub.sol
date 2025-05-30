@@ -14,6 +14,7 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 import {LazyOracle} from "./LazyOracle.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
+import {IConsensusContract} from "./interfaces/IConsensusContract.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
@@ -77,6 +78,11 @@ contract VaultHub is PausableUntilWithRoles {
         int128 inOutDelta;
         // 64 bits of gap
         // ### 4th slot
+        /// @notice cached refSlot number of the latest report
+        uint128 cachedRefSlot;
+        /// @notice cached inOutDelta of the latest report
+        int128 cachedInOutDelta;
+        // ### 5th slot
         /// @notice fee shares charged for the vault
         uint96 feeSharesCharged;
     }
@@ -112,6 +118,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice codehash of the account with no code
     bytes32 private constant EMPTY_CODEHASH = keccak256("");
 
+    /// @notice minimum gas overhead required for withdraw/fund/rebalance operations
+    uint256 internal constant MIN_GAS = 20_000;
+
     // -----------------------------
     //           IMMUTABLES
     // -----------------------------
@@ -121,11 +130,12 @@ contract VaultHub is PausableUntilWithRoles {
 
     ILido public immutable LIDO;
     ILidoLocator public immutable LIDO_LOCATOR;
+    IConsensusContract public immutable CONSENSUS_CONTRACT;
 
     /// @param _locator Lido Locator contract
     /// @param _lido Lido stETH contract
     /// @param _maxRelativeShareLimitBP Maximum share limit relative to TVL in basis points
-    constructor(ILidoLocator _locator, ILido _lido, uint256 _maxRelativeShareLimitBP) {
+    constructor(ILidoLocator _locator, ILido _lido, IConsensusContract _consensusContract, uint256 _maxRelativeShareLimitBP) {
         if (_maxRelativeShareLimitBP == 0) revert ZeroArgument();
         if (_maxRelativeShareLimitBP > TOTAL_BASIS_POINTS) {
             revert MaxRelativeShareLimitBPTooHigh(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
@@ -135,8 +145,15 @@ contract VaultHub is PausableUntilWithRoles {
 
         LIDO_LOCATOR = _locator;
         LIDO = _lido;
-
+        CONSENSUS_CONTRACT = _consensusContract;
+        
         _disableInitializers();
+    }
+
+    /// @notice modifier to check if the gas is enough to cache inOutDelta in fund/withdraw/rebalance operations
+    modifier requireMinGas() {
+        _;
+        if (gasleft() < MIN_GAS) revert NeedMoreGas(MIN_GAS, gasleft());
     }
 
     /// @dev used to perform rebalance operations
@@ -508,10 +525,12 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice funds the vault passing ether as msg.value
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
-    function fund(address _vault) external payable whenResumed {
+    function fund(address _vault) external payable whenResumed requireMinGas {
         _checkConnectionAndOwner(_vault);
 
         VaultRecord storage record = _vaultRecord(_vault);
+        
+        _cacheInOutDelta(record);
 
         int128 inOutDelta_ = record.inOutDelta + int128(int256(msg.value));
         record.inOutDelta = inOutDelta_;
@@ -526,7 +545,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _recipient recipient address
     /// @param _ether amount of ether to withdraw
     /// @dev msg.sender should be vault's owner
-    function withdraw(address _vault, address _recipient, uint256 _ether) external whenResumed {
+    function withdraw(address _vault, address _recipient, uint256 _ether) external whenResumed requireMinGas {
         _checkConnectionAndOwner(_vault);
 
         VaultRecord storage record = _vaultRecord(_vault);
@@ -544,7 +563,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _ether amount of ether to rebalance
     /// @dev msg.sender should be vault's owner
-    function rebalance(address _vault, uint256 _ether) external whenResumed {
+    function rebalance(address _vault, uint256 _ether) external whenResumed requireMinGas {
         if (_ether == 0) revert ZeroArgument();
         if (_ether > _vault.balance) revert InsufficientBalance(_vault.balance, _ether);
         _checkConnectionAndOwner(_vault);
@@ -697,7 +716,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Permissionless rebalance for unhealthy vaults
     /// @param _vault vault address
     /// @dev rebalance all available amount of ether until the vault is healthy
-    function forceRebalance(address _vault) external {
+    function forceRebalance(address _vault) external requireMinGas {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
@@ -776,6 +795,8 @@ contract VaultHub is PausableUntilWithRoles {
             liabilityShares: 0,
             reportTimestamp: _lazyOracle().latestReportTimestamp(),
             inOutDelta: report.inOutDelta,
+            cachedInOutDelta: 0,
+            cachedRefSlot: 0,
             feeSharesCharged: uint96(0)
         });
 
@@ -828,6 +849,8 @@ contract VaultHub is PausableUntilWithRoles {
         address _recipient,
         uint256 _amount
     ) internal {
+        _cacheInOutDelta(_record);
+
         int128 inOutDelta_ = _record.inOutDelta - int128(int256(_amount));
         _record.inOutDelta = inOutDelta_;
 
@@ -970,6 +993,14 @@ contract VaultHub is PausableUntilWithRoles {
         return connection;
     }
 
+    function _cacheInOutDelta(VaultRecord storage _record) internal {
+        (uint256 refSlot, ) = CONSENSUS_CONTRACT.getCurrentFrame();
+        if (_record.cachedRefSlot != refSlot) {
+            _record.cachedInOutDelta = _record.inOutDelta;
+            _record.cachedRefSlot = uint128(refSlot);
+        }
+    }
+
     function _storage() internal pure returns (Storage storage $) {
         assembly {
             $.slot := STORAGE_LOCATION
@@ -1104,4 +1135,5 @@ contract VaultHub is PausableUntilWithRoles {
     error UnhealthyVaultCannotDeposit(address vault);
     error VaultIsDisconnecting(address vault);
     error PartialValidatorWithdrawalNotAllowed();
+    error NeedMoreGas(uint256 minGas, uint256 gasLeft);
 }
