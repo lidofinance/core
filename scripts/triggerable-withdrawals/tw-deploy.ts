@@ -63,7 +63,16 @@ async function main() {
   log.success(`ValidatorsExitBusOracle address: ${validatorsExitBusOracle.address}`);
   log.emptyLine();
 
-  const withdrawalVaultArgs = [LIDO_PROXY, TREASURY_PROXY];
+  const triggerableWithdrawalsGateway = await deployImplementation(
+    Sk.triggerableWithdrawalsGateway,
+    "TriggerableWithdrawalsGateway",
+    deployer,
+    [agent, locator.address, 13000, 1, 48],
+  );
+  log.success(`TriggerableWithdrawalsGateway implementation address: ${triggerableWithdrawalsGateway.address}`);
+  log.emptyLine();
+
+  const withdrawalVaultArgs = [LIDO_PROXY, TREASURY_PROXY, triggerableWithdrawalsGateway.address];
 
   const withdrawalVault = await deployImplementation(
     Sk.withdrawalVault,
@@ -118,15 +127,6 @@ async function main() {
     validatorExitDelayVerifierArgs,
   );
   log.success(`ValidatorExitDelayVerifier implementation address: ${validatorExitDelayVerifier.address}`);
-  log.emptyLine();
-
-  const triggerableWithdrawalsGateway = await deployImplementation(
-    Sk.triggerableWithdrawalsGateway,
-    "TriggerableWithdrawalsGateway",
-    deployer,
-    [agent, locator.address, 13000, 1, 48],
-  );
-  log.success(`TriggerableWithdrawalsGateway implementation address: ${triggerableWithdrawalsGateway.address}`);
   log.emptyLine();
 
   const accountingOracle = await deployImplementation(Sk.accountingOracle, "AccountingOracle", deployer, [

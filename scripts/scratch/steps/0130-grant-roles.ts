@@ -6,7 +6,6 @@ import {
   TriggerableWithdrawalsGateway,
   ValidatorsExitBusOracle,
   WithdrawalQueueERC721,
-  WithdrawalVault,
 } from "typechain-types";
 
 import { loadContract } from "lib/contract";
@@ -26,7 +25,6 @@ export async function main() {
   const burnerAddress = state[Sk.burner].address;
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
-  const withdrawalVaultAddress = state[Sk.withdrawalVault].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
@@ -58,7 +56,6 @@ export async function main() {
     [await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(), triggerableWithdrawalsGatewayAddress],
     { from: deployer },
   );
-
 
   // ValidatorsExitBusOracle
   if (gateSealAddress) {
@@ -104,18 +101,6 @@ export async function main() {
   await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.ORACLE_ROLE(), accountingOracleAddress], {
     from: deployer,
   });
-
-  // WithdrawalVault
-  const withdrawalVault = await loadContract<WithdrawalVault>("WithdrawalVault", withdrawalVaultAddress);
-
-  await makeTx(
-    withdrawalVault,
-    "grantRole",
-    [await withdrawalVault.ADD_WITHDRAWAL_REQUEST_ROLE(), triggerableWithdrawalsGatewayAddress],
-    {
-      from: deployer,
-    },
-  );
 
   // Burner
   const burner = await loadContract<Burner>("Burner", burnerAddress);
