@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3264"  lines-covered="3206"  line-rate="0.9822"  branches-valid="1470"  branches-covered="1411"  branch-rate="0.9599"  timestamp="1748613812687" complexity="0" version="0.1">
+<coverage lines-valid="3264"  lines-covered="3206"  line-rate="0.9822"  branches-valid="1470"  branches-covered="1411"  branch-rate="0.9599"  timestamp="1748614845729" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -5011,7 +5011,7 @@
 			<method name="getMaxValidatorsPerReport"  hits="2"  signature="()V" >
 				<lines><line number="399"  hits="2" /></lines>
 			</method>
-			<method name="getDeliveryTime"  hits="3"  signature="()V" >
+			<method name="getDeliveryTimestamp"  hits="3"  signature="()V" >
 				<lines><line number="412"  hits="3" /></lines>
 			</method>
 			<method name="unpackExitRequest"  hits="8"  signature="()V" >
