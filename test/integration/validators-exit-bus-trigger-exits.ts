@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -96,7 +97,43 @@ describe("ValidatorsExitBus integration", () => {
     expect(deliveryHistory.length).to.equal(1);
     expect(deliveryHistory[0].lastDeliveredExitDataIndex).to.equal(0);
 
-    await expect(veb.triggerExits(exitRequest, [0], refundRecipient, {value: 10}))
-      .to.emit(wv, "WithdrawalRequestAdded");
+    const ethBefore = await ethers.provider.getBalance(refundRecipient.getAddress());
+
+    const triggerExitsTx = await veb
+      .connect(refundRecipient)
+      .triggerExits(exitRequest, [0], ZeroAddress, { value: 10 });
+
+    await expect(triggerExitsTx).to.emit(wv, "WithdrawalRequestAdded");
+
+    const ethAfter = await ethers.provider.getBalance(refundRecipient.getAddress());
+
+    const fee = await wv.getWithdrawalRequestFee();
+
+    const txReceipt = await triggerExitsTx.wait();
+    const gasUsed = BigInt(txReceipt!.gasUsed) * txReceipt!.gasPrice;
+
+    expect(ethAfter).to.equal(ethBefore - gasUsed - fee);
+  });
+
+  it("should handle non-zero refundRecipient and refund the correct amount", async () => {
+    const dataFormat = 1;
+
+    const exitRequest = { dataFormat, data: exitRequestPacked };
+
+    const exitRequestsHash = hashExitRequest(exitRequest);
+
+    await veb.connect(hashReporter).submitExitRequestsHash(exitRequestsHash);
+    await veb.submitExitRequestsData(exitRequest);
+
+    const ethBefore = await ethers.provider.getBalance(refundRecipient.getAddress());
+
+    await veb.triggerExits(exitRequest, [0], refundRecipient.getAddress(), { value: 10 });
+
+    const fee = await wv.getWithdrawalRequestFee();
+
+    const ethAfter = await ethers.provider.getBalance(refundRecipient.getAddress());
+
+    // Should be increased by (10 - fee)
+    expect(ethAfter - ethBefore).to.equal(10n - fee);
   });
 });
