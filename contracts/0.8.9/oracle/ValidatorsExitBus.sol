@@ -409,7 +409,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      *     - exitRequestsHash was not submited
      *     - Request was not delivered
      */
-    function getDeliveryTime(bytes32 exitRequestsHash) external view returns (uint256 deliveryDateTimestamp) {
+    function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 deliveryDateTimestamp) {
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
         RequestStatus storage storedRequest = requestStatusMap[exitRequestsHash];
 
@@ -514,7 +514,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     function _setMaxValidatorsPerReport(uint256 value) internal {
-        require(value > 0, "ZERO_MAX_VALIDATORS_PER_REPORT");
+        if (value == 0) revert ZeroArgument("maxValidatorsPerReport");
 
         MAX_VALIDATORS_PER_REPORT_POSITION.setStorageUint256(value);
     }

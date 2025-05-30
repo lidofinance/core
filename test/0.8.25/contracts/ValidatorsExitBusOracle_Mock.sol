@@ -30,7 +30,7 @@ contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
         }
     }
 
-    function getDeliveryTime(bytes32 exitRequestsHash) external view returns (uint256 timestamp) {
+    function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 timestamp) {
         require(exitRequestsHash == _hash, "Mock error, Invalid exitRequestsHash");
         return _deliveryTimestamp;
     }

@@ -432,9 +432,9 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       const role = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
       await oracle.grantRole(role, authorizedEntity);
 
-      await expect(oracle.connect(authorizedEntity).setMaxValidatorsPerReport(0)).to.be.revertedWith(
-        "ZERO_MAX_VALIDATORS_PER_REPORT",
-      );
+      await expect(oracle.connect(authorizedEntity).setMaxValidatorsPerReport(0))
+        .to.be.revertedWithCustomError(oracle, "ZeroArgument")
+        .withArgs("maxValidatorsPerReport");
     });
 
     it("Should not allow to process request larger than MAX_VALIDATORS_PER_REPORT", async () => {
