@@ -303,10 +303,16 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
     /**
      * @notice sets the depositor for the NO
-     * @param _depositor address of the depositor
+     * @param _newDepositor address of the depositor
      */
-    function setNodeOperatorDepositor(address _depositor) external {
-        _getStorage().nodeOperatorDepositor.set(msg.sender, _depositor);
+    function setNodeOperatorDepositor(address _newDepositor) external {
+        if (_newDepositor == address(0)) revert ZeroArgument("_newDepositor");
+        address prevDepositor = _depositorOf(msg.sender);
+        if (_newDepositor == prevDepositor) revert SameDepositor();
+
+        _getStorage().nodeOperatorDepositor.set(msg.sender, _newDepositor);
+
+        emit DepositorSet(msg.sender, _newDepositor, prevDepositor);
     }
 
     /**
@@ -687,9 +693,11 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     event BalanceCompensated(address indexed nodeOperator, address indexed to, uint128 total, uint128 locked);
     event BalanceRefunded(address indexed nodeOperator, address indexed to);
 
-    /// NO Guarantor events
+    /// NO delegate events
 
     event GuarantorSet(address indexed nodeOperator, address indexed newGuarantor, address indexed prevGuarantor);
+    event DepositorSet(address indexed nodeOperator, address indexed newDepositor, address indexed prevDepositor);
+
     event GuarantorRefundAdded(address indexed guarantor, address indexed nodeOperator, uint256 amount);
     event GuarantorRefundClaimed(address indexed guarantor, address indexed recipient, uint256 amount);
 
@@ -728,6 +736,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     error NothingToRefund();
     error WithdrawalFailed();
     error SameGuarantor();
+    error SameDepositor();
     error RefundFailed();
 
     // predeposit errors
