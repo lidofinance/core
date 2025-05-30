@@ -67,7 +67,7 @@ interface IOracleReportSanityChecker is IAccessControlEnumerable {
 * @title Lido V3 Upgrade Template
 *
 * @dev Must be used by means of two calls:
-*   - `startUpgrade()` after upgrading LidoLocator and before everything else
+*   - `startUpgrade()` before upgrading LidoLocator and before everything else
 *   - `finishUpgrade()` as the last step of the upgrade
 */
 contract V3Template is V3Addresses {
