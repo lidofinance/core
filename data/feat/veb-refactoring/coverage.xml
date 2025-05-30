@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3264"  lines-covered="3206"  line-rate="0.9822"  branches-valid="1470"  branches-covered="1411"  branch-rate="0.9599"  timestamp="1748612153794" complexity="0" version="0.1">
+<coverage lines-valid="3264"  lines-covered="3206"  line-rate="0.9822"  branches-valid="1470"  branches-covered="1411"  branch-rate="0.9599"  timestamp="1748613812687" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -3999,50 +3999,50 @@
 				<lines><line number="26"  hits="125" /></lines>
 			</method>
 			<method name="calculateCurrentExitLimit"  hits="36"  signature="()V" >
-				<lines><line number="35"  hits="36" /></lines>
+				<lines><line number="49"  hits="36" /></lines>
 			</method>
 			<method name="updatePrevExitLimit"  hits="26"  signature="()V" >
-				<lines><line number="56"  hits="26" /></lines>
+				<lines><line number="70"  hits="26" /></lines>
 			</method>
 			<method name="setExitLimits"  hits="39"  signature="()V" >
-				<lines><line number="73"  hits="39" /></lines>
+				<lines><line number="87"  hits="39" /></lines>
 			</method>
 			<method name="isExitLimitSet"  hits="38"  signature="()V" >
-				<lines><line number="103"  hits="38" /></lines>
+				<lines><line number="117"  hits="38" /></lines>
 			</method>
 		</methods>
 		<lines>
 			<line number="19"  hits="71"  branch="false" />
 			<line number="23"  hits="54"  branch="false" />
 			<line number="27"  hits="125"  branch="false" />
-			<line number="39"  hits="36"  branch="false" />
-			<line number="41"  hits="36"  branch="true"  condition-coverage="100% (4/4)" />
-			<line number="42"  hits="24"  branch="false" />
-			<line number="45"  hits="12"  branch="false" />
-			<line number="46"  hits="12"  branch="false" />
-			<line number="48"  hits="12"  branch="false" />
-			<line number="49"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="50"  hits="1"  branch="false" />
-			<line number="53"  hits="12"  branch="false" />
-			<line number="61"  hits="26"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="63"  hits="25"  branch="false" />
-			<line number="64"  hits="25"  branch="false" />
-			<line number="65"  hits="25"  branch="false" />
-			<line number="67"  hits="25"  branch="false" />
-			<line number="68"  hits="25"  branch="false" />
-			<line number="70"  hits="25"  branch="false" />
-			<line number="80"  hits="39"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="81"  hits="38"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="82"  hits="37"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="83"  hits="34"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="85"  hits="34"  branch="false" />
-			<line number="86"  hits="34"  branch="false" />
-			<line number="88"  hits="34"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="94"  hits="30"  branch="false" />
-			<line number="97"  hits="34"  branch="false" />
-			<line number="98"  hits="34"  branch="false" />
+			<line number="53"  hits="36"  branch="false" />
+			<line number="55"  hits="36"  branch="true"  condition-coverage="100% (4/4)" />
+			<line number="56"  hits="24"  branch="false" />
+			<line number="59"  hits="12"  branch="false" />
+			<line number="60"  hits="12"  branch="false" />
+			<line number="62"  hits="12"  branch="false" />
+			<line number="63"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="64"  hits="1"  branch="false" />
+			<line number="67"  hits="12"  branch="false" />
+			<line number="75"  hits="26"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="77"  hits="25"  branch="false" />
+			<line number="78"  hits="25"  branch="false" />
+			<line number="79"  hits="25"  branch="false" />
+			<line number="81"  hits="25"  branch="false" />
+			<line number="82"  hits="25"  branch="false" />
+			<line number="84"  hits="25"  branch="false" />
+			<line number="94"  hits="39"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="95"  hits="38"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="96"  hits="37"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="97"  hits="34"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="99"  hits="34"  branch="false" />
 			<line number="100"  hits="34"  branch="false" />
-			<line number="104"  hits="38"  branch="false" />
+			<line number="102"  hits="34"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="108"  hits="30"  branch="false" />
+			<line number="111"  hits="34"  branch="false" />
+			<line number="112"  hits="34"  branch="false" />
+			<line number="114"  hits="34"  branch="false" />
+			<line number="118"  hits="38"  branch="false" />
 		</lines>
 		</class>
 		<class name="Math.sol"  filename="contracts/0.8.9/lib/Math.sol"  line-rate="1"  branch-rate="1" >
