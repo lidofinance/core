@@ -95,7 +95,6 @@ describe("VaultHub.sol:deauthorize", () => {
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
     vaultHub = await ethers.getContractAt("VaultHub", proxy, deployer);
     await vaultHub.initialize(admin);
-
     //vault implementation
     implOld = await ethers.deployContract("StakingVault", [vaultHub, depositContract], { from: deployer });
     implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [vaultHub, depositContract], {

@@ -28,6 +28,7 @@ import {
   MAX_UINT256,
   randomAddress,
 } from "lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
@@ -41,7 +42,6 @@ const INFRA_FEE_BP = 5_00n;
 const LIQUIDITY_FEE_BP = 4_00n;
 const RESERVATION_FEE_BP = 1_00n;
 
-const TOTAL_BASIS_POINTS = 100_00n; // 100%
 const CONNECT_DEPOSIT = ether("1");
 
 describe("VaultHub.sol:hub", () => {

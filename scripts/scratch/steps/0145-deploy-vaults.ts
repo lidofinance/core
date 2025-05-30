@@ -15,13 +15,14 @@ export async function main() {
   const wstethAddress = state[Sk.wstETH].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
-  const agentAddress = state[Sk.appAgent].proxy.address;
 
   const depositContract = state.chainSpec.depositContract;
 
   // Deploy StakingVault implementation contract
-  const imp = await deployWithoutProxy(Sk.stakingVaultImpl, "StakingVault", deployer, [depositContract]);
-  const impAddress = await imp.getAddress();
+  const vaultImplementation = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
+    depositContract,
+  ]);
+  const vaultImplementationAddress = await vaultImplementation.getAddress();
 
   // Deploy Dashboard implementation contract
   const dashboard = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [
@@ -33,8 +34,8 @@ export async function main() {
   const dashboardAddress = await dashboard.getAddress();
 
   const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
-    impAddress,
-    agentAddress,
+    vaultImplementationAddress,
+    deployer,
   ]);
   const beaconAddress = await beacon.getAddress();
 
@@ -58,15 +59,15 @@ export async function main() {
   // Add VaultFactory and Vault implementation to the Accounting contract
   const vaultHub = await loadContract<VaultHub>("VaultHub", vaultHubAddress);
 
-  // Grant roles for the Accounting contract
+  // Grant VaultHub roles
   const vaultMasterRole = await vaultHub.VAULT_MASTER_ROLE();
-  const vaultRegistryRole = await vaultHub.VAULT_CODEHASH_SET_ROLE();
+  const vaultCodehashRole = await vaultHub.VAULT_CODEHASH_SET_ROLE();
 
   await makeTx(vaultHub, "grantRole", [vaultMasterRole, deployer], { from: deployer });
-  await makeTx(vaultHub, "grantRole", [vaultRegistryRole, deployer], { from: deployer });
+  await makeTx(vaultHub, "grantRole", [vaultCodehashRole, deployer], { from: deployer });
 
   await makeTx(vaultHub, "setAllowedCodehash", [vaultBeaconProxyCodeHash, true], { from: deployer });
 
   await makeTx(vaultHub, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
-  await makeTx(vaultHub, "renounceRole", [vaultRegistryRole, deployer], { from: deployer });
+  await makeTx(vaultHub, "renounceRole", [vaultCodehashRole, deployer], { from: deployer });
 }

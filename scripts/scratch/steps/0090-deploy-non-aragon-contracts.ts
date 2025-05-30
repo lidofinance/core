@@ -3,7 +3,6 @@ import { ethers } from "hardhat";
 
 import { LidoLocator } from "typechain-types";
 
-import { certainAddress } from "lib";
 import { getContractPath } from "lib/contract";
 import {
   deployBehindOssifiableProxy,
@@ -26,12 +25,13 @@ export async function main() {
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
   const vaultHubParams = state[Sk.vaultHub].deployParameters;
-  const burnerParams = state[Sk.burner].deployParameters;
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
   const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
   const pdgDeployParams = state[Sk.predepositGuarantee].deployParameters;
+
+  const sanityCheckerParams = state["oracleReportSanityChecker"].deployParameters;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -208,13 +208,41 @@ export async function main() {
   ]);
 
   // Deploy Burner
+  const isMigrationAllowed = false;
   const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [
     admin,
     locator.address,
     lidoAddress,
-    burnerParams.totalCoverSharesBurnt,
-    burnerParams.totalNonCoverSharesBurnt,
+    isMigrationAllowed,
   ]);
+
+  // Deploy OracleReportSanityChecker
+  const oracleReportSanityCheckerArgs = [
+    locator.address,
+    accountingOracle.address,
+    accounting.address,
+    admin,
+    [
+      sanityCheckerParams.exitedValidatorsPerDayLimit,
+      sanityCheckerParams.appearedValidatorsPerDayLimit,
+      sanityCheckerParams.annualBalanceIncreaseBPLimit,
+      sanityCheckerParams.maxValidatorExitRequestsPerReport,
+      sanityCheckerParams.maxItemsPerExtraDataTransaction,
+      sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
+      sanityCheckerParams.requestTimestampMargin,
+      sanityCheckerParams.maxPositiveTokenRebase,
+      sanityCheckerParams.initialSlashingAmountPWei,
+      sanityCheckerParams.inactivityPenaltiesAmountPWei,
+      sanityCheckerParams.clBalanceOraclesErrorUpperBPLimit,
+    ],
+  ];
+
+  const oracleReportSanityChecker = await deployWithoutProxy(
+    Sk.oracleReportSanityChecker,
+    "OracleReportSanityChecker",
+    deployer,
+    oracleReportSanityCheckerArgs,
+  );
 
   // Deploy PredepositGuarantee
   const predepositGuarantee = await deployBehindOssifiableProxy(
@@ -236,7 +264,7 @@ export async function main() {
     depositSecurityModule: depositSecurityModuleAddress,
     elRewardsVault: elRewardsVault.address,
     lido: lidoAddress,
-    oracleReportSanityChecker: certainAddress("dummy-locator:oracleReportSanityChecker"), // requires LidoLocator in the constructor, so deployed after it
+    oracleReportSanityChecker: oracleReportSanityChecker.address,
     burner: burner.address,
     stakingRouter: stakingRouter.address,
     treasury: treasuryAddress,

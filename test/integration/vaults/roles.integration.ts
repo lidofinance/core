@@ -8,7 +8,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Dashboard } from "typechain-types";
 
 import { days, ether } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { getProtocolContext, ProtocolContext, reportVaultDataWithProof } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
@@ -20,7 +20,7 @@ const VAULT_CONNECTION_DEPOSIT = ether("1");
 
 type Methods<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [K in keyof T]: T[K] extends (...args: any) => any ? K : never; // gdfg
+  [K in keyof T]: T[K] extends (...args: any) => any ? K : never;
 }[keyof T];
 
 type DashboardMethods = Methods<Dashboard>; // "foo" | "bar"
@@ -47,7 +47,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     validatorWithdrawalTriggerer: HardhatEthersSigner,
     disconnecter: HardhatEthersSigner,
     tierChanger: HardhatEthersSigner,
-    nodeOperatorFeeRecipientSetter: HardhatEthersSigner,
     nodeOperatorRewardAdjuster: HardhatEthersSigner,
     stranger: HardhatEthersSigner;
 
@@ -74,8 +73,8 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       validatorExitRequester,
       validatorWithdrawalTriggerer,
       disconnecter,
-      tierChanger,
-      nodeOperatorFeeRecipientSetter,
+      tierChanger, // nodeOperatorFeeRecipientSetter
+      ,
       nodeOperatorRewardAdjuster,
       stranger,
     ] = allRoles;
@@ -110,6 +109,13 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
       const createDashboardEvent = ctx.getEvents(createVaultTxReceipt, "DashboardCreated")[0];
       testDashboard = await ethers.getContractAt("Dashboard", createDashboardEvent.args?.dashboard);
+
+      {
+        // To prevent ReportStale errors
+        const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
+        const stakingVault = await ethers.getContractAt("StakingVault", createVaultEvents[0].args!.vault);
+        await reportVaultDataWithProof(ctx, stakingVault);
+      }
 
       await testDashboard.connect(owner).grantRoles([
         {

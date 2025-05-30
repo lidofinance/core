@@ -10,7 +10,6 @@ export async function main() {
   // Extract necessary addresses and parameters from the state
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
 
-  // Deploy OracleReportSanityChecker
   const lazyOracleArgs = [locatorAddress];
 
   const lazyOracle = await deployWithoutProxy(Sk.lazyOracle, "LazyOracle", deployer, lazyOracleArgs);
