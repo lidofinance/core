@@ -179,10 +179,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
       await testDashboard.connect(nodeOperatorManager).grantRoles([
         {
-          account: nodeOperatorFeeRecipientSetter,
-          role: await testDashboard.NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE(),
-        },
-        {
           account: nodeOperatorRewardAdjuster,
           role: await testDashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
         },
@@ -342,7 +338,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         it.skip("increaseAccruedRewardsAdjustment", async () => {
           await testMethod(
             testDashboard,
-            "increaseAccruedRewardsAdjustment",
+            "increaseRewardsAdjustment",
             {
               successUsers: [nodeOperatorRewardAdjuster, nodeOperatorManager],
               failingUsers: allRoles.filter((r) => r !== nodeOperatorRewardAdjuster && r !== nodeOperatorManager),
@@ -465,18 +461,18 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
     describe("Verify ACL for methods that require confirmations", () => {
       it("setNodeOperatorFeeBP", async () => {
-        await expect(testDashboard.connect(owner).setNodeOperatorFeeBP(1n)).not.to.emit(
+        await expect(testDashboard.connect(owner).setNodeOperatorFeeRate(1n)).not.to.emit(
           testDashboard,
-          "NodeOperatorFeeBPSet",
+          "NodeOperatorFeeRateSet",
         );
-        await expect(testDashboard.connect(nodeOperatorManager).setNodeOperatorFeeBP(1n)).to.emit(
+        await expect(testDashboard.connect(nodeOperatorManager).setNodeOperatorFeeRate(1n)).to.emit(
           testDashboard,
-          "NodeOperatorFeeBPSet",
+          "NodeOperatorFeeRateSet",
         );
 
         await testMethodConfirmedRoles(
           testDashboard,
-          "setNodeOperatorFeeBP",
+          "setNodeOperatorFeeRate",
           {
             successUsers: [],
             failingUsers: allRoles.filter((r) => r !== owner && r !== nodeOperatorManager),
@@ -574,7 +570,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           await testGrantingRole(
             testDashboard,
             "setNodeOperatorFeeRecipient",
-            await testDashboard.NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE(),
+            await testDashboard.NODE_OPERATOR_MANAGER_ROLE(),
             [stranger],
             nodeOperatorManager,
           );

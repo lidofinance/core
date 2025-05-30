@@ -215,6 +215,12 @@ contract VaultHub is PausableUntilWithRoles {
         return _vaultRecord(_vault).report;
     }
 
+    /// @return latest report timestamp for the vault
+    /// @dev returns 0 if the vault is not connected
+    function latestVaultReportTimestamp(address _vault) external view returns (uint64) {
+        return _storage().records[_vault].reportTimestamp;
+    }
+
     /// @return true if the report for the vault is fresh, false otherwise
     /// @dev returns false if the vault is not connected
     function isReportFresh(address _vault) external view returns (bool) {
