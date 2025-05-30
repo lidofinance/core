@@ -173,4 +173,12 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7002 {
 
         _addWithdrawalRequests(pubkeys, amounts);
     }
+
+    /**
+     * @dev Retrieves the current EIP-7002 withdrawal fee.
+     * @return The minimum fee required per withdrawal request.
+     */
+    function getWithdrawalRequestFee() public view returns (uint256) {
+        return _getWithdrawalRequestFee();
+    }
 }

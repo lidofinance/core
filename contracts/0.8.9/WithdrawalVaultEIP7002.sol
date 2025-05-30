@@ -19,20 +19,12 @@ abstract contract WithdrawalVaultEIP7002 {
     error IncorrectFee(uint256 providedFee, uint256 requiredFee);
     error RequestAdditionFailed(bytes callData);
 
-    /**
-     * @dev Retrieves the current EIP-7002 withdrawal fee.
-     * @return The minimum fee required per withdrawal request.
-     */
-    function getWithdrawalRequestFee() public view returns (uint256) {
-        return _getRequestFee(WITHDRAWAL_REQUEST);
-    }
-
     function _addWithdrawalRequests(bytes[] calldata pubkeys, uint64[] calldata amounts) internal {
         uint256 requestsCount = pubkeys.length;
         if (requestsCount == 0) revert ZeroArgument("pubkeys");
         if (requestsCount != amounts.length) revert ArraysLengthMismatch(requestsCount, amounts.length);
 
-        uint256 fee = getWithdrawalRequestFee();
+        uint256 fee = _getWithdrawalRequestFee();
         _checkFee(requestsCount * fee);
 
         for (uint256 i = 0; i < requestsCount; ++i) {
@@ -40,8 +32,8 @@ abstract contract WithdrawalVaultEIP7002 {
         }
     }
 
-    function _getRequestFee(address requestedContract) internal view returns (uint256) {
-        (bool success, bytes memory feeData) = requestedContract.staticcall("");
+    function _getWithdrawalRequestFee() internal view returns (uint256) {
+        (bool success, bytes memory feeData) = WITHDRAWAL_REQUEST.staticcall("");
 
         if (!success) {
             revert FeeReadFailed();
