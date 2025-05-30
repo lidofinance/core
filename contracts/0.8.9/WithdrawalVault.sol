@@ -151,7 +151,8 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7002 {
      * @param pubkeys A tightly packed array of 48-byte public keys corresponding to validators requesting partial withdrawals.
      *                | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
      *
-     * @param amounts An array of 8-byte unsigned integers representing the amounts to be withdrawn for each corresponding public key.
+     * @param amounts An array of 8-byte unsigned integers that represent the amounts, denominated in Gwei,
+     *                to be withdrawn for each corresponding public key.
      *                For full withdrawal requests, the amount should be set to 0.
      *                For partial withdrawal requests, the amount should be greater than 0.
      *
