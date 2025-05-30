@@ -128,7 +128,7 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
     });
   });
 
-  context("getDeliveryTime", () => {
+  context("getDeliveryTimestamp", () => {
     let originalState: string;
 
     before(async () => {
@@ -140,7 +140,7 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
     it("reverts if exitRequestsHash was never submitted (contractVersion = 0)", async () => {
       const fakeHash = keccak256("0x1111");
 
-      await expect(oracle.getDeliveryTime(fakeHash)).to.be.revertedWithCustomError(oracle, "ExitHashNotSubmitted");
+      await expect(oracle.getDeliveryTimestamp(fakeHash)).to.be.revertedWithCustomError(oracle, "ExitHashNotSubmitted");
     });
 
     it("reverts if request was not delivered", async () => {
@@ -151,7 +151,7 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
       // Call the helper to store the hash
       await oracle.storeNewHashRequestStatus(exitRequestsHash, contractVersion, timestamp);
 
-      await expect(oracle.getDeliveryTime(exitRequestsHash)).to.be.revertedWithCustomError(
+      await expect(oracle.getDeliveryTimestamp(exitRequestsHash)).to.be.revertedWithCustomError(
         oracle,
         "RequestsNotDelivered",
       );
@@ -165,7 +165,7 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
       // Call the helper to store the hash
       await oracle.storeNewHashRequestStatus(exitRequestsHash, contractVersion, timestamp);
 
-      const deliveredExitDataTimestamp = await oracle.getDeliveryTime(exitRequestsHash);
+      const deliveredExitDataTimestamp = await oracle.getDeliveryTimestamp(exitRequestsHash);
 
       expect(deliveredExitDataTimestamp).to.equal(timestamp);
     });

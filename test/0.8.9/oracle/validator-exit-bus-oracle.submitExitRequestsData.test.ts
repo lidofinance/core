@@ -330,9 +330,9 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should not allow to set exits per frame bigger than max limit", async () => {
-      await expect(oracle.connect(authorizedEntity).setExitRequestLimit(10, 12, FRAME_DURATION)).to.be.revertedWith(
-        "TOO_LARGE_EXITS_PER_FRAME",
-      );
+      await expect(
+        oracle.connect(authorizedEntity).setExitRequestLimit(10, 12, FRAME_DURATION),
+      ).to.be.revertedWithCustomError(oracle, "TooLargeExitsPerFrame");
     });
 
     it("Should deliver request as it is below limit", async () => {
@@ -432,9 +432,9 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       const role = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
       await oracle.grantRole(role, authorizedEntity);
 
-      await expect(oracle.connect(authorizedEntity).setMaxValidatorsPerReport(0)).to.be.revertedWith(
-        "ZERO_MAX_VALIDATORS_PER_REPORT",
-      );
+      await expect(oracle.connect(authorizedEntity).setMaxValidatorsPerReport(0))
+        .to.be.revertedWithCustomError(oracle, "ZeroArgument")
+        .withArgs("maxValidatorsPerReport");
     });
 
     it("Should not allow to process request larger than MAX_VALIDATORS_PER_REPORT", async () => {

@@ -409,7 +409,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      *     - exitRequestsHash was not submited
      *     - Request was not delivered
      */
-    function getDeliveryTime(bytes32 exitRequestsHash) external view returns (uint256 deliveryDateTimestamp) {
+    function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 deliveryDateTimestamp) {
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
         RequestStatus storage storedRequest = requestStatusMap[exitRequestsHash];
 
@@ -513,10 +513,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         return uint32(block.timestamp); // solhint-disable-line not-rely-on-time
     }
 
-    function _setMaxValidatorsPerReport(uint256 value) internal {
-        require(value > 0, "ZERO_MAX_VALIDATORS_PER_REPORT");
+    function _setMaxValidatorsPerReport(uint256 maxValidatorsPerReport) internal {
+        if (maxValidatorsPerReport == 0) revert ZeroArgument("maxValidatorsPerReport");
 
-        MAX_VALIDATORS_PER_REPORT_POSITION.setStorageUint256(value);
+        MAX_VALIDATORS_PER_REPORT_POSITION.setStorageUint256(maxValidatorsPerReport);
     }
 
     function _getMaxValidatorsPerReport() internal view returns (uint256) {

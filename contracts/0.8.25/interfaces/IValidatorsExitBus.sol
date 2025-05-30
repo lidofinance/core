@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 interface IValidatorsExitBus {
-    function getDeliveryTime(bytes32 exitRequestsHash) external view returns (uint256 timestamp);
+    function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 timestamp);
 
     function unpackExitRequest(
         bytes calldata exitRequests,

@@ -31,7 +31,21 @@ library ExitLimitUtilsStorage {
 }
 
 library ExitLimitUtils {
-    // What should happen with limits if pause is enabled
+    /// @notice Error when new value for remaining limit exceeds maximum limit.
+    error LimitExceeded();
+
+    /// @notice Error when max exit request limit exceeds uint32 max.
+    error TooLargeMaxExitRequestsLimit();
+
+    /// @notice Error when frame duration exceeds uint32 max.
+    error TooLargeFrameDuration();
+
+    /// @notice Error when exits per frame exceed the maximum exit request limit.
+    error TooLargeExitsPerFrame();
+
+    /// @notice Error when frame duration is zero.
+    error ZeroFrameDuration();
+
     function calculateCurrentExitLimit(
         ExitRequestLimitData memory _data,
         uint256 timestamp
@@ -58,7 +72,7 @@ library ExitLimitUtils {
         uint256 newExitRequestLimit,
         uint256 timestamp
     ) internal pure returns (ExitRequestLimitData memory) {
-        require(_data.maxExitRequestsLimit >= newExitRequestLimit, "LIMIT_EXCEEDED");
+        if (_data.maxExitRequestsLimit < newExitRequestLimit) revert LimitExceeded();
 
         uint256 secondsPassed = timestamp - _data.prevTimestamp;
         uint256 framesPassed = secondsPassed / _data.frameDurationInSec;
@@ -77,10 +91,10 @@ library ExitLimitUtils {
         uint256 frameDurationInSec,
         uint256 timestamp
     ) internal pure returns (ExitRequestLimitData memory) {
-        require(maxExitRequestsLimit <= type(uint32).max, "TOO_LARGE_MAX_EXIT_REQUESTS_LIMIT");
-        require(frameDurationInSec <= type(uint32).max, "TOO_LARGE_FRAME_DURATION");
-        require(exitsPerFrame <= maxExitRequestsLimit, "TOO_LARGE_EXITS_PER_FRAME");
-        require(frameDurationInSec != 0, "ZERO_FRAME_DURATION");
+        if (maxExitRequestsLimit > type(uint32).max) revert TooLargeMaxExitRequestsLimit();
+        if (frameDurationInSec > type(uint32).max) revert TooLargeFrameDuration();
+        if (exitsPerFrame > maxExitRequestsLimit) revert TooLargeExitsPerFrame();
+        if (frameDurationInSec == 0) revert ZeroFrameDuration();
 
         _data.exitsPerFrame = uint32(exitsPerFrame);
         _data.frameDurationInSec = uint32(frameDurationInSec);
