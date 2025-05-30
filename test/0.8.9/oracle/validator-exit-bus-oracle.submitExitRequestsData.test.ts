@@ -417,40 +417,34 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       );
     });
 
-    it("Should not give to set new maximum requests per batch value without MAX_VALIDATORS_PER_BATCH_ROLE role", async () => {
-      const maxRequestsPerBatch = 4;
+    it("Should not give to set new maximum requests per report value without MAX_VALIDATORS_PER_REPORT_ROLE role", async () => {
+      const maxRequestsPerReport = 4;
       await expect(
-        oracle.connect(stranger).setMaxRequestsPerBatch(maxRequestsPerBatch),
+        oracle.connect(stranger).setMaxValidatorsPerReport(maxRequestsPerReport),
       ).to.be.revertedWithOZAccessControlError(
         await stranger.getAddress(),
-        await oracle.MAX_VALIDATORS_PER_BATCH_ROLE(),
+        await oracle.MAX_VALIDATORS_PER_REPORT_ROLE(),
       );
     });
 
-    it("Should not allow to set new maximum requests per batch value eq to 0", async () => {
-      const role = await oracle.MAX_VALIDATORS_PER_BATCH_ROLE();
+    it("Should not allow to set new maximum requests per report value eq to 0", async () => {
+      const role = await oracle.MAX_VALIDATORS_PER_REPORT_ROLE();
       await oracle.grantRole(role, authorizedEntity);
 
-      await expect(oracle.connect(authorizedEntity).setMaxRequestsPerBatch(0)).to.be.revertedWith(
-        "MAX_BATCH_SIZE_ZERO",
+      await expect(oracle.connect(authorizedEntity).setMaxValidatorsPerReport(0)).to.be.revertedWith(
+        "ZERO_MAX_VALIDATORS_PER_REPORT",
       );
     });
 
-    it("Should not allow to ", async () => {
-      //  if (totalItemsCount > maxRequestsPerBatch) {
-      //     revert ToManyExitRequestsInReport(totalItemsCount, maxRequestsPerBatch);
-      // }
-    });
-
-    it("Should not allow to process request larger than MAX_VALIDATORS_PER_BATCH", async () => {
+    it("Should not allow to process request larger than MAX_VALIDATORS_PER_REPORT", async () => {
       await consensus.advanceTimeBy(MAX_EXIT_REQUESTS_LIMIT * 4 * 12);
       const data = await oracle.getExitRequestLimitFullInfo();
       expect(data.currentExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
 
-      const maxRequestsPerBatch = 4;
+      const maxRequestsPerReport = 4;
 
-      await oracle.connect(authorizedEntity).setMaxRequestsPerBatch(maxRequestsPerBatch);
-      expect(await oracle.connect(authorizedEntity).getMaxRequestsPerBatch()).to.equal(maxRequestsPerBatch);
+      await oracle.connect(authorizedEntity).setMaxValidatorsPerReport(maxRequestsPerReport);
+      expect(await oracle.connect(authorizedEntity).getMaxValidatorsPerReport()).to.equal(maxRequestsPerReport);
 
       const exitRequestsRandom = [
         { moduleId: 100, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
