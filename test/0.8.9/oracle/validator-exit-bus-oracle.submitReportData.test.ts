@@ -654,25 +654,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         .withArgs(requests[3].moduleId, requests[3].nodeOpId, requests[3].valIndex, requests[3].valPubkey, timestamp);
     });
 
-    it("emits ValidatorExitRequest events", async () => {
-      const requests = [
-        { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0] },
-        { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1] },
-        { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[2] },
-        { moduleId: 2, nodeOpId: 3, valIndex: 4, valPubkey: PUBKEYS[4] },
-      ];
-      const { reportData } = await prepareReportAndSubmitHash(requests);
-
-      await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
-        .to.be.revertedWithCustomError(oracle, "ExitRequestsLimitExceeded")
-        .withArgs(4, 3);
-    });
-
-    it("day passes", async () => {
-      await consensus.advanceTimeBy(24 * 60 * 60);
-    });
-
-    it("Limit regenerated in a day", async () => {
+    it("oracle doesnt consume common veb limits", async () => {
       const requests = [
         { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0] },
         { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1] },

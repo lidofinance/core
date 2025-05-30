@@ -306,7 +306,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     const FRAME_DURATION = 48;
 
     // Data for case when limit is not enough to process entire request
-    const VALIDATORS_DELIVERED_BY_PARTS: ExitRequest[] = [
+    const VALIDATORS: ExitRequest[] = [
       { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
       { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
       { moduleId: 2, nodeOpId: 0, valIndex: 1, valPubkey: PUBKEYS[2] },
@@ -314,20 +314,12 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       { moduleId: 3, nodeOpId: 0, valIndex: 3, valPubkey: PUBKEYS[4] },
     ];
 
-    const REQUEST_DELIVERED_BY_PARTS = {
+    const REQUEST = {
       dataFormat: DATA_FORMAT_LIST,
-      data: encodeExitRequestsDataList(VALIDATORS_DELIVERED_BY_PARTS),
+      data: encodeExitRequestsDataList(VALIDATORS),
     };
 
-    const HASH_REQUEST_DELIVERED_BY_PARTS = hashExitRequest(REQUEST_DELIVERED_BY_PARTS);
-
-    it("Should not allow to set limit without role", async () => {
-      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
-
-      await expect(
-        oracle.connect(stranger).setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION),
-      ).to.be.revertedWithOZAccessControlError(await stranger.getAddress(), reportLimitRole);
-    });
+    const HASH_REQUEST = hashExitRequest(REQUEST);
 
     it("Should not allow to set limit without role", async () => {
       const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
@@ -343,7 +335,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       );
     });
 
-    it("Should deliver request fully as it is below limit", async () => {
+    it("Should deliver request as it is below limit", async () => {
       const exitLimitTx = await oracle
         .connect(authorizedEntity)
         .setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION);
@@ -373,28 +365,14 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
           .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
       }
 
-      await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(exitRequestHash, 0, 1);
+      await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(exitRequestHash);
     });
 
-    it("Should deliver part of request equal to remaining limit", async () => {
-      await oracle.connect(authorizedEntity).submitExitRequestsHash(HASH_REQUEST_DELIVERED_BY_PARTS);
-      const emitTx = await oracle.submitExitRequestsData(REQUEST_DELIVERED_BY_PARTS);
-      const timestamp = await oracle.getTime();
-
-      for (let i = 0; i < 3; i++) {
-        const request = VALIDATORS_DELIVERED_BY_PARTS[i];
-        await expect(emitTx)
-          .to.emit(oracle, "ValidatorExitRequest")
-          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
-      }
-
-      await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(HASH_REQUEST_DELIVERED_BY_PARTS, 0, 2);
-    });
-
-    it("Should revert when limit exceeded for the frame", async () => {
-      await expect(oracle.submitExitRequestsData(REQUEST_DELIVERED_BY_PARTS))
+    it("Should not allow to deliver if limit doesnt cover full request", async () => {
+      await oracle.connect(authorizedEntity).submitExitRequestsHash(HASH_REQUEST);
+      await expect(oracle.submitExitRequestsData(REQUEST))
         .to.be.revertedWithCustomError(oracle, "ExitRequestsLimitExceeded")
-        .withArgs(2, 0);
+        .withArgs(5, 3);
     });
 
     it("Current limit should be equal to 0", async () => {
@@ -403,8 +381,8 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
       expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
       expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(0);
-      expect(data.currentExitRequestsLimit).to.equal(0);
+      expect(data.prevExitRequestsLimit).to.equal(3);
+      expect(data.currentExitRequestsLimit).to.equal(3);
     });
 
     it("Should current limit should be increased on 2 if 2*48 seconds passed", async () => {
@@ -414,59 +392,59 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       expect(data.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
       expect(data.exitsPerFrame).to.equal(EXITS_PER_FRAME);
       expect(data.frameDurationInSec).to.equal(FRAME_DURATION);
-      expect(data.prevExitRequestsLimit).to.equal(0);
-      expect(data.currentExitRequestsLimit).to.equal(2);
+      expect(data.prevExitRequestsLimit).to.equal(3);
+      expect(data.currentExitRequestsLimit).to.equal(5);
     });
 
-    it("Should process remaining requests after 2 frames passes", async () => {
-      const emitTx = await oracle.submitExitRequestsData(REQUEST_DELIVERED_BY_PARTS);
+    it("Should process requests after 2 frames passes", async () => {
+      const emitTx = await oracle.submitExitRequestsData(REQUEST);
       const timestamp = await oracle.getTime();
 
-      for (let i = 3; i < 5; i++) {
-        const request = VALIDATORS_DELIVERED_BY_PARTS[i];
+      for (let i = 0; i < 5; i++) {
+        const request = VALIDATORS[i];
         await expect(emitTx)
           .to.emit(oracle, "ValidatorExitRequest")
           .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
       }
 
-      await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(HASH_REQUEST_DELIVERED_BY_PARTS, 3, 4);
+      await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(HASH_REQUEST);
     });
 
-    it("Should revert when no new requests to deliver", async () => {
-      await expect(oracle.submitExitRequestsData(REQUEST_DELIVERED_BY_PARTS)).to.be.revertedWithCustomError(
+    it("Should revert when request already delivered", async () => {
+      await expect(oracle.submitExitRequestsData(REQUEST)).to.be.revertedWithCustomError(
         oracle,
         "RequestsAlreadyDelivered",
       );
     });
 
-    it("Should not give to set new maximum requests per batch value without MAX_VALIDATORS_PER_BATCH_ROLE role", async () => {
-      const maxRequestsPerBatch = 4;
+    it("Should not give to set new maximum requests per report value without MAX_VALIDATORS_PER_REPORT_ROLE role", async () => {
+      const maxRequestsPerReport = 4;
       await expect(
-        oracle.connect(stranger).setMaxRequestsPerBatch(maxRequestsPerBatch),
+        oracle.connect(stranger).setMaxValidatorsPerReport(maxRequestsPerReport),
       ).to.be.revertedWithOZAccessControlError(
         await stranger.getAddress(),
-        await oracle.MAX_VALIDATORS_PER_BATCH_ROLE(),
+        await oracle.MAX_VALIDATORS_PER_REPORT_ROLE(),
       );
     });
 
-    it("Should not allow to set new maximum requests per batch value eq to 0", async () => {
-      const role = await oracle.MAX_VALIDATORS_PER_BATCH_ROLE();
+    it("Should not allow to set new maximum requests per report value eq to 0", async () => {
+      const role = await oracle.MAX_VALIDATORS_PER_REPORT_ROLE();
       await oracle.grantRole(role, authorizedEntity);
 
-      await expect(oracle.connect(authorizedEntity).setMaxRequestsPerBatch(0)).to.be.revertedWith(
-        "MAX_BATCH_SIZE_ZERO",
+      await expect(oracle.connect(authorizedEntity).setMaxValidatorsPerReport(0)).to.be.revertedWith(
+        "ZERO_MAX_VALIDATORS_PER_REPORT",
       );
     });
 
-    it("Should limit request by MAX_VALIDATORS_PER_BATCH if it is smaller than available vebo limit", async () => {
+    it("Should not allow to process request larger than MAX_VALIDATORS_PER_REPORT", async () => {
       await consensus.advanceTimeBy(MAX_EXIT_REQUESTS_LIMIT * 4 * 12);
       const data = await oracle.getExitRequestLimitFullInfo();
       expect(data.currentExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
 
-      const maxRequestsPerBatch = 4;
+      const maxRequestsPerReport = 4;
 
-      await oracle.connect(authorizedEntity).setMaxRequestsPerBatch(maxRequestsPerBatch);
-      expect(await oracle.connect(authorizedEntity).getMaxRequestsPerBatch()).to.equal(maxRequestsPerBatch);
+      await oracle.connect(authorizedEntity).setMaxValidatorsPerReport(maxRequestsPerReport);
+      expect(await oracle.connect(authorizedEntity).getMaxValidatorsPerReport()).to.equal(maxRequestsPerReport);
 
       const exitRequestsRandom = [
         { moduleId: 100, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
@@ -485,29 +463,9 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHashRandom);
 
-      const tx = oracle.submitExitRequestsData(exitRequestRandom);
-      const timestamp = await oracle.getTime();
-
-      for (let i = 0; i < maxRequestsPerBatch; i++) {
-        const request = exitRequestsRandom[i];
-        await expect(tx)
-          .to.emit(oracle, "ValidatorExitRequest")
-          .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
-      }
-
-      await expect(tx)
-        .to.emit(oracle, "ExitDataProcessing")
-        .withArgs(exitRequestHashRandom, 0, maxRequestsPerBatch - 1);
-
-      const history = await oracle.getExitRequestsDeliveryHistory(exitRequestHashRandom);
-
-      expect(history.length).to.be.equal(1);
-      expect(history[0].lastDeliveredExitDataIndex).to.be.equal(maxRequestsPerBatch - 1);
-
-      const data2 = await oracle.getExitRequestLimitFullInfo();
-
-      expect(data2.maxExitRequestsLimit).to.equal(MAX_EXIT_REQUESTS_LIMIT);
-      expect(data2.currentExitRequestsLimit).to.equal(1);
+      await expect(oracle.submitExitRequestsData(exitRequestRandom))
+        .to.be.revertedWithCustomError(oracle, "ToManyExitRequestsInReport")
+        .withArgs(5, 4);
     });
 
     it("Should set maxExitRequestsLimit equal to 0 and return as currentExitRequestsLimit type(uint256).max", async () => {
@@ -549,7 +507,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
           .withArgs(request.moduleId, request.nodeOpId, request.valIndex, request.valPubkey, timestamp);
       }
 
-      await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(exitRequestRandomHash, 0, 1);
+      await expect(emitTx).to.emit(oracle, "ExitDataProcessing").withArgs(exitRequestRandomHash);
 
       const data = await oracle.getExitRequestLimitFullInfo();
 

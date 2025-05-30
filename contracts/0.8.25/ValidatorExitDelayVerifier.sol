@@ -7,7 +7,7 @@ import {BeaconBlockHeader, Validator} from "./lib/BeaconTypes.sol";
 import {GIndex} from "./lib/GIndex.sol";
 import {SSZ} from "./lib/SSZ.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
-import {IValidatorsExitBus, DeliveryHistory} from "./interfaces/IValidatorsExitBus.sol";
+import {IValidatorsExitBus} from "./interfaces/IValidatorsExitBus.sol";
 import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 
 struct ExitRequestData {
@@ -104,8 +104,6 @@ contract ValidatorExitDelayVerifier {
         uint256 provableBeaconBlockTimestamp,
         uint256 eligibleExitRequestTimestamp
     );
-    error KeyWasNotUnpacked(uint256 keyIndex);
-    error NonMonotonicDeliveryHistory(uint256 index);
     error EmptyDeliveryHistory();
 
     /**
@@ -174,7 +172,7 @@ contract ValidatorExitDelayVerifier {
         IValidatorsExitBus veb = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(veb, exitRequests);
+        uint256 deliveredTimestamp = _getExitRequestDeliveryTimestamp(veb, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(beaconBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
@@ -187,7 +185,7 @@ contract ValidatorExitDelayVerifier {
             );
 
             uint256 eligibleToExitInSec = _getSecondsSinceExitIsEligible(
-                requestsDeliveryHistory,
+                deliveredTimestamp,
                 witness,
                 proofSlotTimestamp
             );
@@ -221,7 +219,7 @@ contract ValidatorExitDelayVerifier {
         IValidatorsExitBus veb = IValidatorsExitBus(LOCATOR.validatorsExitBusOracle());
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
 
-        DeliveryHistory[] memory requestsDeliveryHistory = _getExitRequestDeliveryHistory(veb, exitRequests);
+        uint256 deliveredTimestamp = _getExitRequestDeliveryTimestamp(veb, exitRequests);
         uint256 proofSlotTimestamp = _slotToTimestamp(oldBlock.header.slot);
 
         for (uint256 i = 0; i < validatorWitnesses.length; i++) {
@@ -234,7 +232,7 @@ contract ValidatorExitDelayVerifier {
             );
 
             uint256 eligibleToExitInSec = _getSecondsSinceExitIsEligible(
-                requestsDeliveryHistory,
+                deliveredTimestamp,
                 witness,
                 proofSlotTimestamp
             );
@@ -326,12 +324,10 @@ contract ValidatorExitDelayVerifier {
      * @return uint256 The elapsed seconds since the earliest eligible exit request time.
      */
     function _getSecondsSinceExitIsEligible(
-        DeliveryHistory[] memory history,
+        uint256 deliveredTimestamp,
         ValidatorWitness calldata witness,
         uint256 referenceSlotTimestamp
     ) internal view returns (uint256) {
-        uint256 validatorExitRequestTimestamp = _getExitRequestTimestamp(history, witness.exitRequestIndex);
-
         // The earliest a validator can voluntarily exit is after the Shard Committee Period
         // subsequent to its activation epoch.
         uint256 earliestPossibleVoluntaryExitTimestamp = GENESIS_TIME +
@@ -340,8 +336,8 @@ contract ValidatorExitDelayVerifier {
 
         // The actual eligible timestamp is the max between the exit request submission time
         // and the earliest possible voluntary exit time.
-        uint256 eligibleExitRequestTimestamp = validatorExitRequestTimestamp > earliestPossibleVoluntaryExitTimestamp
-            ? validatorExitRequestTimestamp
+        uint256 eligibleExitRequestTimestamp = deliveredTimestamp > earliestPossibleVoluntaryExitTimestamp
+            ? deliveredTimestamp
             : earliestPossibleVoluntaryExitTimestamp;
 
         if (referenceSlotTimestamp < eligibleExitRequestTimestamp) {
@@ -360,41 +356,16 @@ contract ValidatorExitDelayVerifier {
         return stateSlot < PIVOT_SLOT ? GI_HISTORICAL_SUMMARIES_PREV : GI_HISTORICAL_SUMMARIES_CURR;
     }
 
-    function _getExitRequestDeliveryHistory(
+    function _getExitRequestDeliveryTimestamp(
         IValidatorsExitBus veb,
         ExitRequestData calldata exitRequests
-    ) internal view returns (DeliveryHistory[] memory) {
+    ) internal view returns (uint256 deliveryTimestamp) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
-        DeliveryHistory[] memory history = veb.getExitRequestsDeliveryHistory(exitRequestsHash);
+        deliveryTimestamp = veb.getDeliveryTime(exitRequestsHash);
 
-        if (history.length == 0) {
+        if (deliveryTimestamp == 0) {
             revert EmptyDeliveryHistory();
         }
-
-        // Sanity check, delivery history is strictly monotonically increasing.
-        for (uint256 i = 1; i < history.length; i++) {
-            if (
-                history[i].lastDeliveredKeyIndex <= history[i - 1].lastDeliveredKeyIndex ||
-                history[i].timestamp <= history[i - 1].timestamp
-            ) {
-                revert NonMonotonicDeliveryHistory(i);
-            }
-        }
-
-        return history;
-    }
-
-    function _getExitRequestTimestamp(
-        DeliveryHistory[] memory deliveryHistory,
-        uint256 index
-    ) internal pure returns (uint256 validatorExitRequestTimestamp) {
-        for (uint256 i = 0; i < deliveryHistory.length; i++) {
-            if (deliveryHistory[i].lastDeliveredKeyIndex >= index) {
-                return deliveryHistory[i].timestamp;
-            }
-        }
-
-        revert KeyWasNotUnpacked(index);
     }
 
     function _slotToTimestamp(uint64 slot) internal view returns (uint256) {

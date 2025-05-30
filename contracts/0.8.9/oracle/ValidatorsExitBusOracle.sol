@@ -2,18 +2,17 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
+import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 
-import { BaseOracle } from "./BaseOracle.sol";
-import { ValidatorsExitBus } from "./ValidatorsExitBus.sol";
+import {BaseOracle} from "./BaseOracle.sol";
+import {ValidatorsExitBus} from "./ValidatorsExitBus.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
 
 interface IOracleReportSanityChecker {
     function checkExitBusOracleReport(uint256 _exitRequestsCount) external view;
 }
-
 
 contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     using UnstructuredStorage for bytes32;
@@ -21,17 +20,12 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;
 
-
     error AdminCannotBeZero();
     error SenderNotAllowed();
     error UnexpectedRequestsDataLength();
     error ArgumentOutOfBounds();
 
-    event WarnDataIncompleteProcessing(
-        uint256 indexed refSlot,
-        uint256 requestsProcessed,
-        uint256 requestsCount
-    );
+    event WarnDataIncompleteProcessing(uint256 indexed refSlot, uint256 requestsProcessed, uint256 requestsCount);
 
     struct DataProcessingState {
         uint64 refSlot;
@@ -70,7 +64,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         address consensusContract,
         uint256 consensusVersion,
         uint256 lastProcessingRefSlot,
-        uint256 maxValidatorsPerBatch,
+        uint256 maxValidatorsPerRequest,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
         uint256 frameDurationInSec
@@ -81,7 +75,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         _pauseFor(PAUSE_INFINITELY);
         _initialize(consensusContract, consensusVersion, lastProcessingRefSlot);
 
-        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        _initialize_v2(maxValidatorsPerRequest, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     /**
@@ -90,22 +84,22 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
      */
     function finalizeUpgrade_v2(
-        uint256 maxValidatorsPerBatch,
+        uint256 maxValidatorsPerReport,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
         uint256 frameDurationInSec
     ) external {
-        _initialize_v2(maxValidatorsPerBatch, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        _initialize_v2(maxValidatorsPerReport, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     function _initialize_v2(
-        uint256 maxValidatorsPerBatch,
+        uint256 maxValidatorsPerReport,
         uint256 maxExitRequestsLimit,
         uint256 exitsPerFrame,
         uint256 frameDurationInSec
     ) internal {
         _updateContractVersion(2);
-        _setMaxRequestsPerBatch(maxValidatorsPerBatch);
+        _setMaxValidatorsPerReport(maxValidatorsPerReport);
         _setExitRequestLimit(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
@@ -121,13 +115,11 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         /// @dev Version of the oracle consensus rules. Current version expected
         /// by the oracle can be obtained by calling getConsensusVersion().
         uint256 consensusVersion;
-
         /// @dev Reference slot for which the report was calculated. If the slot
         /// contains a block, the state being reported should include all state
         /// changes resulting from that block. The epoch containing the slot
         /// should be finalized prior to calculating the report.
         uint256 refSlot;
-
         ///
         /// Requests data
         ///
@@ -135,11 +127,9 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         /// @dev Total number of validator exit requests in this report. Must not be greater
         /// than limit checked in OracleReportSanityChecker.checkExitBusOracleReport.
         uint256 requestsCount;
-
         /// @dev Format of the validator exit requests data. Currently, only the
         /// DATA_FORMAT_LIST=1 is supported.
         uint256 dataFormat;
-
         /// @dev Validator exit requests data. Can differ based on the data format,
         /// see the constant defining a specific data format below for more info.
         bytes data;
@@ -161,9 +151,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     ///   provided by the hash consensus contract.
     /// - The provided data doesn't meet safety checks.
     ///
-    function submitReportData(ReportData calldata data, uint256 contractVersion)
-        external whenResumed
-    {
+    function submitReportData(ReportData calldata data, uint256 contractVersion) external whenResumed {
         _checkMsgSenderIsAllowedToSubmitData();
         _checkContractVersion(contractVersion);
         bytes32 dataHash = keccak256(abi.encode(data.data, data.dataFormat));
@@ -172,7 +160,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
         _handleConsensusReportData(data);
-        _storeOracleExitRequestHash(dataHash, data.requestsCount, contractVersion);
+        _storeOracleExitRequestHash(dataHash, contractVersion);
     }
 
     /// @notice Returns the total number of validator exit requests ever processed
@@ -240,11 +228,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     ) internal override {
         DataProcessingState memory state = _storageDataProcessingState().value;
         if (state.refSlot == prevProcessingRefSlot && state.requestsProcessed < state.requestsCount) {
-            emit WarnDataIncompleteProcessing(
-                prevProcessingRefSlot,
-                state.requestsProcessed,
-                state.requestsCount
-            );
+            emit WarnDataIncompleteProcessing(prevProcessingRefSlot, state.requestsProcessed, state.requestsCount);
         }
     }
 
@@ -270,8 +254,6 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
 
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(data.requestsCount);
 
-        // Check VEB common limit
-        _consumeLimit(data.requestsCount, _applyOracleLimit);
         _processExitRequestsList(data.data, 0, data.requestsCount);
 
         _storageDataProcessingState().value = DataProcessingState({
@@ -290,25 +272,8 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         );
     }
 
-    function _applyOracleLimit(uint256 limit, uint256 count) internal pure returns (uint256) {
-        if (limit < count) {
-            revert ExitRequestsLimitExceeded(count, limit);
-        }
-        return count;
-    }
-
-    function _storeOracleExitRequestHash(bytes32 exitRequestsHash, uint256 requestsCount, uint256 contractVersion)
-        internal
-    {
-        if (requestsCount == 0) {
-            return;
-        }
-        _storeNewHashRequestStatus(exitRequestsHash,  RequestStatus({
-            contractVersion: uint32(contractVersion),
-            deliveryHistoryLength: 1,
-            lastDeliveredExitDataIndex: uint32(requestsCount - 1),
-            lastDeliveredExitDataTimestamp: uint32(_getTime())
-        }));
+    function _storeOracleExitRequestHash(bytes32 exitRequestsHash, uint256 contractVersion) internal {
+        _storeNewHashRequestStatus(exitRequestsHash, uint32(contractVersion), uint32(_getTime()));
     }
 
     ///
@@ -319,10 +284,10 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         DataProcessingState value;
     }
 
-    function _storageDataProcessingState() internal pure returns (
-        StorageDataProcessingState storage r
-    ) {
+    function _storageDataProcessingState() internal pure returns (StorageDataProcessingState storage r) {
         bytes32 position = DATA_PROCESSING_STATE_POSITION;
-        assembly { r.slot := position }
+        assembly {
+            r.slot := position
+        }
     }
 }

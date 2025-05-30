@@ -42,44 +42,17 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
         return _storageDataProcessingState().value;
     }
 
-    function storeNewHashRequestStatus(
-        bytes32 exitRequestHash,
-        uint8 contractVersion,
-        uint32 deliveryHistoryLength,
-        uint32 lastDeliveredExitDataIndex,
-        uint32 timestamp
-    ) external {
-        _storeNewHashRequestStatus(
-            exitRequestHash,
-            RequestStatus(contractVersion, deliveryHistoryLength, lastDeliveredExitDataIndex, timestamp)
-        );
-    }
-
-    function storeDeliveryEntry(
-        bytes32 exitRequestsHash,
-        uint256 lastDeliveredExitDataIndex,
-        uint256 lastDeliveredExitDataTimestamp
-    ) external {
-        _storeDeliveryEntry(exitRequestsHash, lastDeliveredExitDataIndex, lastDeliveredExitDataTimestamp);
+    function storeNewHashRequestStatus(bytes32 exitRequestHash, uint8 contractVersion, uint32 timestamp) external {
+        _storeNewHashRequestStatus(exitRequestHash, contractVersion, timestamp);
     }
 
     function setContractVersion(uint256 version) external {
         CONTRACT_VERSION_POSITION.setStorageUint256(version);
     }
 
-    function updateRequestStatus(
-        bytes32 exitRequestHash,
-        uint256 deliveryHistoryLength,
-        uint256 lastDeliveredExitDataIndex,
-        uint256 lastDeliveredExitDataTimestamp
-    ) external {
+    function updateRequestStatus(bytes32 exitRequestHash, uint256 deliveredExitDataTimestamp) external {
         RequestStatus storage requestStatus = _storageRequestStatus()[exitRequestHash];
-        _updateRequestStatus(
-            requestStatus,
-            deliveryHistoryLength,
-            lastDeliveredExitDataIndex,
-            lastDeliveredExitDataTimestamp
-        );
+        _updateRequestStatus(requestStatus, deliveredExitDataTimestamp);
     }
 
     function getRequestStatus(bytes32 exitRequestHash) external view returns (RequestStatus memory requestStatus) {

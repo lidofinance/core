@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IValidatorsExitBus, DeliveryHistory} from "contracts/0.8.25/interfaces/IValidatorsExitBus.sol";
+import {IValidatorsExitBus} from "contracts/0.8.25/interfaces/IValidatorsExitBus.sol";
 
 struct MockExitRequestData {
     bytes pubkey;
@@ -11,21 +11,18 @@ struct MockExitRequestData {
 }
 
 contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
-    bytes32 _hash;
-    DeliveryHistory[] private _deliveryHistory;
+    bytes32 private _hash;
+    uint256 private _deliveryTimestamp;
     MockExitRequestData[] private _data;
 
     function setExitRequests(
         bytes32 exitRequestsHash,
-        DeliveryHistory[] calldata deliveryHistory,
+        uint256 deliveryTimestamp,
         MockExitRequestData[] calldata data
     ) external {
         _hash = exitRequestsHash;
 
-        delete _deliveryHistory;
-        for (uint256 i = 0; i < deliveryHistory.length; i++) {
-            _deliveryHistory.push(deliveryHistory[i]);
-        }
+        _deliveryTimestamp = deliveryTimestamp;
 
         delete _data;
         for (uint256 i = 0; i < data.length; i++) {
@@ -33,9 +30,9 @@ contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
         }
     }
 
-    function getExitRequestsDeliveryHistory(bytes32 exitRequestsHash) external view returns (DeliveryHistory[] memory) {
+    function getDeliveryTime(bytes32 exitRequestsHash) external view returns (uint256 timestamp) {
         require(exitRequestsHash == _hash, "Mock error, Invalid exitRequestsHash");
-        return _deliveryHistory;
+        return _deliveryTimestamp;
     }
 
     function unpackExitRequest(
@@ -47,64 +44,5 @@ contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
 
         MockExitRequestData memory data = _data[index];
         return (data.pubkey, data.nodeOpId, data.moduleId, data.valIndex);
-    }
-}
-
-library ExitRequests {
-    uint256 internal constant PACKED_REQUEST_LENGTH = 64;
-    uint256 internal constant PUBLIC_KEY_LENGTH = 48;
-
-    error ExitRequestIndexOutOfRange(uint256 exitRequestIndex);
-
-    function unpackExitRequest(
-        bytes calldata exitRequests,
-        uint256 exitRequestIndex
-    ) internal pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex) {
-        if (exitRequestIndex >= count(exitRequests)) {
-            revert ExitRequestIndexOutOfRange(exitRequestIndex);
-        }
-
-        uint256 itemOffset;
-        uint256 dataWithoutPubkey;
-
-        assembly {
-            // Compute the start of this packed request (item)
-            itemOffset := add(exitRequests.offset, mul(PACKED_REQUEST_LENGTH, exitRequestIndex))
-
-            // Load the first 16 bytes which contain moduleId (24 bits),
-            // nodeOpId (40 bits), and valIndex (64 bits).
-            dataWithoutPubkey := shr(128, calldataload(itemOffset))
-        }
-
-        // dataWithoutPubkey format (128 bits total):
-        // MSB <-------------------- 128 bits --------------------> LSB
-        // |   128 bits: zeros  | 24 bits: moduleId | 40 bits: nodeOpId | 64 bits: valIndex |
-
-        valIndex = uint64(dataWithoutPubkey);
-        nodeOpId = uint40(dataWithoutPubkey >> 64);
-        moduleId = uint24(dataWithoutPubkey >> (64 + 40));
-
-        // Allocate a new bytes array in memory for the pubkey
-        pubkey = new bytes(PUBLIC_KEY_LENGTH);
-
-        assembly {
-            // Starting offset in calldata for the pubkey part
-            let pubkeyCalldataOffset := add(itemOffset, 16)
-
-            // Memory location of the 'pubkey' bytes array data
-            let pubkeyMemPtr := add(pubkey, 32)
-
-            // Copy the 48 bytes of the pubkey from calldata into memory
-            calldatacopy(pubkeyMemPtr, pubkeyCalldataOffset, PUBLIC_KEY_LENGTH)
-        }
-
-        return (pubkey, nodeOpId, moduleId, valIndex);
-    }
-
-    /**
-     * @dev Counts how many exit requests are packed in the given calldata array.
-     */
-    function count(bytes calldata exitRequests) internal pure returns (uint256) {
-        return exitRequests.length / PACKED_REQUEST_LENGTH;
     }
 }

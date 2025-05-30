@@ -4,15 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-struct DeliveryHistory {
-    // index in array of requests
-    uint256 lastDeliveredKeyIndex;
-    uint256 timestamp;
-}
 interface IValidatorsExitBus {
-    function getExitRequestsDeliveryHistory(
-        bytes32 exitRequestsHash
-    ) external view returns (DeliveryHistory[] memory history);
+    function getDeliveryTime(bytes32 exitRequestsHash) external view returns (uint256 timestamp);
 
     function unpackExitRequest(
         bytes calldata exitRequests,

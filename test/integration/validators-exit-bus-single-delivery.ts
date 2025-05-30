@@ -89,8 +89,7 @@ describe("ValidatorsExitBus integration", () => {
       .to.emit(veb, "ValidatorExitRequest")
       .withArgs(moduleId, nodeOpId, valIndex, pubkey, blockTimestamp);
 
-    const deliveryHistory = await veb.getExitRequestsDeliveryHistory(exitRequestsHash);
-    expect(deliveryHistory.length).to.equal(1);
-    expect(deliveryHistory[0].lastDeliveredExitDataIndex).to.equal(0);
+    const timestamp = await veb.getDeliveryTime(exitRequestsHash);
+    expect(timestamp).to.equal(blockTimestamp);
   });
 });

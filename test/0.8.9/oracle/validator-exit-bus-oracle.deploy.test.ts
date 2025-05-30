@@ -23,7 +23,7 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
     it("initialize reverts if admin address is zero", async () => {
       const deployed = await deployVEBO(admin.address);
 
-      const maxValidatorsPerBatch = 50;
+      const maxValidatorsPerReport = 50;
       const maxExitRequestsLimit = 100;
       const exitsPerFrame = 1;
       const frameDuration = 48;
@@ -34,7 +34,7 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
           await deployed.consensus.getAddress(),
           CONSENSUS_VERSION,
           0,
-          maxValidatorsPerBatch,
+          maxValidatorsPerReport,
           maxExitRequestsLimit,
           exitsPerFrame,
           frameDuration,
