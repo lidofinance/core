@@ -417,18 +417,19 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       );
     });
 
-    it("Should not give to set new maximum requests per report value without MAX_VALIDATORS_PER_REPORT_ROLE role", async () => {
+    it("Should not give to set new maximum requests per report value without EXIT_REQUEST_LIMIT_MANAGER_ROLE role", async () => {
       const maxRequestsPerReport = 4;
+
       await expect(
         oracle.connect(stranger).setMaxValidatorsPerReport(maxRequestsPerReport),
       ).to.be.revertedWithOZAccessControlError(
         await stranger.getAddress(),
-        await oracle.MAX_VALIDATORS_PER_REPORT_ROLE(),
+        await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE(),
       );
     });
 
     it("Should not allow to set new maximum requests per report value eq to 0", async () => {
-      const role = await oracle.MAX_VALIDATORS_PER_REPORT_ROLE();
+      const role = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
       await oracle.grantRole(role, authorizedEntity);
 
       await expect(oracle.connect(authorizedEntity).setMaxValidatorsPerReport(0)).to.be.revertedWith(

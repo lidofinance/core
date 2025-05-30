@@ -254,7 +254,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
 
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(data.requestsCount);
 
-        _processExitRequestsList(data.data, 0, data.requestsCount);
+        _processExitRequestsList(data.data);
 
         _storageDataProcessingState().value = DataProcessingState({
             refSlot: data.refSlot.toUint64(),

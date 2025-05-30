@@ -34,8 +34,8 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
     }
 
     // Method used in VEB
-    function _getTimestamp() internal view override returns (uint256) {
-        return _getTime();
+    function _getTimestamp() internal view override returns (uint32) {
+        return uint32(_getTime());
     }
 
     function getDataProcessingState() external view returns (DataProcessingState memory) {
@@ -50,9 +50,9 @@ contract ValidatorsExitBus__Harness is ValidatorsExitBusOracle, ITimeProvider {
         CONTRACT_VERSION_POSITION.setStorageUint256(version);
     }
 
-    function updateRequestStatus(bytes32 exitRequestHash, uint256 deliveredExitDataTimestamp) external {
+    function updateRequestStatus(bytes32 exitRequestHash) external {
         RequestStatus storage requestStatus = _storageRequestStatus()[exitRequestHash];
-        _updateRequestStatus(requestStatus, deliveredExitDataTimestamp);
+        _updateRequestStatus(requestStatus);
     }
 
     function getRequestStatus(bytes32 exitRequestHash) external view returns (RequestStatus memory requestStatus) {

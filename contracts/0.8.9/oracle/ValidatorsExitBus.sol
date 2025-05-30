@@ -160,14 +160,12 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /// @notice An ACL role granting the permission to submit a hash of the exit requests data
     bytes32 public constant SUBMIT_REPORT_HASH_ROLE = keccak256("SUBMIT_REPORT_HASH_ROLE");
-    /// @notice An ACL role granting the permission to set maximum exit request limit and the frame limit restoring values
+    /// @notice An ACL role granting the permission to set limits configs and MAX_VALIDATORS_PER_REPORT value
     bytes32 public constant EXIT_REQUEST_LIMIT_MANAGER_ROLE = keccak256("EXIT_REQUEST_LIMIT_MANAGER_ROLE");
     /// @notice An ACL role granting the permission to pause accepting validator exit requests
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     /// @notice An ACL role granting the permission to resume accepting validator exit requests
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
-    /// @notice An ACL role granting the permission to set MAX_VALIDATORS_PER_REPORT value
-    bytes32 public constant MAX_VALIDATORS_PER_REPORT_ROLE = keccak256("MAX_VALIDATORS_PER_REPORT_ROLE");
 
     /// Length in bytes of packed request
     uint256 internal constant PACKED_REQUEST_LENGTH = 64;
@@ -267,9 +265,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
         _consumeLimit(requestsCount);
 
-        _processExitRequestsList(request.data, 0, requestsCount);
+        _processExitRequestsList(request.data);
 
-        _updateRequestStatus(requestStatus, _getTimestamp());
+        _updateRequestStatus(requestStatus);
 
         emit ExitDataProcessing(exitRequestsHash);
     }
@@ -343,7 +341,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     }
 
     /**
-     * @notice Sets the maximum exit request limit and the frame during which a portion of the limit can be restored.
+     * @notice Sets the limits config
      * @param maxExitRequestsLimit The maximum number of exit requests.
      * @param exitsPerFrame The number of exits that can be restored per frame.
      * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
@@ -390,7 +388,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @notice Sets the maximum allowed number of validator exit requests to process in a single report.
      * @param maxRequests The new maximum number of exit requests allowed per report.
      */
-    function setMaxValidatorsPerReport(uint256 maxRequests) external onlyRole(MAX_VALIDATORS_PER_REPORT_ROLE) {
+    function setMaxValidatorsPerReport(uint256 maxRequests) external onlyRole(EXIT_REQUEST_LIMIT_MANAGER_ROLE) {
         _setMaxValidatorsPerReport(maxRequests);
     }
 
@@ -411,9 +409,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      *     - exitRequestsHash was not submited
      *     - Request was not delivered
      */
-    function getDeliveryTime(
-        bytes32 exitRequestsHash
-    ) external view returns (uint256 deliveryDateTimestamp) {
+    function getDeliveryTime(bytes32 exitRequestsHash) external view returns (uint256 deliveryDateTimestamp) {
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
         RequestStatus storage storedRequest = requestStatusMap[exitRequestsHash];
 
@@ -513,8 +509,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         }
     }
 
-    function _getTimestamp() internal view virtual returns (uint256) {
-        return block.timestamp; // solhint-disable-line not-rely-on-time
+    function _getTimestamp() internal view virtual returns (uint32) {
+        return uint32(block.timestamp); // solhint-disable-line not-rely-on-time
     }
 
     function _setMaxValidatorsPerReport(uint256 value) internal {
@@ -582,10 +578,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         emit RequestsHashSubmitted(exitRequestsHash);
     }
 
-    function _updateRequestStatus(RequestStatus storage requestStatus, uint256 deliveredExitDataTimestamp) internal {
-        require(deliveredExitDataTimestamp <= type(uint32).max, "DELIVERED_EXIT_DATA_TIMESTAMP_OVERFLOW");
-
-        requestStatus.deliveredExitDataTimestamp = uint32(deliveredExitDataTimestamp);
+    function _updateRequestStatus(RequestStatus storage requestStatus) internal {
+        requestStatus.deliveredExitDataTimestamp = _getTimestamp();
     }
 
     /// Methods for reading data from tightly packed validator exit requests
@@ -636,15 +630,15 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * This method read report data (DATA_FORMAT=1) within a range
      * Check dataWithoutPubkey <= lastDataWithoutPubkey needs to prevent duplicates
      */
-    function _processExitRequestsList(bytes calldata data, uint256 startIndex, uint256 count) internal {
+    function _processExitRequestsList(bytes calldata data) internal {
         uint256 offset;
         uint256 offsetPastEnd;
         uint256 lastDataWithoutPubkey = 0;
         uint256 timestamp = _getTimestamp();
 
         assembly {
-            offset := add(data.offset, mul(startIndex, PACKED_REQUEST_LENGTH))
-            offsetPastEnd := add(offset, mul(count, PACKED_REQUEST_LENGTH))
+            offset := data.offset
+            offsetPastEnd := add(offset, data.length)
         }
 
         bytes calldata pubkey;
