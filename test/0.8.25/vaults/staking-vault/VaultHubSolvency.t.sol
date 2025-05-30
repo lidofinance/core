@@ -189,7 +189,11 @@ contract LidoMock {
     }
 
     function getPooledEthBySharesRoundUp(uint256 _sharesAmount) external view returns (uint256) {
-        return (_sharesAmount * totalPooledEther) / totalShares;
+        uint256 etherAmount = (_sharesAmount * totalPooledEther) / totalShares;
+        if (_sharesAmount * totalPooledEther != etherAmount * totalShares) {
+            ++etherAmount;
+        }
+        return etherAmount;
     }
 
     function transferSharesFrom(address, address, uint256) external pure returns (uint256) {
@@ -214,17 +218,10 @@ contract VaultHubTest is Test {
 
     struct Vault {
         StakingVault stakingVaultProxy;
-        bool isValidatorPerformingWell;
         ValidatorState validatorState;
         uint256 lifetime;
         uint256 lastInactivePenaltyTime;
         VaultState lastState;
-    }
-
-    enum VaultAction {
-        Mint,
-        Burn,
-        Rebalance
     }
 
     enum VaultState {
@@ -266,13 +263,13 @@ contract VaultHubTest is Test {
 
     uint256 internal constant ITERATIONS = 170;
     uint256 internal constant CONNECTED_VAULTS_LIMIT = 100;
-    uint256 internal constant BAD_BEHAVIOUR_ITERATIONS_LIMIT = 10;
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
     uint256 internal constant SECONDS_PER_DAY = 86400;
     uint256 internal constant LOCKED_AMOUNT = 32 ether;
     uint256 internal constant MAX_USERS_TO_STAKING = 100;
     uint256 internal constant CHANCE_TO_CREATE_AND_CONNECT_VAULT = 10;
     uint256 internal constant CHANCE_TO_CALL_REBALANCE_OR_BURN = 10;
+    uint256 internal constant CHANCE_TO_CALL_WITHDRAW = 30;
 
     uint256 private constant INACTIVE_PENALTY_PERIOD = 21 days;
     uint256 private constant INACTIVE_PENALTY_TOTAL_BP = 6000;
@@ -302,9 +299,9 @@ contract VaultHubTest is Test {
         uint256 shareLimit = 35 ether + rnd.randInt(5) * 1 ether; // between 35 and 40 ETH
         uint256 reserveRatioBp = 1000 + rnd.randInt(1000); // between 10% and 20%
         uint256 forcedRebalanceThresholdBp = 500 + rnd.randInt(reserveRatioBp - 500); // between 5% and 95% of reserveRatioBp
-        uint256 infraFeeBp = 500 + rnd.randInt(500); // between 1% and 10%
-        uint256 liquidityFeeBp = 500 + rnd.randInt(500); // between 1% and 10%
-        uint256 reservationFeeBp = 500 + rnd.randInt(500); // between 1% and 10%
+        uint256 infraFeeBp = 500 + rnd.randInt(500); // between 5% and 10%
+        uint256 liquidityFeeBp = 500 + rnd.randInt(500); // between 5% and 10%
+        uint256 reservationFeeBp = 500 + rnd.randInt(500); // between 5% and 10%
         operatorGrid = new OperatorGridMock(
             shareLimit,
             reserveRatioBp,
@@ -376,7 +373,6 @@ contract VaultHubTest is Test {
 
         Vault memory vault = Vault({
             stakingVaultProxy: stakingVaultProxy,
-            isValidatorPerformingWell: rnd.randBool(),
             lifetime: rnd.randInt(ITERATIONS / 2),
             lastInactivePenaltyTime: 0,
             validatorState: validatorState,
@@ -406,7 +402,11 @@ contract VaultHubTest is Test {
             transitionRandomCoreProtocolReceiveReward();
             removeAndDisconnectDeadVault();
 
-            vm.warp(block.timestamp + SECONDS_PER_DAY);
+            if (rnd.randInt(100) >= 20) {
+                vm.warp(block.timestamp + SECONDS_PER_DAY);
+            } else {
+                vm.warp(block.timestamp + SECONDS_PER_DAY * 2);
+            }
 
             checkVaultsForShareLimits();
         }
@@ -434,10 +434,14 @@ contract VaultHubTest is Test {
     function updateReportAndVaultData() internal {
         lazyOracle.setLatestReportTimestamp(block.timestamp);
         for (uint256 i = 0; i < vaults.length; i++) {
+            if (rnd.randInt(100) < 10) {
+                continue;
+            }
+
             Vault memory vault = vaults[i];
             VaultHub.VaultRecord memory vaultRecord = vaultHubProxy.vaultRecord(address(vault.stakingVaultProxy));
             uint256 valuation = address(vault.stakingVaultProxy).balance;
-            int256 inOutDelta = vaultRecord.report.inOutDelta;
+            int256 inOutDelta = vaultRecord.inOutDelta;
             uint256 sharesMinted = vaultRecord.liabilityShares;
             uint256 treasureFeeShares = 0;
 
@@ -454,9 +458,11 @@ contract VaultHubTest is Test {
     }
 
     function checkVaultsForShareLimits() internal view {
+        uint256 totalSharesMinted = 0;
         for (uint256 i = 0; i < vaults.length; i++) {
             Vault memory vault = vaults[i];
             uint256 sharesMinted = vaultHubProxy.vaultRecord(address(vault.stakingVaultProxy)).liabilityShares;
+            totalSharesMinted += sharesMinted;
 
             if (getVaultState(vault) != VaultState.BadDebt) {
                 assertLe(
@@ -464,10 +470,9 @@ contract VaultHubTest is Test {
                     vaultHubProxy.totalValue(address(vault.stakingVaultProxy))
                 );
             }
-
-            uint256 relativeMaxShareLimitPerVault = (lido.getTotalShares() * relativeShareLimitBp) / TOTAL_BASIS_POINTS;
-            assertLe(sharesMinted, relativeMaxShareLimitPerVault);
         }
+        uint256 relativeMaxShareLimitPerVault = (lido.getTotalShares() * relativeShareLimitBp) / TOTAL_BASIS_POINTS;
+        assertLe(totalSharesMinted, relativeMaxShareLimitPerVault);
     }
 
     function disconnectVault(Vault memory _vault) internal {
@@ -513,16 +518,22 @@ contract VaultHubTest is Test {
             }
 
             if (state == VaultState.MintingAllowed) {
-                transitionMintMaxAllowedShares(vault.stakingVaultProxy);
-            } else if (state == VaultState.Healthy || state == VaultState.Unhealthy) {
-                if (rnd.randInt(100) < CHANCE_TO_CALL_REBALANCE_OR_BURN) {
-                    if (rnd.randBool()) {
-                        transitionRandomBurn(vault.stakingVaultProxy);
-                    } else {
-                        transitionRandomRebalance(vault.stakingVaultProxy);
-                    }
+                if (rnd.randInt(100) < CHANCE_TO_CALL_WITHDRAW) {
+                    transitionRandWithdraw(vault.stakingVaultProxy);
+                } else {
+                    transitionMintMaxAllowedShares(vault.stakingVaultProxy);
                 }
-            } else if (state == VaultState.BadDebt) {
+            } else if (state == VaultState.Healthy) {
+                if (rnd.randInt(100) < CHANCE_TO_CALL_REBALANCE_OR_BURN) {
+                    transitionRandomBurn(vault.stakingVaultProxy);
+                }
+            } else if (state == VaultState.Unhealthy) {
+                if (rnd.randBool()) {
+                    transitionRandomRebalance(vault.stakingVaultProxy);
+                } else {
+                    transitionForceRebalance(vault.stakingVaultProxy);
+                }
+            } else if (getVaultState(vault) == VaultState.BadDebt) {
                 // should be call rebalance but it reverts since this scenario is not supported yet
                 uint256 rebalanceShortfall = vaultHubProxy.rebalanceShortfall(address(vault.stakingVaultProxy));
                 assertEq(rebalanceShortfall, type(uint256).max);
@@ -612,6 +623,9 @@ contract VaultHubTest is Test {
     }
 
     function transitionMintMaxAllowedShares(StakingVault _stakingVault) internal {
+        if (!vaultHubProxy.isReportFresh(address(_stakingVault))) {
+            return;
+        }
         uint256 totalShares = lido.getTotalShares();
         uint256 totalPooledEther = lido.getTotalPooledEther();
 
@@ -652,7 +666,19 @@ contract VaultHubTest is Test {
 
     function transitionRandomBurn(StakingVault _stakingVault) internal {
         VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(_stakingVault));
-        uint256 amountOfSharesToBurn = rnd.randInt(record.liabilityShares);
+        uint256 amountOfSharesToBurn = 0;
+        uint256 random = rnd.randInt(100);
+        if (random < 10) {
+            // 10% chance to burn first 10% of shares
+            amountOfSharesToBurn = rnd.randInt(record.liabilityShares / 10);
+        } else if (random < 20) {
+            // 10% chance to burn last 10% of shares
+            amountOfSharesToBurn = record.liabilityShares - rnd.randInt(record.liabilityShares / 10);
+        } else {
+            // 80% chance to burn random amount
+            amountOfSharesToBurn = rnd.randInt(record.liabilityShares);
+        }
+
         if (amountOfSharesToBurn > 0) {
             console2.log("Burn random shares", address(_stakingVault), amountOfSharesToBurn);
             vm.prank(owner);
@@ -661,18 +687,43 @@ contract VaultHubTest is Test {
         }
     }
 
-    function transitionRandomRebalance(StakingVault _stakingVault) internal {
-        if (!vaultHubProxy.isVaultHealthy(address(_stakingVault))) {
-            console2.log("Rebalance", address(_stakingVault));
-            uint256 rebalanceShortfall = vaultHubProxy.rebalanceShortfall(address(_stakingVault));
-            console2.log("rebalanceShortfall", rebalanceShortfall);
-
-            uint256 sharesToBurn = lido.getSharesByPooledEth(rebalanceShortfall);
-            console2.log("sharesToBurn", sharesToBurn);
-            totalSharesBurned += sharesToBurn;
-            vm.prank(owner);
-            vaultHubProxy.forceRebalance(address(_stakingVault));
+    function transitionForceRebalance(StakingVault _stakingVault) internal {
+        if (vaultHubProxy.isVaultHealthy(address(_stakingVault))) {
+            return;
         }
+        uint256 rebalanceShortfall = vaultHubProxy.rebalanceShortfall(address(_stakingVault));
+        uint256 sharesToBurn = lido.getSharesByPooledEth(rebalanceShortfall);
+        totalSharesBurned += sharesToBurn;
+        vm.prank(owner);
+        vaultHubProxy.forceRebalance(address(_stakingVault));
+        console2.log("Force rebalance sharesToBurn:", address(_stakingVault), sharesToBurn);
+    }
+
+    function transitionRandomRebalance(StakingVault _stakingVault) internal {
+        if (vaultHubProxy.isVaultHealthy(address(_stakingVault))) {
+            return;
+        }
+        uint256 rebalanceShortfall = vaultHubProxy.rebalanceShortfall(address(_stakingVault));
+        uint256 rebalanceAmount = rnd.randInt(rebalanceShortfall);
+        uint256 sharesToBurn = lido.getSharesByPooledEth(rebalanceAmount);
+        totalSharesBurned += sharesToBurn;
+        vm.prank(owner);
+        vaultHubProxy.rebalance(address(_stakingVault), rebalanceAmount);
+        console2.log("Rebalance sharesToBurn:", address(_stakingVault), sharesToBurn);
+    }
+
+    function transitionRandWithdraw(StakingVault _stakingVault) internal {
+        if (!vaultHubProxy.isReportFresh(address(_stakingVault))) {
+            return;
+        }
+
+        uint256 unlockedAmount = vaultHubProxy.unlocked(address(_stakingVault));
+        uint256 withdrawAmount = rnd.randInt(unlockedAmount);
+        console2.log("withdrawAmount", withdrawAmount);
+        vm.prank(owner);
+        console2.log("vault balance", address(_stakingVault).balance);
+        vaultHubProxy.withdraw(address(_stakingVault), address(owner), withdrawAmount);
+        console2.log("vault balance after", address(_stakingVault).balance);
     }
 
     function getVaultState(Vault memory _vault) internal view returns (VaultState) {
