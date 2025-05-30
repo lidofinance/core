@@ -27,7 +27,6 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
   let oracleVersion: bigint;
   let exitRequests: ExitRequest[];
   let reportFields: ReportFields;
-  let reportItems: ReturnType<typeof getValidatorsExitBusReportDataItems>;
   let reportHash: string;
 
   let member1: HardhatEthersSigner;
@@ -51,13 +50,12 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
     data: string;
   }
 
-  const calcValidatorsExitBusReportDataHash = (items: ReturnType<typeof getValidatorsExitBusReportDataItems>) => {
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [items]);
-    return ethers.keccak256(data);
-  };
-
-  const getValidatorsExitBusReportDataItems = (r: ReportFields) => {
-    return [r.consensusVersion, r.refSlot, r.requestsCount, r.dataFormat, r.data];
+  const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
+    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
+    const reportDataHash = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
+    );
+    return reportDataHash;
   };
 
   const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
@@ -92,15 +90,13 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
 
     reportFields = {
       consensusVersion: CONSENSUS_VERSION,
-      dataFormat: DATA_FORMAT_LIST,
       refSlot: refSlot,
+      dataFormat: DATA_FORMAT_LIST,
       requestsCount: exitRequests.length,
       data: encodeExitRequestsDataList(exitRequests),
     };
 
-    reportItems = getValidatorsExitBusReportDataItems(reportFields);
-    reportHash = calcValidatorsExitBusReportDataHash(reportItems);
-
+    reportHash = calcValidatorsExitBusReportDataHash(reportFields);
     await consensus.connect(member1).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
     await consensus.connect(member3).submitReport(refSlot, reportHash, CONSENSUS_VERSION);
   };
@@ -123,7 +119,6 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
       expect(oracleVersion).to.be.not.null;
       expect(exitRequests).to.be.not.null;
       expect(reportFields).to.be.not.null;
-      expect(reportItems).to.be.not.null;
       expect(reportHash).to.be.not.null;
     });
   });
@@ -136,7 +131,7 @@ describe("ValidatorsExitBusOracle.sol:accessControl", () => {
       });
       it("should revert without admin address", async () => {
         await expect(
-          oracle.initialize(ZeroAddress, await consensus.getAddress(), CONSENSUS_VERSION, 0),
+          oracle.initialize(ZeroAddress, await consensus.getAddress(), CONSENSUS_VERSION, 0, 600, 13000, 1, 48),
         ).to.be.revertedWithCustomError(oracle, "AdminCannotBeZero");
       });
     });

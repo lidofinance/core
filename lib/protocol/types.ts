@@ -17,6 +17,7 @@ import {
   OracleDaemonConfig,
   OracleReportSanityChecker,
   StakingRouter,
+  ValidatorExitDelayVerifier,
   ValidatorsExitBusOracle,
   WithdrawalQueueERC721,
   WithdrawalVault,
@@ -38,6 +39,7 @@ export type ProtocolNetworkItems = {
   oracleReportSanityChecker: string;
   burner: string;
   stakingRouter: string;
+  validatorExitDelayVerifier: string;
   validatorsExitBusOracle: string;
   withdrawalQueue: string;
   withdrawalVault: string;
@@ -63,6 +65,7 @@ export interface ContractTypes {
   OracleReportSanityChecker: OracleReportSanityChecker;
   Burner: Burner;
   StakingRouter: StakingRouter;
+  ValidatorExitDelayVerifier: ValidatorExitDelayVerifier;
   ValidatorsExitBusOracle: ValidatorsExitBusOracle;
   WithdrawalQueueERC721: WithdrawalQueueERC721;
   WithdrawalVault: WithdrawalVault;
@@ -92,6 +95,7 @@ export type CoreContracts = {
   oracleReportSanityChecker: LoadedContract<OracleReportSanityChecker>;
   burner: LoadedContract<Burner>;
   stakingRouter: LoadedContract<StakingRouter>;
+  validatorExitDelayVerifier: LoadedContract<ValidatorExitDelayVerifier>;
   validatorsExitBusOracle: LoadedContract<ValidatorsExitBusOracle>;
   withdrawalQueue: LoadedContract<WithdrawalQueueERC721>;
   withdrawalVault: LoadedContract<WithdrawalVault>;
