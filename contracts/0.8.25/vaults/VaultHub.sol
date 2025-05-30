@@ -89,8 +89,8 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     struct VaultObligations {
-        /// @notice accumulated value for treasury fees that is settled on the vault
-        uint128 accumulatedSettledTreasuryFees;
+        /// @notice accumulated value for treasury fees that were settled on the vault
+        uint128 totalSettledTreasuryFees;
         /// @notice unsettled treasury fees amount
         uint64 treasuryFees;
         /// @notice unsettled redemptions amount
@@ -450,7 +450,7 @@ contract VaultHub is PausableUntilWithRoles {
             emit VaultDisconnectCompleted(_vault);
         } else {
             VaultObligations storage obligations = _vaultObligations(_vault);
-            uint256 accumulatedTreasuryFees = obligations.accumulatedSettledTreasuryFees + obligations.treasuryFees;
+            uint256 accumulatedTreasuryFees = obligations.totalSettledTreasuryFees + obligations.treasuryFees;
             if (_reportAccumulatedTreasuryFees < accumulatedTreasuryFees) {
                 revert InvalidFees(_vault, _reportAccumulatedTreasuryFees, accumulatedTreasuryFees);
             }
@@ -474,7 +474,7 @@ contract VaultHub is PausableUntilWithRoles {
             _settleObligations(
                 _vault,
                 record,
-                _reportAccumulatedTreasuryFees - obligations.accumulatedSettledTreasuryFees, // new unsettled treasury fees
+                _reportAccumulatedTreasuryFees - obligations.totalSettledTreasuryFees, // new unsettled treasury fees
                 false
             );
 
@@ -1023,7 +1023,6 @@ contract VaultHub is PausableUntilWithRoles {
 
         $.connections[_vault] = _connection;
         $.records[_vault] = _record;
-        $.obligations[_vault] = VaultObligations(0, 0, 0);
     }
 
     function _deleteVault(address _vault, VaultConnection storage _connection) internal {
@@ -1121,7 +1120,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (shouldUpdateTreasuryFees || valueToTransferToTreasury > 0) {
             if (shouldUpdateTreasuryFees) obligations.treasuryFees = uint64(unsettledTreasuryFees);
             if (valueToTransferToTreasury > 0)
-                obligations.accumulatedSettledTreasuryFees += uint128(valueToTransferToTreasury);
+                obligations.totalSettledTreasuryFees += uint128(valueToTransferToTreasury);
             emit TreasuryFeesObligationUpdated(_vault, unsettledTreasuryFees, valueToTransferToTreasury);
         }
     }

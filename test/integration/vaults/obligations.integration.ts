@@ -92,14 +92,14 @@ describe("Integration: Vault obligations", () => {
 
       const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsBefore.treasuryFees).to.equal(0n);
-      expect(obligationsBefore.accumulatedSettledTreasuryFees).to.equal(0n);
+      expect(obligationsBefore.totalSettledTreasuryFees).to.equal(0n);
 
       // Report the vault data with accrued treasury fees
       await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees });
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.treasuryFees).to.equal(ether("0.1"));
-      expect(obligationsAfter.accumulatedSettledTreasuryFees).to.equal(ether("1"));
+      expect(obligationsAfter.totalSettledTreasuryFees).to.equal(ether("1"));
 
       // Try to lower the fees
       await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees: accruedTreasuryFees - 1n }))
@@ -114,7 +114,7 @@ describe("Integration: Vault obligations", () => {
 
       const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsBefore.treasuryFees).to.equal(0n);
-      expect(obligationsBefore.accumulatedSettledTreasuryFees).to.equal(0n);
+      expect(obligationsBefore.totalSettledTreasuryFees).to.equal(0n);
 
       // Report the vault data with accrued treasury fees
       await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees }))
@@ -123,7 +123,7 @@ describe("Integration: Vault obligations", () => {
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.treasuryFees).to.equal(accruedTreasuryFees);
-      expect(obligationsAfter.accumulatedSettledTreasuryFees).to.equal(0n);
+      expect(obligationsAfter.totalSettledTreasuryFees).to.equal(0n);
     });
 
     it("Settled on the vault report for vault with enough balance", async () => {
@@ -133,7 +133,7 @@ describe("Integration: Vault obligations", () => {
 
       const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsBefore.treasuryFees).to.equal(0n);
-      expect(obligationsBefore.accumulatedSettledTreasuryFees).to.equal(0n);
+      expect(obligationsBefore.totalSettledTreasuryFees).to.equal(0n);
 
       // Report the vault data with accrued treasury fees
       await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees }))
@@ -144,7 +144,7 @@ describe("Integration: Vault obligations", () => {
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.treasuryFees).to.equal(0n);
-      expect(obligationsAfter.accumulatedSettledTreasuryFees).to.equal(accruedTreasuryFees);
+      expect(obligationsAfter.totalSettledTreasuryFees).to.equal(accruedTreasuryFees);
     });
 
     it("Partially settled on the vault report for vault with some balance", async () => {
@@ -157,7 +157,7 @@ describe("Integration: Vault obligations", () => {
 
       const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsBefore.treasuryFees).to.equal(0n);
-      expect(obligationsBefore.accumulatedSettledTreasuryFees).to.equal(0n);
+      expect(obligationsBefore.totalSettledTreasuryFees).to.equal(0n);
 
       // Report the vault data with accrued treasury fees
       await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees }))
@@ -168,7 +168,7 @@ describe("Integration: Vault obligations", () => {
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.treasuryFees).to.equal(unsettledTreasuryFees);
-      expect(obligationsAfter.accumulatedSettledTreasuryFees).to.equal(vaultBalance);
+      expect(obligationsAfter.totalSettledTreasuryFees).to.equal(vaultBalance);
     });
 
     it("Get updated on several consecutive reports", async () => {
@@ -215,7 +215,7 @@ describe("Integration: Vault obligations", () => {
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.treasuryFees).to.equal(0n);
-      expect(obligationsAfter.accumulatedSettledTreasuryFees).to.equal(feesToSettle + vaultBalance);
+      expect(obligationsAfter.totalSettledTreasuryFees).to.equal(feesToSettle + vaultBalance);
     });
   });
 
@@ -423,7 +423,7 @@ describe("Integration: Vault obligations", () => {
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.redemptions).to.equal(unsettledWithdrawals);
       expect(obligationsAfter.treasuryFees).to.equal(accruedTreasuryFees);
-      expect(obligationsAfter.accumulatedSettledTreasuryFees).to.equal(0n);
+      expect(obligationsAfter.totalSettledTreasuryFees).to.equal(0n);
 
       // fund to the vault to settle some obligations
       const funded = ether("1");
@@ -448,7 +448,7 @@ describe("Integration: Vault obligations", () => {
       const obligationsAfterFunding = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfterFunding.redemptions).to.equal(0n);
       expect(obligationsAfterFunding.treasuryFees).to.equal(expectedUnsettledTreasuryFees);
-      expect(obligationsAfterFunding.accumulatedSettledTreasuryFees).to.equal(expectedSettledTreasuryFees1);
+      expect(obligationsAfterFunding.totalSettledTreasuryFees).to.equal(expectedSettledTreasuryFees1);
 
       // fund to the vault to settle all the obligations
       await dashboard.connect(roles.funder).fund({ value: funded });
@@ -467,7 +467,7 @@ describe("Integration: Vault obligations", () => {
       const obligationsAfterReport = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfterReport.redemptions).to.equal(0n);
       expect(obligationsAfterReport.treasuryFees).to.equal(0);
-      expect(obligationsAfterReport.accumulatedSettledTreasuryFees).to.equal(expectedTotalSettledTreasuryFees);
+      expect(obligationsAfterReport.totalSettledTreasuryFees).to.equal(expectedTotalSettledTreasuryFees);
     });
   });
 
