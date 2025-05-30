@@ -5,14 +5,13 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  DepositContract__MockForStakingVault,
   EthRejector,
   IPredepositGuarantee,
   LidoLocator,
   OssifiableProxy,
   PredepositGuarantee,
   SSZMerkleTree,
-  StakingVault__MockForPDG,
+  StakingVault__MockForPDG
 } from "typechain-types";
 
 import {
