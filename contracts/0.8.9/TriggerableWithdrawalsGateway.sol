@@ -5,6 +5,7 @@ pragma solidity 0.8.9;
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "./lib/ExitLimitUtils.sol";
+import {PausableUntil} from "./utils/PausableUntil.sol";
 
 interface IWithdrawalVault {
     function addWithdrawalRequests(bytes[] calldata pubkeys, uint64[] calldata amounts) external payable;
@@ -27,7 +28,7 @@ interface IStakingRouter {
  * @notice TriggerableWithdrawalsGateway contract is one entrypoint for all triggerable withdrawal requests (TWRs) in protocol.
  * This contract is responsible for limiting TWRs, checking ADD_FULL_WITHDRAWAL_REQUEST_ROLE role before it gets to Withdrawal Vault.
  */
-contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
+contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil {
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;
 
@@ -87,6 +88,8 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         bytes pubkey;
     }
 
+    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
     bytes32 public constant ADD_FULL_WITHDRAWAL_REQUEST_ROLE = keccak256("ADD_FULL_WITHDRAWAL_REQUEST_ROLE");
     bytes32 public constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
 
@@ -121,6 +124,40 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
     }
 
     /**
+     * @dev Resumes the triggerable withdrawals requests.
+     * @notice Reverts if:
+     *         - The contract is not paused.
+     *         - The sender does not have the `RESUME_ROLE`.
+     */
+    function resume() external onlyRole(RESUME_ROLE) {
+        _resume();
+    }
+
+    /**
+     * @notice Pauses the triggerable withdrawals requests placement for a specified duration.
+     * @param _duration The pause duration in seconds (use `PAUSE_INFINITELY` for unlimited).
+     * @dev Reverts if:
+     *         - The contract is already paused.
+     *         - The sender does not have the `PAUSE_ROLE`.
+     *         - A zero duration is passed.
+     */
+    function pauseFor(uint256 _duration) external onlyRole(PAUSE_ROLE) {
+        _pauseFor(_duration);
+    }
+
+    /**
+     * @notice Pauses the triggerable withdrawals requests placement until a specified timestamp.
+     * @param _pauseUntilInclusive The last second to pause until (inclusive).
+     * @dev Reverts if:
+     *         - The timestamp is in the past.
+     *         - The sender does not have the `PAUSE_ROLE`.
+     *         - The contract is already paused.
+     */
+    function pauseUntil(uint256 _pauseUntilInclusive) external onlyRole(PAUSE_ROLE) {
+        _pauseUntil(_pauseUntilInclusive);
+    }
+
+    /**
      * @dev Submits Triggerable Withdrawal Requests to the Withdrawal Vault as full withdrawal requests
      *      for the specified validator public keys.
      *
@@ -141,7 +178,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable {
         ValidatorData[] calldata validatorsData,
         address refundRecipient,
         uint256 exitType
-    ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance {
+    ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance whenResumed {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         uint256 requestsCount = validatorsData.length;
         if (requestsCount == 0) revert ZeroArgument("validatorsData");
