@@ -47,7 +47,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     validatorWithdrawalTriggerer: HardhatEthersSigner,
     disconnecter: HardhatEthersSigner,
     tierChanger: HardhatEthersSigner,
-    nodeOperatorFeeRecipientSetter: HardhatEthersSigner,
     nodeOperatorRewardAdjuster: HardhatEthersSigner,
     stranger: HardhatEthersSigner;
 
@@ -74,8 +73,8 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       validatorExitRequester,
       validatorWithdrawalTriggerer,
       disconnecter,
-      tierChanger,
-      nodeOperatorFeeRecipientSetter,
+      tierChanger, // nodeOperatorFeeRecipientSetter
+      ,
       nodeOperatorRewardAdjuster,
       stranger,
     ] = allRoles;
