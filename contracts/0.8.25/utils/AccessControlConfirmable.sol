@@ -15,7 +15,7 @@ import {Confirmations} from "./Confirmations.sol";
 abstract contract AccessControlConfirmable is AccessControlEnumerable, Confirmations {
 
     constructor() {
-      __Confirmations_init();
+        __Confirmations_init();
     }
 
     modifier onlyConfirmed(bytes32[] memory _roles) {
@@ -23,7 +23,7 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable, Confirmat
         _;
     }
 
-    function _isValidConfirmer(uint256 _confirmerIndex, bytes32[] memory _confirmers) internal view override returns (bool) {
-        return hasRole(_confirmers[_confirmerIndex], msg.sender);
+    function _isValidConfirmer(bytes32 _role) internal view override returns (bool) {
+        return hasRole(_role, msg.sender);
     }
 }

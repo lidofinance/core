@@ -8,7 +8,6 @@ pragma solidity 0.8.25;
  * @title Confirmations
  * @author Lido
  * @notice A contract that allows exectuing functions by mutual confirmation.
- * @dev This contract extends AccessControlEnumerable and adds a confirmation mechanism in the form of a modifier.
  */
 abstract contract Confirmations {
 
@@ -17,17 +16,17 @@ abstract contract Confirmations {
      * @dev We cannot set confirmExpiry to 0 because this means that all confirmations have to be in the same block,
      *      which can never be guaranteed. And, more importantly, if the `_setConfirmExpiry` is restricted by
      *      the `onlyConfirmed` modifier, the confirmation expiry will be tricky to change.
-     *      This is why confirmExpiry is private, set to a default value of 1 day and cannot be set to 0.
+     *      This is why confirmExpiry is private, set to a default value of 1 hour and cannot be set to 0.
      *
      * Storage layout:
      * - callData: msg.data of the call (selector + arguments)
-     * - confirmer: index of the confirmer that confirmed the action
+     * - role: role that confirmed the action
      * - expiryTimestamp: timestamp of the confirmation
      *
      * - confirmExpiry: confirmation expiry period in seconds
      */
     struct ConfirmationStorage {
-      mapping(bytes callData => mapping(uint256 confirmer => uint256 expiryTimestamp)) confirmations;
+      mapping(bytes callData => mapping(bytes32 role => uint256 expiryTimestamp)) confirmations;
       uint256 confirmExpiry;
     }
 
@@ -43,7 +42,7 @@ abstract contract Confirmations {
     /**
      * @notice Minimal confirmation expiry in seconds.
      */
-    uint256 public constant MIN_CONFIRM_EXPIRY = 1 days;
+    uint256 public constant MIN_CONFIRM_EXPIRY = 1 hours;
 
     /**
      * @notice Maximal confirmation expiry in seconds.
@@ -66,11 +65,11 @@ abstract contract Confirmations {
     /**
      * @notice Returns the confirmation expiry for a given call data and confirmer.
      * @param _callData The call data of the function.
-     * @param _index The index of the confirmer.
+     * @param _role The role of the confirmer.
      * @return The confirmation expiry in seconds.
      */
-    function confirmations(bytes memory _callData, uint256 _index) external view returns (uint256) {
-        return _getConfirmationsStorage().confirmations[_callData][_index];
+    function confirmations(bytes memory _callData, bytes32 _role) external view returns (uint256) {
+        return _getConfirmationsStorage().confirmations[_callData][_role];
     }
 
     /**
@@ -101,47 +100,52 @@ abstract contract Confirmations {
      *    - i.e. this optimization is beneficial for the deciding caller and
      *      saves 1 storage write for each role the deciding caller has
      *
-     * @param _confirmers Array of confirmers that must confirm the call in order to execute it
+     * @param _calldata msg.data of the call (selector + arguments)
+     * @param _roles Array of role identifiers that must confirm the call in order to execute it
+     * @return bool True if the call was executed, false otherwise
      *
      * @notice Confirmations past their expiry are not counted and must be recast
      * @notice Only members of the specified roles can submit confirmations
      * @notice The order of confirmations does not matter
      *
      */
-    function _checkConfirmations(bytes calldata _calldata, bytes32[] memory _confirmers) internal returns (bool) {
-        if (_confirmers.length == 0) revert ZeroConfirmingRoles();
+    function _checkConfirmations(bytes calldata _calldata, bytes32[] memory _roles) internal returns (bool) {
+        if (_roles.length == 0) revert ZeroConfirmingRoles();
 
-        uint256 numberOfConfirmers = _confirmers.length;
+        uint256 numberOfRoles = _roles.length;
         uint256 numberOfConfirms = 0;
-        bool[] memory deferredConfirms = new bool[](numberOfConfirmers);
-        bool isMember = false;
+        bool[] memory deferredConfirms = new bool[](numberOfRoles);
+        bool isRoleMember = false;
 
         ConfirmationStorage storage $ = _getConfirmationsStorage();
         uint256 expiryTimestamp = block.timestamp + $.confirmExpiry;
 
-        for (uint256 i = 0; i < numberOfConfirmers; ++i) {
-            if (_isValidConfirmer(i, _confirmers)) {
-                isMember = true;
+        for (uint256 i = 0; i < numberOfRoles; ++i) {
+            bytes32 role = _roles[i];
+            if (_isValidConfirmer(role)) {
+                isRoleMember = true;
                 numberOfConfirms++;
                 deferredConfirms[i] = true;
 
-                emit MemberConfirmed(msg.sender, _confirmers[i], expiryTimestamp, _calldata);
-            } else if ($.confirmations[_calldata][i] >= block.timestamp) {
+                emit RoleMemberConfirmed(msg.sender, role, expiryTimestamp, msg.data);
+            } else if ($.confirmations[_calldata][role] >= block.timestamp) {
                 numberOfConfirms++;
             }
         }
 
-        if (!isMember) revert SenderNotMember();
+        if (!isRoleMember) revert SenderNotMember();
 
-        if (numberOfConfirms == numberOfConfirmers) {
-            for (uint256 i = 0; i < numberOfConfirmers; ++i) {
-                delete $.confirmations[_calldata][i];
+        if (numberOfConfirms == numberOfRoles) {
+            for (uint256 i = 0; i < numberOfRoles; ++i) {
+                bytes32 role = _roles[i];
+                delete $.confirmations[_calldata][role];
             }
             return true;
         } else {
-            for (uint256 i = 0; i < numberOfConfirmers; ++i) {
+            for (uint256 i = 0; i < numberOfRoles; ++i) {
                 if (deferredConfirms[i]) {
-                    $.confirmations[_calldata][i] = expiryTimestamp;
+                    bytes32 role = _roles[i];
+                    $.confirmations[_calldata][role] = expiryTimestamp;
                 }
             }
             return false;
@@ -150,11 +154,10 @@ abstract contract Confirmations {
 
     /**
      * @notice Checks if the caller is a valid confirmer
-     * @param _confirmerIndex Index of the confirmer to check
-     * @param _confirmers Array of confirmers
+     * @param _role The role to check
      * @return bool True if the caller is a valid confirmer
      */
-    function _isValidConfirmer(uint256 _confirmerIndex, bytes32[] memory _confirmers) internal view virtual returns (bool);
+    function _isValidConfirmer(bytes32 _role) internal view virtual returns (bool);
 
     /**
      * @dev Sets the confirmation expiry.
@@ -189,13 +192,13 @@ abstract contract Confirmations {
     event ConfirmExpirySet(address indexed sender, uint256 oldConfirmExpiry, uint256 newConfirmExpiry);
 
     /**
-     * @dev Emitted when a member confirms.
+     * @dev Emitted when a role member confirms.
      * @param member The address of the confirming member.
-     * @param confirmer The confirming member.
+     * @param role The role of the confirming member.
      * @param expiryTimestamp The timestamp of the confirmation.
      * @param data The msg.data of the confirmation (selector + arguments).
      */
-    event MemberConfirmed(address indexed member, bytes32 indexed confirmer, uint256 expiryTimestamp, bytes data);
+    event RoleMemberConfirmed(address indexed member, bytes32 indexed role, uint256 expiryTimestamp, bytes data);
 
     /**
      * @dev Thrown when attempting to set confirmation expiry out of bounds.

@@ -188,12 +188,12 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [await stakingVault.getAddress(), 1, 1000]);
 
     await expect(dashboard.connect(roles.tierChanger).changeTier(1n, 1000n))
-      .to.emit(operatorGrid, "MemberConfirmed")
+      .to.emit(operatorGrid, "RoleMemberConfirmed")
       .withArgs(dashboard, ownerMemberIndex, expiryTimestamp, msgData);
 
     expiryTimestamp = (await getNextBlockTimestamp()) + (await operatorGrid.getConfirmExpiry());
     await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n))
-      .to.emit(operatorGrid, "MemberConfirmed")
+      .to.emit(operatorGrid, "RoleMemberConfirmed")
       .withArgs(nodeOperator, operatorMemberIndex, expiryTimestamp, msgData)
       .to.emit(operatorGrid, "TierChanged")
       .withArgs(stakingVault, 1);

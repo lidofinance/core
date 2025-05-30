@@ -36,7 +36,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     /*
       Key concepts:
       1. Default Registration:
-         - All Vaults are initially has default tier (DEFAULT_TIER_ID = 0)
+         - All Vaults are initially have default tier (DEFAULT_TIER_ID = 0)
          - The default tier has no group
 
          DEFAULT_TIER_ID = 0
@@ -47,21 +47,16 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         └──────────────────────┘
 
        2. Tier Change Process:
-         - To modify a vault's connection parameters to VaultHub, a tier change must be requested
-         - Change requests must be approved by the target tier's Node Operator
-         - All pending requests are tracked in the pendingRequests mapping
+         - To predefine vaults tier or modify the existing vault's connection parameters to VaultHub, a tier change must be requested
+         - Both vault owner and node operator must confirm the change (doesn't matter who confirms first)
+         - The confirmation has an expiry time (default 1 hour)
 
-         Operator1.pendingRequests = [Vault_1, Vault_2, ...]
-
-       3. Confirmation Process:
-         - Node Operator can confirm the tier change if:
-           a) The target tier has sufficient capacity (shareLimit)
-           b) Vault's node operator corresponds to the target tier group
-         For detailed tier change scenarios and share accounting, see the ASCII diagrams in the `confirmTierChange` function.
+       3. Tier Reset:
+         - When a vault is disconnected from VaultHub, its tier is automatically reset to the default tier (DEFAULT_TIER_ID)
 
        4. Tier Capacity:
          - Tiers are not limited by the number of vaults
-         - Tiers are limited by the sum of vaults' minted shares
+         - Tiers are limited by the sum of vaults' liability shares
 
         ┌──────────────────────────────────────────────────────┐
         │                 Group 1 = operator 1                 │
@@ -82,6 +77,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     ILidoLocator public immutable LIDO_LOCATOR;
 
     uint256 public constant DEFAULT_TIER_ID = 0;
+
+    // Special address to denote that default tier is not linked to any real operator
     address public constant DEFAULT_TIER_OPERATOR = address(uint160(type(uint160).max));
 
     /// @dev basis points base
@@ -111,9 +108,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
      * @custom:storage-location erc7201:Lido.Vaults.OperatorGrid
      * @custom:tiers Tiers
-     * @custom:vaultTier Vault tiers
+     * @custom:vaultTier Vault tier
      * @custom:groups Groups
-     * @custom:pendingRequests Pending requests
      * @custom:nodeOperators Node operators
      */
     struct ERC7201Storage {
@@ -317,7 +313,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
                                          │                              │
     ┌────────────────────┐               │  ┌─────────┐  ┌───────────┐  │
     │  Tier 1 (default)  │   confirm     │  │ Tier 2  │  │ Tier 3    │  │
-    │  LS: -V            │    ─────▶     │  │ LS:+V   │  │ LS: -V    │  │
+    │  LS: -V            │    ─────>     │  │ LS:+V   │  │           │  │
     └────────────────────┘               │  └─────────┘  └───────────┘  │
                                          │                              │
                                          │   Group1.liabilityShares: +V │
@@ -336,7 +332,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     │                                │     │                                │
     │  ┌───────────┐  ┌───────────┐  │     │  ┌───────────┐                 │
     │  │ Tier 2    │  │ Tier 3    │  │     │  │ Tier 4    │                 │
-    │  │ LS:-V     │  │ LS:+V     │  │     │  │ LS: -V    │                 │
+    │  │ LS:-V     │  │ LS:+V     │  │     │  │           │                 │
     │  └───────────┘  └───────────┘  │     │  └───────────┘                 │
     │  operator1                     │     │  operator2                     │
     └────────────────────────────────┘     └────────────────────────────────┘
@@ -356,14 +352,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         if (_requestedTierId >= $.tiers.length) revert TierNotExists();
         if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
-        address nodeOperator = IStakingVault(_vault).nodeOperator();
         address vaultOwner = IStakingVault(_vault).owner();
-
-        bytes32[] memory confirmers = new bytes32[](2);
-        confirmers[0] = bytes32(uint256(uint160(vaultOwner)));
-        confirmers[1] = bytes32(uint256(uint160(nodeOperator)));
-
-        if (!_checkConfirmations(msg.data, confirmers)) return;
+        address nodeOperator = IStakingVault(_vault).nodeOperator();
 
         uint256 vaultTierId = $.vaultTier[_vault];
         if (vaultTierId == _requestedTierId) revert TierAlreadySet();
@@ -371,6 +361,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         Tier storage requestedTier = $.tiers[_requestedTierId];
         if (nodeOperator != requestedTier.operator) revert TierNotInOperatorGroup();
         if (_requestedShareLimit > requestedTier.shareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
+
+        // store the caller's confirmation; only proceed if the required number of confirmations is met.
+        if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return;
 
         VaultHub vaultHub = VaultHub(LIDO_LOCATOR.vaultHub());
         VaultHub.VaultSocket memory vaultSocket = vaultHub.vaultSocket(_vault);
@@ -395,6 +388,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
 
         $.vaultTier[_vault] = _requestedTierId;
 
+        // Vault may not be connected to VaultHub yet.
+        // There are two possible flows:
+        // 1. Vault is created and connected to VaultHub immediately with the default tier.
+        //    In this case, `vaultSocket.vault` is non-zero and updateConnection must be called.
+        // 2. Vault is created, its tier is changed before connecting to VaultHub.
+        //    In this case, `vaultSocket.vault` is still zero, and updateConnection must be skipped.
+        // Hence, we update the VaultHub connection only if the vault is already connected.
         if (vaultSocket.vault != address(0)) {
             VaultHub(LIDO_LOCATOR.vaultHub()).updateConnection(
                 _vault,
@@ -550,9 +550,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     event GroupAdded(address indexed nodeOperator, uint256 shareLimit);
     event GroupShareLimitUpdated(address indexed nodeOperator, uint256 shareLimit);
     event TierAdded(address indexed nodeOperator, uint256 indexed tierId, uint256 shareLimit, uint256 reserveRatioBP, uint256 forcedRebalanceThresholdBP, uint256 treasuryFee);
-    event VaultAdded(address indexed vault);
     event TierChanged(address indexed vault, uint256 indexed tierId);
-    event TierChangeRequested(address indexed vault, uint256 indexed currentTierId, uint256 indexed requestedTierId);
     event TierUpdated(uint256 indexed tierId, uint256 shareLimit, uint256 reserveRatioBP, uint256 forcedRebalanceThresholdBP, uint256 treasuryFee);
 
     // -----------------------------
@@ -563,12 +561,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     error GroupExists();
     error GroupNotExists();
     error GroupLimitExceeded();
-    error GroupMintedSharesUnderflow();
     error NodeOperatorNotExists();
-    error TierExists();
-    error TiersNotAvailable();
     error TierLimitExceeded();
-    error TierMintedSharesUnderflow();
 
     error TierNotExists();
     error TierAlreadySet();

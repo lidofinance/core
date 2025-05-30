@@ -16,7 +16,7 @@ import {
 } from "typechain-types";
 import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 
-import { certainAddress, ether, GENESIS_FORK_VERSION, impersonate } from "lib";
+import { certainAddress, ether, GENESIS_FORK_VERSION, getNextBlockTimestamp, impersonate } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -410,10 +410,17 @@ describe("OperatorGrid.sol", () => {
         },
       ]);
 
-      await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit + 1)).to.be.emit(
-        operatorGrid,
-        "MemberConfirmed",
-      );
+      const vaultOwnerRole = ethers.zeroPadValue(await vaultOwner.getAddress(), 32);
+      const expiryTimestamp = (await getNextBlockTimestamp()) + (await operatorGrid.getConfirmExpiry());
+      const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
+        await vault_NO1_V1.getAddress(),
+        1,
+        shareLimit + 1,
+      ]);
+
+      await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit + 1))
+        .to.emit(operatorGrid, "RoleMemberConfirmed")
+        .withArgs(vaultOwner, vaultOwnerRole, expiryTimestamp, msgData);
 
       await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit + 1)).to.not.be.reverted;
     });
@@ -430,10 +437,17 @@ describe("OperatorGrid.sol", () => {
         },
       ]);
 
-      await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit + 1)).to.be.emit(
-        operatorGrid,
-        "MemberConfirmed",
-      );
+      const vaultOwnerRole = ethers.zeroPadValue(await vaultOwner.getAddress(), 32);
+      const expiryTimestamp = (await getNextBlockTimestamp()) + (await operatorGrid.getConfirmExpiry());
+      const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
+        await vault_NO1_V1.getAddress(),
+        1,
+        shareLimit + 1,
+      ]);
+
+      await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit + 1))
+        .to.emit(operatorGrid, "RoleMemberConfirmed")
+        .withArgs(vaultOwner, vaultOwnerRole, expiryTimestamp, msgData);
 
       await expect(
         operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit + 1),
@@ -460,7 +474,7 @@ describe("OperatorGrid.sol", () => {
 
       await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, 1)).to.be.emit(
         operatorGrid,
-        "MemberConfirmed",
+        "RoleMemberConfirmed",
       );
 
       await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, 1)).to.be.revertedWithCustomError(

@@ -168,12 +168,12 @@ describe("NodeOperatorFee.sol", () => {
       let confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
 
       await expect(nodeOperatorFee.connect(vaultOwner).setConfirmExpiry(newConfirmExpiry))
-        .to.emit(nodeOperatorFee, "MemberConfirmed")
+        .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
         .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData);
 
       confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
       await expect(nodeOperatorFee.connect(nodeOperatorManager).setConfirmExpiry(newConfirmExpiry))
-        .to.emit(nodeOperatorFee, "MemberConfirmed")
+        .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
         .withArgs(nodeOperatorManager, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, msgData)
         .and.to.emit(nodeOperatorFee, "ConfirmExpirySet")
         .withArgs(nodeOperatorManager, oldConfirmExpiry, newConfirmExpiry);
@@ -417,7 +417,7 @@ describe("NodeOperatorFee.sol", () => {
         .setAccruedRewardsAdjustment(newAdjustment, currentAdjustment);
 
       await expect(firstConfirmTx)
-        .to.emit(nodeOperatorFee, "MemberConfirmed")
+        .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
         .withArgs(nodeOperatorManager, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, msgData);
 
       expect(await nodeOperatorFee.accruedRewardsAdjustment()).to.equal(currentAdjustment);
@@ -429,7 +429,7 @@ describe("NodeOperatorFee.sol", () => {
         .setAccruedRewardsAdjustment(newAdjustment, currentAdjustment);
 
       await expect(secondConfirmTx)
-        .to.emit(nodeOperatorFee, "MemberConfirmed")
+        .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
         .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData)
         .to.emit(nodeOperatorFee, "AccruedRewardsAdjustmentSet")
         .withArgs(newAdjustment, currentAdjustment);

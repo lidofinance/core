@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { AccessControlConfirmable__Harness } from "typechain-types";
 
-import { advanceChainTime, days, getNextBlockTimestamp } from "lib";
+import { advanceChainTime, days, getNextBlockTimestamp,hours } from "lib";
 
 describe("AccessControlConfirmable.sol", () => {
   let harness: AccessControlConfirmable__Harness;
@@ -33,7 +33,7 @@ describe("AccessControlConfirmable.sol", () => {
 
   context("constants", () => {
     it("returns the correct constants", async () => {
-      expect(await harness.MIN_CONFIRM_EXPIRY()).to.equal(days(1n));
+      expect(await harness.MIN_CONFIRM_EXPIRY()).to.equal(hours(1n));
       expect(await harness.MAX_CONFIRM_EXPIRY()).to.equal(days(30n));
     });
   });
@@ -100,9 +100,9 @@ describe("AccessControlConfirmable.sol", () => {
       const msgData = harness.interface.encodeFunctionData("setNumber", [newNumber]);
 
       await expect(harness.connect(role1Member).setNumber(newNumber))
-        .to.emit(harness, "MemberConfirmed")
+        .to.emit(harness, "RoleMemberConfirmed")
         .withArgs(role1Member, await harness.ROLE_1(), expiryTimestamp, msgData);
-      expect(await harness.confirmations(msgData, 0)).to.equal(expiryTimestamp);
+      expect(await harness.confirmations(msgData, await harness.ROLE_1())).to.equal(expiryTimestamp);
       // still old number
       expect(await harness.number()).to.equal(oldNumber);
 
@@ -110,9 +110,9 @@ describe("AccessControlConfirmable.sol", () => {
 
       const newExpiryTimestamp = (await getNextBlockTimestamp()) + (await harness.getConfirmExpiry());
       await expect(harness.connect(role2Member).setNumber(newNumber))
-        .to.emit(harness, "MemberConfirmed")
+        .to.emit(harness, "RoleMemberConfirmed")
         .withArgs(role2Member, await harness.ROLE_2(), newExpiryTimestamp, msgData);
-      expect(await harness.confirmations(msgData, 1)).to.equal(newExpiryTimestamp);
+      expect(await harness.confirmations(msgData, await harness.ROLE_2())).to.equal(newExpiryTimestamp);
       // still old number
       expect(await harness.number()).to.equal(oldNumber);
     });
