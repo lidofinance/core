@@ -307,24 +307,30 @@ describe("Integration: Vault obligations", () => {
         expect(await lido.sharesOf(roles.burner)).to.equal(liabilityShares);
         await lido.connect(roles.burner).approve(dashboard, liabilityShares);
 
-        await expect(dashboard.connect(roles.burner).burnShares(liabilityShares / 2n))
+        const sharesToBurn = liabilityShares / 2n;
+        const expectedRedemptions = maxRedemptions / 2n;
+
+        await expect(dashboard.connect(roles.burner).burnShares(sharesToBurn))
           .to.emit(vaultHub, "RedemptionsObligationUpdated")
-          .withArgs(stakingVaultAddress, maxRedemptions / 2n, 0n);
+          .withArgs(stakingVaultAddress, expectedRedemptions, expectedRedemptions);
 
         const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsAfter.redemptions).to.equal(maxRedemptions / 2n);
+        expect(obligationsAfter.redemptions).to.equal(expectedRedemptions);
       });
 
       it("On vault rebalanced", async () => {
         const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
         expect(obligationsBefore.redemptions).to.equal(maxRedemptions);
 
-        await expect(dashboard.connect(roles.rebalancer).rebalanceVault(liabilityShares / 2n))
+        const sharesToRebalance = liabilityShares / 2n;
+        const expectedRedemptions = maxRedemptions / 2n;
+
+        await expect(dashboard.connect(roles.rebalancer).rebalanceVault(sharesToRebalance))
           .to.emit(vaultHub, "RedemptionsObligationUpdated")
-          .withArgs(stakingVaultAddress, maxRedemptions / 2n, 0n);
+          .withArgs(stakingVaultAddress, expectedRedemptions, expectedRedemptions);
 
         const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsAfter.redemptions).to.equal(maxRedemptions / 2n);
+        expect(obligationsAfter.redemptions).to.equal(expectedRedemptions);
       });
 
       it("Should not increase on new minting", async () => {

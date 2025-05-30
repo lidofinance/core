@@ -638,7 +638,7 @@ contract VaultHub is PausableUntilWithRoles {
         LIDO.burnExternalShares(_amountOfShares);
         _operatorGrid().onBurnedShares(_vault, _amountOfShares);
 
-        _ensureWithdrawalsObligationWithinLiability(_vault, record.liabilityShares);
+        _decreaseRedemptions(_vault, _amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
@@ -903,7 +903,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (liabilityShares_ < sharesToBurn) revert InsufficientSharesToBurn(_vault, liabilityShares_);
 
         _rebalanceEther(_vault, _record, _ether, sharesToBurn);
-        _ensureWithdrawalsObligationWithinLiability(_vault, _record.liabilityShares);
+        _decreaseRedemptions(_vault, sharesToBurn);
 
         emit VaultRebalanced(_vault, sharesToBurn, _ether);
     }
@@ -1061,15 +1061,15 @@ contract VaultHub is PausableUntilWithRoles {
         if (msg.sender != connection.owner) revert NotAuthorized();
     }
 
-    /// @notice Ensures that the withdrawals obligation is within the liability of the vault
+    /// @notice Decreases the redemptions obligation by the amount of shares burned
     /// @param _vault vault address
-    /// @param _liabilityShares liability shares of the vault
-    function _ensureWithdrawalsObligationWithinLiability(address _vault, uint256 _liabilityShares) internal {
-        uint256 liability = _getPooledEthBySharesRoundUp(_liabilityShares);
+    /// @param _sharesBurned amount of shares to burn
+    function _decreaseRedemptions(address _vault, uint256 _sharesBurned) internal {
         VaultObligations storage obligations = _vaultObligations(_vault);
-        if (obligations.redemptions > liability) {
-            obligations.redemptions = uint64(liability);
-            emit RedemptionsObligationUpdated(_vault, liability, 0);
+        if (obligations.redemptions > 0) {
+            uint256 decrease = Math256.min(obligations.redemptions, _getPooledEthBySharesRoundUp(_sharesBurned));
+            obligations.redemptions = uint64(obligations.redemptions - decrease);
+            emit RedemptionsObligationUpdated(_vault, obligations.redemptions, decrease);
         }
     }
 
