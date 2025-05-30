@@ -465,7 +465,7 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
       await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHashRandom);
 
       await expect(oracle.submitExitRequestsData(exitRequestRandom))
-        .to.be.revertedWithCustomError(oracle, "ToManyExitRequestsInReport")
+        .to.be.revertedWithCustomError(oracle, "TooManyExitRequestsInReport")
         .withArgs(5, 4);
     });
 

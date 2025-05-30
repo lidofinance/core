@@ -103,7 +103,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @notice Thrown when exit requests in report exceed the maximum allowed number of requests per report.
      * @param requestsCount  Amount of requests that were sent for processing
      */
-    error ToManyExitRequestsInReport(uint256 requestsCount, uint256 maxRequestsPerReport);
+    error TooManyExitRequestsInReport(uint256 requestsCount, uint256 maxRequestsPerReport);
 
     /// @dev Events
 
@@ -260,7 +260,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         uint256 maxRequestsPerReport = _getMaxValidatorsPerReport();
 
         if (requestsCount > maxRequestsPerReport) {
-            revert ToManyExitRequestsInReport(requestsCount, maxRequestsPerReport);
+            revert TooManyExitRequestsInReport(requestsCount, maxRequestsPerReport);
         }
 
         _consumeLimit(requestsCount);
