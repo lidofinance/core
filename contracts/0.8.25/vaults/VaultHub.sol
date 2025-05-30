@@ -726,7 +726,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        if (_isVaultHealthy(connection, record) && _vaultObligations(_vault).redemptions < OBLIGATIONS_THRESHOLD) {
+        uint256 redemptions = _vaultObligations(_vault).redemptions;
+        if (_isVaultHealthy(connection, record) && redemptions < Math256.max(OBLIGATIONS_THRESHOLD, _vault.balance)) {
             revert ForceValidatorExitNotAllowed();
         }
 
@@ -1076,14 +1077,14 @@ contract VaultHub is PausableUntilWithRoles {
     function _settleObligations(
         address _vault,
         VaultRecord storage _record,
-        uint256 _newUnsettledTreasuryFees,
+        uint256 _treasuryFees,
         bool _shouldRevert
     ) internal {
         (
             uint256 valueToRebalance,
             uint256 valueToTransferToTreasury,
             uint256 unsettled
-        ) = _updateObligationsValues(_vault, _newUnsettledTreasuryFees);
+        ) = _updateObligationsValues(_vault, _treasuryFees);
 
         if (_shouldRevert && unsettled > 0) {
             revert VaultHasUnsettledObligations(_vault, unsettled);
@@ -1100,7 +1101,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _updateObligationsValues(
         address _vault,
-        uint256 _newUnsettledTreasuryFees
+        uint256 _treasuryFees
     ) internal returns (
         uint256 valueToRebalance,
         uint256 valueToTransferToTreasury,
@@ -1110,9 +1111,9 @@ contract VaultHub is PausableUntilWithRoles {
         VaultObligations storage obligations = _vaultObligations(_vault);
 
         valueToRebalance = Math256.min(obligations.redemptions, vaultBalance);
-        valueToTransferToTreasury = Math256.min(_newUnsettledTreasuryFees, vaultBalance - valueToRebalance);
+        valueToTransferToTreasury = Math256.min(_treasuryFees, vaultBalance - valueToRebalance);
 
-        uint256 unsettledTreasuryFees = _newUnsettledTreasuryFees - valueToTransferToTreasury;
+        uint256 unsettledTreasuryFees = _treasuryFees - valueToTransferToTreasury;
         uint256 unsettledRedemptions = obligations.redemptions - valueToRebalance;
         unsettled = unsettledTreasuryFees + unsettledRedemptions;
 
