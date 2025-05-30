@@ -254,8 +254,6 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
 
         IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitBusOracleReport(data.requestsCount);
 
-        // Check VEB common limit
-        _consumeLimit(data.requestsCount);
         _processExitRequestsList(data.data, 0, data.requestsCount);
 
         _storageDataProcessingState().value = DataProcessingState({
