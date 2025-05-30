@@ -249,7 +249,10 @@ describe("ExitLimitUtils.sol", () => {
           prevTimestamp,
         );
 
-        await expect(exitLimit.updatePrevExitLimit(11, prevTimestamp + 10)).to.be.revertedWith("LIMIT_EXCEEDED");
+        await expect(exitLimit.updatePrevExitLimit(11, prevTimestamp + 10)).to.be.revertedWithCustomError(
+          exitLimit,
+          "LimitExceeded",
+        );
       });
 
       it("should increase prevTimestamp on frame duration if one frame passed", async () => {
@@ -345,7 +348,12 @@ describe("ExitLimitUtils.sol", () => {
         const exitsPerFrame = 2;
         const frameDurationInSec = 10;
 
-        const result = await exitLimit.setExitLimits(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp);
+        const result = await exitLimit.setExitLimits(
+          maxExitRequestsLimit,
+          exitsPerFrame,
+          frameDurationInSec,
+          timestamp,
+        );
 
         expect(result.maxExitRequestsLimit).to.equal(maxExitRequestsLimit);
         expect(result.exitsPerFrame).to.equal(exitsPerFrame);
@@ -370,7 +378,12 @@ describe("ExitLimitUtils.sol", () => {
         );
 
         const newMaxExitRequestsLimit = 50;
-        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp);
+        const result = await exitLimit.setExitLimits(
+          newMaxExitRequestsLimit,
+          exitsPerFrame,
+          frameDurationInSec,
+          timestamp,
+        );
 
         expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
         expect(result.prevExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
@@ -394,7 +407,12 @@ describe("ExitLimitUtils.sol", () => {
 
         const newMaxExitRequestsLimit = 150;
 
-        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp);
+        const result = await exitLimit.setExitLimits(
+          newMaxExitRequestsLimit,
+          exitsPerFrame,
+          frameDurationInSec,
+          timestamp,
+        );
 
         expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
         expect(result.prevExitRequestsLimit).to.equal(prevExitRequestsLimit);
@@ -417,7 +435,12 @@ describe("ExitLimitUtils.sol", () => {
         );
 
         const newMaxExitRequestsLimit = 77;
-        const result = await exitLimit.setExitLimits(newMaxExitRequestsLimit, exitsPerFrame, frameDurationInSec, timestamp);
+        const result = await exitLimit.setExitLimits(
+          newMaxExitRequestsLimit,
+          exitsPerFrame,
+          frameDurationInSec,
+          timestamp,
+        );
 
         expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
         expect(result.prevExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
@@ -426,18 +449,25 @@ describe("ExitLimitUtils.sol", () => {
 
       it("should revert if maxExitRequestsLimit is too large", async () => {
         const MAX_UINT32 = 2 ** 32;
-        await expect(exitLimit.setExitLimits(MAX_UINT32, 1, 10, 1000)).to.be.revertedWith(
-          "TOO_LARGE_MAX_EXIT_REQUESTS_LIMIT",
+        await expect(exitLimit.setExitLimits(MAX_UINT32, 1, 10, 1000)).to.be.revertedWithCustomError(
+          exitLimit,
+          "TooLargeMaxExitRequestsLimit",
         );
       });
 
       it("should revert if exitsPerFrame bigger than maxExitRequestsLimit", async () => {
-        await expect(exitLimit.setExitLimits(100, 101, 10, 1000)).to.be.revertedWith("TOO_LARGE_EXITS_PER_FRAME");
+        await expect(exitLimit.setExitLimits(100, 101, 10, 1000)).to.be.revertedWithCustomError(
+          exitLimit,
+          "TooLargeExitsPerFrame",
+        );
       });
 
       it("should revert if frameDurationInSec is too large", async () => {
         const MAX_UINT32 = 2 ** 32;
-        await expect(exitLimit.setExitLimits(100, 2, MAX_UINT32, 1000)).to.be.revertedWith("TOO_LARGE_FRAME_DURATION");
+        await expect(exitLimit.setExitLimits(100, 2, MAX_UINT32, 1000)).to.be.revertedWithCustomError(
+          exitLimit,
+          "TooLargeFrameDuration",
+        );
       });
     });
 

@@ -330,9 +330,9 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
     });
 
     it("Should not allow to set exits per frame bigger than max limit", async () => {
-      await expect(oracle.connect(authorizedEntity).setExitRequestLimit(10, 12, FRAME_DURATION)).to.be.revertedWith(
-        "TOO_LARGE_EXITS_PER_FRAME",
-      );
+      await expect(
+        oracle.connect(authorizedEntity).setExitRequestLimit(10, 12, FRAME_DURATION),
+      ).to.be.revertedWithCustomError(oracle, "TooLargeExitsPerFrame");
     });
 
     it("Should deliver request as it is below limit", async () => {

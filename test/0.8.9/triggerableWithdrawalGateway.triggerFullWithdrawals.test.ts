@@ -354,7 +354,7 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
   it("Should not allow to set exitsPerFrame bigger than maxExitRequestsLimit", async () => {
     await expect(
       triggerableWithdrawalsGateway.connect(authorizedEntity).setExitRequestLimit(0, 1, 48),
-    ).to.be.revertedWith("TOO_LARGE_EXITS_PER_FRAME");
+    ).to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "TooLargeExitsPerFrame");
   });
 
   it("should emit StakingModuleExitNotificationFailed if onValidatorExitTriggered reverts", async () => {
