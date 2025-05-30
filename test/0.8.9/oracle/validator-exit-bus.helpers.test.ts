@@ -187,19 +187,10 @@ describe("ValidatorsExitBusOracle.sol:helpers", () => {
 
       await oracle.storeNewHashRequestStatus(hash, contractVersion, timestamp);
 
-      const newTimestamp = 12345;
-
-      await expect(oracle.updateRequestStatus(hash, newTimestamp)).to.not.be.reverted;
+      await expect(oracle.updateRequestStatus(hash)).to.not.be.reverted;
 
       const requestStatus = await oracle.getRequestStatus(hash);
-      expect(requestStatus.deliveredExitDataTimestamp).to.equal(newTimestamp);
-    });
-
-    it("reverts if deliveredExitDataTimestamp exceeds uint32 max", async () => {
-      const hash = keccak256("0xdddd");
-      await expect(oracle.updateRequestStatus(hash, 2n ** 32n)).to.be.revertedWith(
-        "DELIVERED_EXIT_DATA_TIMESTAMP_OVERFLOW",
-      );
+      expect(requestStatus.deliveredExitDataTimestamp).to.equal(await oracle.getTime());
     });
   });
 });
