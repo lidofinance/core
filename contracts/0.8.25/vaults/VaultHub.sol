@@ -451,57 +451,50 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _vaultConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
         VaultObligations storage obligations = _vaultObligations(_vault);
+
         uint256 accumulatedTreasuryFees = obligations.totalSettledTreasuryFees + obligations.treasuryFees;
         if (_reportAccumulatedTreasuryFees < accumulatedTreasuryFees) {
             revert InvalidFees(_vault, _reportAccumulatedTreasuryFees, accumulatedTreasuryFees);
         }
 
-        // only the new fees are accrued, and not counted before
         uint256 accruedTreasuryFees = _reportAccumulatedTreasuryFees - accumulatedTreasuryFees;
+        bool isPendingDisconnect = connection.pendingDisconnect;
 
-        // here we don't check the reported values but rely on the oracle to preserve vault indexes
-        if (connection.pendingDisconnect) {
-            // settle all the fees, but not more than we have in the vault and revert if some obligations remain
-            _settleObligations(_vault, record, Math256.min(accruedTreasuryFees, _vault.balance), 0);
+        _settleObligations(
+            _vault,
+            record,
+            connection,
+            obligations,
+            accruedTreasuryFees,
+            isPendingDisconnect ? 0 : MAX_UINT256 // in case of pending disconnect, force all obligations to be settled
+        );
 
+        if (isPendingDisconnect) {
             IStakingVault(_vault).transferOwnership(connection.owner);
-            // we rely on the oracle to preserve vault index
             _deleteVault(_vault, connection);
 
             emit VaultDisconnectCompleted(_vault);
-        } else {
-            uint256 liabilityShares_ = Math256.max(record.liabilityShares, _reportLiabilityShares);
-            // locked ether can only be increased asynchronously once the oracle settled the new floor value
-            // as of reference slot to prevent slashing upsides in between the report gathering and delivering
-            uint256 lockedEther = Math256.max(
-                _getPooledEthBySharesRoundUp(liabilityShares_) * TOTAL_BASIS_POINTS
-                    / (TOTAL_BASIS_POINTS - connection.reserveRatioBP),
-                connection.pendingDisconnect ? 0 : CONNECT_DEPOSIT
-            );
-
-            record.locked = uint128(lockedEther);
-            record.reportTimestamp = _reportTimestamp;
-            record.report = Report({
-                totalValue: uint128(_reportTotalValue),
-                inOutDelta: int128(_reportInOutDelta)
-            });
-
-            _settleObligations(_vault, record, accruedTreasuryFees, MAX_UINT256);
-
-            IStakingVault vault_ = IStakingVault(_vault);
-            if (!_isVaultHealthy(connection, record) && !vault_.beaconChainDepositsPaused()) {
-                vault_.pauseBeaconChainDeposits();
-            }
-
-            emit VaultReportApplied({
-                vault: _vault,
-                reportTimestamp: _reportTimestamp,
-                reportTotalValue: _reportTotalValue,
-                reportInOutDelta: _reportInOutDelta,
-                reportAccumulatedTreasuryFees: _reportAccumulatedTreasuryFees,
-                reportLiabilityShares: _reportLiabilityShares
-            });
+            return;
         }
+
+        _applyVaultReport(
+            _vault,
+            connection,
+            record,
+            _reportTimestamp,
+            _reportTotalValue,
+            _reportLiabilityShares,
+            _reportInOutDelta
+        );
+
+        emit VaultReportApplied({
+            vault: _vault,
+            reportTimestamp: _reportTimestamp,
+            reportTotalValue: _reportTotalValue,
+            reportInOutDelta: _reportInOutDelta,
+            reportAccumulatedTreasuryFees: _reportAccumulatedTreasuryFees,
+            reportLiabilityShares: _reportLiabilityShares
+        });
     }
 
     /// @notice transfer the ownership of the vault to a new owner without disconnecting it from the hub
@@ -675,7 +668,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
 
         // try to settle using existing unsettled fees, and don't revert if unsettled under the threshold
-        _settleObligationsIfNeeded(_vault, record, OBLIGATIONS_THRESHOLD);
+        _settleObligationsIfNeeded(_vault, record, connection, OBLIGATIONS_THRESHOLD);
 
         connection.manuallyPausedBeaconChainDeposits = false;
         IStakingVault(_vault).resumeBeaconChainDeposits();
@@ -766,7 +759,14 @@ contract VaultHub is PausableUntilWithRoles {
             obligations.redemptions = uint64(redemptions);
 
             // current unsettled treasury fees are used here, because no new fees provided
-            _settleObligations(_vault, _vaultRecord(_vault), 0, MAX_UINT256);
+            _settleObligations(
+                _vault,
+                _vaultRecord(_vault),
+                _vaultConnection(_vault),
+                obligations,
+                0, // no new treasury fees
+                MAX_UINT256 // allow unlimited unsettled obligations
+            );
         }
     }
 
@@ -777,7 +777,14 @@ contract VaultHub is PausableUntilWithRoles {
         if (_vault.balance == 0) revert ZeroBalance();
 
         // settle using existing unsettled fees, and don't revert if some obligations remain
-        _settleObligations(_vault, _vaultRecord(_vault), 0, MAX_UINT256);
+        _settleObligations(
+            _vault,
+            _vaultRecord(_vault),
+            _vaultConnection(_vault),
+            _vaultObligations(_vault),
+            0, // no new treasury fees
+            MAX_UINT256 // allow unlimited unsettled obligations
+        );
     }
 
     /// @notice Proves that validators unknown to PDG have correct WC to participate in the vault
@@ -877,14 +884,38 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         // try to settle using existing unsettled fees, and revert if some obligations remain
-        _settleObligationsIfNeeded(_vault, _record, 0);
-
-        // make sure the vault has enough balance to cover the deposit
-        if (_vault.balance < CONNECT_DEPOSIT) {
-            revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
-        }
-
+        _settleObligationsIfNeeded(_vault, _record, _connection, 0);
         _connection.pendingDisconnect = true;
+    }
+
+    function _applyVaultReport(
+        address _vault,
+        VaultConnection storage _connection,
+        VaultRecord storage _record,
+        uint64 _reportTimestamp,
+        uint256 _reportTotalValue,
+        uint256 _reportLiabilityShares,
+        int256 _reportInOutDelta
+    ) internal {
+        uint256 liabilityShares_ = Math256.max(_record.liabilityShares, _reportLiabilityShares);
+        uint256 liability = _getPooledEthBySharesRoundUp(liabilityShares_);
+
+        uint256 lockedEther = Math256.max(
+            liability * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - _connection.reserveRatioBP),
+            CONNECT_DEPOSIT
+        );
+
+        _record.locked = uint128(lockedEther);
+        _record.reportTimestamp = _reportTimestamp;
+        _record.report = Report({
+            totalValue: uint128(_reportTotalValue),
+            inOutDelta: int128(_reportInOutDelta)
+        });
+
+        IStakingVault vault_ = IStakingVault(_vault);
+        if (!_isVaultHealthy(_connection, _record) && !vault_.beaconChainDepositsPaused()) {
+            vault_.pauseBeaconChainDeposits();
+        }
     }
 
     function _rebalanceEther(
@@ -1080,12 +1111,20 @@ contract VaultHub is PausableUntilWithRoles {
     function _settleObligationsIfNeeded(
         address _vault,
         VaultRecord storage _record,
+        VaultConnection storage _connection,
         uint256 _maxAllowedUnsettled
     ) internal {
         VaultObligations storage obligations = _vaultObligations(_vault);
+
         if (obligations.treasuryFees > 0 || obligations.redemptions > 0) {
-            // settle using existing unsettled fees
-            _settleObligations(_vault, _record, 0, _maxAllowedUnsettled);
+            _settleObligations(
+                _vault,
+                _record,
+                _connection,
+                obligations,
+                0, // no new treasury fees
+                _maxAllowedUnsettled
+            );
         }
     }
 
@@ -1132,19 +1171,19 @@ contract VaultHub is PausableUntilWithRoles {
     function _settleObligations(
         address _vault,
         VaultRecord storage _record,
+        VaultConnection storage _connection,
+        VaultObligations storage _obligations,
         uint256 _newTreasuryFees,
         uint256 _maxAllowedUnsettled
     ) internal {
-        VaultObligations storage obligations = _vaultObligations(_vault);
-
         (
             uint256 valueToRebalance,
             uint256 valueToTransferToTreasury,
             uint256 totalUnsettled
         ) = _calculateSettlementPlan(
             _vault.balance,
-            obligations.redemptions,
-            obligations.treasuryFees,
+            _obligations.redemptions,
+            _obligations.treasuryFees,
             _newTreasuryFees
         );
 
@@ -1155,21 +1194,23 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (valueToRebalance > 0) {
             uint256 sharesToBurn = _getSharesByPooledEth(valueToRebalance);
-            uint256 unsettledRedemptions = obligations.redemptions - valueToRebalance;
+            uint256 unsettledRedemptions = _obligations.redemptions - valueToRebalance;
 
             _rebalanceEther(_vault, _record, valueToRebalance, sharesToBurn);
 
-            obligations.redemptions = uint64(unsettledRedemptions);
+            _obligations.redemptions = uint64(unsettledRedemptions);
             emit RedemptionsObligationUpdated(_vault, unsettledRedemptions, valueToRebalance);
         }
 
         if (valueToTransferToTreasury > 0 || _newTreasuryFees > 0) {
+            uint256 unsettledTreasuryFees = (_obligations.treasuryFees + _newTreasuryFees) - valueToTransferToTreasury;
+
             if (valueToTransferToTreasury > 0) {
                  _withdraw(_vault, _record, LIDO_LOCATOR.treasury(), valueToTransferToTreasury);
-                 obligations.totalSettledTreasuryFees += uint128(valueToTransferToTreasury);
+                 _obligations.totalSettledTreasuryFees += uint128(valueToTransferToTreasury);
             }
-            uint256 unsettledTreasuryFees = (obligations.treasuryFees + _newTreasuryFees) - valueToTransferToTreasury;
-            obligations.treasuryFees = uint64(unsettledTreasuryFees);
+
+            _obligations.treasuryFees = uint64(unsettledTreasuryFees);
             emit TreasuryFeesObligationUpdated(_vault, unsettledTreasuryFees, valueToTransferToTreasury);
         }
 
@@ -1180,7 +1221,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (!isBeaconChainDepositsPaused && totalUnsettled >= OBLIGATIONS_THRESHOLD) {
             vault_.pauseBeaconChainDeposits();
         } else if (isBeaconChainDepositsPaused && totalUnsettled < OBLIGATIONS_THRESHOLD) {
-            if (!_vaultConnection(_vault).manuallyPausedBeaconChainDeposits) {
+            if (!_connection.manuallyPausedBeaconChainDeposits) {
                 vault_.resumeBeaconChainDeposits();
             }
         }
