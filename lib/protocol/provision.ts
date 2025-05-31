@@ -19,7 +19,7 @@ let alreadyProvisioned = false;
  */
 export const provision = async (ctx: ProtocolContext) => {
   if (alreadyProvisioned) {
-    log.success("Already provisioned");
+    log.debug("Already provisioned");
     return;
   }
 

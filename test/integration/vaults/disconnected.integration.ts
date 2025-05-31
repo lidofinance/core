@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Dashboard, StakingVault } from "typechain-types";
 
 import { certainAddress, ether, generatePostDeposit, generatePredeposit, generateValidator } from "lib";
-import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLido } from "lib/protocol";
+import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
 import { getProofAndDepositData, getPubkeys, reportVaultDataWithProof, VaultRoles } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
@@ -30,7 +30,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     ctx = await getProtocolContext();
 
-    await setupLido(ctx);
+    await setupLidoForVaults(ctx);
 
     [owner, nodeOperator, stranger] = await ethers.getSigners();
 
@@ -277,7 +277,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(1, ether("1"));
 
         const { witnesses, postdeposit } = await getProofAndDepositData(
-          predepositGuarantee,
+          ctx,
           validator,
           withdrawalCredentials,
           ether("2048"),

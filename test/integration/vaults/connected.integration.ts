@@ -12,7 +12,7 @@ import {
   getPubkeys,
   ProtocolContext,
   reportVaultDataWithProof,
-  setupLido,
+  setupLidoForVaults,
   VaultRoles,
 } from "lib/protocol";
 
@@ -46,7 +46,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
     originalSnapshot = await Snapshot.take();
 
-    await setupLido(ctx);
+    await setupLidoForVaults(ctx);
 
     ({ vaultHub } = ctx.contracts);
 
@@ -279,25 +279,20 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   // skipping for now, going to update these tests later
   describe("If vault is unhealthy", () => {
     beforeEach(async () => {
-      console.log(await vaultHub.vaultRecord(stakingVault));
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
-      console.log(await vaultHub.vaultRecord(stakingVault));
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
-      console.log(await vaultHub.vaultRecord(stakingVault));
 
-      await reportVaultDataWithProof(ctx, stakingVault, TEST_STETH_AMOUNT_WEI);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: TEST_STETH_AMOUNT_WEI }); // slashing
 
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(false);
     });
 
     it("Can't mint until goes healthy", async () => {
-      console.log(await vaultHub.vaultRecord(stakingVault));
-
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.be.revertedWithCustomError(vaultHub, "InsufficientTotalValueToMint")
-        .withArgs(await stakingVault.getAddress(), ether("1") + TEST_STETH_AMOUNT_WEI); // here + testSharesAmountWei is from the report
+        .withArgs(await stakingVault.getAddress(), ether("1") + TEST_STETH_AMOUNT_WEI, 0n);
 
       await dashboard.connect(roles.funder).fund({ value: ether("2") });
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(true);

@@ -165,6 +165,15 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Returns the overall unsettled obligations of the vault in ether
+     * @dev includes the node operator fee
+     */
+    // TODO: restore this function
+    // function unsettledObligations() public view returns (uint256) {
+    //     return VAULT_HUB.unsettledObligations(address(_stakingVault())) + nodeOperatorDisbursableFee();
+    // }
+
+    /**
      * @notice Returns the locked amount of ether for the vault
      */
     function locked() public view returns (uint256) {
@@ -443,7 +452,7 @@ contract Dashboard is NodeOperatorFee {
         if (_amount == 0) revert ZeroArgument("_amount");
 
         if (_token == ETH) {
-            (bool success, ) = payable(_recipient).call{value: _amount}("");
+            (bool success,) = payable(_recipient).call{value: _amount}("");
             if (!success) revert EthTransferFailed(_recipient, _amount);
         } else {
             SafeERC20.safeTransfer(IERC20(_token), _recipient, _amount);
@@ -593,6 +602,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function _totalMintingCapacityShares(uint256 _additionalEther) internal view returns (uint256) {
         VaultHub.VaultConnection memory connection = vaultConnection();
+        // TODO: move to VaultHub and take into account obligations
         uint256 maxMintableStETH = ((_mintableValue() + _additionalEther) *
             (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
         return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), connection.shareLimit);
