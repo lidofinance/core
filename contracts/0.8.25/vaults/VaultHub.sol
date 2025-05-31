@@ -450,9 +450,19 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultConnection storage connection = _vaultConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
+        VaultObligations storage obligations = _vaultObligations(_vault);
+        uint256 accumulatedTreasuryFees = obligations.totalSettledTreasuryFees + obligations.treasuryFees;
+        if (_reportAccumulatedTreasuryFees < accumulatedTreasuryFees) {
+            revert InvalidFees(_vault, _reportAccumulatedTreasuryFees, accumulatedTreasuryFees);
+        }
+
+        uint256 unsettledTreasuryFees = _reportAccumulatedTreasuryFees - accumulatedTreasuryFees;
 
         // here we don't check the reported values but rely on the oracle to preserve vault indexes
         if (connection.pendingDisconnect) {
+            // settle all the fees, but not more than the connection deposit
+            _settleObligations(_vault, record, Math256.min(unsettledTreasuryFees, CONNECT_DEPOSIT), MAX_UINT256);
+
             // TODO: get some fees after the disconnect. Do we need to do it at all?
             IStakingVault(_vault).transferOwnership(connection.owner);
             // we rely on the oracle to preserve vault index
@@ -460,12 +470,6 @@ contract VaultHub is PausableUntilWithRoles {
 
             emit VaultDisconnectCompleted(_vault);
         } else {
-            VaultObligations storage obligations = _vaultObligations(_vault);
-            uint256 accumulatedTreasuryFees = obligations.totalSettledTreasuryFees + obligations.treasuryFees;
-            if (_reportAccumulatedTreasuryFees < accumulatedTreasuryFees) {
-                revert InvalidFees(_vault, _reportAccumulatedTreasuryFees, accumulatedTreasuryFees);
-            }
-
             uint256 liabilityShares_ = Math256.max(record.liabilityShares, _reportLiabilityShares);
             // locked ether can only be increased asynchronously once the oracle settled the new floor value
             // as of reference slot to prevent slashing upsides in between the report gathering and delivering
@@ -482,12 +486,7 @@ contract VaultHub is PausableUntilWithRoles {
                 inOutDelta: int128(_reportInOutDelta)
             });
 
-            _settleObligations(
-                _vault,
-                record,
-                _reportAccumulatedTreasuryFees - obligations.totalSettledTreasuryFees, // new unsettled treasury fees
-                MAX_UINT256
-            );
+            _settleObligations(_vault, record, unsettledTreasuryFees, MAX_UINT256);
 
             IStakingVault vault_ = IStakingVault(_vault);
             if (!_isVaultHealthy(connection, record) && !vault_.beaconChainDepositsPaused()) {
@@ -882,6 +881,10 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         _settleObligationsIfNeeded(_vault, _record, 0);
+        if (_vault.balance < CONNECT_DEPOSIT) {
+            revert VaultInsufficientBalance(_vault, _vault.balance, CONNECT_DEPOSIT);
+        }
+
         _connection.pendingDisconnect = true;
     }
 

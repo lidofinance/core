@@ -637,4 +637,90 @@ describe("Integration: Vault obligations", () => {
 
     // TODO: add test for node operator fees
   });
+
+  context("Disconnect flow", () => {
+    beforeEach(async () => {});
+
+    it("Should revert when trying to disconnect with unsettled obligations", async () => {
+      // 1 ether of the connection deposit will be settled to the treasury, so 0.1 ether will be left in obligations
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees: ether("1.1") });
+
+      const obligations = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligations.treasuryFees).to.equal(ether("0.1"));
+      expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(0n);
+
+      await expect(dashboard.connect(roles.disconnecter).voluntaryDisconnect())
+        .to.be.revertedWithCustomError(vaultHub, "VaultHasUnsettledObligations")
+        .withArgs(stakingVaultAddress, ether("0.1"));
+    });
+
+    it("Should not allow to disconnect with no connection deposit on balance", async () => {
+      // 1 ether of the connection deposit will be settled to the treasury
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees: ether("1") });
+
+      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsBefore.treasuryFees).to.equal(0n);
+      expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(0n);
+
+      await expect(dashboard.connect(roles.disconnecter).voluntaryDisconnect())
+        .to.be.revertedWithCustomError(vaultHub, "VaultInsufficientBalance")
+        .withArgs(stakingVaultAddress, 0, ether("1"));
+    });
+
+    it("Should allow to disconnect when all obligations are settled and balance is >= connection deposit", async () => {
+      // 1 ether of the connection deposit will be settled to the treasury
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees: ether("1") });
+
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+
+      await expect(dashboard.connect(roles.disconnecter).voluntaryDisconnect())
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
+        .withArgs(stakingVaultAddress);
+    });
+
+    it("Should take last fees from the post disconnect report", async () => {
+      // 1 ether of the connection deposit will be settled to the treasury
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees: ether("1") });
+
+      // adding 1 ether to cover the connection deposit
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+
+      // successfully disconnect
+      await expect(dashboard.connect(roles.disconnecter).voluntaryDisconnect())
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
+        .withArgs(stakingVaultAddress);
+
+      // take the last fees from the post disconnect report (1.1 ether because fees are cumulative)
+      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees: ether("1.1") }))
+        .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
+        .withArgs(stakingVaultAddress, 0, ether("0.1"))
+        .to.emit(vaultHub, "VaultDisconnectCompleted")
+        .withArgs(stakingVaultAddress);
+
+      // 0.9 ether should be left in the vault
+      expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("0.9"));
+    });
+
+    it("Should take full connection deposit if fees are greater than connection deposit", async () => {
+      // 1 ether of the connection deposit will be settled to the treasury
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees: ether("1") });
+
+      // adding 1 ether to cover the connection deposit
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+
+      // successfully disconnect
+      await expect(dashboard.connect(roles.disconnecter).voluntaryDisconnect())
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
+        .withArgs(stakingVaultAddress);
+
+      // take the last fees from the post disconnect report (2.1 ether because fees are cumulative)
+      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedTreasuryFees: ether("2.1") }))
+        .to.emit(vaultHub, "TreasuryFeesObligationUpdated")
+        .withArgs(stakingVaultAddress, 0, ether("1")) // here max we can take is 1 ether (connection deposit)
+        .to.emit(vaultHub, "VaultDisconnectCompleted")
+        .withArgs(stakingVaultAddress);
+
+      expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(0n);
+    });
+  });
 });
