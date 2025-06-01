@@ -182,10 +182,10 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
 }
 
 // address, totalValue, inOutDelta, treasuryFees, liabilityShares
-export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
+export type VaultReportItem = [string, bigint, bigint, bigint, bigint, bigint];
 
 export function createVaultsReportTree(vaults: VaultReportItem[]) {
-  return StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256", "uint256"]);
+  return StandardMerkleTree.of(vaults, ["address", "uint256", "int256", "uint256", "uint256", "uint256"]);
 }
 
 export async function reportVaultDataWithProof(
@@ -210,6 +210,7 @@ export async function reportVaultDataWithProof(
     inOutDeltaArg,
     params.accruedTreasuryFees ?? 0n,
     liabilitySharesArg,
+    0n
   ];
   const reportTree = createVaultsReportTree([vaultReport]);
 
