@@ -285,7 +285,8 @@ contract Accounting {
             _report.timestamp,
             _pre.clValidators,
             _report.clValidators,
-            _report.clBalance
+            _report.clBalance,
+            _report.vaultsTotalDeficit
         );
 
         if (_update.totalSharesToBurn > 0) {
@@ -352,6 +353,12 @@ contract Accounting {
                 _report.withdrawalFinalizationBatches[_report.withdrawalFinalizationBatches.length - 1],
                 _report.timestamp
             );
+        }
+
+        uint256 postExternalEther = _update.postTotalPooledEther - _update.postInternalEther;
+
+        if (_report.vaultsTotalDeficit > postExternalEther) {
+            revert VaultsTotalDeficitTooHigh(_report.vaultsTotalDeficit, postExternalEther);
         }
     }
 
@@ -459,4 +466,5 @@ contract Accounting {
     error UnequalArrayLengths(uint256 firstArrayLength, uint256 secondArrayLength);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
     error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
+    error VaultsTotalDeficitTooHigh(uint256 reportedTotalDeficit, uint256 mintedExternalEther);
 }
