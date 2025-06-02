@@ -49,9 +49,11 @@ jobs:
         env:
           RPC_URL: http://localhost:8555
 
-      - name: Run integration tests
-        run: yarn test:integration
-        env:
-          LOG_LEVEL: debug
-          RPC_URL: http://localhost:8555
-          NETWORK_STATE_FILE: deployed-mainnet-upgrade.json
+      - name: Run Core Integration Tests
+        run: |
+          docker run \
+            --env RPC_URL=http://localhost:8555 \
+            --env NETWORK_STATE_FILE=deployed-mainnet-upgrade.json \
+            -v $(pwd)/deployed-mainnet-upgrade.json:/app/deployed-mainnet-upgrade.json \
+            -it \
+            ghcr.io/lidofinance/core-integration-tests:latest
