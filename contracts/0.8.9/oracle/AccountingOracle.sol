@@ -343,8 +343,6 @@ contract AccountingOracle is BaseOracle {
         /// @dev Hash of the extra data. See the constant defining a specific extra data
         /// format for the info on how to calculate the hash.
         ///
-        /// Must be set to a `ZERO_BYTES32` if the oracle report contains no extra data.
-        ///
         bytes32 extraDataHash;
 
         /// @dev Number of the extra data items.
@@ -359,21 +357,21 @@ contract AccountingOracle is BaseOracle {
 
     /// @notice The extra data format used to signify that the oracle report contains no extra data.
     ///
+    /// The `extraDataHash` in `ReportData` must be set to a `ZERO_BYTES32`
+    ///
     uint256 public constant EXTRA_DATA_FORMAT_EMPTY = 0;
 
     /// @notice The list format for the extra data array. Used when the oracle reports contains extra data.
     ///
-    /// Depending on the extra data size, it's passed within a single or multiple transactions.
-    /// Each transaction contains data consisting of 1) the keccak256 hash of the next
-    /// transaction's data or `ZERO_BYTES32` if there are no more data chunks, and 2) a chunk
-    /// of report data (an array of items).
+    /// When extra data is included in a report, it may be split across one or more transactions.
+    /// Each transaction contains:
+    ///   1) A 32-byte keccak256 hash of the next transaction's data (or `ZERO_BYTES32` if none),
+    ///   2) A chunk of report items (an array of items).
     ///
     /// |                   32 bytes                       |     X bytes      |
     /// |  Next transaction's data hash or `ZERO_BYTES32`  |  array of items  |
     ///
-    /// The `extraDataHash` field of the `ReportData` struct is calculated as a keccak256 hash
-    /// over the first transaction's data, i.e. over the first data chunk with the second
-    /// transaction's data hash (or `ZERO_BYTES32`) prepended.
+    /// The `extraDataHash` in `ReportData` is calculated as shown in the example below:
     ///
     /// ReportData.extraDataHash := hash0
     /// hash0 := keccak256(| hash1 | extraData[0], ... extraData[n] |)
