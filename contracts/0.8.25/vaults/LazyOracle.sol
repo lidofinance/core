@@ -23,6 +23,7 @@ contract LazyOracle is ILazyOracle {
 
     struct VaultInfo {
         address vault;
+        uint96 vaultIndex;
         uint256 balance;
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
@@ -30,6 +31,7 @@ contract LazyOracle is ILazyOracle {
         uint96 shareLimit;
         uint16 reserveRatioBP;
         uint16 forcedRebalanceThresholdBP;
+        uint256 mintableCapacity;
         uint16 infraFeeBP;
         uint16 liquidityFeeBP;
         uint16 reservationFeeBP;
@@ -83,6 +85,7 @@ contract LazyOracle is ILazyOracle {
             VaultHub.VaultRecord memory record = vaultHub.vaultRecord(vaultAddress);
             batch[i] = VaultInfo(
                 vaultAddress,
+                connection.vaultIndex,
                 address(vault).balance,
                 record.inOutDelta,
                 vault.withdrawalCredentials(),
@@ -90,6 +93,7 @@ contract LazyOracle is ILazyOracle {
                 connection.shareLimit,
                 connection.reserveRatioBP,
                 connection.forcedRebalanceThresholdBP,
+                vaultHub.getMintableCapacity(vaultAddress),
                 connection.infraFeeBP,
                 connection.liquidityFeeBP,
                 connection.reservationFeeBP,

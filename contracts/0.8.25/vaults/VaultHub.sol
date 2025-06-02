@@ -217,6 +217,12 @@ contract VaultHub is PausableUntilWithRoles {
         return _totalValue(_vaultRecord(_vault));
     }
 
+    /// @return mintable capacity of the vault
+    /// @dev returns 0 if the vault is not connected
+    function getMintableCapacity(address _vault) external view returns (uint256) {
+        return 0; // TODO: implement
+    }
+
     /// @return amount of ether that is available for the vault to withdraw
     /// @dev returns 0 if the vault is not connected
     function availableBalance(address _vault) external view returns (uint256) {
@@ -365,11 +371,23 @@ contract VaultHub is PausableUntilWithRoles {
         if (_reservationFeeBP > TOTAL_BASIS_POINTS) revert ReservationFeeTooHigh(_vault, _reservationFeeBP, TOTAL_BASIS_POINTS);
 
         VaultConnection storage connection = _checkConnection(_vault);
+        uint16 preInfraFeeBP = connection.infraFeeBP;
+        uint16 preLiquidityFeeBP = connection.liquidityFeeBP;
+        uint16 preReservationFeeBP = connection.reservationFeeBP;
+
         connection.infraFeeBP = uint16(_infraFeeBP);
         connection.liquidityFeeBP = uint16(_liquidityFeeBP);
         connection.reservationFeeBP = uint16(_reservationFeeBP);
 
-        emit VaultFeesUpdated(_vault, _infraFeeBP, _liquidityFeeBP, _reservationFeeBP);
+        emit VaultFeesUpdated({
+            vault: _vault,
+            preInfraFeeBP: preInfraFeeBP,
+            preLiquidityFeeBP: preLiquidityFeeBP,
+            preReservationFeeBP: preReservationFeeBP,
+            infraFeeBP: _infraFeeBP,
+            liquidityFeeBP: _liquidityFeeBP,
+            reservationFeeBP: _reservationFeeBP
+        });
     }
 
     /// @notice updates the vault's connection parameters
@@ -1303,7 +1321,15 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 reservationFeeBP
     );
     event VaultShareLimitUpdated(address indexed vault, uint256 newShareLimit);
-    event VaultFeesUpdated(address indexed vault, uint256 infraFeeBP, uint256 liquidityFeeBP, uint256 reservationFeeBP);
+    event VaultFeesUpdated(
+        address indexed vault,
+        uint256 preInfraFeeBP,
+        uint256 preLiquidityFeeBP,
+        uint256 preReservationFeeBP,
+        uint256 infraFeeBP,
+        uint256 liquidityFeeBP,
+        uint256 reservationFeeBP
+    );
     event VaultDisconnectInitiated(address indexed vault);
     event VaultDisconnectCompleted(address indexed vault);
     event VaultReportApplied(
