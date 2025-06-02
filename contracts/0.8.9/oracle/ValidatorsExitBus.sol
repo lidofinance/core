@@ -237,9 +237,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @dev Reverts if:
      * - The contract is paused.
      * - The keccak256 hash of `requestsData` does not exist in storage (i.e., was not submitted).
-     * - The provided Exit Requests Data has already been fully unpacked.
-     * - The contract version does not match the version at the time of report submission.
+     * - The provided Exit Requests Data has already been submitted.
+     * - The contract version does not match the version at the time of hash submission.
      * - The data format is not supported.
+     * - The data length exceeds the maximum number of requests allowed per payload.
      * - There is no remaining quota available for the current limits.
      *
      * Emits `ValidatorExitRequest` events;
@@ -247,7 +248,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @param request - The exit requests structure.
      */
     function submitExitRequestsData(ExitRequestsData calldata request) external whenResumed {
-        // bytes calldata data = request.data;
         bytes32 exitRequestsHash = keccak256(abi.encode(request.data, request.dataFormat));
         RequestStatus storage requestStatus = _storageRequestStatus()[exitRequestsHash];
 
@@ -275,14 +275,16 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /**
      * @notice Submits Triggerable Withdrawal Requests to the Triggerable Withdrawals Gateway.
      *
-     * @param exitsData The report data previously unpacked and emitted by the VEB.
-     * @param exitDataIndexes Array of of sorted indexes pointing to validators in `exitsData.data`
+     * @param exitsData The report data previously submitted by the VEB.
+     * @param exitDataIndexes Array of sorted indexes pointing to validators in `exitsData.data`
      * to be exited via TWR.
      * @param refundRecipient Address to return extra fee on TW (eip-7002) exit.
      *
      * @dev Reverts if:
-     *     - The hash of `exitsData` was not previously submitted in the VEB.
-     *     - Any of the provided `exitDataIndexes` refers to a validator that was not yet delivered (i.e., exit request not emitted).
+     *     - The contract is paused.
+     *     - The keccak256 hash of `requestsData` does not exist in storage (i.e., was not submitted).
+     *     - The provided Exit Requests Data has not been previously submitted.
+     *     - Any of the provided `exitDataIndexes` refers to an index out of range.
      *     - `exitDataIndexes` is not strictly increasing array
      */
     function triggerExits(
@@ -406,8 +408,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @param exitRequestsHash - The exit requests hash.
      *
      * @dev Reverts if:
-     *     - exitRequestsHash was not submited
-     *     - Request was not delivered
+     *     - exitRequestsHash was not submitted
+     *     - Request was not submitted
      */
     function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 deliveryDateTimestamp) {
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
