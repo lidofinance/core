@@ -29,12 +29,10 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push mainnet fork image
+      - name: Build and push the image
         uses: docker/build-push-action@v6.1.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/lidofinance/core-integration-tests:${{ github.ref_name }}
-          build-args: |
-            HH_CONFIG=hardhat.config.mainnet-fork.ts
+          tags: ghcr.io/lidofinance/core-integration-tests:latest
