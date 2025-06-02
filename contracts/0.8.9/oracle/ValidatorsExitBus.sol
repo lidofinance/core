@@ -240,7 +240,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * - The provided Exit Requests Data has already been submitted.
      * - The contract version does not match the version at the time of hash submission.
      * - The data format is not supported.
-     * - The data length is less than the maximum number of requests allowed per payload.
+     * - The data length exceeds the maximum number of requests allowed per payload.
      * - There is no remaining quota available for the current limits.
      *
      * Emits `ValidatorExitRequest` events;
@@ -408,8 +408,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @param exitRequestsHash - The exit requests hash.
      *
      * @dev Reverts if:
-     *     - exitRequestsHash was not submited
-     *     - Request was not delivered
+     *     - exitRequestsHash was not submitted
+     *     - Request was not submitted
      */
     function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 deliveryDateTimestamp) {
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
