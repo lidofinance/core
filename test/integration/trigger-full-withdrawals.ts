@@ -143,9 +143,10 @@ describe("TriggerFullWithdrawals Integration", () => {
     const balanceBefore = await ethers.provider.getBalance(refundRecipient.address);
 
     // Trigger full withdrawals
-    await triggerableWithdrawalsGateway
+    const tx = await triggerableWithdrawalsGateway
       .connect(authorizedEntity)
       .triggerFullWithdrawals(validatorData, refundRecipient.address, 0, { value: totalAmount });
+    await expect(tx).to.emit(withdrawalVault, "WithdrawalRequestAdded");
 
     // Check refund was processed
     const balanceAfter = await ethers.provider.getBalance(refundRecipient.address);
@@ -173,6 +174,7 @@ describe("TriggerFullWithdrawals Integration", () => {
     const tx = await triggerableWithdrawalsGateway
       .connect(authorizedEntity)
       .triggerFullWithdrawals(validatorData, ZeroAddress, 0, { value: totalAmount });
+    await expect(tx).to.emit(withdrawalVault, "WithdrawalRequestAdded");
 
     // Get gas costs
     const receipt = await tx.wait();
@@ -222,8 +224,10 @@ describe("TriggerFullWithdrawals Integration", () => {
     expect(await triggerableWithdrawalsGateway.isPaused()).to.be.false;
 
     // Trigger withdrawals should now work
-    await triggerableWithdrawalsGateway
+    const tx = await triggerableWithdrawalsGateway
       .connect(authorizedEntity)
       .triggerFullWithdrawals(validatorData, ZeroAddress, 0, { value: totalFee });
+
+    await expect(tx).to.emit(withdrawalVault, "WithdrawalRequestAdded");
   });
 });
