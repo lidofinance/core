@@ -17,6 +17,7 @@ import {
   OracleDaemonConfig,
   OracleReportSanityChecker,
   StakingRouter,
+  TriggerableWithdrawalsGateway,
   ValidatorExitDelayVerifier,
   ValidatorsExitBusOracle,
   WithdrawalQueueERC721,
@@ -41,6 +42,7 @@ export type ProtocolNetworkItems = {
   stakingRouter: string;
   validatorExitDelayVerifier: string;
   validatorsExitBusOracle: string;
+  triggerableWithdrawalsGateway: string;
   withdrawalQueue: string;
   withdrawalVault: string;
   oracleDaemonConfig: string;
@@ -75,6 +77,7 @@ export interface ContractTypes {
   HashConsensus: HashConsensus;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
   WstETH: WstETH;
+  TriggerableWithdrawalsGateway: TriggerableWithdrawalsGateway;
 }
 
 export type ContractName = keyof ContractTypes;
@@ -101,6 +104,7 @@ export type CoreContracts = {
   withdrawalVault: LoadedContract<WithdrawalVault>;
   oracleDaemonConfig: LoadedContract<OracleDaemonConfig>;
   wstETH: LoadedContract<WstETH>;
+  triggerableWithdrawalsGateway: LoadedContract<TriggerableWithdrawalsGateway>;
 };
 
 export type AragonContracts = {

@@ -92,6 +92,10 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
       "ValidatorsExitBusOracle",
       config.get("validatorsExitBusOracle") || (await locator.validatorsExitBusOracle()),
     ),
+    triggerableWithdrawalsGateway: loadContract(
+      "TriggerableWithdrawalsGateway",
+      config.get("triggerableWithdrawalsGateway") || (await locator.triggerableWithdrawalsGateway()),
+    ),
     withdrawalQueue: loadContract(
       "WithdrawalQueueERC721",
       config.get("withdrawalQueue") || (await locator.withdrawalQueue()),
@@ -192,6 +196,7 @@ export async function discover() {
     "Burner": foundationContracts.burner.address,
     "Legacy Oracle": foundationContracts.legacyOracle.address,
     "wstETH": contracts.wstETH.address,
+    "Triggered Withdrawal Gateway": contracts.triggerableWithdrawalsGateway.address,
   });
 
   const signers = {

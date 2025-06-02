@@ -126,7 +126,8 @@ describe("ValidatorsExitBus integration", () => {
 
     const ethBefore = await ethers.provider.getBalance(refundRecipient.getAddress());
 
-    await veb.triggerExits(exitRequest, [0], refundRecipient.getAddress(), { value: 10 });
+    const tx = await veb.triggerExits(exitRequest, [0], refundRecipient.getAddress(), { value: 10 });
+    await expect(tx).to.emit(wv, "WithdrawalRequestAdded");
 
     const fee = await wv.getWithdrawalRequestFee();
 
