@@ -20,7 +20,7 @@ import { LogDescriptionExtended } from "../../../lib/protocol/types";
 
 const AMOUNT = ether("100");
 
-describe("Scenario: Protocol Happy Path", () => {
+describe.only("Scenario: Protocol Happy Path", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 
