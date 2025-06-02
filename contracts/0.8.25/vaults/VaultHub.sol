@@ -119,7 +119,7 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 private constant EMPTY_CODEHASH = keccak256("");
 
     /// @notice minimum gas overhead required for withdraw/fund/rebalance operations
-    uint256 internal constant MIN_GAS = 20_000;
+    uint256 internal constant MIN_GAS = 5_000;
 
     // -----------------------------
     //           IMMUTABLES
