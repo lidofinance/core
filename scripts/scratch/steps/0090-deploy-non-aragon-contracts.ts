@@ -26,6 +26,7 @@ export async function main() {
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
   const vaultHubParams = state[Sk.vaultHub].deployParameters;
+  const lazyOracleParams = state[Sk.lazyOracle].deployParameters;
   const burnerParams = state[Sk.burner].deployParameters;
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
@@ -140,6 +141,26 @@ export async function main() {
     );
   }
 
+  // Deploy AccountingOracle
+  const accountingOracle = await deployBehindOssifiableProxy(
+    Sk.accountingOracle,
+    "AccountingOracle",
+    proxyContractsOwner,
+    deployer,
+    [locator.address, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
+  );
+
+  // Deploy HashConsensus for AccountingOracle
+  const consensusContract = await deployWithoutProxy(Sk.hashConsensusForAccountingOracle, "HashConsensus", deployer, [
+    chainSpec.slotsPerEpoch,
+    chainSpec.secondsPerSlot,
+    chainSpec.genesisTime,
+    hashConsensusForAccountingParams.epochsPerFrame,
+    hashConsensusForAccountingParams.fastLaneLengthSlots,
+    admin, // admin
+    accountingOracle.address, // reportProcessor
+  ]);
+
   // Deploy OperatorGrid
   const operatorGrid = await deployBehindOssifiableProxy(
     Sk.operatorGrid,
@@ -159,32 +180,17 @@ export async function main() {
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     locator.address,
     lidoAddress,
+    consensusContract.address,
     vaultHubParams.maxRelativeShareLimitBP,
   ]);
 
   // Deploy LazyOracle
   const lazyOracle = await deployBehindOssifiableProxy(Sk.lazyOracle, "LazyOracle", proxyContractsOwner, deployer, [
     locator.address,
-  ]);
-
-  // Deploy AccountingOracle
-  const accountingOracle = await deployBehindOssifiableProxy(
-    Sk.accountingOracle,
-    "AccountingOracle",
-    proxyContractsOwner,
-    deployer,
-    [locator.address, Number(chainSpec.secondsPerSlot), Number(chainSpec.genesisTime)],
-  );
-
-  // Deploy HashConsensus for AccountingOracle
-  await deployWithoutProxy(Sk.hashConsensusForAccountingOracle, "HashConsensus", deployer, [
-    chainSpec.slotsPerEpoch,
-    chainSpec.secondsPerSlot,
-    chainSpec.genesisTime,
-    hashConsensusForAccountingParams.epochsPerFrame,
-    hashConsensusForAccountingParams.fastLaneLengthSlots,
-    admin, // admin
-    accountingOracle.address, // reportProcessor
+    consensusContract.address,
+    admin,
+    lazyOracleParams.quarantinePeriod,
+    lazyOracleParams.maxElClRewardsBP
   ]);
 
   // Deploy ValidatorsExitBusOracle
