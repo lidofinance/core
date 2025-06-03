@@ -686,7 +686,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
 
         // try to settle using existing unsettled fees, and don't revert if unsettled under the threshold
-        _settleObligationsIfNeeded(_vault, record, connection, OBLIGATIONS_THRESHOLD);
+        _settleObligationsIfAny(_vault, record, connection, OBLIGATIONS_THRESHOLD);
 
         connection.manuallyPausedBeaconChainDeposits = false;
         IStakingVault(_vault).resumeBeaconChainDeposits();
@@ -741,13 +741,17 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        uint256 redemptions = _vaultObligations(_vault).redemptions;
-        if (_isVaultHealthy(connection, record) && redemptions < Math256.max(OBLIGATIONS_THRESHOLD, _vault.balance)) {
+        if (
+            _isVaultHealthy(connection, record) &&
+            _vaultObligations(_vault).redemptions <= Math256.max(OBLIGATIONS_THRESHOLD, _vault.balance)
+        ) {
             revert ForceValidatorExitNotAllowed();
         }
 
         uint64[] memory amounts = new uint64[](0);
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, amounts, _refundRecipient);
+
+        emit ForceValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
     /// @notice Permissionless rebalance for unhealthy vaults
@@ -769,6 +773,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _value The value of the redemptions obligation
     function setVaultRedemptions(address _vault, uint256 _value) external onlyRole(REDEMPTION_MASTER_ROLE) {
         uint256 liabilityShares_ = _vaultRecord(_vault).liabilityShares;
+
+        // This function may intentionally perform no action in some cases, as these are EasyTrack motions
         if (liabilityShares_ > 0) {
             uint256 liability = _getPooledEthBySharesRoundUp(liabilityShares_);
             uint256 redemptions = Math256.min(_value, liability);
@@ -776,7 +782,6 @@ contract VaultHub is PausableUntilWithRoles {
             VaultObligations storage obligations = _vaultObligations(_vault);
             obligations.redemptions = uint64(redemptions);
 
-            // current unsettled treasury fees are used here, because no new fees provided
             _settleObligations(
                 _vault,
                 _vaultRecord(_vault),
@@ -793,6 +798,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev msg.sender should be vault's owner
     function settleVaultObligations(address _vault) external {
         if (_vault.balance == 0) revert ZeroBalance();
+        _checkConnectionAndOwner(_vault);
 
         // settle using existing unsettled fees, and don't revert if some obligations remain
         _settleObligations(
@@ -902,7 +908,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         // try to settle using existing unsettled fees, and revert if some obligations remain
-        _settleObligationsIfNeeded(_vault, _record, _connection, 0);
+        _settleObligationsIfAny(_vault, _record, _connection, 0);
         _connection.pendingDisconnect = true;
     }
 
@@ -1098,6 +1104,11 @@ contract VaultHub is PausableUntilWithRoles {
         delete $.obligations[_vault];
     }
 
+    function _checkConnectionAndOwner(address _vault) internal view returns (VaultConnection storage connection) {
+        connection = _checkConnection(_vault);
+        if (msg.sender != connection.owner) revert NotAuthorized();
+    }
+
     function _checkConnection(address _vault) internal view returns (VaultConnection storage) {
         if (_vault == address(0)) revert VaultZeroAddress();
 
@@ -1109,24 +1120,21 @@ contract VaultHub is PausableUntilWithRoles {
         return connection;
     }
 
-    function _checkConnectionAndOwner(address _vault) internal view returns (VaultConnection storage connection) {
-        connection = _checkConnection(_vault);
-        if (msg.sender != connection.owner) revert NotAuthorized();
-    }
-
     /// @notice Decreases the redemptions obligation by the amount of shares burned
     /// @param _vault vault address
     /// @param _sharesBurned amount of shares to burn
     function _decreaseRedemptions(address _vault, uint256 _sharesBurned) internal {
         VaultObligations storage obligations = _vaultObligations(_vault);
+
         if (obligations.redemptions > 0) {
             uint256 decrease = Math256.min(obligations.redemptions, _getPooledEthBySharesRoundUp(_sharesBurned));
-            obligations.redemptions = uint64(obligations.redemptions - decrease);
+            obligations.redemptions -= uint64(decrease);
             emit RedemptionsObligationUpdated(_vault, obligations.redemptions, decrease);
         }
     }
 
-    function _settleObligationsIfNeeded(
+    /// @dev Shortcut for _settleObligations if there are any obligations
+    function _settleObligationsIfAny(
         address _vault,
         VaultRecord storage _record,
         VaultConnection storage _connection,
@@ -1157,7 +1165,7 @@ contract VaultHub is PausableUntilWithRoles {
      * @return totalUnsettled The total ETH value of obligations remaining after the planned settlement
      * @dev This is a pure calculation function with no side effects
      */
-    function _calculateSettlementPlan(
+    function _planSettlement(
         uint256 _vaultBalance,
         uint256 _redemptions,
         uint256 _existingTreasuryFees,
@@ -1198,14 +1206,8 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 valueToRebalance,
             uint256 valueToTransferToTreasury,
             uint256 totalUnsettled
-        ) = _calculateSettlementPlan(
-            _vault.balance,
-            _obligations.redemptions,
-            _obligations.treasuryFees,
-            _newTreasuryFees
-        );
+        ) = _planSettlement(_vault.balance, _obligations.redemptions, _obligations.treasuryFees, _newTreasuryFees);
 
-        // Enforce requirement for settlement completeness
         if (totalUnsettled > _maxAllowedUnsettled) {
             revert VaultHasUnsettledObligations(_vault, totalUnsettled);
         }
@@ -1345,6 +1347,7 @@ contract VaultHub is PausableUntilWithRoles {
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned, uint256 etherWithdrawn);
     event VaultInOutDeltaUpdated(address indexed vault, int128 inOutDelta);
+    event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     /**
      * @notice Emitted when the manager is set
@@ -1356,8 +1359,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     event TreasuryFeesObligationUpdated(address indexed vault, uint256 unsettled, uint256 settled);
     event RedemptionsObligationUpdated(address indexed vault, uint256 unsettled, uint256 settled);
-
-    error RedemptionsObligationValueTooHigh(address vault, uint256 value, uint256 liability);
 
     error ZeroIndex();
     error ZeroBalance();
