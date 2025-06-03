@@ -232,6 +232,15 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
         return (_totalValue, _inOutDelta);
     }
 
+    /*
+        Here we need to introduce 2 concepts Safe and Unsafe fund:
+        1. Safe fund happens when the vault owner first tops up ETH balance of the vault contract (through fund() method) 
+        and then bring lazy (on-demand) report. In this case we can proof that ETH really exist, so vault owner can add 
+        as much ETH as he wants.  
+        2. Any other ways of topping up vault's totalValue (consolidations, direct deposit to beaconchain contract, etc.) are 
+        considered unsafe. In this case we set "quarantine" period for this Unsafe fund. It means that totalValue actually 
+        will be increased by this amount only after quarantine period expires.
+    */
     function _checkTotalValue(address _vault, uint256 _totalValue, int256 _inOutDelta, VaultHub.VaultRecord memory record) internal returns (uint256) {
         uint256 refSlotTotalValue = uint256(int256(uint256(record.report.totalValue)) + _inOutDelta - record.report.inOutDelta);
         Storage storage $ = _storage();
