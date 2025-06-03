@@ -548,29 +548,13 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the value of the staking vault with the node operator fee subtracted,
-     *         because the fee cannot be used to mint shares.
-     * @return The amount of ether in wei that can be used to mint shares.
-     */
-    function _mintableValue() internal view returns (uint256) {
-        return totalValue() - nodeOperatorDisbursableFee();
-    }
-
-    /**
      * @notice Mints shares within the mintable total value,
      *         and reverts if the resulting backing is greater than the mintable total value.
      * @param _recipient The address of the recipient.
      * @param _amountOfShares The amount of shares to mint.
      */
     function _mintSharesWithinMintingCapacity(address _recipient, uint256 _amountOfShares) internal {
-        _mintShares(_recipient, _amountOfShares);
-
-        uint256 locked_ = locked();
-        uint256 mintableValue_ = _mintableValue();
-
-        if (locked_ > mintableValue_) {
-            revert MintingCapacityExceeded(locked_, mintableValue_);
-        }
+        _mintShares(_recipient, _amountOfShares, nodeOperatorDisbursableFee());
     }
 
     /**
@@ -601,11 +585,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _additionalEther additional ether that may be funded to the vault
      */
     function _totalMintingCapacityShares(uint256 _additionalEther) internal view returns (uint256) {
-        VaultHub.VaultConnection memory connection = vaultConnection();
-        // TODO: move to VaultHub and take into account obligations
-        uint256 maxMintableStETH = ((_mintableValue() + _additionalEther) *
-            (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
-        return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), connection.shareLimit);
+        return VAULT_HUB.totalMintingCapacityShares(address(_stakingVault()), _additionalEther, nodeOperatorDisbursableFee());
     }
 
     // @dev The logic is inverted, 0 means fund-on-receive is enabled,
@@ -667,11 +647,6 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error thrown when recovery of ETH fails on transfer to recipient
      */
     error EthTransferFailed(address recipient, uint256 amount);
-
-    /**
-     * @notice Error thrown when mintable total value is breached
-     */
-    error MintingCapacityExceeded(uint256 locked, uint256 mintableValue);
 
     /**
      * @notice Error when the StakingVault is still connected to the VaultHub.

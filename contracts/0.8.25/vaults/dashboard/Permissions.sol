@@ -230,8 +230,8 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _shares The amount of shares to mint.
      * @dev The zero checks for parameters are performed in the VaultHub contract.
      */
-    function _mintShares(address _recipient, uint256 _shares) internal onlyRoleMemberOrAdmin(MINT_ROLE) {
-        VAULT_HUB.mintShares(address(_stakingVault()), _recipient, _shares);
+    function _mintShares(address _recipient, uint256 _shares, uint256 _reservedEther) internal onlyRoleMemberOrAdmin(MINT_ROLE) {
+        VAULT_HUB.mintShares(address(_stakingVault()), _recipient, _shares, _reservedEther);
     }
 
     /**

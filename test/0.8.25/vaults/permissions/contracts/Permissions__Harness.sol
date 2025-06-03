@@ -32,8 +32,8 @@ contract Permissions__Harness is Permissions {
         _withdraw(_recipient, _ether);
     }
 
-    function mintShares(address _recipient, uint256 _shares) external {
-        _mintShares(_recipient, _shares);
+    function mintShares(address _recipient, uint256 _shares, uint256 _reservedEther) external {
+        _mintShares(_recipient, _shares, _reservedEther);
     }
 
     function burnShares(uint256 _shares) external {

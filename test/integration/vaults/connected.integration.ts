@@ -292,7 +292,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.be.revertedWithCustomError(vaultHub, "InsufficientTotalValueToMint")
-        .withArgs(await stakingVault.getAddress(), ether("1") + TEST_STETH_AMOUNT_WEI, 0n);
+        .withArgs(await stakingVault.getAddress(), ether("1") + TEST_STETH_AMOUNT_WEI, 0);
 
       await dashboard.connect(roles.funder).fund({ value: ether("2") });
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(true);

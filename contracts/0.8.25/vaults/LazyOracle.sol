@@ -93,7 +93,7 @@ contract LazyOracle is ILazyOracle {
                 connection.shareLimit,
                 connection.reserveRatioBP,
                 connection.forcedRebalanceThresholdBP,
-                vaultHub.getMintableCapacity(vaultAddress),
+                vaultHub.mintingCapacity(vaultAddress),
                 connection.infraFeeBP,
                 connection.liquidityFeeBP,
                 connection.reservationFeeBP,

@@ -239,10 +239,30 @@ contract VaultHub is PausableUntilWithRoles {
         return _totalValue(_vaultRecord(_vault));
     }
 
+    /// @return minting capacity of the vault
+    /// @dev returns 0 if the vault is not connected
+    function mintingCapacity(address _vault) external view returns (uint256) {
+        return _getPooledEthBySharesRoundUp(totalMintingCapacityShares(_vault, 0, 0));
+    }
+
     /// @return mintable capacity of the vault
     /// @dev returns 0 if the vault is not connected
-    function getMintableCapacity(address _vault) external view returns (uint256) {
-        return 0; // TODO: implement
+    function totalMintingCapacityShares(
+        address _vault,
+        uint256 _additionalEther,
+        uint256 _reservedEther
+    ) public view returns (uint256) {
+        VaultConnection storage connection = _vaultConnection(_vault);
+        VaultRecord storage record = _vaultRecord(_vault);
+        VaultObligations storage obligations = _vaultObligations(_vault);
+
+        uint256 maxMintableEther =(
+            (_mintableValue(record, obligations, _reservedEther) + _additionalEther) *
+            (TOTAL_BASIS_POINTS - connection.reserveRatioBP)
+        ) / TOTAL_BASIS_POINTS;
+
+        uint256 maxMintableShares = Math256.min(connection.shareLimit, _operatorGrid().vaultMintableCapacity(_vault));
+        return Math256.min(_getSharesByPooledEth(maxMintableEther), maxMintableShares);
     }
 
     /// @return amount of ether that is available for the vault to withdraw
@@ -606,7 +626,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _recipient address of the receiver
     /// @param _amountOfShares amount of stETH shares to mint
-    function mintShares(address _vault, address _recipient, uint256 _amountOfShares) external whenResumed {
+    function mintShares(address _vault, address _recipient, uint256 _amountOfShares, uint256 _reservedEther) external whenResumed {
         if (_recipient == address(0)) revert ZeroArgument();
         if (_amountOfShares == 0) revert ZeroArgument();
 
@@ -618,14 +638,13 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (!_isReportFresh(record)) revert VaultReportStale(_vault);
 
-        uint256 totalValue_ = _totalValue(record);
-        uint256 unsettledLidoFees = _vaultObligations(_vault).unsettledLidoFees;
-
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - connection.reserveRatioBP;
-        uint256 maxMintableEther = ((totalValue_ - unsettledLidoFees) * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 mintableValue_ = _mintableValue(record, _vaultObligations(_vault), _reservedEther);
+        uint256 maxMintableEther = (mintableValue_ * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
         uint256 stETHAfterMint = _getPooledEthBySharesRoundUp(vaultSharesAfterMint);
         if (stETHAfterMint > maxMintableEther) {
-            revert InsufficientTotalValueToMint(_vault, totalValue_, unsettledLidoFees);
+            uint256 totalValue_ = _totalValue(record);
+            revert InsufficientTotalValueToMint(_vault, totalValue_, totalValue_ - mintableValue_);
         }
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
@@ -1048,6 +1067,14 @@ contract VaultHub is PausableUntilWithRoles {
         return uint256(int256(uint256(report.totalValue)) + _record.inOutDelta - report.inOutDelta);
     }
 
+    function _mintableValue(
+        VaultRecord storage _record,
+        VaultObligations storage _obligations,
+        uint256 _reservedEther
+    ) internal view returns (uint256) {
+        return _totalValue(_record) - _obligations.unsettledLidoFees - _reservedEther;
+    }
+
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
         uint256 latestReportTimestamp = _lazyOracle().latestReportTimestamp();
         return
@@ -1441,7 +1468,7 @@ contract VaultHub is PausableUntilWithRoles {
     error InfraFeeTooHigh(address vault, uint256 infraFeeBP, uint256 maxInfraFeeBP);
     error LiquidityFeeTooHigh(address vault, uint256 liquidityFeeBP, uint256 maxLiquidityFeeBP);
     error ReservationFeeTooHigh(address vault, uint256 reservationFeeBP, uint256 maxReservationFeeBP);
-    error InsufficientTotalValueToMint(address vault, uint256 totalValue, uint256 unsettledLidoFees);
+    error InsufficientTotalValueToMint(address vault, uint256 totalValue, uint256 reservedEther);
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
     error CodehashNotAllowed(address vault, bytes32 codehash);
     error MaxRelativeShareLimitBPTooHigh(uint256 maxRelativeShareLimitBP, uint256 totalBasisPoints);
