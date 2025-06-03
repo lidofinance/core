@@ -224,20 +224,6 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Connects the vault to VaultHub
-     * @dev Requires msg.value to be at least CONNECT_DEPOSIT
-     */
-    function connectToVaultHub() external payable {
-        if (msg.value < VAULT_HUB.CONNECT_DEPOSIT()) revert InsufficientFunds();
-
-        _fund(msg.value);
-        _lock(VAULT_HUB.CONNECT_DEPOSIT());
-        _authorizeLidoVaultHub();
-
-        VAULT_HUB.connectVault(address(_stakingVault()));
-    }
-
-    /**
      * @notice Disconnects the underlying StakingVault from the hub and passing its ownership to Dashboard.
      *         After receiving the final report, one can call reconnectToVaultHub() to reconnect to the hub
      *         or abandonDashboard() to transfer the ownership to a new owner.

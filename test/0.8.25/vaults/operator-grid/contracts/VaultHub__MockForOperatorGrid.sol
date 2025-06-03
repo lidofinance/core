@@ -4,15 +4,18 @@
 pragma solidity 0.8.25;
 
 contract VaultHub__MockForOperatorGrid {
-    struct VaultSocket {
+    struct VaultConnection {
         // ### 1st slot
-        /// @notice vault address
-        address vault;
-        /// @notice total number of stETH shares that the vault owes to Lido
-        uint96 liabilityShares;
-        // ### 2nd slot
+        /// @notice address of the vault owner
+        address owner;
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 shareLimit;
+        // ### 2th slot
+        /// @notice index of the vault in the list of vaults. Indexes is guaranteed to be stable only if there was no deletions.
+        /// @dev vaultIndex is always greater than 0
+        uint96 vaultIndex;
+        /// @notice if true, vault is disconnected and fee is not accrued
+        bool pendingDisconnect;
         /// @notice share of ether that is locked on the vault as an additional reserve
         /// e.g RR=30% means that for 1stETH minted 1/(1-0.3)=1.428571428571428571 ETH is locked on the vault
         uint16 reserveRatioBP;
@@ -24,25 +27,27 @@ contract VaultHub__MockForOperatorGrid {
         uint16 liquidityFeeBP;
         /// @notice reservation fee in basis points
         uint16 reservationFeeBP;
-        /// @notice if true, vault is disconnected and fee is not accrued
-        bool pendingDisconnect;
-        /// @notice unused gap in the slot 2
-        /// uint72 _unused_gap_;
-        // ### 3rd slot
-        /// @notice cumulative amount of shares charged as fees for the vault
-        uint96 feeSharesCharged;
-    }
-    /// @notice unused gap in the slot 3
-    /// uint160 _unused_gap_;
-
-    mapping(address => VaultSocket) public vaultSockets;
-
-    function mock__addVaultSocket(address _vault, VaultSocket calldata _vaultSocket) external {
-        vaultSockets[_vault] = _vaultSocket;
+        /// VaultRecord
+        /// @notice liability shares of the vault
+        uint96 liabilityShares;
     }
 
-    function vaultSocket(address _vault) external view returns (VaultSocket memory) {
-        return vaultSockets[_vault];
+    mapping(address vault => VaultConnection) public vaultConnections;
+
+    function mock__addVaultConnection(address _vault, VaultConnection calldata _vaultConnection) external {
+        vaultConnections[_vault] = _vaultConnection;
+    }
+
+    function vaultConnection(address _vault) external view returns (VaultConnection memory) {
+        return vaultConnections[_vault];
+    }
+
+    function isVaultConnected(address _vault) external view returns (bool) {
+        return vaultConnections[_vault].owner != address(0);
+    }
+
+    function liabilityShares(address _vault) external view returns (uint256) {
+        return vaultConnections[_vault].liabilityShares;
     }
 
     function updateConnection(
@@ -54,13 +59,15 @@ contract VaultHub__MockForOperatorGrid {
         uint256 _liquidityFeeBP,
         uint256 _reservationFeeBP
     ) external {
-        VaultSocket storage socket = vaultSockets[_vault];
-        if (socket.vault == address(0)) revert NotConnectedToHub(_vault);
+        VaultConnection storage connection = vaultConnections[_vault];
+        if (connection.owner == address(0)) revert NotConnectedToHub(_vault);
 
-        socket.shareLimit = uint96(_shareLimit);
-        socket.reserveRatioBP = uint16(_reserveRatioBP);
-        socket.forcedRebalanceThresholdBP = uint16(_forcedRebalanceThresholdBP);
-        socket.treasuryFeeBP = uint16(_treasuryFeeBP);
+        connection.shareLimit = uint96(_shareLimit);
+        connection.reserveRatioBP = uint16(_reserveRatioBP);
+        connection.forcedRebalanceThresholdBP = uint16(_forcedRebalanceThresholdBP);
+        connection.infraFeeBP = uint16(_infraFeeBP);
+        connection.liquidityFeeBP = uint16(_liquidityFeeBP);
+        connection.reservationFeeBP = uint16(_reservationFeeBP);
 
         emit VaultConnectionUpdated(
             _vault,

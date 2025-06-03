@@ -805,6 +805,8 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         _connection.pendingDisconnect = true;
+
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).resetVaultTier(_vault);
     }
 
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _ether) internal {

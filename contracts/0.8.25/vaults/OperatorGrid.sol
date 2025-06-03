@@ -444,17 +444,19 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         // Vault may not be connected to VaultHub yet.
         // There are two possible flows:
         // 1. Vault is created and connected to VaultHub immediately with the default tier.
-        //    In this case, `vaultSocket.vault` is non-zero and updateConnection must be called.
+        //    In this case, `VaultConnection` is non-zero and updateConnection must be called.
         // 2. Vault is created, its tier is changed before connecting to VaultHub.
-        //    In this case, `vaultSocket.vault` is still zero, and updateConnection must be skipped.
+        //    In this case, `VaultConnection` is still zero, and updateConnection must be skipped.
         // Hence, we update the VaultHub connection only if the vault is already connected.
-        if (vaultSocket.vault != address(0)) {
-            VaultHub(payable(LIDO_LOCATOR.vaultHub()).updateConnection(
+        if (vaultHub.isVaultConnected(_vault)) {
+            VaultHub(payable(LIDO_LOCATOR.vaultHub())).updateConnection(
                 _vault,
-                uint96(_requestedShareLimit),
+                _requestedShareLimit,
                 requestedTier.reserveRatioBP,
                 requestedTier.forcedRebalanceThresholdBP,
-                requestedTier.treasuryFeeBP
+                requestedTier.infraFeeBP,
+                requestedTier.liquidityFeeBP,
+                requestedTier.reservationFeeBP
             );
         }
 
