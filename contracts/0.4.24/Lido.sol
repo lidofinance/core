@@ -122,9 +122,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev maximum allowed ratio of external shares to total shares in basis points
     bytes32 internal constant MAX_EXTERNAL_RATIO_POSITION =
         0xf243b7ab6a2698a3d0a16e54fb43706d25b46e82d0a92f60e7e1a4aa86c30e1f; // keccak256("lido.Lido.maxExternalRatioBP")
-    /// @dev amount of external ether deficit
-    bytes32 internal constant EXTERNAL_ETHER_DEFICIT_POSITION =
-        0x42b611d67147013df68869aa8255277842897c713306263d7b91918006b40584; // keccak256("lido.Lido.externalEtherDeficit");
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -137,9 +134,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     // Emitted when validators number delivered by the oracle
     event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
-
-    // Emitted when external ether deficit is updated
-    event ExternalEtherDeficitUpdated(uint256 externalEtherDeficit);
 
     // Emitted when var at `DEPOSITED_VALIDATORS_POSITION` changed
     event DepositedValidatorsChanged(uint256 depositedValidators);
@@ -725,14 +719,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _preClValidators number of validators in the previous CL state (for event compatibility)
      * @param _reportClValidators number of validators in the current CL state
      * @param _reportClBalance total balance of the current CL state
-     * @param _reportExternalEtherDeficit total deficit of external ether
      */
     function processClStateUpdate(
         uint256 _reportTimestamp,
         uint256 _preClValidators,
         uint256 _reportClValidators,
-        uint256 _reportClBalance,
-        uint256 _reportExternalEtherDeficit
+        uint256 _reportClBalance
     ) external {
         _whenNotStopped();
         _auth(getLidoLocator().accounting());
@@ -744,12 +736,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
         // cl balance change are logged in ETHDistributed event later
-
-        uint256 externalEtherDeficit = EXTERNAL_ETHER_DEFICIT_POSITION.getStorageUint256();
-        if (_reportExternalEtherDeficit > externalEtherDeficit) {
-            EXTERNAL_ETHER_DEFICIT_POSITION.setStorageUint256(_reportExternalEtherDeficit);
-            emit ExternalEtherDeficitUpdated(_reportExternalEtherDeficit);
-        }
     }
 
     /**
@@ -969,8 +955,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function _getInternalEther() internal view returns (uint256) {
         return _getBufferedEther()
             .add(CL_BALANCE_POSITION.getStorageUint256())
-            .add(_getTransientEther())
-            .sub(EXTERNAL_ETHER_DEFICIT_POSITION.getStorageUint256());
+            .add(_getTransientEther());
     }
 
     /// @dev Calculate the amount of ether controlled by external entities
