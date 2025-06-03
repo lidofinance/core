@@ -194,7 +194,7 @@ export async function reportVaultDataWithProof(
   params: {
     totalValue?: bigint;
     inOutDelta?: bigint;
-    accruedTreasuryFees?: bigint;
+    accruedLidoFees?: bigint;
     liabilityShares?: bigint;
   } = {},
 ) {
@@ -208,7 +208,7 @@ export async function reportVaultDataWithProof(
     await stakingVault.getAddress(),
     totalValueArg,
     inOutDeltaArg,
-    params.accruedTreasuryFees ?? 0n,
+    params.accruedLidoFees ?? 0n,
     liabilitySharesArg,
   ];
   const reportTree = createVaultsReportTree([vaultReport]);
@@ -220,7 +220,7 @@ export async function reportVaultDataWithProof(
     await stakingVault.getAddress(),
     totalValueArg,
     inOutDeltaArg,
-    params.accruedTreasuryFees ?? 0n,
+    params.accruedLidoFees ?? 0n,
     liabilitySharesArg,
     reportTree.getProof(0),
   );
