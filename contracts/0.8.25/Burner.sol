@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
-pragma solidity 0.8.9;
+pragma solidity 0.8.25;
 
 import {IERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v4.4/token/ERC721/IERC721.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts-v4.4/utils/math/Math.sol";
 
-import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
+import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {IBurner} from "../common/interfaces/IBurner.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 
@@ -54,7 +54,7 @@ interface ILido is IERC20 {
  *
  * @dev Burning stETH means 'decrease total underlying shares amount to perform stETH positive token rebase'
  */
-contract Burner is IBurner, AccessControlEnumerable {
+contract Burner is IBurner, AccessControlEnumerableUpgradeable {
     using SafeERC20 for IERC20;
 
     error AppAuthFailed();
@@ -66,6 +66,7 @@ contract Burner is IBurner, AccessControlEnumerable {
     error BurnAmountExceedsActual(uint256 requestedAmount, uint256 actualAmount);
     error ZeroAddress(string field);
     error OnlyLidoCanMigrate();
+    error NotInitialized();
 
     bytes32 public constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
     bytes32 public constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
@@ -117,21 +118,33 @@ contract Burner is IBurner, AccessControlEnumerable {
     /**
      * Ctor
      *
-     * @param _admin the Lido DAO Aragon agent contract address
      * @param _locator the Lido locator address
      * @param _stETH stETH token address
-     * @param _isMigrationAllowed whether migration is allowed initially
      */
-    constructor(address _admin, address _locator, address _stETH, bool _isMigrationAllowed) {
-        if (_admin == address(0)) revert ZeroAddress("_admin");
+    constructor(address _locator, address _stETH) {
         if (_locator == address(0)) revert ZeroAddress("_locator");
         if (_stETH == address(0)) revert ZeroAddress("_stETH");
 
-        _setupRole(DEFAULT_ADMIN_ROLE, _admin);
-        _setupRole(REQUEST_BURN_SHARES_ROLE, _stETH);
-
         LOCATOR = ILidoLocator(_locator);
         LIDO = ILido(_stETH);
+
+        _disableInitializers();
+    }
+
+    /**
+     * @notice Initializes the contract by setting up roles and migration allowance.
+     * @dev This function should be called only once during the contract deployment.
+     * @param _admin The address to be granted the DEFAULT_ADMIN_ROLE.
+     * @param _isMigrationAllowed whether migration is allowed initially.
+     */
+    function initialize(address _admin, bool _isMigrationAllowed) external initializer {
+        if (_admin == address(0)) revert ZeroAddress("_admin");
+
+        __AccessControlEnumerable_init();
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        _grantRole(REQUEST_BURN_SHARES_ROLE, address(LIDO));
+
         isMigrationAllowed = _isMigrationAllowed;
     }
 
@@ -143,6 +156,7 @@ contract Burner is IBurner, AccessControlEnumerable {
     function migrate(address _oldBurner) external {
         if (msg.sender != address(LIDO)) revert OnlyLidoCanMigrate();
         if (_oldBurner == address(0)) revert ZeroAddress("_oldBurner");
+        if (_getInitializedVersion() == 0) revert NotInitialized();
         if (!isMigrationAllowed) revert MigrationNotAllowedOrAlreadyMigrated();
         isMigrationAllowed = false;
 
@@ -188,6 +202,21 @@ contract Burner is IBurner, AccessControlEnumerable {
     ) external onlyRole(REQUEST_BURN_SHARES_ROLE) {
         uint256 stETHAmount = LIDO.transferSharesFrom(_from, address(this), _sharesAmountToBurn);
         _requestBurn(_sharesAmountToBurn, stETHAmount, true /* _isCover */);
+    }
+
+    /**
+     * @notice BE CAREFUL, the provided stETH shares will be burnt permanently.
+     *
+     * Transfers `_sharesAmountToBurn` stETH shares from the message sender and irreversibly locks these
+     * on the burner contract address. Marks the shares amount for burning
+     * by increasing the `nonCoverSharesBurnRequested` counter.
+     *
+     * @param _sharesAmountToBurn stETH shares to burn
+     *
+     */
+    function requestBurnMyShares(uint256 _sharesAmountToBurn) external onlyRole(REQUEST_BURN_MY_STETH_ROLE) {
+        uint256 stETHAmount = LIDO.transferSharesFrom(msg.sender, address(this), _sharesAmountToBurn);
+        _requestBurn(_sharesAmountToBurn, stETHAmount, false /* _isCover */);
     }
 
     /**

@@ -23,7 +23,7 @@ export async function main() {
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const simpleDvtApp = state[Sk.appSimpleDvt].proxy.address;
   const gateSealAddress = state.gateSeal.address;
-  const burnerAddress = state[Sk.burner].address;
+  const burnerAddress = state[Sk.burner].proxy.address;
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
@@ -93,10 +93,10 @@ export async function main() {
   // Burner
   const burner = await loadContract<Burner>("Burner", burnerAddress);
   // NB: REQUEST_BURN_SHARES_ROLE is already granted to Lido in Burner constructor
-  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), nodeOperatorsRegistryAddress], {
+  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_MY_STETH_ROLE(), nodeOperatorsRegistryAddress], {
     from: deployer,
   });
-  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), simpleDvtApp], {
+  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_MY_STETH_ROLE(), simpleDvtApp], {
     from: deployer,
   });
   await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), accountingAddress], {

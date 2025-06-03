@@ -200,31 +200,32 @@ contract V3Template is V3Addresses {
     }
 
     function _assertFinalACL() internal view {
-        address agent = AGENT;
-
         // Burner
+        bytes32 requestBurnMyStethRole = IBurner(BURNER).REQUEST_BURN_MY_STETH_ROLE();
         bytes32 requestBurnSharesRole = IBurner(BURNER).REQUEST_BURN_SHARES_ROLE();
-        _assertSingleOZRoleHolder(IBurner(BURNER), DEFAULT_ADMIN_ROLE, agent);
-        {
-            address[] memory holders = new address[](4);
-            holders[0] = LIDO;
-            holders[1] = NODE_OPERATORS_REGISTRY;
-            holders[2] = SIMPLE_DVT;
-            holders[3] = ACCOUNTING;
-            _assertOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, holders);
-        }
         _assertZeroOZRoleHolders(IBurner(OLD_BURNER), requestBurnSharesRole);
 
+        _assertSingleOZRoleHolder(IBurner(BURNER), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertTwoOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, LIDO, ACCOUNTING);
+        {
+            address[] memory holders = new address[](3);
+            holders[0] = NODE_OPERATORS_REGISTRY;
+            holders[1] = SIMPLE_DVT;
+            holders[2] = CSM_ACCOUNTING;
+            _assertOZRoleHolders(IBurner(BURNER), requestBurnMyStethRole, holders);
+        }
+        _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
+
         // VaultHub
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), DEFAULT_ADMIN_ROLE, agent);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), agent);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), agent);
-        _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), agent);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), AGENT);
+        _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
 
         // TODO: add PausableUntilWithRoles checks when gate seal is added
 
         // AccountingOracle
-        _assertSingleOZRoleHolder(IAccountingOracle(ACCOUNTING_ORACLE), DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(IAccountingOracle(ACCOUNTING_ORACLE), DEFAULT_ADMIN_ROLE, AGENT);
 
         // OracleReportSanityChecker
         IOracleReportSanityChecker checker = IOracleReportSanityChecker(ORACLE_REPORT_SANITY_CHECKER);
@@ -249,23 +250,21 @@ contract V3Template is V3Addresses {
         }
 
         // Accounting
-        _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), agent);
+        _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), AGENT);
 
         // PredepositGuarantee
-        _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), agent);
+        _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);
 
         // StakingRouter
-        {
-            address[] memory holders = new address[](2);
-            holders[0] = LIDO;
-            holders[1] = ACCOUNTING;
-            _assertOZRoleHolders(IAccessControlEnumerable(STAKING_ROUTER), IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE(), holders);
-        }
+        _assertTwoOZRoleHolders(IAccessControlEnumerable(STAKING_ROUTER),
+            IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE(),
+            LIDO, ACCOUNTING
+        );
 
         // OperatorGrid
-        _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), agent);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), DEFAULT_ADMIN_ROLE, agent);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), agent);
+        _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), AGENT);
     }
 
     function _checkBurnerMigratedCorrectly() internal view {
@@ -316,6 +315,18 @@ contract V3Template is V3Addresses {
     ) internal view {
         if (accessControlled.getRoleMemberCount(role) != 1
          || accessControlled.getRoleMember(role, 0) != holder
+        ) {
+            revert IncorrectOZAccessControlRoleHolders(address(accessControlled), role);
+        }
+    }
+
+
+    function _assertTwoOZRoleHolders(
+        IAccessControlEnumerable accessControlled, bytes32 role, address holder1, address holder2
+    ) internal view {
+        if (accessControlled.getRoleMemberCount(role) != 2
+         || accessControlled.getRoleMember(role, 0) != holder1
+         || accessControlled.getRoleMember(role, 1) != holder2
         ) {
             revert IncorrectOZAccessControlRoleHolders(address(accessControlled), role);
         }

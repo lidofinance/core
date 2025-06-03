@@ -26,7 +26,6 @@ export async function main() {
   const sanityCheckerParams = parameters[Sk.oracleReportSanityChecker].deployParameters;
 
   const proxyContractsOwner = agentAddress;
-  const burnerAdmin = deployer;
 
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const wstethAddress = state[Sk.wstETH].address;
@@ -70,12 +69,9 @@ export async function main() {
   ]);
 
   // Deploy Burner
-  const isMigrationAllowed = true;
-  const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [
-    burnerAdmin,
+  const burner = await deployBehindOssifiableProxy(Sk.burner, "Burner", proxyContractsOwner, deployer, [
     locatorAddress,
     lidoAddress,
-    isMigrationAllowed,
   ]);
 
   // Deploy OracleReportSanityChecker
@@ -118,6 +114,36 @@ export async function main() {
     [locatorAddress],
   );
 
+  // Deploy Delegation implementation contract
+  const dashboardImpl = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [
+    lidoAddress,
+    wstethAddress,
+    vaultHub.address,
+    locatorAddress,
+  ]);
+  const dashboardImplAddress = await dashboardImpl.getAddress();
+
+  // Deploy StakingVault implementation contract
+  const stakingVaultImpl = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
+    depositContract,
+  ]);
+
+  const stakingVaultImplAddress = await stakingVaultImpl.getAddress();
+  // Deploy UpgradeableBeacon contract
+  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
+    stakingVaultImplAddress,
+    agentAddress,
+  ]);
+  const beaconAddress = await beacon.getAddress();
+
+  // Deploy VaultFactory contract
+  const vaultFactory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
+    locatorAddress,
+    beaconAddress,
+    dashboardImplAddress,
+  ]);
+  console.log("VaultFactory address", await vaultFactory.getAddress());
+
   // Deploy new LidoLocator implementation
   const locatorConfig: string[] = [
     await locator.accountingOracle(),
@@ -137,38 +163,9 @@ export async function main() {
     predepositGuarantee.address,
     wstethAddress,
     vaultHub.address,
+    vaultFactory.address,
     lazyOracle.address,
     operatorGrid.address,
   ];
   await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
-
-  // Deploy StakingVault implementation contract
-  const stakingVaultImpl = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
-    depositContract,
-  ]);
-  const stakingVaultImplAddress = await stakingVaultImpl.getAddress();
-
-  // Deploy Delegation implementation contract
-  const dashboardImpl = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [
-    lidoAddress,
-    wstethAddress,
-    vaultHub.address,
-    locatorAddress,
-  ]);
-  const dashboardImplAddress = await dashboardImpl.getAddress();
-
-  // Deploy UpgradeableBeacon contract
-  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
-    stakingVaultImplAddress,
-    agentAddress,
-  ]);
-  const beaconAddress = await beacon.getAddress();
-
-  // Deploy VaultFactory contract
-  const vaultFactory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
-    locatorAddress,
-    beaconAddress,
-    dashboardImplAddress,
-  ]);
-  console.log("VaultFactory address", await vaultFactory.getAddress());
 }

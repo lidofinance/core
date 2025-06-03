@@ -1,7 +1,7 @@
 import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
-import { Burner, OperatorGrid, PredepositGuarantee, VaultHub } from "typechain-types";
+import { Burner, ICSModule, OperatorGrid, PredepositGuarantee, StakingRouter, VaultHub } from "typechain-types";
 
 import { ether, log } from "lib";
 import { loadContract } from "lib/contract";
@@ -17,13 +17,14 @@ export async function main(): Promise<void> {
   const state = readNetworkState();
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const accountingAddress = state[Sk.accounting].proxy.address;
-  const burnerAddress = state[Sk.burner].address;
+  const burnerAddress = state[Sk.burner].proxy.address;
   const agentAddress = state[Sk.appAgent].proxy.address;
   const stakingVaultBeaconAddress = state[Sk.stakingVaultBeacon].address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
   const predepositGuaranteeAddress = state[Sk.predepositGuarantee].proxy.address;
   const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
+  const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
 
   const upgradeParameters = readUpgradeParameters();
 
@@ -59,13 +60,31 @@ export async function main(): Promise<void> {
   // Burner
   //
 
-  // Burner grantRole REQUEST_BURN_SHARES_ROLE
   const burner = await loadContract<Burner>("Burner", burnerAddress);
+
+  const isMigrationAllowed = true;
+  await burner.initialize(deployer, isMigrationAllowed);
+
   const requestBurnSharesRole = await burner.REQUEST_BURN_SHARES_ROLE();
-  await makeTx(burner, "grantRole", [requestBurnSharesRole, nodeOperatorsRegistryAddress], { from: deployer });
-  await makeTx(burner, "grantRole", [requestBurnSharesRole, simpleDvtAddress], { from: deployer });
   await makeTx(burner, "grantRole", [requestBurnSharesRole, accountingAddress], { from: deployer });
-  // NB: admin role is kept on deployer to transfer it to the upgrade template on the next steps
+  // NB: REQUEST_BURN_SHARES_ROLE is granted to Lido upon Burner initialization
+
+  const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
+  const stakingModules = await stakingRouter.getStakingModules();
+  const csm = stakingModules[2];
+  if (csm.name !== "Community Staking") {
+    throw new Error("Community Staking module not found");
+  }
+  const csmModule = await loadContract<ICSModule>("ICSModule", csm.stakingModuleAddress);
+  const csmAccountingAddress = await csmModule.accounting();
+
+  const requestBurnMyStethRole = await burner.REQUEST_BURN_MY_STETH_ROLE();
+  await makeTx(burner, "grantRole", [requestBurnMyStethRole, nodeOperatorsRegistryAddress], { from: deployer });
+  await makeTx(burner, "grantRole", [requestBurnMyStethRole, simpleDvtAddress], { from: deployer });
+  await makeTx(burner, "grantRole", [requestBurnMyStethRole, csmAccountingAddress], { from: deployer });
+
+  await makeTx(burner, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
+  await makeTx(burner, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
 
   //
   // PredepositGuarantee
