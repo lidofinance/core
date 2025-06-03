@@ -7,13 +7,14 @@ pragma solidity 0.8.25;
 import {Math256} from "contracts/common/lib/Math256.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {OperatorGrid} from "./OperatorGrid.sol";
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
+
 import {ILido} from "../interfaces/ILido.sol";
-import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
-import {LazyOracle} from "./LazyOracle.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
+import {LazyOracle} from "./LazyOracle.sol";
+import {OperatorGrid} from "./OperatorGrid.sol";
+
+import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
@@ -149,7 +150,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _maxRelativeShareLimitBP Maximum share limit relative to TVL in basis points
     constructor(ILidoLocator _locator, ILido _lido, uint256 _maxRelativeShareLimitBP) {
         _requireNotZero(_maxRelativeShareLimitBP);
-        _requireLessThanTotalBP(_maxRelativeShareLimitBP);
+        _requireLessThanBP(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
 
         MAX_RELATIVE_SHARE_LIMIT_BP = _maxRelativeShareLimitBP;
 
@@ -361,9 +362,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reservationFeeBP
     ) external onlyRole(VAULT_MASTER_ROLE) {
         _requireNotZero(_vault);
-        _requireLessThanTotalBP(_infraFeeBP);
-        _requireLessThanTotalBP(_liquidityFeeBP);
-        _requireLessThanTotalBP(_reservationFeeBP);
+        _requireLessThanBP(_infraFeeBP, TOTAL_BASIS_POINTS);
+        _requireLessThanBP(_liquidityFeeBP, TOTAL_BASIS_POINTS);
+        _requireLessThanBP(_reservationFeeBP, TOTAL_BASIS_POINTS);
 
         VaultConnection storage connection = _checkConnection(_vault);
         connection.infraFeeBP = uint16(_infraFeeBP);
@@ -518,12 +519,13 @@ contract VaultHub is PausableUntilWithRoles {
     ) external onlyRole(SOCIALIZE_BAD_DEBT_ROLE) {
         _requireNotZero(_vaultAcceptor);
         _requireNotZero(_amountOfSharesToSocialize);
+        if (_nodeOperator(_vaultAcceptor) != _nodeOperator(_vaultDonor)) revert BadDebtSocializationNotAllowed();
 
         VaultConnection storage connectionAcceptor = _vaultConnection(_vaultAcceptor);
-        if (connectionAcceptor.vaultIndex == 0) revert NotConnectedToHub(_vaultAcceptor);
+        _requireConnected(connectionAcceptor, _vaultAcceptor);
 
         VaultConnection storage connectionDonor = _vaultConnection(_vaultDonor);
-        if (connectionDonor.vaultIndex == 0) revert NotConnectedToHub(_vaultDonor);
+        _requireConnected(connectionDonor, _vaultDonor);
 
         VaultRecord storage recordDonor = _vaultRecord(_vaultDonor);
 
@@ -537,25 +539,15 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultRecord storage recordAcceptor = _vaultRecord(_vaultAcceptor);
 
-        uint256 acceptorLockedShares = _getSharesByPooledEth(recordAcceptor.locked);
-        uint256 acceptorLiabilityShares = recordAcceptor.liabilityShares;
-        uint256 acceptorNewLiabilityShares = acceptorLiabilityShares + badDebtShares;
-        if (acceptorLockedShares < acceptorNewLiabilityShares) {
-            revert SocializeIsLimitedByReserve({
-                vault: _vaultAcceptor,
-                reserveShares:
-                    acceptorLockedShares > acceptorLiabilityShares ? acceptorLockedShares - acceptorLiabilityShares : 0,
-                amountOfSharesToSocialize: _amountOfSharesToSocialize
-            });
-        }
-
-        recordAcceptor.liabilityShares = uint96(acceptorNewLiabilityShares);
-        uint256 acceptorNewLocked = _getPooledEthBySharesRoundUp(acceptorNewLiabilityShares);
-        if (acceptorNewLocked > recordAcceptor.locked) {
-            recordAcceptor.locked = uint128(acceptorNewLocked);
-        }
-
-        recordDonor.liabilityShares = uint96(donorLiabilityShares_ - badDebtShares);
+        _decreaseLiability(_vaultDonor, recordDonor, badDebtShares);
+        _increaseLiability(
+            _vaultAcceptor,
+            recordAcceptor,
+            badDebtShares,
+            connectionAcceptor.reserveRatioBP,
+            TOTAL_BASIS_POINTS, // maxMintableRatio up to 100% of total value
+            _getSharesByPooledEth(recordAcceptor.locked) // we can occupy all the locked amount
+        );
 
         emit SocializedBadDebt(_vaultAcceptor, _vaultDonor, badDebtShares);
     }
@@ -651,29 +643,18 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        uint256 vaultSharesAfterMint = record.liabilityShares + _amountOfShares;
-        if (vaultSharesAfterMint > connection.shareLimit) revert ShareLimitExceeded(_vault, connection.shareLimit);
-
         if (!_isReportFresh(record)) revert VaultReportStale(_vault);
 
-        uint256 totalValue_ = _totalValue(record);
-        uint256 treasuryFees = _vaultObligations(_vault).treasuryFees;
+        uint256 reserveRatioBP = connection.reserveRatioBP;
+        _increaseLiability(
+            _vault,
+            record,
+            _amountOfShares,
+            reserveRatioBP,
+            TOTAL_BASIS_POINTS - reserveRatioBP,
+            connection.shareLimit
+        );
 
-        uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - connection.reserveRatioBP;
-        uint256 maxMintableEther = ((totalValue_ - treasuryFees) * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
-        uint256 stETHAfterMint = _getPooledEthBySharesRoundUp(vaultSharesAfterMint);
-        if (stETHAfterMint > maxMintableEther) {
-            revert InsufficientTotalValueToMint(_vault, totalValue_, treasuryFees);
-        }
-
-        // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
-        uint256 etherToLock = (stETHAfterMint * TOTAL_BASIS_POINTS) / maxMintableRatioBP;
-        if (etherToLock > record.locked) {
-            record.locked = uint128(etherToLock);
-        }
-
-        record.liabilityShares = uint96(vaultSharesAfterMint);
-        _operatorGrid().onMintedShares(_vault, _amountOfShares);
         LIDO.mintExternalShares(_recipient, _amountOfShares);
 
         emit MintedSharesOnVault(_vault, _amountOfShares, record.locked);
@@ -690,15 +671,9 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultRecord storage record = _vaultRecord(_vault);
 
-        uint256 liabilityShares_ = record.liabilityShares;
-        if (liabilityShares_ < _amountOfShares) revert InsufficientSharesToBurn(_vault, liabilityShares_);
-
-        record.liabilityShares = uint96(liabilityShares_ - _amountOfShares);
+        _decreaseLiability(_vault, record, _amountOfShares);
 
         LIDO.burnExternalShares(_amountOfShares);
-        _operatorGrid().onBurnedShares(_vault, _amountOfShares);
-
-        _decreaseRedemptions(_vault, _amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
@@ -845,7 +820,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) external {
         _checkConnectionAndOwner(_vault);
 
-        IPredepositGuarantee(_predepositGuarantee()).proveUnknownValidator(_witness, IStakingVault(_vault));
+        _predepositGuarantee().proveUnknownValidator(_witness, IStakingVault(_vault));
     }
 
     /// @notice Compensates disproven predeposit from PDG to the recipient
@@ -859,7 +834,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) external returns (uint256) {
         _checkConnectionAndOwner(_vault);
 
-        return IPredepositGuarantee(_predepositGuarantee()).compensateDisprovenPredeposit(_pubkey, _recipient);
+        return _predepositGuarantee().compensateDisprovenPredeposit(_pubkey, _recipient);
     }
 
     function _connectVault(
@@ -873,16 +848,13 @@ contract VaultHub is PausableUntilWithRoles {
     ) internal {
         _requireSaneShareLimit(_shareLimit);
         _requireNotZero(_reserveRatioBP);
-        _requireLessThanTotalBP(_reserveRatioBP);
+        _requireLessThanBP(_reserveRatioBP, TOTAL_BASIS_POINTS);
         _requireNotZero(_forcedRebalanceThresholdBP);
+        _requireLessThanBP(_forcedRebalanceThresholdBP, _reserveRatioBP);
 
-        if (_forcedRebalanceThresholdBP > _reserveRatioBP) {
-            revert ForcedRebalanceThresholdTooHigh(_vault, _forcedRebalanceThresholdBP, _reserveRatioBP);
-        }
-
-        _requireLessThanTotalBP(_infraFeeBP);
-        _requireLessThanTotalBP(_liquidityFeeBP);
-        _requireLessThanTotalBP(_reservationFeeBP);
+        _requireLessThanBP(_infraFeeBP, TOTAL_BASIS_POINTS);
+        _requireLessThanBP(_liquidityFeeBP, TOTAL_BASIS_POINTS);
+        _requireLessThanBP(_reservationFeeBP, TOTAL_BASIS_POINTS);
 
         VaultConnection memory connection = _vaultConnection(_vault);
         if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
@@ -998,6 +970,47 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).withdraw(_recipient, _amount);
 
         emit VaultInOutDeltaUpdated(_vault, inOutDelta_);
+    }
+
+    function _increaseLiability(
+        address _vault,
+        VaultRecord storage _record,
+        uint256 _amountOfShares,
+        uint256 _reserveRatioBP,
+        uint256 _maxMintableRatioBP,
+        uint256 _shareLimit
+    ) internal {
+        uint256 totalValue_ = _totalValue(_record);
+        uint256 treasuryFees = _vaultObligations(_vault).treasuryFees;
+        uint256 sharesAfterMint = _record.liabilityShares + _amountOfShares;
+
+        if (sharesAfterMint > _shareLimit) revert ShareLimitExceeded(_vault, sharesAfterMint, _shareLimit);
+
+        uint256 maxMintableEther = ((totalValue_ - treasuryFees) * _maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 stETHAfterMint = _getPooledEthBySharesRoundUp(sharesAfterMint);
+        if (stETHAfterMint > maxMintableEther) {
+            revert InsufficientTotalValueToMint(_vault, totalValue_, treasuryFees);
+        }
+
+        // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
+        uint256 etherToLock = (stETHAfterMint * TOTAL_BASIS_POINTS) / _reserveRatioBP;
+        if (etherToLock > _record.locked) {
+            _record.locked = uint128(etherToLock);
+        }
+
+        _record.liabilityShares = uint96(sharesAfterMint);
+
+        _operatorGrid().onMintedShares(_vault, _amountOfShares);
+    }
+
+    function _decreaseLiability(address _vault, VaultRecord storage _record, uint256 _amountOfShares) internal {
+        uint256 liabilityShares_ = _record.liabilityShares;
+        if (liabilityShares_ < _amountOfShares) revert InsufficientSharesToBurn(_vault, liabilityShares_);
+
+        _record.liabilityShares = uint96(liabilityShares_ - _amountOfShares);
+
+        _operatorGrid().onBurnedShares(_vault, _amountOfShares);
+        _decreaseRedemptions(_vault, _amountOfShares);
     }
 
     function _rebalanceShortfall(
@@ -1122,8 +1135,7 @@ contract VaultHub is PausableUntilWithRoles {
         _requireNotZero(_vault);
 
         VaultConnection storage connection = _vaultConnection(_vault);
-
-        if (connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
+        _requireConnected(connection, _vault);
         if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
 
         return connection;
@@ -1313,6 +1325,10 @@ contract VaultHub is PausableUntilWithRoles {
         LIDO.rebalanceExternalEtherToInternal{value: _ether}();
     }
 
+    function _nodeOperator(address _vault) internal view returns (address) {
+        return IStakingVault(_vault).nodeOperator();
+    }
+
     function _requireNotZero(uint256 _value) internal pure {
         if (_value == 0) revert ZeroArgument();
     }
@@ -1325,13 +1341,17 @@ contract VaultHub is PausableUntilWithRoles {
         if (msg.sender != _sender) revert NotAuthorized();
     }
 
-    function _requireLessThanTotalBP(uint256 _valueBP) internal pure {
-        if (_valueBP > TOTAL_BASIS_POINTS) revert InvalidBasisPoints(_valueBP);
+    function _requireLessThanBP(uint256 _valueBP, uint256 _maxValueBP) internal pure {
+        if (_valueBP > _maxValueBP) revert InvalidBasisPoints(_valueBP, _maxValueBP);
     }
 
     function _requireSaneShareLimit(uint256 _shareLimit) internal view {
         uint256 maxSaneShareLimit = (LIDO.getTotalShares() * MAX_RELATIVE_SHARE_LIMIT_BP) / TOTAL_BASIS_POINTS;
         if (_shareLimit > maxSaneShareLimit) revert ShareLimitTooHigh(_shareLimit, maxSaneShareLimit);
+    }
+
+    function _requireConnected(VaultConnection storage _connection, address _vault) internal view {
+        if (_connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
     }
 
     event AllowedCodehashUpdated(bytes32 indexed codehash, bool allowed);
@@ -1418,19 +1438,14 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 newRebalanceThresholdBP
     );
     error InsufficientSharesToBurn(address vault, uint256 amount);
-    error ShareLimitExceeded(address vault, uint256 shareLimit);
+    error ShareLimitExceeded(address vault, uint256 expectedSharesAfterMint, uint256 shareLimit);
     error AlreadyConnected(address vault, uint256 index);
     error NotConnectedToHub(address vault);
     error NotAuthorized();
     error ZeroAddress();
     error ZeroArgument();
-    error InvalidBasisPoints(uint256 valueBP);
+    error InvalidBasisPoints(uint256 valueBP, uint256 maxValueBP);
     error ShareLimitTooHigh(uint256 shareLimit, uint256 maxShareLimit);
-    error ForcedRebalanceThresholdTooHigh(
-        address vault,
-        uint256 forcedRebalanceThresholdBP,
-        uint256 maxForcedRebalanceThresholdBP
-    );
     error InsufficientTotalValueToMint(address vault, uint256 totalValue, uint256 treasuryFees);
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
     error CodehashNotAllowed(address vault, bytes32 codehash);
@@ -1448,4 +1463,5 @@ contract VaultHub is PausableUntilWithRoles {
     error ForceValidatorExitNotAllowed();
     error NoBadDebtToSocialize(address vault, uint256 totalValueShares, uint256 liabilityShares);
     error SocializeIsLimitedByReserve(address vault, uint256 reserveShares, uint256 amountOfSharesToSocialize);
+    error BadDebtSocializationNotAllowed();
 }
