@@ -190,10 +190,8 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     }
 
     /// @notice Finalizes upgrade to v2 (from v1). Can be called only once.
-    /// @param _priorityExitShareThresholds Array of priority exit share thresholds.
-    /// @param _maxDepositsPerBlock Array of max deposits per block.
-    /// @param _minDepositBlockDistances Array of min deposit block distances.
     /// @dev https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
+    ///   See historical usage in commit: https://github.com/lidofinance/core/blob/3015a734ed4dd70cfbad5d18c3f68f13ec6a6a60/contracts/0.8.9/StakingRouter.sol#L191
     // function finalizeUpgrade_v2(
     //     uint256[] memory _priorityExitShareThresholds,
     //     uint256[] memory _maxDepositsPerBlock,

@@ -69,11 +69,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      */
     error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
-    /**
-     * @notice Thrown when onValidatorExitTriggered() reverts with empty data (e.g., out-of-gas error)
-     */
-    error UnrecoverableModuleError();
-
     struct ValidatorData {
         uint256 stakingModuleId;
         uint256 nodeOperatorId;
