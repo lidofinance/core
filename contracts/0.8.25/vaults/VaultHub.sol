@@ -37,6 +37,8 @@ contract VaultHub is PausableUntilWithRoles {
         mapping(address vault => VaultObligations) obligations;
         /// @notice 1-based array of vaults connected to the hub. index 0 is reserved for not connected vaults
         address[] vaults;
+        /// @notice amount of bad debt that was internalized from the vault to become the protocol loss
+        uint256 badDebtToInternalize;
     }
 
     struct VaultConnection {
@@ -163,6 +165,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev used to perform rebalance operations
     receive() external payable {}
 
+    /// @notice initialize the vault hub
+    /// @param _admin default admin address
     function initialize(address _admin) external initializer {
         _requireNotZero(_admin);
 
@@ -275,6 +279,11 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev returns 0 if the vault is not connected
     function rebalanceShortfall(address _vault) external view returns (uint256) {
         return _rebalanceShortfall(_vaultConnection(_vault), _vaultRecord(_vault));
+    }
+
+    /// @notice amount of bad debt to be internalized to become the protocol loss
+    function badDebtToInternalize() external view returns (uint256) {
+        return _storage().badDebtToInternalize;
     }
 
     /// @notice Set if a vault proxy codehash is allowed to be connected to the hub
@@ -507,49 +516,64 @@ contract VaultHub is PausableUntilWithRoles {
         });
     }
 
-    /// @notice Socializes bad debt between two vaults
-    /// @param _vaultAcceptor The address of the vault that accepts the bad debt
-    /// @param _vaultDonor The address of the vault that donates the bad debt
-    /// @param _amountOfSharesToSocialize The amount of shares to socialize
+    /// @notice Transfer the bad debt from the donor vault to the acceptor vault
+    /// @param _vault address of the vault that has the bad debt
+    /// @param _vaultAcceptor address of the vault that will accept the bad debt or 0 if the bad debt is socialized to the protocol
+    /// @param _maxSharesToSocialize maximum amount of shares to socialize
     /// @dev msg.sender must have SOCIALIZE_BAD_DEBT_ROLE
     function socializeBadDebt(
+        address _vault,
         address _vaultAcceptor,
-        address _vaultDonor,
-        uint256 _amountOfSharesToSocialize
+        uint256 _maxSharesToSocialize
     ) external onlyRole(SOCIALIZE_BAD_DEBT_ROLE) {
-        _requireNotZero(_vaultAcceptor);
-        _requireNotZero(_amountOfSharesToSocialize);
-        if (_nodeOperator(_vaultAcceptor) != _nodeOperator(_vaultDonor)) revert BadDebtSocializationNotAllowed();
+        _requireNotZero(_vault);
+        _requireNotZero(_maxSharesToSocialize);
 
-        VaultConnection storage connectionAcceptor = _vaultConnection(_vaultAcceptor);
-        _requireConnected(connectionAcceptor, _vaultAcceptor);
+        VaultConnection storage connection = _vaultConnection(_vault);
+        _requireConnected(connection, _vault); // require connected but may be pending
 
-        VaultConnection storage connectionDonor = _vaultConnection(_vaultDonor);
-        _requireConnected(connectionDonor, _vaultDonor);
-
-        VaultRecord storage recordDonor = _vaultRecord(_vaultDonor);
-
-        uint256 donorLiabilityShares_ = recordDonor.liabilityShares;
-        uint256 donorTotalValueShares = _getSharesByPooledEth(_totalValue(recordDonor));
-        if (donorTotalValueShares > donorLiabilityShares_) {
-            revert NoBadDebtToSocialize(_vaultDonor, donorTotalValueShares, donorLiabilityShares_);
+        VaultRecord storage record = _vaultRecord(_vault);
+        uint256 liabilityShares_ = record.liabilityShares;
+        uint256 totalValueShares = _getSharesByPooledEth(_totalValue(record));
+        if (totalValueShares > liabilityShares_) {
+            revert NoBadDebtToSocialize(_vault, totalValueShares, liabilityShares_);
         }
 
-        uint256 badDebtShares = donorLiabilityShares_ - donorTotalValueShares;
+        uint256 badDebtToSocialize = Math256.min(liabilityShares_ - totalValueShares, _maxSharesToSocialize);
 
-        VaultRecord storage recordAcceptor = _vaultRecord(_vaultAcceptor);
+        _decreaseLiability(_vault, record, badDebtToSocialize);
 
-        _decreaseLiability(_vaultDonor, recordDonor, badDebtShares);
-        _increaseLiability(
-            _vaultAcceptor,
-            recordAcceptor,
-            badDebtShares,
-            connectionAcceptor.reserveRatioBP,
-            TOTAL_BASIS_POINTS, // maxMintableRatio up to 100% of total value
-            _getSharesByPooledEth(recordAcceptor.locked) // we can occupy all the locked amount
-        );
+        if (_vaultAcceptor == address(0)) {
+            // internalize the bad debt to the protocol
+            _storage().badDebtToInternalize += badDebtToSocialize;
 
-        emit SocializedBadDebt(_vaultAcceptor, _vaultDonor, badDebtShares);
+            // disconnect the vault from the hub ?? or ban it ?? or change the owner ??
+        } else {
+            if (_nodeOperator(_vaultAcceptor) != _nodeOperator(_vault)) revert BadDebtSocializationNotAllowed();
+
+            VaultConnection storage connectionAcceptor = _vaultConnection(_vaultAcceptor);
+            _requireConnected(connectionAcceptor, _vaultAcceptor);
+
+            VaultRecord storage recordAcceptor = _vaultRecord(_vaultAcceptor);
+            _increaseLiability(
+                _vaultAcceptor,
+                recordAcceptor,
+                badDebtToSocialize,
+                connectionAcceptor.reserveRatioBP,
+                TOTAL_BASIS_POINTS, // maxMintableRatio up to 100% of total value
+                _getSharesByPooledEth(recordAcceptor.locked) // we can occupy all the locked amount
+            );
+        }
+
+        emit BadDebtSocialized(_vault, _vaultAcceptor, badDebtToSocialize);
+    }
+
+    /// @notice Reset the internalized bad debt to zero
+    /// @dev msg.sender must be the accounting contract
+    function decreaseInternalizedBadDebt(uint256 _amountOfShares) external {
+        _requireSender(LIDO_LOCATOR.accounting());
+
+        _storage().badDebtToInternalize -= _amountOfShares;
     }
 
     /// @notice transfer the ownership of the vault to a new owner without disconnecting it from the hub
@@ -936,12 +960,10 @@ contract VaultHub is PausableUntilWithRoles {
     function _rebalanceEther(
         address _vault,
         VaultRecord storage _record,
-        uint256 _ether,
-        uint256 _sharesToBurn
+        uint256 _ether
     ) internal {
-        _record.liabilityShares = uint96(_record.liabilityShares - _sharesToBurn);
         _withdraw(_vault, _record, address(this), _ether);
-        _rebalanceExternalEther(_ether);
+        LIDO.rebalanceExternalEtherToInternal{value: _ether}();
     }
 
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _ether) internal {
@@ -952,8 +974,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 liabilityShares_ = _record.liabilityShares;
         if (liabilityShares_ < sharesToBurn) revert InsufficientSharesToBurn(_vault, liabilityShares_);
 
-        _rebalanceEther(_vault, _record, _ether, sharesToBurn);
-        _decreaseRedemptions(_vault, sharesToBurn);
+        _decreaseLiability(_vault, _record, sharesToBurn);
+
+        _rebalanceEther(_vault, _record, _ether);
 
         emit VaultRebalanced(_vault, sharesToBurn, _ether);
     }
@@ -1238,7 +1261,9 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 sharesToBurn = _getSharesByPooledEth(valueToRebalance);
             uint256 unsettledRedemptions = obligations.redemptions - valueToRebalance;
 
-            _rebalanceEther(_vault, _record, valueToRebalance, sharesToBurn);
+            _decreaseLiability(_vault, _record, sharesToBurn);
+
+            _rebalanceEther(_vault, _record, valueToRebalance);
 
             obligations.redemptions = uint64(unsettledRedemptions);
             emit RedemptionsObligationUpdated(_vault, unsettledRedemptions, valueToRebalance);
@@ -1319,10 +1344,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _getPooledEthBySharesRoundUp(uint256 _shares) internal view returns (uint256) {
         return LIDO.getPooledEthBySharesRoundUp(_shares);
-    }
-
-    function _rebalanceExternalEther(uint256 _ether) internal {
-        LIDO.rebalanceExternalEtherToInternal{value: _ether}();
     }
 
     function _nodeOperator(address _vault) internal view returns (address) {
@@ -1406,7 +1427,7 @@ contract VaultHub is PausableUntilWithRoles {
     event TreasuryFeesObligationUpdated(address indexed vault, uint256 unsettled, uint256 settled);
     event RedemptionsObligationUpdated(address indexed vault, uint256 unsettled, uint256 settled);
 
-    event SocializedBadDebt(address indexed vaultAcceptor, address indexed vaultDonor, uint256 badDebtShares);
+    event BadDebtSocialized(address indexed vaultDonor, address indexed vaultAcceptor, uint256 badDebtShares);
 
     error ZeroBalance();
 
@@ -1462,6 +1483,7 @@ contract VaultHub is PausableUntilWithRoles {
     error PartialValidatorWithdrawalNotAllowed();
     error ForceValidatorExitNotAllowed();
     error NoBadDebtToSocialize(address vault, uint256 totalValueShares, uint256 liabilityShares);
+    error NoBadDebtToInternalize(address vault, uint256 totalValueShares, uint256 liabilityShares);
     error SocializeIsLimitedByReserve(address vault, uint256 reserveShares, uint256 amountOfSharesToSocialize);
     error BadDebtSocializationNotAllowed();
 }

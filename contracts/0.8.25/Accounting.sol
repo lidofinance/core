@@ -211,7 +211,7 @@ contract Accounting {
         // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
         update.sharesToMintAsFees = _calculateLidoProtocolFeeShares(_report, update, postInternalSharesBeforeFees, update.postInternalEther);
 
-        update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees;
+        update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees + _report.badDebtToInternalize;
 
         update.postTotalShares = update.postInternalShares + _pre.externalShares;
         update.postTotalPooledEther = update.postInternalEther + _pre.externalShares * update.postInternalEther / update.postInternalShares;
@@ -285,8 +285,13 @@ contract Accounting {
             _report.timestamp,
             _pre.clValidators,
             _report.clValidators,
-            _report.clBalance
+            _report.clBalance,
+            _report.badDebtToInternalize
         );
+
+        if (_report.badDebtToInternalize > 0) {
+            _contracts.vaultHub.decreaseInternalizedBadDebt(_report.badDebtToInternalize);
+        }
 
         if (_update.totalSharesToBurn > 0) {
             _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
@@ -352,6 +357,14 @@ contract Accounting {
                 _report.withdrawalFinalizationBatches[_report.withdrawalFinalizationBatches.length - 1],
                 _report.timestamp
             );
+        }
+
+        if (_report.badDebtToInternalize > _contracts.vaultHub.badDebtToInternalize()) {
+            revert BadDebtMoreThanExpected(_report.badDebtToInternalize, _contracts.vaultHub.badDebtToInternalize());
+        }
+
+        if (_report.badDebtToInternalize > _pre.externalShares) {
+            revert BadDebtMoreThanExpected(_report.badDebtToInternalize, _pre.externalShares);
         }
     }
 
@@ -459,4 +472,5 @@ contract Accounting {
     error UnequalArrayLengths(uint256 firstArrayLength, uint256 secondArrayLength);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
     error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
+    error BadDebtMoreThanExpected(uint256 reportBadDebtToInternalize, uint256 expectedBadDebtToInternalize);
 }

@@ -42,7 +42,7 @@ contract AccountingOracle__MockForSanityChecker {
                 data.elRewardsVaultBalance,
                 data.sharesRequestedToBurn,
                 data.withdrawalFinalizationBatches,
-                data.vaultsTotalDeficit
+                data.badDebtToInternalize
             )
         );
     }
