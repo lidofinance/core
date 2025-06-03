@@ -63,14 +63,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      */
     event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
     /**
-     * @notice Emitted when notifying a staking module about a validator exit fails.
-     * @param stakingModuleId Id of staking module.
-     * @param nodeOperatorId Id of node operator.
-     * @param validatorPubkey Public key of validator.
-     */
-    event StakingModuleExitNotificationFailed(uint256 stakingModuleId, uint256 nodeOperatorId, bytes validatorPubkey);
-
-    /**
      * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
      * @param requestsCount Amount of requests that were sent for processing
      * @param remainingLimit Amount of requests that still can be processed at current day
@@ -266,23 +258,13 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
         for (uint256 i = 0; i < validatorsData.length; ++i) {
             data = validatorsData[i];
 
-            try
-                stakingRouter.onValidatorExitTriggered(
-                    data.stakingModuleId,
-                    data.nodeOperatorId,
-                    data.pubkey,
-                    withdrawalRequestPaidFee,
-                    exitType
-                )
-            {} catch (bytes memory lowLevelRevertData) {
-                /// @dev This check is required to prevent incorrect gas estimation of the method.
-                ///      Without it, Ethereum nodes that use binary search for gas estimation may
-                ///      return an invalid value when the onValidatorExitTriggered() reverts because of the
-                ///      "out of gas" error. Here we assume that the onValidatorExitTriggered() method doesn't
-                ///      have reverts with empty error data except "out of gas".
-                if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
-                emit StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
-            }
+            stakingRouter.onValidatorExitTriggered(
+                data.stakingModuleId,
+                data.nodeOperatorId,
+                data.pubkey,
+                withdrawalRequestPaidFee,
+                exitType
+            );
         }
     }
 
