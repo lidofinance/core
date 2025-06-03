@@ -90,6 +90,28 @@ contract VaultHub is PausableUntilWithRoles {
         int128 inOutDelta;
     }
 
+    /**
+     *  Obligations are vaults non-negotiable debts to the Lido protocol.
+     *  While any part of those debts remains unsettled, VaultHub may want to limit what the vault can do.
+     *
+     *  Obligations have two types:
+     *  - Redemptions – Lido Core requests of the part of vault liability to serve the withdrawal queue.
+     *  - Lido fees – Sum of infra, liquidity and reservation fees on validator rewards. Grows on every oracle
+     *    report until paid.
+     *
+     *  Obligations are used to:
+     *  - Guarantee that every stETH share remains fully backed by ether, allowing withdrawal queue to
+     *    be served using the vault's liability.
+     *  - Guarantee that Lido's infra/liquidity/reservation fees are actually paid.
+     *  - While obligations are outstanding, VaultHub clamps the vault's freedom
+     *    (deposits to Beacon Chain, withdrawals, disconnecting) until the obligations are settled.
+     *
+     *  Safety rails:
+     *  - While unsettled obligations ≥ OBLIGATIONS_THRESHOLD (1 ETH) the beacon chain deposits are paused.
+     *  - Withdrawals can't drain the vault below the unsettled obligations.
+     *  - Minting new stETH is limited by unsettled Lido fees.
+     *  - Disconnect refused until both obligations hit zero.
+     */
     struct VaultObligations {
         /// @notice cumulative value for Lido fees that were settled on the vault
         uint128 cumulativeSettledLidoFees;
