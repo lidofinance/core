@@ -628,6 +628,30 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         reservationFeeBP = t.reservationFeeBP;
     }
 
+    /// @notice Returns the mintable capacity of a vault
+    /// @param _addr address of the vault
+    /// @param _liabilityShares liability shares of the vault
+    /// @return mintable capacity
+    function vaultMintableCapacity(address _addr, uint256 _liabilityShares) external view returns (uint256) {
+        ERC7201Storage storage $ = _getStorage();
+
+        VaultTier memory vaultTier = $.vaultTier[_addr];
+        uint64 tierId = vaultTier.currentTierId;
+
+        Tier memory tier = $.tiers[tierId];
+        Group memory group = $.groups[tier.operator];
+
+        uint256 shareLimit = _min(tier.shareLimit, group.shareLimit);
+
+        if (_liabilityShares > shareLimit) return 0;
+
+        return shareLimit - _liabilityShares;
+    }
+
+    function _min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
+    }
+
     /// @notice Validates tier parameters
     /// @param _reserveRatioBP Reserve ratio
     /// @param _forcedRebalanceThresholdBP Forced rebalance threshold
