@@ -820,6 +820,7 @@ contract VaultHub is PausableUntilWithRoles {
         _record.liabilityShares = uint96(liabilityShares_ - sharesToBurn);
         _withdraw(_vault, _record, address(this), _ether);
         LIDO.rebalanceExternalEtherToInternal{value: _ether}();
+        _operatorGrid().onBurnedShares(_vault, sharesToBurn);
 
         emit VaultRebalanced(_vault, sharesToBurn, _ether);
     }
