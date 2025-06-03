@@ -86,6 +86,23 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
         return _storage().vaultsDataTimestamp;
     }
 
+    /// @notice returns the quarantine period
+    function quarantinePeriod() external view returns (uint64) {
+        return _storage().quarantinePeriod;
+    }
+
+    /// @notice returns the max EL CL rewards
+    function maxElClRewardsBP() external view returns (uint16) {
+        return _storage().maxElClRewardsBP;
+    }
+
+    /// @notice returns the quarantine for the vault
+    /// @param _vault the address of the vault
+    /// @return the quarantine for the vault
+    function vaultQuarantine(address _vault) external view returns (Quarantine memory) {
+        return _storage().vaultQuarantines[_vault];
+    }
+
     /// @notice returns batch of vaults info
     /// @param _offset in the vaults list [0, vaultsCount)
     /// @param _limit maximum number of vaults to return
@@ -240,7 +257,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
                     _totalValue = refSlotTotalValue;
                 } else {
                     // quarantine period expired
-                    if (delta < quarDelta + refSlotTotalValue * $.maxElClRewardsBP / TOTAL_BP) {
+                    if (delta <= quarDelta + refSlotTotalValue * $.maxElClRewardsBP / TOTAL_BP) {
                         q.delta = 0;
                     } else {
                         _totalValue = refSlotTotalValue + quarDelta;

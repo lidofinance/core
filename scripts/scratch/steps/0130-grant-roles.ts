@@ -2,12 +2,12 @@ import { ethers } from "hardhat";
 
 import {
   Burner,
+  LazyOracle,
   OperatorGrid,
   StakingRouter,
   ValidatorsExitBusOracle,
   VaultHub,
   WithdrawalQueueERC721,
-  LazyOracle,
 } from "typechain-types";
 
 import { loadContract } from "lib/contract";
