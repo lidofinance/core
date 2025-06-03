@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { DepositContract__MockForBeaconChainDepositor, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, MAX_UINT256, proxify, randomString } from "lib";
+import { certainAddress, ether, proxify } from "lib";
 
 import { Snapshot } from "test/suite";
 
