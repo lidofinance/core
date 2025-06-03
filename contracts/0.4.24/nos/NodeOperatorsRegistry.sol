@@ -1440,7 +1440,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
             emit RewardsDistributed(recipients[idx], shares[idx]);
         }
         if (toBurn > 0) {
-            IBurner(getLocator().burner()).requestBurnShares(address(this), toBurn);
+            IBurner(getLocator().burner()).requestBurnMyShares(toBurn);
         }
     }
 

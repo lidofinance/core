@@ -39,6 +39,8 @@ export enum Sk {
   aragonKernel = "aragon-kernel",
   aragonRepoBase = "aragon-repo-base",
   aragonLidoAppRepo = "aragon-lido-app-repo",
+  aragonNodeOperatorsRegistryAppRepo = "aragon-node-operators-registry-app-repo",
+  aragonSimpleDvtAppRepo = "aragon-simple-dvt-app-repo",
   appAgent = "app:aragon-agent",
   appFinance = "app:aragon-finance",
   appTokenManager = "app:aragon-token-manager",
@@ -123,6 +125,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.accounting:
     case Sk.burner:
     case Sk.appSimpleDvt:
+    case Sk.aragonNodeOperatorsRegistryAppRepo:
+    case Sk.aragonSimpleDvtAppRepo:
     case Sk.predepositGuarantee:
     case Sk.vaultHub:
       return state[contractKey].proxy.address;

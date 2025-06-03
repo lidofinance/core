@@ -6,12 +6,12 @@ import { LidoLocator } from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy } from "lib/deploy";
-import { readNetworkState, Sk } from "lib/state-file";
+import { readNetworkState, setValueInState, Sk } from "lib/state-file";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const parameters = readUpgradeParameters();
-  const state = readNetworkState();
+  let state = readNetworkState();
 
   // Extract necessary addresses and parameters from the state
   const lidoAddress = state[Sk.appLido].proxy.address;
@@ -33,6 +33,14 @@ export async function main() {
 
   // Deploy Lido new implementation
   await deployImplementation(Sk.appLido, "Lido", deployer);
+
+  // Deploy NodeOperatorsRegistry new implementation (for both Curated and SimpleDVT)
+  const norImpl = await deployImplementation(Sk.appNodeOperatorsRegistry, "NodeOperatorsRegistry", deployer, [], {
+    libraries: { MinFirstAllocationStrategy: state[Sk.minFirstAllocationStrategy].address },
+  });
+  const simpleDvtStateEntry = state[Sk.appSimpleDvt];
+  simpleDvtStateEntry.implementation.address = norImpl.address;
+  state = setValueInState(Sk.appSimpleDvt, simpleDvtStateEntry);
 
   // Deploy Accounting
   const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [

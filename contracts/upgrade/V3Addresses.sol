@@ -44,6 +44,7 @@ contract V3Addresses {
         // New implementations
         address newLocatorImpl;
         address newLidoImpl;
+        address newNodeOperatorsRegistryImpl;
         address newAccountingOracleImpl;
 
         // New fancy proxy and blueprint contracts
@@ -55,6 +56,8 @@ contract V3Addresses {
         address kernel;
         address agent;
         address aragonAppLidoRepo;
+        address aragonAppNodeOperatorsRegistryRepo;
+        address aragonAppSimpleDvtRepo;
         address locator;
         address voting;
     }
@@ -81,6 +84,7 @@ contract V3Addresses {
     address public immutable BURNER;
     address public immutable ORACLE_REPORT_SANITY_CHECKER;
     address public immutable NEW_LIDO_IMPL;
+    address public immutable NEW_NODE_OPERATORS_REGISTRY_IMPL;
     address public immutable NEW_ACCOUNTING_ORACLE_IMPL;
 
     //
@@ -101,6 +105,8 @@ contract V3Addresses {
     address public immutable KERNEL;
     address public immutable AGENT;
     address public immutable ARAGON_APP_LIDO_REPO;
+    address public immutable ARAGON_APP_NODE_OPERATORS_REGISTRY_REPO;
+    address public immutable ARAGON_APP_SIMPLE_DVT_REPO;
     address public immutable VOTING;
     address public immutable EL_REWARDS_VAULT;
     address public immutable STAKING_ROUTER;
@@ -129,10 +135,13 @@ contract V3Addresses {
         LOCATOR = params.locator;
         NEW_LOCATOR_IMPL = params.newLocatorImpl;
         NEW_LIDO_IMPL = params.newLidoImpl;
+        NEW_NODE_OPERATORS_REGISTRY_IMPL = params.newNodeOperatorsRegistryImpl;
         NEW_ACCOUNTING_ORACLE_IMPL = params.newAccountingOracleImpl;
         KERNEL = params.kernel;
         AGENT = params.agent;
         ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
+        ARAGON_APP_NODE_OPERATORS_REGISTRY_REPO = params.aragonAppNodeOperatorsRegistryRepo;
+        ARAGON_APP_SIMPLE_DVT_REPO = params.aragonAppSimpleDvtRepo;
         VOTING = params.voting;
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPL = params.stakingVaultImpl;

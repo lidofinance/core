@@ -37,6 +37,12 @@
   "app:lido": {
     "newVersion": [5, 0, 0]
   },
+  "app:node-operators-registry": {
+    "newVersion": [6, 0, 0]
+  },
+  "app:simple-dvt": {
+    "newVersion": [3, 0, 0]
+  },
   "operatorGrid": {
     "deployParameters": {
       "defaultTierParams": {
