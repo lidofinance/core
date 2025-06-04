@@ -105,7 +105,12 @@ contract VaultHub__MockForDashboard {
         emit Mock__ValidatorExitRequested(_vault, _pubkeys);
     }
 
-    function triggerValidatorWithdrawals(address _vault, bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
+    function triggerValidatorWithdrawals(
+        address _vault,
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) external payable {
         emit Mock__ValidatorWithdrawalsTriggered(_vault, _pubkeys, _amounts, _refundRecipient);
     }
 
@@ -125,12 +130,19 @@ contract VaultHub__MockForDashboard {
         emit Mock__Withdrawn(_vault, _recipient, _amount);
     }
 
-    function compensateDisprovenPredepositFromPDG(address _vault, bytes calldata _validatorPubkey, address _recipient) external returns (uint256) {
+    function compensateDisprovenPredepositFromPDG(
+        address _vault,
+        bytes calldata _validatorPubkey,
+        address _recipient
+    ) external returns (uint256) {
         emit Mock__CompensatedDisprovenPredepositFromPDG(_vault, _validatorPubkey, _recipient);
         return 1 ether;
     }
 
-    function proveUnknownValidatorToPDG(address _vault, IPredepositGuarantee.ValidatorWitness calldata _witness) external {
+    function proveUnknownValidatorToPDG(
+        address _vault,
+        IPredepositGuarantee.ValidatorWitness calldata _witness
+    ) external {
         emit Mock__ValidatorProvedToPDG(_vault, _witness);
     }
 

@@ -79,7 +79,7 @@
   },
   "lazyOracle": {
     "deployParameters": {
-      "quarantinePeriod": 259200, 
+      "quarantinePeriod": 259200,
       "maxElClRewardsBP": 300
     }
   },
@@ -162,6 +162,18 @@
       "gIndex": "0x0000000000000000000000000000000000000000000000000096000000000028",
       "gIndexAfterChange": "0x0000000000000000000000000000000000000000000000000096000000000028",
       "changeSlot": 0
+    }
+  },
+  "operatorGrid": {
+    "deployParameters": {
+      "defaultTierParams": {
+        "shareLimitInEther": "1000",
+        "reserveRatioBP": 2000,
+        "forcedRebalanceThresholdBP": 1800,
+        "infraFeeBP": 500,
+        "liquidityFeeBP": 400,
+        "reservationFeeBP": 100
+      }
     }
   }
 }

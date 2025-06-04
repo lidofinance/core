@@ -44,20 +44,18 @@ async function applySteps(steps: string[]) {
   }
 }
 
-export async function deployUpgrade(networkName: string): Promise<void> {
+export async function deployUpgrade(networkName: string, stepsFile: string): Promise<void> {
   // Hardhat network is a fork of mainnet so we need to use the mainnet-fork steps
   if (networkName === "hardhat") {
     networkName = "mainnet-fork";
   }
 
   try {
-    const stepsFile = `upgrade/steps-${networkName}.json`;
     const steps = loadSteps(stepsFile);
-
     await applySteps(steps);
   } catch (error) {
     if (error instanceof StepsFileNotFoundError) {
-      log.warning("Upgrade steps not found, assuming the protocol is already deployed");
+      log.warning(`Upgrade steps not found in ${stepsFile}, assuming the protocol is already deployed`);
     } else {
       log.error("Upgrade failed:", (error as Error).message);
     }

@@ -245,8 +245,8 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .unguaranteedDepositToBeaconChain([predepositData.deposit]),
     )
       .to.emit(dashboard, "UnguaranteedDeposits")
-      .withArgs(await stakingVault.getAddress(), 1, predepositData.deposit.amount)
-      // check that emit the event from deposit contract
+      .withArgs(await stakingVault.getAddress(), 1, predepositData.deposit.amount);
+    // check that emit the event from deposit contract
 
     const { witnesses, postdeposit } = await getProofAndDepositData(
       predepositGuarantee,

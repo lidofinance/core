@@ -31,9 +31,9 @@ contract VaultHub__MockForOperatorGrid {
         // ### 3rd slot
         /// @notice cumulative amount of shares charged as fees for the vault
         uint96 feeSharesCharged;
-        /// @notice unused gap in the slot 3
-        /// uint160 _unused_gap_;
     }
+    /// @notice unused gap in the slot 3
+    /// uint160 _unused_gap_;
 
     mapping(address => VaultSocket) public vaultSockets;
 

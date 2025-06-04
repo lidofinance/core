@@ -48,7 +48,11 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     uint256 private nodeOperatorNodeOperatorTotalDepositedValidators__mocked;
     uint256 private nodeOperatorNodeOperatorDepositableValidatorsCount__mocked;
 
-    function getNodeOperatorSummary(uint256) external view
+    function getNodeOperatorSummary(
+        uint256
+    )
+        external
+        view
         returns (
             uint256 targetLimitMode,
             uint256 targetValidatorsCount,
@@ -122,10 +126,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
 
     uint256[] private nodeOperatorsIds__mocked;
 
-    function getNodeOperatorIds(
-        uint256,
-        uint256
-    ) external view returns (uint256[] memory nodeOperatorIds) {
+    function getNodeOperatorIds(uint256, uint256) external view returns (uint256[] memory nodeOperatorIds) {
         return nodeOperatorsIds__mocked;
     }
 

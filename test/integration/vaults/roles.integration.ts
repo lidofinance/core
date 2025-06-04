@@ -8,7 +8,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Dashboard } from "typechain-types";
 
 import { days, ether } from "lib";
-import { getProtocolContext, ProtocolContext } from "lib/protocol";
+import { getProtocolContext, ProtocolContext, reportVaultDataWithProof } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
@@ -20,7 +20,7 @@ const VAULT_CONNECTION_DEPOSIT = ether("1");
 
 type Methods<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [K in keyof T]: T[K] extends (...args: any) => any ? K : never; // gdfg
+  [K in keyof T]: T[K] extends (...args: any) => any ? K : never;
 }[keyof T];
 
 type DashboardMethods = Methods<Dashboard>; // "foo" | "bar"
@@ -47,7 +47,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     validatorWithdrawalTriggerer: HardhatEthersSigner,
     disconnecter: HardhatEthersSigner,
     tierChanger: HardhatEthersSigner,
-    nodeOperatorFeeRecipientSetter: HardhatEthersSigner,
     nodeOperatorRewardAdjuster: HardhatEthersSigner,
     stranger: HardhatEthersSigner;
 
@@ -74,8 +73,8 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       validatorExitRequester,
       validatorWithdrawalTriggerer,
       disconnecter,
-      tierChanger,
-      nodeOperatorFeeRecipientSetter,
+      tierChanger, // nodeOperatorFeeRecipientSetter
+      ,
       nodeOperatorRewardAdjuster,
       stranger,
     ] = allRoles;
@@ -110,6 +109,13 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
       const createDashboardEvent = ctx.getEvents(createVaultTxReceipt, "DashboardCreated")[0];
       testDashboard = await ethers.getContractAt("Dashboard", createDashboardEvent.args?.dashboard);
+
+      {
+        // To prevent ReportStale errors
+        const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
+        const stakingVault = await ethers.getContractAt("StakingVault", createVaultEvents[0].args!.vault);
+        await reportVaultDataWithProof(ctx, stakingVault);
+      }
 
       await testDashboard.connect(owner).grantRoles([
         {
@@ -171,10 +177,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       ]);
 
       await testDashboard.connect(nodeOperatorManager).grantRoles([
-        {
-          account: nodeOperatorFeeRecipientSetter,
-          role: await testDashboard.NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE(),
-        },
         {
           account: nodeOperatorRewardAdjuster,
           role: await testDashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
@@ -335,7 +337,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         it.skip("increaseAccruedRewardsAdjustment", async () => {
           await testMethod(
             testDashboard,
-            "increaseAccruedRewardsAdjustment",
+            "increaseRewardsAdjustment",
             {
               successUsers: [nodeOperatorRewardAdjuster, nodeOperatorManager],
               failingUsers: allRoles.filter((r) => r !== nodeOperatorRewardAdjuster && r !== nodeOperatorManager),
@@ -458,18 +460,18 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
     describe("Verify ACL for methods that require confirmations", () => {
       it("setNodeOperatorFeeBP", async () => {
-        await expect(testDashboard.connect(owner).setNodeOperatorFeeBP(1n)).not.to.emit(
+        await expect(testDashboard.connect(owner).setNodeOperatorFeeRate(1n)).not.to.emit(
           testDashboard,
-          "NodeOperatorFeeBPSet",
+          "NodeOperatorFeeRateSet",
         );
-        await expect(testDashboard.connect(nodeOperatorManager).setNodeOperatorFeeBP(1n)).to.emit(
+        await expect(testDashboard.connect(nodeOperatorManager).setNodeOperatorFeeRate(1n)).to.emit(
           testDashboard,
-          "NodeOperatorFeeBPSet",
+          "NodeOperatorFeeRateSet",
         );
 
         await testMethodConfirmedRoles(
           testDashboard,
-          "setNodeOperatorFeeBP",
+          "setNodeOperatorFeeRate",
           {
             successUsers: [],
             failingUsers: allRoles.filter((r) => r !== owner && r !== nodeOperatorManager),
@@ -567,7 +569,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           await testGrantingRole(
             testDashboard,
             "setNodeOperatorFeeRecipient",
-            await testDashboard.NODE_OPERATOR_FEE_RECIPIENT_SET_ROLE(),
+            await testDashboard.NODE_OPERATOR_MANAGER_ROLE(),
             [stranger],
             nodeOperatorManager,
           );

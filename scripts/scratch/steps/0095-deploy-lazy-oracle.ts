@@ -13,7 +13,13 @@ export async function main() {
   const lazyOracleParams = state[Sk.lazyOracle].deployParameters;
 
   // Deploy OracleReportSanityChecker
-  const lazyOracleArgs = [locatorAddress, consensusContract, deployer, lazyOracleParams.quarantinePeriod, lazyOracleParams.maxElClRewardsBP];
+  const lazyOracleArgs = [
+    locatorAddress,
+    consensusContract,
+    deployer,
+    lazyOracleParams.quarantinePeriod,
+    lazyOracleParams.maxElClRewardsBP,
+  ];
 
   const lazyOracle = await deployWithoutProxy(Sk.lazyOracle, "LazyOracle", deployer, lazyOracleArgs);
 
