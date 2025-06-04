@@ -31,10 +31,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     }
 
     struct Quarantine {
-        uint256 delta;
-        uint256 timestamp;
-        uint256 lastUnsafeFundTs;
-        uint256 lastUnsafeFundDelta;
+        uint128 delta;
+        uint64 startTs;
+        uint128 lastUnsafeFundDelta;
+        uint64 lastUnsafeFundTs;
     }
 
     struct VaultInfo {
@@ -252,16 +252,18 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
 
         if (_totalValue > limit) {
             Quarantine storage q = $.vaultQuarantines[_vault];
-            uint256 reportTs = $.vaultsDataTimestamp;
-            uint256 quarDelta = q.delta;
-            uint256 quarTs = q.timestamp;
-            uint256 delta = _totalValue - refSlotTotalValue;
+            uint64 reportTs = $.vaultsDataTimestamp;
+            uint128 quarDelta = q.delta;
+            uint64 quarTs = q.startTs;
+            // Safe conversion from uint256 to uint128
+            if (_totalValue - refSlotTotalValue > type(uint128).max) revert ValueExceedsUint128();
+            uint128 delta = uint128(_totalValue - refSlotTotalValue);
 
             if (quarDelta == 0) {
                 // first overlimit report
                 _totalValue = refSlotTotalValue;
                 q.delta = delta;
-                q.timestamp = reportTs;
+                q.startTs = reportTs;
                 emit QuarantinedDeposit(_vault, delta);
             } else {
                 // subsequent overlimit reports
@@ -282,9 +284,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
                         q.delta = delta - quarDelta;
                         // if lastUnsafeFundTs is greater than quarantine start, use it as next quarantine start
                         if (q.lastUnsafeFundTs > quarTs && delta <= q.lastUnsafeFundDelta + maxELCLRewards) {
-                            q.timestamp = q.lastUnsafeFundTs;
+                            q.startTs = q.lastUnsafeFundTs;
                         } else {
-                            q.timestamp = reportTs;
+                            q.startTs = reportTs;
                         }
                         emit QuarantinedDeposit(_vault, delta - quarDelta);
                     }
@@ -309,7 +311,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     }
 
     event VaultsReportDataUpdated(uint256 indexed timestamp, bytes32 indexed root, string cid);
-    event QuarantinedDeposit(address vault, uint256 delta);
+    event QuarantinedDeposit(address vault, uint128 delta);
     event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxElClRewardsBP);
 
     error AdminCannotBeZero();
@@ -317,4 +319,5 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     error InvalidProof();
     error UnderflowInTotalValueCalculation();
     error LiabilitySharesExceedsLimit();
+    error ValueExceedsUint128();
 }
