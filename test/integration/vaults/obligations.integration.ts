@@ -345,6 +345,70 @@ describe("Integration: Vault obligations", () => {
       expect(obligationsAfter.redemptions).to.equal(expectedUnsettledRedemptions);
     });
 
+    context("Must decrease on liability shares change", () => {
+      let liabilityShares: bigint;
+      let maxRedemptions: bigint;
+
+      beforeEach(async () => {
+        const { lido } = ctx.contracts;
+
+        liabilityShares = ether("1");
+        maxRedemptions = await lido.getPooledEthBySharesRoundUp(liabilityShares);
+
+        await dashboard.connect(roles.funder).fund({ value: ether("1") });
+        await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
+
+        await addRedemptionsObligation(maxRedemptions);
+      });
+
+      // TODO: check rounding errors
+      it.skip("On shares burned", async () => {
+        const { lido } = ctx.contracts;
+
+        const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
+        expect(obligationsBefore.redemptions).to.equal(maxRedemptions);
+
+        expect(await lido.sharesOf(roles.burner)).to.equal(liabilityShares);
+        await lido.connect(roles.burner).approve(dashboard, liabilityShares);
+
+        const sharesToBurn = liabilityShares / 2n;
+        const expectedRedemptions = await lido.getPooledEthBySharesRoundUp(sharesToBurn);
+
+        await expect(dashboard.connect(roles.burner).burnShares(sharesToBurn))
+          .to.emit(vaultHub, "RedemptionsDecreased")
+          .withArgs(stakingVaultAddress, expectedRedemptions, expectedRedemptions);
+
+        const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
+        expect(obligationsAfter.redemptions).to.equal(expectedRedemptions);
+      });
+
+      // TODO: check rounding errors
+      it.skip("On vault rebalanced", async () => {
+        const { lido } = ctx.contracts;
+
+        const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
+        expect(obligationsBefore.redemptions).to.equal(maxRedemptions);
+
+        const sharesToBurn = liabilityShares / 2n;
+        const expectedRedemptions = await lido.getPooledEthBySharesRoundUp(sharesToBurn);
+
+        await expect(dashboard.connect(roles.rebalancer).rebalanceVault(expectedRedemptions))
+          .to.emit(vaultHub, "RedemptionsDecreased")
+          .withArgs(stakingVaultAddress, expectedRedemptions, expectedRedemptions);
+
+        const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
+        expect(obligationsAfter.redemptions).to.equal(expectedRedemptions);
+      });
+
+      it("Should not increase on new minting", async () => {
+        await dashboard.connect(roles.funder).fund({ value: ether("1") });
+        await dashboard.connect(roles.minter).mintShares(roles.burner, ether("1"));
+
+        const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
+        expect(obligationsAfter.redemptions).to.equal(maxRedemptions);
+      });
+    });
+
     context("Must be settled on report", () => {
       let liabilityShares: bigint;
       let maxRedemptions: bigint;

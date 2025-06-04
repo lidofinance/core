@@ -679,6 +679,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         LIDO.burnExternalShares(_amountOfShares);
         _operatorGrid().onBurnedShares(_vault, _amountOfShares);
+        _decreaseRedemptions(_vault, _getPooledEthBySharesRoundUp(_amountOfShares));
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
@@ -992,6 +993,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (liabilityShares_ < sharesToBurn) revert InsufficientSharesToBurn(_vault, liabilityShares_);
 
         _rebalanceEther(_vault, _record, _ether, sharesToBurn);
+        _decreaseRedemptions(_vault, _ether);
 
         emit VaultRebalanced(_vault, sharesToBurn, _ether);
     }
@@ -1184,8 +1186,8 @@ contract VaultHub is PausableUntilWithRoles {
      * @notice Settles redemptions and Lido fee obligations for a vault
      * @param _vault The address of the vault to settle obligations for
      * @param _record The record of the vault to settle obligations for
-     * @param _lidoFees The Lido fees to be settled
-     * @param _redemptions The redemptions to be settled
+     * @param _proposedLidoFees The Lido fees value proposed to be settled
+     * @param _proposedRedemptions The redemptions value proposed to be settled
      * @param _maxAllowedUnsettled The maximum allowable unsettled obligations post-settlement (triggers reverts)
      * @dev    It also updates the vault deposit pause status based on the remaining obligations
      */
@@ -1193,13 +1195,13 @@ contract VaultHub is PausableUntilWithRoles {
         address _vault,
         VaultRecord storage _record,
         VaultObligations storage _obligations,
-        uint256 _lidoFees,
-        uint256 _redemptions,
+        uint256 _proposedLidoFees,
+        uint256 _proposedRedemptions,
         uint256 _maxAllowedUnsettled
     ) internal {
         // Cap redemptions to the liability shares to avoid over-settlement
-        uint256 maxRedemptions = Math256.min(
-            _redemptions,
+        _proposedRedemptions = Math256.min(
+            _proposedRedemptions,
             _getPooledEthBySharesRoundUp(_record.liabilityShares)
         );
 
@@ -1207,15 +1209,15 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 valueToRebalance,
             uint256 valueToLido,
             uint256 totalUnsettled
-        ) = _planSettlement(_vault.balance, maxRedemptions, _lidoFees);
+        ) = _planSettlement(_vault.balance, _proposedRedemptions, _proposedLidoFees);
 
         // Enforce requirement for settlement completeness
         if (totalUnsettled > _maxAllowedUnsettled) {
             revert VaultHasUnsettledObligations(_vault, totalUnsettled, _maxAllowedUnsettled);
         }
 
-        uint256 unsettledRedemptions = maxRedemptions - valueToRebalance;
-        uint256 unsettledLidoFees = _lidoFees - valueToLido;
+        uint256 unsettledRedemptions = _proposedRedemptions - valueToRebalance;
+        uint256 unsettledLidoFees = _proposedLidoFees - valueToLido;
 
         // Skip if no changes to obligations
         if (
@@ -1239,14 +1241,24 @@ contract VaultHub is PausableUntilWithRoles {
         _obligations.redemptions = uint64(unsettledRedemptions);
         _obligations.unsettledLidoFees = uint64(unsettledLidoFees);
 
-        emit VaultObligationsUpdated(
-            _vault,
-            unsettledRedemptions,
-            valueToRebalance,
-            unsettledLidoFees,
-            valueToLido,
-            _obligations.cumulativeSettledLidoFees
-        );
+        emit VaultObligationsUpdated({
+            vault: _vault,
+            unsettledRedemptions: unsettledRedemptions,
+            settledRedemptions: valueToRebalance,
+            unsettledLidoFees: unsettledLidoFees,
+            settledLidoFees: valueToLido,
+            cumulativeSettledLidoFees: _obligations.cumulativeSettledLidoFees
+        });
+    }
+
+    function _decreaseRedemptions(address _vault, uint256 _ether) internal {
+        VaultObligations storage obligations = _vaultObligations(_vault);
+
+        if (obligations.redemptions > 0) {
+            uint256 decrease = Math256.min(obligations.redemptions, _ether);
+            obligations.redemptions -= uint64(decrease);
+            emit RedemptionsDecreased(_vault, obligations.redemptions, decrease);
+        }
     }
 
     function _checkAndUpdateBeaconChainDepositsPause(
@@ -1365,6 +1377,7 @@ contract VaultHub is PausableUntilWithRoles {
      */
     event VaultOwnershipTransferred(address indexed vault, address indexed newOwner, address indexed oldOwner);
 
+    event RedemptionsDecreased(address indexed vault, uint256 newRedemptions, uint256 amountDecreased);
     event VaultObligationsUpdated(
         address indexed vault,
         uint256 unsettledRedemptions,
