@@ -152,7 +152,7 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 private constant EMPTY_CODEHASH = keccak256("");
 
     /// @notice max allowed unsettled obligations
-    uint256 internal constant MAX_UINT256 = type(uint256).max;
+    uint256 internal constant MAX_UNSETTLED_OBLIGATIONS = type(uint256).max;
 
     // -----------------------------
     //           IMMUTABLES
@@ -512,9 +512,24 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         VaultObligations storage obligations = _vaultObligations(_vault);
 
-        _checkFeesAndSettleObligations(_vault, connection, record, obligations, _reportCumulativeLidoFees);
+        bool pendingDisconnect = connection.pendingDisconnect;
+        uint256 cumulativeSettledLidoFees = obligations.cumulativeSettledLidoFees;
+        uint256 cumulativeLidoFees = cumulativeSettledLidoFees + obligations.unsettledLidoFees;
+        if (_reportCumulativeLidoFees < cumulativeLidoFees) {
+            revert InvalidFees(_vault, _reportCumulativeLidoFees, cumulativeLidoFees);
+        }
 
-        if (connection.pendingDisconnect) {
+        _settleObligations(
+            _vault,
+            record,
+            connection,
+            obligations,
+            _reportCumulativeLidoFees - obligations.cumulativeSettledLidoFees,
+            obligations.redemptions,
+            pendingDisconnect ? 0 : MAX_UNSETTLED_OBLIGATIONS // in case of pending disconnect, force all obligations to be settled
+        );
+
+        if (pendingDisconnect) {
             IStakingVault(_vault).transferOwnership(connection.owner);
             _deleteVault(_vault, connection);
 
@@ -710,7 +725,16 @@ contract VaultHub is PausableUntilWithRoles {
         if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
 
         // try to settle using existing unsettled fees, and don't revert if unsettled under the threshold
-        _checkAndSettleObligations(_vault, record, connection, OBLIGATIONS_THRESHOLD);
+        VaultObligations storage obligations = _vaultObligations(_vault);
+        _settleObligations(
+            _vault,
+            record,
+            connection,
+            obligations,
+            obligations.unsettledLidoFees,
+            obligations.redemptions,
+            OBLIGATIONS_THRESHOLD
+        );
 
         connection.manuallyPausedBeaconChainDeposits = false;
         IStakingVault(_vault).resumeBeaconChainDeposits();
@@ -809,7 +833,7 @@ contract VaultHub is PausableUntilWithRoles {
                 obligations,
                 obligations.unsettledLidoFees,
                 _redemptionsValue,
-                MAX_UINT256 // allow unlimited unsettled obligations
+                MAX_UNSETTLED_OBLIGATIONS // allow unlimited unsettled obligations
             );
         }
     }
@@ -827,7 +851,7 @@ contract VaultHub is PausableUntilWithRoles {
             obligations,
             obligations.unsettledLidoFees,
             obligations.redemptions,
-            MAX_UINT256 // allow unlimited unsettled obligations
+            MAX_UNSETTLED_OBLIGATIONS // allow unlimited unsettled obligations
         );
     }
 
@@ -928,7 +952,8 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         // try to settle using existing unsettled fees, and revert if some obligations remain
-        _checkAndSettleObligations(_vault, _record, _connection, 0);
+        VaultObligations storage obligations = _vaultObligations(_vault);
+        _settleObligations(_vault, _record, _connection, obligations, obligations.unsettledLidoFees, obligations.redemptions, 0);
         _connection.pendingDisconnect = true;
     }
 
@@ -1145,51 +1170,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
 
         return connection;
-    }
-
-    /// @dev Shortcut for _settleObligations if there are any obligations
-    function _checkAndSettleObligations(
-        address _vault,
-        VaultRecord storage _record,
-        VaultConnection storage _connection,
-        uint256 _maxAllowedUnsettled
-    ) internal {
-        VaultObligations storage obligations = _vaultObligations(_vault);
-        if (obligations.unsettledLidoFees > 0 || obligations.redemptions > 0) {
-            _settleObligations(
-                _vault,
-                _record,
-                _connection,
-                obligations,
-                obligations.unsettledLidoFees,
-                obligations.redemptions,
-                _maxAllowedUnsettled
-            );
-        }
-    }
-
-    function _checkFeesAndSettleObligations(
-        address _vault,
-        VaultConnection storage _connection,
-        VaultRecord storage _record,
-        VaultObligations storage _obligations,
-        uint256 _reportCumulativeLidoFees
-    ) internal {
-        uint256 cumulativeSettledLidoFees = _obligations.cumulativeSettledLidoFees;
-        uint256 cumulativeLidoFees = cumulativeSettledLidoFees + _obligations.unsettledLidoFees;
-        if (_reportCumulativeLidoFees < cumulativeLidoFees) {
-            revert InvalidFees(_vault, _reportCumulativeLidoFees, cumulativeLidoFees);
-        }
-
-        _settleObligations(
-            _vault,
-            _record,
-            _connection,
-            _obligations,
-            _reportCumulativeLidoFees - cumulativeSettledLidoFees,
-            _obligations.redemptions,
-            _connection.pendingDisconnect ? 0 : MAX_UINT256 // in case of pending disconnect, force all obligations to be settled
-        );
     }
 
     /**
