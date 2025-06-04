@@ -4,11 +4,17 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
-import {VaultHub} from "./VaultHub.sol";
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
+
+import {Math256} from "contracts/common/lib/Math256.sol";
+import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
+import {VaultHub} from "./VaultHub.sol";
+import {OperatorGrid} from "./OperatorGrid.sol";
+
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {ILido} from "../interfaces/ILido.sol";
 
 contract LazyOracle is ILazyOracle {
     /// @custom:storage-location erc7201:LazyOracle
@@ -67,7 +73,7 @@ contract LazyOracle is ILazyOracle {
     /// @param _limit maximum number of vaults to return
     /// @return batch of vaults info
     function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory) {
-        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        VaultHub vaultHub = _vaultHub();
 
         uint256 vaultCount = vaultHub.vaultsCount();
         uint256 batchSize;
@@ -93,7 +99,7 @@ contract LazyOracle is ILazyOracle {
                 connection.shareLimit,
                 connection.reserveRatioBP,
                 connection.forcedRebalanceThresholdBP,
-                vaultHub.mintingCapacity(vaultAddress),
+                _totalMintingCapacity(vaultAddress),
                 connection.infraFeeBP,
                 connection.liquidityFeeBP,
                 connection.reservationFeeBP,
@@ -142,15 +148,33 @@ contract LazyOracle is ILazyOracle {
         );
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
-        VaultHub(payable(LIDO_LOCATOR.vaultHub()))
-            .applyVaultReport(
-                _vault,
-                _storage().vaultsDataTimestamp,
-                _totalValue,
-                _inOutDelta,
-                _cumulativeLidoFees,
-                _liabilityShares
-            );
+        _vaultHub().applyVaultReport(
+            _vault,
+            _storage().vaultsDataTimestamp,
+            _totalValue,
+            _inOutDelta,
+            _cumulativeLidoFees,
+            _liabilityShares
+        );
+    }
+
+    function _totalMintingCapacity(address _vault) internal view returns (uint256) {
+        VaultHub.VaultRecord memory record = _vaultHub().vaultRecord(_vault);
+        VaultHub.VaultConnection memory connection = _vaultHub().vaultConnection(_vault);
+
+        uint256 totalMintableShares = Math256.min(
+            OperatorGrid(LIDO_LOCATOR.operatorGrid()).vaultMintableCapacity(_vault),
+            connection.shareLimit - record.liabilityShares
+        ) + record.liabilityShares;
+
+        uint256 mintableCapacity = ILido(LIDO_LOCATOR.lido()).getSharesByPooledEth(totalMintableShares);
+        uint256 mintableEther = _vaultHub().vaultMintableEther(_vault);
+
+        return Math256.min(mintableEther, mintableCapacity);
+    }
+
+    function _vaultHub() internal view returns (VaultHub) {
+        return VaultHub(payable(LIDO_LOCATOR.vaultHub()));
     }
 
     function _storage() internal pure returns (Storage storage $) {

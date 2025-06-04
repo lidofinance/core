@@ -554,7 +554,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfShares The amount of shares to mint.
      */
     function _mintSharesWithinMintingCapacity(address _recipient, uint256 _amountOfShares) internal {
-        _mintShares(_recipient, _amountOfShares, nodeOperatorDisbursableFee());
+        _mintShares(_recipient, _amountOfShares);
     }
 
     /**
@@ -585,7 +585,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _additionalEther additional ether that may be funded to the vault
      */
     function _totalMintingCapacityShares(uint256 _additionalEther) internal view returns (uint256) {
-        return VAULT_HUB.totalMintingCapacityShares(address(_stakingVault()), _additionalEther, nodeOperatorDisbursableFee());
+        // return VAULT_HUB.totalMintingCapacityShares(address(_stakingVault()), _additionalEther, nodeOperatorDisbursableFee());
     }
 
     // @dev The logic is inverted, 0 means fund-on-receive is enabled,

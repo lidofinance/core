@@ -366,7 +366,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
     /// @param _requestedShareLimit requested share limit
     function requestTierChange(address _vault, uint256 _tierId, uint256 _requestedShareLimit) external {
         if (_vault == address(0)) revert ZeroArgument("_vault");
-        if (msg.sender != VaultHub(payable(LIDO_LOCATOR.vaultHub())).vaultConnection(_vault).owner) {
+        if (msg.sender != _vaultHub().vaultConnection(_vault).owner) {
             revert NotAuthorized("requestTierChange", msg.sender);
         }
 
@@ -459,7 +459,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         Tier storage requestedTier = $.tiers[requestedTierId];
 
-        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        VaultHub vaultHub = _vaultHub();
         uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
 
         //check if tier limit is exceeded
@@ -489,7 +489,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         $.pendingRequests[nodeOperator].remove(_vault);
 
-        VaultHub(payable(LIDO_LOCATOR.vaultHub())).updateConnection(
+        vaultHub.updateConnection(
             _vault,
             requestedShareLimit,
             requestedTier.reserveRatioBP,
@@ -628,11 +628,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         reservationFeeBP = t.reservationFeeBP;
     }
 
-    /// @notice Returns the mintable capacity of a vault
+    /// @notice Returns the remaining minting capacity of a vault according to the OperatorGrid limits
     /// @param _addr address of the vault
-    /// @param _liabilityShares liability shares of the vault
-    /// @return mintable capacity
-    function vaultMintableCapacity(address _addr, uint256 _liabilityShares) external view returns (uint256) {
+    function vaultMintableCapacity(address _addr) external view returns (uint256) {
         ERC7201Storage storage $ = _getStorage();
 
         VaultTier memory vaultTier = $.vaultTier[_addr];
@@ -641,11 +639,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         Tier storage tier_ = $.tiers[tierId];
         Group storage group_ = $.groups[tier_.operator];
 
-        uint256 shareLimit = _min(tier_.shareLimit, group_.shareLimit);
+        uint256 remainingTierShares = tier_.shareLimit - tier_.liabilityShares;
+        if (tierId != DEFAULT_TIER_ID) {
+            uint256 remainingGroupShares = group_.shareLimit - group_.liabilityShares;
+            return _min(remainingTierShares, remainingGroupShares);
+        }
 
-        if (_liabilityShares > shareLimit) return 0;
-
-        return shareLimit - _liabilityShares;
+        return remainingTierShares;
     }
 
     function _min(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -682,6 +682,10 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
         if (_reservationFeeBP > TOTAL_BASIS_POINTS)
             revert ReservationFeeTooHigh(_tierId, _reservationFeeBP, TOTAL_BASIS_POINTS);
+    }
+
+    function _vaultHub() internal view returns (VaultHub) {
+        return VaultHub(payable(LIDO_LOCATOR.vaultHub()));
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
