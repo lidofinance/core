@@ -226,8 +226,8 @@ contract VaultHub is PausableUntilWithRoles {
         return _vaultRecord(_vault);
     }
 
-    /// @notice obligations for the vault
-    /// @return obligations obligations for the vault
+    /// @return the obligations struct for the given vault
+    /// @dev returns empty struct if the vault is not connected to the hub
     function vaultObligations(address _vault) external view returns (VaultObligations memory) {
         return _vaultObligations(_vault);
     }
