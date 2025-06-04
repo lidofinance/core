@@ -91,33 +91,37 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /**
-     *  Obligations are vaults non-negotiable debts to the Lido protocol.
-     *  While any part of those debts remains unsettled, VaultHub may want to limit what the vault can do.
+     *  Obligations of the vaults towards the Lido protocol.
+     *  While any part of those obligations remains unsettled, VaultHub may want to limit what the vault can do.
      *
      *  Obligations have two types:
-     *  - Redemptions – Lido Core requests of the part of vault liability to serve the withdrawal queue.
-     *  - Lido fees – Sum of infra, liquidity and reservation fees on validator rewards. Grows on every oracle
-     *    report until paid.
+     *  1. Redemptions.
+     *     Under extreem conditions Lido may want to rebalance the part of the vault's liability to serve the Lido Core
+     *     withdrawal queue requests to guarantee that every stETH is redeemable
+     *  2. Lido fees. Sum of infra, liquidity and reservation fees on the vault. Calculated in ether and grows on every
+     *     oracle report until paid.
      *
-     *  Obligations are used to:
-     *  - Guarantee that every stETH share remains fully backed by ether, allowing withdrawal queue to
-     *    be served using the vault's liability.
-     *  - Guarantee that Lido's infra/liquidity/reservation fees are actually paid.
-     *  - While obligations are outstanding, VaultHub clamps the vault's freedom
-     *    (deposits to Beacon Chain, withdrawals, disconnecting) until the obligations are settled.
+     *  Constraints until obligations settled:
+     *  - Beacon chain deposits are paused while unsettled obligations ≥ OBLIGATIONS_THRESHOLD (1 ETH)
+     *  - Unsettled obligations can't be withdrawn
+     *  - Minting new stETH is limited by unsettled Lido fees (redemptions do not affect minting capacity)
+     *  - Vault disconnect is refused until both unsettled redemptions and Lido fees obligations hit zero
      *
-     *  Safety rails:
-     *  - While unsettled obligations ≥ OBLIGATIONS_THRESHOLD (1 ETH) the beacon chain deposits are paused.
-     *  - Withdrawals can't drain the vault below the unsettled obligations.
-     *  - Minting new stETH is limited by unsettled Lido fees.
-     *  - Disconnect refused until both obligations hit zero.
+     *  Settlement:
+     *  - Obligations may be settled manually using the `settleVaultObligations` function
+     *  - Obligations try to automatically settle on:
+     *    - every oracle report
+     *    - resume of the beacon chain deposits
+     *    - disconnect initiation
+     *  - Redemptions can be settled immediately at the moment of accruence
+     *  - Lido fees are automatically settled on the final report that completes the disconnection process
      */
     struct VaultObligations {
         /// @notice cumulative value for Lido fees that were settled on the vault
         uint128 cumulativeSettledLidoFees;
-        /// @notice unsettled Lido fees amount
+        /// @notice current unsettled Lido fees amount
         uint64 unsettledLidoFees;
-        /// @notice unsettled redemptions amount
+        /// @notice current unsettled redemptions amount
         uint64 redemptions;
     }
 
@@ -711,8 +715,12 @@ contract VaultHub is PausableUntilWithRoles {
     function pauseBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
 
+        if (!_isBeaconChainDepositsPaused(_vault)) {
+            IStakingVault(_vault).pauseBeaconChainDeposits();
+        }
+
+        // need this to prevent auto-unpause
         connection.manuallyPausedBeaconChainDeposits = true;
-        IStakingVault(_vault).pauseBeaconChainDeposits();
     }
 
     /// @notice resumes beacon chain deposits for the vault
@@ -736,8 +744,9 @@ contract VaultHub is PausableUntilWithRoles {
             OBLIGATIONS_THRESHOLD
         );
 
-        connection.manuallyPausedBeaconChainDeposits = false;
         IStakingVault(_vault).resumeBeaconChainDeposits();
+
+        connection.manuallyPausedBeaconChainDeposits = false;
     }
 
     /// @notice Emits a request event for the node operator to perform validator exit
@@ -1334,6 +1343,10 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _getPooledEthBySharesRoundUp(uint256 _shares) internal view returns (uint256) {
         return LIDO.getPooledEthBySharesRoundUp(_shares);
+    }
+
+    function _isBeaconChainDepositsPaused(address _vault) internal view returns (bool) {
+        return IStakingVault(_vault).beaconChainDepositsPaused();
     }
 
     event AllowedCodehashUpdated(bytes32 indexed codehash, bool allowed);
