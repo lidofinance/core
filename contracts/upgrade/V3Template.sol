@@ -205,14 +205,12 @@ contract V3Template is V3Addresses {
         _assertZeroOZRoleHolders(IBurner(OLD_BURNER), requestBurnSharesRole);
 
         _assertSingleOZRoleHolder(IBurner(BURNER), DEFAULT_ADMIN_ROLE, AGENT);
-        // _assertTwoOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, LIDO, ACCOUNTING);
         {
-            address[] memory holders = new address[](5);
-            holders[0] = LIDO;
-            holders[1] = ACCOUNTING;
-            holders[2] = NODE_OPERATORS_REGISTRY;
-            holders[3] = SIMPLE_DVT;
-            holders[4] = CSM_ACCOUNTING;
+            address[] memory holders = new address[](4);
+            holders[0] = ACCOUNTING;
+            holders[1] = NODE_OPERATORS_REGISTRY;
+            holders[2] = SIMPLE_DVT;
+            holders[3] = CSM_ACCOUNTING;
             _assertOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, holders);
         }
         _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
@@ -257,9 +255,10 @@ contract V3Template is V3Addresses {
         _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);
 
         // StakingRouter
-        _assertTwoOZRoleHolders(IAccessControlEnumerable(STAKING_ROUTER),
-            IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE(),
-            LIDO, ACCOUNTING
+        bytes32 reportRewardsMintedRole = IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE();
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(STAKING_ROUTER),
+            reportRewardsMintedRole,
+            ACCOUNTING
         );
 
         // OperatorGrid
@@ -316,18 +315,6 @@ contract V3Template is V3Addresses {
     ) internal view {
         if (accessControlled.getRoleMemberCount(role) != 1
          || accessControlled.getRoleMember(role, 0) != holder
-        ) {
-            revert IncorrectOZAccessControlRoleHolders(address(accessControlled), role);
-        }
-    }
-
-
-    function _assertTwoOZRoleHolders(
-        IAccessControlEnumerable accessControlled, bytes32 role, address holder1, address holder2
-    ) internal view {
-        if (accessControlled.getRoleMemberCount(role) != 2
-         || accessControlled.getRoleMember(role, 0) != holder1
-         || accessControlled.getRoleMember(role, 1) != holder2
         ) {
             revert IncorrectOZAccessControlRoleHolders(address(accessControlled), role);
         }

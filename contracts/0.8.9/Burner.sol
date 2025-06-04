@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
-pragma solidity 0.8.25;
+pragma solidity 0.8.9;
 
 import {IERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v4.4/token/ERC721/IERC721.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts-v4.4/utils/math/Math.sol";
 
-import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
+import {Versioned} from "./utils/Versioned.sol";
+
 import {IBurner} from "../common/interfaces/IBurner.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 
@@ -54,7 +56,7 @@ interface ILido is IERC20 {
  *
  * @dev Burning stETH means 'decrease total underlying shares amount to perform stETH positive token rebase'
  */
-contract Burner is IBurner, AccessControlEnumerableUpgradeable {
+contract Burner is IBurner, AccessControlEnumerable, Versioned {
     using SafeERC20 for IERC20;
 
     error AppAuthFailed();
@@ -121,14 +123,14 @@ contract Burner is IBurner, AccessControlEnumerableUpgradeable {
      * @param _locator the Lido locator address
      * @param _stETH stETH token address
      */
-    constructor(address _locator, address _stETH) {
+    constructor(address _locator, address _stETH)
+        Versioned()
+    {
         if (_locator == address(0)) revert ZeroAddress("_locator");
         if (_stETH == address(0)) revert ZeroAddress("_stETH");
 
         LOCATOR = ILidoLocator(_locator);
         LIDO = ILido(_stETH);
-
-        _disableInitializers();
     }
 
     /**
@@ -137,13 +139,12 @@ contract Burner is IBurner, AccessControlEnumerableUpgradeable {
      * @param _admin The address to be granted the DEFAULT_ADMIN_ROLE.
      * @param _isMigrationAllowed whether migration is allowed initially.
      */
-    function initialize(address _admin, bool _isMigrationAllowed) external initializer {
+    function initialize(address _admin, bool _isMigrationAllowed) external {
         if (_admin == address(0)) revert ZeroAddress("_admin");
 
-        __AccessControlEnumerable_init();
+        _initializeContractVersionTo(1);
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(REQUEST_BURN_SHARES_ROLE, address(LIDO));
 
         isMigrationAllowed = _isMigrationAllowed;
     }
@@ -156,7 +157,7 @@ contract Burner is IBurner, AccessControlEnumerableUpgradeable {
     function migrate(address _oldBurner) external {
         if (msg.sender != address(LIDO)) revert OnlyLidoCanMigrate();
         if (_oldBurner == address(0)) revert ZeroAddress("_oldBurner");
-        if (_getInitializedVersion() == 0) revert NotInitialized();
+        _checkContractVersion(1);
         if (!isMigrationAllowed) revert MigrationNotAllowedOrAlreadyMigrated();
         isMigrationAllowed = false;
 
