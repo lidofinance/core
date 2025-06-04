@@ -243,10 +243,10 @@ contract VaultHub is PausableUntilWithRoles {
         return _totalValue(_vaultRecord(_vault));
     }
 
-    function vaultMintableEther(address _vault) external view returns (uint256) {
-        return (
-            _mintableValue(_vault) * (TOTAL_BASIS_POINTS - _vaultConnection(_vault).reserveRatioBP)
-        ) / TOTAL_BASIS_POINTS;
+    /// @return the value of the staking vault with the fees subtracted
+    /// @dev returns 0 if the vault is not connected
+    function mintableValue(address _vault) external view returns (uint256) {
+        return _mintableValue(_vault);
     }
 
     /// @return amount of ether that is available for the vault to withdraw

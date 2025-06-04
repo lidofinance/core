@@ -630,7 +630,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
     /// @notice Returns the remaining minting capacity of a vault according to the OperatorGrid limits
     /// @param _addr address of the vault
-    function vaultMintableCapacity(address _addr) external view returns (uint256) {
+    function vaultRemainingMintingCapacityShares(address _addr) external view returns (uint256) {
         ERC7201Storage storage $ = _getStorage();
 
         VaultTier memory vaultTier = $.vaultTier[_addr];
@@ -639,13 +639,27 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         Tier storage tier_ = $.tiers[tierId];
         Group storage group_ = $.groups[tier_.operator];
 
-        uint256 remainingTierShares = tier_.shareLimit - tier_.liabilityShares;
+        uint256 remainingShares = tier_.shareLimit - tier_.liabilityShares;
         if (tierId != DEFAULT_TIER_ID) {
             uint256 remainingGroupShares = group_.shareLimit - group_.liabilityShares;
-            return _min(remainingTierShares, remainingGroupShares);
+            remainingShares = _min(remainingShares, remainingGroupShares);
         }
 
-        return remainingTierShares;
+        return remainingShares;
+    }
+
+    /// @notice Returns the minimum applicable share limit of a vault according to the OperatorGrid limits
+    /// @param _addr address of the vault
+    function vaultShareLimit(address _addr) external view returns (uint256) {
+        ERC7201Storage storage $ = _getStorage();
+
+        VaultTier memory vaultTier = $.vaultTier[_addr];
+        uint64 tierId = vaultTier.currentTierId;
+
+        Tier storage tier_ = $.tiers[tierId];
+        Group storage group_ = $.groups[tier_.operator];
+
+        return _min(tier_.shareLimit, group_.shareLimit);
     }
 
     function _min(uint256 a, uint256 b) internal pure returns (uint256) {

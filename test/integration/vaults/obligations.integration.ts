@@ -603,8 +603,8 @@ describe("Integration: Vault obligations", () => {
       const unlockedValue = await vaultHub.unlocked(stakingVaultAddress);
 
       await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, unlockedValue))
-        .to.be.revertedWithCustomError(vaultHub, "VaultInsufficientBalance")
-        .withArgs(stakingVaultAddress, 0, unlockedValue);
+        .to.be.revertedWithCustomError(dashboard, "WithdrawalExceedsWithdrawable")
+        .withArgs(unlockedValue, 0n);
     });
 
     // TODO: add test for node operator fees

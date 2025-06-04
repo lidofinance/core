@@ -50,6 +50,8 @@ contract LazyOracle is ILazyOracle {
 
     ILidoLocator public immutable LIDO_LOCATOR;
 
+    uint256 private constant TOTAL_BASIS_POINTS = 100_00;
+
     constructor(address _lidoLocator) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
     }
@@ -99,7 +101,7 @@ contract LazyOracle is ILazyOracle {
                 connection.shareLimit,
                 connection.reserveRatioBP,
                 connection.forcedRebalanceThresholdBP,
-                _totalMintingCapacity(vaultAddress),
+                _mintableCapacity(vaultAddress),
                 connection.infraFeeBP,
                 connection.liquidityFeeBP,
                 connection.reservationFeeBP,
@@ -158,23 +160,26 @@ contract LazyOracle is ILazyOracle {
         );
     }
 
-    function _totalMintingCapacity(address _vault) internal view returns (uint256) {
-        VaultHub.VaultRecord memory record = _vaultHub().vaultRecord(_vault);
-        VaultHub.VaultConnection memory connection = _vaultHub().vaultConnection(_vault);
+    function _mintableCapacity(address _vault) internal view returns (uint256) {
+        VaultHub vaultHub = _vaultHub();
+        VaultHub.VaultConnection memory connection = vaultHub.vaultConnection(_vault);
 
-        uint256 totalMintableShares = Math256.min(
-            OperatorGrid(LIDO_LOCATOR.operatorGrid()).vaultMintableCapacity(_vault),
-            connection.shareLimit - record.liabilityShares
-        ) + record.liabilityShares;
+        uint256 mintingCapacityShares = Math256.min(_operatorGrid().vaultShareLimit(_vault), connection.shareLimit);
+        uint256 mintingCapacity = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(mintingCapacityShares);
 
-        uint256 mintableCapacity = ILido(LIDO_LOCATOR.lido()).getSharesByPooledEth(totalMintableShares);
-        uint256 mintableEther = _vaultHub().vaultMintableEther(_vault);
+        uint256 mintableEther = (
+            _vaultHub().mintableValue(_vault) * (TOTAL_BASIS_POINTS - connection.reserveRatioBP)
+        ) / TOTAL_BASIS_POINTS;
 
-        return Math256.min(mintableEther, mintableCapacity);
+        return Math256.min(mintableEther, mintingCapacity);
     }
 
     function _vaultHub() internal view returns (VaultHub) {
         return VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+    }
+
+    function _operatorGrid() internal view returns (OperatorGrid) {
+        return OperatorGrid(LIDO_LOCATOR.operatorGrid());
     }
 
     function _storage() internal pure returns (Storage storage $) {
