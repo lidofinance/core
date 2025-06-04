@@ -552,29 +552,33 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       let quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(value - ether("1"));
       expect(quarantine.timestamp).to.equal(firstReportTimestamp);
+      expect(quarantine.lastUnsafeFundTs).to.equal(0);
 
-      // total value UNSAFE increase  in the middle of quarantine period
+      // total value UNSAFE increase in the middle of quarantine period
       const quarantinePeriod = await lazyOracle.quarantinePeriod();
       await advanceChainTime(quarantinePeriod / 2n);
 
       await reportVaultDataWithProof(ctx, stakingVault, value * 2n);
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
 
+      const [secondQuarantineTimestamp, ,] = await lazyOracle.latestReportData();
+
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(value - ether("1"));
       expect(quarantine.timestamp).to.equal(firstReportTimestamp);
+      expect(quarantine.lastUnsafeFundTs).to.equal(secondQuarantineTimestamp);
 
       // end of first quarantine = start of second quarantine
       await advanceChainTime(quarantinePeriod / 2n + 60n * 60n);
 
       await reportVaultDataWithProof(ctx, stakingVault, value * 2n);
-      const [lastReportTimestamp, ,] = await lazyOracle.latestReportData();
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(value);
 
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(value);
-      expect(quarantine.timestamp).to.equal(lastReportTimestamp);
+      expect(quarantine.timestamp).to.equal(secondQuarantineTimestamp);
+      expect(quarantine.lastUnsafeFundTs).to.equal(secondQuarantineTimestamp);
 
       // end of second quarantine
       await advanceChainTime(quarantinePeriod);
@@ -585,7 +589,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(0);
-      expect(quarantine.timestamp).to.equal(lastReportTimestamp);
+      expect(quarantine.timestamp).to.equal(secondQuarantineTimestamp);
+      expect(quarantine.lastUnsafeFundTs).to.equal(secondQuarantineTimestamp);
     });
   });
 

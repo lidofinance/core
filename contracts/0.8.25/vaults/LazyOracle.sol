@@ -33,6 +33,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     struct Quarantine {
         uint256 delta;
         uint256 timestamp;
+        uint256 lastUnsafeFundTs;
     }
 
     struct VaultInfo {
@@ -250,20 +251,23 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
 
         if (_totalValue > limit) {
             Quarantine storage q = $.vaultQuarantines[_vault];
-            uint256 reportTimestamp = $.vaultsDataTimestamp;
+            uint256 reportTs = $.vaultsDataTimestamp;
             uint256 quarDelta = q.delta;
+            uint256 quarTs = q.timestamp;
             uint256 delta = _totalValue - refSlotTotalValue;
 
             if (quarDelta == 0) {
                 // first overlimit report
                 _totalValue = refSlotTotalValue;
                 q.delta = delta;
-                q.timestamp = reportTimestamp;
+                q.timestamp = reportTs;
                 emit QuarantinedDeposit(_vault, delta);
             } else {
                 // subsequent overlimit reports
-                if (reportTimestamp - q.timestamp < $.quarantinePeriod) {
+                if (reportTs - quarTs < $.quarantinePeriod) {
                     _totalValue = refSlotTotalValue;
+                    // remember last quarantine Unsafe fund
+                    q.lastUnsafeFundTs = reportTs;
                 } else {
                     // quarantine period expired
                     if (delta <= quarDelta + refSlotTotalValue * $.maxElClRewardsBP / TOTAL_BP) {
@@ -271,7 +275,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
                     } else {
                         _totalValue = refSlotTotalValue + quarDelta;
                         q.delta = delta - quarDelta;
-                        q.timestamp = reportTimestamp;
+                        q.timestamp = q.lastUnsafeFundTs > quarTs ? q.lastUnsafeFundTs : reportTs;
                         emit QuarantinedDeposit(_vault, delta - quarDelta);
                     }
                 }
