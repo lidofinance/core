@@ -201,18 +201,19 @@ contract V3Template is V3Addresses {
 
     function _assertFinalACL() internal view {
         // Burner
-        bytes32 requestBurnMyStethRole = IBurner(BURNER).REQUEST_BURN_MY_STETH_ROLE();
         bytes32 requestBurnSharesRole = IBurner(BURNER).REQUEST_BURN_SHARES_ROLE();
         _assertZeroOZRoleHolders(IBurner(OLD_BURNER), requestBurnSharesRole);
 
         _assertSingleOZRoleHolder(IBurner(BURNER), DEFAULT_ADMIN_ROLE, AGENT);
-        _assertTwoOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, LIDO, ACCOUNTING);
+        // _assertTwoOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, LIDO, ACCOUNTING);
         {
-            address[] memory holders = new address[](3);
-            holders[0] = NODE_OPERATORS_REGISTRY;
-            holders[1] = SIMPLE_DVT;
-            holders[2] = CSM_ACCOUNTING;
-            _assertOZRoleHolders(IBurner(BURNER), requestBurnMyStethRole, holders);
+            address[] memory holders = new address[](5);
+            holders[0] = LIDO;
+            holders[1] = ACCOUNTING;
+            holders[2] = NODE_OPERATORS_REGISTRY;
+            holders[3] = SIMPLE_DVT;
+            holders[4] = CSM_ACCOUNTING;
+            _assertOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, holders);
         }
         _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
 

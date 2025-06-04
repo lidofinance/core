@@ -92,14 +92,15 @@ export async function main() {
 
   // Burner
   const burner = await loadContract<Burner>("Burner", burnerAddress);
+  const requestBurnSharesRole = await burner.REQUEST_BURN_SHARES_ROLE();
   // NB: REQUEST_BURN_SHARES_ROLE is already granted to Lido in Burner constructor
-  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_MY_STETH_ROLE(), nodeOperatorsRegistryAddress], {
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, nodeOperatorsRegistryAddress], {
     from: deployer,
   });
-  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_MY_STETH_ROLE(), simpleDvtApp], {
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, simpleDvtApp], {
     from: deployer,
   });
-  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), accountingAddress], {
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, accountingAddress], {
     from: deployer,
   });
 

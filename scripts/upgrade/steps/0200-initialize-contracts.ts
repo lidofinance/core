@@ -78,10 +78,9 @@ export async function main(): Promise<void> {
   const csmModule = await loadContract<ICSModule>("ICSModule", csm.stakingModuleAddress);
   const csmAccountingAddress = await csmModule.accounting();
 
-  const requestBurnMyStethRole = await burner.REQUEST_BURN_MY_STETH_ROLE();
-  await makeTx(burner, "grantRole", [requestBurnMyStethRole, nodeOperatorsRegistryAddress], { from: deployer });
-  await makeTx(burner, "grantRole", [requestBurnMyStethRole, simpleDvtAddress], { from: deployer });
-  await makeTx(burner, "grantRole", [requestBurnMyStethRole, csmAccountingAddress], { from: deployer });
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, nodeOperatorsRegistryAddress], { from: deployer });
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, simpleDvtAddress], { from: deployer });
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, csmAccountingAddress], { from: deployer });
 
   await makeTx(burner, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
   await makeTx(burner, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
