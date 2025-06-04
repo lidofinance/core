@@ -119,7 +119,7 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 private constant EMPTY_CODEHASH = keccak256("");
 
     /// @notice minimum gas overhead required for withdraw/fund/rebalance operations
-    uint256 internal constant MIN_GAS = 5_000;
+    uint256 internal constant MIN_GAS = 15_000;
 
     // -----------------------------
     //           IMMUTABLES
@@ -150,10 +150,22 @@ contract VaultHub is PausableUntilWithRoles {
         _disableInitializers();
     }
 
-    /// @notice modifier to check if the gas is enough to cache inOutDelta in fund/withdraw/rebalance operations
-    modifier requireMinGas() {
+    /// @notice modifier to cache inOutDelta in fund/withdraw/rebalance operations
+    modifier cacheInOutDelta(address _vault) {
+        VaultRecord storage record = _vaultRecord(_vault);
+        int128 inOutDelta = record.inOutDelta;
+
         _;
+
+        // check if the gas is enough to cache inOutDelta
         if (gasleft() < MIN_GAS) revert NeedMoreGas(MIN_GAS, gasleft());
+
+        // cache inOutDelta if the refSlot is different from the cachedRefSlot
+        (uint256 refSlot, ) = CONSENSUS_CONTRACT.getCurrentFrame();
+        if (record.cachedRefSlot != refSlot) {
+            record.cachedInOutDelta = inOutDelta;
+            record.cachedRefSlot = uint128(refSlot);
+        }
     }
 
     /// @dev used to perform rebalance operations
@@ -525,12 +537,10 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice funds the vault passing ether as msg.value
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
-    function fund(address _vault) external payable whenResumed requireMinGas {
+    function fund(address _vault) external payable whenResumed cacheInOutDelta(_vault) {
         _checkConnectionAndOwner(_vault);
 
         VaultRecord storage record = _vaultRecord(_vault);
-        
-        _cacheInOutDelta(record);
 
         int128 inOutDelta_ = record.inOutDelta + int128(int256(msg.value));
         record.inOutDelta = inOutDelta_;
@@ -545,7 +555,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _recipient recipient address
     /// @param _ether amount of ether to withdraw
     /// @dev msg.sender should be vault's owner
-    function withdraw(address _vault, address _recipient, uint256 _ether) external whenResumed requireMinGas {
+    function withdraw(address _vault, address _recipient, uint256 _ether) external whenResumed cacheInOutDelta(_vault) {
         _checkConnectionAndOwner(_vault);
 
         VaultRecord storage record = _vaultRecord(_vault);
@@ -563,7 +573,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _ether amount of ether to rebalance
     /// @dev msg.sender should be vault's owner
-    function rebalance(address _vault, uint256 _ether) external whenResumed requireMinGas {
+    function rebalance(address _vault, uint256 _ether) external whenResumed cacheInOutDelta(_vault) {
         if (_ether == 0) revert ZeroArgument();
         if (_ether > _vault.balance) revert InsufficientBalance(_vault.balance, _ether);
         _checkConnectionAndOwner(_vault);
@@ -716,7 +726,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Permissionless rebalance for unhealthy vaults
     /// @param _vault vault address
     /// @dev rebalance all available amount of ether until the vault is healthy
-    function forceRebalance(address _vault) external requireMinGas {
+    function forceRebalance(address _vault) external cacheInOutDelta(_vault) {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
@@ -849,8 +859,6 @@ contract VaultHub is PausableUntilWithRoles {
         address _recipient,
         uint256 _amount
     ) internal {
-        _cacheInOutDelta(_record);
-
         int128 inOutDelta_ = _record.inOutDelta - int128(int256(_amount));
         _record.inOutDelta = inOutDelta_;
 
@@ -991,14 +999,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
 
         return connection;
-    }
-
-    function _cacheInOutDelta(VaultRecord storage _record) internal {
-        (uint256 refSlot, ) = CONSENSUS_CONTRACT.getCurrentFrame();
-        if (_record.cachedRefSlot != refSlot) {
-            _record.cachedInOutDelta = _record.inOutDelta;
-            _record.cachedRefSlot = uint128(refSlot);
-        }
     }
 
     function _storage() internal pure returns (Storage storage $) {
