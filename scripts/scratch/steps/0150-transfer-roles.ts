@@ -10,22 +10,22 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  const agent = state["app:aragon-agent"].proxy.address;
+  const agent = state[Sk.appAgent].proxy.address;
 
   // Transfer OZ admin roles for various contracts
   const ozAdminTransfers = [
-    { name: "Burner", address: state.burner.address },
-    { name: "HashConsensus", address: state.hashConsensusForAccountingOracle.address },
-    { name: "HashConsensus", address: state.hashConsensusForValidatorsExitBusOracle.address },
-    { name: "StakingRouter", address: state.stakingRouter.proxy.address },
-    { name: "AccountingOracle", address: state.accountingOracle.proxy.address },
-    { name: "ValidatorsExitBusOracle", address: state.validatorsExitBusOracle.proxy.address },
-    { name: "WithdrawalQueueERC721", address: state.withdrawalQueueERC721.proxy.address },
-    { name: "OracleDaemonConfig", address: state.oracleDaemonConfig.address },
-    { name: "OracleReportSanityChecker", address: state.oracleReportSanityChecker.address },
-    { name: "VaultHub", address: state.vaultHub.proxy.address },
-    { name: "PredepositGuarantee", address: state.predepositGuarantee.proxy.address },
-    { name: "OperatorGrid", address: state.operatorGrid.proxy.address },
+    { name: "Burner", address: state[Sk.burner].address },
+    { name: "HashConsensus", address: state[Sk.hashConsensusForAccountingOracle].address },
+    { name: "HashConsensus", address: state[Sk.hashConsensusForValidatorsExitBusOracle].address },
+    { name: "StakingRouter", address: state[Sk.stakingRouter].proxy.address },
+    { name: "AccountingOracle", address: state[Sk.accountingOracle].proxy.address },
+    { name: "ValidatorsExitBusOracle", address: state[Sk.validatorsExitBusOracle].proxy.address },
+    { name: "WithdrawalQueueERC721", address: state[Sk.withdrawalQueueERC721].proxy.address },
+    { name: "OracleDaemonConfig", address: state[Sk.oracleDaemonConfig].address },
+    { name: "OracleReportSanityChecker", address: state[Sk.oracleReportSanityChecker].address },
+    { name: "VaultHub", address: state[Sk.vaultHub].proxy.address },
+    { name: "PredepositGuarantee", address: state[Sk.predepositGuarantee].proxy.address },
+    { name: "OperatorGrid", address: state[Sk.operatorGrid].proxy.address },
   ];
 
   for (const contract of ozAdminTransfers) {
@@ -41,9 +41,11 @@ export async function main() {
     state.accountingOracle.proxy.address,
     state.validatorsExitBusOracle.proxy.address,
     state.withdrawalQueueERC721.proxy.address,
+    state.accounting.proxy.address,
     state.vaultHub.proxy.address,
     state.predepositGuarantee.proxy.address,
     state.operatorGrid.proxy.address,
+    state.lazyOracle.proxy.address,
   ];
 
   for (const proxyAddress of ossifiableProxyAdminChanges) {
@@ -56,4 +58,8 @@ export async function main() {
     const depositSecurityModule = await loadContract("DepositSecurityModule", state.depositSecurityModule.address);
     await makeTx(depositSecurityModule, "setOwner", [agent], { from: deployer });
   }
+
+  // Transfer ownership of LidoTemplate to agent
+  const lidoTemplate = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
+  await makeTx(lidoTemplate, "setOwner", [agent], { from: deployer });
 }

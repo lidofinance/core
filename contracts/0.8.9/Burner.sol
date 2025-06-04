@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
@@ -58,12 +58,14 @@ contract Burner is IBurner, AccessControlEnumerable {
     using SafeERC20 for IERC20;
 
     error AppAuthFailed();
+    error MigrationNotAllowedOrAlreadyMigrated();
     error DirectETHTransfer();
     error ZeroRecoveryAmount();
     error StETHRecoveryWrongFunc();
     error ZeroBurnAmount();
     error BurnAmountExceedsActual(uint256 requestedAmount, uint256 actualAmount);
     error ZeroAddress(string field);
+    error OnlyLidoCanMigrate();
 
     bytes32 public constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
     bytes32 public constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
@@ -73,6 +75,8 @@ contract Burner is IBurner, AccessControlEnumerable {
 
     uint256 private totalCoverSharesBurnt;
     uint256 private totalNonCoverSharesBurnt;
+
+    bool public isMigrationAllowed;
 
     ILidoLocator public immutable LOCATOR;
     ILido public immutable LIDO;
@@ -116,16 +120,9 @@ contract Burner is IBurner, AccessControlEnumerable {
      * @param _admin the Lido DAO Aragon agent contract address
      * @param _locator the Lido locator address
      * @param _stETH stETH token address
-     * @param _totalCoverSharesBurnt Shares burnt counter init value (cover case)
-     * @param _totalNonCoverSharesBurnt Shares burnt counter init value (non-cover case)
+     * @param _isMigrationAllowed whether migration is allowed initially
      */
-    constructor(
-        address _admin,
-        address _locator,
-        address _stETH,
-        uint256 _totalCoverSharesBurnt,
-        uint256 _totalNonCoverSharesBurnt
-    ) {
+    constructor(address _admin, address _locator, address _stETH, bool _isMigrationAllowed) {
         if (_admin == address(0)) revert ZeroAddress("_admin");
         if (_locator == address(0)) revert ZeroAddress("_locator");
         if (_stETH == address(0)) revert ZeroAddress("_stETH");
@@ -135,9 +132,26 @@ contract Burner is IBurner, AccessControlEnumerable {
 
         LOCATOR = ILidoLocator(_locator);
         LIDO = ILido(_stETH);
+        isMigrationAllowed = _isMigrationAllowed;
+    }
 
-        totalCoverSharesBurnt = _totalCoverSharesBurnt;
-        totalNonCoverSharesBurnt = _totalNonCoverSharesBurnt;
+    /**
+     * @param _oldBurner The address of the old Burner contract
+     * @dev Can be called only by Lido contract. Migrates state from the old Burner. Can be run only once.
+     *      Cannot be run if migration is disabled upon deployment.
+     */
+    function migrate(address _oldBurner) external {
+        if (msg.sender != address(LIDO)) revert OnlyLidoCanMigrate();
+        if (_oldBurner == address(0)) revert ZeroAddress("_oldBurner");
+        if (!isMigrationAllowed) revert MigrationNotAllowedOrAlreadyMigrated();
+        isMigrationAllowed = false;
+
+        IBurner oldBurner = IBurner(_oldBurner);
+        totalCoverSharesBurnt = oldBurner.getCoverSharesBurnt();
+        totalNonCoverSharesBurnt = oldBurner.getNonCoverSharesBurnt();
+        (uint256 coverShares, uint256 nonCoverShares) = oldBurner.getSharesRequestedToBurn();
+        coverSharesBurnRequested = coverShares;
+        nonCoverSharesBurnRequested = nonCoverShares;
     }
 
     /**

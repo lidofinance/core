@@ -38,6 +38,7 @@ export enum Sk {
   aragonId = "aragonID",
   aragonKernel = "aragon-kernel",
   aragonRepoBase = "aragon-repo-base",
+  aragonLidoAppRepo = "aragon-lido-app-repo",
   appAgent = "app:aragon-agent",
   appFinance = "app:aragon-finance",
   appTokenManager = "app:aragon-token-manager",
@@ -50,7 +51,6 @@ export enum Sk {
   evmScriptRegistryFactory = "evmScriptRegistryFactory",
   ensSubdomainRegistrar = "ensSubdomainRegistrar",
   ldo = "ldo",
-  // lido = "lido",
   lidoApm = "lidoApm",
   lidoApmEnsName = "lidoApmEnsName",
   lidoApmEnsRegDurationSec = "lidoApmEnsRegDurationSec",
@@ -89,12 +89,16 @@ export enum Sk {
   tokenRebaseNotifier = "tokenRebaseNotifier",
   // Vaults
   predepositGuarantee = "predepositGuarantee",
-  stakingVaultImpl = "stakingVaultImpl",
+  stakingVaultImplementation = "stakingVaultImplementation",
   stakingVaultFactory = "stakingVaultFactory",
   dashboardImpl = "dashboardImpl",
   stakingVaultBeacon = "stakingVaultBeacon",
+  v3Template = "upgradeTemplateV3",
+  v3Addresses = "v3Addresses",
+  v3VoteScript = "v3VoteScript",
   operatorGrid = "operatorGrid",
   maxEffectiveBalanceIncreaser = "maxEffectiveBalanceIncreaser",
+  lazyOracle = "lazyOracle",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -115,6 +119,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorsExitBusOracle:
     case Sk.withdrawalQueueERC721:
     case Sk.withdrawalVault:
+    case Sk.lazyOracle:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.burner:

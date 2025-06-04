@@ -4,9 +4,10 @@
 pragma solidity ^0.8.0;
 
 import {NodeOperatorFee} from "contracts/0.8.25/vaults/dashboard/NodeOperatorFee.sol";
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 
 contract NodeOperatorFee__Harness is NodeOperatorFee {
-    constructor(address _vaultHub) NodeOperatorFee(_vaultHub) {}
+    constructor(address _vaultHub, address _lidoLocator) NodeOperatorFee(_vaultHub, _lidoLocator) {}
 
     function initialize(
         address _defaultAdmin,

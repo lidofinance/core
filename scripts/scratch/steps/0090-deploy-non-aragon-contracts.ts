@@ -1,7 +1,8 @@
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { certainAddress } from "lib";
+import { LidoLocator } from "typechain-types";
+
 import { getContractPath } from "lib/contract";
 import {
   deployBehindOssifiableProxy,
@@ -24,12 +25,13 @@ export async function main() {
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
   const vaultHubParams = state[Sk.vaultHub].deployParameters;
-  const burnerParams = state[Sk.burner].deployParameters;
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
   const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
   const pdgDeployParams = state[Sk.predepositGuarantee].deployParameters;
+
+  const sanityCheckerParams = state["oracleReportSanityChecker"].deployParameters;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -153,10 +155,16 @@ export async function main() {
     lidoAddress,
   ]);
 
+  // Deploy VaultHub
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     locator.address,
     lidoAddress,
-    vaultHubParams.relativeShareLimitBP,
+    vaultHubParams.maxRelativeShareLimitBP,
+  ]);
+
+  // Deploy LazyOracle
+  const lazyOracle = await deployBehindOssifiableProxy(Sk.lazyOracle, "LazyOracle", proxyContractsOwner, deployer, [
+    locator.address,
   ]);
 
   // Deploy AccountingOracle
@@ -200,13 +208,41 @@ export async function main() {
   ]);
 
   // Deploy Burner
+  const isMigrationAllowed = false;
   const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [
     admin,
     locator.address,
     lidoAddress,
-    burnerParams.totalCoverSharesBurnt,
-    burnerParams.totalNonCoverSharesBurnt,
+    isMigrationAllowed,
   ]);
+
+  // Deploy OracleReportSanityChecker
+  const oracleReportSanityCheckerArgs = [
+    locator.address,
+    accountingOracle.address,
+    accounting.address,
+    admin,
+    [
+      sanityCheckerParams.exitedValidatorsPerDayLimit,
+      sanityCheckerParams.appearedValidatorsPerDayLimit,
+      sanityCheckerParams.annualBalanceIncreaseBPLimit,
+      sanityCheckerParams.maxValidatorExitRequestsPerReport,
+      sanityCheckerParams.maxItemsPerExtraDataTransaction,
+      sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
+      sanityCheckerParams.requestTimestampMargin,
+      sanityCheckerParams.maxPositiveTokenRebase,
+      sanityCheckerParams.initialSlashingAmountPWei,
+      sanityCheckerParams.inactivityPenaltiesAmountPWei,
+      sanityCheckerParams.clBalanceOraclesErrorUpperBPLimit,
+    ],
+  ];
+
+  const oracleReportSanityChecker = await deployWithoutProxy(
+    Sk.oracleReportSanityChecker,
+    "OracleReportSanityChecker",
+    deployer,
+    oracleReportSanityCheckerArgs,
+  );
 
   // Deploy PredepositGuarantee
   const predepositGuarantee = await deployBehindOssifiableProxy(
@@ -223,25 +259,27 @@ export async function main() {
   );
 
   // Update LidoLocator with valid implementation
-  const locatorConfig: string[] = [
-    accountingOracle.address,
-    depositSecurityModuleAddress,
-    elRewardsVault.address,
-    lidoAddress,
-    certainAddress("dummy-locator:oracleReportSanityChecker"), // requires LidoLocator in the constructor, so deployed after it
-    ZeroAddress,
-    burner.address,
-    stakingRouter.address,
-    treasuryAddress,
-    validatorsExitBusOracle.address,
-    withdrawalQueueERC721.address,
-    withdrawalVaultAddress,
-    oracleDaemonConfig.address,
-    accounting.address,
-    predepositGuarantee.address,
-    wstETH.address,
-    vaultHub.address,
-    operatorGrid.address,
-  ];
+  const locatorConfig: LidoLocator.ConfigStruct = {
+    accountingOracle: accountingOracle.address,
+    depositSecurityModule: depositSecurityModuleAddress,
+    elRewardsVault: elRewardsVault.address,
+    lido: lidoAddress,
+    oracleReportSanityChecker: oracleReportSanityChecker.address,
+    burner: burner.address,
+    stakingRouter: stakingRouter.address,
+    treasury: treasuryAddress,
+    validatorsExitBusOracle: validatorsExitBusOracle.address,
+    withdrawalQueue: withdrawalQueueERC721.address,
+    withdrawalVault: withdrawalVaultAddress,
+    oracleDaemonConfig: oracleDaemonConfig.address,
+    accounting: accounting.address,
+    predepositGuarantee: predepositGuarantee.address,
+    wstETH: wstETH.address,
+    vaultHub: vaultHub.address,
+    operatorGrid: operatorGrid.address,
+    postTokenRebaseReceiver: ZeroAddress,
+    lazyOracle: lazyOracle.address,
+  };
+
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }

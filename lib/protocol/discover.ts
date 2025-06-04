@@ -2,7 +2,7 @@ import hre from "hardhat";
 
 import {
   AccountingOracle,
-  ICSModule,
+  IStakingModule,
   Lido,
   LidoLocator,
   NodeOperatorsRegistry,
@@ -71,7 +71,11 @@ const loadContract = async <Name extends ContractName>(name: Name, address: stri
 /**
  * Load all Lido protocol foundation contracts.
  */
-const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: ProtocolNetworkConfig) => {
+const getCoreContracts = async (
+  locator: LoadedContract<LidoLocator>,
+  config: ProtocolNetworkConfig,
+  skipV3Contracts: boolean,
+) => {
   return (await batch({
     accountingOracle: loadContract(
       "AccountingOracle",
@@ -86,7 +90,6 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
       config.get("elRewardsVault") || (await locator.elRewardsVault()),
     ),
     lido: loadContract("Lido", config.get("lido") || (await locator.lido())),
-    accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
     oracleReportSanityChecker: loadContract(
       "OracleReportSanityChecker",
       config.get("oracleReportSanityChecker") || (await locator.oracleReportSanityChecker()),
@@ -109,6 +112,11 @@ const getCoreContracts = async (locator: LoadedContract<LidoLocator>, config: Pr
       "OracleDaemonConfig",
       config.get("oracleDaemonConfig") || (await locator.oracleDaemonConfig()),
     ),
+    ...(skipV3Contracts
+      ? {}
+      : {
+          accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
+        }),
   })) as CoreContracts;
 };
 
@@ -130,13 +138,13 @@ const getAragonContracts = async (lido: LoadedContract<Lido>, config: ProtocolNe
 const getStakingModules = async (stakingRouter: LoadedContract<StakingRouter>, config: ProtocolNetworkConfig) => {
   const [nor, sdvt, csm] = await stakingRouter.getStakingModules();
 
-  const promises: { [key: string]: Promise<LoadedContract<NodeOperatorsRegistry | ICSModule>> } = {
+  const promises: { [key: string]: Promise<LoadedContract<NodeOperatorsRegistry | IStakingModule>> } = {
     nor: loadContract("NodeOperatorsRegistry", config.get("nor") || nor.stakingModuleAddress),
     sdvt: loadContract("NodeOperatorsRegistry", config.get("sdvt") || sdvt.stakingModuleAddress),
   };
 
   if (csm) {
-    promises.csm = loadContract("ICSModule", config.get("csm") || csm.stakingModuleAddress);
+    promises.csm = loadContract("IStakingModule", config.get("csm") || csm.stakingModuleAddress);
   }
 
   return (await batch(promises)) as StakingModuleContracts;
@@ -181,7 +189,8 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
       "PredepositGuarantee",
       config.get("predepositGuarantee") || (await locator.predepositGuarantee()),
     ),
-    operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid")),
+    operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid") || (await locator.operatorGrid())),
+    lazyOracle: loadContract("LazyOracle", config.get("lazyOracle") || (await locator.lazyOracle())),
     maxEffectiveBalanceIncreaser: loadContract(
       "MaxEffectiveBalanceIncreaser",
       config.get("maxEffectiveBalanceIncreaser"),
@@ -189,10 +198,10 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
   })) as VaultsContracts;
 };
 
-export async function discover() {
+export async function discover(skipV3Contracts: boolean) {
   const networkConfig = await getDiscoveryConfig();
   const locator = await loadContract("LidoLocator", networkConfig.get("locator"));
-  const foundationContracts = await getCoreContracts(locator, networkConfig);
+  const foundationContracts = await getCoreContracts(locator, networkConfig, skipV3Contracts);
 
   const contracts = {
     locator,
@@ -201,18 +210,18 @@ export async function discover() {
     ...(await getStakingModules(foundationContracts.stakingRouter, networkConfig)),
     ...(await getHashConsensusContract(foundationContracts.accountingOracle, networkConfig)),
     ...(await getWstEthContract(foundationContracts.withdrawalQueue, networkConfig)),
-    ...(await getVaultsContracts(networkConfig, locator)),
+    ...(skipV3Contracts ? {} : await getVaultsContracts(networkConfig, locator)),
   } as ProtocolContracts;
 
   log.debug("Contracts discovered", {
     "Locator": locator.address,
     "Lido": foundationContracts.lido.address,
-    "Accounting": foundationContracts.accounting.address,
+    "Accounting": foundationContracts.accounting?.address,
     "Accounting Oracle": foundationContracts.accountingOracle.address,
     "Hash Consensus": contracts.hashConsensus.address,
     "Execution Layer Rewards Vault": foundationContracts.elRewardsVault.address,
     "Withdrawal Queue": foundationContracts.withdrawalQueue.address,
-    "Withdrawal Vault": foundationContracts.withdrawalVault.address,
+    "Withdrawal Vault": foundationContracts.withdrawalVault?.address,
     "Validators Exit Bus Oracle": foundationContracts.validatorsExitBusOracle.address,
     "Oracle Daemon Config": foundationContracts.oracleDaemonConfig.address,
     "Oracle Report Sanity Checker": foundationContracts.oracleReportSanityChecker.address,
@@ -225,11 +234,11 @@ export async function discover() {
     "Burner": foundationContracts.burner.address,
     "wstETH": contracts.wstETH.address,
     // Vaults
-    "Staking Vault Factory": contracts.stakingVaultFactory.address,
-    "Staking Vault Beacon": contracts.stakingVaultBeacon.address,
-    "Vault Hub": contracts.vaultHub.address,
-    "Predeposit Guarantee": contracts.predepositGuarantee.address,
-    "Operator Grid": contracts.operatorGrid.address,
+    "Staking Vault Factory": contracts.stakingVaultFactory?.address,
+    "Staking Vault Beacon": contracts.stakingVaultBeacon?.address,
+    "Vault Hub": contracts.vaultHub?.address,
+    "Predeposit Guarantee": contracts.predepositGuarantee?.address,
+    "Operator Grid": contracts.operatorGrid?.address,
   });
 
   const signers = {
