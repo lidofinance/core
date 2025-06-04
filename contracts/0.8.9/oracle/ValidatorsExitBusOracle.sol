@@ -161,6 +161,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         _startProcessing();
         _handleConsensusReportData(data);
         _storeOracleExitRequestHash(dataHash, contractVersion);
+        emit ExitDataProcessing(dataHash);
     }
 
     /// @notice Returns the total number of validator exit requests ever processed
