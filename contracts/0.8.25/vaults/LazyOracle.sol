@@ -34,6 +34,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
         uint256 delta;
         uint256 timestamp;
         uint256 lastUnsafeFundTs;
+        uint256 lastUnsafeFundDelta;
     }
 
     struct VaultInfo {
@@ -264,18 +265,27 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
                 emit QuarantinedDeposit(_vault, delta);
             } else {
                 // subsequent overlimit reports
+                uint256 maxELCLRewards = refSlotTotalValue * $.maxElClRewardsBP / TOTAL_BP;
                 if (reportTs - quarTs < $.quarantinePeriod) {
                     _totalValue = refSlotTotalValue;
-                    // remember last quarantine Unsafe fund
-                    q.lastUnsafeFundTs = reportTs;
+                    // remember last Unsafe fund ts and delta
+                    if (delta > quarDelta + maxELCLRewards) {
+                        q.lastUnsafeFundTs = reportTs;
+                        q.lastUnsafeFundDelta = delta;
+                    }
                 } else {
                     // quarantine period expired
-                    if (delta <= quarDelta + refSlotTotalValue * $.maxElClRewardsBP / TOTAL_BP) {
+                    if (delta <= quarDelta + maxELCLRewards) {
                         q.delta = 0;
                     } else {
                         _totalValue = refSlotTotalValue + quarDelta;
                         q.delta = delta - quarDelta;
-                        q.timestamp = q.lastUnsafeFundTs > quarTs ? q.lastUnsafeFundTs : reportTs;
+                        // if lastUnsafeFundTs is greater than quarantine start, use it as next quarantine start
+                        if (q.lastUnsafeFundTs > quarTs && delta <= q.lastUnsafeFundDelta + maxELCLRewards) {
+                            q.timestamp = q.lastUnsafeFundTs;
+                        } else {
+                            q.timestamp = reportTs;
+                        }
                         emit QuarantinedDeposit(_vault, delta - quarDelta);
                     }
                 }
