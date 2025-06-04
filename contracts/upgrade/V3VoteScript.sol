@@ -29,17 +29,13 @@ contract V3VoteScript is OmnibusBase {
     struct ScriptParams {
         address upgradeTemplate;
         uint16[3] lidoAppNewVersion;
-        uint16[3] nodeOperatorsRegistryAppNewVersion;
-        uint16[3] simpleDvtAppNewVersion;
         bytes32 lidoAppId;
-        bytes32 nodeOperatorsRegistryAppId;
-        bytes32 simpleDvtAppId;
     }
 
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 15;
+    uint256 public constant VOTE_ITEMS_COUNT = 11;
 
     //
     // Immutables
@@ -77,12 +73,12 @@ contract V3VoteScript is OmnibusBase {
 
         // Update Lido version in Lido App Repo
         voteItems[index++] = VoteItem({
-            description: "3. Update Lido version in App Repo",
+            description: "3. Update Lido version in Lido App Repo",
             call: _votingCall(TEMPLATE.ARAGON_APP_LIDO_REPO(), abi.encodeCall(IRepo.newVersion, (
-                params.lidoAppNewVersion,
-                TEMPLATE.NEW_LIDO_IMPL(),
-                "0x"
-            )))
+                    params.lidoAppNewVersion,
+                    TEMPLATE.NEW_LIDO_IMPL(),
+                    "0x"
+                )))
         });
 
         // Set Lido implementation in Kernel
@@ -94,48 +90,10 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Upgrade NodeOperatorsRegistry implementation in App Repo
-        voteItems[index++] = VoteItem({
-            description: "5. Update NodeOperatorsRegistry version in App Repo",
-            call: _votingCall(TEMPLATE.ARAGON_APP_NODE_OPERATORS_REGISTRY_REPO(), abi.encodeCall(IRepo.newVersion, (
-                params.nodeOperatorsRegistryAppNewVersion,
-                TEMPLATE.NEW_NODE_OPERATORS_REGISTRY_IMPL(),
-                "0x"
-            )))
-        });
-
-        // Set NodeOperatorsRegistry implementation in Kernel
-        voteItems[index++] = VoteItem({
-            description: "6. Set NodeOperatorsRegistry implementation in Kernel",
-            call: _votingCall(
-                TEMPLATE.KERNEL(),
-                abi.encodeCall(IKernel.setApp, (IKernel(TEMPLATE.KERNEL()).APP_BASES_NAMESPACE(), params.nodeOperatorsRegistryAppId, TEMPLATE.NEW_NODE_OPERATORS_REGISTRY_IMPL()))
-            )
-        });
-
-        // Upgrade NodeOperatorsRegistry implementation in App Repo
-        voteItems[index++] = VoteItem({
-            description: "7. Upgrade SimpleDVT implementation in App Repo",
-            call: _votingCall(TEMPLATE.ARAGON_APP_SIMPLE_DVT_REPO(), abi.encodeCall(IRepo.newVersion, (
-                params.simpleDvtAppNewVersion,
-                TEMPLATE.NEW_NODE_OPERATORS_REGISTRY_IMPL(),
-                "0x"
-            )))
-        });
-
-        // Set NodeOperatorsRegistry implementation in Kernel
-        voteItems[index++] = VoteItem({
-            description: "8. Set SimpleDVT implementation in Kernel",
-            call: _votingCall(
-                TEMPLATE.KERNEL(),
-                abi.encodeCall(IKernel.setApp, (IKernel(TEMPLATE.KERNEL()).APP_BASES_NAMESPACE(), params.simpleDvtAppId, TEMPLATE.NEW_NODE_OPERATORS_REGISTRY_IMPL()))
-            )
-        });
-
         // Revoke REQUEST_BURN_SHARES_ROLE from Lido
         bytes32 requestBurnSharesRole = IBurner(TEMPLATE.OLD_BURNER()).REQUEST_BURN_SHARES_ROLE();
         voteItems[index++] = VoteItem({
-            description: "9. Revoke REQUEST_BURN_SHARES_ROLE from Lido",
+            description: "5. Revoke REQUEST_BURN_SHARES_ROLE from Lido",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -145,7 +103,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Revoke REQUEST_BURN_SHARES_ROLE from Curated staking modules (NodeOperatorsRegistry)
         voteItems[index++] = VoteItem({
-            description: "10. Revoke REQUEST_BURN_SHARES_ROLE from Curated staking module",
+            description: "6. Revoke REQUEST_BURN_SHARES_ROLE from Curated staking module",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -155,7 +113,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT
         voteItems[index++] = VoteItem({
-            description: "11. Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT",
+            description: "7. Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -165,7 +123,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Revoke REQUEST_BURN_SHARES_ROLE from CS Accounting
         voteItems[index++] = VoteItem({
-            description: "12. Revoke REQUEST_BURN_SHARES_ROLE from Community Staking Accounting",
+            description: "8. Revoke REQUEST_BURN_SHARES_ROLE from Community Staking Accounting",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -175,7 +133,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Upgrade AccountingOracle implementation
         voteItems[index++] = VoteItem({
-            description: "13. Upgrade AccountingOracle implementation",
+            description: "9. Upgrade AccountingOracle implementation",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ACCOUNTING_ORACLE(),
@@ -186,7 +144,7 @@ contract V3VoteScript is OmnibusBase {
         // Grant REPORT_REWARDS_MINTED_ROLE to Accounting
         bytes32 reportRewardsMintedRole = IStakingRouter(TEMPLATE.STAKING_ROUTER()).REPORT_REWARDS_MINTED_ROLE();
         voteItems[index++] = VoteItem({
-            description: "14. Grant REPORT_REWARDS_MINTED_ROLE to Accounting",
+            description: "10. Grant REPORT_REWARDS_MINTED_ROLE to Accounting",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.STAKING_ROUTER(),
@@ -196,7 +154,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Finish the upgrade process
         voteItems[index++] = VoteItem({
-            description: "15. Call UpgradeTemplateV3.finishUpgrade",
+            description: "11. Call UpgradeTemplateV3.finishUpgrade",
             call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
         });
 

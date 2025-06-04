@@ -31,7 +31,6 @@ export async function main() {
     // New implementations
     state[Sk.lidoLocator].implementation.address,
     state[Sk.appLido].implementation.address,
-    state[Sk.appNodeOperatorsRegistry].implementation.address,
     state[Sk.accountingOracle].implementation.address,
 
     // New fancy proxy and blueprint contracts
@@ -43,8 +42,6 @@ export async function main() {
     state[Sk.aragonKernel].proxy.address,
     state[Sk.appAgent].proxy.address,
     state[Sk.aragonLidoAppRepo].proxy.address,
-    state[Sk.aragonNodeOperatorsRegistryAppRepo].proxy.address,
-    state[Sk.aragonSimpleDvtAppRepo].proxy.address,
     state[Sk.lidoLocator].proxy.address,
     state[Sk.appVoting].proxy.address,
   ];
@@ -52,14 +49,6 @@ export async function main() {
   const template = await deployWithoutProxy(Sk.v3Template, "V3Template", deployer, [addressesParams]);
 
   await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [
-    [
-      template.address,
-      parameters[Sk.appLido].newVersion,
-      parameters[Sk.appNodeOperatorsRegistry].newVersion,
-      parameters[Sk.appSimpleDvt].newVersion,
-      state[Sk.appLido].aragonApp.id,
-      state[Sk.appNodeOperatorsRegistry].aragonApp.id,
-      state[Sk.appSimpleDvt].aragonApp.id,
-    ],
+    [template.address, parameters[Sk.appLido].newVersion, state[Sk.appLido].aragonApp.id],
   ]);
 }
