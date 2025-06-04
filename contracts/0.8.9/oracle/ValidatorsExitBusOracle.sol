@@ -273,7 +273,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     }
 
     function _storeOracleExitRequestHash(bytes32 exitRequestsHash, uint256 contractVersion) internal {
-        _storeNewHashRequestStatus(exitRequestsHash, uint32(contractVersion), uint32(_getTime()));
+        _storeOracleNewHashRequestStatus(exitRequestsHash, uint32(contractVersion), uint32(_getTime()));
     }
 
     ///

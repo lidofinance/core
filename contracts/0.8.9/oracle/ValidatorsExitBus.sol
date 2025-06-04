@@ -561,6 +561,26 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         );
     }
 
+    function _storeOracleNewHashRequestStatus(
+        bytes32 exitRequestsHash,
+        uint32 contractVersion,
+        uint32 deliveredExitDataTimestamp
+    ) internal {
+        mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
+
+        if (requestStatusMap[exitRequestsHash].deliveredExitDataTimestamp != 0) {
+           return;
+        }
+
+        requestStatusMap[exitRequestsHash] = RequestStatus({
+            contractVersion: contractVersion,
+            deliveredExitDataTimestamp: deliveredExitDataTimestamp
+        });
+
+        emit RequestsHashSubmitted(exitRequestsHash);
+    }
+
+
     function _storeNewHashRequestStatus(
         bytes32 exitRequestsHash,
         uint32 contractVersion,
