@@ -167,7 +167,7 @@ contract LazyOracle is ILazyOracle {
             vaultHub.mintableValue(_vault) * (TOTAL_BASIS_POINTS - vaultHub.vaultConnection(_vault).reserveRatioBP)
         ) / TOTAL_BASIS_POINTS;
 
-        (uint256 totalMintingCapacity,) = _operatorGrid().vaultMintingLimits(_vault);
+        (uint256 totalMintingCapacity,) = _operatorGrid().vaultMintingInfo(_vault);
         uint256 mintingCapacity = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(totalMintingCapacity);
 
         return Math256.min(mintableEther, mintingCapacity);

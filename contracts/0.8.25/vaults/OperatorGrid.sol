@@ -628,21 +628,27 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         reservationFeeBP = t.reservationFeeBP;
     }
 
-    /// @dev Returns the total minting capacity of a vault according to the OperatorGrid limits
-    function vaultMintingLimits(address _vault) public view returns (uint256 total, uint256 remaining) {
+    /// @dev Returns the total and remaining minting capacity of a vault according vault and OperatorGrid limits
+    /// @param _vault address of the vault
+    /// @return totalMintingCapacity total minting capacity of the vault
+    /// @return remainingMintingCapacity remaining minting capacity of the vault
+    function vaultMintingInfo(
+        address _vault
+    ) external view returns (uint256 totalMintingCapacity, uint256 remainingMintingCapacity) {
         uint256 shareLimit = _vaultHub().vaultConnection(_vault).shareLimit;
         uint256 liabilityShares = _vaultHub().liabilityShares(_vault);
 
-        total = _min(_vaultRemainingMintingCapacity(_vault), shareLimit);
-        remaining = _min(
+        totalMintingCapacity = _min(_vaultRemainingMintingCapacity(_vault), shareLimit);
+        remainingMintingCapacity = _min(
             _vaultRemainingMintingCapacity(_vault),
             shareLimit > liabilityShares ? shareLimit - liabilityShares : 0
         );
     }
 
-
     /// @dev Returns the remaining minting capacity of a vault according to the OperatorGrid limits
     /// @param _vault address of the vault
+    /// @dev remaining minting capacity inherits the limits of the vault tier and group,
+    ///      and accounts other vaults liabilities inside the tier and group
     function _vaultRemainingMintingCapacity(address _vault) internal view returns (uint256 remaining) {
         ERC7201Storage storage $ = _getStorage();
 

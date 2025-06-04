@@ -318,6 +318,33 @@ describe("Integration: Vault obligations", () => {
       expect(obligationsAfter.redemptions).to.equal(0n);
     });
 
+    it("Should pause beacon chain deposits when unsettled obligations are too high", async () => {
+      const { lido } = ctx.contracts;
+
+      const liabilityShares = ether("10");
+      const maxRedemptions = await lido.getPooledEthBySharesRoundUp(liabilityShares);
+
+      await dashboard.connect(roles.funder).fund({ value: ether("20") });
+      await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
+
+      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsBefore.redemptions).to.equal(0n);
+
+      const vaultBalance = ether("1");
+      await setBalance(stakingVaultAddress, vaultBalance);
+      const expectedUnsettledRedemptions = maxRedemptions - vaultBalance;
+
+      await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions))
+        .to.emit(vaultHub, "VaultObligationsUpdated")
+        .withArgs(stakingVaultAddress, expectedUnsettledRedemptions, vaultBalance, 0n, 0n, 0n)
+        .to.emit(lido, "ExternalEtherTransferredToBuffer")
+        .withArgs(vaultBalance)
+        .to.emit(stakingVault, "BeaconChainDepositsPaused");
+
+      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
+      expect(obligationsAfter.redemptions).to.equal(expectedUnsettledRedemptions);
+    });
+
     context("Must be settled on report", () => {
       let liabilityShares: bigint;
       let maxRedemptions: bigint;
@@ -623,7 +650,7 @@ describe("Integration: Vault obligations", () => {
 
       await expect(dashboard.connect(roles.disconnecter).voluntaryDisconnect())
         .to.be.revertedWithCustomError(vaultHub, "VaultHasUnsettledObligations")
-        .withArgs(stakingVaultAddress, ether("0.1"));
+        .withArgs(stakingVaultAddress, ether("0.1"), 0);
     });
 
     it("Should allow to disconnect when all obligations are settled", async () => {
@@ -647,7 +674,7 @@ describe("Integration: Vault obligations", () => {
       // take the last fees from the post disconnect report (1.1 ether because fees are cumulative)
       await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1.1") }))
         .to.be.revertedWithCustomError(vaultHub, "VaultHasUnsettledObligations")
-        .withArgs(stakingVaultAddress, ether("0.1"));
+        .withArgs(stakingVaultAddress, ether("0.1"), 0);
     });
 
     it("Should take last fees from the post disconnect report", async () => {

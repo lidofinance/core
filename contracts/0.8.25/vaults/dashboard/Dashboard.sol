@@ -184,8 +184,8 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() external view returns (uint256) {
-        (uint256 totalMintingCapacity,) = _operatorGrid().vaultMintingLimits(address(_stakingVault()));
-        return Math256.min(totalMintingCapacity, _mintableShares(0));
+        (uint256 totalMintingCapacity,) = _operatorGridVaultMintingInfo();
+        return Math256.min(totalMintingCapacity, _mintableSharesWithinTotalValue(0));
     }
 
     /**
@@ -195,14 +195,16 @@ contract Dashboard is NodeOperatorFee {
      * @return the number of shares that can be minted using additional ether
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) external view returns (uint256) {
-        (,uint256 remainingMintingCapacity) = _operatorGrid().vaultMintingLimits(address(_stakingVault()));
+        (,uint256 remainingMintingCapacity) = _operatorGridVaultMintingInfo();
 
-        uint256 maxMintableShares = _mintableShares(_etherToFund);
-        uint256 liabilityShares_ = liabilityShares();
+        if (remainingMintingCapacity == 0) return 0;
+
+        uint256 vaultMintableShares = _mintableSharesWithinTotalValue(_etherToFund);
+        uint256 vaultLiabilityShares = liabilityShares();
 
         return Math256.min(
             remainingMintingCapacity,
-            maxMintableShares > liabilityShares_ ? maxMintableShares - liabilityShares_ : 0
+            vaultMintableShares > vaultLiabilityShares ? vaultMintableShares - vaultLiabilityShares : 0
         );
     }
 
@@ -212,15 +214,18 @@ contract Dashboard is NodeOperatorFee {
      * @dev This method overrides the Dashboard's withdrawableEther() method
      */
     function withdrawableEther() public view returns (uint256) {
-        uint256 noFees = nodeOperatorDisbursableFee();
-        uint256 availableBalance = VAULT_HUB.availableBalance(address(_stakingVault()));
+        uint256 nodeOperatorFees = nodeOperatorDisbursableFee();
+        uint256 vaultWithdrawableBalance = VAULT_HUB.withdrawableBalance(address(_stakingVault()));
 
-        if (noFees > availableBalance) return 0;
+        if (nodeOperatorFees > vaultWithdrawableBalance) return 0;
 
-        uint256 totalValue_ = totalValue();
-        uint256 lockedPlusFee = locked() + noFees;
+        uint256 vaultTotalValue = totalValue();
+        uint256 vaultLockedPlusFee = locked() + nodeOperatorFees;
 
-        return Math256.min(availableBalance - noFees, totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
+        return Math256.min(
+            vaultWithdrawableBalance - nodeOperatorFees,
+            vaultTotalValue > vaultLockedPlusFee ? vaultTotalValue - vaultLockedPlusFee : 0
+        );
     }
 
     // ==================== Vault Management Functions ====================
@@ -604,7 +609,7 @@ contract Dashboard is NodeOperatorFee {
         _burnShares(unwrappedShares);
     }
 
-    function _mintableShares(uint256 _additionalEther) internal view returns (uint256) {
+    function _mintableSharesWithinTotalValue(uint256 _additionalEther) internal view returns (uint256) {
         return _getSharesByPooledEth(
             (_mintableValue() + _additionalEther) * (TOTAL_BASIS_POINTS - vaultConnection().reserveRatioBP) / TOTAL_BASIS_POINTS
         );
@@ -612,6 +617,10 @@ contract Dashboard is NodeOperatorFee {
 
     function _getSharesByPooledEth(uint256 _amountOfStETH) internal view returns (uint256) {
         return STETH.getSharesByPooledEth(_amountOfStETH);
+    }
+
+    function _operatorGridVaultMintingInfo() internal view returns (uint256, uint256) {
+        return _operatorGrid().vaultMintingInfo(address(_stakingVault()));
     }
 
     // @dev The logic is inverted, 0 means fund-on-receive is enabled,

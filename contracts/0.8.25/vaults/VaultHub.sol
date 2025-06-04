@@ -62,7 +62,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice reservation fee in basis points
         uint16 reservationFeeBP;
         /// @notice if true, vault owner manually paused the beacon chain deposits
-        bool manuallyPausedBeaconChainDeposits;
+        bool isBeaconDepositsManuallyPaused;
     }
 
     struct VaultRecord {
@@ -249,10 +249,10 @@ contract VaultHub is PausableUntilWithRoles {
         return _mintableValue(_vault);
     }
 
-    /// @return amount of ether that is available for the vault to withdraw
+    /// @return amount of ether that is possible to withdraw from the vault at the moment
     /// @dev returns 0 if the vault is not connected
-    function availableBalance(address _vault) external view returns (uint256) {
-        return _availableBalance(_vault);
+    function withdrawableBalance(address _vault) external view returns (uint256) {
+        return _withdrawableBalance(_vault);
     }
 
     /// @return liability shares of the vault
@@ -506,7 +506,6 @@ contract VaultHub is PausableUntilWithRoles {
         _settleObligations(
             _vault,
             record,
-            connection,
             obligations,
             _reportCumulativeLidoFees - obligations.cumulativeSettledLidoFees,
             obligations.redemptions,
@@ -522,9 +521,8 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         _applyVaultReport(
-            _vault,
-            connection,
             record,
+            connection,
             _reportTimestamp,
             _reportTotalValue,
             _reportLiabilityShares,
@@ -539,6 +537,8 @@ contract VaultHub is PausableUntilWithRoles {
             reportCumulativeLidoFees: _reportCumulativeLidoFees,
             reportLiabilityShares: _reportLiabilityShares
         });
+
+        _checkAndUpdateBeaconChainDepositsPause(_vault, connection, record, obligations);
     }
 
     /// @notice transfer the ownership of the vault to a new owner without disconnecting it from the hub
@@ -603,7 +603,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 unlocked_ = _unlocked(record);
         if (_ether > unlocked_) revert InsufficientUnlocked(unlocked_, _ether);
 
-        _checkAvailableBalance(_vault, _ether);
+        uint256 withdrawableBalance_ = _withdrawableBalance(_vault);
+        if (_ether > withdrawableBalance_) revert VaultInsufficientBalance(_vault, withdrawableBalance_, _ether);
+
         _withdraw(_vault, record, _recipient, _ether);
 
         if (_totalValue(record) < record.locked) revert TotalValueBelowLockedAmount();
@@ -695,12 +697,8 @@ contract VaultHub is PausableUntilWithRoles {
     function pauseBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
 
-        if (!_isBeaconChainDepositsPaused(_vault)) {
-            IStakingVault(_vault).pauseBeaconChainDeposits();
-        }
-
-        // need this to prevent auto-unpause
-        connection.manuallyPausedBeaconChainDeposits = true;
+        IStakingVault(_vault).pauseBeaconChainDeposits();
+        connection.isBeaconDepositsManuallyPaused = true;
     }
 
     /// @notice resumes beacon chain deposits for the vault
@@ -717,7 +715,6 @@ contract VaultHub is PausableUntilWithRoles {
         _settleObligations(
             _vault,
             record,
-            connection,
             obligations,
             obligations.unsettledLidoFees,
             obligations.redemptions,
@@ -725,8 +722,7 @@ contract VaultHub is PausableUntilWithRoles {
         );
 
         IStakingVault(_vault).resumeBeaconChainDeposits();
-
-        connection.manuallyPausedBeaconChainDeposits = false;
+        connection.isBeaconDepositsManuallyPaused = false;
     }
 
     /// @notice Emits a request event for the node operator to perform validator exit
@@ -809,7 +805,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault The address of the vault
     /// @param _redemptionsValue The value of the redemptions obligation
     function setVaultRedemptions(address _vault, uint256 _redemptionsValue) external onlyRole(REDEMPTION_MASTER_ROLE) {
-        uint256 liabilityShares_ = _vaultRecord(_vault).liabilityShares;
+        VaultRecord storage record = _vaultRecord(_vault);
+
+        uint256 liabilityShares_ = record.liabilityShares;
 
         // This function may intentionally perform no action in some cases, as these are EasyTrack motions
         if (liabilityShares_ > 0) {
@@ -817,13 +815,14 @@ contract VaultHub is PausableUntilWithRoles {
 
             _settleObligations(
                 _vault,
-                _vaultRecord(_vault),
-                _vaultConnection(_vault),
+                record,
                 obligations,
                 obligations.unsettledLidoFees,
                 _redemptionsValue,
                 MAX_UNSETTLED_OBLIGATIONS // allow unlimited unsettled obligations
             );
+
+            _checkAndUpdateBeaconChainDepositsPause(_vault, _vaultConnection(_vault), record, obligations);
         }
     }
 
@@ -832,16 +831,19 @@ contract VaultHub is PausableUntilWithRoles {
     function settleVaultObligations(address _vault) external whenResumed {
         if (_vault.balance == 0) revert ZeroBalance();
 
+        VaultRecord storage record = _vaultRecord(_vault);
+
         VaultObligations storage obligations = _vaultObligations(_vault);
         _settleObligations(
             _vault,
-            _vaultRecord(_vault),
-            _vaultConnection(_vault),
+            record,
             obligations,
             obligations.unsettledLidoFees,
             obligations.redemptions,
             MAX_UNSETTLED_OBLIGATIONS // allow unlimited unsettled obligations
         );
+
+        _checkAndUpdateBeaconChainDepositsPause(_vault, _vaultConnection(_vault), record, obligations);
     }
 
     /// @notice Proves that validators unknown to PDG have correct WC to participate in the vault
@@ -924,7 +926,7 @@ contract VaultHub is PausableUntilWithRoles {
             infraFeeBP: uint16(_infraFeeBP),
             liquidityFeeBP: uint16(_liquidityFeeBP),
             reservationFeeBP: uint16(_reservationFeeBP),
-            manuallyPausedBeaconChainDeposits: false
+            isBeaconDepositsManuallyPaused: false
         });
 
         _addVault(_vault, connection, record);
@@ -942,14 +944,13 @@ contract VaultHub is PausableUntilWithRoles {
 
         // try to settle using existing unsettled fees, and revert if some obligations remain
         VaultObligations storage obligations = _vaultObligations(_vault);
-        _settleObligations(_vault, _record, _connection, obligations, obligations.unsettledLidoFees, obligations.redemptions, 0);
+        _settleObligations(_vault, _record, obligations, obligations.unsettledLidoFees, obligations.redemptions, 0);
         _connection.pendingDisconnect = true;
     }
 
     function _applyVaultReport(
-        address _vault,
-        VaultConnection storage _connection,
         VaultRecord storage _record,
+        VaultConnection storage _connection,
         uint64 _reportTimestamp,
         uint256 _reportTotalValue,
         uint256 _reportLiabilityShares,
@@ -969,11 +970,6 @@ contract VaultHub is PausableUntilWithRoles {
             totalValue: uint128(_reportTotalValue),
             inOutDelta: int128(_reportInOutDelta)
         });
-
-        IStakingVault vault_ = IStakingVault(_vault);
-        if (!_isVaultHealthy(_connection, _record) && !vault_.beaconChainDepositsPaused()) {
-            vault_.pauseBeaconChainDeposits();
-        }
     }
 
     function _rebalanceEther(
@@ -1196,7 +1192,6 @@ contract VaultHub is PausableUntilWithRoles {
     function _settleObligations(
         address _vault,
         VaultRecord storage _record,
-        VaultConnection storage _connection,
         VaultObligations storage _obligations,
         uint256 _lidoFees,
         uint256 _redemptions,
@@ -1216,7 +1211,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // Enforce requirement for settlement completeness
         if (totalUnsettled > _maxAllowedUnsettled) {
-            revert VaultHasUnsettledObligations(_vault, totalUnsettled);
+            revert VaultHasUnsettledObligations(_vault, totalUnsettled, _maxAllowedUnsettled);
         }
 
         uint256 unsettledRedemptions = maxRedemptions - valueToRebalance;
@@ -1252,39 +1247,32 @@ contract VaultHub is PausableUntilWithRoles {
             valueToLido,
             _obligations.cumulativeSettledLidoFees
         );
-
-        _pauseBeaconChainDepositsIfNeeded(_vault, _connection, totalUnsettled);
     }
 
-    function _pauseBeaconChainDepositsIfNeeded(
+    function _checkAndUpdateBeaconChainDepositsPause(
         address _vault,
         VaultConnection storage _connection,
-        uint256 _unsettled
+        VaultRecord storage _record,
+        VaultObligations storage _obligations
     ) internal {
         IStakingVault vault_ = IStakingVault(_vault);
-        bool isBeaconChainDepositsPaused = vault_.beaconChainDepositsPaused();
+        uint256 unsettledObligations = _obligations.unsettledLidoFees + _obligations.redemptions;
+        bool isHealthy = _isVaultHealthy(_connection, _record);
 
-        if (_unsettled >= OBLIGATIONS_THRESHOLD) {
-            if (!isBeaconChainDepositsPaused) vault_.pauseBeaconChainDeposits();
-        } else if (!_connection.manuallyPausedBeaconChainDeposits) {
-            if (isBeaconChainDepositsPaused)vault_.resumeBeaconChainDeposits();
+        if (unsettledObligations >= OBLIGATIONS_THRESHOLD || !isHealthy) {
+            vault_.pauseBeaconChainDeposits();
+        } else if (!_connection.isBeaconDepositsManuallyPaused && isHealthy) {
+            vault_.resumeBeaconChainDeposits();
         }
     }
 
-    function _availableBalance(address _vault) internal view returns (uint256) {
+    function _withdrawableBalance(address _vault) internal view returns (uint256) {
         if (_vaultConnection(_vault).vaultIndex == 0) return 0;
 
         uint256 vaultBalance = _vault.balance;
         VaultObligations storage obligations = _vaultObligations(_vault);
         uint256 unsettledObligations_ = obligations.unsettledLidoFees + obligations.redemptions;
-        return unsettledObligations_ > vaultBalance ? 0 : vaultBalance - unsettledObligations_;
-    }
-
-    function _checkAvailableBalance(address _vault, uint256 _requiredBalance) internal view {
-        uint256 available = _availableBalance(_vault);
-        if (_requiredBalance > available) {
-            revert VaultInsufficientBalance(_vault, available, _requiredBalance);
-        }
+        return vaultBalance > unsettledObligations_ ? vaultBalance - unsettledObligations_ : 0;
     }
 
     function _storage() internal pure returns (Storage storage $) {
@@ -1319,10 +1307,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _getPooledEthBySharesRoundUp(uint256 _shares) internal view returns (uint256) {
         return LIDO.getPooledEthBySharesRoundUp(_shares);
-    }
-
-    function _isBeaconChainDepositsPaused(address _vault) internal view returns (bool) {
-        return IStakingVault(_vault).beaconChainDepositsPaused();
     }
 
     event AllowedCodehashUpdated(bytes32 indexed codehash, bool allowed);
@@ -1450,7 +1434,7 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultHubNotPendingOwner(address vault);
     error UnhealthyVaultCannotDeposit(address vault);
     error VaultIsDisconnecting(address vault);
-    error VaultHasUnsettledObligations(address vault, uint256 unsettledObligations);
+    error VaultHasUnsettledObligations(address vault, uint256 unsettledObligations, uint256 allowedUnsettled);
     error PartialValidatorWithdrawalNotAllowed();
     error ForceValidatorExitNotAllowed();
 }
