@@ -118,7 +118,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the number of stETH shares minted
      */
-    function liabilityShares() external view returns (uint256) {
+    function liabilityShares() public view returns (uint256) {
         return VAULT_HUB.liabilityShares(address(_stakingVault()));
     }
 
@@ -170,7 +170,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function unsettledObligations() public view returns (uint256) {
         VaultHub.VaultObligations memory obligations = VAULT_HUB.vaultObligations(address(_stakingVault()));
-        return obligations.unsettledLidoFees + obligations.redemptions + nodeOperatorDisbursableFee();
+        return uint256(obligations.unsettledLidoFees + obligations.redemptions) + nodeOperatorDisbursableFee();
     }
 
     /**
@@ -184,7 +184,8 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() external view returns (uint256) {
-        return _totalMintingCapacityShares();
+        (uint256 totalMintingCapacity,) = _operatorGrid().vaultMintingLimits(address(_stakingVault()));
+        return Math256.min(totalMintingCapacity, _mintableShares(0));
     }
 
     /**
@@ -194,7 +195,15 @@ contract Dashboard is NodeOperatorFee {
      * @return the number of shares that can be minted using additional ether
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) external view returns (uint256) {
-        return _remainingMintingCapacityShares(_etherToFund);
+        (,uint256 remainingMintingCapacity) = _operatorGrid().vaultMintingLimits(address(_stakingVault()));
+
+        uint256 maxMintableShares = _mintableShares(_etherToFund);
+        uint256 liabilityShares_ = liabilityShares();
+
+        return Math256.min(
+            remainingMintingCapacity,
+            maxMintableShares > liabilityShares_ ? maxMintableShares - liabilityShares_ : 0
+        );
     }
 
     /**
@@ -203,12 +212,15 @@ contract Dashboard is NodeOperatorFee {
      * @dev This method overrides the Dashboard's withdrawableEther() method
      */
     function withdrawableEther() public view returns (uint256) {
-        uint256 totalValue_ = totalValue();
-        uint256 lockedPlusFee = locked() + nodeOperatorDisbursableFee();
+        uint256 noFees = nodeOperatorDisbursableFee();
+        uint256 availableBalance = VAULT_HUB.availableBalance(address(_stakingVault()));
 
-        return Math256.min(
-            VAULT_HUB.availableBalance(address(_stakingVault())),
-            totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
+        if (noFees > availableBalance) return 0;
+
+        uint256 totalValue_ = totalValue();
+        uint256 lockedPlusFee = locked() + noFees;
+
+        return Math256.min(availableBalance - noFees, totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
     }
 
     // ==================== Vault Management Functions ====================
@@ -592,34 +604,10 @@ contract Dashboard is NodeOperatorFee {
         _burnShares(unwrappedShares);
     }
 
-    function _maxMintableShares(uint16 _reserveRatioBP, uint256 _additionalEther) internal view returns (uint256) {
+    function _mintableShares(uint256 _additionalEther) internal view returns (uint256) {
         return _getSharesByPooledEth(
-            (_mintableValue() + _additionalEther) * (TOTAL_BASIS_POINTS - _reserveRatioBP) / TOTAL_BASIS_POINTS
+            (_mintableValue() + _additionalEther) * (TOTAL_BASIS_POINTS - vaultConnection().reserveRatioBP) / TOTAL_BASIS_POINTS
         );
-    }
-
-    function _remainingMintingCapacityShares(uint256 _additionalEther) internal view returns (uint256) {
-        VaultHub.VaultConnection memory connection = vaultConnection();
-
-        uint256 maxMintableShares = _maxMintableShares(connection.reserveRatioBP, _additionalEther);
-        uint256 remainingMintingCapacityShares_ = Math256.min(
-            _operatorGrid().vaultRemainingMintingCapacityShares(address(_stakingVault())),
-            connection.shareLimit - VAULT_HUB.liabilityShares(address(_stakingVault()))
-        );
-
-        return Math256.min(maxMintableShares, remainingMintingCapacityShares_);
-    }
-
-    function _totalMintingCapacityShares() internal view returns (uint256) {
-        VaultHub.VaultConnection memory connection = vaultConnection();
-
-        uint256 maxMintableShares = _maxMintableShares(connection.reserveRatioBP, 0);
-        uint256 shareLimit_ = Math256.min(
-            _operatorGrid().vaultShareLimit(address(_stakingVault())),
-            connection.shareLimit
-        );
-
-        return Math256.min(maxMintableShares, shareLimit_);
     }
 
     function _getSharesByPooledEth(uint256 _amountOfStETH) internal view returns (uint256) {

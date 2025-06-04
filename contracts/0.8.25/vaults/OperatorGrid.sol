@@ -628,38 +628,37 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         reservationFeeBP = t.reservationFeeBP;
     }
 
-    /// @notice Returns the remaining minting capacity of a vault according to the OperatorGrid limits
-    /// @param _addr address of the vault
-    function vaultRemainingMintingCapacityShares(address _addr) external view returns (uint256) {
-        ERC7201Storage storage $ = _getStorage();
+    /// @dev Returns the total minting capacity of a vault according to the OperatorGrid limits
+    function vaultMintingLimits(address _vault) public view returns (uint256 total, uint256 remaining) {
+        uint256 shareLimit = _vaultHub().vaultConnection(_vault).shareLimit;
+        uint256 liabilityShares = _vaultHub().liabilityShares(_vault);
 
-        VaultTier memory vaultTier = $.vaultTier[_addr];
-        uint64 tierId = vaultTier.currentTierId;
-
-        Tier storage tier_ = $.tiers[tierId];
-        Group storage group_ = $.groups[tier_.operator];
-
-        uint256 remainingShares = tier_.shareLimit - tier_.liabilityShares;
-        if (tierId != DEFAULT_TIER_ID) {
-            uint256 remainingGroupShares = group_.shareLimit - group_.liabilityShares;
-            remainingShares = _min(remainingShares, remainingGroupShares);
-        }
-
-        return remainingShares;
+        total = _min(_vaultRemainingMintingCapacity(_vault), shareLimit);
+        remaining = _min(
+            _vaultRemainingMintingCapacity(_vault),
+            shareLimit > liabilityShares ? shareLimit - liabilityShares : 0
+        );
     }
 
-    /// @notice Returns the minimum applicable share limit of a vault according to the OperatorGrid limits
-    /// @param _addr address of the vault
-    function vaultShareLimit(address _addr) external view returns (uint256) {
+
+    /// @dev Returns the remaining minting capacity of a vault according to the OperatorGrid limits
+    /// @param _vault address of the vault
+    function _vaultRemainingMintingCapacity(address _vault) internal view returns (uint256 remaining) {
         ERC7201Storage storage $ = _getStorage();
 
-        VaultTier memory vaultTier = $.vaultTier[_addr];
+        VaultTier storage vaultTier = $.vaultTier[_vault];
         uint64 tierId = vaultTier.currentTierId;
-
         Tier storage tier_ = $.tiers[tierId];
-        Group storage group_ = $.groups[tier_.operator];
 
-        return _min(tier_.shareLimit, group_.shareLimit);
+        uint256 tierLimit = tier_.shareLimit;
+        remaining = tierLimit > tier_.liabilityShares ? tierLimit - tier_.liabilityShares : 0;
+
+        if (tierId != DEFAULT_TIER_ID) {
+            Group storage group_ = $.groups[tier_.operator];
+            uint256 groupLimit = group_.shareLimit;
+            uint256 groupRemaining = groupLimit > group_.liabilityShares ? groupLimit - group_.liabilityShares : 0;
+            remaining = _min(remaining, groupRemaining);
+        }
     }
 
     function _min(uint256 a, uint256 b) internal pure returns (uint256) {

@@ -101,7 +101,7 @@ contract LazyOracle is ILazyOracle {
                 connection.shareLimit,
                 connection.reserveRatioBP,
                 connection.forcedRebalanceThresholdBP,
-                _mintableCapacity(vaultAddress),
+                _mintable(vaultAddress),
                 connection.infraFeeBP,
                 connection.liquidityFeeBP,
                 connection.reservationFeeBP,
@@ -160,16 +160,15 @@ contract LazyOracle is ILazyOracle {
         );
     }
 
-    function _mintableCapacity(address _vault) internal view returns (uint256) {
+    function _mintable(address _vault) internal view returns (uint256) {
         VaultHub vaultHub = _vaultHub();
-        VaultHub.VaultConnection memory connection = vaultHub.vaultConnection(_vault);
-
-        uint256 mintingCapacityShares = Math256.min(_operatorGrid().vaultShareLimit(_vault), connection.shareLimit);
-        uint256 mintingCapacity = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(mintingCapacityShares);
 
         uint256 mintableEther = (
-            _vaultHub().mintableValue(_vault) * (TOTAL_BASIS_POINTS - connection.reserveRatioBP)
+            vaultHub.mintableValue(_vault) * (TOTAL_BASIS_POINTS - vaultHub.vaultConnection(_vault).reserveRatioBP)
         ) / TOTAL_BASIS_POINTS;
+
+        (uint256 totalMintingCapacity,) = _operatorGrid().vaultMintingLimits(_vault);
+        uint256 mintingCapacity = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(totalMintingCapacity);
 
         return Math256.min(mintableEther, mintingCapacity);
     }
