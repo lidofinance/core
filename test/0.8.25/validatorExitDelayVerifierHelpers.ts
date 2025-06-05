@@ -42,10 +42,10 @@ export const encodeExitRequestsDataListWithFormat = (requests: ExitRequest[]) =>
 };
 
 const stakingRouterMockEventABI = [
-  "event UnexitedValidatorReported(uint256 moduleId, uint256 nodeOperatorId, uint256 proofSlotTimestamp, bytes publicKey, uint256 secondsSinceEligibleExitRequest)",
+  "event Mock_UnexitedValidatorReported(uint256 moduleId, uint256 nodeOperatorId, uint256 proofSlotTimestamp, bytes publicKey, uint256 secondsSinceEligibleExitRequest)",
 ];
 const stakingRouterMockInterface = new ethers.Interface(stakingRouterMockEventABI);
-type StakingRouterMockEvents = "UnexitedValidatorReported";
+type StakingRouterMockEvents = "Mock_UnexitedValidatorReported";
 
 export function findStakingRouterMockEvents(receipt: ContractTransactionReceipt, event: StakingRouterMockEvents) {
   return findEventsWithInterfaces(receipt!, event, [stakingRouterMockInterface]);
