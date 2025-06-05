@@ -80,7 +80,6 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice current inOutDelta of the vault (all deposits - all withdrawals)
         int128 inOutDelta;
         // 64 bits of gap
-        // ### 4th slot
     }
 
     struct Report {
@@ -95,16 +94,16 @@ contract VaultHub is PausableUntilWithRoles {
      *  While any part of those obligations remains unsettled, VaultHub may want to limit what the vault can do.
      *
      *  Obligations have two types:
-     *  1. Redemptions.
-     *     Under extreem conditions Lido may want to rebalance the part of the vault's liability to serve the Lido Core
-     *     withdrawal queue requests to guarantee that every stETH is redeemable
+     *  1. Redemptions. Under extreem conditions Lido may want to rebalance the part of the vault's liability to serve
+     *     the Lido Core withdrawal queue requests to guarantee that every stETH is redeemable. Burning stETH reduces
+     *     the redemptions obligation amount on the vault.
      *  2. Lido fees. Sum of infra, liquidity and reservation fees on the vault. Calculated in ether and grows on every
      *     oracle report until paid.
      *
      *  Constraints until obligations settled:
      *  - Beacon chain deposits are paused while unsettled obligations ≥ OBLIGATIONS_THRESHOLD (1 ETH)
      *  - Unsettled obligations can't be withdrawn
-     *  - Minting new stETH is limited by unsettled Lido fees (redemptions do not affect minting capacity)
+     *  - Minting new stETH is limited by unsettled Lido fees (NB: redemptions do not affect minting capacity)
      *  - Vault disconnect is refused until both unsettled redemptions and Lido fees obligations hit zero
      *
      *  Settlement:
@@ -113,7 +112,6 @@ contract VaultHub is PausableUntilWithRoles {
      *    - every oracle report
      *    - resume of the beacon chain deposits
      *    - disconnect initiation
-     *  - Redemptions can be settled immediately at the moment of accruence
      *  - Lido fees are automatically settled on the final report that completes the disconnection process
      */
     struct VaultObligations {
@@ -812,15 +810,12 @@ contract VaultHub is PausableUntilWithRoles {
         // This function may intentionally perform no action in some cases, as these are EasyTrack motions
         if (liabilityShares_ > 0) {
             VaultObligations storage obligations = _vaultObligations(_vault);
+            if (obligations.redemptions == _redemptionsValue) return;
 
-            _settleObligations(
-                _vault,
-                record,
-                obligations,
-                obligations.unsettledLidoFees,
-                _redemptionsValue,
-                MAX_UNSETTLED_OBLIGATIONS // allow unlimited unsettled obligations
-            );
+            uint256 newRedemptions = Math256.min(_redemptionsValue, _getPooledEthBySharesRoundUp(liabilityShares_));
+            obligations.redemptions = uint64(newRedemptions);
+
+            emit RedemptionsSet(_vault, newRedemptions);
 
             _checkAndUpdateBeaconChainDepositsPause(_vault, _vaultConnection(_vault), record, obligations);
         }
@@ -1399,6 +1394,7 @@ contract VaultHub is PausableUntilWithRoles {
      */
     event VaultOwnershipTransferred(address indexed vault, address indexed newOwner, address indexed oldOwner);
 
+    event RedemptionsSet(address indexed vault, uint256 newRedemptions);
     event RedemptionsDecreased(address indexed vault, uint256 newRedemptions, uint256 amountDecreased);
     event VaultObligationsUpdated(
         address indexed vault,

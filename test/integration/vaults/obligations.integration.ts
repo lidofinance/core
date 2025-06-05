@@ -22,7 +22,7 @@ import { Snapshot } from "test/suite";
 
 const TOTAL_BASIS_POINTS = 100_00n;
 
-describe("Integration: Vault obligations", () => {
+describe.only("Integration: Vault obligations", () => {
   let ctx: ProtocolContext;
 
   let vaultHub: VaultHub;
@@ -262,17 +262,15 @@ describe("Integration: Vault obligations", () => {
       const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsBefore.redemptions).to.equal(0n);
 
-      await setBalance(stakingVaultAddress, 0n); // dirty hack to make the vault balance 0
-
       // Over the max possible withdrawals
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions + 1n))
-        .to.emit(vaultHub, "VaultObligationsUpdated")
-        .withArgs(stakingVaultAddress, maxRedemptions, 0n, 0n, 0n, 0n);
+        .to.emit(vaultHub, "RedemptionsSet")
+        .withArgs(stakingVaultAddress, maxRedemptions);
 
       // Second time should not emit anything because the obligation is already set
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions)).not.to.emit(
         vaultHub,
-        "VaultObligationsUpdated",
+        "RedemptionsSet",
       );
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
@@ -281,22 +279,22 @@ describe("Integration: Vault obligations", () => {
       // Decrease the obligation
       const newRedemptionsValue = maxRedemptions / 2n; // => 1 wei
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, newRedemptionsValue))
-        .to.emit(vaultHub, "VaultObligationsUpdated")
-        .withArgs(stakingVaultAddress, newRedemptionsValue, 0n, 0n, 0n, 0n);
+        .to.emit(vaultHub, "RedemptionsSet")
+        .withArgs(stakingVaultAddress, newRedemptionsValue);
 
       const obligationsAfterDecreased = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfterDecreased.redemptions).to.equal(newRedemptionsValue);
 
       // Remove the obligation
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, 0))
-        .to.emit(vaultHub, "VaultObligationsUpdated")
-        .withArgs(stakingVaultAddress, 0n, 0n, 0n, 0n, 0n);
+        .to.emit(vaultHub, "RedemptionsSet")
+        .withArgs(stakingVaultAddress, 0n);
 
       const obligationsAfterRemoved = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfterRemoved.redemptions).to.equal(0n);
     });
 
-    it("Should immidiatly settle if the vault has enough balance", async () => {
+    it("Should not settle if the vault has enough balance", async () => {
       const { lido } = ctx.contracts;
 
       const liabilityShares = ether("1");
@@ -309,13 +307,12 @@ describe("Integration: Vault obligations", () => {
       expect(obligationsBefore.redemptions).to.equal(0n);
 
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions))
-        .to.emit(vaultHub, "VaultObligationsUpdated")
-        .withArgs(stakingVaultAddress, 0n, maxRedemptions, 0n, 0n, 0n)
-        .to.emit(lido, "ExternalEtherTransferredToBuffer")
-        .withArgs(maxRedemptions);
+        .to.emit(vaultHub, "RedemptionsSet")
+        .withArgs(stakingVaultAddress, maxRedemptions)
+        .not.to.emit(vaultHub, "VaultObligationsUpdated");
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.redemptions).to.equal(0n);
+      expect(obligationsAfter.redemptions).to.equal(maxRedemptions);
     });
 
     it("Should pause beacon chain deposits when unsettled obligations are too high", async () => {
@@ -332,17 +329,14 @@ describe("Integration: Vault obligations", () => {
 
       const vaultBalance = ether("1");
       await setBalance(stakingVaultAddress, vaultBalance);
-      const expectedUnsettledRedemptions = maxRedemptions - vaultBalance;
 
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions))
-        .to.emit(vaultHub, "VaultObligationsUpdated")
-        .withArgs(stakingVaultAddress, expectedUnsettledRedemptions, vaultBalance, 0n, 0n, 0n)
-        .to.emit(lido, "ExternalEtherTransferredToBuffer")
-        .withArgs(vaultBalance)
+        .to.emit(vaultHub, "RedemptionsSet")
+        .withArgs(stakingVaultAddress, maxRedemptions)
         .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.redemptions).to.equal(expectedUnsettledRedemptions);
+      expect(obligationsAfter.redemptions).to.equal(maxRedemptions);
     });
 
     context("Must decrease on liability shares change", () => {
@@ -674,18 +668,21 @@ describe("Integration: Vault obligations", () => {
     beforeEach(async () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
       await dashboard.connect(roles.minter).mintShares(roles.burner, ether("1"));
-
-      const obligation = ether("1");
-
-      await addRedemptionsObligation(obligation);
+      await addRedemptionsObligation(ether("1"));
     });
 
     it("Should work when trying to withdraw less than available balance", async () => {
-      const unlockedValue = await vaultHub.unlocked(stakingVaultAddress);
+      let withdrawableEther = await vaultHub.withdrawableEther(stakingVaultAddress);
+      expect(withdrawableEther).to.equal(0n);
 
-      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, unlockedValue))
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+
+      withdrawableEther = await vaultHub.withdrawableEther(stakingVaultAddress);
+      expect(withdrawableEther).to.equal(ether("0.75")); // 0.25 ether is reserve ratio
+
+      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, withdrawableEther))
         .to.emit(stakingVault, "EtherWithdrawn")
-        .withArgs(stranger, unlockedValue);
+        .withArgs(stranger, withdrawableEther);
     });
 
     it("Should revert when trying to withdraw more than available balance", async () => {
