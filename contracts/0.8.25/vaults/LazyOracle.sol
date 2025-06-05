@@ -34,10 +34,10 @@ contract LazyOracle is ILazyOracle {
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
+        uint256 mintableStETH;
         uint96 shareLimit;
         uint16 reserveRatioBP;
         uint16 forcedRebalanceThresholdBP;
-        uint256 mintableCapacity;
         uint16 infraFeeBP;
         uint16 liquidityFeeBP;
         uint16 reservationFeeBP;
@@ -99,7 +99,7 @@ contract LazyOracle is ILazyOracle {
                 connection.shareLimit,
                 connection.reserveRatioBP,
                 connection.forcedRebalanceThresholdBP,
-                _mintable(vaultAddress),
+                _mintableStETH(vaultAddress),
                 connection.infraFeeBP,
                 connection.liquidityFeeBP,
                 connection.reservationFeeBP,
@@ -158,7 +158,7 @@ contract LazyOracle is ILazyOracle {
         );
     }
 
-    function _mintable(address _vault) internal view returns (uint256) {
+    function _mintableStETH(address _vault) internal view returns (uint256) {
         uint256 mintableStETH = _vaultHub().mintableStETH(_vault, 0, 0);
         uint256 totalSharesMintingCapacity = _operatorGrid().vaultTotalSharesMintingCapacity(_vault);
         uint256 mintingStETHCapacity = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(totalSharesMintingCapacity);

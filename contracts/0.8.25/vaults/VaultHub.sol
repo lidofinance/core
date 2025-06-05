@@ -243,26 +243,6 @@ contract VaultHub is PausableUntilWithRoles {
         return _totalValue(_vaultRecord(_vault));
     }
 
-    /// @return the value of the staking vault with the fees subtracted
-    /// @dev returns 0 if the vault is not connected
-    function totalCollaterizableValue(address _vault) external view returns (uint256) {
-        return _totalCollaterizableValue(_vault);
-    }
-
-    /// @return amount of stETH that can be minted by the vault using additional ether
-    /// @param _valueToAdd value to add to the total collaterizable value of the vault
-    /// @param _valueToDeduct value to deduct from the total collaterizable value of the vault
-    /// @dev returns 0 if the vault is not connected
-    function mintableStETH(address _vault, uint256 _valueToAdd, uint256 _valueToDeduct) external view returns (uint256) {
-        return _mintableStETH(_vault, _vaultConnection(_vault), _valueToAdd, _valueToDeduct);
-    }
-
-    /// @return amount of ether that is possible to withdraw from the vault at the moment
-    /// @dev returns 0 if the vault is not connected
-    function withdrawableBalance(address _vault) external view returns (uint256) {
-        return _withdrawableBalance(_vault);
-    }
-
     /// @return liability shares of the vault
     /// @dev returns 0 if the vault is not connected
     function liabilityShares(address _vault) external view returns (uint256) {
@@ -279,6 +259,20 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev returns 0 if the vault is not connected
     function unlocked(address _vault) external view returns (uint256) {
         return _unlocked(_vaultRecord(_vault));
+    }
+
+    /// @return amount of stETH that can be minted by the vault using additional ether
+    /// @param _valueToAdd value to add to the total collaterizable value of the vault
+    /// @param _valueToDeduct value to deduct from the total collaterizable value of the vault
+    /// @dev returns 0 if the vault is not connected
+    function mintableStETH(address _vault, uint256 _valueToAdd, uint256 _valueToDeduct) external view returns (uint256) {
+        return _mintableStETH(_vault, _vaultConnection(_vault), _valueToAdd, _valueToDeduct);
+    }
+
+    /// @return the amount of ether that can be instantly withdrawn from the staking vault
+    /// @dev returns 0 if the vault is not connected
+    function withdrawableEther(address _vault) external view returns (uint256) {
+        return _withdrawableEther(_vault, _vaultConnection(_vault), _vaultRecord(_vault), _vaultObligations(_vault));
     }
 
     /// @return latest report for the vault
@@ -608,11 +602,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         if (!_isReportFresh(record)) revert VaultReportStale(_vault);
 
-        uint256 unlocked_ = _unlocked(record);
-        if (_ether > unlocked_) revert InsufficientUnlocked(unlocked_, _ether);
-
-        uint256 withdrawableBalance_ = _withdrawableBalance(_vault);
-        if (_ether > withdrawableBalance_) revert VaultInsufficientBalance(_vault, withdrawableBalance_, _ether);
+        uint256 withdrawableEther_ = _withdrawableEther(_vault, _vaultConnection(_vault), record, _vaultObligations(_vault));
+        if (_ether > withdrawableEther_) revert VaultInsufficientBalance(_vault, withdrawableEther_, _ether);
 
         _withdraw(_vault, record, _recipient, _ether);
 
@@ -1299,13 +1290,23 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    function _withdrawableBalance(address _vault) internal view returns (uint256) {
-        if (_vaultConnection(_vault).vaultIndex == 0) return 0;
+    /// @return the amount of ether that can be instantly withdrawn from the staking vault
+    /// @dev this amount already accounts locked value and unsettled obligations
+    function _withdrawableEther(
+        address _vault,
+        VaultConnection storage _connection,
+        VaultRecord storage _record,
+        VaultObligations storage _obligations
+    ) internal view returns (uint256) {
+        if (_connection.vaultIndex == 0) return 0;
 
-        uint256 vaultBalance = _vault.balance;
-        VaultObligations storage obligations = _vaultObligations(_vault);
-        uint256 unsettledObligations_ = obligations.unsettledLidoFees + obligations.redemptions;
-        return vaultBalance > unsettledObligations_ ? vaultBalance - unsettledObligations_ : 0;
+        uint256 totalValue_ = _totalValue(_record);
+        uint256 lockedPlusUnsettled = _record.locked + _obligations.unsettledLidoFees + _obligations.redemptions;
+
+        return Math256.min(
+            _vault.balance,
+            totalValue_ > lockedPlusUnsettled ? totalValue_ - lockedPlusUnsettled : 0
+        );
     }
 
     function _storage() internal pure returns (Storage storage $) {

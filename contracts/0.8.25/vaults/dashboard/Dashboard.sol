@@ -168,7 +168,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the overall unsettled obligations of the vault in ether
      * @dev includes the node operator fee
      */
-    function unsettledObligations() public view returns (uint256) {
+    function unsettledObligations() external view returns (uint256) {
         VaultHub.VaultObligations memory obligations = VAULT_HUB.vaultObligations(address(_stakingVault()));
         return uint256(obligations.unsettledLidoFees + obligations.redemptions) + nodeOperatorDisbursableFee();
     }
@@ -210,22 +210,13 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Returns the amount of ether that can be instantly withdrawn from the staking vault.
-     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
-     * @dev This method overrides the Dashboard's withdrawableEther() method
+     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for fees and obligations.
      */
     function withdrawableEther() public view returns (uint256) {
-        uint256 nodeOperatorFees = nodeOperatorDisbursableFee();
-        uint256 vaultWithdrawableBalance = VAULT_HUB.withdrawableBalance(address(_stakingVault()));
+        uint256 totalWithdrawable = VAULT_HUB.withdrawableEther(address(_stakingVault()));
+        uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
 
-        if (nodeOperatorFees > vaultWithdrawableBalance) return 0;
-
-        uint256 vaultTotalValue = totalValue();
-        uint256 vaultLockedPlusFee = locked() + nodeOperatorFees;
-
-        return Math256.min(
-            vaultWithdrawableBalance - nodeOperatorFees,
-            vaultTotalValue > vaultLockedPlusFee ? vaultTotalValue - vaultLockedPlusFee : 0
-        );
+        return totalWithdrawable > nodeOperatorFee ? totalWithdrawable - nodeOperatorFee : 0;
     }
 
     // ==================== Vault Management Functions ====================
