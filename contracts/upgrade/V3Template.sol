@@ -166,6 +166,8 @@ contract V3Template is V3Addresses {
                 revert IncorrectBurnerAllowance(contractsWithBurnerAllowances_[i], OLD_BURNER);
             }
         }
+
+        if (!IBurner(BURNER).isMigrationAllowed()) revert BurnerMigrationNotAllowed();
     }
 
     function _assertPostUpgradeState() internal view {
@@ -359,6 +361,7 @@ contract V3Template is V3Addresses {
     error Expired();
     error IncorrectBurnerSharesMigration();
     error IncorrectBurnerAllowance(address contractAddress, address burner);
+    error BurnerMigrationNotAllowed();
     error IncorrectVaultFactoryBeacon(address factory, address beacon);
     error IncorrectVaultFactoryDashboardImplementation(address factory, address delegation);
     error IncorrectUpgradeableBeaconOwner(address beacon, address owner);
