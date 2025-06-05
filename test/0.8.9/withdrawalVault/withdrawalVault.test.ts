@@ -13,11 +13,16 @@ import {
   WithdrawalVault__Harness,
 } from "typechain-types";
 
-import { deployEIP7002WithdrawalRequestContract, EIP7002_ADDRESS, MAX_UINT256, proxify } from "lib";
+import { EIP7002_ADDRESS, EIP7002_MIN_WITHDRAWAL_REQUEST_FEE, MAX_UINT256, proxify } from "lib";
 
 import { Snapshot } from "test/suite";
 
-import { encodeEIP7002Payload, findEIP7002MockEvents, testEIP7002Mock } from "./eip7002Mock";
+import {
+  deployEIP7002WithdrawalRequestContractMock,
+  encodeEIP7002Payload,
+  findEIP7002MockEvents,
+  testEIP7002Mock,
+} from "./eip7002Mock";
 import { generateWithdrawalRequestPayload } from "./utils";
 
 const PETRIFIED_VERSION = MAX_UINT256;
@@ -42,7 +47,7 @@ describe("WithdrawalVault.sol", () => {
   before(async () => {
     [owner, treasury, triggerableWithdrawalsGateway, stranger] = await ethers.getSigners();
 
-    withdrawalsPredeployed = await deployEIP7002WithdrawalRequestContract(1n);
+    withdrawalsPredeployed = await deployEIP7002WithdrawalRequestContractMock(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
 
     expect(await withdrawalsPredeployed.getAddress()).to.equal(EIP7002_ADDRESS);
 
