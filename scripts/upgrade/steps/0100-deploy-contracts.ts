@@ -19,7 +19,9 @@ export async function main() {
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
   const vaultHubParams = parameters[Sk.vaultHub].deployParameters;
+  const lazyOracleParams = parameters[Sk.lazyOracle].deployParameters;
   const depositContract = state.chainSpec.depositContractAddress;
+  const consensusContract = state[Sk.hashConsensusForAccountingOracle].address;
   const pdgDeployParams = parameters[Sk.predepositGuarantee].deployParameters;
 
   // TODO: maybe take the parameters from current sanity checker
@@ -45,6 +47,7 @@ export async function main() {
   const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     locatorAddress,
     lidoAddress,
+    consensusContract,
     vaultHubParams.relativeShareLimitBP,
   ]);
 
@@ -107,7 +110,13 @@ export async function main() {
   );
 
   // Deploy LazyOracle
-  const lazyOracle = await deployWithoutProxy(Sk.lazyOracle, "LazyOracle", deployer, [locatorAddress]);
+  const lazyOracle = await deployWithoutProxy(Sk.lazyOracle, "LazyOracle", deployer, [
+    locatorAddress,
+    consensusContract,
+    agentAddress,
+    lazyOracleParams.quarantinePeriod,
+    lazyOracleParams.maxElClRewardsBP,
+  ]);
 
   // Deploy OperatorGrid
   const operatorGrid = await deployBehindOssifiableProxy(

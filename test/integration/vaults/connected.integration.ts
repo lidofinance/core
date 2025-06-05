@@ -665,6 +665,81 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(quarantine.lastUnsafeFundTs).to.equal(0);
       expect(quarantine.lastUnsafeFundDelta).to.equal(0);
     });
+
+    it("Sanity check for dynamic total value underflow", async () => {
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await reportVaultDataWithProof(ctx, stakingVault);
+
+      await advanceChainTime(days(1n));
+
+      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
+
+      // int256(_totalValue) + curInOutDelta - _inOutDelta < 0
+      await expect(reportVaultDataWithProof(ctx, stakingVault, 0n))
+        .to.be.revertedWithCustomError(lazyOracle, "UnderflowInTotalValueCalculation");
+    });
+
+    it("Sanity check for liability shares increase", async () => {
+      const connection = await vaultHub.vaultConnection(stakingVault);
+      const shareLimit = connection.shareLimit;
+
+      await expect(reportVaultDataWithProof(ctx, stakingVault, ether("1"), shareLimit + ether("1")))
+        .to.be.revertedWithCustomError(lazyOracle, "LiabilitySharesExceedsLimit");
+    });
+
+    it("InOutDelta cache in fund", async () => {
+      const value = ether("1.234");
+      
+      await advanceChainTime(days(2n));
+
+      // first deposit in frame
+      let record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.cachedInOutDelta).to.equal(0);
+      expect(record.cachedRefSlot).to.equal(0);
+
+      await dashboard.connect(roles.funder).fund({ value: value });
+
+      record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.cachedInOutDelta).to.equal(ether("1"));
+      let [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      expect(record.cachedRefSlot).to.equal(refSlot);
+
+      // second deposit in frame
+      await dashboard.connect(roles.funder).fund({ value: value });
+
+      record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.cachedInOutDelta).to.equal(ether("1"));
+      expect(record.cachedRefSlot).to.equal(refSlot);
+    });
+
+    it("InOutDelta cache in withdraw", async () => {
+      const value = ether("1.234");
+
+      await dashboard.connect(roles.funder).fund({ value: value });
+
+      let [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      let record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.cachedInOutDelta).to.equal(ether("1"));
+      expect(record.cachedRefSlot).to.equal(refSlot);
+
+      await advanceChainTime(days(2n));
+      await reportVaultDataWithProof(ctx, stakingVault);
+
+      // first withdraw in frame
+      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
+
+      record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.cachedInOutDelta).to.equal(value + ether("1"));
+      [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      expect(record.cachedRefSlot).to.equal(refSlot);
+
+      // second withdraw in frame
+      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
+
+      record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.cachedInOutDelta).to.equal(value + ether("1"));
+      expect(record.cachedRefSlot).to.equal(refSlot);
+    });
   });
 
   // skipping for now, going to update these tests later

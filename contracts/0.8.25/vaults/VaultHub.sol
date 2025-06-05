@@ -987,8 +987,8 @@ contract VaultHub is PausableUntilWithRoles {
     ///      A storage write is only performed if the current refSlot differs from the cached one.
     ///      In the edge case where estimation is executed before the refSlot, and execution happens 
     ///      after it, there may be a mismatch between the gas estimated during the estimate step and 
-    ///      the actual gas used during execution. The difference is around 800 gas, which should 
-    ///      not be critical, as some gas buffer is usually included anyway. 
+    ///      the actual gas used during execution. The difference is not more than 800 gas, which should 
+    ///      not be critical, as some gas buffer is usually included anyway.
     function _cacheInOutDelta(VaultRecord storage _record) internal {
         // cache inOutDelta if the refSlot is different from the cachedRefSlot
         (uint256 refSlot, ) = CONSENSUS_CONTRACT.getCurrentFrame();
