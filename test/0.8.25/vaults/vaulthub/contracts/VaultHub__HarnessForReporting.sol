@@ -59,16 +59,16 @@ contract VaultHub__HarnessForReporting is VaultHub {
         );
         $.connections[_vault] = connection;
 
-        VaultHub.VaultRecord memory record = VaultHub.VaultRecord(
-            VaultHub.Report(0, 0), // report
-            0, // locked
-            uint96(_shareLimit), // liabilityShares
-            uint64(block.timestamp), // reportTimestamp
-            0, // inOutDelta
-            0, // cachedInOutDelta
-            0, // cachedRefSlot
-            0 // feeSharesCharged
-        );
+        VaultHub.VaultRecord memory record = VaultHub.VaultRecord({
+            report: VaultHub.Report(0, 0),
+            locked: 0,
+            liabilityShares: uint96(_shareLimit),
+            inOutDelta: 0,
+            cachedInOutDelta: 0,
+            cachedRefSlot: 0,
+            reportTimestamp: uint64(block.timestamp),
+            feeSharesCharged: 0
+        });
 
         $.records[_vault] = record;
         $.vaults.push(_vault);
