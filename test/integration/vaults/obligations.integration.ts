@@ -641,7 +641,7 @@ describe("Integration: Vault obligations", () => {
 
       await expect(
         dashboard.connect(roles.minter).mintShares(roles.burner, maxMintableEther + 1n),
-      ).to.be.revertedWithCustomError(vaultHub, "InsufficientTotalValueToMint");
+      ).to.be.revertedWithCustomError(dashboard, "MintingCapacityExceeded");
 
       await expect(dashboard.connect(roles.minter).mintShares(roles.burner, maxMintableEther))
         .to.emit(vaultHub, "MintedSharesOnVault")

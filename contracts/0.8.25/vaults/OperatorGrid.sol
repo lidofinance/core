@@ -7,7 +7,9 @@ pragma solidity 0.8.25;
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 
+import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultHub} from "./VaultHub.sol";
 
@@ -628,47 +630,47 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         reservationFeeBP = t.reservationFeeBP;
     }
 
-    /// @dev Returns the total and remaining minting capacity of a vault according vault and OperatorGrid limits
+    /// @notice Returns the total minting capacity of a vault according to the OperatorGrid and vault share limits
     /// @param _vault address of the vault
-    /// @return totalMintingCapacity total minting capacity of the vault
-    /// @return remainingMintingCapacity remaining minting capacity of the vault
-    function vaultMintingInfo(
-        address _vault
-    ) external view returns (uint256 totalMintingCapacity, uint256 remainingMintingCapacity) {
+    /// @return total shares minting capacity
+    function vaultTotalSharesMintingCapacity(address _vault) public view returns (uint256) {
         uint256 shareLimit = _vaultHub().vaultConnection(_vault).shareLimit;
-        uint256 liabilityShares = _vaultHub().liabilityShares(_vault);
-
-        totalMintingCapacity = _min(_vaultRemainingMintingCapacity(_vault), shareLimit);
-        remainingMintingCapacity = _min(
-            _vaultRemainingMintingCapacity(_vault),
-            shareLimit > liabilityShares ? shareLimit - liabilityShares : 0
-        );
-    }
-
-    /// @dev Returns the remaining minting capacity of a vault according to the OperatorGrid limits
-    /// @param _vault address of the vault
-    /// @dev remaining minting capacity inherits the limits of the vault tier and group,
-    ///      and accounts other vaults liabilities inside the tier and group
-    function _vaultRemainingMintingCapacity(address _vault) internal view returns (uint256 remaining) {
         ERC7201Storage storage $ = _getStorage();
 
-        VaultTier storage vaultTier = $.vaultTier[_vault];
+        VaultTier memory vaultTier = $.vaultTier[_vault];
         uint64 tierId = vaultTier.currentTierId;
-        Tier storage tier_ = $.tiers[tierId];
+
+        return Math256.min(_gridRemainingMintingCapacity(tierId), shareLimit);
+    }
+
+    /// @notice Returns the remaining minting capacity of a vault according to the OperatorGrid and vault share limits
+    ///         and current vault liabilities
+    /// @param _vault address of the vault
+    /// @return remaining shares minting capacity
+    function vaultRemainingSharesMintingCapacity(address _vault) external view returns (uint256) {
+        uint256 totalSharesMintingCapacity = vaultTotalSharesMintingCapacity(_vault);
+        uint256 liabilityShares = _vaultHub().liabilityShares(_vault);
+        return totalSharesMintingCapacity > liabilityShares ? totalSharesMintingCapacity - liabilityShares : 0;
+    }
+
+    /// @notice Returns the remaining minting capacity in a given tier and group
+    /// @param _tierId tier id of the vault
+    /// @return remaining minting capacity
+    /// @dev remaining minting capacity inherits the limits of the vault tier and group,
+    ///      and accounts liabilities of other vaults belonging to the same tier and group
+    function _gridRemainingMintingCapacity(uint64 _tierId) internal view returns (uint256 remaining) {
+        ERC7201Storage storage $ = _getStorage();
+        Tier storage tier_ = $.tiers[_tierId];
 
         uint256 tierLimit = tier_.shareLimit;
         remaining = tierLimit > tier_.liabilityShares ? tierLimit - tier_.liabilityShares : 0;
 
-        if (tierId != DEFAULT_TIER_ID) {
+        if (_tierId != DEFAULT_TIER_ID) {
             Group storage group_ = $.groups[tier_.operator];
             uint256 groupLimit = group_.shareLimit;
             uint256 groupRemaining = groupLimit > group_.liabilityShares ? groupLimit - group_.liabilityShares : 0;
-            remaining = _min(remaining, groupRemaining);
+            remaining = Math256.min(remaining, groupRemaining);
         }
-    }
-
-    function _min(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a < b ? a : b;
     }
 
     /// @notice Validates tier parameters

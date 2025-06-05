@@ -248,8 +248,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, ether("2.1"))).to.be.revertedWithCustomError(
-        vaultHub,
-        "InsufficientTotalValueToMint",
+        dashboard,
+        "MintingCapacityExceeded",
       );
 
       const etherToMint = ether("0.1");
@@ -290,9 +290,10 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     it("Can't mint until goes healthy", async () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
+      const shares = await ctx.contracts.lido.getSharesByPooledEth(TEST_STETH_AMOUNT_WEI);
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
-        .to.be.revertedWithCustomError(vaultHub, "InsufficientTotalValueToMint")
-        .withArgs(await stakingVault.getAddress(), ether("1") + TEST_STETH_AMOUNT_WEI, 0);
+        .to.be.revertedWithCustomError(dashboard, "MintingCapacityExceeded")
+        .withArgs(shares, 0);
 
       await dashboard.connect(roles.funder).fund({ value: ether("2") });
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(true);
