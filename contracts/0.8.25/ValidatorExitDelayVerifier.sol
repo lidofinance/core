@@ -105,16 +105,6 @@ contract ValidatorExitDelayVerifier {
         uint256 eligibleExitRequestTimestamp
     );
     error EmptyDeliveryHistory();
-    error UnrecoverableModuleError();
-
-    event ReportValidatorExitDelayFailed(
-        uint256 moduleId,
-        uint256 nodeOpId,
-        bytes pubkey,
-        uint256 proofSlotTimestamp,
-        uint256 eligibleToExitInSec
-    );
-
 
     /**
      * @dev The previous and current forks can be essentially the same.
@@ -202,7 +192,7 @@ contract ValidatorExitDelayVerifier {
 
             _verifyValidatorExitUnset(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
 
-            _reportValidatorExitDelay(stakingRouter, moduleId, nodeOpId, proofSlotTimestamp, pubkey, eligibleToExitInSec);
+            stakingRouter.reportValidatorExitDelay(moduleId, nodeOpId, proofSlotTimestamp, pubkey, eligibleToExitInSec);
         }
     }
 
@@ -249,34 +239,7 @@ contract ValidatorExitDelayVerifier {
 
             _verifyValidatorExitUnset(oldBlock.header, witness, pubkey, valIndex);
 
-            _reportValidatorExitDelay(stakingRouter, moduleId, nodeOpId, proofSlotTimestamp, pubkey, eligibleToExitInSec);
-        }
-    }
-
-    function _reportValidatorExitDelay(
-        IStakingRouter stakingRouter,
-        uint256 moduleId,
-        uint256 nodeOpId,
-        uint256 proofSlotTimestamp,
-        bytes memory pubkey,
-        uint256 eligibleToExitInSec
-    ) internal {
-        try
-            stakingRouter.reportValidatorExitDelay(
-                moduleId,
-                nodeOpId,
-                proofSlotTimestamp,
-                pubkey,
-                eligibleToExitInSec
-            ) {}
-         catch (bytes memory lowLevelRevertData) {
-            /// @dev This check is required to prevent incorrect gas estimation of the method.
-            ///      Without it, Ethereum nodes that use binary search for gas estimation may
-            ///      return an invalid value when the reportValidatorExitDelay() reverts because
-            ///      of the "out of gas" error. Here we assume that the reportValidatorExitDelay()
-            ///      method doesn't have reverts with empty error data except "out of gas".
-            if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
-            emit ReportValidatorExitDelayFailed(moduleId, nodeOpId, pubkey, proofSlotTimestamp, eligibleToExitInSec);
+            stakingRouter.reportValidatorExitDelay(moduleId, nodeOpId, proofSlotTimestamp, pubkey, eligibleToExitInSec);
         }
     }
 

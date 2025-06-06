@@ -190,7 +190,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       const verifyExitDelayEvents = async (tx: ContractTransactionResponse) => {
         const receipt = await tx.wait();
-        const events = findStakingRouterMockEvents(receipt!, "Mock_UnexitedValidatorReported");
+        const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
         expect(events.length).to.equal(2);
 
         const firstEvent = events[0];
@@ -229,114 +229,6 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       );
     });
 
-    it("Reverts with `UnrecoverableModuleError` if the staking router hook fails without reason, e.g. ran out of gas", async () => {
-      const shouldRunOutOfGas = true;
-
-      const intervalInSlotsBetweenProvableBlockAndExitRequest = 1000;
-      const veboExitRequestTimestamp =
-        GENESIS_TIME +
-        (ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot - intervalInSlotsBetweenProvableBlockAndExitRequest) *
-          SECONDS_PER_SLOT;
-      const moduleId = 1;
-      const nodeOpId = 2;
-      const pubkey = ACTIVE_VALIDATOR_PROOF.validator.pubkey;
-      const exitRequests: ExitRequest[] = [
-        {
-          moduleId,
-          nodeOpId,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey,
-        },
-      ];
-      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
-
-      await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
-      await stakingRouter.mock__revertOnReportingValidatorExitDelay(false, shouldRunOutOfGas);
-
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-      const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
-
-      await expect(
-        validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-          encodedExitRequests,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnrecoverableModuleError");
-
-      await expect(
-        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
-          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-          encodedExitRequests,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "UnrecoverableModuleError");
-    });
-
-    it("accepts a valid proof and does not revert if report delay failed", async () => {
-      const shouldRevert = true;
-
-      const intervalInSlotsBetweenProvableBlockAndExitRequest = 1000;
-      const veboExitRequestTimestamp =
-        GENESIS_TIME +
-        (ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot - intervalInSlotsBetweenProvableBlockAndExitRequest) *
-          SECONDS_PER_SLOT;
-      const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
-
-      const moduleId = 1;
-      const nodeOpId = 2;
-      const pubkey = ACTIVE_VALIDATOR_PROOF.validator.pubkey;
-      const exitRequests: ExitRequest[] = [
-        {
-          moduleId,
-          nodeOpId,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey,
-        },
-      ];
-      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
-
-      await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
-      await stakingRouter.mock__revertOnReportingValidatorExitDelay(shouldRevert, false);
-
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-      const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
-
-      await expect(
-        validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-          encodedExitRequests,
-        ),
-      )
-        .to.emit(validatorExitDelayVerifier, "ReportValidatorExitDelayFailed")
-        .withArgs(
-          moduleId,
-          nodeOpId,
-          pubkey,
-          proofSlotTimestamp,
-          intervalInSlotsBetweenProvableBlockAndExitRequest * SECONDS_PER_SLOT,
-        );
-
-      await expect(
-        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
-          toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-          encodedExitRequests,
-        ),
-      )
-        .to.emit(validatorExitDelayVerifier, "ReportValidatorExitDelayFailed")
-        .withArgs(
-          moduleId,
-          nodeOpId,
-          pubkey,
-          proofSlotTimestamp,
-          intervalInSlotsBetweenProvableBlockAndExitRequest * SECONDS_PER_SLOT,
-        );
-    });
-
     it("report exit delay with uses earliest possible voluntary exit time when it's greater than exit request timestamp", async () => {
       const activationEpochTimestamp =
         GENESIS_TIME + Number(ACTIVE_VALIDATOR_PROOF.validator.activationEpoch) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
@@ -367,7 +259,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       const verifyExitDelayEvents = async (tx: ContractTransactionResponse) => {
         const receipt = await tx.wait();
-        const events = findStakingRouterMockEvents(receipt!, "Mock_UnexitedValidatorReported");
+        const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
         expect(events.length).to.equal(1);
 
         const event = events[0];

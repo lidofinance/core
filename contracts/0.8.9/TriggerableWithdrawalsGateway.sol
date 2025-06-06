@@ -7,6 +7,12 @@ import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "./lib/ExitLimitUtils.sol";
 import {PausableUntil} from "./utils/PausableUntil.sol";
 
+struct ValidatorData {
+    uint256 stakingModuleId;
+    uint256 nodeOperatorId;
+    bytes pubkey;
+}
+
 interface IWithdrawalVault {
     function addWithdrawalRequests(bytes[] calldata pubkeys, uint64[] calldata amounts) external payable;
 
@@ -15,9 +21,7 @@ interface IWithdrawalVault {
 
 interface IStakingRouter {
     function onValidatorExitTriggered(
-        uint256 _stakingModuleId,
-        uint256 _nodeOperatorId,
-        bytes calldata _publicKey,
+        ValidatorData[] calldata validatorData,
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     ) external;
@@ -63,30 +67,11 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      */
     event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
     /**
-     * @notice Emitted when notifying a staking module about a validator exit fails.
-     * @param stakingModuleId Id of staking module.
-     * @param nodeOperatorId Id of node operator.
-     * @param validatorPubkey Public key of validator.
-     */
-    event StakingModuleExitNotificationFailed(uint256 stakingModuleId, uint256 nodeOperatorId, bytes validatorPubkey);
-
-    /**
      * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
      * @param requestsCount Amount of requests that were sent for processing
      * @param remainingLimit Amount of requests that still can be processed at current day
      */
     error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
-
-    /**
-     * @notice Thrown when onValidatorExitTriggered() reverts with empty data (e.g., out-of-gas error)
-     */
-    error UnrecoverableModuleError();
-
-    struct ValidatorData {
-        uint256 stakingModuleId;
-        uint256 nodeOperatorId;
-        bytes pubkey;
-    }
 
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
@@ -262,28 +247,11 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
         uint256 exitType
     ) internal {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
-        ValidatorData calldata data;
-        for (uint256 i = 0; i < validatorsData.length; ++i) {
-            data = validatorsData[i];
-
-            try
-                stakingRouter.onValidatorExitTriggered(
-                    data.stakingModuleId,
-                    data.nodeOperatorId,
-                    data.pubkey,
-                    withdrawalRequestPaidFee,
-                    exitType
-                )
-            {} catch (bytes memory lowLevelRevertData) {
-                /// @dev This check is required to prevent incorrect gas estimation of the method.
-                ///      Without it, Ethereum nodes that use binary search for gas estimation may
-                ///      return an invalid value when the onValidatorExitTriggered() reverts because of the
-                ///      "out of gas" error. Here we assume that the onValidatorExitTriggered() method doesn't
-                ///      have reverts with empty error data except "out of gas".
-                if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
-                emit StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
-            }
-        }
+        stakingRouter.onValidatorExitTriggered(
+            validatorsData,
+            withdrawalRequestPaidFee,
+            exitType
+        );
     }
 
     function _refundFee(uint256 refund, address recipient) internal {
