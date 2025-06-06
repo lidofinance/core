@@ -1479,7 +1479,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     }
 
     /// @notice Handles the triggerable exit event for a set of validators.
-    /// @dev This function is called when validators are exited using triggerable exit requests on the Execution Layer (EL).
+    /// @dev This function is called when validators are exited using triggerable exit requests on the Execution Layer.
     /// @param validatorExitData An array of `ValidatorExitData` structs, each representing a validator
     ///        for which a triggerable exit was requested. Each entry includes:
     ///        - `stakingModuleId`: ID of the staking module.
