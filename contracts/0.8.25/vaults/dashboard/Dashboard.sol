@@ -118,7 +118,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the number of stETH shares minted
      */
-    function liabilityShares() external view returns (uint256) {
+    function liabilityShares() public view returns (uint256) {
         return VAULT_HUB.liabilityShares(address(_stakingVault()));
     }
 
@@ -165,6 +165,15 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Returns the overall unsettled obligations of the vault in ether
+     * @dev includes the node operator fee
+     */
+    function unsettledObligations() external view returns (uint256) {
+        VaultHub.VaultObligations memory obligations = VAULT_HUB.vaultObligations(address(_stakingVault()));
+        return uint256(obligations.unsettledLidoFees) + uint256(obligations.redemptions) + nodeOperatorDisbursableFee();
+    }
+
+    /**
      * @notice Returns the locked amount of ether for the vault
      */
     function locked() public view returns (uint256) {
@@ -174,8 +183,10 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
-    function totalMintingCapacityShares() external view returns (uint256) {
-        return _totalMintingCapacityShares(0);
+    function totalMintingCapacityShares() public view returns (uint256) {
+        uint256 totalSharesMintingCapacity = _operatorGrid().vaultTotalSharesMintingCapacity(address(_stakingVault()));
+
+        return Math256.min(totalSharesMintingCapacity, _totalMintableShares(0));
     }
 
     /**
@@ -184,25 +195,28 @@ contract Dashboard is NodeOperatorFee {
      * @param _etherToFund the amount of ether to be funded, can be zero
      * @return the number of shares that can be minted using additional ether
      */
-    function remainingMintingCapacityShares(uint256 _etherToFund) external view returns (uint256) {
-        uint256 totalShares = _totalMintingCapacityShares(_etherToFund);
-        uint256 liabilityShares_ = VAULT_HUB.liabilityShares(address(_stakingVault()));
+    function remainingMintingCapacityShares(uint256 _etherToFund) public view returns (uint256) {
+        uint256 remainingMintingCapacity = _operatorGrid().vaultRemainingSharesMintingCapacity(address(_stakingVault()));
+        if (remainingMintingCapacity == 0) return 0;
 
-        if (totalShares < liabilityShares_) return 0;
-        return totalShares - liabilityShares_;
+        uint256 vaultMintableShares = _totalMintableShares(_etherToFund);
+        uint256 vaultLiabilityShares = liabilityShares();
+
+        return Math256.min(
+            remainingMintingCapacity,
+            vaultMintableShares > vaultLiabilityShares ? vaultMintableShares - vaultLiabilityShares : 0
+        );
     }
 
     /**
      * @notice Returns the amount of ether that can be instantly withdrawn from the staking vault.
-     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for node operator fee.
-     * @dev This method overrides the Dashboard's withdrawableEther() method
+     * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for fees and obligations.
      */
     function withdrawableEther() public view returns (uint256) {
-        uint256 totalValue_ = totalValue();
-        uint256 lockedPlusFee = locked() + nodeOperatorDisbursableFee();
+        uint256 totalWithdrawable = VAULT_HUB.withdrawableEther(address(_stakingVault()));
+        uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
 
-        return Math256.min(address(_stakingVault()).balance,
-            totalValue_ > lockedPlusFee ? totalValue_ - lockedPlusFee : 0);
+        return totalWithdrawable > nodeOperatorFee ? totalWithdrawable - nodeOperatorFee : 0;
     }
 
     // ==================== Vault Management Functions ====================
@@ -241,8 +255,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _newOwner The address to transfer the StakingVault ownership to.
      */
     function abandonDashboard(address _newOwner) external {
-        address vaultAddress = address(_stakingVault());
-        if (VAULT_HUB.vaultConnection(vaultAddress).vaultIndex != 0) revert ConnectedToVaultHub();
+        if (VAULT_HUB.isVaultConnected(address(_stakingVault()))) revert ConnectedToVaultHub();
 
         _acceptOwnership();
         _transferOwnership(_newOwner);
@@ -304,7 +317,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfStETH Amount of stETH to mint
      */
     function mintStETH(address _recipient, uint256 _amountOfStETH) external payable fundable {
-        _mintSharesWithinMintingCapacity(_recipient, STETH.getSharesByPooledEth(_amountOfStETH));
+        _mintSharesWithinMintingCapacity(_recipient, _getSharesByPooledEth(_amountOfStETH));
     }
 
     /**
@@ -443,7 +456,7 @@ contract Dashboard is NodeOperatorFee {
         if (_amount == 0) revert ZeroArgument("_amount");
 
         if (_token == ETH) {
-            (bool success, ) = payable(_recipient).call{value: _amount}("");
+            (bool success,) = payable(_recipient).call{value: _amount}("");
             if (!success) revert EthTransferFailed(_recipient, _amount);
         } else {
             SafeERC20.safeTransfer(IERC20(_token), _recipient, _amount);
@@ -539,29 +552,16 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the value of the staking vault with the node operator fee subtracted,
-     *         because the fee cannot be used to mint shares.
-     * @return The amount of ether in wei that can be used to mint shares.
-     */
-    function _mintableValue() internal view returns (uint256) {
-        return totalValue() - nodeOperatorDisbursableFee();
-    }
-
-    /**
-     * @notice Mints shares within the mintable total value,
-     *         and reverts if the resulting backing is greater than the mintable total value.
+     * @notice Mints shares within the mintable capacity,
+     *         and reverts if the resulting backing is greater than the mintable capacity.
      * @param _recipient The address of the recipient.
      * @param _amountOfShares The amount of shares to mint.
      */
     function _mintSharesWithinMintingCapacity(address _recipient, uint256 _amountOfShares) internal {
+        uint256 remainingShares = remainingMintingCapacityShares(0);
+        if (_amountOfShares > remainingShares) revert MintingCapacityExceeded(_amountOfShares, remainingShares);
+
         _mintShares(_recipient, _amountOfShares);
-
-        uint256 locked_ = locked();
-        uint256 mintableValue_ = _mintableValue();
-
-        if (locked_ > mintableValue_) {
-            revert MintingCapacityExceeded(locked_, mintableValue_);
-        }
     }
 
     /**
@@ -569,7 +569,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountOfStETH Amount of tokens to burn
      */
     function _burnStETH(uint256 _amountOfStETH) internal {
-        uint256 _amountOfShares = STETH.getSharesByPooledEth(_amountOfStETH);
+        uint256 _amountOfShares = _getSharesByPooledEth(_amountOfStETH);
         STETH.transferSharesFrom(msg.sender, address(VAULT_HUB), _amountOfShares);
         _burnShares(_amountOfShares);
     }
@@ -581,21 +581,23 @@ contract Dashboard is NodeOperatorFee {
     function _burnWstETH(uint256 _amountOfWstETH) internal {
         SafeERC20.safeTransferFrom(WSTETH, msg.sender, address(this), _amountOfWstETH);
         uint256 unwrappedStETH = WSTETH.unwrap(_amountOfWstETH);
-        uint256 unwrappedShares = STETH.getSharesByPooledEth(unwrappedStETH);
+        uint256 unwrappedShares = _getSharesByPooledEth(unwrappedStETH);
 
         STETH.transferShares(address(VAULT_HUB), unwrappedShares);
         _burnShares(unwrappedShares);
     }
 
-    /**
-     * @dev calculates the maximum number of stETH shares that can be minted by the vault
-     * @param _additionalEther additional ether that may be funded to the vault
-     */
-    function _totalMintingCapacityShares(uint256 _additionalEther) internal view returns (uint256) {
-        VaultHub.VaultConnection memory connection = vaultConnection();
-        uint256 maxMintableStETH = ((_mintableValue() + _additionalEther) *
-            (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
-        return Math256.min(STETH.getSharesByPooledEth(maxMintableStETH), connection.shareLimit);
+    /// @notice Calculates the total number of shares that can be minted by the vault
+    /// @param _additionalEther The amount of additional ether to consider for minting
+    function _totalMintableShares(uint256 _additionalEther) internal view returns (uint256) {
+        return _getSharesByPooledEth(
+            VAULT_HUB.mintableStETH(address(_stakingVault()), _additionalEther, nodeOperatorDisbursableFee())
+        );
+    }
+
+    /// @notice Converts the given amount of stETH to shares
+    function _getSharesByPooledEth(uint256 _amountOfStETH) internal view returns (uint256) {
+        return STETH.getSharesByPooledEth(_amountOfStETH);
     }
 
     // @dev The logic is inverted, 0 means fund-on-receive is enabled,
@@ -654,14 +656,14 @@ contract Dashboard is NodeOperatorFee {
     error WithdrawalExceedsWithdrawable(uint256 amount, uint256 withdrawableEther);
 
     /**
+     * @notice Error thrown when minting capacity is exceeded
+     */
+    error MintingCapacityExceeded(uint256 requestedShares, uint256 remainingShares);
+
+    /**
      * @notice Error thrown when recovery of ETH fails on transfer to recipient
      */
     error EthTransferFailed(address recipient, uint256 amount);
-
-    /**
-     * @notice Error thrown when mintable total value is breached
-     */
-    error MintingCapacityExceeded(uint256 locked, uint256 mintableValue);
 
     /**
      * @notice Error when the StakingVault is still connected to the VaultHub.

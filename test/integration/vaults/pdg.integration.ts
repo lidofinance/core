@@ -11,7 +11,7 @@ import {
   getProtocolContext,
   ProtocolContext,
   reportVaultDataWithProof,
-  setupLido,
+  setupLidoForVaults,
   VaultRoles,
 } from "lib/protocol";
 import { generatePredepositData, getProofAndDepositData } from "lib/protocol/helpers/vaults";
@@ -39,7 +39,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
     originalSnapshot = await Snapshot.take();
 
-    await setupLido(ctx);
+    await setupLidoForVaults(ctx);
 
     [owner, nodeOperator, stranger, guarantor] = await ethers.getSigners();
 
@@ -83,11 +83,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     const withdrawalCredentials = await stakingVault.withdrawalCredentials();
     const validator = generateValidator(withdrawalCredentials);
 
-    const { witnesses, postdeposit } = await getProofAndDepositData(
-      predepositGuarantee,
-      validator,
-      withdrawalCredentials,
-    );
+    const { witnesses, postdeposit } = await getProofAndDepositData(ctx, validator, withdrawalCredentials);
 
     await expect(
       predepositGuarantee.connect(nodeOperator).proveAndDeposit(witnesses, [postdeposit], stakingVault),
@@ -143,7 +139,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .withArgs(nodeOperator, ether("1"), ether("1"));
 
       const { witnesses, postdeposit } = await getProofAndDepositData(
-        predepositGuarantee,
+        ctx,
         validator,
         withdrawalCredentials,
         ether("99"),
@@ -248,12 +244,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       .withArgs(await stakingVault.getAddress(), 1, predepositData.deposit.amount);
     // check that emit the event from deposit contract
 
-    const { witnesses, postdeposit } = await getProofAndDepositData(
-      predepositGuarantee,
-      validator,
-      withdrawalCredentials,
-      ether("99"),
-    );
+    const { witnesses, postdeposit } = await getProofAndDepositData(ctx, validator, withdrawalCredentials, ether("99"));
 
     // 5. The stVault's owner submits a Merkle proof of the validator's appearing on the Consensus Layer to the Dashboard contract.
     await expect(dashboard.connect(roles.unknownValidatorProver).proveUnknownValidatorsToPDG([witnesses[0]]))

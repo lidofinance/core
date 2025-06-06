@@ -358,8 +358,7 @@ abstract contract Permissions is AccessControlConfirmable {
         uint256 _tierId,
         uint256 _requestedShareLimit
     ) internal onlyRoleMemberOrAdmin(REQUEST_TIER_CHANGE_ROLE) {
-        OperatorGrid(LIDO_LOCATOR.operatorGrid())
-            .requestTierChange(address(_stakingVault()), _tierId, _requestedShareLimit);
+        _operatorGrid().requestTierChange(address(_stakingVault()), _tierId, _requestedShareLimit);
     }
 
     /**
@@ -373,6 +372,10 @@ abstract contract Permissions is AccessControlConfirmable {
             stakingVaultAddress := mload(add(args, 32))
         }
         return IStakingVault(stakingVaultAddress);
+    }
+
+    function _operatorGrid() internal view returns (OperatorGrid) {
+        return OperatorGrid(LIDO_LOCATOR.operatorGrid());
     }
 
     /**

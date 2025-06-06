@@ -53,7 +53,8 @@ contract VaultHub__HarnessForReporting is VaultHub {
             uint16(_forcedRebalanceThresholdBP),
             uint16(_infraFeeBP),
             uint16(_liquidityFeeBP),
-            uint16(_reservationFeeBP)
+            uint16(_reservationFeeBP),
+            false // manuallyPausedBeaconChainDeposits
         );
         $.connections[_vault] = connection;
 
@@ -62,8 +63,7 @@ contract VaultHub__HarnessForReporting is VaultHub {
             0, // locked
             uint96(_shareLimit), // liabilityShares
             uint64(block.timestamp), // reportTimestamp
-            0, // inOutDelta
-            0 // feeSharesCharged
+            0 // inOutDelta
         );
 
         $.records[_vault] = record;

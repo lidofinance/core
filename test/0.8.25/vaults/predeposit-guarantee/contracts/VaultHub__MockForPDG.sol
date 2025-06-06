@@ -3,8 +3,4 @@
 
 pragma solidity 0.8.25;
 
-
-
-contract VaultHub__MockForPDG {
-
-}
+contract VaultHub__MockForPDG {}

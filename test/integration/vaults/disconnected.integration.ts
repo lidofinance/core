@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Dashboard, StakingVault } from "typechain-types";
 
 import { certainAddress, ether, generatePostDeposit, generatePredeposit, generateValidator } from "lib";
-import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLido } from "lib/protocol";
+import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
 import { getProofAndDepositData, getPubkeys, reportVaultDataWithProof, VaultRoles } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
@@ -30,7 +30,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     ctx = await getProtocolContext();
 
-    await setupLido(ctx);
+    await setupLidoForVaults(ctx);
 
     [owner, nodeOperator, stranger] = await ethers.getSigners();
 
@@ -78,7 +78,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
       await dashboard.reconnectToVaultHub();
 
-      expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
     });
   });
 
@@ -110,7 +110,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .to.emit(stakingVault, "OwnershipTransferred")
           .withArgs(owner, vaultHub);
 
-        expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
+        expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
       });
 
       it("Can reconnect the vault to the dashboard and then to the hub", async () => {
@@ -127,7 +127,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(dashboard, vaultHub)
           .to.emit(vaultHub, "VaultConnected");
 
-        expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
+        expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
       });
     });
 
@@ -277,7 +277,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(1, ether("1"));
 
         const { witnesses, postdeposit } = await getProofAndDepositData(
-          predepositGuarantee,
+          ctx,
           validator,
           withdrawalCredentials,
           ether("2048"),
