@@ -157,12 +157,12 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
       await nor
         .connect(stakingRouter)
         .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec);
+      const tx =  nor
+      .connect(stakingRouter)
+      .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec);
 
-      await expect(
-        nor
-          .connect(stakingRouter)
-          .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec),
-      ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+      await expect(tx).to.not.be.reverted;
+      await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
     });
   });
 

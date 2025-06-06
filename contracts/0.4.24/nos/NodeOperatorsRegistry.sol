@@ -1046,14 +1046,6 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         return _validatorExitProcessedKeys[processedKeyHash];
     }
 
-    function _markValidatorExitingKeyAsReported(bytes _publicKey) internal {
-        bytes32 processedKeyHash = keccak256(_publicKey);
-        // Require that key is currently NotProcessed
-        require(_validatorExitProcessedKeys[processedKeyHash] == false,
-            "VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
-        _validatorExitProcessedKeys[processedKeyHash] = true;
-    }
-
     /// @notice Returns the number of seconds after which a validator is considered late.
     /// @dev The operatorId argument is ignored and present only to comply with the IStakingModule interface.
     /// @return uint256 The exit deadline threshold in seconds for all node operators.
@@ -1150,9 +1142,16 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
         // Check if exit delay exceeds the threshold
         require(_eligibleToExitInSec >= _exitDeadlineThreshold(), "EXIT_DELAY_BELOW_THRESHOLD");
+        // Check if the proof slot timestamp is within the allowed reporting window
         require(_proofSlotTimestamp - _eligibleToExitInSec >= exitPenaltyCutoffTimestamp(), "TOO_LATE_FOR_EXIT_DELAY_REPORT");
 
-        _markValidatorExitingKeyAsReported(_publicKey);
+        bytes32 processedKeyHash = keccak256(_publicKey);
+        // Skip if key is already processed (i.e., not in NotProcessed state)
+        if (_validatorExitProcessedKeys[processedKeyHash]) {
+            return;
+        }
+        // Mark the validator exit key as processed
+        _validatorExitProcessedKeys[processedKeyHash] = true;
 
         emit ValidatorExitStatusUpdated(_nodeOperatorId, _publicKey, _eligibleToExitInSec, _proofSlotTimestamp);
     }
