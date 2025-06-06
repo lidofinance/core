@@ -389,13 +389,12 @@ describe("Report Validator Exit Delay", () => {
       ),
     ).to.be.false;
 
-    const tx  = validatorExitDelayVerifier.verifyValidatorExitDelay(
-      toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-      [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-      encodedExitRequests,
-    )
-
-    await expect(tx).to.not.be.reverted;
-    await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
+    await expect(
+      validatorExitDelayVerifier.verifyValidatorExitDelay(
+        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+        encodedExitRequests,
+      ),
+    ).to.be.revertedWith("EXIT_DELAY_BELOW_THRESHOLD");
   });
 });
