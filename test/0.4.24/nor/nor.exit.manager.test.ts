@@ -145,12 +145,14 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, proofSlotTimestamp);
     });
 
-    it("reverts when public key is empty", async () => {
-      await expect(
-        nor
-          .connect(stakingRouter)
-          .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, "0x", eligibleToExitInSec),
-      ).to.be.revertedWith("INVALID_PUBLIC_KEY");
+    it("return when public key is empty", async () => {
+      const tx = nor
+      .connect(stakingRouter)
+      .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, "0x", eligibleToExitInSec)
+
+
+      await expect(tx).to.not.be.reverted;
+      await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
     });
 
     it("reverts when reporting the same validator key twice", async () => {
@@ -308,17 +310,18 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
       expect(result).to.be.true;
     });
 
-    it("reverts reportValidatorExitDelay when _proofSlotTimestamp < cutoff", async () => {
-      await expect(
-        nor
-          .connect(stakingRouter)
-          .reportValidatorExitDelay(
-            firstNodeOperatorId,
-            cutoff + exitDeadlineThreshold - 1n,
-            testPublicKey,
-            eligibleToExitInSec,
-          ),
-      ).to.be.revertedWith("TOO_LATE_FOR_EXIT_DELAY_REPORT");
+    it("return when _proofSlotTimestamp < cutoff", async () => {
+      const tx = nor
+      .connect(stakingRouter)
+      .reportValidatorExitDelay(
+        firstNodeOperatorId,
+        cutoff + exitDeadlineThreshold - 1n,
+        testPublicKey,
+        eligibleToExitInSec,
+      )
+
+      await expect(tx).to.not.be.reverted;
+      await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
     });
 
     it("emits event when reportValidatorExitDelay is called with _proofSlotTimestamp >= cutoff", async () => {
