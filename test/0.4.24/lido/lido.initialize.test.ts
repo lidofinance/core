@@ -33,7 +33,7 @@ describe("Lido.sol:initialize", () => {
 
   context("initialize", () => {
     const initialValue = 1n;
-    const contractVersion = 2n;
+    const contractVersion = 3n;
 
     let withdrawalQueueAddress: string;
     let burnerAddress: string;
@@ -86,6 +86,7 @@ describe("Lido.sol:initialize", () => {
       expect(await lido.getEIP712StETH()).to.equal(eip712helperAddress);
       expect(await lido.allowance(withdrawalQueueAddress, burnerAddress)).to.equal(MaxUint256);
       expect(await lido.getInitializationBlock()).to.equal(latestBlock + 1n);
+      expect(await lido.getContractVersion()).to.equal(contractVersion);
     });
 
     it("Does not bootstrap initial holder if total shares is not zero", async () => {

@@ -1,0 +1,24 @@
+name: Integration Test For Upgrade Template
+
+on: [push]
+
+jobs:
+  test_hardhat_integration_fork_template:
+    name: Hardhat / Upgrade Template
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Prepare network state file
+        run: cp deployed-mainnet.json deployed-mainnet-upgrade.json
+
+      - name: Run Upgrade Template Integration Tests
+        run: yarn test:integration:upgrade-template
+        env:
+          RPC_URL: "${{ secrets.ETH_RPC_URL }}"
+          UPGRADE_PARAMETERS_FILE: upgrade-parameters-mainnet.json

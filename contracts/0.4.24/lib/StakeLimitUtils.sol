@@ -4,7 +4,7 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.4.24;
 
-import "@aragon/os/contracts/common/UnstructuredStorage.sol";
+import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStorage.sol";
 
 //
 // We need to pack four variables into the same 256bit-wide storage slot

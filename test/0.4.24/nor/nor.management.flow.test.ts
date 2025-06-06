@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   ACL,
-  Burner__MockForLidoHandleOracleReport,
+  Burner__MockForDistributeReward,
   Kernel,
   Lido__HarnessForDistributeReward,
   LidoLocator,
@@ -49,7 +49,7 @@ describe("NodeOperatorsRegistry.sol:management", () => {
 
   let originalState: string;
 
-  let burner: Burner__MockForLidoHandleOracleReport;
+  let burner: Burner__MockForDistributeReward;
 
   const firstNodeOperatorId = 0;
   const secondNodeOperatorId = 1;

@@ -1,6 +1,13 @@
 import { ethers } from "hardhat";
 
-import { Burner, StakingRouter, ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types";
+import {
+  Burner,
+  OperatorGrid,
+  StakingRouter,
+  ValidatorsExitBusOracle,
+  VaultHub,
+  WithdrawalQueueERC721,
+} from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
@@ -20,8 +27,11 @@ export async function main() {
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
+  const accountingAddress = state[Sk.accounting].proxy.address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
+  const vaultHubAddress = state[Sk.vaultHub].proxy.address;
+  const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
 
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
@@ -41,6 +51,9 @@ export async function main() {
     from: deployer,
   });
   await makeTx(stakingRouter, "grantRole", [await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), agentAddress], {
+    from: deployer,
+  });
+  await makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), accountingAddress], {
     from: deployer,
   });
 
@@ -84,6 +97,24 @@ export async function main() {
     from: deployer,
   });
   await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), simpleDvtApp], {
+    from: deployer,
+  });
+  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), accountingAddress], {
+    from: deployer,
+  });
+
+  // VaultHub
+  const vaultHub = await loadContract<VaultHub>("VaultHub", vaultHubAddress);
+  await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_MASTER_ROLE(), agentAddress], {
+    from: deployer,
+  });
+  await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_CODEHASH_SET_ROLE(), deployer], {
+    from: deployer,
+  });
+
+  // OperatorGrid
+  const operatorGrid = await loadContract<OperatorGrid>("OperatorGrid", operatorGridAddress);
+  await makeTx(operatorGrid, "grantRole", [await operatorGrid.REGISTRY_ROLE(), agentAddress], {
     from: deployer,
   });
 }
