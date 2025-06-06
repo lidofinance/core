@@ -252,27 +252,20 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
             if (_totalValue - refSlotTotalValue > type(uint128).max) revert ValueExceedsUint128();
             uint128 delta = uint128(_totalValue - refSlotTotalValue);
 
-            if (quarDelta == 0) {
-                // first overlimit report
+            if (quarDelta == 0) { // first overlimit report
                 _totalValue = refSlotTotalValue;
                 q.pendingTotalValueIncrease = delta;
                 q.startTimestamp = reportTs;
                 emit QuarantinedDeposit(_vault, delta);
-            } else {
-                // subsequent overlimit reports
-                if (reportTs - q.startTimestamp < $.quarantinePeriod) {
-                    _totalValue = refSlotTotalValue;
-                } else {
-                    // quarantine period expired
-                    if (delta <= quarDelta + refSlotTotalValue * $.maxRewardRatioBP / TOTAL_BP) {
-                        q.pendingTotalValueIncrease = 0;
-                    } else {
-                        _totalValue = refSlotTotalValue + quarDelta;
-                        q.pendingTotalValueIncrease = delta - quarDelta;
-                        q.startTimestamp = reportTs;
-                        emit QuarantinedDeposit(_vault, delta - quarDelta);
-                    }
-                }
+            } else if (reportTs - q.startTimestamp < $.quarantinePeriod) { // quarantine period not expired
+                _totalValue = refSlotTotalValue;
+            } else if (delta <= quarDelta + refSlotTotalValue * $.maxRewardRatioBP / TOTAL_BP) { // quarantine period expired
+                q.pendingTotalValueIncrease = 0;
+            } else { // start new quarantine
+                _totalValue = refSlotTotalValue + quarDelta;
+                q.pendingTotalValueIncrease = delta - quarDelta;
+                q.startTimestamp = reportTs;
+                emit QuarantinedDeposit(_vault, delta - quarDelta);
             }
         }
 
