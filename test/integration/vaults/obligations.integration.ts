@@ -22,7 +22,7 @@ import { Snapshot } from "test/suite";
 
 const TOTAL_BASIS_POINTS = 100_00n;
 
-describe.only("Integration: Vault obligations", () => {
+describe("Integration: Vault obligations", () => {
   let ctx: ProtocolContext;
 
   let vaultHub: VaultHub;
