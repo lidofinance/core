@@ -118,13 +118,14 @@ describe("Report Validator Exit Delay", () => {
       ),
     ).to.be.false;
 
-    await expect(
-      validatorExitDelayVerifier.verifyValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-        encodedExitRequests,
-      ),
-    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+    const tx = validatorExitDelayVerifier.verifyValidatorExitDelay(
+      toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+      [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+      encodedExitRequests,
+    )
+
+    await expect(tx).to.not.be.reverted;
+    await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 
   it("Should report validator exit delay historically", async () => {
@@ -186,18 +187,19 @@ describe("Report Validator Exit Delay", () => {
       ),
     ).to.be.false;
 
-    await expect(
-      validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
-        toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-        encodedExitRequests,
-      ),
-    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+    const tx = validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+      toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
+      toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+      [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+      encodedExitRequests,
+    )
+
+    await expect(tx).to.not.be.reverted;
+    await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 
   it("Should revert when validator reported multiple times in a single transaction", async () => {
-    const { validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
+    const { validatorsExitBusOracle, validatorExitDelayVerifier, nor } = ctx.contracts;
 
     // Setup multiple exit requests with the same pubkey
     const nodeOpIds = [1, 2];
@@ -223,24 +225,26 @@ describe("Report Validator Exit Delay", () => {
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
     const witnesses = nodeOpIds.map((_, index) => toValidatorWitness(ACTIVE_VALIDATOR_PROOF, index));
-    await expect(
-      validatorExitDelayVerifier.verifyValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-        witnesses,
-        encodedExitRequests,
-      ),
-    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+    const tx = validatorExitDelayVerifier.verifyValidatorExitDelay(
+      toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+      witnesses,
+      encodedExitRequests,
+    )
+
+    await expect(tx).to.not.be.reverted;
+    await expect(tx).to.emit(nor, "ValidatorExitStatusUpdated");
 
     const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
-    await expect(
-      validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
-        toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-        witnesses,
-        encodedExitRequests,
-      ),
-    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+    const tx2 = validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
+      toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
+      toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
+      witnesses,
+      encodedExitRequests,
+    )
+
+    await expect(tx2).to.not.be.reverted;
+    await expect(tx2).to.not.emit(nor, "ValidatorExitStatusUpdated");
   });
 
   it("Should revert when exit request hash is not submitted", async () => {
