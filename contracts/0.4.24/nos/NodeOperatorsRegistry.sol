@@ -1146,18 +1146,11 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         uint256 _eligibleToExitInSec
     ) external {
         _auth(STAKING_ROUTER_ROLE);
+        require(_publicKey.length == 48, "INVALID_PUBLIC_KEY");
 
-        if (_publicKey.length != 48) {
-            return;
-        }
-
-        if (_eligibleToExitInSec < _exitDeadlineThreshold()) {
-            return;
-        }
-
-        if (_proofSlotTimestamp - _eligibleToExitInSec < exitPenaltyCutoffTimestamp()) {
-            return;
-        }
+        // Check if exit delay exceeds the threshold
+        require(_eligibleToExitInSec >= _exitDeadlineThreshold(), "EXIT_DELAY_BELOW_THRESHOLD");
+        require(_proofSlotTimestamp - _eligibleToExitInSec >= exitPenaltyCutoffTimestamp(), "TOO_LATE_FOR_EXIT_DELAY_REPORT");
 
         _markValidatorExitingKeyAsReported(_publicKey);
 
