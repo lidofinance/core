@@ -272,13 +272,13 @@ describe("Integration: Vault obligations", () => {
 
       // Over the max possible withdrawals
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions + 1n))
-        .to.emit(vaultHub, "RedemptionsSet")
+        .to.emit(vaultHub, "RedemptionsUpdated")
         .withArgs(stakingVaultAddress, maxRedemptions);
 
       // Second time should not emit anything because the obligation is already set
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions)).not.to.emit(
         vaultHub,
-        "RedemptionsSet",
+        "RedemptionsUpdated",
       );
 
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
@@ -287,7 +287,7 @@ describe("Integration: Vault obligations", () => {
       // Decrease the obligation
       const newRedemptionsValue = maxRedemptions / 2n; // => 1 wei
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, newRedemptionsValue))
-        .to.emit(vaultHub, "RedemptionsSet")
+        .to.emit(vaultHub, "RedemptionsUpdated")
         .withArgs(stakingVaultAddress, newRedemptionsValue);
 
       const obligationsAfterDecreased = await vaultHub.vaultObligations(stakingVaultAddress);
@@ -295,7 +295,7 @@ describe("Integration: Vault obligations", () => {
 
       // Remove the obligation
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, 0))
-        .to.emit(vaultHub, "RedemptionsSet")
+        .to.emit(vaultHub, "RedemptionsUpdated")
         .withArgs(stakingVaultAddress, 0n);
 
       const obligationsAfterRemoved = await vaultHub.vaultObligations(stakingVaultAddress);
@@ -315,7 +315,7 @@ describe("Integration: Vault obligations", () => {
       expect(obligationsBefore.redemptions).to.equal(0n);
 
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions))
-        .to.emit(vaultHub, "RedemptionsSet")
+        .to.emit(vaultHub, "RedemptionsUpdated")
         .withArgs(stakingVaultAddress, maxRedemptions)
         .not.to.emit(vaultHub, "VaultObligationsSettled");
 
@@ -339,7 +339,7 @@ describe("Integration: Vault obligations", () => {
       await setBalance(stakingVaultAddress, vaultBalance);
 
       await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions))
-        .to.emit(vaultHub, "RedemptionsSet")
+        .to.emit(vaultHub, "RedemptionsUpdated")
         .withArgs(stakingVaultAddress, maxRedemptions)
         .to.emit(stakingVault, "BeaconChainDepositsPaused");
 

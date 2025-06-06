@@ -170,7 +170,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function unsettledObligations() external view returns (uint256) {
         VaultHub.VaultObligations memory obligations = VAULT_HUB.vaultObligations(address(_stakingVault()));
-        return uint256(obligations.unsettledLidoFees + obligations.redemptions) + nodeOperatorDisbursableFee();
+        return uint256(obligations.unsettledLidoFees) + uint256(obligations.redemptions) + nodeOperatorDisbursableFee();
     }
 
     /**
