@@ -33,9 +33,6 @@ export async function main() {
     state[Sk.appLido].implementation.address,
     state[Sk.accountingOracle].implementation.address,
 
-    // New non-proxy contracts
-    state[Sk.stakingVaultFactory].address,
-
     // New fancy proxy and blueprint contracts
     state[Sk.stakingVaultBeacon].address,
     state[Sk.stakingVaultImplementation].address,

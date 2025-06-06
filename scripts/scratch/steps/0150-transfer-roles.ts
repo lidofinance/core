@@ -14,7 +14,7 @@ export async function main() {
 
   // Transfer OZ admin roles for various contracts
   const ozAdminTransfers = [
-    { name: "Burner", address: state[Sk.burner].address },
+    { name: "Burner", address: state[Sk.burner].proxy.address },
     { name: "HashConsensus", address: state[Sk.hashConsensusForAccountingOracle].address },
     { name: "HashConsensus", address: state[Sk.hashConsensusForValidatorsExitBusOracle].address },
     { name: "StakingRouter", address: state[Sk.stakingRouter].proxy.address },
@@ -46,6 +46,7 @@ export async function main() {
     state.predepositGuarantee.proxy.address,
     state.operatorGrid.proxy.address,
     state.lazyOracle.proxy.address,
+    state.burner.proxy.address,
   ];
 
   for (const proxyAddress of ossifiableProxyAdminChanges) {

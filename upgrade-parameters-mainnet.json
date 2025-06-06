@@ -4,23 +4,6 @@
       "relativeShareLimitBP": 1000
     }
   },
-  "oracleReportSanityChecker": {
-    "deployParameters": {
-      "exitedValidatorsPerDayLimit": 1500,
-      "appearedValidatorsPerDayLimit": 1500,
-      "deprecatedOneOffCLBalanceDecreaseBPLimit": 500,
-      "annualBalanceIncreaseBPLimit": 1000,
-      "simulatedShareRateDeviationBPLimit": 250,
-      "maxValidatorExitRequestsPerReport": 2000,
-      "maxItemsPerExtraDataTransaction": 8,
-      "maxNodeOperatorsPerExtraDataItem": 24,
-      "requestTimestampMargin": 128,
-      "maxPositiveTokenRebase": 5000000,
-      "initialSlashingAmountPWei": 1000,
-      "inactivityPenaltiesAmountPWei": 101,
-      "clBalanceOraclesErrorUpperBPLimit": 50
-    }
-  },
   "predepositGuarantee": {
     "deployParameters": {
       "genesisForkVersion": "0x00000000",

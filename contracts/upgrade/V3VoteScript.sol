@@ -35,7 +35,7 @@ contract V3VoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 11;
+    uint256 public constant VOTE_ITEMS_COUNT = 12;
 
     //
     // Immutables
@@ -141,10 +141,20 @@ contract V3VoteScript is OmnibusBase {
             )
         });
 
-        // Grant REPORT_REWARDS_MINTED_ROLE to Accounting
+        // Revoke REPORT_REWARDS_MINTED_ROLE from Lido
         bytes32 reportRewardsMintedRole = IStakingRouter(TEMPLATE.STAKING_ROUTER()).REPORT_REWARDS_MINTED_ROLE();
         voteItems[index++] = VoteItem({
-            description: "10. Grant REPORT_REWARDS_MINTED_ROLE to Accounting",
+            description: "10. Revoke REPORT_REWARDS_MINTED_ROLE from Lido",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.STAKING_ROUTER(),
+                abi.encodeCall(IAccessControl.revokeRole, (reportRewardsMintedRole, TEMPLATE.LIDO()))
+            )
+        });
+
+        // Grant REPORT_REWARDS_MINTED_ROLE to Accounting
+        voteItems[index++] = VoteItem({
+            description: "11. Grant REPORT_REWARDS_MINTED_ROLE to Accounting",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.STAKING_ROUTER(),
@@ -154,7 +164,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Finish the upgrade process
         voteItems[index++] = VoteItem({
-            description: "11. Call UpgradeTemplateV3.finishUpgrade",
+            description: "12. Call UpgradeTemplateV3.finishUpgrade",
             call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
         });
 

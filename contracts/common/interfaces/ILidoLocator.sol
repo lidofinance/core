@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
@@ -23,6 +23,7 @@ interface ILidoLocator {
     function predepositGuarantee() external view returns (address);
     function wstETH() external view returns (address);
     function vaultHub() external view returns (address);
+    function vaultFactory() external view returns (address);
     function lazyOracle() external view returns (address);
     function operatorGrid() external view returns (address);
 

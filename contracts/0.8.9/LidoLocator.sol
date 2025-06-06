@@ -31,6 +31,7 @@ contract LidoLocator is ILidoLocator {
         address predepositGuarantee;
         address wstETH;
         address vaultHub;
+        address vaultFactory;
         address lazyOracle;
         address operatorGrid;
     }
@@ -55,6 +56,7 @@ contract LidoLocator is ILidoLocator {
     address public immutable predepositGuarantee;
     address public immutable wstETH;
     address public immutable vaultHub;
+    address public immutable vaultFactory;
     address public immutable lazyOracle;
     address public immutable operatorGrid;
     //solhint-enable immutable-vars-naming
@@ -82,6 +84,7 @@ contract LidoLocator is ILidoLocator {
         predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
         wstETH = _assertNonZero(_config.wstETH);
         vaultHub = _assertNonZero(_config.vaultHub);
+        vaultFactory = _assertNonZero(_config.vaultFactory);
         lazyOracle = _assertNonZero(_config.lazyOracle);
         operatorGrid = _assertNonZero(_config.operatorGrid);
     }

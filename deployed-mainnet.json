@@ -202,6 +202,16 @@
       "address": "0xF5Dc67E54FC96F993CD06073f71ca732C1E654B1"
     }
   },
+  "aragon-node-operators-registry-app-repo": {
+    "proxy": {
+      "address": "0x0D97E876ad14DB2b183CFeEB8aa1A5C788eB1831"
+    }
+  },
+  "aragon-simple-dvt-app-repo": {
+    "proxy": {
+      "address": "0x2325b0a607808dE42D918DB07F925FFcCfBb2968"
+    }
+  },
   "aragonIDAddress": "0x546aa2eae2514494eeadb7bbb35243348983c59d",
   "burner": {
     "address": "0xD15a672319Cf0352560eE76d9e89eAB0889046D3",
