@@ -536,8 +536,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(value);
       expect(quarantine.startTs).to.equal(lastReportTimestamp);
-      expect(quarantine.lastUnsafeFundTs).to.equal(0);
-      expect(quarantine.lastUnsafeFundDelta).to.equal(0);
 
       // end of quarantine period ------------------------------
       await advanceChainTime(quarantinePeriod / 2n + 60n * 60n);
@@ -563,8 +561,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       let quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(value - ether("1"));
       expect(quarantine.startTs).to.equal(firstReportTimestamp);
-      expect(quarantine.lastUnsafeFundTs).to.equal(0);
-      expect(quarantine.lastUnsafeFundDelta).to.equal(0);
 
       // total value UNSAFE increase in the middle of quarantine period
       const quarantinePeriod = await lazyOracle.quarantinePeriod();
@@ -573,26 +569,21 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await reportVaultDataWithProof(ctx, stakingVault, value * 2n);
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
 
-      const [secondQuarantineTimestamp, ,] = await lazyOracle.latestReportData();
-
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(value - ether("1"));
       expect(quarantine.startTs).to.equal(firstReportTimestamp);
-      expect(quarantine.lastUnsafeFundTs).to.equal(secondQuarantineTimestamp);
-      expect(quarantine.lastUnsafeFundDelta).to.equal(value * 2n - ether("1"));
 
       // end of first quarantine = start of second quarantine
       await advanceChainTime(quarantinePeriod / 2n + 60n * 60n);
 
       await reportVaultDataWithProof(ctx, stakingVault, value * 2n);
+      const [secondQuarantineTimestamp, ,] = await lazyOracle.latestReportData();
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(value);
 
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(value);
       expect(quarantine.startTs).to.equal(secondQuarantineTimestamp);
-      expect(quarantine.lastUnsafeFundTs).to.equal(secondQuarantineTimestamp);
-      expect(quarantine.lastUnsafeFundDelta).to.equal(value * 2n - ether("1"));
 
       // end of second quarantine
       await advanceChainTime(quarantinePeriod);
@@ -604,8 +595,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(0);
       expect(quarantine.startTs).to.equal(secondQuarantineTimestamp);
-      expect(quarantine.lastUnsafeFundTs).to.equal(secondQuarantineTimestamp);
-      expect(quarantine.lastUnsafeFundDelta).to.equal(value * 2n - ether("1"));
     });
 
     it("Sequential quarantine with EL/CL rewards", async () => {
@@ -619,8 +608,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       let quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(value - ether("1"));
       expect(quarantine.startTs).to.equal(firstReportTimestamp);
-      expect(quarantine.lastUnsafeFundTs).to.equal(0);
-      expect(quarantine.lastUnsafeFundDelta).to.equal(0);
 
       // rewards in the middle of quarantine period
       const quarantinePeriod = await lazyOracle.quarantinePeriod();
@@ -635,8 +622,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(value - ether("1"));
       expect(quarantine.startTs).to.equal(firstReportTimestamp);
-      expect(quarantine.lastUnsafeFundTs).to.equal(0);
-      expect(quarantine.lastUnsafeFundDelta).to.equal(0);
 
       // end of first quarantine = start of second quarantine
       await advanceChainTime(quarantinePeriod / 2n + 60n * 60n);
@@ -649,8 +634,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(value);
       expect(quarantine.startTs).to.equal(secondQuarantineTimestamp);
-      expect(quarantine.lastUnsafeFundTs).to.equal(0);
-      expect(quarantine.lastUnsafeFundDelta).to.equal(0);
 
       // end of second quarantine
       await advanceChainTime(quarantinePeriod);
@@ -662,8 +645,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
       expect(quarantine.delta).to.equal(0);
       expect(quarantine.startTs).to.equal(secondQuarantineTimestamp);
-      expect(quarantine.lastUnsafeFundTs).to.equal(0);
-      expect(quarantine.lastUnsafeFundDelta).to.equal(0);
     });
 
     it("Sanity check for dynamic total value underflow", async () => {
@@ -701,7 +682,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.cachedInOutDelta).to.equal(ether("1"));
-      let [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      const [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
       expect(record.cachedRefSlot).to.equal(refSlot);
 
       // second deposit in frame

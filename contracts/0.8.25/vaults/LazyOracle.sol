@@ -33,8 +33,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     struct Quarantine {
         uint128 delta;
         uint64 startTs;
-        uint128 lastUnsafeFundDelta;
-        uint64 lastUnsafeFundTs;
     }
 
     struct VaultInfo {
@@ -244,9 +242,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
         will be increased by this amount only after quarantine period expires.
     */
     function _checkTotalValue(address _vault, uint256 _totalValue, int256 _inOutDelta, VaultHub.VaultRecord memory record) internal returns (uint256) {
-        uint256 refSlotTotalValue = uint256(int256(uint256(record.report.totalValue)) + _inOutDelta - record.report.inOutDelta);
         Storage storage $ = _storage();
 
+        uint256 refSlotTotalValue = uint256(int256(uint256(record.report.totalValue)) + _inOutDelta - record.report.inOutDelta);
         // small percentage of unsafe funds is allowed for the EL CL rewards handling
         uint256 limit = refSlotTotalValue * (TOTAL_BP + $.maxElClRewardsBP) / TOTAL_BP;
 
@@ -254,7 +252,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
             Quarantine storage q = $.vaultQuarantines[_vault];
             uint64 reportTs = $.vaultsDataTimestamp;
             uint128 quarDelta = q.delta;
-            uint64 quarTs = q.startTs;
             // Safe conversion from uint256 to uint128
             if (_totalValue - refSlotTotalValue > type(uint128).max) revert ValueExceedsUint128();
             uint128 delta = uint128(_totalValue - refSlotTotalValue);
@@ -267,27 +264,16 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
                 emit QuarantinedDeposit(_vault, delta);
             } else {
                 // subsequent overlimit reports
-                uint256 maxELCLRewards = refSlotTotalValue * $.maxElClRewardsBP / TOTAL_BP;
-                if (reportTs - quarTs < $.quarantinePeriod) {
+                if (reportTs - q.startTs < $.quarantinePeriod) {
                     _totalValue = refSlotTotalValue;
-                    // remember last Unsafe fund ts and delta
-                    if (delta > quarDelta + maxELCLRewards) {
-                        q.lastUnsafeFundTs = reportTs;
-                        q.lastUnsafeFundDelta = delta;
-                    }
                 } else {
                     // quarantine period expired
-                    if (delta <= quarDelta + maxELCLRewards) {
+                    if (delta <= quarDelta + refSlotTotalValue * $.maxElClRewardsBP / TOTAL_BP) {
                         q.delta = 0;
                     } else {
                         _totalValue = refSlotTotalValue + quarDelta;
                         q.delta = delta - quarDelta;
-                        // if lastUnsafeFundTs is greater than quarantine start, use it as next quarantine start
-                        if (q.lastUnsafeFundTs > quarTs && delta <= q.lastUnsafeFundDelta + maxELCLRewards) {
-                            q.startTs = q.lastUnsafeFundTs;
-                        } else {
-                            q.startTs = reportTs;
-                        }
+                        q.startTs = reportTs;
                         emit QuarantinedDeposit(_vault, delta - quarDelta);
                     }
                 }
