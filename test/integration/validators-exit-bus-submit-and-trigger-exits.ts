@@ -101,7 +101,7 @@ describe("ValidatorsExitBus integration", () => {
 
     await expect(veb.connect(stranger).submitExitRequestsHash(exitRequestsHash)).to.be.revertedWithOZAccessControlError(
       stranger.address,
-      await veb.SUBMIT_REPORT_HASH_ROLE(),
+      SUBMIT_REPORT_HASH_ROLE,
     );
   });
 
