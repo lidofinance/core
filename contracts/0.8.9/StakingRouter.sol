@@ -1507,6 +1507,12 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
                 _exitType
             )
             {} catch (bytes memory lowLevelRevertData) {
+                /// @dev This check is required to prevent incorrect gas estimation of the method.
+                ///      Without it, Ethereum nodes that use binary search for gas estimation may
+                ///      return an invalid value when the onValidatorExitTriggered()
+                ///      reverts because of the "out of gas" error. Here we assume that the
+                ///      onValidatorExitTriggered() method doesn't have reverts with
+                ///      empty error data except "out of gas".
                 if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
                 emit StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
             }
