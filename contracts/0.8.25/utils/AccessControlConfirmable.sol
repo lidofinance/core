@@ -19,7 +19,7 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable, Confirmat
     }
 
     modifier onlyConfirmed(bytes32[] memory _roles) {
-        if (!_checkConfirmations(msg.data, _roles)) return;
+        if (!_collectAndCheckConfirmations(msg.data, _roles)) return;
         _;
     }
 

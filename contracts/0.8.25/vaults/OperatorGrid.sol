@@ -40,7 +40,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     /*
       Key concepts:
       1. Default Registration:
-         - All Vaults are initially have default tier (DEFAULT_TIER_ID = 0)
+         - All Vaults initially have default tier (DEFAULT_TIER_ID = 0)
          - The default tier has no group
 
          DEFAULT_TIER_ID = 0
@@ -53,7 +53,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
        2. Tier Change Process:
          - To predefine vaults tier or modify the existing vault's connection parameters to VaultHub, a tier change must be requested
          - Both vault owner and node operator must confirm the change (doesn't matter who confirms first)
-         - The confirmation has an expiry time (default 1 hour)
+         - The confirmation has an expiry time (default 1 day)
 
        3. Tier Reset:
          - When a vault is disconnected from VaultHub, its tier is automatically reset to the default tier (DEFAULT_TIER_ID)
@@ -465,6 +465,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
 
     /// @notice Reset vault's tier to default
     /// @param _vault address of the vault
+    /// @dev Requires vault's liabilityShares to be zero before resetting the tier
     function resetVaultTier(address _vault) external {
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("resetVaultTier", msg.sender);
 
@@ -493,21 +494,19 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         ERC7201Storage storage $ = _getStorage();
 
         uint256 tierId = $.vaultTier[_vault];
-        uint96 amount = uint96(_amount);
-
         Tier storage tier_ = $.tiers[tierId];
 
         uint96 tierLiabilityShares = tier_.liabilityShares;
-        if (tierLiabilityShares + amount > tier_.shareLimit) revert TierLimitExceeded();
+        if (tierLiabilityShares + _amount > tier_.shareLimit) revert TierLimitExceeded();
 
-        tier_.liabilityShares = tierLiabilityShares + amount;
+        tier_.liabilityShares = tierLiabilityShares + uint96(_amount);
 
         if (tierId != DEFAULT_TIER_ID) {
             Group storage group_ = $.groups[tier_.operator];
             uint96 groupMintedShares = group_.liabilityShares;
-            if (groupMintedShares + amount > group_.shareLimit) revert GroupLimitExceeded();
+            if (groupMintedShares + _amount > group_.shareLimit) revert GroupLimitExceeded();
 
-            group_.liabilityShares = groupMintedShares + amount;
+            group_.liabilityShares = groupMintedShares + uint96(_amount);
         }
     }
 
@@ -524,17 +523,15 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
 
         uint256 tierId = $.vaultTier[_vault];
 
-        uint96 amount = uint96(_amount);
-
         Tier storage tier_ = $.tiers[tierId];
 
         // we skip the check for minted shared underflow, because it's done in the VaultHub.burnShares()
 
-        tier_.liabilityShares -= amount;
+        tier_.liabilityShares -= uint96(_amount);
 
         if (tierId != DEFAULT_TIER_ID) {
             Group storage group_ = $.groups[tier_.operator];
-            group_.liabilityShares -= amount;
+            group_.liabilityShares -= uint96(_amount);
         }
     }
 

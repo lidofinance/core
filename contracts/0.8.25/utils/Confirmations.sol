@@ -50,7 +50,7 @@ abstract contract Confirmations {
     uint256 public constant MAX_CONFIRM_EXPIRY = 30 days;
 
     function __Confirmations_init() internal {
-      _setConfirmExpiry(MIN_CONFIRM_EXPIRY);
+      _setConfirmExpiry(1 days);
     }
 
 
@@ -66,15 +66,18 @@ abstract contract Confirmations {
      * @notice Returns the confirmation expiry for a given call data and confirmer.
      * @param _callData The call data of the function.
      * @param _role The role of the confirmer.
-     * @return The confirmation expiry in seconds.
+     * @return The confirmation expiration timestamp or 0 if there was no confirmation from this role to this _callData
      */
-    function confirmations(bytes memory _callData, bytes32 _role) external view returns (uint256) {
+    function confirmation(bytes memory _callData, bytes32 _role) external view returns (uint256) {
         return _getConfirmationsStorage().confirmations[_callData][_role];
     }
 
     /**
-     * @dev Restricts execution of the function unless confirmed by all specified roles.
+     * @dev Processes a confirmation from the current caller and checks if all required confirmations are present.
      * Confirmation, in this context, is a call to the same function with the same arguments.
+     * This is a one-off operation that either:
+     * - Collects the current caller's confirmation and returns false if not enough confirmations
+     * - Or clears all confirmations and returns true if all required confirmations are present
      *
      * The confirmation process works as follows:
      * 1. When a role member calls the function:
@@ -86,11 +89,14 @@ abstract contract Confirmations {
      *    - Counts the current caller's confirmations if they're a member of any of the specified roles
      *    - Counts existing confirmations that are not expired, i.e. expiry is not exceeded
      *
-     * 3. Execution:
-     *    - If all members of the specified roles have confirmed, executes the function
-     *    - On successful execution, clears all confirmations for this call
-     *    - If not enough confirmations, stores the current confirmations
-     *    - Thus, if the caller has all the roles, the function is executed immediately
+     * 3. Confirmation Management:
+     *    - If all members of the specified roles have confirmed:
+     *      a. Clears all confirmations for this call
+     *      b. Returns true to indicate that the function can be executed
+     *    - If not enough confirmations:
+     *      a. Stores the current confirmations
+     *      b. Returns false to indicate that the function cannot be executed yet
+     *    - Thus, if the caller has all the roles, returns true immediately
      *
      * 4. Gas Optimization:
      *    - Confirmations are stored in a deferred manner using a memory array
@@ -102,14 +108,14 @@ abstract contract Confirmations {
      *
      * @param _calldata msg.data of the call (selector + arguments)
      * @param _roles Array of role identifiers that must confirm the call in order to execute it
-     * @return bool True if the call was executed, false otherwise
+     * @return bool True if all required confirmations are present and the function can be executed, false otherwise
      *
      * @notice Confirmations past their expiry are not counted and must be recast
      * @notice Only members of the specified roles can submit confirmations
      * @notice The order of confirmations does not matter
      *
      */
-    function _checkConfirmations(bytes calldata _calldata, bytes32[] memory _roles) internal returns (bool) {
+    function _collectAndCheckConfirmations(bytes calldata _calldata, bytes32[] memory _roles) internal returns (bool) {
         if (_roles.length == 0) revert ZeroConfirmingRoles();
 
         uint256 numberOfRoles = _roles.length;

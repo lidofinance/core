@@ -113,15 +113,11 @@ contract VaultFactory {
         // initialize StakingVault with the dashboard address as the owner
         vault.initialize(_defaultAdmin, _nodeOperator, locator.predepositGuarantee());
 
-        // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
+        // initialize Dashboard with the _defaultAdmin as the default admin, grant optional roles
         dashboard.initialize(_defaultAdmin, address(this), _nodeOperatorFeeBP, _confirmExpiry);
 
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
-        //dashboard.connectToVaultHub{value: msg.value}();
-
-        // dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
-        // dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
         dashboard.grantRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), _nodeOperatorManager);
         dashboard.revokeRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), address(this));
  

@@ -17,7 +17,7 @@ abstract contract Confirmable is Confirmations {
         roles[0] = bytes32(uint256(uint160(_role1)));
         roles[1] = bytes32(uint256(uint160(_role2)));
 
-        return _checkConfirmations(_calldata, roles);
+        return _collectAndCheckConfirmations(_calldata, roles);
     }
 
     function _isValidConfirmer(bytes32 _role) internal view override returns (bool) {
