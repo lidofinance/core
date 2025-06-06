@@ -14,6 +14,7 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 import {LazyOracle} from "./LazyOracle.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
+import {IHashConsensus} from "./interfaces/IHashConsensus.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
@@ -71,21 +72,25 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice liability shares of the vault
         uint96 liabilityShares;
         // ### 3rd slot
+        /// @notice current inOutDelta of the vault (all deposits - all withdrawals)
+        int112 inOutDelta;
+        /// @notice cached inOutDelta of the latest report
+        int112 cachedInOutDelta;
+        /// @notice cached refSlot number of the latest report
+        uint32 cachedRefSlot;
+        // ### 4th slot
         /// @notice timestamp of the latest report
         uint64 reportTimestamp;
-        /// @notice current inOutDelta of the vault (all deposits - all withdrawals)
-        int128 inOutDelta;
-        // 64 bits of gap
-        // ### 4th slot
         /// @notice fee shares charged for the vault
         uint96 feeSharesCharged;
+        // 96 bits of gap
     }
 
     struct Report {
         /// @notice total value of the vault
         uint128 totalValue;
         /// @notice inOutDelta of the report
-        int128 inOutDelta;
+        int112 inOutDelta;
     }
 
     // -----------------------------
@@ -121,11 +126,12 @@ contract VaultHub is PausableUntilWithRoles {
 
     ILido public immutable LIDO;
     ILidoLocator public immutable LIDO_LOCATOR;
+    IHashConsensus public immutable CONSENSUS_CONTRACT;
 
     /// @param _locator Lido Locator contract
     /// @param _lido Lido stETH contract
     /// @param _maxRelativeShareLimitBP Maximum share limit relative to TVL in basis points
-    constructor(ILidoLocator _locator, ILido _lido, uint256 _maxRelativeShareLimitBP) {
+    constructor(ILidoLocator _locator, ILido _lido, IHashConsensus _consensusContract, uint256 _maxRelativeShareLimitBP) {
         if (_maxRelativeShareLimitBP == 0) revert ZeroArgument();
         if (_maxRelativeShareLimitBP > TOTAL_BASIS_POINTS) {
             revert MaxRelativeShareLimitBPTooHigh(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
@@ -135,7 +141,8 @@ contract VaultHub is PausableUntilWithRoles {
 
         LIDO_LOCATOR = _locator;
         LIDO = _lido;
-
+        CONSENSUS_CONTRACT = _consensusContract;
+        
         _disableInitializers();
     }
 
@@ -445,7 +452,7 @@ contract VaultHub is PausableUntilWithRoles {
 
             record.report = Report(
                 uint128(_reportTotalValue),
-                int128(_reportInOutDelta)
+                int112(_reportInOutDelta)
             );
             record.reportTimestamp = _reportTimestamp;
             record.locked = uint128(lockedEther);
@@ -513,7 +520,9 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultRecord storage record = _vaultRecord(_vault);
 
-        int128 inOutDelta_ = record.inOutDelta + int128(int256(msg.value));
+        _cacheInOutDelta(record);
+
+        int112 inOutDelta_ = record.inOutDelta + int112(int256(msg.value));
         record.inOutDelta = inOutDelta_;
 
         emit VaultInOutDeltaUpdated(_vault, inOutDelta_);
@@ -767,7 +776,7 @@ contract VaultHub is PausableUntilWithRoles {
         // Connecting a new vault with totalValue == balance
         Report memory report = Report({
             totalValue: uint128(vaultBalance),
-            inOutDelta: int128(int256(vaultBalance))
+            inOutDelta: int112(int256(vaultBalance))
         });
 
         VaultRecord memory record = VaultRecord({
@@ -776,6 +785,8 @@ contract VaultHub is PausableUntilWithRoles {
             liabilityShares: 0,
             reportTimestamp: _lazyOracle().latestReportTimestamp(),
             inOutDelta: report.inOutDelta,
+            cachedInOutDelta: 0,
+            cachedRefSlot: 0,
             feeSharesCharged: uint96(0)
         });
 
@@ -828,7 +839,9 @@ contract VaultHub is PausableUntilWithRoles {
         address _recipient,
         uint256 _amount
     ) internal {
-        int128 inOutDelta_ = _record.inOutDelta - int128(int256(_amount));
+        _cacheInOutDelta(_record);
+
+        int112 inOutDelta_ = _record.inOutDelta - int112(int256(_amount));
         _record.inOutDelta = inOutDelta_;
 
         IStakingVault(_vault).withdraw(_recipient, _amount);
@@ -970,6 +983,21 @@ contract VaultHub is PausableUntilWithRoles {
         return connection;
     }
 
+    /// @dev Caches the inOutDelta of the latest refSlot.
+    ///      A storage write is only performed if the current refSlot differs from the cached one.
+    ///      In the edge case where estimation is executed before the refSlot, and execution happens 
+    ///      after it, there may be a mismatch between the gas estimated during the estimate step and 
+    ///      the actual gas used during execution. The difference is not more than 800 gas, which should 
+    ///      not be critical, as some gas buffer is usually included anyway.
+    function _cacheInOutDelta(VaultRecord storage _record) internal {
+        // cache inOutDelta if the refSlot is different from the cachedRefSlot
+        (uint256 refSlot, ) = CONSENSUS_CONTRACT.getCurrentFrame();
+        if (_record.cachedRefSlot != refSlot) {
+            _record.cachedInOutDelta =  _record.inOutDelta;
+            _record.cachedRefSlot = uint32(refSlot);
+        }
+    }
+
     function _storage() internal pure returns (Storage storage $) {
         assembly {
             $.slot := STORAGE_LOCATION
@@ -1033,7 +1061,7 @@ contract VaultHub is PausableUntilWithRoles {
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares, uint256 lockedAmount);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned, uint256 etherWithdrawn);
-    event VaultInOutDeltaUpdated(address indexed vault, int128 inOutDelta);
+    event VaultInOutDeltaUpdated(address indexed vault, int112 inOutDelta);
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     /**
@@ -1104,4 +1132,5 @@ contract VaultHub is PausableUntilWithRoles {
     error UnhealthyVaultCannotDeposit(address vault);
     error VaultIsDisconnecting(address vault);
     error PartialValidatorWithdrawalNotAllowed();
+    error NeedMoreGas(uint256 minGas, uint256 gasLeft);
 }
