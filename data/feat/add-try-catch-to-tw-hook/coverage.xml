@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3261"  lines-covered="3197"  line-rate="0.9804"  branches-valid="1472"  branches-covered="1412"  branch-rate="0.9592"  timestamp="1749208394608" complexity="0" version="0.1">
+<coverage lines-valid="3261"  lines-covered="3197"  line-rate="0.9804"  branches-valid="1472"  branches-covered="1412"  branch-rate="0.9592"  timestamp="1749209706222" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -3171,8 +3171,8 @@
 			<line number="1500"  hits="0"  branch="false" />
 			<line number="1501"  hits="0"  branch="false" />
 			<line number="1503"  hits="0"  branch="false" />
-			<line number="1510"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="1511"  hits="0"  branch="false" />
+			<line number="1516"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="1517"  hits="0"  branch="false" />
 		</lines>
 		</class>
 		<class name="TriggerableWithdrawalsGateway.sol"  filename="contracts/0.8.9/TriggerableWithdrawalsGateway.sol"  line-rate="0.9815"  branch-rate="0.9412" >
