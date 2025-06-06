@@ -124,7 +124,9 @@ describe("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+    )
+      .to.emit(validatorExitDelayVerifier, "ReportValidatorExitDelayFailed")
+      .withArgs(moduleId, nodeOpId, ACTIVE_VALIDATOR_PROOF.validator.pubkey, proofSlotTimestamp, eligibleToExitInSec);
   });
 
   it("Should report validator exit delay historically", async () => {
@@ -193,10 +195,12 @@ describe("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+    )
+      .to.emit(validatorExitDelayVerifier, "ReportValidatorExitDelayFailed")
+      .withArgs(moduleId, nodeOpId, ACTIVE_VALIDATOR_PROOF.validator.pubkey, proofSlotTimestamp, eligibleToExitInSec);
   });
 
-  it("Should revert when validator reported multiple times in a single transaction", async () => {
+  it("Should ignore when validator reported multiple times in a single transaction", async () => {
     const { validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
 
     // Setup multiple exit requests with the same pubkey
@@ -222,25 +226,51 @@ describe("Report Validator Exit Delay", () => {
 
     const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
-    const witnesses = nodeOpIds.map((_, index) => toValidatorWitness(ACTIVE_VALIDATOR_PROOF, index));
+    // Second item should be ignored
     await expect(
       validatorExitDelayVerifier.verifyValidatorExitDelay(
         toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-        witnesses,
+        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0), toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+    ).to.emit(validatorExitDelayVerifier, "ReportValidatorExitDelayFailed");
+  });
+
+  it("Should ignore when validator reported multiple times historically in a single transaction", async () => {
+    const { validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
+
+    // Setup multiple exit requests with the same pubkey
+    const nodeOpIds = [1, 2];
+    const exitRequests = nodeOpIds.map((nodeOpId) => ({
+      moduleId,
+      nodeOpId,
+      valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
+      pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
+    }));
+
+    const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
+
+    const currentBlockTimestamp = await getCurrentBlockTimestamp();
+    const proofSlotTimestamp =
+      (await validatorExitDelayVerifier.GENESIS_TIME()) + BigInt(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * 12);
+
+    // Set the block timestamp to 7 days before the proof time
+    await advanceChainTime(proofSlotTimestamp - currentBlockTimestamp - BigInt(3600 * 24 * 7));
+
+    await validatorsExitBusOracle.connect(vebReportSubmitter).submitExitRequestsHash(encodedExitRequestsHash);
+    await validatorsExitBusOracle.submitExitRequestsData(encodedExitRequests);
 
     const futureBlockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
 
+    // Second item should be ignored
     await expect(
       validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
         toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, futureBlockRootTimestamp),
         toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
-        witnesses,
+        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0), toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWith("VALIDATOR_KEY_NOT_IN_REQUIRED_STATE");
+    ).to.emit(validatorExitDelayVerifier, "ReportValidatorExitDelayFailed");
   });
 
   it("Should revert when exit request hash is not submitted", async () => {
@@ -350,7 +380,7 @@ describe("Report Validator Exit Delay", () => {
     ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidBlockHeader");
   });
 
-  it("Should revert when reporting validator exit delay before exit deadline threshold", async () => {
+  it("Should emit `ReportValidatorExitDelayFailed` when reporting validator exit delay before exit deadline threshold", async () => {
     const { nor, validatorsExitBusOracle, validatorExitDelayVerifier } = ctx.contracts;
 
     const nodeOpId = 2;
@@ -395,6 +425,6 @@ describe("Report Validator Exit Delay", () => {
         [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
         encodedExitRequests,
       ),
-    ).to.be.revertedWith("EXIT_DELAY_BELOW_THRESHOLD");
+    ).to.emit(validatorExitDelayVerifier, "ReportValidatorExitDelayFailed");
   });
 });

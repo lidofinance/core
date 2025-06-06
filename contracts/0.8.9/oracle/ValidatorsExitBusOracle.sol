@@ -161,6 +161,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         _startProcessing();
         _handleConsensusReportData(data);
         _storeOracleExitRequestHash(dataHash, contractVersion);
+        emit ExitDataProcessing(dataHash);
     }
 
     /// @notice Returns the total number of validator exit requests ever processed
@@ -273,7 +274,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     }
 
     function _storeOracleExitRequestHash(bytes32 exitRequestsHash, uint256 contractVersion) internal {
-        _storeNewHashRequestStatus(exitRequestsHash, uint32(contractVersion), uint32(_getTime()));
+        _storeOracleNewHashRequestStatus(exitRequestsHash, uint32(contractVersion), uint32(_getTime()));
     }
 
     ///

@@ -620,9 +620,9 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         { moduleId: 2, nodeOpId: 2, valIndex: 3, valPubkey: PUBKEYS[2] },
         { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[3] },
       ];
-      const { reportData } = await prepareReportAndSubmitHash(requests);
+      const data = await encodeExitRequestsDataList(requests);
       const exitRequestHash = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [reportData.data, reportData.dataFormat]),
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [data, DATA_FORMAT_LIST]),
       );
 
       const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
@@ -632,8 +632,8 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
 
       const exitRequest = {
-        dataFormat: reportData.dataFormat,
-        data: reportData.data,
+        dataFormat: DATA_FORMAT_LIST,
+        data,
       };
 
       const emitTx = await oracle.submitExitRequestsData(exitRequest);
@@ -683,4 +683,234 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
         .withArgs(requests[3].moduleId, requests[3].nodeOpId, requests[3].valIndex, requests[3].valPubkey, timestamp);
     });
   });
+
+  context("Allow oracle to submit a report for a previously submitted hash if the original submitter did not.", () => {
+    let originalState: string;
+    before(async () => {
+      originalState = await Snapshot.take();
+      await consensus.advanceTimeToNextFrameStart();
+    });
+    after(async () => await Snapshot.restore(originalState));
+
+    const validators = [
+      { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0] },
+      { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1] },
+      { moduleId: 2, nodeOpId: 2, valIndex: 3, valPubkey: PUBKEYS[2] },
+      { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[3] },
+    ];
+
+    let exitRequestHash: string;
+
+    it("create hash", async () => {
+      const data = await encodeExitRequestsDataList(validators);
+      exitRequestHash = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [data, DATA_FORMAT_LIST]),
+      );
+    });
+
+    it("submit hash by actor different from oracle", async () => {
+      const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
+      await oracle.grantRole(role, authorizedEntity);
+
+      const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
+      await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
+
+      const { deliveredExitDataTimestamp } = await oracle.getRequestStatus(exitRequestHash);
+      expect(deliveredExitDataTimestamp).to.equal(0);
+    });
+
+    it("oracle allowed to submit report", async () => {
+      const { reportData } = await prepareReportAndSubmitHash(validators);
+
+      const tx = await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+      const timestamp = await consensus.getTime();
+
+      await expect(tx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          validators[0].moduleId,
+          validators[0].nodeOpId,
+          validators[0].valIndex,
+          validators[0].valPubkey,
+          timestamp,
+        );
+
+      await expect(tx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          validators[1].moduleId,
+          validators[1].nodeOpId,
+          validators[1].valIndex,
+          validators[1].valPubkey,
+          timestamp,
+        );
+
+      await expect(tx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          validators[2].moduleId,
+          validators[2].nodeOpId,
+          validators[2].valIndex,
+          validators[2].valPubkey,
+          timestamp,
+        );
+
+      await expect(tx)
+        .to.emit(oracle, "ValidatorExitRequest")
+        .withArgs(
+          validators[3].moduleId,
+          validators[3].nodeOpId,
+          validators[3].valIndex,
+          validators[3].valPubkey,
+          timestamp,
+        );
+
+      const { deliveredExitDataTimestamp } = await oracle.getRequestStatus(exitRequestHash);
+      expect(deliveredExitDataTimestamp).to.equal(timestamp);
+    });
+  });
+
+  context(
+    "Dont allow oracle to change deliveredExitDataTimestamp for a previously submitted report by another submitter.",
+    () => {
+      let originalState: string;
+      const prevTime = 2000;
+
+      before(async () => {
+        originalState = await Snapshot.take();
+        await consensus.advanceTimeToNextFrameStart();
+
+        await consensus.setTime(prevTime);
+
+        const role = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
+        await oracle.grantRole(role, admin);
+        await oracle.connect(admin).setExitRequestLimit(100, 1, 48);
+      });
+      after(async () => await Snapshot.restore(originalState));
+
+      const validators = [
+        { moduleId: 1, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[0] },
+        { moduleId: 1, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[1] },
+        { moduleId: 2, nodeOpId: 2, valIndex: 3, valPubkey: PUBKEYS[2] },
+        { moduleId: 2, nodeOpId: 3, valIndex: 3, valPubkey: PUBKEYS[3] },
+      ];
+
+      let exitRequestHash: string;
+      let exitRequests: string;
+
+      it("create hash", async () => {
+        exitRequests = await encodeExitRequestsDataList(validators);
+        exitRequestHash = ethers.keccak256(
+          ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [exitRequests, DATA_FORMAT_LIST]),
+        );
+      });
+
+      it("submit hash by actor different from oracle", async () => {
+        const role = await oracle.SUBMIT_REPORT_HASH_ROLE();
+        await oracle.grantRole(role, authorizedEntity);
+
+        const submitTx = await oracle.connect(authorizedEntity).submitExitRequestsHash(exitRequestHash);
+        await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
+
+        const { deliveredExitDataTimestamp } = await oracle.getRequestStatus(exitRequestHash);
+        expect(deliveredExitDataTimestamp).to.equal(0);
+      });
+
+      it("submit report by actor different from oracle", async () => {
+        const exitRequest = {
+          dataFormat: DATA_FORMAT_LIST,
+          data: exitRequests,
+        };
+
+        const tx = await oracle.submitExitRequestsData(exitRequest);
+        const timestamp = await oracle.getTime();
+
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(
+            validators[0].moduleId,
+            validators[0].nodeOpId,
+            validators[0].valIndex,
+            validators[0].valPubkey,
+            timestamp,
+          );
+
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(
+            validators[1].moduleId,
+            validators[1].nodeOpId,
+            validators[1].valIndex,
+            validators[1].valPubkey,
+            timestamp,
+          );
+
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(
+            validators[2].moduleId,
+            validators[2].nodeOpId,
+            validators[2].valIndex,
+            validators[2].valPubkey,
+            timestamp,
+          );
+
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(
+            validators[3].moduleId,
+            validators[3].nodeOpId,
+            validators[3].valIndex,
+            validators[3].valPubkey,
+            timestamp,
+          );
+
+        const { deliveredExitDataTimestamp } = await oracle.getRequestStatus(exitRequestHash);
+        expect(deliveredExitDataTimestamp).to.equal(2000);
+      });
+
+      it("dont allow oracle to change deliveredExitDataTimestamp", async () => {
+        await consensus.advanceTimeBy(10);
+        const { reportData } = await prepareReportAndSubmitHash(validators);
+
+        const tx = await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+        const timestamp = await consensus.getTime();
+
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(
+            validators[1].moduleId,
+            validators[1].nodeOpId,
+            validators[1].valIndex,
+            validators[1].valPubkey,
+            timestamp,
+          );
+
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(
+            validators[2].moduleId,
+            validators[2].nodeOpId,
+            validators[2].valIndex,
+            validators[2].valPubkey,
+            timestamp,
+          );
+
+        await expect(tx)
+          .to.emit(oracle, "ValidatorExitRequest")
+          .withArgs(
+            validators[3].moduleId,
+            validators[3].nodeOpId,
+            validators[3].valIndex,
+            validators[3].valPubkey,
+            timestamp,
+          );
+
+        const { deliveredExitDataTimestamp } = await oracle.getRequestStatus(exitRequestHash);
+        expect(deliveredExitDataTimestamp).to.equal(prevTime);
+
+        expect(timestamp).to.eq(prevTime + 10);
+      });
+    },
+  );
 });

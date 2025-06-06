@@ -62,15 +62,77 @@ describe("StakingRouter.sol:misc", () => {
     it("Initializes the contract version, sets up roles and variables", async () => {
       await expect(stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials))
         .to.emit(stakingRouter, "ContractVersionSet")
-        .withArgs(2)
+        .withArgs(3)
         .and.to.emit(stakingRouter, "RoleGranted")
         .withArgs(await stakingRouter.DEFAULT_ADMIN_ROLE(), stakingRouterAdmin.address, user.address)
         .and.to.emit(stakingRouter, "WithdrawalCredentialsSet")
         .withArgs(withdrawalCredentials, user.address);
 
-      expect(await stakingRouter.getContractVersion()).to.equal(2);
+      expect(await stakingRouter.getContractVersion()).to.equal(3);
       expect(await stakingRouter.getLido()).to.equal(lido);
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(withdrawalCredentials);
+    });
+  });
+
+  context("finalizeUpgrade_v3()", () => {
+    const STAKE_SHARE_LIMIT = 1_00n;
+    const PRIORITY_EXIT_SHARE_THRESHOLD = STAKE_SHARE_LIMIT;
+    const MODULE_FEE = 5_00n;
+    const TREASURY_FEE = 5_00n;
+    const MAX_DEPOSITS_PER_BLOCK = 150n;
+    const MIN_DEPOSIT_BLOCK_DISTANCE = 25n;
+
+    const modulesCount = 3;
+
+    beforeEach(async () => {
+      // initialize staking router
+      await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials);
+      // grant roles
+      await stakingRouter
+        .connect(stakingRouterAdmin)
+        .grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), stakingRouterAdmin);
+
+      for (let i = 0; i < modulesCount; i++) {
+        await stakingRouter
+          .connect(stakingRouterAdmin)
+          .addStakingModule(
+            randomString(8),
+            certainAddress(`test:staking-router:staking-module-${i}`),
+            STAKE_SHARE_LIMIT,
+            PRIORITY_EXIT_SHARE_THRESHOLD,
+            MODULE_FEE,
+            TREASURY_FEE,
+            MAX_DEPOSITS_PER_BLOCK,
+            MIN_DEPOSIT_BLOCK_DISTANCE,
+          );
+      }
+      expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount);
+    });
+
+    it("fails with UnexpectedContractVersion error when called on implementation", async () => {
+      await expect(impl.finalizeUpgrade_v3())
+        .to.be.revertedWithCustomError(impl, "UnexpectedContractVersion")
+        .withArgs(MAX_UINT256, 2);
+    });
+
+    it("fails with UnexpectedContractVersion error when called on deployed from scratch SRv2", async () => {
+      await expect(stakingRouter.finalizeUpgrade_v3())
+        .to.be.revertedWithCustomError(impl, "UnexpectedContractVersion")
+        .withArgs(3, 2);
+    });
+
+    context("simulate upgrade from v2", () => {
+      beforeEach(async () => {
+        // reset contract version
+        await stakingRouter.testing_setBaseVersion(2);
+      });
+
+      it("sets correct contract version", async () => {
+        expect(await stakingRouter.getContractVersion()).to.equal(2);
+        await stakingRouter.finalizeUpgrade_v3(
+        );
+        expect(await stakingRouter.getContractVersion()).to.be.equal(3);
+      });
     });
   });
 

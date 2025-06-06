@@ -175,7 +175,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         if (_admin == address(0)) revert ZeroAddressAdmin();
         if (_lido == address(0)) revert ZeroAddressLido();
 
-        _initializeContractVersionTo(2);
+        _initializeContractVersionTo(3);
 
         _setupRole(DEFAULT_ADMIN_ROLE, _admin);
 
@@ -191,12 +191,18 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
     /// @notice Finalizes upgrade to v2 (from v1). Can be called only once.
     /// @dev https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
-    ///   See historical usage in commit: https://github.com/lidofinance/core/blob/3015a734ed4dd70cfbad5d18c3f68f13ec6a6a60/contracts/0.8.9/StakingRouter.sol#L191
+    ///   See historical usage in commit: https://github.com/lidofinance/core/blob/c19480aa3366b26aa6eac17f85a6efae8b9f4f72/contracts/0.8.9/StakingRouter.sol#L190
     // function finalizeUpgrade_v2(
     //     uint256[] memory _priorityExitShareThresholds,
     //     uint256[] memory _maxDepositsPerBlock,
     //     uint256[] memory _minDepositBlockDistances
     // ) external
+
+    /// @notice Finalizes upgrade to v3 (from v2). Can be called only once.
+    function finalizeUpgrade_v3() external {
+        _checkContractVersion(2);
+        _updateContractVersion(3);
+    }
 
     /// @notice Returns Lido contract address.
     /// @return Lido contract address.
