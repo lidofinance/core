@@ -7,6 +7,12 @@ import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "./lib/ExitLimitUtils.sol";
 import {PausableUntil} from "./utils/PausableUntil.sol";
 
+struct ValidatorData {
+    uint256 stakingModuleId;
+    uint256 nodeOperatorId;
+    bytes pubkey;
+}
+
 interface IWithdrawalVault {
     function addWithdrawalRequests(bytes[] calldata pubkeys, uint64[] calldata amounts) external payable;
 
@@ -15,9 +21,7 @@ interface IWithdrawalVault {
 
 interface IStakingRouter {
     function onValidatorExitTriggered(
-        uint256 _stakingModuleId,
-        uint256 _nodeOperatorId,
-        bytes calldata _publicKey,
+        ValidatorData[] calldata validatorData,
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     ) external;
@@ -68,12 +72,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      * @param remainingLimit Amount of requests that still can be processed at current day
      */
     error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
-
-    struct ValidatorData {
-        uint256 stakingModuleId;
-        uint256 nodeOperatorId;
-        bytes pubkey;
-    }
 
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
@@ -249,18 +247,11 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
         uint256 exitType
     ) internal {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
-        ValidatorData calldata data;
-        for (uint256 i = 0; i < validatorsData.length; ++i) {
-            data = validatorsData[i];
-
-            stakingRouter.onValidatorExitTriggered(
-                data.stakingModuleId,
-                data.nodeOperatorId,
-                data.pubkey,
-                withdrawalRequestPaidFee,
-                exitType
-            );
-        }
+        stakingRouter.onValidatorExitTriggered(
+            validatorsData,
+            withdrawalRequestPaidFee,
+            exitType
+        );
     }
 
     function _refundFee(uint256 refund, address recipient) internal {

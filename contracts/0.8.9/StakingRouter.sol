@@ -134,6 +134,12 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         uint256 availableValidatorsCount;
     }
 
+    struct ValidatorExitData {
+        uint256 stakingModuleId;
+        uint256 nodeOperatorId;
+        bytes pubkey;
+    }
+
     bytes32 public constant MANAGE_WITHDRAWAL_CREDENTIALS_ROLE = keccak256("MANAGE_WITHDRAWAL_CREDENTIALS_ROLE");
     bytes32 public constant STAKING_MODULE_MANAGE_ROLE = keccak256("STAKING_MODULE_MANAGE_ROLE");
     bytes32 public constant STAKING_MODULE_UNVETTING_ROLE = keccak256("STAKING_MODULE_UNVETTING_ROLE");
@@ -1472,39 +1478,38 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         );
     }
 
-    /// @notice Handles the triggerable exit event for a validator belonging to a specific node operator.
-    /// @dev This function is called when a validator is exited using the triggerable exit request on the Execution Layer (EL).
-    /// @param _stakingModuleId The ID of the staking module.
-    /// @param _nodeOperatorId The ID of the node operator.
-    /// @param _publicKey The public key of the validator being reported.
+    /// @notice Handles the triggerable exit event for a set of validators.
+    /// @dev This function is called when validators are exited using triggerable exit requests on the Execution Layer (EL).
+    /// @param validatorExitData An array of `ValidatorExitData` structs, each representing a validator
+    ///        for which a triggerable exit was requested. Each entry includes:
+    ///        - `stakingModuleId`: ID of the staking module.
+    ///        - `nodeOperatorId`: ID of the node operator.
+    ///        - `pubkey`: Validator public key, 48 bytes length.
     /// @param _withdrawalRequestPaidFee Fee amount paid to send a withdrawal request on the Execution Layer (EL).
     /// @param _exitType The type of exit being performed.
-    ///        This parameter may be interpreted differently across various staking modules, depending on their specific implementation.
+    ///        This parameter may be interpreted differently across various staking modules depending on their specific implementation.
     function onValidatorExitTriggered(
-        uint256 _stakingModuleId,
-        uint256 _nodeOperatorId,
-        bytes calldata _publicKey,
+        ValidatorExitData[] calldata validatorExitData,
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     )
         external
         onlyRole(REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE)
     {
-        try
-            _getIStakingModuleById(_stakingModuleId).onValidatorExitTriggered(
-                _nodeOperatorId,
-                _publicKey,
+        ValidatorExitData calldata data;
+        for (uint256 i = 0; i < validatorExitData.length; ++i) {
+            data = validatorExitData[i];
+
+            try _getIStakingModuleById(data.stakingModuleId).onValidatorExitTriggered(
+                data.nodeOperatorId,
+                data.pubkey,
                 _withdrawalRequestPaidFee,
                 _exitType
             )
-        {} catch (bytes memory lowLevelRevertData) {
-            /// @dev This check is required to prevent incorrect gas estimation of the method.
-            ///      Without it, Ethereum nodes that use binary search for gas estimation may
-            ///      return an invalid value when the onValidatorExitTriggered() reverts because of the
-            ///      "out of gas" error. Here we assume that the onValidatorExitTriggered() method doesn't
-            ///      have reverts with empty error data except "out of gas".
-            if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
-            emit StakingModuleExitNotificationFailed(_stakingModuleId, _nodeOperatorId, _publicKey);
+            {} catch (bytes memory lowLevelRevertData) {
+                if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
+                emit StakingModuleExitNotificationFailed(data.stakingModuleId, data.nodeOperatorId, data.pubkey);
+            }
         }
     }
 }
