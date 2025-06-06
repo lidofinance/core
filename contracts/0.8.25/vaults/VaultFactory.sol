@@ -46,6 +46,7 @@ contract VaultFactory {
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry in seconds
      * @param _roleAssignments The optional role assignments to be made
+     * @notice Only Node Operator managed roles can be assigned
      */
     function createVaultWithDashboard(
         address _defaultAdmin,
@@ -91,6 +92,7 @@ contract VaultFactory {
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry in seconds
      * @param _roleAssignments The optional role assignments to be made
+     * @notice Only Node Operator managed roles can be assigned
      */
     function createVaultWithDashboardWithoutConnectingToVaultHub(
         address _defaultAdmin,
