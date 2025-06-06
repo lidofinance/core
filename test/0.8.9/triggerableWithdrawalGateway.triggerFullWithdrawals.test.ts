@@ -95,6 +95,16 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
       .withArgs("msg.value");
   });
 
+  it("should revert with ZeroArgument error if requests count is zero", async () => {
+    await expect(
+      triggerableWithdrawalsGateway
+        .connect(authorizedEntity)
+        .triggerFullWithdrawals([], ZERO_ADDRESS, 0, { value: 10 }),
+    )
+      .to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "ZeroArgument")
+      .withArgs("validatorsData");
+  });
+
   it("should revert if total fee value sent is insufficient to cover all provided TW requests ", async () => {
     const requests = createValidatorDataList(exitRequests);
 
