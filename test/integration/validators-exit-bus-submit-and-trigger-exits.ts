@@ -99,7 +99,7 @@ describe("ValidatorsExitBus integration", () => {
     const hasRole = await veb.hasRole(SUBMIT_REPORT_HASH_ROLE, stranger.address);
     expect(hasRole).to.be.false;
 
-    await expect(veb.connect(stranger).submitExitRequestsHash(exitRequestsHash)).to.revertedWithOZAccessControlError(
+    await expect(veb.connect(stranger).submitExitRequestsHash(exitRequestsHash)).to.be.revertedWithOZAccessControlError(
       stranger.address,
       await veb.SUBMIT_REPORT_HASH_ROLE(),
     );
