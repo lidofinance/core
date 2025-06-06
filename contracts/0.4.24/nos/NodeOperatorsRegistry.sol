@@ -81,7 +81,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     bytes32 public constant MANAGE_SIGNING_KEYS = 0x75abc64490e17b40ea1e66691c3eb493647b24430b358bd87ec3e5127f1621ee;
     // bytes32 public constant SET_NODE_OPERATOR_LIMIT_ROLE = keccak256("SET_NODE_OPERATOR_LIMIT_ROLE");
     bytes32 public constant SET_NODE_OPERATOR_LIMIT_ROLE = 0x07b39e0faf2521001ae4e58cb9ffd3840a63e205d288dc9c93c3774f0d794754;
-    // bytes32 public constant ACTIVATE_NODE_OPERATOR_ROLE = keccak256("MANAGE_NODE_OPERATOR_ROLE");
+    // bytes32 public constant MANAGE_NODE_OPERATOR_ROLE = keccak256("MANAGE_NODE_OPERATOR_ROLE");
     bytes32 public constant MANAGE_NODE_OPERATOR_ROLE = 0x78523850fdd761612f46e844cf5a16bda6b3151d6ae961fd7e8e7b92bfbca7f8;
     // bytes32 public constant STAKING_ROUTER_ROLE = keccak256("STAKING_ROUTER_ROLE");
     bytes32 public constant STAKING_ROUTER_ROLE = 0xbb75b874360e0bfd87f964eadd8276d8efb7c942134fc329b513032d0803e0c6;
@@ -106,7 +106,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     uint8 internal constant TOTAL_DEPOSITED_KEYS_COUNT_OFFSET = 3;
 
     // TargetValidatorsStats
-    /// @dev Target limit mode, allows limiting target active validators count for operator (0 = disabled, 1 = soft mode, 2 = forced mode)
+    /// @dev Target limit mode, allows limiting target active validators count for operator (0 = disabled, 1 = soft mode, 2 = boosted mode)
     uint8 internal constant TARGET_LIMIT_MODE_OFFSET = 0;
     /// @dev relative target active validators limit for operator, set by DAO
     /// @notice used to check how many keys should go to exit, 0 - means all deposited keys would be exited
@@ -599,7 +599,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     /// @notice Updates the limit of the validators that can be used for deposit by DAO
     /// @param _nodeOperatorId Id of the node operator
-    /// @param _targetLimitMode target limit mode (0 = disabled, 1 = soft mode, 2 = forced mode)
+    /// @param _targetLimitMode target limit mode (0 = disabled, 1 = soft mode, 2 = boosted mode)
     /// @param _targetLimit Target limit of the node operator
     function updateTargetValidatorsLimits(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit) public {
         _onlyExistedNodeOperator(_nodeOperatorId);
