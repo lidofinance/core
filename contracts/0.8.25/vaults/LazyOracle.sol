@@ -7,7 +7,7 @@ pragma solidity 0.8.25;
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 import {VaultHub} from "./VaultHub.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IConsensusContract} from "./interfaces/IConsensusContract.sol";
+import {IHashConsensus} from "./interfaces/IHashConsensus.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
@@ -22,17 +22,17 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
         string vaultsDataReportCid;
         /// @notice timestamp of the vaults data
         uint64 vaultsDataTimestamp;
-        /// @notice quarantine period
+        /// @notice total value increase quarantine period
         uint64 quarantinePeriod;
-        /// @notice max EL CL rewards
-        uint16 maxElClRewardsBP;
+        /// @notice max reward ratio for refSlot total value, basis points
+        uint16 maxRewardRatioBP;
         /// @notice deposit quarantines for each vault
-        mapping(address => Quarantine) vaultQuarantines;
+        mapping(address vault => Quarantine) vaultQuarantines;
     }
 
     struct Quarantine {
-        uint128 delta;
-        uint64 startTs;
+        uint128 pendingTotalValueIncrease;
+        uint64 startTimestamp;
     }
 
     struct VaultInfo {
@@ -60,13 +60,13 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     uint256 internal constant TOTAL_BP = 100_00;
 
     ILidoLocator public immutable LIDO_LOCATOR;
-    IConsensusContract public immutable CONSENSUS_CONTRACT;
+    IHashConsensus public immutable HASH_CONSENSUS;
 
-    constructor(address _lidoLocator, address _consensusContract, address _admin, uint64 _quarantinePeriod, uint16 _maxElClRewardsBP) {
+    constructor(address _lidoLocator, address _hashConsensus, address _admin, uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
-        CONSENSUS_CONTRACT = IConsensusContract(_consensusContract);
+        HASH_CONSENSUS = IHashConsensus(_hashConsensus);
 
-        _updateSanityParams(_quarantinePeriod, _maxElClRewardsBP);
+        _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP);
 
         if (_admin == address(0)) revert AdminCannotBeZero();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
@@ -91,9 +91,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
         return _storage().quarantinePeriod;
     }
 
-    /// @notice returns the max EL CL rewards
-    function maxElClRewardsBP() external view returns (uint16) {
-        return _storage().maxElClRewardsBP;
+    /// @notice returns the max reward ratio for refSlot total value, basis points
+    function maxRewardRatioBP() external view returns (uint16) {
+        return _storage().maxRewardRatioBP;
     }
 
     /// @notice returns the quarantine for the vault
@@ -144,9 +144,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
 
     /// @notice update the sanity parameters
     /// @param _quarantinePeriod the quarantine period
-    /// @param _maxElClRewardsBP the max EL CL rewards
-    function updateSanityParams(uint64 _quarantinePeriod, uint16 _maxElClRewardsBP) external onlyRole(UPDATE_SANITY_PARAMS_ROLE) {
-        _updateSanityParams(_quarantinePeriod, _maxElClRewardsBP);
+    /// @param _maxRewardRatioBP the max EL CL rewards
+    function updateSanityParams(uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) external onlyRole(UPDATE_SANITY_PARAMS_ROLE) {
+        _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP);
     }
 
     /// @notice Store the report root and its meta information
@@ -187,7 +187,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
         int256 inOutDelta;
-        (_totalValue, inOutDelta) = _handleSanityChecks(_vault, _totalValue, _liabilityShares);
+        (_totalValue, inOutDelta) = _handleSanityChecks(_vault, _totalValue);
 
         VaultHub(payable(LIDO_LOCATOR.vaultHub()))
             .applyVaultReport(
@@ -203,42 +203,38 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     /// @notice handle sanity checks for the vault lazy report data
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault in refSlot
-    /// @param _liabilityShares the liabilityShares of the vault in refSlot
-    /// @return the smoothed total value, inOutDelta in the refSlot
-    function _handleSanityChecks(address _vault, uint256 _totalValue, uint256 _liabilityShares) public returns (uint256, int256 _inOutDelta) {
+    /// @return totalValue the smoothed total value of the vault after sanity checks
+    /// @return inOutDelta the inOutDelta in the refSlot
+    function _handleSanityChecks(address _vault, uint256 _totalValue) public returns (uint256 totalValue, int256 inOutDelta) {
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
         VaultHub.VaultConnection memory connection = vaultHub.vaultConnection(_vault);
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
         // 1. Calculate inOutDelta in the refSlot
         int256 curInOutDelta = record.inOutDelta;
-        (uint256 refSlot, ) = CONSENSUS_CONTRACT.getCurrentFrame();
+        (uint256 refSlot, ) = HASH_CONSENSUS.getCurrentFrame();
         if (record.cachedRefSlot == refSlot) {
-            _inOutDelta = record.cachedInOutDelta;
+            inOutDelta = record.cachedInOutDelta;
         } else {
-            _inOutDelta = curInOutDelta;
+            inOutDelta = curInOutDelta;
         }
 
         // 2. Sanity check for total value increase
-        _totalValue = _checkTotalValue(_vault, _totalValue, _inOutDelta, record);
+        totalValue = _checkTotalValue(_vault, _totalValue, inOutDelta, record);
 
         // 3. Sanity check for dynamic total value underflow
-        if (int256(_totalValue) + curInOutDelta - _inOutDelta < 0) revert UnderflowInTotalValueCalculation();
+        if (int256(totalValue) + curInOutDelta - inOutDelta < 0) revert UnderflowInTotalValueCalculation();
 
-        // 4. Sanity check for liability shares increase
-        uint256 maxLiabilityShares = Math256.max(connection.shareLimit, record.liabilityShares);
-        if (_liabilityShares > maxLiabilityShares) revert LiabilitySharesExceedsLimit();
-
-        return (_totalValue, _inOutDelta);
+        return (totalValue, inOutDelta);
     }
 
     /*
-        Here we need to introduce 2 concepts Safe and Unsafe fund:
-        1. Safe fund happens when the vault owner first tops up ETH balance of the vault contract (through fund() method) 
+        Here we need to introduce 2 concepts direct and side fund:
+        1. Direct fund happens when the vault owner first tops up ETH balance of the vault contract (through fund() method) 
         and then bring lazy (on-demand) report. In this case we can proof that ETH really exist, so vault owner can add 
         as much ETH as he wants.  
         2. Any other ways of topping up vault's totalValue (consolidations, direct deposit to beaconchain contract, etc.) are 
-        considered unsafe. In this case we set "quarantine" period for this Unsafe fund. It means that totalValue actually 
+        considered side. In this case we set "quarantine" period for this side fund. It means that totalValue actually 
         will be increased by this amount only after quarantine period expires.
     */
     function _checkTotalValue(address _vault, uint256 _totalValue, int256 _inOutDelta, VaultHub.VaultRecord memory record) internal returns (uint256) {
@@ -246,12 +242,12 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
 
         uint256 refSlotTotalValue = uint256(int256(uint256(record.report.totalValue)) + _inOutDelta - record.report.inOutDelta);
         // small percentage of unsafe funds is allowed for the EL CL rewards handling
-        uint256 limit = refSlotTotalValue * (TOTAL_BP + $.maxElClRewardsBP) / TOTAL_BP;
+        uint256 limit = refSlotTotalValue * (TOTAL_BP + $.maxRewardRatioBP) / TOTAL_BP;
 
         if (_totalValue > limit) {
             Quarantine storage q = $.vaultQuarantines[_vault];
             uint64 reportTs = $.vaultsDataTimestamp;
-            uint128 quarDelta = q.delta;
+            uint128 quarDelta = q.pendingTotalValueIncrease;
             // Safe conversion from uint256 to uint128
             if (_totalValue - refSlotTotalValue > type(uint128).max) revert ValueExceedsUint128();
             uint128 delta = uint128(_totalValue - refSlotTotalValue);
@@ -259,21 +255,21 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
             if (quarDelta == 0) {
                 // first overlimit report
                 _totalValue = refSlotTotalValue;
-                q.delta = delta;
-                q.startTs = reportTs;
+                q.pendingTotalValueIncrease = delta;
+                q.startTimestamp = reportTs;
                 emit QuarantinedDeposit(_vault, delta);
             } else {
                 // subsequent overlimit reports
-                if (reportTs - q.startTs < $.quarantinePeriod) {
+                if (reportTs - q.startTimestamp < $.quarantinePeriod) {
                     _totalValue = refSlotTotalValue;
                 } else {
                     // quarantine period expired
-                    if (delta <= quarDelta + refSlotTotalValue * $.maxElClRewardsBP / TOTAL_BP) {
-                        q.delta = 0;
+                    if (delta <= quarDelta + refSlotTotalValue * $.maxRewardRatioBP / TOTAL_BP) {
+                        q.pendingTotalValueIncrease = 0;
                     } else {
                         _totalValue = refSlotTotalValue + quarDelta;
-                        q.delta = delta - quarDelta;
-                        q.startTs = reportTs;
+                        q.pendingTotalValueIncrease = delta - quarDelta;
+                        q.startTimestamp = reportTs;
                         emit QuarantinedDeposit(_vault, delta - quarDelta);
                     }
                 }
@@ -283,11 +279,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
         return _totalValue;
     }
 
-    function _updateSanityParams(uint64 _quarantinePeriod, uint16 _maxElClRewardsBP) internal {
+    function _updateSanityParams(uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) internal {
         Storage storage $ = _storage();
         $.quarantinePeriod = _quarantinePeriod;
-        $.maxElClRewardsBP = _maxElClRewardsBP;
-        emit SanityParamsUpdated(_quarantinePeriod, _maxElClRewardsBP);
+        $.maxRewardRatioBP = _maxRewardRatioBP;
+        emit SanityParamsUpdated(_quarantinePeriod, _maxRewardRatioBP);
     }
 
     function _storage() internal pure returns (Storage storage $) {
@@ -298,12 +294,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
 
     event VaultsReportDataUpdated(uint256 indexed timestamp, bytes32 indexed root, string cid);
     event QuarantinedDeposit(address vault, uint128 delta);
-    event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxElClRewardsBP);
+    event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxRewardRatioBP);
 
     error AdminCannotBeZero();
     error NotAuthorized();
     error InvalidProof();
     error UnderflowInTotalValueCalculation();
-    error LiabilitySharesExceedsLimit();
     error ValueExceedsUint128();
 }

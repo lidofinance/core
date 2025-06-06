@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-interface IConsensusContract {
+interface IHashConsensus {
     function getIsMember(address addr) external view returns (bool);
 
     function getCurrentFrame() external view returns (
