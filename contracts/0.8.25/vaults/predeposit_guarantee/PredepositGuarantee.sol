@@ -296,7 +296,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             emit GuarantorRefundAdded(prevGuarantor, msg.sender, refund);
         }
 
-        $.nodeOperatorGuarantor.set(msg.sender, _newGuarantor);
+        $.nodeOperatorGuarantor.setOrReset(msg.sender, _newGuarantor);
 
         emit GuarantorSet(msg.sender, _newGuarantor, prevGuarantor);
     }
@@ -310,7 +310,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         address prevDepositor = _depositorOf(msg.sender);
         if (_newDepositor == prevDepositor) revert SameDepositor();
 
-        _getStorage().nodeOperatorDepositor.set(msg.sender, _newDepositor);
+        _getStorage().nodeOperatorDepositor.setOrReset(msg.sender, _newDepositor);
 
         emit DepositorSet(msg.sender, _newDepositor, prevDepositor);
     }
@@ -641,7 +641,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /// @notice returns guarantor of the NO
     /// @dev if guarantor is not set, returns NO address
     function _guarantorOf(address _nodeOperator) internal view returns (address) {
-        return _getStorage().nodeOperatorGuarantor.get(_nodeOperator);
+        return _getStorage().nodeOperatorGuarantor.getValueOrKey(_nodeOperator);
     }
 
     /// @notice enforces that only NO's guarantor can call the function
@@ -655,7 +655,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /// @notice returns depositor of the NO
     /// @dev if depositor is not set, returns NO address
     function _depositorOf(address _nodeOperator) internal view returns (address) {
-        return _getStorage().nodeOperatorDepositor.get(_nodeOperator);
+        return _getStorage().nodeOperatorDepositor.getValueOrKey(_nodeOperator);
     }
 
     /// @notice validates that WC belong to the vault
