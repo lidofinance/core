@@ -185,6 +185,16 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
         .withArgs("msg.value");
     });
 
+    it("should revert with ZeroArgument error if exitRequestsData is empty", async () => {
+      await expect(
+        oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [], ZERO_ADDRESS, {
+          value: 2,
+        }),
+      )
+        .to.be.revertedWithCustomError(oracle, "ZeroArgument")
+        .withArgs("exitDataIndexes");
+    });
+
     it("should refund fee to recipient address", async () => {
       const tx = await oracle.triggerExits(
         { data: reportFields.data, dataFormat: reportFields.dataFormat },
@@ -267,19 +277,14 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
 
     it("should revert with an error if the key index array is not strictly increasing", async () => {
       await expect(
-        oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [1, 2, 2], ZERO_ADDRESS, {
+        oracle.triggerExits({ data: reportFields.data, dataFormat: reportFields.dataFormat }, [2, 1, 3], ZERO_ADDRESS, {
           value: 2,
         }),
       ).to.be.revertedWithCustomError(oracle, "InvalidExitDataIndexSortOrder");
     });
   });
 
-  // the only difference in this checks, is that it is possible to get DeliveryWasNotStarted error because of partial delivery
   describe("Submit via trustfull method", () => {
-    const MAX_EXIT_REQUESTS_LIMIT = 3;
-    const EXITS_PER_FRAME = 1;
-    const FRAME_DURATION = 48;
-
     const exitRequests = [
       { moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] },
       { moduleId: 1, nodeOpId: 0, valIndex: 2, valPubkey: PUBKEYS[1] },
@@ -320,7 +325,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       await expect(submitTx).to.emit(oracle, "RequestsHashSubmitted").withArgs(exitRequestHash);
     });
 
-    it("should revert if request was not started to deliver", async () => {
+    it("should revert if request was not delivered", async () => {
       await expect(
         oracle.triggerExits(
           { data: exitRequest.data, dataFormat: exitRequest.dataFormat },
@@ -331,15 +336,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
       ).to.be.revertedWithCustomError(oracle, "RequestsNotDelivered");
     });
 
-    it("Should deliver request", async () => {
-      // set limit
-      const reportLimitRole = await oracle.EXIT_REQUEST_LIMIT_MANAGER_ROLE();
-      await oracle.grantRole(reportLimitRole, authorizedEntity);
-
-      await oracle
-        .connect(authorizedEntity)
-        .setExitRequestLimit(MAX_EXIT_REQUESTS_LIMIT, EXITS_PER_FRAME, FRAME_DURATION);
-
+    it("Should be executed without errors if request was previously delivered", async () => {
       const emitTx = await oracle.submitExitRequestsData(exitRequest);
       const timestamp = await oracle.getTime();
 
@@ -372,10 +369,13 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
           exitRequests[2].valPubkey,
           timestamp,
         );
-    });
 
-    it("some time passes", async () => {
-      await consensus.advanceTimeBy(2 * 48);
+      await oracle.triggerExits(
+        { data: exitRequest.data, dataFormat: exitRequest.dataFormat },
+        [0, 1, 2],
+        ZERO_ADDRESS,
+        { value: 4 },
+      );
     });
 
     it("should revert with error if module id is equal to 0", async () => {
@@ -404,7 +404,7 @@ describe("ValidatorsExitBusOracle.sol:triggerExits", () => {
   });
 
   describe("Version changed", () => {
-    // version can be changed during deploy
+    // version should be changed during deploy
     // but we will change it via accessing storage
 
     const VALIDATORS: ExitRequest[] = [{ moduleId: 1, nodeOpId: 0, valIndex: 0, valPubkey: PUBKEYS[0] }];

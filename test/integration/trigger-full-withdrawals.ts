@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { StakingRouter, TriggerableWithdrawalsGateway, WithdrawalVault } from "typechain-types";
+import { NodeOperatorsRegistry, StakingRouter, TriggerableWithdrawalsGateway, WithdrawalVault } from "typechain-types";
 
 import { ether } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -19,6 +19,7 @@ describe("TriggerFullWithdrawals Integration", () => {
   let triggerableWithdrawalsGateway: TriggerableWithdrawalsGateway;
   let withdrawalVault: WithdrawalVault;
   let stakingRouter: StakingRouter;
+  let nor: NodeOperatorsRegistry;
   let authorizedEntity: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
@@ -46,6 +47,7 @@ describe("TriggerFullWithdrawals Integration", () => {
     withdrawalVault = ctx.contracts.withdrawalVault as WithdrawalVault;
     stakingRouter = ctx.contracts.stakingRouter as StakingRouter;
     triggerableWithdrawalsGateway = ctx.contracts.triggerableWithdrawalsGateway as TriggerableWithdrawalsGateway;
+    nor = ctx.contracts.nor as NodeOperatorsRegistry;
 
     // Take a snapshot to restore state after tests
     snapshot = await Snapshot.take();
@@ -147,6 +149,8 @@ describe("TriggerFullWithdrawals Integration", () => {
       .connect(authorizedEntity)
       .triggerFullWithdrawals(validatorData, refundRecipient.address, 0, { value: totalAmount });
     await expect(tx).to.emit(withdrawalVault, "WithdrawalRequestAdded");
+    // check notification of 1 module
+    await expect(tx).to.emit(nor, "ValidatorExitTriggered");
 
     // Check refund was processed
     const balanceAfter = await ethers.provider.getBalance(refundRecipient.address);
@@ -154,8 +158,8 @@ describe("TriggerFullWithdrawals Integration", () => {
 
     // Verify exit limits were consumed
     const exitLimitInfo = await triggerableWithdrawalsGateway.getExitRequestLimitFullInfo();
-    const prevExitRequestsLimit = exitLimitInfo[3];
-    expect(prevExitRequestsLimit).to.equal(100n - BigInt(validatorData.length));
+    const currentExitRequestsLimit = exitLimitInfo[4]; // currentExitRequestsLimit
+    expect(currentExitRequestsLimit).to.equal(100n - BigInt(validatorData.length));
   });
 
   it("Should successfully trigger full withdrawals with fee refund to sender", async () => {
@@ -175,10 +179,12 @@ describe("TriggerFullWithdrawals Integration", () => {
       .connect(authorizedEntity)
       .triggerFullWithdrawals(validatorData, ZeroAddress, 0, { value: totalAmount });
     await expect(tx).to.emit(withdrawalVault, "WithdrawalRequestAdded");
+    // check notification of 1 module
+    await expect(tx).to.emit(nor, "ValidatorExitTriggered");
 
     // Get gas costs
     const receipt = await tx.wait();
-    const gasCost = receipt!.gasUsed * receipt!.gasPrice;
+    const gasCost = BigInt(receipt!.gasUsed * receipt!.gasPrice);
 
     // Check balance after (should be: initial - gas - totalFee)
     const balanceAfter = await ethers.provider.getBalance(authorizedEntity.address);
@@ -229,5 +235,8 @@ describe("TriggerFullWithdrawals Integration", () => {
       .triggerFullWithdrawals(validatorData, ZeroAddress, 0, { value: totalFee });
 
     await expect(tx).to.emit(withdrawalVault, "WithdrawalRequestAdded");
+
+    // check notification of 1 module
+    await expect(tx).to.emit(nor, "ValidatorExitTriggered");
   });
 });

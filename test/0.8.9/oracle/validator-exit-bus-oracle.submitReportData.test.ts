@@ -913,4 +913,37 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       });
     },
   );
+
+  context("allow oracle to submit empty data", () => {
+    let originalState: string;
+    const time = 2000;
+    beforeEach(async () => {
+      originalState = await Snapshot.take();
+
+      await consensus.setTime(time);
+    });
+
+    afterEach(async () => await Snapshot.restore(originalState));
+
+    it("submit report pass", async () => {
+      const encodedEmptyRequestList = encodeExitRequestsDataList([]);
+      const exitHash = ethers.keccak256(
+        ethers.AbiCoder.defaultAbiCoder().encode(["bytes", "uint256"], [encodedEmptyRequestList, DATA_FORMAT_LIST]),
+      );
+
+      await expect(oracle.connect(member1).getDeliveryTimestamp(exitHash)).to.be.revertedWithCustomError(
+        oracle,
+        "ExitHashNotSubmitted",
+      );
+
+      const { reportData } = await prepareReportAndSubmitHash([]);
+      const tx = await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+
+      await expect(tx).to.not.emit(oracle, "ValidatorExitRequest");
+      await expect(tx).to.emit(oracle, "ExitDataProcessing").withArgs(exitHash);
+
+      const timestamp = await oracle.connect(member1).getDeliveryTimestamp(exitHash);
+      expect(timestamp).to.be.equal(time);
+    });
+  });
 });
