@@ -97,6 +97,7 @@ export enum Sk {
   v3Addresses = "v3Addresses",
   v3VoteScript = "v3VoteScript",
   operatorGrid = "operatorGrid",
+  maxEffectiveBalanceIncreaser = "maxEffectiveBalanceIncreaser",
   lazyOracle = "lazyOracle",
 }
 
@@ -145,6 +146,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.accounting:
     case Sk.tokenRebaseNotifier:
     case Sk.operatorGrid:
+    case Sk.maxEffectiveBalanceIncreaser:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);

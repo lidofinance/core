@@ -1,4 +1,7 @@
+import { BytesLike } from "ethers";
 import { ethers } from "hardhat";
+
+import { getPublicKey,utils } from "@noble/bls12-381";
 
 function toValidatorPubKey(num: number): string {
   if (num < 0 || num > 0xffff) {
@@ -34,4 +37,45 @@ export function generateWithdrawalRequestPayload(numberOfRequests: number) {
     partialWithdrawalAmounts,
     mixedWithdrawalAmounts,
   };
+}
+
+export function generateConsolidationRequestPayload(numberOfRequests: number): {
+  sourcePubkeys: BytesLike[];
+  targetPubkeys: BytesLike[];
+  totalSourcePubkeysCount: number;
+} {
+  const sourcePubkeys: BytesLike[] = [];
+  const targetPubkeys: BytesLike[] = [];
+  let totalSourcePubkeysCount = 0;
+  const numberOfSourcePubkeys = 50;
+  for (let i = 1; i <= numberOfRequests; i++) {
+    let tempSourcePubkeys: Uint8Array = new Uint8Array();
+    totalSourcePubkeysCount += numberOfSourcePubkeys;
+    for (let j = 1; j <= numberOfSourcePubkeys; j++) {
+      const privateKey = utils.randomPrivateKey();
+      const publicKey = getPublicKey(privateKey);
+      tempSourcePubkeys = concatUint8Arrays([tempSourcePubkeys, publicKey]);
+    }
+    sourcePubkeys.push(tempSourcePubkeys);
+    const privateKey = utils.randomPrivateKey();
+    const publicKey = getPublicKey(privateKey);
+    targetPubkeys.push(publicKey);
+  }
+
+  return {
+    sourcePubkeys,
+    targetPubkeys,
+    totalSourcePubkeysCount,
+  };
+}
+
+function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
+  const totalLength = arrays.reduce((acc, curr) => acc + curr.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const arr of arrays) {
+    result.set(arr, offset);
+    offset += arr.length;
+  }
+  return result;
 }
