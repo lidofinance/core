@@ -34,7 +34,7 @@ contract VaultHub__MockForOperatorGrid {
 
     mapping(address vault => VaultConnection) public vaultConnections;
 
-    function mock__addVaultConnection(address _vault, VaultConnection calldata _vaultConnection) external {
+    function mock__setVaultConnection(address _vault, VaultConnection calldata _vaultConnection) external {
         vaultConnections[_vault] = _vaultConnection;
     }
 

@@ -93,6 +93,55 @@ describe("OperatorGrid.sol", () => {
     // VaultHub
     vaultHub = await ethers.deployContract("VaultHub__MockForOperatorGrid", []);
 
+    await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: 2000,
+      forcedRebalanceThresholdBP: 1800,
+      infraFeeBP: 500,
+      liquidityFeeBP: 400,
+      reservationFeeBP: 100,
+      owner: vaultOwner,
+      vaultIndex: 1,
+      liabilityShares: 0,
+      pendingDisconnect: false,
+    });
+    await vaultHub.mock__setVaultConnection(vault_NO1_V2, {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: 2000,
+      forcedRebalanceThresholdBP: 1800,
+      infraFeeBP: 500,
+      liquidityFeeBP: 400,
+      reservationFeeBP: 100,
+      owner: vaultOwner,
+      vaultIndex: 2,
+      liabilityShares: 0,
+      pendingDisconnect: false,
+    });
+    await vaultHub.mock__setVaultConnection(vault_NO2_V1, {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: 2000,
+      forcedRebalanceThresholdBP: 1800,
+      infraFeeBP: 500,
+      liquidityFeeBP: 400,
+      reservationFeeBP: 100,
+      owner: vaultOwner,
+      vaultIndex: 3,
+      liabilityShares: 0,
+      pendingDisconnect: false,
+    });
+    await vaultHub.mock__setVaultConnection(vault_NO2_V2, {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: 2000,
+      forcedRebalanceThresholdBP: 1800,
+      infraFeeBP: 500,
+      liquidityFeeBP: 400,
+      reservationFeeBP: 100,
+      owner: vaultOwner,
+      vaultIndex: 4,
+      liabilityShares: 0,
+      pendingDisconnect: false,
+    });
+
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 
     vaultHubAsSigner = await impersonate(await vaultHub.getAddress(), ether("100.0"));
@@ -668,7 +717,7 @@ describe("OperatorGrid.sol", () => {
 
       //just for test - update sharesMinted for vaultHub socket
       const _liabilityShares = 1001;
-      await vaultHub.mock__addVaultConnection(vault_NO1_V1, {
+      await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
         shareLimit: shareLimit,
         reserveRatioBP: 2000,
         forcedRebalanceThresholdBP: 1800,
@@ -705,7 +754,7 @@ describe("OperatorGrid.sol", () => {
 
       //just for test - update sharesMinted for vaultHub socket
       const _liabilityShares = 1000;
-      await vaultHub.mock__addVaultConnection(vault_NO1_V1, {
+      await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
         shareLimit: shareLimit,
         reserveRatioBP: 2000,
         forcedRebalanceThresholdBP: 1800,
@@ -742,7 +791,7 @@ describe("OperatorGrid.sol", () => {
 
       //just for test - update sharesMinted for vaultHub socket
       const _liabilityShares = 1000;
-      await vaultHub.mock__addVaultConnection(vault_NO1_V1, {
+      await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
         shareLimit: shareLimit,
         reserveRatioBP: 2000,
         forcedRebalanceThresholdBP: 1800,
@@ -787,7 +836,7 @@ describe("OperatorGrid.sol", () => {
 
       //just for test - update sharesMinted for vaultHub socket
       const _liabilityShares = 1000;
-      await vaultHub.mock__addVaultConnection(vault_NO1_V1, {
+      await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
         shareLimit: shareLimit,
         reserveRatioBP: 2000,
         forcedRebalanceThresholdBP: 1800,
@@ -876,7 +925,7 @@ describe("OperatorGrid.sol", () => {
           reservationFee,
         );
 
-      await vaultHub.mock__addVaultConnection(vault_NO1_V1, {
+      await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
         shareLimit: tierShareLimit,
         reserveRatioBP: reserveRatio,
         forcedRebalanceThresholdBP: forcedRebalanceThreshold,
@@ -1040,7 +1089,7 @@ describe("OperatorGrid.sol", () => {
         },
       ]);
 
-      await vaultHub.mock__addVaultConnection(vault_NO1_V1, {
+      await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
         shareLimit: shareLimit,
         reserveRatioBP: 2000,
         forcedRebalanceThresholdBP: 1800,
@@ -1161,7 +1210,7 @@ describe("OperatorGrid.sol", () => {
         },
       ];
 
-      await vaultHub.mock__addVaultConnection(vault_NO1_V1, {
+      await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
         owner: vaultOwner,
         shareLimit: shareLimit,
         vaultIndex: 1,

@@ -397,14 +397,14 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     NB: Cannot change from Tier2 to Tier4, because Tier4 has different operator.
 
     */
-    function changeTier(address _vault, uint256 _requestedTierId, uint256 _requestedShareLimit) external {
+    function changeTier(address _vault, uint256 _requestedTierId, uint256 _requestedShareLimit) external returns (bool) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
         ERC7201Storage storage $ = _getStorage();
         if (_requestedTierId >= $.tiers.length) revert TierNotExists();
         if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
-        address vaultOwner = IStakingVault(_vault).owner();
+        address vaultOwner = VaultHub(payable(LIDO_LOCATOR.vaultHub())).vaultConnection(_vault).owner;
         address nodeOperator = IStakingVault(_vault).nodeOperator();
 
         uint256 vaultTierId = $.vaultTier[_vault];
@@ -415,7 +415,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         if (_requestedShareLimit > requestedTier.shareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
 
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
-        if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return;
+        if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
 
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
         uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
@@ -461,6 +461,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         }
 
         emit TierChanged(_vault, _requestedTierId);
+
+        return true;
     }
 
     /// @notice Reset vault's tier to default

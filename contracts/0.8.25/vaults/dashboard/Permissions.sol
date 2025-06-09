@@ -353,9 +353,10 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the CHANGE_TIER_ROLE and requests a change of the tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
+     * @return bool Whether the tier change was confirmed.
      */
-    function _changeTier(uint256 _tierId, uint256 _requestedShareLimit) internal onlyRoleMemberOrAdmin(CHANGE_TIER_ROLE) {
-        OperatorGrid(LIDO_LOCATOR.operatorGrid()).changeTier(address(_stakingVault()), _tierId, _requestedShareLimit);
+    function _changeTier(uint256 _tierId, uint256 _requestedShareLimit) internal onlyRoleMemberOrAdmin(CHANGE_TIER_ROLE) returns (bool) {
+        return OperatorGrid(LIDO_LOCATOR.operatorGrid()).changeTier(address(_stakingVault()), _tierId, _requestedShareLimit);
     }
 
     /**
