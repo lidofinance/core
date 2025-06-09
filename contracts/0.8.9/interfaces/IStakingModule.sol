@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 pragma solidity 0.8.9;
@@ -22,7 +22,7 @@ interface IStakingModule {
     /// @param _nodeOperatorId The ID of the node operator whose validator's status is being delivered.
     /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
     /// @param _publicKey The public key of the validator being reported.
-    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit but has not exited.
+    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit after request but has not exited.
     function reportValidatorExitDelay(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
@@ -31,7 +31,7 @@ interface IStakingModule {
     ) external;
 
     /// @notice Handles the triggerable exit event for a validator belonging to a specific node operator.
-    /// @dev This function is called by the StakingRouter when a validator is exited using the triggerable
+    /// @dev This function is called by the StakingRouter when a validator is triggered to exit using the triggerable
     ///      exit request on the Execution Layer (EL).
     /// @param _nodeOperatorId The ID of the node operator.
     /// @param _publicKey The public key of the validator being reported.
@@ -58,7 +58,7 @@ interface IStakingModule {
         uint256 _eligibleToExitInSec
     ) external view returns (bool);
 
-    /// @notice Returns the number of seconds after which a validator is considered late.
+    /// @notice Returns the number of seconds after which a validator is considered late for specified node operator.
     /// @param _nodeOperatorId The ID of the node operator.
     /// @return The exit deadline threshold in seconds.
     function exitDeadlineThreshold(uint256 _nodeOperatorId) external view returns (uint256);
