@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
@@ -210,7 +210,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     NodeOperatorSummary internal _nodeOperatorSummary;
 
     /// @dev Mapping of Node Operator exit delay keys
-    mapping(bytes32 => bool) internal _validatorExitProcessedKeys;
+    mapping(bytes32 => bool) internal _validatorProcessedLateKeys;
 
     //
     // METHODS
@@ -255,12 +255,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _setExitDeadlineThreshold(_exitDeadlineThresholdInSeconds, 0);
     }
 
-    /// @notice A function to finalize upgrade to v2 (from v1). Can be called only once.
+    /// @notice A function to finalize upgrade to v2 (from v1). Removed and no longer used.
     /// For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
-    ///      See historical usage in commit: https://github.com/lidofinance/core/blob/c19480aa3366b26aa6eac17f85a6efae8b9f4f72/contracts/0.4.24/nos/NodeOperatorsRegistry.sol#L230
+    /// See historical usage in commit: https://github.com/lidofinance/core/blob/c19480aa3366b26aa6eac17f85a6efae8b9f4f72/contracts/0.4.24/nos/NodeOperatorsRegistry.sol#L230
     /// function finalizeUpgrade_v2(address _locator, bytes32 _type, uint256 _stuckPenaltyDelay) external
 
-    /// @notice A function to finalize upgrade to v3 (from v2). Can be called only once.
+    /// @notice A function to finalize upgrade to v3 (from v2). Removed and no longer used.
     /// See historical usage in commit: https://github.com/lidofinance/core/blob/c19480aa3366b26aa6eac17f85a6efae8b9f4f72/contracts/0.4.24/nos/NodeOperatorsRegistry.sol#L298
     /// function finalizeUpgrade_v3() external
 
@@ -540,15 +540,12 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         _updateRewardDistributionState(RewardDistributionState.ReadyForDistribution);
     }
 
-    /// @notice [DEPRECATED] `_stuckValidatorsCount` is ignored.
     /// @notice Unsafely updates the number of validators in the EXITED/STUCK states for node operator with given id.
     /// @param _nodeOperatorId Id of the node operator
     /// @param _exitedValidatorsCount New number of EXITED validators for the node operator
-    /// @dev _stuckValidatorsCount [DEPRECATED] Ignored.
     function unsafeUpdateValidatorsCount(
         uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount,
-        uint256 /* _stuckValidatorsCount */
+        uint256 _exitedValidatorsCount
     ) external {
         _onlyExistedNodeOperator(_nodeOperatorId);
         _auth(STAKING_ROUTER_ROLE);
@@ -1038,15 +1035,15 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     }
 
     /// @notice Returns true if the given validator public key has already been reported as exiting.
-    /// @dev The function hashes the input public key using keccak256 and checks if it exists in the _validatorExitProcessedKeys mapping.
+    /// @dev The function hashes the input public key using keccak256 and checks if it exists in the _validatorProcessedLateKeys mapping.
     /// @param _publicKey The BLS public key of the validator (serialized as bytes).
     /// @return True if the validator exit for the provided key has been reported, false otherwise.
     function isValidatorExitingKeyReported(bytes _publicKey) public view returns (bool) {
         bytes32 processedKeyHash = keccak256(_publicKey);
-        return _validatorExitProcessedKeys[processedKeyHash];
+        return _validatorProcessedLateKeys[processedKeyHash];
     }
 
-    /// @notice Returns the number of seconds after which a validator is considered late.
+    /// @notice Returns the number of seconds after which a validator is considered late for specified node operator.
     /// @dev The operatorId argument is ignored and present only to comply with the IStakingModule interface.
     /// @return uint256 The exit deadline threshold in seconds for all node operators.
     function exitDeadlineThreshold(uint256 /* operatorId */) public view returns (uint256) {
@@ -1066,17 +1063,17 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @notice Sets the validator exit deadline threshold and the reporting window for late exits.
     /// @dev Updates the cutoff timestamp before which a validator that was requested to exit cannot be reported as late.
     /// @param _threshold Number of seconds a validator has to exit after becoming eligible.
-    /// @param _reportingWindow Additional number of seconds during which a late exit can still be reported.
-    function setExitDeadlineThreshold(uint256 _threshold, uint256 _reportingWindow) external {
+    /// @param _lateReportingWindow Additional number of seconds during which a late exit can still be reported.
+    function setExitDeadlineThreshold(uint256 _threshold, uint256 _lateReportingWindow) external {
         _auth(MANAGE_NODE_OPERATOR_ROLE);
-        _setExitDeadlineThreshold(_threshold, _reportingWindow);
+        _setExitDeadlineThreshold(_threshold, _lateReportingWindow);
     }
 
-    function _setExitDeadlineThreshold(uint256 _threshold, uint256 _reportingWindow) internal {
+    function _setExitDeadlineThreshold(uint256 _threshold, uint256 _lateReportingWindow) internal {
         require(_threshold > 0, "INVALID_EXIT_DELAY_THRESHOLD");
 
         // Set the cutoff timestamp to the current time minus the threshold and reportingWindow period
-        uint256 currentCutoffTimestamp = block.timestamp - _threshold - _reportingWindow;
+        uint256 currentCutoffTimestamp = block.timestamp - _threshold - _lateReportingWindow;
         require(exitPenaltyCutoffTimestamp() <= currentCutoffTimestamp, "INVALID_EXIT_PENALTY_CUTOFF_TIMESTAMP");
 
         Packed64x4.Packed memory stats = Packed64x4.Packed(0);
@@ -1084,11 +1081,11 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
         stats.set(EXIT_PENALTY_CUTOFF_TIMESTAMP_OFFSET, currentCutoffTimestamp);
         EXIT_DELAY_STATS.setStorageUint256(stats.v);
 
-        emit ExitDeadlineThresholdChanged(_threshold, _reportingWindow);
+        emit ExitDeadlineThresholdChanged(_threshold, _lateReportingWindow);
     }
 
     /// @notice Handles the triggerable exit event for a validator belonging to a specific node operator.
-    /// @dev This function is called by the StakingRouter when a validator is exited using the triggerable
+    /// @dev This function is called by the StakingRouter when a validator is triggered to exit using the triggerable
     ///      exit request on the Execution Layer (EL).
     /// @param _nodeOperatorId The ID of the node operator.
     /// @param _publicKey The public key of the validator being reported.
@@ -1130,7 +1127,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @param _nodeOperatorId The ID of the node operator whose validator's status is being delivered.
     /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
     /// @param _publicKey The public key of the validator being reported.
-    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit but has not exited.
+    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit after request but has not exited.
     function reportValidatorExitDelay(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
@@ -1147,11 +1144,11 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
         bytes32 processedKeyHash = keccak256(_publicKey);
         // Skip if key is already processed (i.e., not in NotProcessed state)
-        if (_validatorExitProcessedKeys[processedKeyHash]) {
+        if (_validatorProcessedLateKeys[processedKeyHash]) {
             return;
         }
         // Mark the validator exit key as processed
-        _validatorExitProcessedKeys[processedKeyHash] = true;
+        _validatorProcessedLateKeys[processedKeyHash] = true;
 
         emit ValidatorExitStatusUpdated(_nodeOperatorId, _publicKey, _eligibleToExitInSec, _proofSlotTimestamp);
     }

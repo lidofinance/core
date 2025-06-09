@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 /* See contracts/COMPILERS.md */
@@ -195,9 +195,9 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         revert DirectETHTransfer();
     }
 
-    /// @notice Finalizes upgrade to v2 (from v1). Can be called only once.
+    /// @notice A function to finalize upgrade to v2 (from v1). Removed and no longer used.
     /// @dev https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
-    ///   See historical usage in commit: https://github.com/lidofinance/core/blob/c19480aa3366b26aa6eac17f85a6efae8b9f4f72/contracts/0.8.9/StakingRouter.sol#L190
+    /// See historical usage in commit: https://github.com/lidofinance/core/blob/c19480aa3366b26aa6eac17f85a6efae8b9f4f72/contracts/0.8.9/StakingRouter.sol#L190
     // function finalizeUpgrade_v2(
     //     uint256[] memory _priorityExitShareThresholds,
     //     uint256[] memory _maxDepositsPerBlock,
@@ -438,11 +438,11 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     ///    finish until the new oracle reporting frame is started, in which case staking router will emit a warning
     ///    event `StakingModuleExitedValidatorsIncompleteReporting` when the first data submission phase is performed
     ///    for a new reporting frame. This condition will result in the staking module having an incomplete data about
-    ///    the exited and maybe stuck validator counts during the whole reporting frame. Handling this condition is
+    ///    the exited validator counts during the whole reporting frame. Handling this condition is
     ///    the responsibility of each staking module.
     ///
-    /// 4. When the second reporting phase is finished, i.e. when the oracle submitted the complete data on the stuck
-    ///    and exited validator counts per node operator for the current reporting frame, the oracle calls
+    /// 4. When the second reporting phase is finished, i.e. when the oracle submitted the complete data on the exited
+    ///    validator counts per node operator for the current reporting frame, the oracle calls
     ///    `StakingRouter.onValidatorsCountsByNodeOperatorReportingFinished` which, in turn, calls
     ///    `IStakingModule.onExitedAndStuckValidatorsCountsUpdated` on all modules.
     ///
@@ -547,7 +547,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     /// after applying the corrections.
     /// @param _correction See the docs for the `ValidatorsCountsCorrection` struct.
     ///
-    /// @dev Reverts if the current numbers of exited and stuck validators of the module and node operator
+    /// @dev Reverts if the current numbers of exited validators of the module and node operator
     /// don't match the supplied expected current values.
     ///
     /// @dev The function is restricted to the `UNSAFE_SET_EXITED_VALIDATORS_ROLE` role.
@@ -614,11 +614,11 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         }
     }
 
-    /// @notice Finalizes the reporting of the exited and stuck validators counts for the current
+    /// @notice Finalizes the reporting of the exited validators counts for the current
     /// reporting frame.
     ///
     /// @dev Called by the oracle when the second phase of data reporting finishes, i.e. when the
-    /// oracle submitted the complete data on the stuck and exited validator counts per node operator
+    /// oracle submitted the complete data on the exited validator counts per node operator
     /// for the current reporting frame. See the docs for `updateExitedValidatorsCountByStakingModule`
     /// for the description of the overall update process.
     ///
@@ -762,6 +762,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         uint256 targetValidatorsCount;
 
         /// @notice The number of validators with an expired request to exit time.
+        /// @dev [deprecated] Stuck key processing has been removed, this field is no longer used.
         uint256 stuckValidatorsCount;
 
         /// @notice The number of validators that can't be withdrawn, but deposit costs were
@@ -769,6 +770,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         uint256 refundedValidatorsCount;
 
         /// @notice A time when the penalty for stuck validators stops applying to node operator rewards.
+        /// @dev [deprecated] Stuck key processing has been removed, this field is no longer used.
         uint256 stuckPenaltyEndTimestamp;
 
         /// @notice The total number of validators in the EXITED state on the Consensus Layer.
@@ -1459,7 +1461,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
     /// @param _nodeOperatorId The ID of the node operator whose validator status is being delivered.
     /// @param _proofSlotTimestamp The timestamp (slot time) when the validator was last known to be in an active ongoing state.
     /// @param _publicKey The public key of the validator being reported.
-    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit but has not exited.
+    /// @param _eligibleToExitInSec The duration (in seconds) indicating how long the validator has been eligible to exit after request but has not exited.
     function reportValidatorExitDelay(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
