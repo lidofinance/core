@@ -271,7 +271,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _tierId The tier to change to
      * @param _requestedShareLimit The requested share limit
      */
-    function changeTierAndConnectToVaultHub(uint256 _tierId, uint256 _requestedShareLimit) external {
+    function changeTierAndConnectToVaultHub(uint256 _tierId, uint256 _requestedShareLimit) external payable {
         connectToVaultHub();
         if (!_changeTier(_tierId, _requestedShareLimit)) {
             revert TierChangeNotConfirmed();
@@ -595,7 +595,7 @@ contract Dashboard is NodeOperatorFee {
         SafeERC20.safeTransferFrom(WSTETH, msg.sender, address(this), _amountOfWstETH);
         uint256 unwrappedStETH = WSTETH.unwrap(_amountOfWstETH);
         uint256 unwrappedShares = STETH.getSharesByPooledEth(unwrappedStETH);
-
+сщ
         STETH.transferShares(address(VAULT_HUB), unwrappedShares);
         _burnShares(unwrappedShares);
     }
