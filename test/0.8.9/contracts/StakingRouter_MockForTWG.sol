@@ -1,5 +1,11 @@
 pragma solidity 0.8.9;
 
+struct ValidatorData {
+    uint256 stakingModuleId;
+    uint256 nodeOperatorId;
+    bytes pubkey;
+}
+
 contract StakingRouter__MockForTWG {
     error CustomRevertError(uint256 id, string reason);
 
@@ -11,38 +17,19 @@ contract StakingRouter__MockForTWG {
         uint256 exitType
     );
 
-    bool private shouldRevert;
-    bool private shouldRevertWithCustomError;
-
-    function setShouldRevert(bool _shouldRevert) external {
-        shouldRevert = _shouldRevert;
-    }
-
-    function setShouldRevertWithCustomError(bool _shouldRevert) external {
-        shouldRevertWithCustomError = _shouldRevert;
-    }
-
     function onValidatorExitTriggered(
-        uint256 _stakingModuleId,
-        uint256 _nodeOperatorId,
-        bytes calldata _publicKey,
+        ValidatorData[] calldata validatorData,
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     ) external {
-        if (shouldRevert) {
-            revert("some reason");
+        for (uint256 i = 0; i < validatorData.length; ++i) {
+            emit Mock__onValidatorExitTriggered(
+                validatorData[i].stakingModuleId,
+                validatorData[i].nodeOperatorId,
+                validatorData[i].pubkey,
+                _withdrawalRequestPaidFee,
+                _exitType
+            );
         }
-
-        if (shouldRevertWithCustomError) {
-            revert CustomRevertError(42, "custom fail");
-        }
-
-        emit Mock__onValidatorExitTriggered(
-            _stakingModuleId,
-            _nodeOperatorId,
-            _publicKey,
-            _withdrawalRequestPaidFee,
-            _exitType
-        );
     }
 }
