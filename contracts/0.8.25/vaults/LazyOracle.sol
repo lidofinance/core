@@ -38,7 +38,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     struct VaultInfo {
         address vault;
         uint256 balance;
-        int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
         uint96 shareLimit;
@@ -127,7 +126,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
             batch[i] = VaultInfo(
                 vaultAddress,
                 address(vault).balance,
-                record.inOutDelta,
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
                 connection.shareLimit,
@@ -207,7 +205,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     /// @return inOutDelta the inOutDelta in the refSlot
     function _handleSanityChecks(address _vault, uint256 _totalValue) public returns (uint256 totalValue, int256 inOutDelta) {
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
-        VaultHub.VaultConnection memory connection = vaultHub.vaultConnection(_vault);
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
         // 1. Calculate inOutDelta in the refSlot
@@ -257,9 +254,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
                 q.pendingTotalValueIncrease = delta;
                 q.startTimestamp = reportTs;
                 emit QuarantinedDeposit(_vault, delta);
-            } else if (reportTs - q.startTimestamp < $.quarantinePeriod) { // quarantine period not expired
+            } else if (reportTs - q.startTimestamp < $.quarantinePeriod) { // quarantine not expired
                 _totalValue = refSlotTotalValue;
-            } else if (delta <= quarDelta + refSlotTotalValue * $.maxRewardRatioBP / TOTAL_BP) { // quarantine period expired
+            } else if (delta <= quarDelta + refSlotTotalValue * $.maxRewardRatioBP / TOTAL_BP) { // quarantine expired
                 q.pendingTotalValueIncrease = 0;
             } else { // start new quarantine
                 _totalValue = refSlotTotalValue + quarDelta;
