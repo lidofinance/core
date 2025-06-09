@@ -173,8 +173,7 @@ abstract contract Confirmations {
      * @param _newConfirmExpiry The new confirmation expiry in seconds.
      */
     function _setConfirmExpiry(uint256 _newConfirmExpiry) internal {
-        if (_newConfirmExpiry < MIN_CONFIRM_EXPIRY || _newConfirmExpiry > MAX_CONFIRM_EXPIRY)
-            revert ConfirmExpiryOutOfBounds();
+        _validateConfirmExpiry(_newConfirmExpiry);
 
         ConfirmationStorage storage $ = _getConfirmationsStorage();
 
@@ -182,6 +181,11 @@ abstract contract Confirmations {
         $.confirmExpiry = _newConfirmExpiry;
 
         emit ConfirmExpirySet(msg.sender, oldConfirmExpiry, _newConfirmExpiry);
+    }
+
+    function _validateConfirmExpiry(uint256 _newConfirmExpiry) internal pure {
+        if (_newConfirmExpiry < MIN_CONFIRM_EXPIRY || _newConfirmExpiry > MAX_CONFIRM_EXPIRY)
+            revert ConfirmExpiryOutOfBounds();
     }
 
     function _getConfirmationsStorage() private pure returns (ConfirmationStorage storage $) {

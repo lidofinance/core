@@ -98,6 +98,7 @@ contract NodeOperatorFee is Permissions {
 
         super._initialize(_defaultAdmin, _confirmExpiry);
 
+        _validateNodeOperatorFeeRate(_nodeOperatorFeeRate);
         _setNodeOperatorFeeRate(_nodeOperatorFeeRate);
         _setNodeOperatorFeeRecipient(_nodeOperatorManager);
 
@@ -189,7 +190,7 @@ contract NodeOperatorFee is Permissions {
      * @notice Updates the node-operator's fee rate (basis-points share).
      * @param _newNodeOperatorFeeRate The new node operator fee rate.
      */
-    function setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) external onlyConfirmed(confirmingRoles()) {
+    function setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) external {
         // The report must be fresh so that the total value of the vault is up to date
         // and all the node operator fees are paid out fairly up to the moment of the latest fresh report
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
@@ -200,6 +201,12 @@ contract NodeOperatorFee is Permissions {
 
         // Adjustment must be settled before the fee rate change
         if (rewardsAdjustment.amount != 0) revert AdjustmentNotSettled();
+
+        // Validate fee rate before collecting confirmations
+        _validateNodeOperatorFeeRate(_newNodeOperatorFeeRate);
+
+        // store the caller's confirmation; only proceed if the required number of confirmations is met.
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return;
 
         // To follow the check-effects-interaction pattern, we need to remember the fee here
         // because the fee calculation variables will be reset in the following lines
@@ -222,7 +229,11 @@ contract NodeOperatorFee is Permissions {
      * the confirm is considered expired, no longer counts and must be recasted.
      * @param _newConfirmExpiry The new confirm expiry in seconds.
      */
-    function setConfirmExpiry(uint256 _newConfirmExpiry) external onlyConfirmed(confirmingRoles()) {
+    function setConfirmExpiry(uint256 _newConfirmExpiry) external {
+        _validateConfirmExpiry(_newConfirmExpiry);
+        
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return;
+
         _setConfirmExpiry(_newConfirmExpiry);
     }
 
@@ -259,15 +270,16 @@ contract NodeOperatorFee is Permissions {
     function setRewardsAdjustment(
         uint256 _proposedAdjustment,
         uint256 _expectedAdjustment
-    ) external onlyConfirmed(confirmingRoles()) {
+    ) external {
         if (rewardsAdjustment.amount != _expectedAdjustment)
             revert InvalidatedAdjustmentVote(rewardsAdjustment.amount, _expectedAdjustment);
         if (_proposedAdjustment > MANUAL_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return;
         _setRewardsAdjustment(uint128(_proposedAdjustment));
     }
 
     function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
-        if (_newNodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
+        _validateNodeOperatorFeeRate(_newNodeOperatorFeeRate);
 
         uint256 oldNodeOperatorFeeRate = nodeOperatorFeeRate;
         nodeOperatorFeeRate = _newNodeOperatorFeeRate;
@@ -302,6 +314,14 @@ contract NodeOperatorFee is Permissions {
     function _toSignedClamped(uint128 _adjustment) internal pure returns (int128) {
         if (_adjustment > uint128(type(int128).max)) return type(int128).max;
         return int128(_adjustment);
+    }
+
+    /**
+     * @notice Validates that the node operator fee rate is within acceptable bounds
+     * @param _nodeOperatorFeeRate The fee rate to validate
+     */
+    function _validateNodeOperatorFeeRate(uint256 _nodeOperatorFeeRate) internal pure {
+        if (_nodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
     }
 
     // ==================== Events ====================

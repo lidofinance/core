@@ -146,6 +146,7 @@ abstract contract Permissions is AccessControlConfirmable {
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
+        _validateConfirmExpiry(_confirmExpiry);
         _setConfirmExpiry(_confirmExpiry);
     }
 
@@ -345,7 +346,8 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the confirming roles and sets the owner on the StakingVault.
      * @param _newOwner The address to set the owner to.
      */
-    function _transferVaultOwnership(address _newOwner) internal onlyConfirmed(confirmingRoles()) {
+    function _transferVaultOwnership(address _newOwner) internal {
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return;
         VAULT_HUB.transferVaultOwnership(address(_stakingVault()), _newOwner);
     }
 

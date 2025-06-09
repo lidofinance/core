@@ -18,11 +18,6 @@ abstract contract AccessControlConfirmable is AccessControlEnumerable, Confirmat
         __Confirmations_init();
     }
 
-    modifier onlyConfirmed(bytes32[] memory _roles) {
-        if (!_collectAndCheckConfirmations(msg.data, _roles)) return;
-        _;
-    }
-
     function _isValidConfirmer(bytes32 _role) internal view override returns (bool) {
         return hasRole(_role, msg.sender);
     }
