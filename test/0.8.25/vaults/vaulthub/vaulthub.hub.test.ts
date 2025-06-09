@@ -28,7 +28,7 @@ import {
   MAX_UINT256,
   randomAddress,
 } from "lib";
-import { TOTAL_BASIS_POINTS, MAX_FEE_BP } from "lib/constants";
+import { MAX_FEE_BP,TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
