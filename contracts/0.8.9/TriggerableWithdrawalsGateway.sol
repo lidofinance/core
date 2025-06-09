@@ -41,24 +41,36 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      * @param name Name of the argument that was zero
      */
     error ZeroArgument(string name);
+
     /**
      * @notice Thrown when attempting to set the admin address to zero
      */
     error AdminCannotBeZero();
+
     /**
      * @notice Thrown when exit request has wrong length
      */
     error InvalidRequestsDataLength();
+
     /**
      * @notice Thrown when a withdrawal fee insufficient
      * @param feeRequired Amount of fee required to cover withdrawal request
      * @param passedValue Amount of fee sent to cover withdrawal request
      */
     error InsufficientFee(uint256 feeRequired, uint256 passedValue);
+
     /**
      * @notice Thrown when a withdrawal fee refund failed
      */
     error FeeRefundFailed();
+
+    /**
+     * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
+     * @param requestsCount Amount of requests that were sent for processing
+     * @param remainingLimit Amount of requests that still can be processed at current day
+     */
+    error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
+
     /**
      * @notice Emitted when limits configs are set.
      * @param maxExitRequestsLimit The maximum number of exit requests.
@@ -66,12 +78,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
     event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
-    /**
-     * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
-     * @param requestsCount Amount of requests that were sent for processing
-     * @param remainingLimit Amount of requests that still can be processed at current day
-     */
-    error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
 
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
@@ -247,11 +253,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
         uint256 exitType
     ) internal {
         IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
-        stakingRouter.onValidatorExitTriggered(
-            validatorsData,
-            withdrawalRequestPaidFee,
-            exitType
-        );
+        stakingRouter.onValidatorExitTriggered(validatorsData, withdrawalRequestPaidFee, exitType);
     }
 
     function _refundFee(uint256 refund, address recipient) internal {
