@@ -59,3 +59,5 @@ export const EMPTY_SIGNATURE = "0x".padEnd(SIGNATURE_LENGTH_HEX + 2, "0");
 export const ONE_GWEI = 1_000_000_000n;
 
 export const TOTAL_BASIS_POINTS = 100_00n;
+
+export const MAX_FEE_BP = 65_535n;

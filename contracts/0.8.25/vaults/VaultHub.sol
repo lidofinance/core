@@ -150,6 +150,8 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
     /// @notice length of the validator pubkey in bytes
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
+    /// @dev max value for fees in basis points - it's about 650%
+    uint256 internal constant MAX_FEE_BP = type(uint16).max;
 
     /// @notice codehash of the account with no code
     bytes32 private constant EMPTY_CODEHASH = keccak256("");
@@ -394,9 +396,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reservationFeeBP
     ) external onlyRole(VAULT_MASTER_ROLE) {
         if (_vault == address(0)) revert ZeroArgument();
-        if (_infraFeeBP > TOTAL_BASIS_POINTS) revert InfraFeeTooHigh(_vault, _infraFeeBP, TOTAL_BASIS_POINTS);
-        if (_liquidityFeeBP > TOTAL_BASIS_POINTS) revert LiquidityFeeTooHigh(_vault, _liquidityFeeBP, TOTAL_BASIS_POINTS);
-        if (_reservationFeeBP > TOTAL_BASIS_POINTS) revert ReservationFeeTooHigh(_vault, _reservationFeeBP, TOTAL_BASIS_POINTS);
+        if (_infraFeeBP > MAX_FEE_BP) revert InfraFeeTooHigh(_vault, _infraFeeBP, MAX_FEE_BP);
+        if (_liquidityFeeBP > MAX_FEE_BP) revert LiquidityFeeTooHigh(_vault, _liquidityFeeBP, MAX_FEE_BP);
+        if (_reservationFeeBP > MAX_FEE_BP) revert ReservationFeeTooHigh(_vault, _reservationFeeBP, MAX_FEE_BP);
 
         VaultConnection storage connection = _checkConnection(_vault);
         uint16 preInfraFeeBP = connection.infraFeeBP;
@@ -869,9 +871,9 @@ contract VaultHub is PausableUntilWithRoles {
         if (_forcedRebalanceThresholdBP > _reserveRatioBP) {
             revert ForcedRebalanceThresholdTooHigh(_vault, _forcedRebalanceThresholdBP, _reserveRatioBP);
         }
-        if (_infraFeeBP > TOTAL_BASIS_POINTS) revert InfraFeeTooHigh(_vault, _infraFeeBP, TOTAL_BASIS_POINTS);
-        if (_liquidityFeeBP > TOTAL_BASIS_POINTS) revert LiquidityFeeTooHigh(_vault, _liquidityFeeBP, TOTAL_BASIS_POINTS);
-        if (_reservationFeeBP > TOTAL_BASIS_POINTS) revert ReservationFeeTooHigh(_vault, _reservationFeeBP, TOTAL_BASIS_POINTS);
+        if (_infraFeeBP > MAX_FEE_BP) revert InfraFeeTooHigh(_vault, _infraFeeBP, MAX_FEE_BP);
+        if (_liquidityFeeBP > MAX_FEE_BP) revert LiquidityFeeTooHigh(_vault, _liquidityFeeBP, MAX_FEE_BP);
+        if (_reservationFeeBP > MAX_FEE_BP) revert ReservationFeeTooHigh(_vault, _reservationFeeBP, MAX_FEE_BP);
 
         VaultConnection memory connection = _vaultConnection(_vault);
         if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
