@@ -321,7 +321,7 @@ describe("WithdrawalVault.sol", () => {
         vault.connect(triggerableWithdrawalsGateway).addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts),
       )
         .to.be.revertedWithCustomError(vault, "IncorrectFee")
-        .withArgs(0, 3n);
+        .withArgs(3n, 0);
 
       // 2. Should revert if fee is less than required
       const insufficientFee = 2n;
@@ -331,7 +331,7 @@ describe("WithdrawalVault.sol", () => {
           .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: insufficientFee }),
       )
         .to.be.revertedWithCustomError(vault, "IncorrectFee")
-        .withArgs(2n, 3n);
+        .withArgs(3n, 2n);
     });
 
     it("Should revert if pubkey is not 48 bytes", async function () {
@@ -400,7 +400,7 @@ describe("WithdrawalVault.sol", () => {
           .addWithdrawalRequests(pubkeysHexArray, mixedWithdrawalAmounts, { value: withdrawalFee }),
       )
         .to.be.revertedWithCustomError(vault, "IncorrectFee")
-        .withArgs(10n, 9n);
+        .withArgs(9n, 10n);
     });
 
     ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {

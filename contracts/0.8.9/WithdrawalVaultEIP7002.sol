@@ -16,7 +16,7 @@ abstract contract WithdrawalVaultEIP7002 {
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
     error FeeReadFailed();
     error FeeInvalidData();
-    error IncorrectFee(uint256 providedFee, uint256 requiredFee);
+    error IncorrectFee(uint256 requiredFee, uint256 providedFee);
     error RequestAdditionFailed(bytes callData);
 
     function _addWithdrawalRequests(bytes[] calldata pubkeys, uint64[] calldata amounts) internal {
@@ -60,7 +60,7 @@ abstract contract WithdrawalVaultEIP7002 {
 
     function _checkFee(uint256 fee) internal view {
         if (msg.value != fee) {
-            revert IncorrectFee(msg.value, fee);
+            revert IncorrectFee(fee, msg.value);
         }
     }
 }
