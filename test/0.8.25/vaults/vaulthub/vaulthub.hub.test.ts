@@ -786,7 +786,7 @@ describe("VaultHub.sol:hub", () => {
         .withArgs(vaultAddress, RESERVE_RATIO_BP + 1n, RESERVE_RATIO_BP);
     });
 
-    it.only("reverts if infra fee is too high", async () => {
+    it("reverts if infra fee is too high", async () => {
       const tooHighInfraFeeBP = MAX_FEE_BP + 1n;
 
       await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
