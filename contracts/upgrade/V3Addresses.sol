@@ -46,9 +46,6 @@ contract V3Addresses {
         address newLidoImpl;
         address newAccountingOracleImpl;
 
-        // New non-proxy contracts
-        address vaultFactory;
-
         // New fancy proxy and blueprint contracts
         address upgradeableBeacon;
         address stakingVaultImpl;
@@ -65,7 +62,6 @@ contract V3Addresses {
     string public constant CURATED_MODULE_NAME = "curated-onchain-v1";
     string public constant SIMPLE_DVT_MODULE_NAME = "SimpleDVT";
     string public constant CSM_MODULE_NAME = "Community Staking";
-
 
     //
     // -------- Pre-upgrade old contracts --------
@@ -138,7 +134,6 @@ contract V3Addresses {
         AGENT = params.agent;
         ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
         VOTING = params.voting;
-        VAULT_FACTORY = params.vaultFactory;
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;
@@ -156,6 +151,7 @@ contract V3Addresses {
 
         ACCOUNTING = newLocatorImpl.accounting();
         VAULT_HUB = payable(newLocatorImpl.vaultHub());
+        VAULT_FACTORY = newLocatorImpl.vaultFactory();
         PREDEPOSIT_GUARANTEE = newLocatorImpl.predepositGuarantee();
         OPERATOR_GRID = newLocatorImpl.operatorGrid();
 
