@@ -528,7 +528,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (connection.pendingDisconnect) {
             if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
-                _completeDisconnection(_vault, connection, record, accruedTreasuryFees);
+                _completeDisconnection(_vault, connection, record, obligations);
                 return;
             } else {
                 // we abort the disconnect process as there is a slashing conflict yet to be resolved
@@ -994,10 +994,10 @@ contract VaultHub is PausableUntilWithRoles {
         address _vault,
         VaultConnection storage _connection,
         VaultRecord storage _record,
-        uint256 _accruedTreasuryFees
+        VaultObligations storage _obligations
     ) internal {
         // settle all the fees, but not more than we have in the vault and revert if some obligations remain
-        _settleObligations(_vault, _record, Math256.min(_accruedTreasuryFees, _vault.balance), 0);
+        _settleObligations(_vault, _record, _obligations, 0);
 
         IStakingVault(_vault).transferOwnership(_connection.owner);
         // we rely on the oracle to preserve vault index
@@ -1079,9 +1079,8 @@ contract VaultHub is PausableUntilWithRoles {
         if (sharesAfterMint > _shareLimit) revert ShareLimitExceeded(_vault, sharesAfterMint, _shareLimit);
 
         uint256 stETHAfterMint = _getPooledEthBySharesRoundUp(sharesAfterMint);
-        uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - connection.reserveRatioBP;
         uint256 maxLockedEther = _maxLocked(_vault);
-        uint256 maxMintableEther = (maxLockedEther * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 maxMintableEther = (maxLockedEther * _maxMintableRatioBP) / TOTAL_BASIS_POINTS;
         if (stETHAfterMint > maxMintableEther) {
             uint256 totalValue_ = _totalValue(_record);
             revert InsufficientTotalValueToMint(_vault, totalValue_, totalValue_ - maxLockedEther);
@@ -1570,7 +1569,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 settledLidoFees,
         uint256 cumulativeSettledLidoFees
     );
-    
+
     event BadDebtSocialized(address indexed vaultDonor, address indexed vaultAcceptor, uint256 badDebtShares);
 
     error ZeroBalance();
