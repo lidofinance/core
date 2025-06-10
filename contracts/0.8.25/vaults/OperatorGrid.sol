@@ -398,7 +398,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (_requestedTierId >= $.tiers.length) revert TierNotExists();
         if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
-        address vaultOwner = VaultHub(payable(LIDO_LOCATOR.vaultHub())).vaultConnection(_vault).owner;
+        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        bool isVaultConnected = vaultHub.isVaultConnected(_vault);
+ 
+        address vaultOwner = isVaultConnected 
+            ? vaultHub.vaultConnection(_vault).owner
+            : IStakingVault(_vault).owner();
+
         address nodeOperator = IStakingVault(_vault).nodeOperator();
 
         uint256 vaultTierId = $.vaultTier[_vault];
@@ -411,7 +417,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
 
-        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
         uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
 
         //check if tier limit is exceeded
@@ -442,8 +447,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         // 2. Vault is created, its tier is changed before connecting to VaultHub.
         //    In this case, `VaultConnection` is still zero, and updateConnection must be skipped.
         // Hence, we update the VaultHub connection only if the vault is already connected.
-        if (vaultHub.isVaultConnected(_vault)) {
-            VaultHub(payable(LIDO_LOCATOR.vaultHub())).updateConnection(
+        if (isVaultConnected) {
+            vaultHub.updateConnection(
                 _vault,
                 _requestedShareLimit,
                 requestedTier.reserveRatioBP,

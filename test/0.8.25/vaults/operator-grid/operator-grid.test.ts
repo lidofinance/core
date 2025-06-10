@@ -880,6 +880,29 @@ describe("OperatorGrid.sol", () => {
       expect(tier1after.liabilityShares).to.equal(0);
       expect(tier2after.liabilityShares).to.equal(_liabilityShares);
     });
+
+    it("changeTier without connection to VaultHub", async function () {
+      const shareLimit = 1000;
+      await operatorGrid.registerGroup(nodeOperator1, 1000);
+      await operatorGrid.registerTiers(nodeOperator1, [
+        {
+          shareLimit: shareLimit,
+          reserveRatioBP: 2000,
+          forcedRebalanceThresholdBP: 1800,
+          infraFeeBP: 500,
+          liquidityFeeBP: 400,
+          reservationFeeBP: 100,
+        }
+      ]);
+
+      await vaultHub.mock__deleteVaultConnection(vault_NO1_V1);
+
+      await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
+      const tx = operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit);
+      
+      await expect(tx).to.not.emit(vaultHub, "VaultConnectionUpdated")
+      await expect(tx).to.emit(operatorGrid, "TierChanged")
+    });
   });
 
   context("mintShares", () => {

@@ -38,12 +38,16 @@ contract VaultHub__MockForOperatorGrid {
         vaultConnections[_vault] = _vaultConnection;
     }
 
+    function mock__deleteVaultConnection(address _vault) external {
+        delete vaultConnections[_vault];
+    }
+
     function vaultConnection(address _vault) external view returns (VaultConnection memory) {
         return vaultConnections[_vault];
     }
 
     function isVaultConnected(address _vault) external view returns (bool) {
-        return vaultConnections[_vault].owner != address(0);
+        return vaultConnections[_vault].vaultIndex != 0;
     }
 
     function liabilityShares(address _vault) external view returns (uint256) {
