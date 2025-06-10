@@ -123,7 +123,6 @@ export async function main() {
 
   // LazyOracle
   const lazyOracle = await loadContract<LazyOracle>("LazyOracle", lazyOracleAddress);
-  await makeTx(lazyOracle, "grantRole", [await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), agentAddress], {
-    from: deployer,
-  });
+  const updateSanityParamsRole = await lazyOracle.UPDATE_SANITY_PARAMS_ROLE();
+  await makeTx(lazyOracle, "grantRole", [updateSanityParamsRole, agentAddress], { from: deployer });
 }

@@ -108,7 +108,7 @@ export async function main() {
   // Deploy LazyOracle
   //
 
-  const lazyOracle_ = await deployWithoutProxy(Sk.lazyOracle, "LazyOracle", deployer, [locatorAddress, hashConsensusAddress]);
+  const lazyOracle_ = await deployBehindOssifiableProxy(Sk.lazyOracle, "LazyOracle", proxyContractsOwner, deployer, [locatorAddress, hashConsensusAddress]);
 
   const lazyOracle = await loadContract<LazyOracle>("LazyOracle", lazyOracle_.address);
   await makeTx(lazyOracle, "initialize", [deployer, lazyOracleParams.quarantinePeriod, lazyOracleParams.maxRewardRatioBP], { from: deployer });

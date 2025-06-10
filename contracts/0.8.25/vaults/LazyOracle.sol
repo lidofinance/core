@@ -10,7 +10,6 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IHashConsensus} from "./interfaces/IHashConsensus.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {Math256} from "contracts/common/lib/Math256.sol";
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
 contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {

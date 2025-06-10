@@ -489,12 +489,15 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
 
       // end of quarantine period ------------------------------
-      await advanceChainTime(60n * 60n * 2n);
-      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
-
       //check that refslot is increased
-      const [refSlot2] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      let refSlot2 = refSlot;
+      while (refSlot2 === refSlot) {
+        await advanceChainTime(60n * 60n * 2n);
+        [refSlot2] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      }
       expect(refSlot2).to.be.greaterThan(refSlot);
+
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3"));
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7"));
