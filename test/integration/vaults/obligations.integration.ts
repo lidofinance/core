@@ -363,8 +363,7 @@ describe("Integration: Vault obligations", () => {
         await addRedemptionsObligation(maxRedemptions);
       });
 
-      // TODO: check rounding errors
-      it.skip("On shares burned", async () => {
+      it("On shares burned", async () => {
         const { lido } = ctx.contracts;
 
         const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
@@ -374,29 +373,27 @@ describe("Integration: Vault obligations", () => {
         await lido.connect(roles.burner).approve(dashboard, liabilityShares);
 
         const sharesToBurn = liabilityShares / 2n;
-        const expectedRedemptions = await lido.getPooledEthBySharesRoundUp(sharesToBurn);
+        const expectedRedemptions = await lido.getPooledEthByShares(sharesToBurn);
 
         await expect(dashboard.connect(roles.burner).burnShares(sharesToBurn))
-          .to.emit(vaultHub, "RedemptionsDecreased")
-          .withArgs(stakingVaultAddress, expectedRedemptions, expectedRedemptions);
+          .to.emit(vaultHub, "RedemptionsUpdated")
+          .withArgs(stakingVaultAddress, expectedRedemptions);
 
         const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
         expect(obligationsAfter.redemptions).to.equal(expectedRedemptions);
       });
 
-      // TODO: check rounding errors
-      it.skip("On vault rebalanced", async () => {
+      it("On vault rebalanced", async () => {
         const { lido } = ctx.contracts;
 
         const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
         expect(obligationsBefore.redemptions).to.equal(maxRedemptions);
 
-        const sharesToBurn = liabilityShares / 2n;
-        const expectedRedemptions = await lido.getPooledEthBySharesRoundUp(sharesToBurn);
-
-        await expect(dashboard.connect(roles.rebalancer).rebalanceVault(expectedRedemptions))
-          .to.emit(vaultHub, "RedemptionsDecreased")
-          .withArgs(stakingVaultAddress, expectedRedemptions, expectedRedemptions);
+        const rebalanceAmount = (await lido.getPooledEthByShares(liabilityShares)) / 2n;
+        const expectedRedemptions = maxRedemptions - rebalanceAmount;
+        await expect(dashboard.connect(roles.rebalancer).rebalanceVault(rebalanceAmount))
+          .to.emit(vaultHub, "RedemptionsUpdated")
+          .withArgs(stakingVaultAddress, expectedRedemptions);
 
         const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
         expect(obligationsAfter.redemptions).to.equal(expectedRedemptions);
@@ -730,12 +727,12 @@ describe("Integration: Vault obligations", () => {
     });
 
     it("Should work when trying to withdraw less than available balance", async () => {
-      let withdrawableEther = await vaultHub.withdrawableEther(stakingVaultAddress);
+      let withdrawableEther = await vaultHub.withdrawableValue(stakingVaultAddress);
       expect(withdrawableEther).to.equal(0n);
 
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
-      withdrawableEther = await vaultHub.withdrawableEther(stakingVaultAddress);
+      withdrawableEther = await vaultHub.withdrawableValue(stakingVaultAddress);
       expect(withdrawableEther).to.equal(ether("0.75")); // 0.25 ether is reserve ratio
 
       await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, withdrawableEther))
