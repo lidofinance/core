@@ -77,6 +77,13 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint64 startTimestamp;
     }
 
+    struct QuarantineInfo {
+        bool isActive;
+        uint256 pendingTotalValueIncrease;
+        uint256 startTimestamp;
+        uint256 endTimestamp;
+    }
+
     struct VaultInfo {
         address vault;
         uint256 balance;
@@ -143,11 +150,15 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         return _storage().maxRewardRatioBP;
     }
 
-    /// @notice returns the quarantine for the vault
+    /// @notice returns the quarantine info for the vault
     /// @param _vault the address of the vault
-    /// @return the quarantine for the vault
-    function vaultQuarantine(address _vault) external view returns (Quarantine memory) {
-        return _storage().vaultQuarantines[_vault];
+    function vaultQuarantine(address _vault) external view returns (QuarantineInfo memory) {
+        Quarantine storage q = _storage().vaultQuarantines[_vault];
+        if (q.pendingTotalValueIncrease == 0) {
+            return QuarantineInfo(false, 0, 0, 0);
+        }
+
+        return QuarantineInfo(true, q.pendingTotalValueIncrease, q.startTimestamp, q.startTimestamp + _storage().quarantinePeriod);
     }
 
     /// @notice returns batch of vaults info
