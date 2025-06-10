@@ -39,6 +39,7 @@ contract Accounting {
         uint256 depositedValidators;
         uint256 externalShares;
         uint256 externalEther;
+        uint256 badDebtToInternalize;
     }
 
     /// @notice precalculated values that is used to change the state of the protocol during the report
@@ -110,7 +111,7 @@ contract Accounting {
         uint256 _withdrawalShareRate
     ) public view returns (CalculatedValues memory update) {
         Contracts memory contracts = _loadOracleReportContracts();
-        PreReportState memory pre = _snapshotPreReportState();
+        PreReportState memory pre = _snapshotPreReportState(contracts);
 
         return _simulateOracleReport(contracts, pre, _report, _withdrawalShareRate);
     }
@@ -136,7 +137,7 @@ contract Accounting {
         Contracts memory _contracts,
         ReportValues calldata _report
     ) internal view returns (PreReportState memory pre, CalculatedValues memory update, uint256 withdrawalsShareRate) {
-        pre = _snapshotPreReportState();
+        pre = _snapshotPreReportState(_contracts);
 
         CalculatedValues memory updateNoWithdrawals = _simulateOracleReport(_contracts, pre, _report, 0);
 
@@ -146,12 +147,13 @@ contract Accounting {
     }
 
     /// @dev reads the current state of the protocol to the memory
-    function _snapshotPreReportState() internal view returns (PreReportState memory pre) {
+    function _snapshotPreReportState(Contracts memory _contracts) internal view returns (PreReportState memory pre) {
         (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
         pre.externalEther = LIDO.getExternalEther();
+        pre.badDebtToInternalize = _contracts.vaultHub.badDebtToInternalizeAsOfLastRefSlot();
     }
 
     /// @dev calculates all the state changes that is required to apply the report
@@ -211,8 +213,8 @@ contract Accounting {
         // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
         update.sharesToMintAsFees = _calculateLidoProtocolFeeShares(_report, update, postInternalSharesBeforeFees, update.postInternalEther);
 
-        update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees + _report.badDebtToInternalize;
-        uint256 postExternalShares = _pre.externalShares - _report.badDebtToInternalize; // can't underflow by design
+        update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees + _pre.badDebtToInternalize;
+        uint256 postExternalShares = _pre.externalShares - _pre.badDebtToInternalize; // can't underflow by design
 
         update.postTotalShares = update.postInternalShares + postExternalShares;
         update.postTotalPooledEther = update.postInternalEther + postExternalShares * update.postInternalEther / update.postInternalShares;
@@ -289,9 +291,9 @@ contract Accounting {
             _report.clBalance
         );
 
-        if (_report.badDebtToInternalize > 0) {
-            LIDO.internalizeExternalBadDebt(_report.badDebtToInternalize);
-            _contracts.vaultHub.decreaseInternalizedBadDebt(_report.badDebtToInternalize);
+        if (_pre.badDebtToInternalize > 0) {
+            LIDO.internalizeExternalBadDebt(_pre.badDebtToInternalize);
+            _contracts.vaultHub.decreaseInternalizedBadDebt(_pre.badDebtToInternalize);
         }
 
         if (_update.totalSharesToBurn > 0) {
@@ -358,14 +360,6 @@ contract Accounting {
                 _report.withdrawalFinalizationBatches[_report.withdrawalFinalizationBatches.length - 1],
                 _report.timestamp
             );
-        }
-
-        if (_report.badDebtToInternalize > _contracts.vaultHub.badDebtToInternalize()) {
-            revert BadDebtMoreThanExpected(_report.badDebtToInternalize, _contracts.vaultHub.badDebtToInternalize());
-        }
-
-        if (_report.badDebtToInternalize > _pre.externalShares) {
-            revert BadDebtMoreThanExpected(_report.badDebtToInternalize, _pre.externalShares);
         }
     }
 
@@ -473,5 +467,4 @@ contract Accounting {
     error UnequalArrayLengths(uint256 firstArrayLength, uint256 secondArrayLength);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
     error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
-    error BadDebtMoreThanExpected(uint256 reportBadDebtToInternalize, uint256 expectedBadDebtToInternalize);
 }

@@ -722,7 +722,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _preClValidators number of validators in the previous CL state (for event compatibility)
      * @param _reportClValidators number of validators in the current CL state
      * @param _reportClBalance total balance of the current CL state
-     * @param _badDebtToInternalize amount of shares to internalize as a bad debt
      */
     function processClStateUpdate(
         uint256 _reportTimestamp,
@@ -742,6 +741,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         // cl balance change are logged in ETHDistributed event later
     }
 
+    /**
+     * @notice Internalize external bad debt
+     * @param _amountOfShares amount of shares to internalize
+     */
     function internalizeExternalBadDebt(uint256 _amountOfShares) external {
         require(_amountOfShares != 0, "BAD_DEBT_ZERO_SHARES");
         _whenNotStopped();

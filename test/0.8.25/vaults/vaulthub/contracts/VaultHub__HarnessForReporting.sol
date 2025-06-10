@@ -3,7 +3,7 @@
 
 pragma solidity ^0.8.0;
 
-import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {VaultHub, IHashConsensus} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
 

@@ -16,11 +16,18 @@ import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 
+import {RefSlotCache, IHashConsensus} from "./lib/RefSlotCache.sol";
+
+interface IAccountingOracle {
+    function getConsensusContract() external view returns (IHashConsensus);
+}
+
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
 /// Also, it facilitates the individual per-vault reports from the lazy oracle to the vaults and charges Lido fees
 /// @author folkyatina
 contract VaultHub is PausableUntilWithRoles {
+    using RefSlotCache for RefSlotCache.Uint112WithRefSlotCache;
 
     // -----------------------------
     //           STORAGE STRUCTS
@@ -38,7 +45,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice 1-based array of vaults connected to the hub. index 0 is reserved for not connected vaults
         address[] vaults;
         /// @notice amount of bad debt that was internalized from the vault to become the protocol loss
-        uint256 badDebtToInternalize;
+        RefSlotCache.Uint112WithRefSlotCache badDebtToInternalize;
     }
 
     struct VaultConnection {
@@ -282,8 +289,8 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice amount of bad debt to be internalized to become the protocol loss
-    function badDebtToInternalize() external view returns (uint256) {
-        return _storage().badDebtToInternalize;
+    function badDebtToInternalizeAsOfLastRefSlot() external view returns (uint256) {
+        return _storage().badDebtToInternalize.getValueForLastRefSlot(_hashConsensus());
     }
 
     /// @notice Set if a vault proxy codehash is allowed to be connected to the hub
@@ -477,7 +484,7 @@ contract VaultHub is PausableUntilWithRoles {
                 _completeDisconnection(_vault, connection, record, accruedTreasuryFees);
                 return;
             } else {
-                // we revert the disconnect as there is a slashing conflict yet to be resolved
+                // we abort the disconnect process as there is a slashing conflict yet to be resolved
                 connection.pendingDisconnect = false;
                 emit VaultDisconnectAborted(_vault, _reportSlashingReserve);
             }
@@ -546,7 +553,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (_vaultAcceptor == address(0)) {
             // internalize the bad debt to the protocol
-            _storage().badDebtToInternalize += badDebtToSocialize;
+            _storage().badDebtToInternalize.updateCacheAndIncreaseValue(_hashConsensus(), uint112(badDebtToSocialize));
         } else {
             if (_nodeOperator(_vaultAcceptor) != _nodeOperator(_badDebtVault)) revert BadDebtSocializationNotAllowed();
 
@@ -572,7 +579,8 @@ contract VaultHub is PausableUntilWithRoles {
     function decreaseInternalizedBadDebt(uint256 _amountOfShares) external {
         _requireSender(LIDO_LOCATOR.accounting());
 
-        _storage().badDebtToInternalize -= _amountOfShares;
+        // don't cache previous value, we don't need it for sure
+        _storage().badDebtToInternalize.value -= uint112(_amountOfShares);
     }
 
     /// @notice transfer the ownership of the vault to a new owner without disconnecting it from the hub
@@ -632,7 +640,7 @@ contract VaultHub is PausableUntilWithRoles {
         _checkConnectionAndOwner(_vault);
 
         VaultRecord storage record = _vaultRecord(_vault);
-        if (!_isReportFresh(record)) revert VaultReportStale(_vault);
+        _requireFreshReport(_vault, record);
 
         uint256 unlocked_ = _unlocked(record);
         if (_ether > unlocked_) revert InsufficientUnlocked(unlocked_, _ether);
@@ -666,7 +674,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        if (!_isReportFresh(record)) revert VaultReportStale(_vault);
+        _requireFreshReport(_vault, record);
 
         uint256 reserveRatioBP = connection.reserveRatioBP;
         _increaseLiability(
@@ -1337,6 +1345,10 @@ contract VaultHub is PausableUntilWithRoles {
         return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee());
     }
 
+    function _hashConsensus() internal view returns (IHashConsensus) {
+        return IAccountingOracle(LIDO_LOCATOR.accountingOracle()).getConsensusContract();
+    }
+
     function _getSharesByPooledEth(uint256 _ether) internal view returns (uint256) {
         return LIDO.getSharesByPooledEth(_ether);
     }
@@ -1372,6 +1384,10 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _requireConnected(VaultConnection storage _connection, address _vault) internal view {
         if (_connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
+    }
+
+    function _requireFreshReport(address _vault, VaultRecord storage _record) internal view {
+        if (!_isReportFresh(_record)) revert VaultReportStale(_vault);
     }
 
     event AllowedCodehashUpdated(bytes32 indexed codehash, bool allowed);

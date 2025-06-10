@@ -193,8 +193,6 @@ contract AccountingOracle is BaseOracle {
         /// Liquid Staking Vaults
         ///
 
-        /// @dev The historical value of bad debt to be internalized from VaultHub as observed at the reference slot.
-        uint256 badDebtToInternalize;
         /// @dev Merkle Tree root of the vaults data.
         bytes32 vaultsDataTreeRoot;
         /// @notice CID of the published Merkle tree of the vault data.
@@ -492,8 +490,7 @@ contract AccountingOracle is BaseOracle {
                 data.withdrawalVaultBalance,
                 data.elRewardsVaultBalance,
                 data.sharesRequestedToBurn,
-                data.withdrawalFinalizationBatches,
-                data.badDebtToInternalize
+                data.withdrawalFinalizationBatches
             )
         );
 
