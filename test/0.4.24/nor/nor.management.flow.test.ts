@@ -692,6 +692,43 @@ describe("NodeOperatorsRegistry.sol:management", () => {
         .and.to.emit(nor, "RewardsDistributed")
         .withArgs(await user2.getAddress(), ether("7"));
     });
+
+    it("distribute with stopped works", async () => {
+      const totalRewardShares = ether("10");
+
+      await lido.setTotalPooledEther(ether("100"));
+      await lido.mintShares(await nor.getAddress(), totalRewardShares);
+
+      // before
+      //      operatorId | Total | Deposited | Exited | Active (deposited-exited)
+      //         0           3         3         0        3
+      //         1           7         7         0        7
+      //         2           0         0         0        0
+      // -----------------------------------------------------------------------------
+      // total    3           10       10         0       10
+      //
+      // perValidatorShare 10*10^18 / 10 = 10^18
+
+      // update [operator, exited, stuck]
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(0, 1);
+      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(1, 1);
+
+      // after
+      //      operatorId | Total | Deposited | Exited | Stuck | Active (deposited-exited)
+      //         0           3         3         1        0        2
+      //         1           7         7         1        0        6
+      //         2           0         0         0        0        0
+      // -----------------------------------------------------------------------------
+      // total    3           10       10         2       0         8
+      //
+      // perValidatorShare 10*10^18 / 8 = 1250000000000000000 == 1.25 * 10^18
+
+      await expect(nor.distributeReward())
+        .to.emit(nor, "RewardsDistributed")
+        .withArgs(await user1.getAddress(), ether(2 * 1.25 + ""))
+        .and.to.emit(nor, "RewardsDistributed")
+        .withArgs(await user2.getAddress(), ether(6 * 1.25 + ""));
+    });
   });
 
   context("getNodeOperatorIds", () => {

@@ -15,6 +15,15 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
         initialized();
     }
 
+    function harness__initializeWithLocator(
+        uint256 _initialVersion,
+        address _locator
+    ) external {
+        _setContractVersion(_initialVersion);
+        LIDO_LOCATOR_POSITION.setStorageAddress(_locator);
+        initialized();
+    }
+
     function harness__setDepositedSigningKeysCount(uint256 _nodeOperatorId, uint256 _depositedSigningKeysCount) public {
         _onlyExistedNodeOperator(_nodeOperatorId);
         // NodeOperator storage nodeOperator = _nodeOperators[_nodeOperatorId];

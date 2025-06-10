@@ -158,6 +158,36 @@ describe("NodeOperatorsRegistry.sol:auxiliary", () => {
         "APP_AUTH_FAILED",
       );
     });
+
+    it("Can change exited keys arbitrary (even decreasing exited)", async () => {
+      const nonce = await nor.getNonce();
+
+      const beforeNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
+      expect(beforeNOSummary.stuckValidatorsCount).to.equal(0n);
+      expect(beforeNOSummary.totalExitedValidators).to.equal(1n);
+
+      await expect(nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperatorId, 3n))
+        .to.emit(nor, "ExitedSigningKeysCountChanged")
+        .withArgs(firstNodeOperatorId, 3n)
+        .to.emit(nor, "KeysOpIndexSet")
+        .withArgs(nonce + 1n)
+        .to.emit(nor, "NonceChanged")
+        .withArgs(nonce + 1n);
+
+      const middleNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
+      expect(middleNOSummary.totalExitedValidators).to.equal(3n);
+
+      await expect(nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperatorId, 1n))
+        .to.emit(nor, "ExitedSigningKeysCountChanged")
+        .withArgs(firstNodeOperatorId, 1n)
+        .to.emit(nor, "KeysOpIndexSet")
+        .withArgs(nonce + 2n)
+        .to.emit(nor, "NonceChanged")
+        .withArgs(nonce + 2n);
+
+      const lastNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
+      expect(lastNOSummary.totalExitedValidators).to.equal(1n);
+    });
   });
 
   context("onWithdrawalCredentialsChanged", () => {

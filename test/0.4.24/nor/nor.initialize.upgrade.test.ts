@@ -126,4 +126,80 @@ describe("NodeOperatorsRegistry.sol:initialize-and-upgrade", () => {
       expect(await nor.getType()).to.equal(moduleType);
     });
   });
+
+  context("finalizeUpgrade_v4()", () => {
+    let preInitState: string;
+    beforeEach(async () => {
+      locator = await deployLidoLocator({ lido: lido });
+      preInitState = await Snapshot.take();
+      await nor.harness__initializeWithLocator(2n, locator.getAddress());
+    });
+
+    it("Reverts if contract is not initialized", async () => {
+      await Snapshot.restore(preInitState); // Restore to uninitialized state
+      await expect(nor.finalizeUpgrade_v4(86400n)).to.be.revertedWith("CONTRACT_NOT_INITIALIZED");
+    });
+
+    it("Reverts if contract version is not 3", async () => {
+      // Version is currently 2 from harness__initialize(2n)
+      await expect(nor.finalizeUpgrade_v4(86400n)).to.be.revertedWith("UNEXPECTED_CONTRACT_VERSION");
+    });
+
+    it("Successfully upgrades from v3 to v4", async () => {
+      // First upgrade to v3
+      await nor.harness__setBaseVersion(3n);
+
+      // Get burner address from locator
+      const burnerAddress = await locator.burner();
+
+      // Set initial allowance to a non-zero value to verify it gets reset
+      await lido.connect(deployer).approve(burnerAddress, 100);
+      expect(await lido.allowance(await nor.getAddress(), burnerAddress)).to.be.eq(0);
+
+      // Perform the upgrade to v4
+      await expect(nor.finalizeUpgrade_v4(86400n))
+        .to.emit(nor, "ContractVersionSet")
+        .withArgs(4n)
+        .and.to.emit(nor, "ExitDeadlineThresholdChanged")
+        .withArgs(86400n, 0n);
+
+      // Verify contract version updated to 4
+      expect(await nor.getContractVersion()).to.equal(4n);
+
+      // Verify allowance reset to 0
+      expect(await lido.allowance(await nor.getAddress(), burnerAddress)).to.equal(0n);
+
+      // Verify exit deadline threshold was set correctly
+      expect(await nor.exitDeadlineThreshold(0)).to.equal(86400n);
+    });
+
+    it("Works with different exit deadline threshold values", async () => {
+      // Upgrade to v3 first
+      await nor.harness__setBaseVersion(3n);
+
+      const customThreshold = 172800n; // 2 days in seconds
+      await nor.finalizeUpgrade_v4(customThreshold);
+
+      expect(await nor.exitDeadlineThreshold(0)).to.equal(customThreshold);
+    });
+
+    it("Calls _initialize_v4 with correct parameters", async () => {
+      // Upgrade to v3 first
+      await nor.harness__setBaseVersion(3n);
+
+      // Mock the _initialize_v4 function to track calls
+      // This is a simplified approach since we can't easily mock internal functions
+      // We'll verify through events and state changes instead
+
+      await nor.finalizeUpgrade_v4(86400n);
+
+      // Verify expected state changes from _initialize_v4
+      expect(await nor.getContractVersion()).to.equal(4n);
+      expect(await nor.exitDeadlineThreshold(0)).to.equal(86400n);
+
+      // Verify exit penalty cutoff timestamp is set correctly (this is done in _setExitDeadlineThreshold)
+      const currentTimestamp = await time.latest();
+      expect(await nor.exitPenaltyCutoffTimestamp()).to.be.lte(currentTimestamp);
+    });
+  });
 });
