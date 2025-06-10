@@ -78,7 +78,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
       await dashboard.reconnectToVaultHub();
 
-      expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
     });
   });
 
@@ -110,7 +110,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .to.emit(stakingVault, "OwnershipTransferred")
           .withArgs(owner, vaultHub);
 
-        expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
+        expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
       });
 
       it("Can reconnect the vault to the dashboard and then to the hub", async () => {
@@ -127,7 +127,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(dashboard, vaultHub)
           .to.emit(vaultHub, "VaultConnected");
 
-        expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
+        expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
       });
     });
 
