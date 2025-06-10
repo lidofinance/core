@@ -160,7 +160,7 @@ contract LazyOracle is ILazyOracle {
 
     function _mintableStETH(address _vault) internal view returns (uint256) {
         uint256 mintableStETH = _vaultHub().mintableStETH(_vault, 0, 0);
-        uint256 totalSharesMintingCapacity = _operatorGrid().vaultTotalSharesMintingCapacity(_vault);
+        uint256 totalSharesMintingCapacity = _operatorGrid().vaultTotalMintingCapacity(_vault);
         uint256 mintingStETHCapacity = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(totalSharesMintingCapacity);
 
         return Math256.min(mintableStETH, mintingStETHCapacity);
