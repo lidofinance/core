@@ -480,7 +480,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // here we don't check the reported values but rely on the oracle to preserve vault indexes
         if (connection.pendingDisconnect) {
-            if (_reportSlashingReserve == 0) {
+            if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
                 _completeDisconnection(_vault, connection, record, accruedTreasuryFees);
                 return;
             } else {
