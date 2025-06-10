@@ -333,7 +333,7 @@ describe("OperatorGrid.sol", () => {
     ];
 
     it("reverts if tier id is not exists with custom error", async function () {
-      const tierCount = await operatorGrid.tierCount();
+      const tierCount = await operatorGrid.tiersCount();
       await expect(operatorGrid.tier(tierCount)).to.be.revertedWithCustomError(operatorGrid, "TierNotExists");
     });
 
@@ -372,12 +372,12 @@ describe("OperatorGrid.sol", () => {
 
     it("tierCount - works", async function () {
       //default tier
-      expect(await operatorGrid.tierCount()).to.equal(1);
+      expect(await operatorGrid.tiersCount()).to.equal(1);
 
       await operatorGrid.registerGroup(groupOperator, 1000);
       await operatorGrid.registerTiers(groupOperator, tiers);
 
-      expect(await operatorGrid.tierCount()).to.equal(2);
+      expect(await operatorGrid.tiersCount()).to.equal(2);
     });
   });
 

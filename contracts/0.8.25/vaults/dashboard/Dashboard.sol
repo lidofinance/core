@@ -271,7 +271,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _tierId The tier to change to
      * @param _requestedShareLimit The requested share limit
      */
-    function changeTierAndConnectToVaultHub(uint256 _tierId, uint256 _requestedShareLimit) external payable {
+    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit) external payable {
         connectToVaultHub();
         if (!_changeTier(_tierId, _requestedShareLimit)) {
             revert TierChangeNotConfirmed();
@@ -680,11 +680,6 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error when the StakingVault is still connected to the VaultHub.
      */
     error ConnectedToVaultHub();
-
-    /**
-     * @notice Error thrown when insufficient funds are provided to connect to VaultHub
-     */
-    error InsufficientFunds();
 
     /**
      * @notice Error thrown when attempting to connect to VaultHub without confirmed tier change

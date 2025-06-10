@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
@@ -46,7 +46,6 @@ contract VaultFactory {
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry in seconds
      * @param _roleAssignments The optional role assignments to be made
-     * @notice Only Node Operator managed roles can be assigned
      */
     function createVaultWithDashboard(
         address _defaultAdmin,
@@ -102,7 +101,6 @@ contract VaultFactory {
         uint256 _confirmExpiry,
         Permissions.RoleAssignment[] calldata _roleAssignments
     ) external payable returns (IStakingVault vault, Dashboard dashboard) {
-        // check if the msg.value is enough to cover the connect deposit
         ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
 
         // create the vault proxy
@@ -115,7 +113,7 @@ contract VaultFactory {
         // initialize StakingVault with the _defaultAdmin as the owner
         vault.initialize(_defaultAdmin, _nodeOperator, locator.predepositGuarantee());
 
-        // initialize Dashboard with the _defaultAdmin as the default admin, grant optional roles
+        // initialize Dashboard with the _defaultAdmin as the default admin, grant optional node operator managed roles
         dashboard.initialize(_defaultAdmin, address(this), _nodeOperatorFeeBP, _confirmExpiry);
 
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);

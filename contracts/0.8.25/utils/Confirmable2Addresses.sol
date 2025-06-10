@@ -6,11 +6,12 @@ pragma solidity 0.8.25;
 
 import {Confirmations} from "./Confirmations.sol";
 /**
- * @title Confirmable
+ * @title Confirmable2Addresses
  * @author Lido
  * @notice An extension of Confirmations that allows exectuing functions by mutual confirmation.
+ * @dev In this implementation, roles are treated as addresses.
  */
-abstract contract Confirmable is Confirmations {
+abstract contract Confirmable2Addresses is Confirmations {
     
     function _collectAndCheckConfirmations(bytes calldata _calldata, address _role1, address _role2) internal returns (bool) {
         bytes32[] memory roles = new bytes32[](2);
@@ -20,7 +21,7 @@ abstract contract Confirmable is Confirmations {
         return _collectAndCheckConfirmations(_calldata, roles);
     }
 
-    function _isValidConfirmer(bytes32 _role) internal view override returns (bool) {
-        return _role == bytes32(uint256(uint160(msg.sender)));
+    function _isValidConfirmer(bytes32 _roleAsAddress) internal view override returns (bool) {
+        return _roleAsAddress == bytes32(uint256(uint160(msg.sender)));
     }
 }

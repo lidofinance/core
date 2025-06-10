@@ -26,8 +26,8 @@ abstract contract Confirmations {
      * - confirmExpiry: confirmation expiry period in seconds
      */
     struct ConfirmationStorage {
-      mapping(bytes callData => mapping(bytes32 role => uint256 expiryTimestamp)) confirmations;
-      uint256 confirmExpiry;
+        mapping(bytes callData => mapping(bytes32 role => uint256 expiryTimestamp)) confirmations;
+        uint256 confirmExpiry;
     }
 
     /**
@@ -50,7 +50,7 @@ abstract contract Confirmations {
     uint256 public constant MAX_CONFIRM_EXPIRY = 30 days;
 
     function __Confirmations_init() internal {
-      _setConfirmExpiry(1 days);
+        _setConfirmExpiry(1 days);
     }
 
 

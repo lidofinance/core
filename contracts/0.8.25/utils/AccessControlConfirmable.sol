@@ -10,7 +10,7 @@ import {Confirmations} from "./Confirmations.sol";
  * @title AccessControlConfirmable
  * @author Lido
  * @notice An extension of AccessControlEnumerable that allows executing functions by mutual confirmation.
- * @dev This contract extends Confirmations and AccessControlEnumerable and adds a confirmation mechanism in the form of a modifier.
+ * @dev This contract extends Confirmations and AccessControlEnumerable and adds a confirmation mechanism.
  */
 abstract contract AccessControlConfirmable is AccessControlEnumerable, Confirmations {
 

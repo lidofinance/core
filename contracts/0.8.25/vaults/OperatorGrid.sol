@@ -6,7 +6,7 @@ pragma solidity 0.8.25;
 
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
-import {Confirmable} from "contracts/0.8.25/utils/Confirmable.sol";
+import {Confirmable2Addresses} from "contracts/0.8.25/utils/Confirmable2Addresses.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultHub} from "./VaultHub.sol";
@@ -36,7 +36,7 @@ struct TierParams {
  * These parameters are determined by the Tier in which the Vault is registered.
  *
  */
-contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
+contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Addresses {
     /*
       Key concepts:
       1. Default Registration:
@@ -53,7 +53,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
        2. Tier Change Process:
          - To predefine vaults tier or modify the existing vault's connection parameters to VaultHub, a tier change must be requested
          - Both vault owner and node operator must confirm the change (doesn't matter who confirms first)
-         - The confirmation has an expiry time (default 1 day)
+         - The confirmation has an expiry time (default 1 hour)
 
        3. Tier Reset:
          - When a vault is disconnected from VaultHub, its tier is automatically reset to the default tier (DEFAULT_TIER_ID)
@@ -288,12 +288,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
         return $.tiers[_tierId];
     }
 
-    /// @notice Returns a number of tiers
-    /// @return Number of tiers
-    function tierCount() external view returns (uint256) {
-        return _getStorage().tiers.length;
-    }
-
     /// @notice Returns a tiers count
     /// @return Tiers count
     function tiersCount() external view returns (uint256) {
@@ -351,7 +345,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable {
     /// @param _vault address of the vault
     /// @param _requestedTierId id of the tier
     /// @param _requestedShareLimit share limit to set
-    ///
+    /// @return bool Whether the tier change was confirmed.
     /*
 
     Legend:

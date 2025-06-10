@@ -189,8 +189,9 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Updates the node-operator's fee rate (basis-points share).
      * @param _newNodeOperatorFeeRate The new node operator fee rate.
+     * @return bool Whether the node operator fee rate was set.
      */
-    function setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) external {
+    function setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) external returns (bool) {
         // The report must be fresh so that the total value of the vault is up to date
         // and all the node operator fees are paid out fairly up to the moment of the latest fresh report
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
@@ -206,7 +207,7 @@ contract NodeOperatorFee is Permissions {
         _validateNodeOperatorFeeRate(_newNodeOperatorFeeRate);
 
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
-        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return;
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
         // To follow the check-effects-interaction pattern, we need to remember the fee here
         // because the fee calculation variables will be reset in the following lines
@@ -221,6 +222,8 @@ contract NodeOperatorFee is Permissions {
             VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
             emit NodeOperatorFeeDisbursed(msg.sender, fee);
         }
+
+        return true;
     }
 
     /**
@@ -228,13 +231,16 @@ contract NodeOperatorFee is Permissions {
      * Confirm expiry is a period during which the confirm is counted. Once the period is over,
      * the confirm is considered expired, no longer counts and must be recasted.
      * @param _newConfirmExpiry The new confirm expiry in seconds.
+     * @return bool Whether the confirm expiry was set.
      */
-    function setConfirmExpiry(uint256 _newConfirmExpiry) external {
+    function setConfirmExpiry(uint256 _newConfirmExpiry) external returns (bool) {
         _validateConfirmExpiry(_newConfirmExpiry);
         
-        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return;
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
         _setConfirmExpiry(_newConfirmExpiry);
+
+        return true;
     }
 
     /**
@@ -265,17 +271,19 @@ contract NodeOperatorFee is Permissions {
      * @notice set `rewardsAdjustment` to a new proposed value if `confirmingRoles()` agree
      * @param _proposedAdjustment new adjustment amount
      * @param _expectedAdjustment current adjustment value for invalidating old confirmations
+     * @return bool Whether the rewards adjustment was set.
      * @dev will revert if new adjustment is more than `MANUAL_REWARDS_ADJUSTMENT_LIMIT`
      */
     function setRewardsAdjustment(
         uint256 _proposedAdjustment,
         uint256 _expectedAdjustment
-    ) external {
+    ) external returns (bool) {
         if (rewardsAdjustment.amount != _expectedAdjustment)
             revert InvalidatedAdjustmentVote(rewardsAdjustment.amount, _expectedAdjustment);
         if (_proposedAdjustment > MANUAL_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
-        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return;
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
         _setRewardsAdjustment(uint128(_proposedAdjustment));
+        return true;
     }
 
     function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
