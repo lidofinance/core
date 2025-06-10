@@ -1,12 +1,24 @@
-import { ZeroAddress } from "ethers";
+import { keccak256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import { LidoLocator } from "typechain-types";
+import {
+  Burner,
+  ICSModule,
+  IOracleReportSanityChecker_preV3,
+  LidoLocator,
+  OperatorGrid,
+  PredepositGuarantee,
+  StakingRouter,
+  VaultHub,
+} from "typechain-types";
 
+import { ether, log } from "lib";
 import { loadContract } from "lib/contract";
-import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy } from "lib/deploy";
+import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy";
 import { readNetworkState, Sk } from "lib/state-file";
+
+const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -23,36 +35,139 @@ export async function main() {
   const depositContract = state.chainSpec.depositContractAddress;
   const consensusContract = state[Sk.hashConsensusForAccountingOracle].address;
   const pdgDeployParams = parameters[Sk.predepositGuarantee].deployParameters;
-
-  // TODO: maybe take the parameters from current sanity checker
-  const sanityCheckerParams = parameters[Sk.oracleReportSanityChecker].deployParameters;
+  const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
+  const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
+  const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
+  const oracleReportSanityCheckerAddress = state[Sk.oracleReportSanityChecker].address;
 
   const proxyContractsOwner = agentAddress;
-  const burnerAdmin = deployer;
 
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const wstethAddress = state[Sk.wstETH].address;
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
 
+  //
   // Deploy Lido new implementation
+  //
+
   await deployImplementation(Sk.appLido, "Lido", deployer);
 
+  //
   // Deploy Accounting
+  //
+
   const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
     locatorAddress,
     lidoAddress,
   ]);
 
+  //
+  // Deploy AccountingOracle new implementation
+  //
+  const accountingOracleImpl = await deployImplementation(Sk.accountingOracle, "AccountingOracle", deployer, [
+    locatorAddress,
+    Number(chainSpec.secondsPerSlot),
+    Number(chainSpec.genesisTime),
+  ]);
+
+  //
+  // Deploy Burner
+  //
+
+  const burner_ = await deployBehindOssifiableProxy(Sk.burner, "Burner", proxyContractsOwner, deployer, [
+    locatorAddress,
+    lidoAddress,
+  ]);
+
+  const burner = await loadContract<Burner>("Burner", burner_.address);
+
+  const isMigrationAllowed = true;
+  await burner.initialize(deployer, isMigrationAllowed);
+
+  const requestBurnSharesRole = await burner.REQUEST_BURN_SHARES_ROLE();
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, accounting.address], { from: deployer });
+
+  const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
+  const stakingModules = await stakingRouter.getStakingModules();
+  const csm = stakingModules[2];
+  if (csm.name !== "Community Staking") {
+    throw new Error("Community Staking module not found");
+  }
+  const csmModule = await loadContract<ICSModule>("ICSModule", csm.stakingModuleAddress);
+  const csmAccountingAddress = await csmModule.accounting();
+
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, nodeOperatorsRegistryAddress], { from: deployer });
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, simpleDvtAddress], { from: deployer });
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, csmAccountingAddress], { from: deployer });
+
+  await makeTx(burner, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
+  await makeTx(burner, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+
+  //
+  // Deploy LazyOracle
+  //
+
+  const lazyOracle = await deployWithoutProxy(Sk.lazyOracle, "LazyOracle", deployer, [locatorAddress]);
+  //
+  // Deploy StakingVault implementation contract
+  //
+
+  const stakingVaultImpl = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
+    depositContract,
+  ]);
+
+  //
+  // Deploy UpgradeableBeacon contract
+  //
+
+  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
+    stakingVaultImpl.address,
+    agentAddress,
+  ]);
+
+  //
+  // Deploy BeaconProxy to get bytecode and add it to whitelist
+  //
+
+  const vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beacon.address, "0x"]);
+  const vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
+  const vaultBeaconProxyCodeHash = keccak256(vaultBeaconProxyCode);
+  console.log("BeaconProxy address", await vaultBeaconProxy.getAddress());
+
+  //
   // Deploy VaultHub
-  const vaultHub = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
+  //
+
+  const vaultHub_ = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     locatorAddress,
     lidoAddress,
     consensusContract,
     vaultHubParams.relativeShareLimitBP,
   ]);
 
+  const vaultHubAdmin = deployer;
+  const vaultHub = await loadContract<VaultHub>("VaultHub", vaultHub_.address);
+  await makeTx(vaultHub, "initialize", [vaultHubAdmin], { from: deployer });
+  log("VaultHub initialized with admin", vaultHubAdmin);
+
+  const vaultMasterRole = await vaultHub.VAULT_MASTER_ROLE();
+  const vaultCodehashRole = await vaultHub.VAULT_CODEHASH_SET_ROLE();
+
+  await makeTx(vaultHub, "grantRole", [vaultCodehashRole, deployer], { from: deployer });
+  await makeTx(vaultHub, "setAllowedCodehash", [vaultBeaconProxyCodeHash], { from: deployer });
+  await makeTx(vaultHub, "renounceRole", [vaultCodehashRole, deployer], { from: deployer });
+
+  await makeTx(vaultHub, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
+  await makeTx(vaultHub, "grantRole", [vaultMasterRole, agentAddress], { from: deployer });
+  await makeTx(vaultHub, "grantRole", [vaultCodehashRole, agentAddress], { from: deployer });
+
+  await makeTx(vaultHub, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+
+  //
   // Deploy PredepositGuarantee
-  const predepositGuarantee = await deployBehindOssifiableProxy(
+  //
+
+  const predepositGuarantee_ = await deployBehindOssifiableProxy(
     Sk.predepositGuarantee,
     "PredepositGuarantee",
     proxyContractsOwner,
@@ -65,40 +180,39 @@ export async function main() {
     ],
   );
 
-  // Deploy AccountingOracle new implementation
-  const accountingOracleImpl = await deployImplementation(Sk.accountingOracle, "AccountingOracle", deployer, [
-    locatorAddress,
-    Number(chainSpec.secondsPerSlot),
-    Number(chainSpec.genesisTime),
-  ]);
+  const predepositGuarantee = await loadContract<PredepositGuarantee>(
+    "PredepositGuarantee",
+    predepositGuarantee_.address,
+  );
+  await makeTx(predepositGuarantee, "initialize", [agentAddress], { from: deployer });
 
-  // Deploy Burner
-  const isMigrationAllowed = true;
-  const burner = await deployWithoutProxy(Sk.burner, "Burner", deployer, [
-    burnerAdmin,
-    locatorAddress,
-    lidoAddress,
-    isMigrationAllowed,
-  ]);
-
+  //
   // Deploy OracleReportSanityChecker
+  //
+
+  const sanityChecker = await loadContract<IOracleReportSanityChecker_preV3>(
+    "IOracleReportSanityChecker_preV3",
+    oracleReportSanityCheckerAddress,
+  );
+  const oldCheckerLimits = await sanityChecker.getOracleReportLimits();
+
   const oracleReportSanityCheckerArgs = [
     locatorAddress,
     accountingOracleImpl.address,
     accounting.address,
     agentAddress,
     [
-      sanityCheckerParams.exitedValidatorsPerDayLimit,
-      sanityCheckerParams.appearedValidatorsPerDayLimit,
-      sanityCheckerParams.annualBalanceIncreaseBPLimit,
-      sanityCheckerParams.maxValidatorExitRequestsPerReport,
-      sanityCheckerParams.maxItemsPerExtraDataTransaction,
-      sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
-      sanityCheckerParams.requestTimestampMargin,
-      sanityCheckerParams.maxPositiveTokenRebase,
-      sanityCheckerParams.initialSlashingAmountPWei,
-      sanityCheckerParams.inactivityPenaltiesAmountPWei,
-      sanityCheckerParams.clBalanceOraclesErrorUpperBPLimit,
+      oldCheckerLimits.exitedValidatorsPerDayLimit,
+      oldCheckerLimits.appearedValidatorsPerDayLimit,
+      oldCheckerLimits.annualBalanceIncreaseBPLimit,
+      oldCheckerLimits.maxValidatorExitRequestsPerReport,
+      oldCheckerLimits.maxItemsPerExtraDataTransaction,
+      oldCheckerLimits.maxNodeOperatorsPerExtraDataItem,
+      oldCheckerLimits.requestTimestampMargin,
+      oldCheckerLimits.maxPositiveTokenRebase,
+      oldCheckerLimits.initialSlashingAmountPWei,
+      oldCheckerLimits.inactivityPenaltiesAmountPWei,
+      oldCheckerLimits.clBalanceOraclesErrorUpperBPLimit,
     ],
   ];
 
@@ -109,17 +223,11 @@ export async function main() {
     oracleReportSanityCheckerArgs,
   );
 
-  // Deploy LazyOracle
-  const lazyOracle = await deployWithoutProxy(Sk.lazyOracle, "LazyOracle", deployer, [
-    locatorAddress,
-    consensusContract,
-    agentAddress,
-    lazyOracleParams.quarantinePeriod,
-    lazyOracleParams.maxElClRewardsBP,
-  ]);
-
+  //
   // Deploy OperatorGrid
-  const operatorGrid = await deployBehindOssifiableProxy(
+  //
+
+  const operatorGrid_ = await deployBehindOssifiableProxy(
     Sk.operatorGrid,
     "OperatorGrid",
     proxyContractsOwner,
@@ -127,7 +235,51 @@ export async function main() {
     [locatorAddress],
   );
 
+  const gridParams = parameters[Sk.operatorGrid].deployParameters;
+  const defaultTierParams = {
+    shareLimit: ether(gridParams.defaultTierParams.shareLimitInEther),
+    reserveRatioBP: gridParams.defaultTierParams.reserveRatioBP,
+    forcedRebalanceThresholdBP: gridParams.defaultTierParams.forcedRebalanceThresholdBP,
+    infraFeeBP: gridParams.defaultTierParams.infraFeeBP,
+    liquidityFeeBP: gridParams.defaultTierParams.liquidityFeeBP,
+    reservationFeeBP: gridParams.defaultTierParams.reservationFeeBP,
+  };
+  const operatorGrid = await loadContract<OperatorGrid>("OperatorGrid", operatorGrid_.address);
+  const operatorGridAdmin = deployer;
+  await makeTx(operatorGrid, "initialize", [operatorGridAdmin, defaultTierParams], { from: deployer });
+  await makeTx(operatorGrid, "grantRole", [await operatorGrid.REGISTRY_ROLE(), agentAddress], {
+    from: operatorGridAdmin,
+  });
+  await makeTx(operatorGrid, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
+  await makeTx(operatorGrid, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+
+  //
+  // Deploy Delegation implementation contract
+  //
+
+  const dashboardImpl = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [
+    lidoAddress,
+    wstethAddress,
+    vaultHub.address,
+    locatorAddress,
+  ]);
+  const dashboardImplAddress = await dashboardImpl.getAddress();
+
+  //
+  // Deploy VaultFactory
+  //
+
+  const vaultFactory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
+    locatorAddress,
+    beacon.address,
+    dashboardImplAddress,
+  ]);
+  console.log("VaultFactory address", await vaultFactory.getAddress());
+
+  //
   // Deploy new LidoLocator implementation
+  //
+
   const locatorConfig: string[] = [
     await locator.accountingOracle(),
     await locator.depositSecurityModule(),
@@ -146,38 +298,9 @@ export async function main() {
     predepositGuarantee.address,
     wstethAddress,
     vaultHub.address,
+    vaultFactory.address,
     lazyOracle.address,
     operatorGrid.address,
   ];
   await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
-
-  // Deploy StakingVault implementation contract
-  const stakingVaultImpl = await deployWithoutProxy(Sk.stakingVaultImplementation, "StakingVault", deployer, [
-    depositContract,
-  ]);
-  const stakingVaultImplAddress = await stakingVaultImpl.getAddress();
-
-  // Deploy Delegation implementation contract
-  const dashboardImpl = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [
-    lidoAddress,
-    wstethAddress,
-    vaultHub.address,
-    locatorAddress,
-  ]);
-  const dashboardImplAddress = await dashboardImpl.getAddress();
-
-  // Deploy UpgradeableBeacon contract
-  const beacon = await deployWithoutProxy(Sk.stakingVaultBeacon, "UpgradeableBeacon", deployer, [
-    stakingVaultImplAddress,
-    agentAddress,
-  ]);
-  const beaconAddress = await beacon.getAddress();
-
-  // Deploy VaultFactory contract
-  const vaultFactory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
-    locatorAddress,
-    beaconAddress,
-    dashboardImplAddress,
-  ]);
-  console.log("VaultFactory address", await vaultFactory.getAddress());
 }

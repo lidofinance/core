@@ -10,6 +10,7 @@ import {BLS12_381} from "contracts/0.8.25/lib/BLS.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
 import {CLProofVerifier} from "./CLProofVerifier.sol";
+import {MeIfNobodyElse} from "./MeIfNobodyElse.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
@@ -31,6 +32,8 @@ import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
  *         Internal guards for NO<->Guarantor are used only to prevent mistakes and provide operational recovery paths.
  *         But can not be used to fully prevent misbehavior in this relationship where NO's can access guarantor provided ether.
  *
+ *     !NB:
+ *         There is a mutual trust assumption between NO's and the assigned depositor.
  *
  *     !NB:
  *         PDG is permissionless by design. Anyone can be an NO, provided there is a compatible staking vault
@@ -40,6 +43,8 @@ import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
  *          - PDG can be used outside of Lido
  */
 contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableUntilWithRoles {
+    using MeIfNobodyElse for mapping(address => address);
+
     /**
      * @notice represents validator stages in PDG flow
      * @param NONE - initial stage
@@ -93,6 +98,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         mapping(address nodeOperator => address guarantor) nodeOperatorGuarantor;
         mapping(address guarantor => uint256 claimableEther) guarantorClaimableEther;
         mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) validatorStatus;
+        mapping(address nodeOperator => address depositor) nodeOperatorDepositor;
     }
 
     uint8 public constant MIN_SUPPORTED_WC_VERSION = 0x01;
@@ -173,6 +179,15 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      */
     function nodeOperatorGuarantor(address _nodeOperator) external view returns (address) {
         return _guarantorOf(_nodeOperator);
+    }
+
+    /**
+     * @notice returns address of the depositor for the NO
+     * @param _nodeOperator to check depositor for
+     * @return address of depositor for the NO
+     */
+    function nodeOperatorDepositor(address _nodeOperator) external view returns (address) {
+        return _depositorOf(_nodeOperator);
     }
 
     /**
@@ -285,9 +300,23 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             emit GuarantorRefundAdded(prevGuarantor, msg.sender, refund);
         }
 
-        $.nodeOperatorGuarantor[msg.sender] = _newGuarantor != msg.sender ? _newGuarantor : address(0);
+        $.nodeOperatorGuarantor.setOrReset(msg.sender, _newGuarantor);
 
         emit GuarantorSet(msg.sender, _newGuarantor, prevGuarantor);
+    }
+
+    /**
+     * @notice sets the depositor for the NO
+     * @param _newDepositor address of the depositor
+     */
+    function setNodeOperatorDepositor(address _newDepositor) external {
+        if (_newDepositor == address(0)) revert ZeroArgument("_newDepositor");
+        address prevDepositor = _depositorOf(msg.sender);
+        if (_newDepositor == prevDepositor) revert SameDepositor();
+
+        _getStorage().nodeOperatorDepositor.setOrReset(msg.sender, _newDepositor);
+
+        emit DepositorSet(msg.sender, _newDepositor, prevDepositor);
     }
 
     /**
@@ -329,7 +358,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         if (_deposits.length == 0) revert EmptyDeposits();
 
         address nodeOperator = _stakingVault.nodeOperator();
-        if (msg.sender != nodeOperator) revert NotNodeOperator();
+        if (msg.sender != _depositorOf(nodeOperator)) revert NotDepositor();
 
         if (msg.value != 0) {
             // check that node operator is self-guarantor is inside
@@ -410,8 +439,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         IStakingVault _stakingVault,
         IStakingVault.Deposit[] calldata _deposits
     ) public payable whenResumed {
-        if (msg.sender != _stakingVault.nodeOperator()) {
-            revert NotNodeOperator();
+        if (msg.sender != _depositorOf(_stakingVault.nodeOperator())) {
+            revert NotDepositor();
         }
         ERC7201Storage storage $ = _getStorage();
 
@@ -425,8 +454,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             }
 
             // sanity check because first check relies on external contract
-            if (validator.nodeOperator != msg.sender) {
-                revert NotNodeOperator();
+            if (_depositorOf(validator.nodeOperator) != msg.sender) {
+                revert NotDepositor();
             }
 
             if (validator.stakingVault != _stakingVault) {
@@ -616,8 +645,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /// @notice returns guarantor of the NO
     /// @dev if guarantor is not set, returns NO address
     function _guarantorOf(address _nodeOperator) internal view returns (address) {
-        address stored = _getStorage().nodeOperatorGuarantor[_nodeOperator];
-        return stored == address(0) ? _nodeOperator : stored;
+        return _getStorage().nodeOperatorGuarantor.getValueOrKey(_nodeOperator);
     }
 
     /// @notice enforces that only NO's guarantor can call the function
@@ -626,6 +654,12 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             revert NotGuarantor();
         }
         _;
+    }
+
+    /// @notice returns depositor of the NO
+    /// @dev if depositor is not set, returns NO address
+    function _depositorOf(address _nodeOperator) internal view returns (address) {
+        return _getStorage().nodeOperatorDepositor.getValueOrKey(_nodeOperator);
     }
 
     /// @notice validates that WC belong to the vault
@@ -663,9 +697,11 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     event BalanceCompensated(address indexed nodeOperator, address indexed to, uint128 total, uint128 locked);
     event BalanceRefunded(address indexed nodeOperator, address indexed to);
 
-    /// NO Guarantor events
+    /// NO delegate events
 
     event GuarantorSet(address indexed nodeOperator, address indexed newGuarantor, address indexed prevGuarantor);
+    event DepositorSet(address indexed nodeOperator, address indexed newDepositor, address indexed prevDepositor);
+
     event GuarantorRefundAdded(address indexed guarantor, address indexed nodeOperator, uint256 amount);
     event GuarantorRefundClaimed(address indexed guarantor, address indexed recipient, uint256 amount);
 
@@ -704,6 +740,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     error NothingToRefund();
     error WithdrawalFailed();
     error SameGuarantor();
+    error SameDepositor();
     error RefundFailed();
 
     // predeposit errors
@@ -731,7 +768,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     // auth
     error NotStakingVaultOwner();
     error NotGuarantor();
-    error NotNodeOperator();
+    error NotDepositor();
 
     // general
     error ZeroArgument(string argument);
