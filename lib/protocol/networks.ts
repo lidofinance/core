@@ -73,7 +73,7 @@ const defaultEnv = {
   // vaults
   stakingVaultFactory: "STAKING_VAULT_FACTORY_ADDRESS",
   stakingVaultBeacon: "STAKING_VAULT_BEACON_ADDRESS",
-  maxEffectiveBalanceIncreaser: "MAX_EFFECTIVE_BALANCE_INCREASER_ADDRESS",
+  validatorConsolidationRequests: "MAX_EFFECTIVE_BALANCE_INCREASER_ADDRESS",
 } as ProtocolNetworkItems;
 
 const getPrefixedEnv = (prefix: string, obj: ProtocolNetworkItems) =>
@@ -93,7 +93,7 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
     stakingVaultFactory: config[Sk.stakingVaultFactory].address,
     stakingVaultBeacon: config[Sk.stakingVaultBeacon].address,
     operatorGrid: config[Sk.operatorGrid].proxy.address,
-    maxEffectiveBalanceIncreaser: config[Sk.maxEffectiveBalanceIncreaser].address,
+    validatorConsolidationRequests: config[Sk.validatorConsolidationRequests].address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }

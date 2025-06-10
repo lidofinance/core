@@ -13,6 +13,14 @@ export function findEIP7251MockEvents(receipt: ContractTransactionReceipt) {
   return findEventsWithInterfaces(receipt!, eventName, [eip7251MockInterface]);
 }
 
+const dashboardMockEventName = "RewardsAdjustmentIncreased";
+const dashboardMockEventABI = [`event ${dashboardMockEventName}(uint256 _amount)`];
+const dashboardMockInterface = new ethers.Interface(dashboardMockEventABI);
+
+export function findDashboardMockEvents(receipt: ContractTransactionReceipt) {
+  return findEventsWithInterfaces(receipt!, dashboardMockEventName, [dashboardMockInterface]);
+}
+
 export const testEIP7251Mock = async (
   addConsolidationRequests: () => Promise<ContractTransactionResponse>,
   sender: string,

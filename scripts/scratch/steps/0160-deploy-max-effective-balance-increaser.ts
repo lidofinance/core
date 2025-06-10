@@ -8,17 +8,17 @@ export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
 
-  let maxEffectiveBalanceIncreaserAddress = state.maxEffectiveBalanceIncreaser;
-  if (maxEffectiveBalanceIncreaserAddress) {
-    log(`Using MaxEffectiveBalanceIncreaser at: ${cy(maxEffectiveBalanceIncreaserAddress)}`);
+  let validatorConsolidationRequestsAddress = state.validatorConsolidationRequests;
+  if (validatorConsolidationRequestsAddress) {
+    log(`Using ValidatorConsolidationRequests at: ${cy(validatorConsolidationRequestsAddress)}`);
     return;
   }
 
-  maxEffectiveBalanceIncreaserAddress = (
-    await deployWithoutProxy(Sk.maxEffectiveBalanceIncreaser, "MaxEffectiveBalanceIncreaser", deployer)
+  validatorConsolidationRequestsAddress = (
+    await deployWithoutProxy(Sk.validatorConsolidationRequests, "ValidatorConsolidationRequests", deployer)
   ).address;
 
-  updateObjectInState(Sk.maxEffectiveBalanceIncreaser, {
-    maxEffectiveBalanceIncreaser: maxEffectiveBalanceIncreaserAddress,
+  updateObjectInState(Sk.validatorConsolidationRequests, {
+    validatorConsolidationRequests: validatorConsolidationRequestsAddress,
   });
 }

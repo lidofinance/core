@@ -191,9 +191,9 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
     ),
     operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid") || (await locator.operatorGrid())),
     lazyOracle: loadContract("LazyOracle", config.get("lazyOracle") || (await locator.lazyOracle())),
-    maxEffectiveBalanceIncreaser: loadContract(
-      "MaxEffectiveBalanceIncreaser",
-      config.get("maxEffectiveBalanceIncreaser"),
+    validatorConsolidationRequests: loadContract(
+      "ValidatorConsolidationRequests",
+      config.get("validatorConsolidationRequests"),
     ),
   })) as VaultsContracts;
 };
