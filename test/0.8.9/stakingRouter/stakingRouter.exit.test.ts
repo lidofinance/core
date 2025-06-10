@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { hexlify, randomBytes, ZeroAddress } from "ethers";
+import { hexlify, randomBytes } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
