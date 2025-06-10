@@ -125,7 +125,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the reserve ratio of the vault in basis points
      */
-    function reserveRatioBP() external view returns (uint16) {
+    function reserveRatioBP() public view returns (uint16) {
         return vaultConnection().reserveRatioBP;
     }
 
@@ -181,12 +181,21 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Returns the max locked amount of ether for the vault (excluding the Lido and node operator fees)
+     */
+    function maxLocked() public view returns (uint256) {
+        uint256 maxLocked_ = VAULT_HUB.maxLocked(address(_stakingVault()));
+        uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
+        return maxLocked_ > nodeOperatorFee ? maxLocked_ - nodeOperatorFee : 0;
+    }
+
+    /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() public view returns (uint256) {
         uint256 totalSharesMintingCapacity = _operatorGrid().vaultTotalMintingCapacity(address(_stakingVault()));
 
-        return Math256.min(totalSharesMintingCapacity, _totalMintableShares(0));
+        return Math256.min(totalSharesMintingCapacity, _mintableShares(maxLocked()));
     }
 
     /**
@@ -199,7 +208,7 @@ contract Dashboard is NodeOperatorFee {
         uint256 remainingMintingCapacity = _operatorGrid().vaultRemainingMintingCapacity(address(_stakingVault()));
         if (remainingMintingCapacity == 0) return 0;
 
-        uint256 vaultMintableShares = _totalMintableShares(_etherToFund);
+        uint256 vaultMintableShares = _mintableShares(maxLocked() + _etherToFund);
         uint256 vaultLiabilityShares = liabilityShares();
 
         return Math256.min(
@@ -588,11 +597,10 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /// @notice Calculates the total number of shares that can be minted by the vault
-    /// @param _additionalEther The amount of additional ether to consider for minting
-    function _totalMintableShares(uint256 _additionalEther) internal view returns (uint256) {
-        return _getSharesByPooledEth(
-            VAULT_HUB.mintableStETH(address(_stakingVault()), _additionalEther, nodeOperatorDisbursableFee())
-        );
+    /// @param _ether The amount of ether to consider for minting
+    function _mintableShares(uint256 _ether) internal view returns (uint256) {
+        uint256 mintableStETH = (_ether * (TOTAL_BASIS_POINTS - reserveRatioBP())) / TOTAL_BASIS_POINTS;
+        return _getSharesByPooledEth(mintableStETH);
     }
 
     /// @notice Converts the given amount of stETH to shares

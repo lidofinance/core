@@ -50,6 +50,9 @@ contract LazyOracle is ILazyOracle {
 
     ILidoLocator public immutable LIDO_LOCATOR;
 
+    /// @dev basis points base
+    uint256 private constant TOTAL_BASIS_POINTS = 100_00;
+
     constructor(address _lidoLocator) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
     }
@@ -159,9 +162,13 @@ contract LazyOracle is ILazyOracle {
     }
 
     function _mintableStETH(address _vault) internal view returns (uint256) {
-        uint256 mintableStETH = _vaultHub().mintableStETH(_vault, 0, 0);
-        uint256 totalSharesMintingCapacity = _operatorGrid().vaultTotalMintingCapacity(_vault);
-        uint256 mintingStETHCapacity = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(totalSharesMintingCapacity);
+        VaultHub vaultHub = _vaultHub();
+        uint256 maxLocked = vaultHub.maxLocked(_vault);
+        uint256 reserveRatioBP = vaultHub.vaultConnection(_vault).reserveRatioBP;
+        uint256 mintableStETH = maxLocked * (TOTAL_BASIS_POINTS - reserveRatioBP) / TOTAL_BASIS_POINTS;
+
+        uint256 totalMintingCapacity = _operatorGrid().vaultTotalMintingCapacity(_vault);
+        uint256 mintingStETHCapacity = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(totalMintingCapacity);
 
         return Math256.min(mintableStETH, mintingStETHCapacity);
     }

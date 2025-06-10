@@ -260,12 +260,10 @@ contract VaultHub is PausableUntilWithRoles {
         return _unlocked(_vaultRecord(_vault));
     }
 
-    /// @return amount of stETH that can be minted by the vault using additional ether
-    /// @param _valueToAdd value to add to the total collaterizable value of the vault
-    /// @param _valueToDeduct value to deduct from the total collaterizable value of the vault
+    /// @return the amount of ether that can be locked in the vault
     /// @dev returns 0 if the vault is not connected
-    function mintableStETH(address _vault, uint256 _valueToAdd, uint256 _valueToDeduct) external view returns (uint256) {
-        return _mintableStETH(_vault, _vaultConnection(_vault), _valueToAdd, _valueToDeduct);
+    function maxLocked(address _vault) external view returns (uint256) {
+        return _maxLocked(_vault);
     }
 
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
@@ -639,12 +637,13 @@ contract VaultHub is PausableUntilWithRoles {
         if (!_isReportFresh(record)) revert VaultReportStale(_vault);
 
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - connection.reserveRatioBP;
-        uint256 totalCollaterizableValue_ = _totalCollaterizableValue(_vault);
-        uint256 maxMintableEther = (totalCollaterizableValue_ * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 maxLockedEther = _maxLocked(_vault);
+        uint256 maxMintableEther = (maxLockedEther * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+
         uint256 stETHAfterMint = _getPooledEthBySharesRoundUp(vaultSharesAfterMint);
         if (stETHAfterMint > maxMintableEther) {
             uint256 totalValue_ = _totalValue(record);
-            revert InsufficientTotalValueToMint(_vault, totalValue_, totalValue_ - totalCollaterizableValue_);
+            revert InsufficientTotalValueToMint(_vault, totalValue_, totalValue_ - maxLockedEther);
         }
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
@@ -1058,21 +1057,8 @@ contract VaultHub is PausableUntilWithRoles {
         return uint256(int256(uint256(report.totalValue)) + _record.inOutDelta - report.inOutDelta);
     }
 
-    function _totalCollaterizableValue(address _vault) internal view returns (uint256) {
+    function _maxLocked(address _vault) internal view returns (uint256) {
         return _totalValue(_vaultRecord(_vault)) - _vaultObligations(_vault).unsettledLidoFees;
-    }
-
-    function _mintableStETH(
-        address _vault,
-        VaultConnection storage _connection,
-        uint256 _valueToAdd,
-        uint256 _valueToDeduct
-    ) internal view returns (uint256) {
-        uint256 collaterizableValue = _totalCollaterizableValue(_vault) + _valueToAdd;
-        if (collaterizableValue < _valueToDeduct) return 0;
-
-        uint256 value = collaterizableValue - _valueToDeduct;
-        return value * (TOTAL_BASIS_POINTS - _connection.reserveRatioBP) / TOTAL_BASIS_POINTS;
     }
 
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
