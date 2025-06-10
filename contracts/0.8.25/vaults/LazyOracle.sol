@@ -29,6 +29,49 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         mapping(address vault => Quarantine) vaultQuarantines;
     }
 
+    /*
+        A quarantine is a timelock applied to any sudden jump in a vault's reported total value
+        that cannot be immediately confirmed on-chain (via the inOutDelta difference). If the 
+        reported total value exceeds the expected routine EL/CL rewards, the excess is pushed 
+        into a quarantine buffer for a predefined cooldown period. Only after this delay is the 
+        quarantined value released into VaultHub's total value.
+
+        Normal top-ups — where the vault owner funds the contract directly using the `fund()` 
+        function — do not go through quarantine, as they can be verified on-chain via the 
+        inOutDelta value. These direct fundings are reflected immediately. In contrast, 
+        consolidations or deposits that bypass the vault must sit in quarantine.
+
+        Example flow:
+
+        Time 0: Total Value = 100 ETH
+        ┌────────────────────────────────────┐
+        │            100 ETH Active          │
+        └────────────────────────────────────┘
+
+        Time 1: Sudden jump of +50 ETH → start quarantine for 50 ETH
+        ┌────────────────────────────────────┐
+        │            100 ETH Active          │
+        │            50 ETH Quarantined      │
+        └────────────────────────────────────┘
+
+        Time 2: Another jump of +70 ETH → wait for current quarantine to expire
+        ┌────────────────────────────────────┐
+        │            100 ETH Active          │
+        │            50 ETH Quarantined      │
+        │            70 ETH Quarantine Queue │
+        └────────────────────────────────────┘
+
+        Time 3: First quarantine expires → add 50 ETH to active value, start new quarantine for 70 ETH
+        ┌────────────────────────────────────┐
+        │            150 ETH Active          │
+        │            70 ETH Quarantined      │
+        └────────────────────────────────────┘
+
+        Time 4: Second quarantine expires → add 70 ETH to active value
+        ┌────────────────────────────────────┐
+        │            220 ETH Active          │
+        └────────────────────────────────────┘
+    */
     struct Quarantine {
         uint128 pendingTotalValueIncrease;
         uint64 startTimestamp;
@@ -230,15 +273,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         return (totalValue, inOutDelta);
     }
 
-    /*
-        Here we need to introduce 2 concepts direct and side fund:
-        1. Direct fund happens when the vault owner first tops up ETH balance of the vault contract (through fund() method) 
-        and then bring lazy (on-demand) report. In this case we can proof that ETH really exist, so vault owner can add 
-        as much ETH as he wants.  
-        2. Any other ways of topping up vault's totalValue (consolidations, direct deposit to beaconchain contract, etc.) are 
-        considered side. In this case we set "quarantine" period for this side fund. It means that totalValue actually 
-        will be increased by this amount only after quarantine period expires.
-    */
     function _checkTotalValue(address _vault, uint256 _totalValue, int256 _inOutDelta, VaultHub.VaultRecord memory record) internal returns (uint256) {
         Storage storage $ = _storage();
 
