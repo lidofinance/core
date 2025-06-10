@@ -1274,9 +1274,9 @@ contract VaultHub is PausableUntilWithRoles {
         bool isHealthy = _isVaultHealthy(_connection, _record);
 
         if (_totalUnsettledObligations(_vaultObligations(_vault)) >= OBLIGATIONS_THRESHOLD || !isHealthy) {
-            vault_.pauseBeaconChainDeposits();
+            if (!vault_.beaconChainDepositsPaused()) vault_.pauseBeaconChainDeposits();
         } else if (!_connection.isBeaconDepositsManuallyPaused && isHealthy) {
-            vault_.resumeBeaconChainDeposits();
+            if (vault_.beaconChainDepositsPaused()) vault_.resumeBeaconChainDeposits();
         }
     }
 
