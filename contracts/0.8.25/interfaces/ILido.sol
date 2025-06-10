@@ -44,8 +44,7 @@ interface ILido is IERC20, IERC20Permit, IVersioned {
         uint256 _reportTimestamp,
         uint256 _preClValidators,
         uint256 _reportClValidators,
-        uint256 _reportClBalance,
-        uint256 _badDebtToInternalize
+        uint256 _reportClBalance
     ) external;
 
     function collectRewardsAndProcessWithdrawals(
@@ -72,4 +71,6 @@ interface ILido is IERC20, IERC20Permit, IVersioned {
     ) external;
 
     function mintShares(address _recipient, uint256 _sharesAmount) external;
+
+    function internalizeExternalBadDebt(uint256 _amountOfShares) external;
 }

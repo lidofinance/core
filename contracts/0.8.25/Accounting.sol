@@ -212,9 +212,10 @@ contract Accounting {
         update.sharesToMintAsFees = _calculateLidoProtocolFeeShares(_report, update, postInternalSharesBeforeFees, update.postInternalEther);
 
         update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees + _report.badDebtToInternalize;
+        uint256 postExternalShares = _pre.externalShares - _report.badDebtToInternalize; // can't underflow by design
 
-        update.postTotalShares = update.postInternalShares + _pre.externalShares;
-        update.postTotalPooledEther = update.postInternalEther + _pre.externalShares * update.postInternalEther / update.postInternalShares;
+        update.postTotalShares = update.postInternalShares + postExternalShares;
+        update.postTotalPooledEther = update.postInternalEther + postExternalShares * update.postInternalEther / update.postInternalShares;
     }
 
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
@@ -285,11 +286,11 @@ contract Accounting {
             _report.timestamp,
             _pre.clValidators,
             _report.clValidators,
-            _report.clBalance,
-            _report.badDebtToInternalize
+            _report.clBalance
         );
 
         if (_report.badDebtToInternalize > 0) {
+            LIDO.internalizeExternalBadDebt(_report.badDebtToInternalize);
             _contracts.vaultHub.decreaseInternalizedBadDebt(_report.badDebtToInternalize);
         }
 

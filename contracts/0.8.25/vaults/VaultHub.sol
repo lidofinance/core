@@ -517,39 +517,38 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice Transfer the bad debt from the donor vault to the acceptor vault
-    /// @param _vault address of the vault that has the bad debt
-    /// @param _vaultAcceptor address of the vault that will accept the bad debt or 0 if the bad debt is socialized to the protocol
+    /// @param _badDebtVault address of the vault that has the bad debt
+    /// @param _vaultAcceptor address of the vault that will accept the bad debt or 0 if the bad debt is internalized to the protocol
     /// @param _maxSharesToSocialize maximum amount of shares to socialize
     /// @dev msg.sender must have SOCIALIZE_BAD_DEBT_ROLE
+    /// @dev if _vaultAcceptor is 0, the bad debt is internalized to the protocol
     function socializeBadDebt(
-        address _vault,
+        address _badDebtVault,
         address _vaultAcceptor,
         uint256 _maxSharesToSocialize
     ) external onlyRole(SOCIALIZE_BAD_DEBT_ROLE) {
-        _requireNotZero(_vault);
+        _requireNotZero(_badDebtVault);
         _requireNotZero(_maxSharesToSocialize);
 
-        VaultConnection storage connection = _vaultConnection(_vault);
-        _requireConnected(connection, _vault); // require connected but may be pending
+        VaultConnection storage badDebtConnection = _vaultConnection(_badDebtVault);
+        _requireConnected(badDebtConnection, _badDebtVault); // require connected but may be pending disconnect
 
-        VaultRecord storage record = _vaultRecord(_vault);
-        uint256 liabilityShares_ = record.liabilityShares;
-        uint256 totalValueShares = _getSharesByPooledEth(_totalValue(record));
+        VaultRecord storage badDebtRecord = _vaultRecord(_badDebtVault);
+        uint256 liabilityShares_ = badDebtRecord.liabilityShares;
+        uint256 totalValueShares = _getSharesByPooledEth(_totalValue(badDebtRecord));
         if (totalValueShares > liabilityShares_) {
-            revert NoBadDebtToSocialize(_vault, totalValueShares, liabilityShares_);
+            revert NoBadDebtToSocialize(_badDebtVault, totalValueShares, liabilityShares_);
         }
 
         uint256 badDebtToSocialize = Math256.min(liabilityShares_ - totalValueShares, _maxSharesToSocialize);
 
-        _decreaseLiability(_vault, record, badDebtToSocialize);
+        _decreaseLiability(_badDebtVault, badDebtRecord, badDebtToSocialize);
 
         if (_vaultAcceptor == address(0)) {
             // internalize the bad debt to the protocol
             _storage().badDebtToInternalize += badDebtToSocialize;
-
-            // disconnect the vault from the hub ?? or ban it ?? or change the owner ??
         } else {
-            if (_nodeOperator(_vaultAcceptor) != _nodeOperator(_vault)) revert BadDebtSocializationNotAllowed();
+            if (_nodeOperator(_vaultAcceptor) != _nodeOperator(_badDebtVault)) revert BadDebtSocializationNotAllowed();
 
             VaultConnection storage connectionAcceptor = _vaultConnection(_vaultAcceptor);
             _requireConnected(connectionAcceptor, _vaultAcceptor);
@@ -565,7 +564,7 @@ contract VaultHub is PausableUntilWithRoles {
             );
         }
 
-        emit BadDebtSocialized(_vault, _vaultAcceptor, badDebtToSocialize);
+        emit BadDebtSocialized(_badDebtVault, _vaultAcceptor, badDebtToSocialize);
     }
 
     /// @notice Reset the internalized bad debt to zero
