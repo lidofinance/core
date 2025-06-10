@@ -95,7 +95,7 @@ contract VaultHub is PausableUntilWithRoles {
      *  While any part of those obligations remains unsettled, VaultHub may want to limit what the vault can do.
      *
      *  Obligations have two types:
-     *  1. Redemptions. Under extreem conditions Lido may want to rebalance the part of the vault's liability to serve
+     *  1. Redemptions. Under extreme conditions Lido protocol may rebalance the part of the vault's liability to serve
      *     the Lido Core withdrawal queue requests to guarantee that every stETH is redeemable. Burning stETH reduces
      *     the redemptions obligation amount on the vault.
      *  2. Lido fees. Sum of infra, liquidity and reservation fees on the vault. Calculated in ether and grows on every
@@ -155,7 +155,7 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 private constant EMPTY_CODEHASH = keccak256("");
 
     /// @notice max allowed unsettled obligations
-    uint256 internal constant MAX_UNSETTLED_OBLIGATIONS = type(uint256).max;
+    uint256 internal constant UNLIMITED_UNSETTLED_OBLIGATIONS = type(uint256).max;
 
     // -----------------------------
     //           IMMUTABLES
@@ -270,9 +270,9 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
     /// @dev returns 0 if the vault is not connected
-    function withdrawableEther(address _vault) external view returns (uint256) {
+    function withdrawableValue(address _vault) external view returns (uint256) {
         if (_vaultConnection(_vault).vaultIndex == 0) return 0;
-        return _withdrawableEther(_vault, _vaultRecord(_vault));
+        return _withdrawableValue(_vault, _vaultRecord(_vault));
     }
 
     /// @return latest report for the vault
@@ -498,7 +498,6 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         VaultObligations storage obligations = _vaultObligations(_vault);
 
-        bool pendingDisconnect = connection.pendingDisconnect;
         uint256 cumulativeSettledLidoFees = obligations.cumulativeSettledLidoFees;
         uint256 cumulativeLidoFees = cumulativeSettledLidoFees + obligations.unsettledLidoFees;
         if (_reportCumulativeLidoFees < cumulativeLidoFees) {
@@ -512,7 +511,7 @@ contract VaultHub is PausableUntilWithRoles {
             emit LidoFeesUpdated(_vault, unsettledLidoFees, cumulativeSettledLidoFees);
         }
 
-        if (pendingDisconnect) {
+        if (connection.pendingDisconnect) {
             _settleObligations(_vault, record, obligations, 0);
 
             IStakingVault(_vault).transferOwnership(connection.owner);
@@ -540,7 +539,7 @@ contract VaultHub is PausableUntilWithRoles {
             reportLiabilityShares: _reportLiabilityShares
         });
 
-        _settleObligations(_vault, record, obligations, MAX_UNSETTLED_OBLIGATIONS);
+        _settleObligations(_vault, record, obligations, UNLIMITED_UNSETTLED_OBLIGATIONS);
         _checkAndUpdateBeaconChainDepositsPause(_vault, connection, record);
     }
 
@@ -603,8 +602,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         if (!_isReportFresh(record)) revert VaultReportStale(_vault);
 
-        uint256 withdrawable = _withdrawableEther(_vault, record);
-        if (_ether > withdrawable) revert VaultInsufficientWithdrawableEther(_vault, withdrawable, _ether);
+        uint256 withdrawable = _withdrawableValue(_vault, record);
+        if (_ether > withdrawable) revert VaultInsufficientWithdrawableValue(_vault, withdrawable, _ether);
 
         _withdraw(_vault, record, _recipient, _ether);
 
@@ -822,7 +821,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultRecord storage record = _vaultRecord(_vault);
         VaultObligations storage obligations = _vaultObligations(_vault);
-        _settleObligations(_vault, record, obligations, MAX_UNSETTLED_OBLIGATIONS);
+        _settleObligations(_vault, record, obligations, UNLIMITED_UNSETTLED_OBLIGATIONS);
 
         _checkAndUpdateBeaconChainDepositsPause(_vault, _vaultConnection(_vault), record);
     }
@@ -1316,7 +1315,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
     /// @dev this amount already accounts locked value and unsettled obligations
-    function _withdrawableEther(
+    function _withdrawableValue(
         address _vault,
         VaultRecord storage _record
     ) internal view returns (uint256) {
@@ -1484,7 +1483,7 @@ contract VaultHub is PausableUntilWithRoles {
     error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
     error VaultOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
-    error VaultInsufficientWithdrawableEther(address vault, uint256 withdrawable, uint256 requested);
+    error VaultInsufficientWithdrawableValue(address vault, uint256 withdrawable, uint256 requested);
     error VaultReportStale(address vault);
     error PDGNotDepositor(address vault);
     error ZeroCodehash();
