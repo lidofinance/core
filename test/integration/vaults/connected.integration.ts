@@ -527,8 +527,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const quarantinePeriod = await lazyOracle.quarantinePeriod();
       await advanceChainTime(quarantinePeriod / 2n);
 
-      const maxElClRewardsBP = await lazyOracle.maxRewardRatioBP();
-      const rewardsValue = (ether("1") * maxElClRewardsBP) / 10000n;
+      const maxRewardRatioBP = await lazyOracle.maxRewardRatioBP();
+      const rewardsValue = (ether("1") * maxRewardRatioBP) / 10000n;
 
       await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value + rewardsValue);
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));

@@ -82,7 +82,7 @@
   "lazyOracle": {
     "deployParameters": {
       "quarantinePeriod": 259200, 
-      "maxElClRewardsBP": 350
+      "maxRewardRatioBP": 350
     }
   },
   "accountingOracle": {

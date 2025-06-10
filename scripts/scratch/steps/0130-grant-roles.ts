@@ -33,7 +33,7 @@ export async function main() {
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
-  const lazyOracleAddress = state[Sk.lazyOracle].address;
+  const lazyOracleAddress = state[Sk.lazyOracle].proxy.address;
 
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);

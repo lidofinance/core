@@ -11,9 +11,9 @@ import {IHashConsensus} from "./interfaces/IHashConsensus.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
-import {AccessControlEnumerable} from "@openzeppelin/contracts-v5.2/access/extensions/AccessControlEnumerable.sol";
+import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
-contract LazyOracle is ILazyOracle, AccessControlEnumerable {
+contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @custom:storage-location erc7201:LazyOracle
     struct Storage {
         /// @notice root of the vaults data tree
@@ -61,10 +61,16 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerable {
     ILidoLocator public immutable LIDO_LOCATOR;
     IHashConsensus public immutable HASH_CONSENSUS;
 
-    constructor(address _lidoLocator, address _hashConsensus, address _admin, uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) {
+    constructor(address _lidoLocator, address _hashConsensus) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
         HASH_CONSENSUS = IHashConsensus(_hashConsensus);
+    }
 
+    /// @notice Initializes the contract
+    /// @param _admin Address of the admin
+    /// @param _quarantinePeriod the quarantine period
+    /// @param _maxRewardRatioBP the max reward ratio, basis points
+    function initialize(address _admin, uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) external initializer {
         _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP);
 
         if (_admin == address(0)) revert AdminCannotBeZero();
