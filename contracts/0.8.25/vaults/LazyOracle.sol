@@ -117,7 +117,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     /// @notice Initializes the contract
     /// @param _admin Address of the admin
-    /// @param _quarantinePeriod the quarantine period
+    /// @param _quarantinePeriod the quarantine period, seconds
     /// @param _maxRewardRatioBP the max reward ratio, basis points
     function initialize(address _admin, uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) external initializer {
         _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP);
