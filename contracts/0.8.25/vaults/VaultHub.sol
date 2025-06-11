@@ -816,6 +816,8 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         _connection.pendingDisconnect = true;
+
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).resetVaultTier(_vault);
     }
 
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _ether) internal {
@@ -829,6 +831,7 @@ contract VaultHub is PausableUntilWithRoles {
         _record.liabilityShares = uint96(liabilityShares_ - sharesToBurn);
         _withdraw(_vault, _record, address(this), _ether);
         LIDO.rebalanceExternalEtherToInternal{value: _ether}();
+        _operatorGrid().onBurnedShares(_vault, sharesToBurn);
 
         emit VaultRebalanced(_vault, sharesToBurn, _ether);
     }
