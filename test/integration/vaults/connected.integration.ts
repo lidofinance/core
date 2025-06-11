@@ -279,11 +279,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   // skipping for now, going to update these tests later
   describe("If vault is unhealthy", () => {
     beforeEach(async () => {
-      console.log(await vaultHub.vaultRecord(stakingVault));
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
-      console.log(await vaultHub.vaultRecord(stakingVault));
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
-      console.log(await vaultHub.vaultRecord(stakingVault));
 
       await reportVaultDataWithProof(ctx, stakingVault, TEST_STETH_AMOUNT_WEI);
 
@@ -291,8 +288,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     });
 
     it("Can't mint until goes healthy", async () => {
-      console.log(await vaultHub.vaultRecord(stakingVault));
-
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))

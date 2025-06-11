@@ -10,6 +10,8 @@ import {
   DepositContract__MockForStakingVault,
   ERC721__MockForDashboard,
   LidoLocator,
+  OperatorGrid,
+  OssifiableProxy,
   Permissions,
   StakingVault,
   StETHPermit__HarnessForDashboard,
@@ -59,6 +61,9 @@ describe("Dashboard.sol", () => {
 
   let vault: StakingVault;
   let dashboard: Dashboard;
+  let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
+  let proxy: OssifiableProxy;
 
   const nodeOperatorFeeBP = 0n;
   const confirmExpiry = days(7n);
@@ -66,6 +71,13 @@ describe("Dashboard.sol", () => {
   let originalState: string;
 
   const BP_BASE = 10_000n;
+
+  const DEFAULT_TIER_SHARE_LIMIT = 1000;
+  const RESERVE_RATIO = 2000;
+  const FORCED_REBALANCE_THRESHOLD = 1800;
+  const INFRA_FEE = 500;
+  const LIQUIDITY_FEE = 400;
+  const RESERVATION_FEE = 100;
 
   const record: Readonly<VaultHub.VaultRecordStruct> = {
     report: {
@@ -132,7 +144,40 @@ describe("Dashboard.sol", () => {
 
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth, lidoLocator]);
 
-    await updateLidoLocatorImplementation(await lidoLocator.getAddress(), { vaultHub: hub.getAddress() });
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [lidoLocator], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+
+    const defaultTierParams = {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: RESERVE_RATIO,
+      forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD,
+      infraFeeBP: INFRA_FEE,
+      liquidityFeeBP: LIQUIDITY_FEE,
+      reservationFeeBP: RESERVATION_FEE,
+    };
+    await operatorGrid.initialize(deployer, defaultTierParams);
+    await operatorGrid.grantRole(await operatorGrid.REGISTRY_ROLE(), deployer);
+
+    // Register group and tiers
+    const shareLimit = 1000;
+    await operatorGrid.connect(deployer).registerGroup(nodeOperator, shareLimit);
+    await operatorGrid.connect(deployer).registerTiers(nodeOperator, [
+      {
+        shareLimit: shareLimit,
+        reserveRatioBP: 2000,
+        forcedRebalanceThresholdBP: 1800,
+        infraFeeBP: 500,
+        liquidityFeeBP: 400,
+        reservationFeeBP: 100,
+      },
+    ]);
+
+    await updateLidoLocatorImplementation(await lidoLocator.getAddress(), {
+      vaultHub: hub.getAddress(),
+      operatorGrid: operatorGrid.getAddress(),
+    });
 
     dashboardImpl = await ethers.deployContract("Dashboard", [steth, wsteth, hub, lidoLocator]);
     vaultImpl = await ethers.deployContract("StakingVault", [depositContract]);
@@ -504,6 +549,69 @@ describe("Dashboard.sol", () => {
       await expect(dashboard.connect(nodeOperator).transferVaultOwnership(newOwner))
         .to.emit(hub, "Mock__VaultOwnershipTransferred")
         .withArgs(vault, newOwner);
+    });
+  });
+
+  context("connectAndAcceptTier", () => {
+    let newVault: StakingVault;
+    let newDashboard: Dashboard;
+
+    beforeEach(async () => {
+      const defaultAdminRoles = await Promise.all([
+        { role: await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), account: nodeOperator.address },
+      ]);
+
+      // Create a new vault without hub connection
+      const createVaultTx = await factory.createVaultWithDashboardWithoutConnectingToVaultHub(
+        vaultOwner.address,
+        nodeOperator.address,
+        nodeOperator.address,
+        nodeOperatorFeeBP,
+        confirmExpiry,
+        defaultAdminRoles,
+      );
+      const createVaultReceipt = await createVaultTx.wait();
+      if (!createVaultReceipt) throw new Error("Vault creation receipt not found");
+
+      const vaultCreatedEvents = findEvents(createVaultReceipt, "VaultCreated");
+      expect(vaultCreatedEvents.length).to.equal(1);
+
+      const newVaultAddress = vaultCreatedEvents[0].args.vault;
+      newVault = await ethers.getContractAt("StakingVault", newVaultAddress, vaultOwner);
+
+      const dashboardCreatedEvents = findEvents(createVaultReceipt, "DashboardCreated");
+      expect(dashboardCreatedEvents.length).to.equal(1);
+
+      const newDashboardAddress = dashboardCreatedEvents[0].args.dashboard;
+      newDashboard = await ethers.getContractAt("Dashboard", newDashboardAddress, vaultOwner);
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(newDashboard.connect(stranger).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+        newDashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if change tier is not confirmed by node operator", async () => {
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+        newDashboard,
+        "TierChangeNotConfirmed",
+      );
+    });
+
+    it("works", async () => {
+      await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.emit(hub, "Mock__VaultConnected");
+    });
+
+    it("works with connection deposit", async () => {
+      const connectDeposit = await hub.CONNECT_DEPOSIT();
+
+      await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, { value: connectDeposit }))
+        .to.emit(hub, "Mock__VaultConnected")
+        .withArgs(newVault);
     });
   });
 

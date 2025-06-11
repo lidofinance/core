@@ -172,7 +172,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         },
         {
           account: tierChanger,
-          role: await testDashboard.REQUEST_TIER_CHANGE_ROLE(),
+          role: await testDashboard.CHANGE_TIER_ROLE(),
         },
       ]);
 
@@ -446,13 +446,13 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         it("requestTierChange", async () => {
           await testMethod(
             testDashboard,
-            "requestTierChange",
+            "changeTier",
             {
               successUsers: [tierChanger, owner],
               failingUsers: allRoles.filter((r) => r !== tierChanger && r !== owner),
             },
             [1n, 1n],
-            await testDashboard.REQUEST_TIER_CHANGE_ROLE(),
+            await testDashboard.CHANGE_TIER_ROLE(),
           );
         });
       });
