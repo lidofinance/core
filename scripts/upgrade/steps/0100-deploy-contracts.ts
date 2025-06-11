@@ -3,6 +3,7 @@ import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
+  AccountingOracle,
   Burner,
   ICSModule,
   IOracleReportSanityChecker_preV3,
@@ -20,15 +21,6 @@ import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy, 
 import { readNetworkState, Sk } from "lib/state-file";
 
 const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
-
-function getEnvVariable(name: string, defaultValue?: string): string {
-  const value = process.env[name] ?? defaultValue;
-  if (value === undefined) {
-    throw new Error(`Environment variable ${name} is required`);
-  }
-  log(`${name} = ${value}`);
-  return value;
-}
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -278,6 +270,9 @@ export async function main() {
   // Deploy VaultFactory
   //
 
+  const accountingOracle = await loadContract<AccountingOracle>("AccountingOracle", await locator.accountingOracle());
+  const genesisTime = await accountingOracle.GENESIS_TIME();
+
   const vaultFactory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     locatorAddress,
     beacon.address,
@@ -299,7 +294,7 @@ export async function main() {
       validatorExitDelayVerifierParams.pivotSlot,
       chainSpec.slotsPerEpoch,
       chainSpec.secondsPerSlot,
-      parseInt(getEnvVariable("GENESIS_TIME")), // uint64 genesisTime,
+      genesisTime,
       // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
       validatorExitDelayVerifierParams.shardCommitteePeriodInSeconds,
     ],
@@ -346,7 +341,7 @@ export async function main() {
   //
 
   const locatorConfig: string[] = [
-    await locator.accountingOracle(),
+    accountingOracle.address,
     await locator.depositSecurityModule(),
     await locator.elRewardsVault(),
     lidoAddress,
