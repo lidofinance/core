@@ -193,9 +193,9 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() public view returns (uint256) {
-        uint256 totalSharesMintingCapacity = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
+        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
 
-        return Math256.min(totalSharesMintingCapacity, _mintableShares(maxLockableValue()));
+        return Math256.min(effectiveShareLimit, _mintableShares(maxLockableValue()));
     }
 
     /**
