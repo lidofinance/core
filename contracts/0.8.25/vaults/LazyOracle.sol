@@ -277,7 +277,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         }
 
         // 2. Sanity check for total value increase
-        totalValue = _checkTotalValue(_vault, _totalValue, inOutDelta, record);
+        totalValue = _processTotalValue(_vault, _totalValue, inOutDelta, record);
 
         // 3. Sanity check for dynamic total value underflow
         if (int256(totalValue) + curInOutDelta - inOutDelta < 0) revert UnderflowInTotalValueCalculation();
@@ -285,7 +285,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         return (totalValue, inOutDelta);
     }
 
-    function _checkTotalValue(address _vault, uint256 _totalValue, int256 _inOutDelta, VaultHub.VaultRecord memory record) internal returns (uint256) {
+    function _processTotalValue(address _vault, uint256 _totalValue, int256 _inOutDelta, VaultHub.VaultRecord memory record) internal returns (uint256) {
         Storage storage $ = _storage();
 
         uint256 refSlotTotalValue = uint256(int256(uint256(record.report.totalValue)) + _inOutDelta - record.report.inOutDelta);
@@ -309,6 +309,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 _totalValue = refSlotTotalValue;
             } else if (delta <= quarDelta + refSlotTotalValue * $.maxRewardRatioBP / TOTAL_BP) { // quarantine expired
                 q.pendingTotalValueIncrease = 0;
+                emit QuarantineExpired(_vault, delta);
             } else { // start new quarantine
                 _totalValue = refSlotTotalValue + quarDelta;
                 q.pendingTotalValueIncrease = delta - quarDelta;
@@ -336,7 +337,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     event VaultsReportDataUpdated(uint256 indexed timestamp, bytes32 indexed root, string cid);
     event QuarantinedDeposit(address vault, uint128 delta);
     event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxRewardRatioBP);
-
+    event QuarantineExpired(address vault, uint128 delta);
     error AdminCannotBeZero();
     error NotAuthorized();
     error InvalidProof();
