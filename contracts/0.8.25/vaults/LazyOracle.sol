@@ -23,7 +23,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint64 vaultsDataTimestamp;
         /// @notice total value increase quarantine period
         uint64 quarantinePeriod;
-        /// @notice max reward ratio for refSlot total value, basis points
+        /// @notice max reward ratio for refSlot-observed total value, basis points
         uint16 maxRewardRatioBP;
         /// @notice deposit quarantines for each vault
         mapping(address vault => Quarantine) vaultQuarantines;
