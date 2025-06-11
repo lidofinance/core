@@ -70,7 +70,6 @@ describe("AccountingOracle.sol:submitReport", () => {
     sharesRequestedToBurn: ether("3"),
     withdrawalFinalizationBatches: [1],
     isBunkerMode: true,
-    vaultsTotalDeficit: ether("4"),
     vaultsDataTreeRoot: ethers.ZeroHash,
     vaultsDataTreeCid: "",
     extraDataFormat: EXTRA_DATA_FORMAT_LIST,

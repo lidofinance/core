@@ -48,7 +48,6 @@ export type OracleReportParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
-  vaultsTotalDeficit?: bigint;
   vaultsDataTreeRoot?: string;
   vaultsDataTreeCid?: string;
   silent?: boolean;
@@ -85,7 +84,6 @@ export const report = async (
     numExitedValidatorsByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
-    vaultsTotalDeficit = 0n,
     vaultsDataTreeRoot = ZERO_BYTES32,
     vaultsDataTreeCid = "",
   }: OracleReportParams = {},
@@ -146,7 +144,6 @@ export const report = async (
       clBalance: postCLBalance,
       withdrawalVaultBalance,
       elRewardsVaultBalance,
-      vaultsTotalDeficit,
     });
 
     if (!simulatedReport) {
@@ -189,7 +186,6 @@ export const report = async (
     sharesRequestedToBurn,
     withdrawalFinalizationBatches,
     isBunkerMode,
-    vaultsTotalDeficit,
     vaultsDataTreeRoot,
     vaultsDataTreeCid,
     extraDataFormat,
@@ -329,7 +325,6 @@ type SimulateReportParams = {
   clBalance: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
-  vaultsTotalDeficit: bigint;
 };
 
 type SimulateReportResult = {
@@ -350,7 +345,6 @@ const simulateReport = async (
     clBalance,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    vaultsTotalDeficit,
   }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
@@ -377,7 +371,6 @@ const simulateReport = async (
       elRewardsVaultBalance,
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches: [],
-      vaultsTotalDeficit,
     },
     0n,
   );
@@ -403,7 +396,6 @@ type HandleOracleReportParams = {
   sharesRequestedToBurn: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
-  vaultsTotalDeficit: bigint;
   vaultsDataTreeRoot: string;
   vaultsDataTreeCid: string;
 };
@@ -416,7 +408,6 @@ export const handleOracleReport = async (
     sharesRequestedToBurn,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    vaultsTotalDeficit,
     vaultsDataTreeRoot,
     vaultsDataTreeCid,
   }: HandleOracleReportParams,
@@ -448,7 +439,6 @@ export const handleOracleReport = async (
       elRewardsVaultBalance,
       sharesRequestedToBurn,
       withdrawalFinalizationBatches: [],
-      vaultsTotalDeficit,
     });
 
     await lazyOracle
@@ -560,7 +550,6 @@ export type OracleReportSubmitParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   withdrawalFinalizationBatches?: bigint[];
   isBunkerMode?: boolean;
-  vaultsTotalDeficit?: bigint;
   vaultsDataTreeRoot?: string;
   vaultsDataTreeCid?: string;
   extraDataFormat?: bigint;
@@ -591,7 +580,6 @@ const submitReport = async (
     numExitedValidatorsByStakingModule = [],
     withdrawalFinalizationBatches = [],
     isBunkerMode = false,
-    vaultsTotalDeficit = 0n,
     vaultsDataTreeRoot = ZERO_BYTES32,
     vaultsDataTreeCid = "",
     extraDataFormat = 0n,
@@ -613,7 +601,6 @@ const submitReport = async (
     "Num exited validators by staking module": numExitedValidatorsByStakingModule,
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
-    "Vaults total deficit": vaultsTotalDeficit,
     "Vaults data tree root": vaultsDataTreeRoot,
     "Vaults data tree cid": vaultsDataTreeCid,
     "Extra data format": extraDataFormat,
@@ -637,7 +624,6 @@ const submitReport = async (
     numExitedValidatorsByStakingModule,
     withdrawalFinalizationBatches,
     isBunkerMode,
-    vaultsTotalDeficit,
     vaultsDataTreeRoot,
     vaultsDataTreeCid,
     extraDataFormat,
@@ -763,7 +749,6 @@ export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.sharesRequestedToBurn,
   data.withdrawalFinalizationBatches,
   data.isBunkerMode,
-  data.vaultsTotalDeficit,
   data.vaultsDataTreeRoot,
   data.vaultsDataTreeCid,
   data.extraDataFormat,
@@ -787,7 +772,6 @@ export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>)
     "uint256", // sharesRequestedToBurn
     "uint256[]", // withdrawalFinalizationBatches
     "bool", // isBunkerMode
-    "uint256", // vaultsTotalDeficit
     "bytes32", // vaultsDataTreeRoot
     "string", // vaultsDataTreeCid
     "uint256", // extraDataFormat

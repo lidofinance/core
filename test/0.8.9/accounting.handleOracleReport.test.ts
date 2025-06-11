@@ -125,7 +125,6 @@ describe("Accounting.sol:report", () => {
       elRewardsVaultBalance: 0n,
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches: [],
-      vaultsTotalDeficit: 0n,
       ...overrides,
     };
   }
