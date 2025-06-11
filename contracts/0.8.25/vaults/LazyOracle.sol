@@ -289,7 +289,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         Storage storage $ = _storage();
 
         uint256 refSlotTotalValue = uint256(int256(uint256(record.report.totalValue)) + _inOutDelta - record.report.inOutDelta);
-        // small percentage of unsafe funds is allowed for the EL CL rewards handling
+        // some percentage of funds hasn't passed through the vault's balance is allowed for the EL and CL rewards handling
         uint256 limit = refSlotTotalValue * (TOTAL_BP + $.maxRewardRatioBP) / TOTAL_BP;
 
         if (_totalValue > limit) {
