@@ -72,12 +72,8 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice liability shares of the vault
         uint96 liabilityShares;
         // ### 3rd slot
-        /// @notice current inOutDelta of the vault (all deposits - all withdrawals)
-        int112 inOutDelta;
-        /// @notice cached inOutDelta of the latest report
-        int112 cachedInOutDelta;
-        /// @notice cached refSlot number of the latest report
-        uint32 cachedRefSlot;
+        /// @notice inOutDelta of the vault (all deposits - all withdrawals)
+        Int112WithRefSlotCache inOutDelta;
         // ### 4th slot
         /// @notice timestamp of the latest report
         uint64 reportTimestamp;
@@ -91,6 +87,15 @@ contract VaultHub is PausableUntilWithRoles {
         uint128 totalValue;
         /// @notice inOutDelta of the report
         int112 inOutDelta;
+    }
+
+    struct Int112WithRefSlotCache {
+        /// @notice current value
+        int112 value;
+        /// @notice cached value of the latest refSlot
+        int112 refSlotValue;
+        /// @notice cached refSlot number
+        uint32 refSlot;
     }
 
     // -----------------------------
@@ -518,14 +523,7 @@ contract VaultHub is PausableUntilWithRoles {
     function fund(address _vault) external payable whenResumed {
         _checkConnectionAndOwner(_vault);
 
-        VaultRecord storage record = _vaultRecord(_vault);
-
-        _cacheInOutDelta(record);
-
-        int112 inOutDelta_ = record.inOutDelta + int112(int256(msg.value));
-        record.inOutDelta = inOutDelta_;
-
-        emit VaultInOutDeltaUpdated(_vault, inOutDelta_);
+        _updateInOutDelta(_vault, _vaultRecord(_vault), int112(int256(msg.value)));
 
         IStakingVault(_vault).fund{value: msg.value}();
     }
@@ -784,9 +782,11 @@ contract VaultHub is PausableUntilWithRoles {
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
             reportTimestamp: _lazyOracle().latestReportTimestamp(),
-            inOutDelta: report.inOutDelta,
-            cachedInOutDelta: 0,
-            cachedRefSlot: 0,
+            inOutDelta: Int112WithRefSlotCache({
+                value: report.inOutDelta,
+                refSlotValue: 0,
+                refSlot: 0
+            }),
             feeSharesCharged: uint96(0)
         });
 
@@ -839,14 +839,9 @@ contract VaultHub is PausableUntilWithRoles {
         address _recipient,
         uint256 _amount
     ) internal {
-        _cacheInOutDelta(_record);
-
-        int112 inOutDelta_ = _record.inOutDelta - int112(int256(_amount));
-        _record.inOutDelta = inOutDelta_;
+        _updateInOutDelta(_vault, _record, -int112(int256(_amount)));
 
         IStakingVault(_vault).withdraw(_recipient, _amount);
-
-        emit VaultInOutDeltaUpdated(_vault, inOutDelta_);
     }
 
     function _rebalanceShortfall(
@@ -913,7 +908,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
         Report memory report = _record.report;
-        return uint256(int256(uint256(report.totalValue)) + _record.inOutDelta - report.inOutDelta);
+        return uint256(int256(uint256(report.totalValue)) + _record.inOutDelta.value - report.inOutDelta);
     }
 
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
@@ -983,19 +978,21 @@ contract VaultHub is PausableUntilWithRoles {
         return connection;
     }
 
-    /// @dev Caches the inOutDelta of the latest refSlot.
-    ///      A storage write is only performed if the current refSlot differs from the cached one.
-    ///      In the edge case where estimation is executed before the refSlot, and execution happens 
-    ///      after it, there may be a mismatch between the gas estimated during the estimate step and 
-    ///      the actual gas used during execution. The difference is not more than 800 gas, which should 
-    ///      not be critical, as some gas buffer is usually included anyway.
-    function _cacheInOutDelta(VaultRecord storage _record) internal {
-        // cache inOutDelta if the refSlot is different from the cachedRefSlot
+    /// @dev Caches the inOutDelta of the latest refSlot and updates the value
+    function _updateInOutDelta(address _vault, VaultRecord storage record_, int112 increment_) internal {
+        Int112WithRefSlotCache memory inOutDelta_ = record_.inOutDelta;
+
+        // cache inOutDelta if the refSlot is different from the cached refSlot
         (uint256 refSlot, ) = CONSENSUS_CONTRACT.getCurrentFrame();
-        if (_record.cachedRefSlot != refSlot) {
-            _record.cachedInOutDelta =  _record.inOutDelta;
-            _record.cachedRefSlot = uint32(refSlot);
+        if (inOutDelta_.refSlot != refSlot) {
+            inOutDelta_.refSlotValue =  inOutDelta_.value;
+            inOutDelta_.refSlot = uint32(refSlot);
         }
+
+        inOutDelta_.value += increment_;
+        record_.inOutDelta = inOutDelta_;
+
+        emit VaultInOutDeltaUpdated(_vault, inOutDelta_.value);
     }
 
     function _storage() internal pure returns (Storage storage $) {

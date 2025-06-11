@@ -694,22 +694,22 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       // first deposit in frame
       let record = await vaultHub.vaultRecord(stakingVault);
-      expect(record.cachedInOutDelta).to.equal(0);
-      expect(record.cachedRefSlot).to.equal(0);
+      expect(record.inOutDelta.refSlotValue).to.equal(0);
+      expect(record.inOutDelta.refSlot).to.equal(0);
 
       await dashboard.connect(roles.funder).fund({ value: value });
 
       record = await vaultHub.vaultRecord(stakingVault);
-      expect(record.cachedInOutDelta).to.equal(ether("1"));
+      expect(record.inOutDelta.refSlotValue).to.equal(ether("1"));
       const [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
-      expect(record.cachedRefSlot).to.equal(refSlot);
+      expect(record.inOutDelta.refSlot).to.equal(refSlot);
 
       // second deposit in frame
       await dashboard.connect(roles.funder).fund({ value: value });
 
       record = await vaultHub.vaultRecord(stakingVault);
-      expect(record.cachedInOutDelta).to.equal(ether("1"));
-      expect(record.cachedRefSlot).to.equal(refSlot);
+      expect(record.inOutDelta.refSlotValue).to.equal(ether("1"));
+      expect(record.inOutDelta.refSlot).to.equal(refSlot);
     });
 
     it("InOutDelta cache in withdraw", async () => {
@@ -719,8 +719,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       let [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
       let record = await vaultHub.vaultRecord(stakingVault);
-      expect(record.cachedInOutDelta).to.equal(ether("1"));
-      expect(record.cachedRefSlot).to.equal(refSlot);
+      expect(record.inOutDelta.refSlotValue).to.equal(ether("1"));
+      expect(record.inOutDelta.refSlot).to.equal(refSlot);
 
       await advanceChainTime(days(2n));
       await reportVaultDataWithProof(ctx, stakingVault);
@@ -729,16 +729,16 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
 
       record = await vaultHub.vaultRecord(stakingVault);
-      expect(record.cachedInOutDelta).to.equal(value + ether("1"));
+      expect(record.inOutDelta.refSlotValue).to.equal(value + ether("1"));
       [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
-      expect(record.cachedRefSlot).to.equal(refSlot);
+      expect(record.inOutDelta.refSlot).to.equal(refSlot);
 
       // second withdraw in frame
       await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
 
       record = await vaultHub.vaultRecord(stakingVault);
-      expect(record.cachedInOutDelta).to.equal(value + ether("1"));
-      expect(record.cachedRefSlot).to.equal(refSlot);
+      expect(record.inOutDelta.refSlotValue).to.equal(value + ether("1"));
+      expect(record.inOutDelta.refSlot).to.equal(refSlot);
     });
   });
 

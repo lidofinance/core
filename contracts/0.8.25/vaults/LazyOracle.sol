@@ -268,10 +268,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
         // 1. Calculate inOutDelta in the refSlot
-        int256 curInOutDelta = record.inOutDelta;
+        int256 curInOutDelta = record.inOutDelta.value;
         (uint256 refSlot, ) = HASH_CONSENSUS.getCurrentFrame();
-        if (record.cachedRefSlot == refSlot) {
-            inOutDelta = record.cachedInOutDelta;
+        if (record.inOutDelta.refSlot == refSlot) {
+            inOutDelta = record.inOutDelta.refSlotValue;
         } else {
             inOutDelta = curInOutDelta;
         }
