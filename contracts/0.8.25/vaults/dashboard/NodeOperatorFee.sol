@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 import {VaultHub} from "../VaultHub.sol";
 import {Permissions} from "./Permissions.sol";
+import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 
 /**
  * @title NodeOperatorFee
@@ -201,6 +202,10 @@ contract NodeOperatorFee is Permissions {
         // Adjustment must be settled before the fee rate change
         if (rewardsAdjustment.amount != 0) revert AdjustmentNotSettled();
 
+        // If the vault is quarantined, the total value is reduced and may not reflect the adjustment
+        if (ILazyOracle(LIDO_LOCATOR.lazyOracle()).vaultQuarantine(address(_stakingVault())).isActive)
+            revert VaultQuarantined();
+
         // To follow the check-effects-interaction pattern, we need to remember the fee here
         // because the fee calculation variables will be reset in the following lines
         uint256 fee = nodeOperatorDisbursableFee();
@@ -375,4 +380,9 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the adjustment is not settled.
      */
     error AdjustmentNotSettled();
+
+    /**
+     * @dev Error emitted when the vault is quarantined.
+     */
+    error VaultQuarantined();
 }
