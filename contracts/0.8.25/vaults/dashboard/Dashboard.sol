@@ -267,6 +267,18 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Changes the tier of the vault and connects to VaultHub
+     * @param _tierId The tier to change to
+     * @param _requestedShareLimit The requested share limit
+     */
+    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit) external payable {
+        connectToVaultHub();
+        if (!_changeTier(_tierId, _requestedShareLimit)) {
+            revert TierChangeNotConfirmed();
+        }
+    }
+
+    /**
      * @notice Funds the staking vault with ether
      */
     function fund() external payable {
@@ -521,9 +533,10 @@ contract Dashboard is NodeOperatorFee {
      * @notice Requests a change of tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
+     * @return bool Whether the tier change was confirmed.
      */
-    function requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) external {
-        _requestTierChange(_tierId, _requestedShareLimit);
+    function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external returns (bool) {
+        return _changeTier(_tierId, _requestedShareLimit);
     }
 
     // ==================== Internal Functions ====================
@@ -667,4 +680,9 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error when the StakingVault is still connected to the VaultHub.
      */
     error ConnectedToVaultHub();
+
+    /**
+     * @notice Error thrown when attempting to connect to VaultHub without confirmed tier change
+     */
+    error TierChangeNotConfirmed();
 }

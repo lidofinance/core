@@ -158,16 +158,18 @@ describe("NodeOperatorFee.sol", () => {
       const oldConfirmExpiry = await nodeOperatorFee.getConfirmExpiry();
       const newConfirmExpiry = days(10n);
       const msgData = nodeOperatorFee.interface.encodeFunctionData("setConfirmExpiry", [newConfirmExpiry]);
-      let confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
+      let confirmTimestamp = await getNextBlockTimestamp();
+      let expiryTimestamp = confirmTimestamp + (await nodeOperatorFee.getConfirmExpiry());
 
       await expect(nodeOperatorFee.connect(vaultOwner).setConfirmExpiry(newConfirmExpiry))
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
-        .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData);
+        .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, expiryTimestamp, msgData);
 
-      confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
+      confirmTimestamp = await getNextBlockTimestamp();
+      expiryTimestamp = confirmTimestamp + (await nodeOperatorFee.getConfirmExpiry());
       await expect(nodeOperatorFee.connect(nodeOperatorManager).setConfirmExpiry(newConfirmExpiry))
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
-        .withArgs(nodeOperatorManager, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, msgData)
+        .withArgs(nodeOperatorManager, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, expiryTimestamp, msgData)
         .and.to.emit(nodeOperatorFee, "ConfirmExpirySet")
         .withArgs(nodeOperatorManager, oldConfirmExpiry, newConfirmExpiry);
 
@@ -465,8 +467,6 @@ describe("NodeOperatorFee.sol", () => {
       const { amount: current } = await nodeOperatorFee.rewardsAdjustment();
       const LIMIT = await nodeOperatorFee.MANUAL_REWARDS_ADJUSTMENT_LIMIT();
 
-      await nodeOperatorFee.connect(nodeOperatorManager).setRewardsAdjustment(LIMIT + 1n, current);
-
       await expect(
         nodeOperatorFee.connect(vaultOwner).setRewardsAdjustment(LIMIT + 1n, current),
       ).to.be.revertedWithCustomError(nodeOperatorFee, "IncreasedOverLimit");
@@ -508,7 +508,8 @@ describe("NodeOperatorFee.sol", () => {
         currentAdjustment,
       ]);
 
-      let confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
+      let confirmTimestamp = await getNextBlockTimestamp();
+      let expiryTimestamp = confirmTimestamp + (await nodeOperatorFee.getConfirmExpiry());
 
       const firstConfirmTx = await nodeOperatorFee
         .connect(nodeOperatorManager)
@@ -516,11 +517,12 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(firstConfirmTx)
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
-        .withArgs(nodeOperatorManager, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, msgData);
+        .withArgs(nodeOperatorManager, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, expiryTimestamp, msgData);
 
       expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([currentAdjustment, 0n]);
 
-      confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
+      confirmTimestamp = await getNextBlockTimestamp();
+      expiryTimestamp = confirmTimestamp + (await nodeOperatorFee.getConfirmExpiry());
 
       const timestamp = await getNextBlockTimestamp();
       const secondConfirmTx = await nodeOperatorFee
@@ -529,7 +531,7 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(secondConfirmTx)
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
-        .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData)
+        .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, expiryTimestamp, msgData)
         .to.emit(nodeOperatorFee, "RewardsAdjustmentSet")
         .withArgs(newAdjustment, currentAdjustment);
 
@@ -539,6 +541,15 @@ describe("NodeOperatorFee.sol", () => {
 
   context("setNodeOperatorFeeRate", () => {
     it("reverts if called by not CONFIRMING_ROLE", async () => {
+      await hub.setReport(
+        {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+        },
+        await getNextBlockTimestamp(),
+        true,
+      );
+
       await expect(nodeOperatorFee.connect(stranger).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
         nodeOperatorFee,
         "SenderNotMember",
