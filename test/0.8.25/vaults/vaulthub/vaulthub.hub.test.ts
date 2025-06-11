@@ -28,7 +28,7 @@ import {
   MAX_UINT256,
   randomAddress,
 } from "lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants";
+import { MAX_FEE_BP,TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
@@ -787,7 +787,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("reverts if infra fee is too high", async () => {
-      const tooHighInfraFeeBP = TOTAL_BASIS_POINTS + 1n;
+      const tooHighInfraFeeBP = MAX_FEE_BP + 1n;
 
       await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
         shareLimit: SHARE_LIMIT,
@@ -800,11 +800,11 @@ describe("VaultHub.sol:hub", () => {
 
       await expect(vaultHub.connect(user).connectVault(vaultAddress))
         .to.be.revertedWithCustomError(vaultHub, "InfraFeeTooHigh")
-        .withArgs(vaultAddress, tooHighInfraFeeBP, TOTAL_BASIS_POINTS);
+        .withArgs(vaultAddress, tooHighInfraFeeBP, MAX_FEE_BP);
     });
 
     it("reverts if liquidity fee is too high", async () => {
-      const tooHighLiquidityFeeBP = TOTAL_BASIS_POINTS + 1n;
+      const tooHighLiquidityFeeBP = MAX_FEE_BP + 1n;
 
       await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
         shareLimit: SHARE_LIMIT,
@@ -817,11 +817,11 @@ describe("VaultHub.sol:hub", () => {
 
       await expect(vaultHub.connect(user).connectVault(vaultAddress))
         .to.be.revertedWithCustomError(vaultHub, "LiquidityFeeTooHigh")
-        .withArgs(vaultAddress, tooHighLiquidityFeeBP, TOTAL_BASIS_POINTS);
+        .withArgs(vaultAddress, tooHighLiquidityFeeBP, MAX_FEE_BP);
     });
 
     it("reverts if reservation fee is too high", async () => {
-      const tooHighReservationFeeBP = TOTAL_BASIS_POINTS + 1n;
+      const tooHighReservationFeeBP = MAX_FEE_BP + 1n;
 
       await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
         shareLimit: SHARE_LIMIT,
@@ -834,7 +834,7 @@ describe("VaultHub.sol:hub", () => {
 
       await expect(vaultHub.connect(user).connectVault(vaultAddress))
         .to.be.revertedWithCustomError(vaultHub, "ReservationFeeTooHigh")
-        .withArgs(vaultAddress, tooHighReservationFeeBP, TOTAL_BASIS_POINTS);
+        .withArgs(vaultAddress, tooHighReservationFeeBP, MAX_FEE_BP);
     });
 
     it("reverts if vault is already connected", async () => {
@@ -1054,33 +1054,33 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("reverts if infra fee is too high", async () => {
-      const tooHighInfraFeeBP = TOTAL_BASIS_POINTS + 1n;
+      const tooHighInfraFeeBP = MAX_FEE_BP + 1n;
 
       await expect(
         vaultHub.connect(user).updateVaultFees(vaultAddress, tooHighInfraFeeBP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
       )
         .to.be.revertedWithCustomError(vaultHub, "InfraFeeTooHigh")
-        .withArgs(vaultAddress, tooHighInfraFeeBP, TOTAL_BASIS_POINTS);
+        .withArgs(vaultAddress, tooHighInfraFeeBP, MAX_FEE_BP);
     });
 
     it("reverts if liquidity fee is too high", async () => {
-      const tooHighLiquidityFeeBP = TOTAL_BASIS_POINTS + 1n;
+      const tooHighLiquidityFeeBP = MAX_FEE_BP + 1n;
 
       await expect(
         vaultHub.connect(user).updateVaultFees(vaultAddress, INFRA_FEE_BP, tooHighLiquidityFeeBP, RESERVATION_FEE_BP),
       )
         .to.be.revertedWithCustomError(vaultHub, "LiquidityFeeTooHigh")
-        .withArgs(vaultAddress, tooHighLiquidityFeeBP, TOTAL_BASIS_POINTS);
+        .withArgs(vaultAddress, tooHighLiquidityFeeBP, MAX_FEE_BP);
     });
 
     it("reverts if reservation fee is too high", async () => {
-      const tooHighReservationFeeBP = TOTAL_BASIS_POINTS + 1n;
+      const tooHighReservationFeeBP = MAX_FEE_BP + 1n;
 
       await expect(
         vaultHub.connect(user).updateVaultFees(vaultAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, tooHighReservationFeeBP),
       )
         .to.be.revertedWithCustomError(vaultHub, "ReservationFeeTooHigh")
-        .withArgs(vaultAddress, tooHighReservationFeeBP, TOTAL_BASIS_POINTS);
+        .withArgs(vaultAddress, tooHighReservationFeeBP, MAX_FEE_BP);
     });
 
     it("updates the vault fees", async () => {

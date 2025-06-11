@@ -160,6 +160,8 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
     /// @notice length of the validator pubkey in bytes
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
+    /// @dev max value for fees in basis points - it's about 650%
+    uint256 internal constant MAX_FEE_BP = type(uint16).max;
 
     /// @notice codehash of the account with no code
     bytes32 private constant EMPTY_CODEHASH = keccak256("");
@@ -409,9 +411,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reservationFeeBP
     ) external onlyRole(VAULT_MASTER_ROLE) {
         _requireNotZero(_vault);
-        _requireLessThanBP(_infraFeeBP, TOTAL_BASIS_POINTS);
-        _requireLessThanBP(_liquidityFeeBP, TOTAL_BASIS_POINTS);
-        _requireLessThanBP(_reservationFeeBP, TOTAL_BASIS_POINTS);
+        _requireLessThanBP(_infraFeeBP, MAX_FEE_BP);
+        _requireLessThanBP(_liquidityFeeBP, MAX_FEE_BP);
+        _requireLessThanBP(_reservationFeeBP, MAX_FEE_BP);
 
         VaultConnection storage connection = _checkConnection(_vault);
         uint16 preInfraFeeBP = connection.infraFeeBP;
@@ -922,9 +924,9 @@ contract VaultHub is PausableUntilWithRoles {
         _requireNotZero(_forcedRebalanceThresholdBP);
         _requireLessThanBP(_forcedRebalanceThresholdBP, _reserveRatioBP);
 
-        _requireLessThanBP(_infraFeeBP, TOTAL_BASIS_POINTS);
-        _requireLessThanBP(_liquidityFeeBP, TOTAL_BASIS_POINTS);
-        _requireLessThanBP(_reservationFeeBP, TOTAL_BASIS_POINTS);
+        _requireLessThanBP(_infraFeeBP, MAX_FEE_BP);
+        _requireLessThanBP(_liquidityFeeBP, MAX_FEE_BP);
+        _requireLessThanBP(_reservationFeeBP, MAX_FEE_BP);
 
         VaultConnection memory connection = _vaultConnection(_vault);
         if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);

@@ -95,6 +95,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
 
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
+    /// @dev max value for fees in basis points - it's about 650%
+    uint256 internal constant MAX_FEE_BP = type(uint16).max;
 
     // -----------------------------
     //            STRUCTS
@@ -699,14 +701,14 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         if (_forcedRebalanceThresholdBP > _reserveRatioBP)
             revert ForcedRebalanceThresholdTooHigh(_tierId, _forcedRebalanceThresholdBP, _reserveRatioBP);
 
-        if (_infraFeeBP > TOTAL_BASIS_POINTS)
-            revert InfraFeeTooHigh(_tierId, _infraFeeBP, TOTAL_BASIS_POINTS);
+        if (_infraFeeBP > MAX_FEE_BP)
+            revert InfraFeeTooHigh(_tierId, _infraFeeBP, MAX_FEE_BP);
 
-        if (_liquidityFeeBP > TOTAL_BASIS_POINTS)
-            revert LiquidityFeeTooHigh(_tierId, _liquidityFeeBP, TOTAL_BASIS_POINTS);
+        if (_liquidityFeeBP > MAX_FEE_BP)
+            revert LiquidityFeeTooHigh(_tierId, _liquidityFeeBP, MAX_FEE_BP);
 
-        if (_reservationFeeBP > TOTAL_BASIS_POINTS)
-            revert ReservationFeeTooHigh(_tierId, _reservationFeeBP, TOTAL_BASIS_POINTS);
+        if (_reservationFeeBP > MAX_FEE_BP)
+            revert ReservationFeeTooHigh(_tierId, _reservationFeeBP, MAX_FEE_BP);
     }
 
     function _vaultHub() internal view returns (VaultHub) {

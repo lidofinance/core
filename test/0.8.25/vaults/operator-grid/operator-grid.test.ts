@@ -397,27 +397,27 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("alterTiers - validateParams - reverts if _infraFeeBP is greater than 100_00", async function () {
-      const _infraFeeBP = 100_01;
-      const totalBasisPoints = 100_00;
+      const _infraFeeBP = 700_01;
+      const maxFeeBP = 65535;
       await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], infraFeeBP: _infraFeeBP }]))
         .to.be.revertedWithCustomError(operatorGrid, "InfraFeeTooHigh")
-        .withArgs("0", _infraFeeBP, totalBasisPoints);
+        .withArgs("0", _infraFeeBP, maxFeeBP);
     });
 
     it("alterTiers - validateParams - reverts if _liquidityFeeBP is greater than 100_00", async function () {
-      const _liquidityFeeBP = 100_01;
-      const totalBasisPoints = 100_00;
+      const _liquidityFeeBP = 700_01;
+      const maxFeeBP = 65535;
       await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], liquidityFeeBP: _liquidityFeeBP }]))
         .to.be.revertedWithCustomError(operatorGrid, "LiquidityFeeTooHigh")
-        .withArgs("0", _liquidityFeeBP, totalBasisPoints);
+        .withArgs("0", _liquidityFeeBP, maxFeeBP);
     });
 
     it("alterTiers - validateParams - reverts if _reservationFeeBP is greater than 100_00", async function () {
-      const _reservationFeeBP = 100_01;
-      const totalBasisPoints = 100_00;
+      const _reservationFeeBP = 700_01;
+      const maxFeeBP = 65535;
       await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], reservationFeeBP: _reservationFeeBP }]))
         .to.be.revertedWithCustomError(operatorGrid, "ReservationFeeTooHigh")
-        .withArgs("0", _reservationFeeBP, totalBasisPoints);
+        .withArgs("0", _reservationFeeBP, maxFeeBP);
     });
 
     it("alterTiers - reverts if arrays length mismatch", async function () {
