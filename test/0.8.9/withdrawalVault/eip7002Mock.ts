@@ -25,7 +25,9 @@ export const deployEIP7002WithdrawalRequestContractMock = async (
 };
 
 export function encodeEIP7002Payload(pubkey: string, amount: bigint): string {
-  return `0x${pubkey}${amount.toString(16).padStart(16, "0")}`;
+  // remove 0x prefix if it exists
+  const pubkeyWithoutPrefix = pubkey.startsWith("0x") ? pubkey.slice(2) : pubkey;
+  return `0x${pubkeyWithoutPrefix}${amount.toString(16).padStart(16, "0")}`;
 }
 
 export function findEIP7002MockEvents(receipt: ContractTransactionReceipt) {

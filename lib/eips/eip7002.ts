@@ -26,14 +26,44 @@ export const ensureEIP7002WithdrawalRequestContractPresent = async (): Promise<v
   }
 };
 
+export type EIP7002WithdrawalRequest = {
+  address: string; // hex string, 0x-prefixed
+  pubkey: string; // hex string, 0x-prefixed
+  amount: bigint;
+};
+
 // Pop withdrawal request from queue, update fee accumulator.
 // Reads as many requests as available from the queue, until the max withdrawal request per
 // block is reached. The requests are returned as a contiguous array of bytes
-export const readWithdrawalRequests = async (): Promise<void> => {
+export const readWithdrawalRequests = async (): Promise<EIP7002WithdrawalRequest[]> => {
   const sysAddress = await impersonate("0xfffffffffffffffffffffffffffffffffffffffe", 999999999999999999999999999n);
 
+  // Use a call to get the return data (simulate the transaction)
+  const callResult: string = await ethers.provider.call({
+    to: EIP7002_ADDRESS,
+    from: await sysAddress.getAddress(),
+    value: 0,
+    data: "0x",
+  });
+
+  // Send a transaction
   await sysAddress.sendTransaction({
     to: EIP7002_ADDRESS,
     value: 0,
   });
+
+  if (!callResult || callResult === "0x") return [];
+
+  const buf = Buffer.from(callResult.slice(2), "hex");
+  const REQUEST_SIZE = 76;
+  const requests: EIP7002WithdrawalRequest[] = [];
+  for (let i = 0; i + REQUEST_SIZE <= buf.length; i += REQUEST_SIZE) {
+    const chunk = buf.subarray(i, i + REQUEST_SIZE);
+    const address = "0x" + chunk.subarray(0, 20).toString("hex");
+    const pubkey = "0x" + chunk.subarray(20, 68).toString("hex");
+    const amount = chunk.readBigUInt64LE(68);
+    requests.push({ address, pubkey, amount });
+  }
+
+  return requests;
 };
