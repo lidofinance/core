@@ -39,7 +39,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         Normal top-ups — where the vault owner funds the contract directly using the `fund()` 
         function — do not go through quarantine, as they can be verified on-chain via the 
         inOutDelta value. These direct fundings are reflected immediately. In contrast, 
-        consolidations or deposits that bypass the vault must sit in quarantine.
+        consolidations or deposits that bypass the vault's balance must sit in quarantine.
 
         Example flow:
 
