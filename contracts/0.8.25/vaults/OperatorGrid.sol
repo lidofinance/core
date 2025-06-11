@@ -628,9 +628,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         uint256 liquidityFeeBP,
         uint256 reservationFeeBP
     );
-    event VaultAdded(address indexed vault);
     event TierChanged(address indexed vault, uint256 indexed tierId);
-    event TierChangeRequested(address indexed vault, uint256 indexed currentTierId, uint256 indexed requestedTierId);
     event TierUpdated(
       uint256 indexed tierId,
       uint256 shareLimit,
