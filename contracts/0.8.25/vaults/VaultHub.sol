@@ -119,9 +119,9 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice cumulative value for Lido fees that were settled on the vault
         uint128 cumulativeSettledLidoFees;
         /// @notice current unsettled Lido fees amount
-        uint64 unsettledLidoFees;
+        uint128 unsettledLidoFees;
         /// @notice current unsettled redemptions amount
-        uint64 redemptions;
+        uint128 redemptions;
     }
 
     // -----------------------------
@@ -263,10 +263,10 @@ contract VaultHub is PausableUntilWithRoles {
         return _unlocked(_vaultRecord(_vault), _vaultObligations(_vault));
     }
 
-    /// @return the amount of ether that can be locked in the vault
+    /// @return the amount of ether that can be locked in the vault given the current total value
     /// @dev returns 0 if the vault is not connected
-    function maxLocked(address _vault) external view returns (uint256) {
-        return _maxLocked(_vaultRecord(_vault), _vaultObligations(_vault));
+    function maxLockableValue(address _vault) external view returns (uint256) {
+        return _maxLockableValue(_vaultRecord(_vault), _vaultObligations(_vault));
     }
 
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
@@ -628,13 +628,13 @@ contract VaultHub is PausableUntilWithRoles {
         if (!_isReportFresh(record)) revert VaultReportStale(_vault);
 
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - connection.reserveRatioBP;
-        uint256 maxLockedEther = _maxLocked(record, _vaultObligations(_vault));
-        uint256 maxMintableEther = (maxLockedEther * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 maxLockableValue_ = _maxLockableValue(record, _vaultObligations(_vault));
+        uint256 maxMintableEther = (maxLockableValue_ * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
 
         uint256 stETHAfterMint = _getPooledEthBySharesRoundUp(vaultSharesAfterMint);
         if (stETHAfterMint > maxMintableEther) {
             uint256 totalValue_ = _totalValue(record);
-            revert InsufficientTotalValueToMint(_vault, totalValue_, totalValue_ - maxLockedEther);
+            revert InsufficientTotalValueToMint(_vault, totalValue_, totalValue_ - maxLockableValue_);
         }
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
@@ -741,7 +741,8 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
-    /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault is unhealthy
+    /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault is
+    ///         unhealthy or has redemptions obligation over the threshold
     /// @param _vault address of the vault to exit validators from
     /// @param _refundRecipient address that will receive the refund for transaction costs
     /// @dev    When the vault becomes unhealthy, trusted actor with the role can force its validators to exit the beacon chain
@@ -751,7 +752,7 @@ contract VaultHub is PausableUntilWithRoles {
         bytes calldata _pubkeys,
         address _refundRecipient
     ) external payable onlyRole(VALIDATOR_EXIT_ROLE) {
-        VaultConnection storage connection = _checkConnectionAndOwner(_vault);
+        VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
         if (
@@ -759,13 +760,13 @@ contract VaultHub is PausableUntilWithRoles {
             // Check if the vault has redemptions under the threshold, or enough balance to cover the redemptions fully
             _vaultObligations(_vault).redemptions <= Math256.max(OBLIGATIONS_THRESHOLD, _vault.balance)
         ) {
-            revert ForceValidatorExitNotAllowed();
+            revert ForcedValidatorExitNotAllowed();
         }
 
         uint64[] memory amounts = new uint64[](0);
         IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, amounts, _refundRecipient);
 
-        emit ForceValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
+        emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
     /// @notice Permissionless rebalance for unhealthy vaults
@@ -792,14 +793,13 @@ contract VaultHub is PausableUntilWithRoles {
 
         // This function may intentionally perform no action in some cases, as these are EasyTrack motions
         if (liabilityShares_ > 0) {
-            VaultObligations storage obligations = _vaultObligations(_vault);
-            if (obligations.redemptions == _redemptionsValue) return;
-
             uint256 newRedemptions = Math256.min(_redemptionsValue, _getPooledEthBySharesRoundUp(liabilityShares_));
-            obligations.redemptions = uint64(newRedemptions);
+            _vaultObligations(_vault).redemptions = uint128(newRedemptions);
             emit RedemptionsUpdated(_vault, newRedemptions);
 
             _checkAndUpdateBeaconChainDepositsPause(_vault, _vaultConnection(_vault), record);
+        } else {
+            emit RedemptionsNotSet(_vault, _redemptionsValue);
         }
     }
 
@@ -1031,12 +1031,12 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _unlocked(VaultRecord storage _record, VaultObligations storage _obligations) internal view returns (uint256) {
-        uint256 totalValue_ = _maxLocked(_record, _obligations);
+        uint256 lockableValue_ = _maxLockableValue(_record, _obligations);
         uint256 locked_ = _record.locked;
 
-        if (locked_ > totalValue_) return 0;
+        if (locked_ > lockableValue_) return 0;
 
-        return totalValue_ - locked_;
+        return lockableValue_ - locked_;
     }
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
@@ -1044,7 +1044,7 @@ contract VaultHub is PausableUntilWithRoles {
         return uint256(int256(uint256(report.totalValue)) + _record.inOutDelta - report.inOutDelta);
     }
 
-    function _maxLocked(VaultRecord storage _record, VaultObligations storage _obligations) internal view returns (uint256) {
+    function _maxLockableValue(VaultRecord storage _record, VaultObligations storage _obligations) internal view returns (uint256) {
         return _totalValue(_record) - _obligations.unsettledLidoFees;
     }
 
@@ -1140,7 +1140,7 @@ contract VaultHub is PausableUntilWithRoles {
         // update unsettled lido fees
         uint256 unsettledLidoFees = _reportCumulativeLidoFees - cumulativeSettledLidoFees;
         if (unsettledLidoFees != obligations.unsettledLidoFees) {
-            obligations.unsettledLidoFees = uint64(unsettledLidoFees);
+            obligations.unsettledLidoFees = uint128(unsettledLidoFees);
             emit LidoFeesUpdated(_vault, unsettledLidoFees, cumulativeSettledLidoFees);
         }
     }
@@ -1238,8 +1238,8 @@ contract VaultHub is PausableUntilWithRoles {
             obligations.cumulativeSettledLidoFees += uint128(valueToTransferToLido);
         }
 
-        obligations.redemptions = uint64(unsettledRedemptions);
-        obligations.unsettledLidoFees = uint64(unsettledLidoFees);
+        obligations.redemptions = uint128(unsettledRedemptions);
+        obligations.unsettledLidoFees = uint128(unsettledLidoFees);
 
         emit VaultObligationsSettled({
             vault: _vault,
@@ -1257,7 +1257,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (obligations.redemptions > 0) {
             uint256 decrease = Math256.min(obligations.redemptions, _ether);
             if (decrease > 0) {
-                obligations.redemptions -= uint64(decrease);
+                obligations.redemptions -= uint128(decrease);
                 emit RedemptionsUpdated(_vault, obligations.redemptions);
             }
         }
@@ -1277,7 +1277,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (_totalUnsettledObligations(_vaultObligations(_vault)) >= OBLIGATIONS_THRESHOLD || !isHealthy) {
             if (!vault_.beaconChainDepositsPaused()) vault_.pauseBeaconChainDeposits();
-        } else if (!_connection.isBeaconDepositsManuallyPaused && isHealthy) {
+        } else if (!_connection.isBeaconDepositsManuallyPaused) {
             if (vault_.beaconChainDepositsPaused()) vault_.resumeBeaconChainDeposits();
         }
     }
@@ -1377,7 +1377,7 @@ contract VaultHub is PausableUntilWithRoles {
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned, uint256 etherWithdrawn);
     event VaultInOutDeltaUpdated(address indexed vault, int128 inOutDelta);
-    event ForceValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
+    event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     /**
      * @notice Emitted when the manager is set
@@ -1389,6 +1389,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     event LidoFeesUpdated(address indexed vault, uint256 unsettledLidoFees, uint256 settledLidoFees);
     event RedemptionsUpdated(address indexed vault, uint256 unsettledRedemptions);
+    event RedemptionsNotSet(address indexed vault, uint256 redemptionsValue);
     event VaultObligationsSettled(
         address indexed vault,
         uint256 unsettledRedemptions,
@@ -1461,5 +1462,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultIsDisconnecting(address vault);
     error VaultHasUnsettledObligations(address vault, uint256 unsettledObligations, uint256 allowedUnsettled);
     error PartialValidatorWithdrawalNotAllowed();
-    error ForceValidatorExitNotAllowed();
+    error ForcedValidatorExitNotAllowed();
 }

@@ -632,39 +632,25 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable {
         reservationFeeBP = t.reservationFeeBP;
     }
 
-    /// @notice Returns the total minting capacity of a vault according to the OperatorGrid and vault share limits
+    /// @notice Returns the effective share limit of a vault according to the OperatorGrid and vault share limits
     /// @param _vault address of the vault
-    /// @return total shares minting capacity
-    function vaultTotalMintingCapacity(address _vault) public view returns (uint256) {
+    /// @return shareLimit effective share limit of the vault
+    function effectiveShareLimit(address _vault) public view returns (uint256) {
         VaultHub hub = _vaultHub();
         uint256 shareLimit = hub.vaultConnection(_vault).shareLimit;
         uint256 liabilityShares = hub.liabilityShares(_vault);
 
         uint64 tierId = _getStorage().vaultTier[_vault].currentTierId;
-        uint256 gridShareLimit = _gridRemainingMintingCapacity(tierId) + liabilityShares;
+        uint256 gridShareLimit = _gridRemainingShareLimit(tierId) + liabilityShares;
         return Math256.min(gridShareLimit, shareLimit);
     }
 
-    /// @notice Returns the remaining minting capacity of a vault according to the OperatorGrid and vault share limits
-    ///         and current vault liabilities
-    /// @param _vault address of the vault
-    /// @return remaining shares minting capacity
-    function vaultRemainingMintingCapacity(address _vault) external view returns (uint256) {
-        VaultHub hub = _vaultHub();
-        uint256 shareLimit = hub.vaultConnection(_vault).shareLimit;
-        uint256 liabilityShares = hub.liabilityShares(_vault);
-        uint256 mintingCapacity = shareLimit > liabilityShares ? shareLimit - liabilityShares : 0;
-
-        uint64 tierId = _getStorage().vaultTier[_vault].currentTierId;
-        return Math256.min(_gridRemainingMintingCapacity(tierId), mintingCapacity);
-    }
-
-    /// @notice Returns the remaining minting capacity in a given tier and group
+    /// @notice Returns the remaining share limit in a given tier and group
     /// @param _tierId tier id of the vault
-    /// @return remaining minting capacity
-    /// @dev remaining minting capacity inherits the limits of the vault tier and group,
+    /// @return remaining share limit
+    /// @dev remaining share limit inherits the limits of the vault tier and group,
     ///      and accounts liabilities of other vaults belonging to the same tier and group
-    function _gridRemainingMintingCapacity(uint64 _tierId) internal view returns (uint256) {
+    function _gridRemainingShareLimit(uint64 _tierId) internal view returns (uint256) {
         ERC7201Storage storage $ = _getStorage();
         Tier storage tier_ = $.tiers[_tierId];
 

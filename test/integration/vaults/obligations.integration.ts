@@ -277,12 +277,6 @@ describe("Integration: Vault obligations", () => {
         .to.emit(vaultHub, "RedemptionsUpdated")
         .withArgs(stakingVaultAddress, maxRedemptions);
 
-      // Second time should not emit anything because the obligation is already set
-      await expect(vaultHub.connect(agentSigner).setVaultRedemptions(stakingVaultAddress, maxRedemptions)).not.to.emit(
-        vaultHub,
-        "RedemptionsUpdated",
-      );
-
       const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
       expect(obligationsAfter.redemptions).to.equal(maxRedemptions);
 
@@ -375,7 +369,7 @@ describe("Integration: Vault obligations", () => {
         await lido.connect(roles.burner).approve(dashboard, liabilityShares);
 
         const sharesToBurn = liabilityShares / 2n;
-        const expectedRedemptions = await lido.getPooledEthByShares(sharesToBurn);
+        const expectedRedemptions = await lido.getPooledEthBySharesRoundUp(sharesToBurn);
 
         await expect(dashboard.connect(roles.burner).burnShares(sharesToBurn))
           .to.emit(vaultHub, "RedemptionsUpdated")
@@ -391,7 +385,7 @@ describe("Integration: Vault obligations", () => {
         const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
         expect(obligationsBefore.redemptions).to.equal(maxRedemptions);
 
-        const rebalanceAmount = (await lido.getPooledEthByShares(liabilityShares)) / 2n;
+        const rebalanceAmount = (await lido.getPooledEthBySharesRoundUp(liabilityShares)) / 2n;
         const expectedRedemptions = maxRedemptions - rebalanceAmount;
         await expect(dashboard.connect(roles.rebalancer).rebalanceVault(rebalanceAmount))
           .to.emit(vaultHub, "RedemptionsUpdated")
@@ -706,7 +700,7 @@ describe("Integration: Vault obligations", () => {
 
     it("Should revert when trying to mint more than total value minus unsettled Lido fees", async () => {
       const mintableShares = await dashboard.totalMintingCapacityShares();
-      const maxLocked = await vaultHub.maxLocked(stakingVaultAddress);
+      const maxLockableValue = await vaultHub.maxLockableValue(stakingVaultAddress);
 
       await expect(
         dashboard.connect(roles.minter).mintShares(roles.burner, mintableShares + 1n),
@@ -714,12 +708,12 @@ describe("Integration: Vault obligations", () => {
 
       await expect(dashboard.connect(roles.minter).mintShares(roles.burner, mintableShares))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVaultAddress, mintableShares, maxLocked);
+        .withArgs(stakingVaultAddress, mintableShares, maxLockableValue);
     });
 
     it("Should not take withdrals obligation into account", async () => {
       const mintableShares = await dashboard.totalMintingCapacityShares();
-      // const maxLocked = await vaultHub.maxLocked(stakingVaultAddress);
+      // const maxLocked = await vaultHub.maxLockableValue(stakingVaultAddress);
 
       const sharesToMint = mintableShares / 2n;
 

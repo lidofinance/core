@@ -183,19 +183,19 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the max locked amount of ether for the vault (excluding the Lido and node operator fees)
      */
-    function maxLocked() public view returns (uint256) {
-        uint256 maxLocked_ = VAULT_HUB.maxLocked(address(_stakingVault()));
+    function maxLockableValue() public view returns (uint256) {
+        uint256 maxLockableValue_ = VAULT_HUB.maxLockableValue(address(_stakingVault()));
         uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
-        return maxLocked_ > nodeOperatorFee ? maxLocked_ - nodeOperatorFee : 0;
+        return maxLockableValue_ > nodeOperatorFee ? maxLockableValue_ - nodeOperatorFee : 0;
     }
 
     /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() public view returns (uint256) {
-        uint256 totalSharesMintingCapacity = _operatorGrid().vaultTotalMintingCapacity(address(_stakingVault()));
+        uint256 totalSharesMintingCapacity = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
 
-        return Math256.min(totalSharesMintingCapacity, _mintableShares(maxLocked()));
+        return Math256.min(totalSharesMintingCapacity, _mintableShares(maxLockableValue()));
     }
 
     /**
@@ -205,15 +205,15 @@ contract Dashboard is NodeOperatorFee {
      * @return the number of shares that can be minted using additional ether
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) public view returns (uint256) {
-        uint256 remainingMintingCapacity = _operatorGrid().vaultRemainingMintingCapacity(address(_stakingVault()));
-        if (remainingMintingCapacity == 0) return 0;
-
-        uint256 vaultMintableShares = _mintableShares(maxLocked() + _etherToFund);
         uint256 vaultLiabilityShares = liabilityShares();
+        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
+        uint256 vaultMintableSharesByRR = _mintableShares(maxLockableValue() + _etherToFund);
+
+        if (effectiveShareLimit <= vaultLiabilityShares) return 0;
 
         return Math256.min(
-            remainingMintingCapacity,
-            vaultMintableShares > vaultLiabilityShares ? vaultMintableShares - vaultLiabilityShares : 0
+            effectiveShareLimit > vaultLiabilityShares ? effectiveShareLimit - vaultLiabilityShares : 0,
+            vaultMintableSharesByRR > vaultLiabilityShares ? vaultMintableSharesByRR - vaultLiabilityShares : 0
         );
     }
 
