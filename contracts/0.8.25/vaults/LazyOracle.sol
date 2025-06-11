@@ -77,13 +77,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint64 startTimestamp;
     }
 
-    struct QuarantineInfo {
-        bool isActive;
-        uint256 pendingTotalValueIncrease;
-        uint256 startTimestamp;
-        uint256 endTimestamp;
-    }
-
     struct VaultInfo {
         address vault;
         uint256 balance;

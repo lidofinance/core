@@ -33,6 +33,7 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     vaultHub: certainAddress("dummy-locator:vaultHub"),
     operatorGrid: certainAddress("dummy-locator:operatorGrid"),
     lazyOracle: certainAddress("dummy-locator:lazyOracle"),
+    vaultFactory: certainAddress("dummy-locator:vaultFactory"),
     ...config,
   });
 
