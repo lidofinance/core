@@ -53,6 +53,18 @@ describe("OperatorGrid.sol", () => {
 
   let originalState: string;
 
+  const record: Readonly<VaultHub.VaultRecordStruct> = {
+    report: {
+      totalValue: 1000n,
+      inOutDelta: 1000n,
+    },
+    liabilityShares: 555n,
+    locked: 1000n,
+    reportTimestamp: 2122n,
+    inOutDelta: 1000n,
+    feeSharesCharged: 1n,
+  };
+
   before(async () => {
     [deployer, vaultOwner, stranger, nodeOperator1, nodeOperator2] = await ethers.getSigners();
 
@@ -604,7 +616,8 @@ describe("OperatorGrid.sol", () => {
       ]);
 
       const vaultOwnerRole = ethers.zeroPadValue(await vaultOwner.getAddress(), 32);
-      const expiryTimestamp = (await getNextBlockTimestamp()) + (await operatorGrid.getConfirmExpiry());
+      const confirmTimestamp = await getNextBlockTimestamp()
+      const expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
       const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
         await vault_NO1_V1.getAddress(),
         1,
@@ -613,7 +626,7 @@ describe("OperatorGrid.sol", () => {
 
       await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit))
         .to.emit(operatorGrid, "RoleMemberConfirmed")
-        .withArgs(vaultOwner, vaultOwnerRole, expiryTimestamp, msgData);
+        .withArgs(vaultOwner, vaultOwnerRole, confirmTimestamp, expiryTimestamp, msgData);
 
       await expect(operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit)).to.not.be.reverted;
     });
@@ -726,9 +739,14 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        liabilityShares: _liabilityShares,
         pendingDisconnect: false,
       });
+
+      await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
+        ...record,
+        liabilityShares: _liabilityShares,
+      });
+
       //and update tier sharesMinted
       await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares);
 
@@ -763,9 +781,14 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        liabilityShares: _liabilityShares,
         pendingDisconnect: false,
       });
+
+      await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
+        ...record,
+        liabilityShares: _liabilityShares,
+      });
+
       //and update tier sharesMinted
       await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares);
 
@@ -845,9 +868,14 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        liabilityShares: _liabilityShares,
         pendingDisconnect: false,
       });
+      
+      await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
+        ...record,
+        liabilityShares: _liabilityShares,
+      });
+
       //and update tier sharesMinted
       await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares);
 

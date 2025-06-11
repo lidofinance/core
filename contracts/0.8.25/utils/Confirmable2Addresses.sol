@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {Confirmations} from "./Confirmations.sol";
+
 /**
  * @title Confirmable2Addresses
  * @author Lido

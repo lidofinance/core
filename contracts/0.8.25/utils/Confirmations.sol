@@ -133,7 +133,7 @@ abstract contract Confirmations {
                 numberOfConfirms++;
                 deferredConfirms[i] = true;
 
-                emit RoleMemberConfirmed(msg.sender, role, expiryTimestamp, msg.data);
+                emit RoleMemberConfirmed(msg.sender, role, block.timestamp, expiryTimestamp, msg.data);
             } else if ($.confirmations[_calldata][role] >= block.timestamp) {
                 numberOfConfirms++;
             }
@@ -205,10 +205,11 @@ abstract contract Confirmations {
      * @dev Emitted when a role member confirms.
      * @param member The address of the confirming member.
      * @param role The role of the confirming member.
-     * @param expiryTimestamp The timestamp of the confirmation.
+     * @param confirmTimestamp The timestamp of the confirmation.
+     * @param expiryTimestamp The timestamp when this confirmation expires.
      * @param data The msg.data of the confirmation (selector + arguments).
      */
-    event RoleMemberConfirmed(address indexed member, bytes32 indexed role, uint256 expiryTimestamp, bytes data);
+    event RoleMemberConfirmed(address indexed member, bytes32 indexed role, uint256 confirmTimestamp, uint256 expiryTimestamp, bytes data);
 
     /**
      * @dev Thrown when attempting to set confirmation expiry out of bounds.

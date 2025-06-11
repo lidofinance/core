@@ -110,8 +110,8 @@ contract VaultFactory {
         bytes memory immutableArgs = abi.encode(address(vault));
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
-        // initialize StakingVault with the _defaultAdmin as the owner
-        vault.initialize(_defaultAdmin, _nodeOperator, locator.predepositGuarantee());
+        // initialize StakingVault with the dashboard address as the owner
+        vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the _defaultAdmin as the default admin, grant optional node operator managed roles
         dashboard.initialize(_defaultAdmin, address(this), _nodeOperatorFeeBP, _confirmExpiry);
