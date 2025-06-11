@@ -368,8 +368,9 @@ describe("Integration: Vault obligations", () => {
         expect(await lido.sharesOf(roles.burner)).to.equal(liabilityShares);
         await lido.connect(roles.burner).approve(dashboard, liabilityShares);
 
-        const sharesToBurn = liabilityShares / 2n;
-        const expectedRedemptions = await lido.getPooledEthBySharesRoundUp(sharesToBurn);
+        const parts = 2n;
+        const sharesToBurn = liabilityShares / parts;
+        const expectedRedemptions = (await lido.getPooledEthBySharesRoundUp(liabilityShares)) / parts;
 
         await expect(dashboard.connect(roles.burner).burnShares(sharesToBurn))
           .to.emit(vaultHub, "RedemptionsUpdated")
@@ -738,7 +739,7 @@ describe("Integration: Vault obligations", () => {
       expect(withdrawableValue).to.equal(0n);
 
       await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, withdrawableValue + 1n))
-        .to.be.revertedWithCustomError(dashboard, "WithdrawalExceedsWithdrawable")
+        .to.be.revertedWithCustomError(dashboard, "WithdrawalExceedsWithdrawableValue")
         .withArgs(withdrawableValue + 1n, withdrawableValue);
     });
 

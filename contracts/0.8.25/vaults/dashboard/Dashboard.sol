@@ -181,7 +181,7 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the max locked amount of ether for the vault (excluding the Lido and node operator fees)
+     * @notice Returns the max total lockable amount of ether for the vault (excluding the Lido and node operator fees)
      */
     function maxLockableValue() public view returns (uint256) {
         uint256 maxLockableValue_ = VAULT_HUB.maxLockableValue(address(_stakingVault()));
@@ -205,11 +205,9 @@ contract Dashboard is NodeOperatorFee {
      * @return the number of shares that can be minted using additional ether
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) public view returns (uint256) {
-        uint256 vaultLiabilityShares = liabilityShares();
         uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
         uint256 vaultMintableSharesByRR = _mintableShares(maxLockableValue() + _etherToFund);
-
-        if (effectiveShareLimit <= vaultLiabilityShares) return 0;
+        uint256 vaultLiabilityShares = liabilityShares();
 
         return Math256.min(
             effectiveShareLimit > vaultLiabilityShares ? effectiveShareLimit - vaultLiabilityShares : 0,
@@ -221,7 +219,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the amount of ether that can be instantly withdrawn from the staking vault.
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for fees and obligations.
      */
-    function withdrawableEther() public view returns (uint256) {
+    function withdrawableValue() public view returns (uint256) {
         // On pending disconnect, the vault does not allow any withdrawals, so need to return 0 here
         if (VAULT_HUB.vaultConnection(address(_stakingVault())).pendingDisconnect) return 0;
 
@@ -316,10 +314,9 @@ contract Dashboard is NodeOperatorFee {
      * @param _ether Amount of ether to withdraw
      */
     function withdraw(address _recipient, uint256 _ether) external {
-        uint256 withdrawableEther_ = withdrawableEther();
-
-        if (_ether > withdrawableEther_) {
-            revert WithdrawalExceedsWithdrawable(_ether, withdrawableEther_);
+        uint256 withdrawableEther = withdrawableValue();
+        if (_ether > withdrawableEther) {
+            revert WithdrawalExceedsWithdrawableValue(_ether, withdrawableEther);
         }
 
         _withdraw(_recipient, _ether);
@@ -414,9 +411,9 @@ contract Dashboard is NodeOperatorFee {
             totalAmount += _deposits[i].amount;
         }
 
-        uint256 withdrawableEther_ = withdrawableEther();
-        if (totalAmount > withdrawableEther_) {
-            revert WithdrawalExceedsWithdrawable(totalAmount, withdrawableEther_);
+        uint256 withdrawableEther = withdrawableValue();
+        if (totalAmount > withdrawableEther) {
+            revert WithdrawalExceedsWithdrawableValue(totalAmount, withdrawableEther);
         }
 
         _disableFundOnReceive();
@@ -675,9 +672,9 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Emitted when the withdrawable amount of ether is exceeded
      * @param amount The amount of ether that was attempted to be withdrawn
-     * @param withdrawableEther The amount of withdrawable ether available
+     * @param withdrawableValue The amount of withdrawable ether available
      */
-    error WithdrawalExceedsWithdrawable(uint256 amount, uint256 withdrawableEther);
+    error WithdrawalExceedsWithdrawableValue(uint256 amount, uint256 withdrawableValue);
 
     /**
      * @notice Error thrown when minting capacity is exceeded
