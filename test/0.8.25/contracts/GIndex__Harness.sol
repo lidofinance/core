@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {GIndex, pack, IndexOutOfRange, fls} from "contracts/0.8.25/lib/GIndex.sol";
+import {GIndex, pack, IndexOutOfRange, fls} from "contracts/common/lib/GIndex.sol";
 
 /**
  * @dev Test contract for GIndex library in TypeScript tests
