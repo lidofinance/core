@@ -1,6 +1,6 @@
 import { BytesLike } from "ethers";
 
-import { getPublicKey, utils } from "@noble/bls12-381";
+import { SecretKey } from "@chainsafe/blst";
 
 export function generateConsolidationRequestPayload(numberOfRequests: number): {
   sourcePubkeys: BytesLike[];
@@ -17,13 +17,11 @@ export function generateConsolidationRequestPayload(numberOfRequests: number): {
     let tempSourcePubkeys: Uint8Array = new Uint8Array();
     totalSourcePubkeysCount += numberOfSourcePubkeys;
     for (let j = 1; j <= numberOfSourcePubkeys; j++) {
-      const privateKey = utils.randomPrivateKey();
-      const publicKey = getPublicKey(privateKey);
+      const publicKey = generateRandomPublicKey(i * j);
       tempSourcePubkeys = concatUint8Arrays([tempSourcePubkeys, publicKey]);
     }
     sourcePubkeys.push(tempSourcePubkeys);
-    const privateKey = utils.randomPrivateKey();
-    const publicKey = getPublicKey(privateKey);
+    const publicKey = generateRandomPublicKey(i * numberOfSourcePubkeys + 1);
     targetPubkeys.push(publicKey);
     adjustmentIncreases.push(32n);
   }
@@ -45,4 +43,11 @@ function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
     offset += arr.length;
   }
   return result;
+}
+
+function generateRandomPublicKey(index: number): Uint8Array {
+  const ikm = Uint8Array.from(Buffer.from("test test test test test test test", "utf-8"));
+  const masterSecret = SecretKey.deriveMasterEip2333(ikm);
+  const sk = masterSecret.deriveChildEip2333(index);
+  return sk.toPublicKey().toBytes();
 }
