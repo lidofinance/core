@@ -150,6 +150,10 @@ contract VaultHub__MockForDashboard {
         emit Mock__VaultOwnershipTransferred(_vault, _newOwner);
     }
 
+    function isVaultConnected(address _vault) external view returns (bool) {
+        return vaultConnections[_vault].vaultIndex != 0;
+    }
+
     event Mock__ValidatorExitRequested(address vault, bytes pubkeys);
     event Mock__ValidatorWithdrawalsTriggered(address vault, bytes pubkeys, uint64[] amounts, address refundRecipient);
     event Mock__BeaconChainDepositsPaused(address vault);

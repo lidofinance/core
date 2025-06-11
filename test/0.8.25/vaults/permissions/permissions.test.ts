@@ -207,7 +207,7 @@ describe("Permissions", () => {
       await checkSoleMember(validatorExitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
       await checkSoleMember(validatorWithdrawalTriggerer, await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await checkSoleMember(disconnecter, await permissions.VOLUNTARY_DISCONNECT_ROLE());
-      await checkSoleMember(tierChanger, await permissions.REQUEST_TIER_CHANGE_ROLE());
+      await checkSoleMember(tierChanger, await permissions.CHANGE_TIER_ROLE());
     });
   });
 
@@ -963,29 +963,29 @@ describe("Permissions", () => {
 
   context("requestTierChange()", () => {
     it("requests a tier change", async () => {
-      await expect(permissions.connect(tierChanger).requestTierChange(1, ether("1")))
-        .to.emit(operatorGrid, "Mock__TierChangeRequested")
+      await expect(permissions.connect(tierChanger).changeTier(1, ether("1")))
+        .to.emit(operatorGrid, "Mock__TierChanged")
         .withArgs(stakingVault, 1, ether("1"));
     });
 
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
-      expect(await permissions.hasRole(await permissions.REQUEST_TIER_CHANGE_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.REQUEST_TIER_CHANGE_ROLE())).to.equal(
+      expect(await permissions.hasRole(await permissions.CHANGE_TIER_ROLE(), defaultAdmin)).to.be.false;
+      expect(await permissions.getRoleAdmin(await permissions.CHANGE_TIER_ROLE())).to.equal(
         await permissions.DEFAULT_ADMIN_ROLE(),
       );
 
-      await expect(permissions.connect(defaultAdmin).requestTierChange(1, ether("1")))
-        .to.emit(operatorGrid, "Mock__TierChangeRequested")
+      await expect(permissions.connect(defaultAdmin).changeTier(1, ether("1")))
+        .to.emit(operatorGrid, "Mock__TierChanged")
         .withArgs(stakingVault, 1, ether("1"));
     });
 
     it("reverts if the caller is not a member of the request tier change role", async () => {
-      expect(await permissions.hasRole(await permissions.REQUEST_TIER_CHANGE_ROLE(), stranger)).to.be.false;
+      expect(await permissions.hasRole(await permissions.CHANGE_TIER_ROLE(), stranger)).to.be.false;
 
-      await expect(permissions.connect(stranger).requestTierChange(1, ether("1")))
+      await expect(permissions.connect(stranger).changeTier(1, ether("1")))
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.REQUEST_TIER_CHANGE_ROLE());
+        .withArgs(stranger, await permissions.CHANGE_TIER_ROLE());
     });
   });
 
