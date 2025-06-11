@@ -74,7 +74,11 @@ describe("WithdrawalVault.sol", () => {
   context("Constructor", () => {
     it("Reverts if the Lido address is zero", async () => {
       await expect(
-        ethers.deployContract("WithdrawalVault", [ZeroAddress, treasury.address]),
+        ethers.deployContract("WithdrawalVault", [
+          ZeroAddress,
+          treasury.address,
+          triggerableWithdrawalsGateway.address,
+        ]),
       ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
 

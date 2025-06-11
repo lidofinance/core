@@ -112,9 +112,11 @@ async function getLocatorConfig(locatorAddress: string) {
     "validatorExitDelayVerifier",
     "triggerableWithdrawalsGateway",
     "accounting",
-    "wstETH",
     "predepositGuarantee",
+    "wstETH",
     "vaultHub",
+    "vaultFactory",
+    "lazyOracle",
     "operatorGrid",
   ] as Partial<keyof LidoLocator.ConfigStruct>[];
 

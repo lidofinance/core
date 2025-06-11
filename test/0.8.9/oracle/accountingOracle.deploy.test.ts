@@ -95,7 +95,6 @@ describe("AccountingOracle.sol:deploy", () => {
         expect(updateExitedKeysByModuleCallData.callCount).to.equal(0);
 
         expect(await mockStakingRouter.totalCalls_reportExitedKeysByNodeOperator()).to.equal(0);
-        expect(await mockStakingRouter.totalCalls_reportStuckKeysByNodeOperator()).to.equal(0);
 
         const onOracleReportLastCall = await mockWithdrawalQueue.lastCall__onOracleReport();
         expect(onOracleReportLastCall.callCount).to.equal(0);

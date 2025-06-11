@@ -421,11 +421,6 @@ describe("AccountingOracle.sol:happyPath", () => {
     expect(totalReportCalls).to.equal(2);
   });
 
-  it("Staking router didn't get the stuck keys by node op report", async () => {
-    const totalReportCalls = await mockStakingRouter.totalCalls_reportStuckKeysByNodeOperator();
-    expect(totalReportCalls).to.equal(3);
-  });
-
   it("Staking router was told that stuck and exited keys updating is finished", async () => {
     const totalFinishedCalls = await mockStakingRouter.totalCalls_onValidatorsCountsByNodeOperatorReportingFinished();
     expect(totalFinishedCalls).to.equal(2);

@@ -75,9 +75,11 @@ export async function deployAccountingOracleSetup(
     accountingAddress,
     admin,
   );
+  const lazyOracle = await ethers.deployContract("LazyOracle", [locatorAddr]);
 
   await updateLidoLocatorImplementation(locatorAddr, {
     oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
+    lazyOracle: await lazyOracle.getAddress(),
   });
 
   // pretend we're at the first slot of the initial frame's epoch

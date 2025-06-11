@@ -288,7 +288,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     });
 
     it("Can't mint until goes healthy", async () => {
-
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))

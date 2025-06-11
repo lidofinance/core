@@ -169,7 +169,13 @@ describe("NodeOperatorFee.sol", () => {
       expiryTimestamp = confirmTimestamp + (await nodeOperatorFee.getConfirmExpiry());
       await expect(nodeOperatorFee.connect(nodeOperatorManager).setConfirmExpiry(newConfirmExpiry))
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
-        .withArgs(nodeOperatorManager, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, expiryTimestamp, msgData)
+        .withArgs(
+          nodeOperatorManager,
+          await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
+          confirmTimestamp,
+          expiryTimestamp,
+          msgData,
+        )
         .and.to.emit(nodeOperatorFee, "ConfirmExpirySet")
         .withArgs(nodeOperatorManager, oldConfirmExpiry, newConfirmExpiry);
 
@@ -517,7 +523,13 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(firstConfirmTx)
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
-        .withArgs(nodeOperatorManager, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, expiryTimestamp, msgData);
+        .withArgs(
+          nodeOperatorManager,
+          await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
+          confirmTimestamp,
+          expiryTimestamp,
+          msgData,
+        );
 
       expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([currentAdjustment, 0n]);
 

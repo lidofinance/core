@@ -11,6 +11,7 @@ import {
   ERC20__Harness,
   ERC721__Harness,
   LidoLocator,
+  OssifiableProxy__factory,
   StETH__Harness,
 } from "typechain-types";
 
@@ -51,6 +52,13 @@ describe("Burner.sol", () => {
     steth = await ethers.deployContract("StETH__Harness", [holder], { value: ether("10.0"), from: deployer });
 
     burner = await ethers.getContractFactory("Burner").then((f) => f.connect(deployer).deploy(locator, steth));
+    const proxyFactory = new OssifiableProxy__factory(deployer);
+    const burnerProxy = await proxyFactory.deploy(
+      await burner.getAddress(),
+      await deployer.getAddress(),
+      new Uint8Array(),
+    );
+    burner = burner.attach(await burnerProxy.getAddress()) as Burner;
 
     const isMigrationAllowed = false;
     await burner.initialize(admin, isMigrationAllowed);
@@ -102,8 +110,7 @@ describe("Burner.sol", () => {
       expect(await burner.hasRole(adminRole, admin)).to.equal(true);
 
       const requestBurnSharesRole = await burner.REQUEST_BURN_SHARES_ROLE();
-      expect(await burner.getRoleMemberCount(requestBurnSharesRole)).to.equal(2);
-      expect(await burner.hasRole(requestBurnSharesRole, steth)).to.equal(true);
+      expect(await burner.getRoleMemberCount(requestBurnSharesRole)).to.equal(1);
       expect(await burner.hasRole(requestBurnSharesRole, accounting)).to.equal(true);
 
       expect(await burner.LIDO()).to.equal(steth);
