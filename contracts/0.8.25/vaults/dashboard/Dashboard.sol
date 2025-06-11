@@ -222,6 +222,9 @@ contract Dashboard is NodeOperatorFee {
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for fees and obligations.
      */
     function withdrawableEther() public view returns (uint256) {
+        // On pending disconnect, the vault does not allow any withdrawals, so need to return 0 here
+        if (VAULT_HUB.vaultConnection(address(_stakingVault())).pendingDisconnect) return 0;
+
         uint256 withdrawable = VAULT_HUB.withdrawableValue(address(_stakingVault()));
         uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
 
