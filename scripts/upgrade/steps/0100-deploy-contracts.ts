@@ -10,6 +10,7 @@ import {
   OperatorGrid,
   PredepositGuarantee,
   StakingRouter,
+  TriggerableWithdrawalsGateway,
   VaultHub,
 } from "typechain-types";
 
@@ -19,6 +20,15 @@ import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy, 
 import { readNetworkState, Sk } from "lib/state-file";
 
 const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
+
+function getEnvVariable(name: string, defaultValue?: string): string {
+  const value = process.env[name] ?? defaultValue;
+  if (value === undefined) {
+    throw new Error(`Environment variable ${name} is required`);
+  }
+  log(`${name} = ${value}`);
+  return value;
+}
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -36,7 +46,8 @@ export async function main() {
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
-  const oracleReportSanityCheckerAddress = state[Sk.oracleReportSanityChecker].address;
+  const validatorExitDelayVerifierParams = parameters[Sk.validatorExitDelayVerifier].deployParameters;
+  const triggerableWithdrawalsGatewayParams = parameters[Sk.triggerableWithdrawalsGateway].deployParameters;
 
   const proxyContractsOwner = agentAddress;
 
@@ -187,11 +198,12 @@ export async function main() {
   // Deploy OracleReportSanityChecker
   //
 
-  const sanityChecker = await loadContract<IOracleReportSanityChecker_preV3>(
+  const oldSanityCheckerAddress = await locator.oracleReportSanityChecker();
+  const oldSanityChecker = await loadContract<IOracleReportSanityChecker_preV3>(
     "IOracleReportSanityChecker_preV3",
-    oracleReportSanityCheckerAddress,
+    oldSanityCheckerAddress,
   );
-  const oldCheckerLimits = await sanityChecker.getOracleReportLimits();
+  const oldCheckerLimits = await oldSanityChecker.getOracleReportLimits();
 
   const oracleReportSanityCheckerArgs = [
     locatorAddress,
@@ -213,7 +225,7 @@ export async function main() {
     ],
   ];
 
-  const oracleReportSanityChecker = await deployWithoutProxy(
+  const newSanityChecker = await deployWithoutProxy(
     Sk.oracleReportSanityChecker,
     "OracleReportSanityChecker",
     deployer,
@@ -273,6 +285,62 @@ export async function main() {
   ]);
   console.log("VaultFactory address", await vaultFactory.getAddress());
 
+  const validatorExitDelayVerifier = await deployWithoutProxy(
+    Sk.validatorExitDelayVerifier,
+    "ValidatorExitDelayVerifier",
+    deployer,
+    [
+      locator.address,
+      validatorExitDelayVerifierParams.gIFirstValidatorPrev,
+      validatorExitDelayVerifierParams.gIFirstValidatorCurr,
+      validatorExitDelayVerifierParams.gIHistoricalSummariesPrev,
+      validatorExitDelayVerifierParams.gIHistoricalSummariesCurr,
+      validatorExitDelayVerifierParams.firstSupportedSlot,
+      validatorExitDelayVerifierParams.pivotSlot,
+      chainSpec.slotsPerEpoch,
+      chainSpec.secondsPerSlot,
+      parseInt(getEnvVariable("GENESIS_TIME")), // uint64 genesisTime,
+      // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
+      validatorExitDelayVerifierParams.shardCommitteePeriodInSeconds,
+    ],
+  );
+
+  //
+  // Deploy Triggerable Withdrawals Gateway
+  //
+
+  const triggerableWithdrawalsGateway_ = await deployWithoutProxy(
+    Sk.triggerableWithdrawalsGateway,
+    "TriggerableWithdrawalsGateway",
+    deployer,
+    [
+      deployer,
+      locator.address,
+      triggerableWithdrawalsGatewayParams.maxExitRequestsLimit,
+      triggerableWithdrawalsGatewayParams.exitsPerFrame,
+      triggerableWithdrawalsGatewayParams.frameDurationInSec,
+    ],
+  );
+  // TODO: move to voting script
+  // await makeTx(
+  //   stakingRouter,
+  //   "grantRole",
+  //   [await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(), triggerableWithdrawalsGateway_.address],
+  //   { from: deployer },
+  // );
+  const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
+    "TriggerableWithdrawalsGateway",
+    triggerableWithdrawalsGateway_.address,
+  );
+  await makeTx(
+    triggerableWithdrawalsGateway,
+    "grantRole",
+    [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), await locator.validatorsExitBusOracle()],
+    { from: deployer },
+  );
+  await makeTx(triggerableWithdrawalsGateway, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
+  await makeTx(triggerableWithdrawalsGateway, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+
   //
   // Deploy new LidoLocator implementation
   //
@@ -282,7 +350,7 @@ export async function main() {
     await locator.depositSecurityModule(),
     await locator.elRewardsVault(),
     lidoAddress,
-    oracleReportSanityChecker.address,
+    newSanityChecker.address,
     ZeroAddress,
     burner.address,
     await locator.stakingRouter(),
@@ -291,6 +359,8 @@ export async function main() {
     await locator.withdrawalQueue(),
     await locator.withdrawalVault(),
     await locator.oracleDaemonConfig(),
+    validatorExitDelayVerifier.address,
+    triggerableWithdrawalsGateway_.address,
     accounting.address,
     predepositGuarantee.address,
     wstethAddress,

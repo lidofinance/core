@@ -50,9 +50,10 @@ describe("Burner.sol", () => {
     locator = await deployLidoLocator({ treasury, accounting }, deployer);
     steth = await ethers.deployContract("StETH__Harness", [holder], { value: ether("10.0"), from: deployer });
 
-    burner = await ethers
-      .getContractFactory("Burner")
-      .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, false));
+    burner = await ethers.getContractFactory("Burner").then((f) => f.connect(deployer).deploy(locator, steth));
+
+    const isMigrationAllowed = false;
+    await burner.initialize(admin, isMigrationAllowed);
 
     steth = steth.connect(holder);
     burner = burner.connect(holder);
@@ -77,31 +78,19 @@ describe("Burner.sol", () => {
   context("constructor", () => {
     context("Reverts", () => {
       it("if admin is zero address", async () => {
-        await expect(
-          ethers
-            .getContractFactory("Burner")
-            .then((f) => f.connect(deployer).deploy(ZeroAddress, locator, steth, false)),
-        )
+        await expect(ethers.getContractFactory("Burner").then((f) => f.connect(deployer).deploy(locator, steth)))
           .to.be.revertedWithCustomError(burner, "ZeroAddress")
           .withArgs("_admin");
       });
 
       it("if locator is zero address", async () => {
-        await expect(
-          ethers
-            .getContractFactory("Burner")
-            .then((f) => f.connect(deployer).deploy(admin.address, ZeroAddress, steth, false)),
-        )
+        await expect(ethers.getContractFactory("Burner").then((f) => f.connect(deployer).deploy(ZeroAddress, steth)))
           .to.be.revertedWithCustomError(burner, "ZeroAddress")
           .withArgs("_locator");
       });
 
       it("if stETH is zero address", async () => {
-        await expect(
-          ethers
-            .getContractFactory("Burner")
-            .then((f) => f.connect(deployer).deploy(admin.address, locator, ZeroAddress, false)),
-        )
+        await expect(ethers.getContractFactory("Burner").then((f) => f.connect(deployer).deploy(locator, ZeroAddress)))
           .to.be.revertedWithCustomError(burner, "ZeroAddress")
           .withArgs("_stETH");
       });
@@ -127,13 +116,13 @@ describe("Burner.sol", () => {
     it("Sets isMigrationAllowed correctly", async () => {
       const deployedWithMigrationAllowed = await ethers
         .getContractFactory("Burner")
-        .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, true));
+        .then((f) => f.connect(deployer).deploy(locator, steth));
 
       expect(await deployedWithMigrationAllowed.isMigrationAllowed()).to.equal(true);
 
       const deployedWithoutMigrationAllowed = await ethers
         .getContractFactory("Burner")
-        .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, false));
+        .then((f) => f.connect(deployer).deploy(locator, steth));
 
       expect(await deployedWithoutMigrationAllowed.isMigrationAllowed()).to.equal(false);
     });
@@ -157,7 +146,7 @@ describe("Burner.sol", () => {
       it("if migration is not allowed", async () => {
         const burnerWithoutMigration = await ethers
           .getContractFactory("Burner")
-          .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, false));
+          .then((f) => f.connect(deployer).deploy(locator, steth));
 
         const anyAddress = deployer.address;
         await expect(burnerWithoutMigration.connect(stethSigner).migrate(anyAddress)).to.be.revertedWithCustomError(
@@ -169,7 +158,7 @@ describe("Burner.sol", () => {
       it("if migration is already performed", async () => {
         const deployed = await ethers
           .getContractFactory("Burner")
-          .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, true));
+          .then((f) => f.connect(deployer).deploy(locator, steth));
 
         await deployed.connect(stethSigner).migrate(oldBurner.target);
         expect(await deployed.isMigrationAllowed()).to.equal(false);
@@ -184,7 +173,7 @@ describe("Burner.sol", () => {
     it("Migrates state from old burner correctly", async () => {
       const deployed = await ethers
         .getContractFactory("Burner")
-        .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, true));
+        .then((f) => f.connect(deployer).deploy(locator, steth));
 
       await deployed.connect(stethSigner).migrate(oldBurner.target);
 

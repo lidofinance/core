@@ -96,9 +96,17 @@ const getCoreContracts = async (
     ),
     burner: loadContract("Burner", config.get("burner") || (await locator.burner())),
     stakingRouter: loadContract("StakingRouter", config.get("stakingRouter") || (await locator.stakingRouter())),
+    validatorExitDelayVerifier: loadContract(
+      "ValidatorExitDelayVerifier",
+      config.get("validatorExitDelayVerifier") || (await locator.validatorExitDelayVerifier()),
+    ),
     validatorsExitBusOracle: loadContract(
       "ValidatorsExitBusOracle",
       config.get("validatorsExitBusOracle") || (await locator.validatorsExitBusOracle()),
+    ),
+    triggerableWithdrawalsGateway: loadContract(
+      "TriggerableWithdrawalsGateway",
+      config.get("triggerableWithdrawalsGateway") || (await locator.triggerableWithdrawalsGateway()),
     ),
     withdrawalQueue: loadContract(
       "WithdrawalQueueERC721",
@@ -217,7 +225,8 @@ export async function discover(skipV3Contracts: boolean) {
     "Hash Consensus": contracts.hashConsensus.address,
     "Execution Layer Rewards Vault": foundationContracts.elRewardsVault.address,
     "Withdrawal Queue": foundationContracts.withdrawalQueue.address,
-    "Withdrawal Vault": foundationContracts.withdrawalVault?.address,
+    "Withdrawal Vault": foundationContracts.withdrawalVault.address,
+    "Validator Exit Delay Verifier": foundationContracts.validatorExitDelayVerifier.address,
     "Validators Exit Bus Oracle": foundationContracts.validatorsExitBusOracle.address,
     "Oracle Daemon Config": foundationContracts.oracleDaemonConfig.address,
     "Oracle Report Sanity Checker": foundationContracts.oracleReportSanityChecker.address,
@@ -229,6 +238,7 @@ export async function discover(skipV3Contracts: boolean) {
     "ACL": contracts.acl.address,
     "Burner": foundationContracts.burner.address,
     "wstETH": contracts.wstETH.address,
+    "Triggered Withdrawal Gateway": contracts.triggerableWithdrawalsGateway.address,
     // Vaults
     "Staking Vault Factory": contracts.stakingVaultFactory?.address,
     "Staking Vault Beacon": contracts.stakingVaultBeacon?.address,

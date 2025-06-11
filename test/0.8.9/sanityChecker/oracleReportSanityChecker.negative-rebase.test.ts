@@ -86,6 +86,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         withdrawalVault: deployer.address,
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
+        validatorExitDelayVerifier: deployer.address,
+        triggerableWithdrawalsGateway: deployer.address,
         accounting: await accounting.getAddress(),
         wstETH: deployer.address,
         vaultHub: deployer.address,

@@ -51,7 +51,7 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
     impl = await ethers.deployContract("Lido__HarnessForFinalizeUpgradeV3");
     [lido] = await proxify({ impl, admin: deployer });
 
-    burner = await ethers.deployContract("Burner", [deployer.address, dummyLocatorAddress, lido.target, true]);
+    burner = await ethers.deployContract("Burner", [dummyLocatorAddress, lido.target]);
     const stakingRouter = await ethers.deployContract("StakingRouter__MockForLidoUpgrade");
 
     nodeOperatorsRegistryAddress = (await stakingRouter.getStakingModule(1)).stakingModuleAddress;

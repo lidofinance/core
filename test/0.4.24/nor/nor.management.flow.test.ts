@@ -6,7 +6,6 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   ACL,
-  Burner__MockForDistributeReward,
   Kernel,
   Lido__HarnessForDistributeReward,
   LidoLocator,
@@ -15,7 +14,6 @@ import {
 
 import {
   addNodeOperator,
-  advanceChainTime,
   certainAddress,
   ether,
   NodeOperatorConfig,
@@ -25,8 +23,6 @@ import {
 
 import { addAragonApp, deployLidoDaoForNor } from "test/deploy";
 import { Snapshot } from "test/suite";
-
-const ONE_DAY = 86400n;
 
 describe("NodeOperatorsRegistry.sol:management", () => {
   let deployer: HardhatEthersSigner;
@@ -48,8 +44,6 @@ describe("NodeOperatorsRegistry.sol:management", () => {
   let nor: NodeOperatorsRegistry__Harness;
 
   let originalState: string;
-
-  let burner: Burner__MockForDistributeReward;
 
   const firstNodeOperatorId = 0;
   const secondNodeOperatorId = 1;
@@ -93,14 +87,15 @@ describe("NodeOperatorsRegistry.sol:management", () => {
   ];
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
-  const penaltyDelay = 86400n;
+  const exitDeadlineThreshold = 86400n;
+
   const contractVersion = 2n;
 
   before(async () => {
     [deployer, user, stakingRouter, nodeOperatorsManager, signingKeysManager, limitsManager, user1, user2, user3] =
       await ethers.getSigners();
 
-    ({ lido, dao, acl, burner } = await deployLidoDaoForNor({
+    ({ lido, dao, acl } = await deployLidoDaoForNor({
       rootAccount: deployer,
       initialized: true,
       locatorConfig: {
@@ -140,7 +135,7 @@ describe("NodeOperatorsRegistry.sol:management", () => {
     locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy.
-    await expect(nor.initialize(locator, moduleType, penaltyDelay))
+    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold))
       .to.emit(nor, "ContractVersionSet")
       .withArgs(contractVersion)
       .and.to.emit(nor, "LocatorContractSet")
@@ -626,9 +621,6 @@ describe("NodeOperatorsRegistry.sol:management", () => {
   });
 
   context("distributeReward()", () => {
-    const firstNodeOperator = 0;
-    const secondNodeOperator = 1;
-
     beforeEach(async () => {
       await nor.harness__addNodeOperator("0", user1, 3, 3, 3, 0);
       await nor.harness__addNodeOperator("1", user2, 7, 7, 7, 0);
@@ -699,151 +691,6 @@ describe("NodeOperatorsRegistry.sol:management", () => {
         .withArgs(await user1.getAddress(), ether("3"))
         .and.to.emit(nor, "RewardsDistributed")
         .withArgs(await user2.getAddress(), ether("7"));
-    });
-
-    it("distribute with stopped works", async () => {
-      const totalRewardShares = ether("10");
-
-      await lido.setTotalPooledEther(ether("100"));
-      await lido.mintShares(await nor.getAddress(), totalRewardShares);
-
-      // before
-      //      operatorId | Total | Deposited | Exited | Active (deposited-exited)
-      //         0           3         3         0        3
-      //         1           7         7         0        7
-      //         2           0         0         0        0
-      // -----------------------------------------------------------------------------
-      // total    3           10       10         0       10
-      //
-      // perValidatorShare 10*10^18 / 10 = 10^18
-
-      // update [operator, exited, stuck]
-      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperator, 1, 0);
-      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(secondNodeOperator, 1, 0);
-
-      // after
-      //      operatorId | Total | Deposited | Exited | Stuck | Active (deposited-exited)
-      //         0           3         3         1        0        2
-      //         1           7         7         1        0        6
-      //         2           0         0         0        0        0
-      // -----------------------------------------------------------------------------
-      // total    3           10       10         2       0         8
-      //
-      // perValidatorShare 10*10^18 / 8 = 1250000000000000000 == 1.25 * 10^18
-
-      await expect(nor.distributeReward())
-        .to.emit(nor, "RewardsDistributed")
-        .withArgs(await user1.getAddress(), ether(2 * 1.25 + ""))
-        .and.to.emit(nor, "RewardsDistributed")
-        .withArgs(await user2.getAddress(), ether(6 * 1.25 + ""));
-    });
-
-    it("penalized keys with stopped and stuck works", async () => {
-      const totalRewardShares = ether("10");
-
-      await lido.setTotalPooledEther(ether("100"));
-      await lido.mintShares(await nor.getAddress(), totalRewardShares);
-
-      // before
-      //      operatorId | Total | Deposited | Exited | Active (deposited-exited)
-      //         0           3         3         0        3
-      //         1           7         7         0        7
-      //         2           0         0         0        0
-      // -----------------------------------------------------------------------------
-      // total    3           10       10         0       10
-      //
-      // perValidatorShare 10*10^18 / 10 = 10^18
-
-      // update [operator, exited, stuck]
-      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperator, 1, 1);
-      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(secondNodeOperator, 1, 0);
-
-      // after
-      //      operatorId | Total | Deposited | Exited | Stuck | Active (deposited-exited)
-      //         0           3         3         1        1        2
-      //         1           7         7         1        0        6
-      //         2           0         0         0        0        0
-      // -----------------------------------------------------------------------------
-      // total    3           10       10         2       1         8
-      //
-      // perValidatorShare 10*10^18 / 8 = 1250000000000000000 == 1.25 * 10^18
-      // but half goes to burner
-      await expect(await nor.getRewardDistributionState()).to.be.equal(RewardDistributionState.ReadyForDistribution);
-
-      await expect(nor.distributeReward())
-        .to.emit(nor, "RewardsDistributed")
-        .withArgs(await user1.getAddress(), ether(1.25 + ""))
-        .and.to.emit(nor, "RewardsDistributed")
-        .withArgs(await user2.getAddress(), ether(6 * 1.25 + ""))
-        .and.to.emit(nor, "NodeOperatorPenalized")
-        .withArgs(await user1.getAddress(), ether(1.25 + ""))
-        .and.to.emit(burner, "StETHBurnRequested")
-        .withArgs(false, await nor.getAddress(), ether("2.5"), ether("1.25"));
-    });
-
-    it("penalized firstOperator, add refund but 2 days have not passed yet", async () => {
-      await lido.setTotalPooledEther(ether("100"));
-      await lido.mintShares(await nor.getAddress(), ether("10"));
-
-      // update [operator, exited, stuck]
-      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperator, 1, 1);
-      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(secondNodeOperator, 1, 0);
-
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperator, 1);
-
-      await expect(nor.distributeReward())
-        .to.emit(nor, "RewardsDistributed")
-        .withArgs(await user1.getAddress(), ether(1.25 + ""))
-        .and.to.emit(nor, "RewardsDistributed")
-        .withArgs(await user2.getAddress(), ether(6 * 1.25 + ""))
-        .and.to.emit(nor, "NodeOperatorPenalized")
-        .withArgs(await user1.getAddress(), ether(1.25 + ""));
-    });
-
-    it("penalized firstOperator, add refund less than stuck validators", async () => {
-      await lido.setTotalPooledEther(ether("100"));
-      await lido.mintShares(await nor.getAddress(), ether("10"));
-
-      // update [operator, exited, stuck]
-      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperator, 2, 1);
-      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(secondNodeOperator, 3, 0);
-
-      // perValidator = ETH(10) / 5 = 2 eth
-
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperator, 1);
-
-      await expect(nor.distributeReward())
-        .to.emit(nor, "RewardsDistributed")
-        .withArgs(await user1.getAddress(), ether(1 + ""))
-        .and.to.emit(nor, "RewardsDistributed")
-        .withArgs(await user2.getAddress(), ether(4 * 2 + ""))
-        .and.to.emit(nor, "NodeOperatorPenalized")
-        .withArgs(await user1.getAddress(), ether(1 + ""));
-    });
-
-    it("penalized firstOperator, add refund and 2 days passed", async () => {
-      await lido.setTotalPooledEther(ether("100"));
-      await lido.mintShares(await nor.getAddress(), ether("10"));
-
-      expect(await nor.isOperatorPenalized(firstNodeOperator)).to.be.false;
-
-      // update [operator, exited, stuck]
-      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperator, 1, 1);
-      await nor.connect(stakingRouter).unsafeUpdateValidatorsCount(secondNodeOperator, 1, 0);
-      expect(await nor.isOperatorPenalized(firstNodeOperator)).to.be.true;
-
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperator, 1);
-      expect(await nor.isOperatorPenalized(firstNodeOperator)).to.be.true;
-
-      await advanceChainTime(2n * ONE_DAY);
-
-      expect(await nor.isOperatorPenalized(firstNodeOperator)).to.be.false;
-
-      await expect(nor.distributeReward())
-        .to.emit(nor, "RewardsDistributed")
-        .withArgs(await user1.getAddress(), ether(2.5 + ""))
-        .and.to.emit(nor, "RewardsDistributed")
-        .withArgs(await user2.getAddress(), ether(7.5 + ""));
     });
   });
 
@@ -959,56 +806,6 @@ describe("NodeOperatorsRegistry.sol:management", () => {
     it("Allows reading zero LidoLocator address", async () => {
       await nor.harness__setLocator(ZeroAddress);
       expect(await nor.getLocator()).to.equal(ZeroAddress);
-    });
-  });
-
-  context("getStuckPenaltyDelay", () => {
-    it("Returns stuck penalty delay", async () => {
-      expect(await nor.getStuckPenaltyDelay()).to.equal(penaltyDelay);
-    });
-
-    it("Allows reading the changed stuck penalty delay", async () => {
-      const maxStuckPenaltyDelay = await nor.MAX_STUCK_PENALTY_DELAY();
-
-      await nor.harness__setStuckPenaltyDelay(maxStuckPenaltyDelay);
-      expect(await nor.getStuckPenaltyDelay()).to.equal(maxStuckPenaltyDelay);
-    });
-
-    it("Allows reading zero stuck penalty delay", async () => {
-      await nor.harness__setStuckPenaltyDelay(0n);
-      expect(await nor.getStuckPenaltyDelay()).to.equal(0n);
-    });
-  });
-
-  context("setStuckPenaltyDelay", () => {
-    it("Reverts if has no MANAGE_NODE_OPERATOR_ROLE assigned", async () => {
-      await expect(nor.setStuckPenaltyDelay(86400n)).to.be.revertedWith("APP_AUTH_FAILED");
-    });
-
-    it("Reverts if invalid range value provided", async () => {
-      const maxStuckPenaltyDelay = await nor.MAX_STUCK_PENALTY_DELAY();
-
-      await expect(
-        nor.connect(nodeOperatorsManager).setStuckPenaltyDelay(maxStuckPenaltyDelay + 1n),
-      ).to.be.revertedWith("OUT_OF_RANGE");
-    });
-
-    it("Sets a new value for the stuck penalty delay", async () => {
-      await expect(nor.connect(nodeOperatorsManager).setStuckPenaltyDelay(7200n))
-        .to.emit(nor, "StuckPenaltyDelayChanged")
-        .withArgs(7200n);
-
-      const stuckPenaltyDelay = await nor.getStuckPenaltyDelay();
-      expect(stuckPenaltyDelay).to.equal(7200n);
-    });
-
-    it("Allows setting a zero delay", async () => {
-      await expect(nor.connect(nodeOperatorsManager).setStuckPenaltyDelay(0n))
-        .to.emit(nor, "StuckPenaltyDelayChanged")
-        .withArgs(0n);
-
-      const stuckPenaltyDelay = await nor.getStuckPenaltyDelay();
-      expect(stuckPenaltyDelay).to.equal(0n);
     });
   });
 });

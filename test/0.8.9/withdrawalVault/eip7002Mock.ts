@@ -2,13 +2,29 @@ import { expect } from "chai";
 import { ContractTransactionReceipt, ContractTransactionResponse } from "ethers";
 import { ethers } from "hardhat";
 
-import { findEventsWithInterfaces } from "lib";
+import { EIP7002WithdrawalRequest__Mock } from "typechain-types";
+
+import { EIP7002_ADDRESS, findEventsWithInterfaces } from "lib";
 
 const eventName = "RequestAdded__Mock";
 const eip7002MockEventABI = [`event ${eventName}(bytes request, uint256 fee)`];
 const eip7002MockInterface = new ethers.Interface(eip7002MockEventABI);
 
-function encodeEIP7002Payload(pubkey: string, amount: bigint): string {
+export const deployEIP7002WithdrawalRequestContractMock = async (
+  fee: bigint,
+): Promise<EIP7002WithdrawalRequest__Mock> => {
+  const eip7002Mock = await ethers.deployContract("EIP7002WithdrawalRequest__Mock");
+  const eip7002MockAddress = await eip7002Mock.getAddress();
+
+  await ethers.provider.send("hardhat_setCode", [EIP7002_ADDRESS, await ethers.provider.getCode(eip7002MockAddress)]);
+
+  const contract = await ethers.getContractAt("EIP7002WithdrawalRequest__Mock", EIP7002_ADDRESS);
+  await contract.mock__setFee(fee);
+
+  return contract;
+};
+
+export function encodeEIP7002Payload(pubkey: string, amount: bigint): string {
   return `0x${pubkey}${amount.toString(16).padStart(16, "0")}`;
 }
 

@@ -1,5 +1,7 @@
 import { ethers } from "hardhat";
 
+import { StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
+
 import { getContractPath, loadContract } from "lib/contract";
 import {
   deployBehindOssifiableProxy,
@@ -14,13 +16,21 @@ import { en0x } from "lib/string";
 
 const ZERO_LAST_PROCESSING_REF_SLOT = 0;
 
+function getEnvVariable(name: string, defaultValue?: string): string {
+  const value = process.env[name] ?? defaultValue;
+  if (value === undefined) {
+    throw new Error(`Environment variable ${name} is required`);
+  }
+  log(`${name} = ${value}`);
+  return value;
+}
+
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
-  const state = readNetworkState({ deployer });
+  let state = readNetworkState({ deployer });
 
   // Extract necessary addresses and parameters from the state
   const lidoAddress = state[Sk.appLido].proxy.address;
-  const votingAddress = state[Sk.appVoting].proxy.address;
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
   const depositSecurityModuleParams = state[Sk.depositSecurityModule].deployParameters;
@@ -28,6 +38,7 @@ export async function main() {
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
   const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
+  const validatorExitDelayVerifierParams = state[Sk.validatorExitDelayVerifier].deployParameters;
 
   const proxyContractsOwner = deployer;
   const admin = deployer;
@@ -39,10 +50,14 @@ export async function main() {
   const depositContract = state.chainSpec.depositContract;
 
   //
+  // Deploy dummy implementation
+
+  const dummyContract = await deployWithoutProxy(Sk.dummyEmptyContract, "DummyEmptyContract", deployer);
+
+  //
   // Deploy LidoLocator with dummy implementation
   //
 
-  const dummyContract = await deployWithoutProxy(Sk.dummyEmptyContract, "DummyEmptyContract", deployer);
   const locator = await deployBehindOssifiableProxy(
     Sk.lidoLocator,
     "DummyEmptyContract",
@@ -105,31 +120,6 @@ export async function main() {
   }
 
   //
-  // Deploy WithdrawalVault
-  //
-
-  const withdrawalVaultImpl = await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [
-    lidoAddress,
-    treasuryAddress,
-  ]);
-
-  const withdrawalsManagerProxyConstructorArgs = [votingAddress, withdrawalVaultImpl.address];
-  const withdrawalsManagerProxy = await deployContract(
-    "WithdrawalsManagerProxy",
-    withdrawalsManagerProxyConstructorArgs,
-    deployer,
-  );
-
-  updateObjectInState(Sk.withdrawalVault, {
-    proxy: {
-      contract: await getContractPath("WithdrawalsManagerProxy"),
-      address: withdrawalsManagerProxy.address,
-      constructorArgs: withdrawalsManagerProxyConstructorArgs,
-    },
-    address: withdrawalsManagerProxy.address,
-  });
-
-  //
   // Deploy LidoExecutionLayerRewardsVault
   //
 
@@ -137,6 +127,23 @@ export async function main() {
     lidoAddress,
     treasuryAddress,
   ]);
+
+  // TODO: modify WMP to remove LIDO_VOTING
+  const withdrawalsManagerProxyConstructorArgs = [deployer, dummyContract.address];
+  const withdrawalsManagerProxy = await deployContract(
+    "WithdrawalsManagerProxy",
+    withdrawalsManagerProxyConstructorArgs,
+    deployer,
+  );
+
+  state = updateObjectInState(Sk.withdrawalVault, {
+    proxy: {
+      contract: await getContractPath("WithdrawalsManagerProxy"),
+      address: withdrawalsManagerProxy.address,
+      constructorArgs: withdrawalsManagerProxyConstructorArgs,
+    },
+    address: withdrawalsManagerProxy.address,
+  });
 
   //
   // Deploy StakingRouter
@@ -156,7 +163,7 @@ export async function main() {
   );
   const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
   const stakingRouterAdmin = deployer;
-  const stakingRouter = await loadContract("StakingRouter", stakingRouter_.address);
+  const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouter_.address);
   await makeTx(stakingRouter, "initialize", [stakingRouterAdmin, lidoAddress, withdrawalCredentials], {
     from: deployer,
   });
@@ -258,9 +265,77 @@ export async function main() {
       hashConsensusForVebo.address,
       validatorsExitBusOracleParams.consensusVersion,
       ZERO_LAST_PROCESSING_REF_SLOT,
+      validatorsExitBusOracleParams.maxValidatorsPerRequest,
+      validatorsExitBusOracleParams.maxExitRequestsLimit,
+      validatorsExitBusOracleParams.exitsPerFrame,
+      validatorsExitBusOracleParams.frameDurationInSec,
     ],
     { from: deployer },
   );
+
+  //
+  // Deploy Triggerable Withdrawals Gateway
+  //
+
+  const triggerableWithdrawalsGateway_ = await deployWithoutProxy(
+    Sk.triggerableWithdrawalsGateway,
+    "TriggerableWithdrawalsGateway",
+    deployer,
+    [
+      admin,
+      locator.address,
+      validatorsExitBusOracleParams.maxExitRequestsLimit,
+      validatorsExitBusOracleParams.exitsPerFrame,
+      validatorsExitBusOracleParams.frameDurationInSec,
+    ],
+  );
+  await makeTx(
+    stakingRouter,
+    "grantRole",
+    [await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(), triggerableWithdrawalsGateway_.address],
+    { from: deployer },
+  );
+  const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
+    "TriggerableWithdrawalsGateway",
+    triggerableWithdrawalsGateway_.address,
+  );
+  await makeTx(
+    triggerableWithdrawalsGateway,
+    "grantRole",
+    [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), validatorsExitBusOracle.address],
+    { from: deployer },
+  );
+
+  //
+  // Deploy ValidatorExitDelayVerifier
+  //
+
+  await deployWithoutProxy(Sk.validatorExitDelayVerifier, "ValidatorExitDelayVerifier", deployer, [
+    locator.address,
+    validatorExitDelayVerifierParams.gIFirstValidatorPrev,
+    validatorExitDelayVerifierParams.gIFirstValidatorCurr,
+    validatorExitDelayVerifierParams.gIHistoricalSummariesPrev,
+    validatorExitDelayVerifierParams.gIHistoricalSummariesCurr,
+    validatorExitDelayVerifierParams.firstSupportedSlot,
+    validatorExitDelayVerifierParams.pivotSlot,
+    chainSpec.slotsPerEpoch,
+    chainSpec.secondsPerSlot,
+    parseInt(getEnvVariable("GENESIS_TIME")), // uint64 genesisTime,
+    // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
+    validatorExitDelayVerifierParams.shardCommitteePeriodInSeconds,
+  ]);
+
+  //
+  // Deploy WithdrawalVault
+  //
+
+  const withdrawalVaultImpl = await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [
+    lidoAddress,
+    treasuryAddress,
+    triggerableWithdrawalsGateway.address,
+  ]);
+
+  await makeTx(withdrawalsManagerProxy, "proxy_upgradeTo", [withdrawalVaultImpl.address, "0x"], { from: deployer });
 
   //
   // Deploy Burner

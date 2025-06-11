@@ -50,6 +50,10 @@ async function deployOracleReportSanityCheckerForExitBus(
   );
 }
 
+async function deployTWG() {
+  return await ethers.deployContract("TriggerableWithdrawalsGateway__MockForVEB");
+}
+
 export async function deployVEBO(
   admin: string,
   {
@@ -73,13 +77,16 @@ export async function deployVEBO(
   });
 
   const { ao, lido } = await deployMockAccountingOracle(secondsPerSlot, genesisTime);
+  const triggerableWithdrawalsGateway = await deployTWG();
 
+  // TODO
   const accountingOracleAddress = await ao.getAddress();
   const accountingAddress = await locator.accounting();
 
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
     accountingOracle: accountingOracleAddress,
+    triggerableWithdrawalsGateway, //: await lido.getAddress(), // await TriggerableWithdrawalsGateway.getAddress(),
   });
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(
@@ -97,10 +104,12 @@ export async function deployVEBO(
   await consensus.setTime(genesisTime + initialEpoch * slotsPerEpoch * secondsPerSlot);
 
   return {
+    locator,
     locatorAddr,
     oracle,
     consensus,
     oracleReportSanityChecker,
+    triggerableWithdrawalsGateway,
   };
 }
 
@@ -112,6 +121,10 @@ interface VEBOConfig {
   consensusVersion?: bigint;
   lastProcessingRefSlot?: number;
   resumeAfterDeploy?: boolean;
+  maxRequestsPerBatch?: number;
+  maxExitRequestsLimit?: number;
+  exitsPerFrame?: number;
+  frameDurationInSec?: number;
 }
 
 export async function initVEBO({
@@ -122,8 +135,21 @@ export async function initVEBO({
   consensusVersion = VEBO_CONSENSUS_VERSION,
   lastProcessingRefSlot = 0,
   resumeAfterDeploy = false,
+  maxRequestsPerBatch = 600,
+  maxExitRequestsLimit = 13000,
+  exitsPerFrame = 1,
+  frameDurationInSec = 48,
 }: VEBOConfig) {
-  const initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion, lastProcessingRefSlot);
+  const initTx = await oracle.initialize(
+    admin,
+    await consensus.getAddress(),
+    consensusVersion,
+    lastProcessingRefSlot,
+    maxRequestsPerBatch,
+    maxExitRequestsLimit,
+    exitsPerFrame,
+    frameDurationInSec,
+  );
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_VERSION_ROLE(), admin);
