@@ -915,6 +915,8 @@ contract VaultHub is PausableUntilWithRoles {
         _settleObligations(_vault, _record, _vaultObligations(_vault), NO_UNSETTLED_ALLOWED);
 
         _connection.pendingDisconnect = true;
+
+        OperatorGrid(LIDO_LOCATOR.operatorGrid()).resetVaultTier(_vault);
     }
 
     function _applyVaultReport(
@@ -962,6 +964,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _rebalanceEther(_vault, _record, _ether, sharesToBurn);
         _decreaseRedemptions(_vault, _ether);
+        _operatorGrid().onBurnedShares(_vault, sharesToBurn);
 
         emit VaultRebalanced(_vault, sharesToBurn, _ether);
     }

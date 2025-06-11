@@ -4,9 +4,10 @@
 pragma solidity ^0.8.0;
 
 contract OperatorGrid__MockForPermissions {
-    event Mock__TierChangeRequested(address indexed _vault, uint256 _tierId, uint256 _requestedShareLimit);
+    event Mock__TierChanged(address indexed _vault, uint256 _tierId, uint256 _requestedShareLimit);
 
-    function requestTierChange(address _vault, uint256 _tierId, uint256 _requestedShareLimit) external {
-        emit Mock__TierChangeRequested(_vault, _tierId, _requestedShareLimit);
+    function changeTier(address _vault, uint256 _tierId, uint256 _requestedShareLimit) external returns (bool) {
+        emit Mock__TierChanged(_vault, _tierId, _requestedShareLimit);
+        return true;
     }
 }
