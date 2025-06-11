@@ -152,6 +152,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     /// @notice returns the quarantine info for the vault
     /// @param _vault the address of the vault
+    // @dev returns zeroed structure if there is no active quarantine
     function vaultQuarantine(address _vault) external view returns (QuarantineInfo memory) {
         Quarantine storage q = _storage().vaultQuarantines[_vault];
         if (q.pendingTotalValueIncrease == 0) {
