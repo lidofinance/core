@@ -24,6 +24,8 @@ interface IBurner {
      */
     function requestBurnShares(address _from, uint256 _sharesAmount) external;
 
+    function requestBurnMyShares(uint256 _sharesAmountToBurn) external;
+
     /**
       * Returns the current amount of shares locked on the contract to be burnt.
       */

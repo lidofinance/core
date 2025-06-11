@@ -258,10 +258,11 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     function pauseBeaconChainDeposits() external onlyOwner {
         Storage storage $ = _storage();
-        if (!$.beaconChainDepositsPaused) {
-            $.beaconChainDepositsPaused = true;
-            emit BeaconChainDepositsPaused();
-        }
+        if ($.beaconChainDepositsPaused) revert BeaconChainDepositsAlreadyPaused();
+
+        $.beaconChainDepositsPaused = true;
+
+        emit BeaconChainDepositsPaused();
     }
 
     /**
@@ -269,10 +270,11 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     function resumeBeaconChainDeposits() external onlyOwner {
         Storage storage $ = _storage();
-        if ($.beaconChainDepositsPaused) {
-            $.beaconChainDepositsPaused = false;
-            emit BeaconChainDepositsResumed();
-        }
+        if (!$.beaconChainDepositsPaused) revert BeaconChainDepositsAlreadyResumed();
+
+        $.beaconChainDepositsPaused = false;
+
+        emit BeaconChainDepositsResumed();
     }
 
     /**
@@ -610,6 +612,16 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Thrown when the new depositor is the same as the previous depositor
      */
     error NewDepositorSameAsPrevious();
+
+    /**
+     * @notice Thrown when the beacon chain deposits are already paused
+     */
+    error BeaconChainDepositsAlreadyPaused();
+
+    /**
+     * @notice Thrown when the beacon chain deposits are already resumed
+     */
+    error BeaconChainDepositsAlreadyResumed();
 
     /**
      * @notice Thrown when the beacon chain deposits are on pause
