@@ -10,6 +10,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IHashConsensus} from "./interfaces/IHashConsensus.sol";
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
 contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
@@ -296,9 +297,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             Quarantine storage q = $.vaultQuarantines[_vault];
             uint64 reportTs = $.vaultsDataTimestamp;
             uint128 quarDelta = q.pendingTotalValueIncrease;
-            // Safe conversion from uint256 to uint128
-            if (_totalValue - refSlotTotalValue > type(uint128).max) revert ValueExceedsUint128();
-            uint128 delta = uint128(_totalValue - refSlotTotalValue);
+            uint128 delta = SafeCast.toUint128(_totalValue - refSlotTotalValue);
 
             if (quarDelta == 0) { // first overlimit report
                 _totalValue = refSlotTotalValue;
