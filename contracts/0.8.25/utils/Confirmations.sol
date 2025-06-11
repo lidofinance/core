@@ -7,7 +7,7 @@ pragma solidity 0.8.25;
 /**
  * @title Confirmations
  * @author Lido
- * @notice A contract that allows exectuing functions by mutual confirmation.
+ * @notice A contract that allows executing functions by mutual confirmation.
  */
 abstract contract Confirmations {
 
