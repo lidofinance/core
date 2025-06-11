@@ -1129,5 +1129,4 @@ contract VaultHub is PausableUntilWithRoles {
     error UnhealthyVaultCannotDeposit(address vault);
     error VaultIsDisconnecting(address vault);
     error PartialValidatorWithdrawalNotAllowed();
-    error NeedMoreGas(uint256 minGas, uint256 gasLeft);
 }

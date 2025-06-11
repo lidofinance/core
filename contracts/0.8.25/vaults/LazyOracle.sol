@@ -327,12 +327,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     }
 
     event VaultsReportDataUpdated(uint256 indexed timestamp, bytes32 indexed root, string cid);
-    event QuarantinedDeposit(address vault, uint128 delta);
+    event QuarantinedDeposit(address indexed vault, uint128 delta);
     event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxRewardRatioBP);
-    event QuarantineExpired(address vault, uint128 delta);
+    event QuarantineExpired(address indexed vault, uint128 delta);
     error AdminCannotBeZero();
     error NotAuthorized();
     error InvalidProof();
     error UnderflowInTotalValueCalculation();
-    error ValueExceedsUint128();
 }
