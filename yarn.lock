@@ -10509,7 +10509,7 @@ __metadata:
 "resolve@patch:resolve@npm%3A1.1.x#optional!builtin<compat/resolve>":
   version: 1.1.7
   resolution: "resolve@patch:resolve@npm%3A1.1.7#optional!builtin<compat/resolve>::version=1.1.7&hash=3bafbf"
-  checksum: 10c0/64f26b1c26417aee3c373d59d1a4ff606d4b8d4d05423544e10eb5f0ac9e2ff8b657573512c8acd7b9a9ee58a8ab5b7bcf89fd96bd4104172f9b1212d49a79d2
+  checksum: 10c0/f4f1471423d600a10944785222fa7250237ed8c98aa6b1e1f4dc0bb3dbfbcafcaac69a2ed23cd1f6f485ed23e7c939894ac1978284e4163754fade8a05358823
   languageName: node
   linkType: hard
 
@@ -10518,7 +10518,7 @@ __metadata:
   resolution: "resolve@patch:resolve@npm%3A1.17.0#optional!builtin<compat/resolve>::version=1.17.0&hash=c3c19d"
   dependencies:
     path-parse: "npm:^1.0.6"
-  checksum: 10c0/23df484bd50a6e4d2c35a6a90d633196b2d4e41aabbc137b6bca9c34892b4a301d90bfff279c3af056a61179cecd32328bfc1534eb4047eafc673f0169b5f1c3
+  checksum: 10c0/e072e52be3c3dbfd086761115db4a5136753e7aefc0e665e66e7307ddcd9d6b740274516055c74aee44921625e95993f03570450aa310b8d73b1c9daa056c4cd
   languageName: node
   linkType: hard
 
@@ -10531,7 +10531,7 @@ __metadata:
     supports-preserve-symlinks-flag: "npm:^1.0.0"
   bin:
     resolve: bin/resolve
-  checksum: 10c0/2e34167d3fadd73268ee05fdeebdea8c60b6b9ded3daf0b82abdb32e9be1c3c1b5b227507150c294ae85804a5df7b75efd2b39b4f7e05687567c398d264b8f0d
+  checksum: 10c0/52a4e505bbfc7925ac8f4cd91fd8c4e096b6a89728b9f46861d3b405ac9a1ccf4dcbf8befb4e89a2e11370dacd0160918163885cbc669369590f2f31f4c58939
   languageName: node
   linkType: hard
 
@@ -12223,7 +12223,7 @@ __metadata:
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/ceed56ab997dfc0abe5a12ff307db001fb583fc51c13cde31bbbfcc7a62f2833cf05a7f28fd205a4ba5c5f96de0f00e945fb3bec34b8a9272d645fb25b8536d7
+  checksum: 10c0/39117e346ff8ebd87ae1510b3a77d5d92dae5a89bde588c747d25da5c146603a99c8ee588c7ef80faaf123d89ed46f6dbd918d534d641083177d5fac38b8a1cb
   languageName: node
   linkType: hard
 
