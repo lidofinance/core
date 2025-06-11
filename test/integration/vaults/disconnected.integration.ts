@@ -89,7 +89,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     });
 
     it("Can change the tier as dashboard is owner of the vault", async () => {
-      const { operatorGrid, vaultHub } = ctx.contracts;
+      const { operatorGrid } = ctx.contracts;
       const agentSigner = await ctx.getSigner("agent");
 
       await dashboard.abandonDashboard(dashboard)
@@ -180,7 +180,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     });
 
     it("Can change the tier as owner of the vault", async () => {
-      const { operatorGrid, vaultHub } = ctx.contracts;
+      const { operatorGrid } = ctx.contracts;
       const agentSigner = await ctx.getSigner("agent");
 
       await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, 1000);
