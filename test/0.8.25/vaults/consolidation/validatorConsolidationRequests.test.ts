@@ -44,6 +44,17 @@ describe("ValidatorConsolidationRequests.sol", () => {
     consolidationRequestPredeployed = await deployEIP7251MaxEffectiveBalanceRequestContract(1n);
     validatorConsolidationRequests = await ethers.deployContract("ValidatorConsolidationRequests");
     dashboard = await ethers.deployContract("Dashboard__Mock");
+    await dashboard.mock__setVaultConnection({
+      owner: actor.address,
+      shareLimit: 0,
+      vaultIndex: 1,
+      pendingDisconnect: false,
+      reserveRatioBP: 0,
+      forcedRebalanceThresholdBP: 0,
+      infraFeeBP: 0,
+      liquidityFeeBP: 0,
+      reservationFeeBP: 0,
+    });
 
     expect(await consolidationRequestPredeployed.getAddress()).to.equal(EIP7251_ADDRESS);
   });
@@ -90,18 +101,18 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
   context("add consolidation requests", () => {
     it("Should revert if empty parameters are provided", async function () {
-      await expect(validatorConsolidationRequests.addConsolidationRequests([], [], receiver.address, dashboard, []))
+      await expect(validatorConsolidationRequests.addConsolidationRequests([], [], receiver.address, dashboard, 0))
         .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
         .withArgs("msg.value");
 
       await expect(
-        validatorConsolidationRequests.addConsolidationRequests([], [], receiver.address, dashboard, [], { value: 1n }),
+        validatorConsolidationRequests.addConsolidationRequests([], [], receiver.address, dashboard, 0, { value: 1n }),
       )
         .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
         .withArgs("sourcePubkeys");
 
       await expect(
-        validatorConsolidationRequests.addConsolidationRequests([EMPTY_PUBKEYS], [], receiver.address, dashboard, [], {
+        validatorConsolidationRequests.addConsolidationRequests([EMPTY_PUBKEYS], [], receiver.address, dashboard, 0, {
           value: 1n,
         }),
       )
@@ -113,27 +124,62 @@ describe("ValidatorConsolidationRequests.sol", () => {
           [EMPTY_PUBKEYS],
           [EMPTY_PUBKEYS],
           receiver.address,
-          dashboard,
-          [],
-          { value: 1n },
-        ),
-      )
-        .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
-        .withArgs("adjustmentIncreases");
-
-      await expect(
-        validatorConsolidationRequests.addConsolidationRequests(
-          [EMPTY_PUBKEYS],
-          [EMPTY_PUBKEYS],
-          receiver.address,
           ethers.ZeroAddress,
-          [],
+          0,
           { value: 1n },
         ),
       )
         .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
         .withArgs("dashboardAddress");
     });
+  });
+
+  it("Should revert if vault is not connected", async function () {
+    await dashboard.mock__setVaultConnection({
+      owner: actor.address,
+      shareLimit: 0,
+      vaultIndex: 0,
+      pendingDisconnect: false,
+      reserveRatioBP: 0,
+      forcedRebalanceThresholdBP: 0,
+      infraFeeBP: 0,
+      liquidityFeeBP: 0,
+      reservationFeeBP: 0,
+    });
+
+    await expect(
+      validatorConsolidationRequests.addConsolidationRequests(
+        [EMPTY_PUBKEYS],
+        [EMPTY_PUBKEYS],
+        receiver.address,
+        dashboard,
+        1n,
+        { value: 1n },
+      ),
+    ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
+
+    await dashboard.mock__setVaultConnection({
+      owner: actor.address,
+      shareLimit: 0,
+      vaultIndex: 1,
+      pendingDisconnect: true,
+      reserveRatioBP: 0,
+      forcedRebalanceThresholdBP: 0,
+      infraFeeBP: 0,
+      liquidityFeeBP: 0,
+      reservationFeeBP: 0,
+    });
+
+    await expect(
+      validatorConsolidationRequests.addConsolidationRequests(
+        [EMPTY_PUBKEYS],
+        [EMPTY_PUBKEYS],
+        receiver.address,
+        dashboard,
+        1n,
+        { value: 1n },
+      ),
+    ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
   });
 
   it("Should revert if array lengths do not match", async function () {
@@ -143,29 +189,16 @@ describe("ValidatorConsolidationRequests.sol", () => {
         [EMPTY_PUBKEYS, EMPTY_PUBKEYS],
         receiver.address,
         dashboard,
-        [1n],
+        1n,
         { value: 1n },
       ),
     )
       .to.be.revertedWithCustomError(validatorConsolidationRequests, "MismatchingSourceAndTargetPubkeysCount")
       .withArgs(1, 2);
-
-    await expect(
-      validatorConsolidationRequests.addConsolidationRequests(
-        [EMPTY_PUBKEYS, EMPTY_PUBKEYS],
-        [EMPTY_PUBKEYS, EMPTY_PUBKEYS],
-        receiver.address,
-        dashboard,
-        [1n],
-        { value: 1n },
-      ),
-    )
-      .to.be.revertedWithCustomError(validatorConsolidationRequests, "MismatchingAdjustmentIncreasesCount")
-      .withArgs(1, 2);
   });
 
   it("Should revert if not enough fee is sent", async function () {
-    const { sourcePubkeys, targetPubkeys, adjustmentIncreases } = generateConsolidationRequestPayload(1);
+    const { sourcePubkeys, targetPubkeys, adjustmentIncrease } = generateConsolidationRequestPayload(1);
 
     await consolidationRequestPredeployed.mock__setFee(3n); // Set fee to 3 gwei
 
@@ -177,7 +210,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         targetPubkeys,
         receiver.address,
         dashboard,
-        adjustmentIncreases,
+        adjustmentIncrease,
         {
           value: insufficientFee,
         },
@@ -188,7 +221,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
   it("Should revert if pubkey is not 48 bytes", async function () {
     // Invalid pubkey (only 2 bytes)
     const invalidPubkeyHexString = "0x1234";
-    const { sourcePubkeys, targetPubkeys, adjustmentIncreases } = generateConsolidationRequestPayload(1);
+    const { sourcePubkeys, targetPubkeys, adjustmentIncrease } = generateConsolidationRequestPayload(1);
 
     const fee = await getFee();
 
@@ -198,7 +231,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         targetPubkeys,
         receiver.address,
         dashboard,
-        adjustmentIncreases,
+        adjustmentIncrease,
         {
           value: fee,
         },
@@ -211,7 +244,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         [invalidPubkeyHexString],
         receiver.address,
         dashboard,
-        adjustmentIncreases,
+        adjustmentIncrease,
         {
           value: fee,
         },
@@ -224,7 +257,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
     const invalidPubkey = "1234";
     const sourcePubkeys = [`0x${validPubey}${invalidPubkey}`];
-    const { targetPubkeys, adjustmentIncreases } = generateConsolidationRequestPayload(1);
+    const { targetPubkeys, adjustmentIncrease } = generateConsolidationRequestPayload(1);
 
     const fee = await getFee();
 
@@ -234,7 +267,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         targetPubkeys,
         receiver.address,
         dashboard,
-        adjustmentIncreases,
+        adjustmentIncrease,
         {
           value: fee,
         },
@@ -243,7 +276,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
   });
 
   it("Should revert if addition fails at the consolidation request contract", async function () {
-    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncreases } =
+    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncrease } =
       generateConsolidationRequestPayload(1);
 
     const fee = (await getFee()) * BigInt(totalSourcePubkeysCount);
@@ -257,7 +290,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         targetPubkeys,
         receiver.address,
         dashboard,
-        adjustmentIncreases,
+        adjustmentIncrease,
         {
           value: fee,
         },
@@ -270,7 +303,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     const fee = 10n;
     const balance = 19n;
 
-    const { sourcePubkeys, targetPubkeys, adjustmentIncreases } = generateConsolidationRequestPayload(keysCount);
+    const { sourcePubkeys, targetPubkeys, adjustmentIncrease } = generateConsolidationRequestPayload(keysCount);
 
     await consolidationRequestPredeployed.mock__setFee(fee);
     await setBalance(await validatorConsolidationRequests.getAddress(), balance);
@@ -281,7 +314,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         targetPubkeys,
         receiver.address,
         dashboard,
-        adjustmentIncreases,
+        adjustmentIncrease,
         {
           value: fee,
         },
@@ -291,7 +324,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
   it("Should accept consolidation requests when the provided fee matches the exact required amount", async function () {
     const requestCount = 1;
-    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncreases } =
+    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncrease } =
       generateConsolidationRequestPayload(requestCount);
 
     const fee = 3n;
@@ -304,7 +337,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           targetPubkeys,
           receiver.address,
           dashboard,
-          adjustmentIncreases,
+          adjustmentIncrease,
           {
             value: fee * BigInt(totalSourcePubkeysCount),
           },
@@ -326,7 +359,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           targetPubkeys,
           receiver.address,
           dashboard,
-          adjustmentIncreases,
+          adjustmentIncrease,
           {
             value: highFee * BigInt(totalSourcePubkeysCount),
           },
@@ -340,7 +373,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
   it("Should accept consolidation requests when the provided fee exceeds the required amount", async function () {
     const requestCount = 1;
-    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncreases } =
+    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncrease } =
       generateConsolidationRequestPayload(requestCount);
 
     await consolidationRequestPredeployed.mock__setFee(3n);
@@ -353,7 +386,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           targetPubkeys,
           receiver.address,
           dashboard,
-          adjustmentIncreases,
+          adjustmentIncrease,
           {
             value: excessFee * BigInt(totalSourcePubkeysCount),
           },
@@ -375,7 +408,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       () =>
         validatorConsolidationRequests
           .connect(actor)
-          .addConsolidationRequests(sourcePubkeys, targetPubkeys, receiver.address, dashboard, adjustmentIncreases, {
+          .addConsolidationRequests(sourcePubkeys, targetPubkeys, receiver.address, dashboard, adjustmentIncrease, {
             value: extremelyHighFee * BigInt(totalSourcePubkeysCount),
           }),
       await validatorConsolidationRequests.getAddress(),
@@ -387,7 +420,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
   it("Should correctly deduct the exact fee amount from the contract balance", async function () {
     const requestCount = 3;
-    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncreases } =
+    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncrease } =
       generateConsolidationRequestPayload(requestCount);
 
     const fee = 4n;
@@ -400,7 +433,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       targetPubkeys,
       receiver.address,
       dashboard,
-      adjustmentIncreases,
+      adjustmentIncrease,
       { value: expectedTotalConsolidationFee },
     );
     const receipt = await tx.wait();
@@ -418,7 +451,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
   it("Should transfer the total calculated fee to the EIP-7251 consolidation request contract", async function () {
     const requestCount = 3;
-    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncreases } =
+    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncrease } =
       generateConsolidationRequestPayload(requestCount);
 
     const fee = 3n;
@@ -430,7 +463,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       targetPubkeys,
       receiver.address,
       dashboard,
-      adjustmentIncreases,
+      adjustmentIncrease,
       {
         value: expectedTotalConsolidationFee,
       },
@@ -442,7 +475,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
   it("Should ensure consolidation requests are encoded as expected with two 48-byte pubkeys", async function () {
     const requestCount = 16;
-    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncreases } =
+    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncrease } =
       generateConsolidationRequestPayload(requestCount);
 
     const fee = 3n;
@@ -454,7 +487,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       targetPubkeys,
       receiver.address,
       dashboard,
-      adjustmentIncreases,
+      adjustmentIncrease,
       { value: expectedTotalConsolidationFee },
     );
     const receipt = await tx.wait();
@@ -481,8 +514,8 @@ describe("ValidatorConsolidationRequests.sol", () => {
   });
 
   it("Should ensure the dashboard is called with the correct adjustment increases", async function () {
-    const requestCount = 1;
-    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncreases } =
+    const requestCount = 3;
+    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncrease } =
       generateConsolidationRequestPayload(requestCount);
 
     const fee = 3n;
@@ -493,7 +526,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       targetPubkeys,
       receiver.address,
       dashboard,
-      adjustmentIncreases,
+      adjustmentIncrease,
       {
         value: fee * BigInt(totalSourcePubkeysCount),
       },
@@ -501,10 +534,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     const receipt = await tx.wait();
 
     const events = findDashboardMockEvents(receipt!);
-    expect(events.length).to.equal(adjustmentIncreases.length);
-
-    for (let i = 0; i < requestCount; i++) {
-      expect(events[i].args._amount).to.equal(adjustmentIncreases[i]);
-    }
+    expect(events.length).to.equal(1);
+    expect(events[0].args._amount).to.equal(adjustmentIncrease);
   });
 });

@@ -4,8 +4,10 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.25;
 
-/// @title A part of Dashboard interface for increasing rewards adjustment
-interface INodeOperatorFee {
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+
+/// @title A part of Dashboard interface for increasing rewards adjustment and getting vault connection data
+interface IDashboard {
      /**
       * @notice Increases rewards adjustment to correct fee calculation due to non-rewards ether on CL
       * @param _adjustmentIncrease amount to increase adjustment by
@@ -14,6 +16,12 @@ interface INodeOperatorFee {
     function increaseRewardsAdjustment(
         uint256 _adjustmentIncrease
     ) external;
+
+    /**
+     * @notice Returns the vault connection data for the staking vault.
+     * @return VaultConnection struct containing vault data
+     */
+    function vaultConnection() external view returns (VaultHub.VaultConnection memory);
 }
 
 /**
@@ -34,9 +42,9 @@ contract ValidatorConsolidationRequests {
     error MalformedPubkeysArray();
     error MalformedTargetPubkey();
     error MismatchingSourceAndTargetPubkeysCount(uint256 sourcePubkeysCount, uint256 targetPubkeysCount);
-    error MismatchingAdjustmentIncreasesCount(uint256 adjustmentIncreasesCount, uint256 targetPubkeysCount);
     error InsufficientValidatorConsolidationFee(uint256 provided, uint256 required);
     error ZeroArgument(string argName);
+    error VaultNotConnected();
 
     event ConsolidationRequestsAdded(
         address indexed sender,
@@ -44,7 +52,7 @@ contract ValidatorConsolidationRequests {
         bytes[] targetPubkeys,
         address indexed refundRecipient,
         uint256 excess,
-        uint256[] adjustmentIncreases
+        uint256 adjustmentIncrease
     );
 
     /**
@@ -75,7 +83,7 @@ contract ValidatorConsolidationRequests {
      *
      * @param _refundRecipient The address to refund the excess consolidation fee to.
      * @param _dashboardAddress The address of the dashboard contract.
-     * @param _adjustmentIncreases The amounts to increase the rewards adjustment by for each target validator.
+     * @param _adjustmentIncrease The sum of the balances of the source validators to increase the rewards adjustment by.
      *
      */
     function addConsolidationRequests(
@@ -83,13 +91,12 @@ contract ValidatorConsolidationRequests {
         bytes[] calldata _targetPubkeys,
         address _refundRecipient,
         address _dashboardAddress,
-        uint256[] calldata _adjustmentIncreases
+        uint256 _adjustmentIncrease
     ) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
         if (_targetPubkeys.length == 0) revert ZeroArgument("targetPubkeys");
         if (_dashboardAddress == address(0)) revert ZeroArgument("dashboardAddress");
-        if (_adjustmentIncreases.length == 0) revert ZeroArgument("adjustmentIncreases");
 
         // If the refund recipient is not set, use the sender as the refund recipient
         if (_refundRecipient == address(0)) {
@@ -100,8 +107,9 @@ contract ValidatorConsolidationRequests {
             revert MismatchingSourceAndTargetPubkeysCount(_sourcePubkeys.length, _targetPubkeys.length);
         }
 
-        if (_adjustmentIncreases.length != _sourcePubkeys.length) {
-            revert MismatchingAdjustmentIncreasesCount(_adjustmentIncreases.length, _sourcePubkeys.length);
+        VaultHub.VaultConnection memory vaultConnection = IDashboard(_dashboardAddress).vaultConnection();
+        if(vaultConnection.vaultIndex == 0 || vaultConnection.pendingDisconnect == true) {
+            revert VaultNotConnected();
         }
 
         uint256 totalSourcePubkeysCount = 0;
@@ -130,11 +138,9 @@ contract ValidatorConsolidationRequests {
             if (!success) revert ConsolidationFeeRefundFailed(_refundRecipient, excess);
         }
 
-        for (uint256 i = 0; i < _sourcePubkeys.length; i++) {
-            INodeOperatorFee(_dashboardAddress).increaseRewardsAdjustment(_adjustmentIncreases[i]);
-        }
+        IDashboard(_dashboardAddress).increaseRewardsAdjustment(_adjustmentIncrease);
 
-        emit ConsolidationRequestsAdded(msg.sender, _sourcePubkeys, _targetPubkeys, _refundRecipient, excess, _adjustmentIncreases);
+        emit ConsolidationRequestsAdded(msg.sender, _sourcePubkeys, _targetPubkeys, _refundRecipient, excess, _adjustmentIncrease);
     }
 
     /**

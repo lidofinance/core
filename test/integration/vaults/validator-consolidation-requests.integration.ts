@@ -2,10 +2,10 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard,EIP7251MaxEffectiveBalanceRequest__Mock } from "typechain-types";
+import { Dashboard, EIP7251MaxEffectiveBalanceRequest__Mock } from "typechain-types";
 
 import { deployEIP7251MaxEffectiveBalanceRequestContract } from "lib";
-import { createVaultWithDashboard,getProtocolContext, ProtocolContext } from "lib/protocol";
+import { createVaultWithDashboard, getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import { generateConsolidationRequestPayload } from "test/0.8.25/vaults/consolidation/consolidation_utils";
 import { testEIP7251Mock } from "test/0.8.25/vaults/consolidation/eip7251Mock";
@@ -39,7 +39,7 @@ describe("Integration: ValidatorConsolidationRequests", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   it("Consolidates validators by calling max effective balance increaser through contract using delegatecall", async () => {
-    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncreases } =
+    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncrease } =
       generateConsolidationRequestPayload(1);
 
     const delegateCaller = await ethers.deployContract("DelegateCaller", [], { from: owner });
@@ -63,7 +63,7 @@ describe("Integration: ValidatorConsolidationRequests", () => {
             targetPubkeys,
             stranger.address,
             dashboardAddress,
-            adjustmentIncreases,
+            adjustmentIncrease,
           ]),
           { value: totalFee },
         ),

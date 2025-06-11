@@ -6,11 +6,11 @@ export function generateConsolidationRequestPayload(numberOfRequests: number): {
   sourcePubkeys: BytesLike[];
   targetPubkeys: BytesLike[];
   totalSourcePubkeysCount: number;
-  adjustmentIncreases: bigint[];
+  adjustmentIncrease: bigint;
 } {
   const sourcePubkeys: BytesLike[] = [];
   const targetPubkeys: BytesLike[] = [];
-  const adjustmentIncreases: bigint[] = [];
+  let adjustmentIncrease: bigint = 0n;
   let totalSourcePubkeysCount = 0;
   const numberOfSourcePubkeys = 50;
   for (let i = 1; i <= numberOfRequests; i++) {
@@ -23,14 +23,14 @@ export function generateConsolidationRequestPayload(numberOfRequests: number): {
     sourcePubkeys.push(tempSourcePubkeys);
     const publicKey = generateRandomPublicKey(i * numberOfSourcePubkeys + 1);
     targetPubkeys.push(publicKey);
-    adjustmentIncreases.push(32n);
+    adjustmentIncrease += 32n;
   }
 
   return {
     sourcePubkeys,
     targetPubkeys,
     totalSourcePubkeysCount,
-    adjustmentIncreases,
+    adjustmentIncrease,
   };
 }
 
