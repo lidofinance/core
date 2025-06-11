@@ -120,6 +120,19 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
   afterEach(async () => (originalState = await Snapshot.refresh(originalState)));
 
+  context("backward compatibility test", () => {
+    it("isOperatorPenalized", async () => {
+      expect(await nor.isOperatorPenalized(firstNodeOperatorId)).to.be.false;
+    });
+
+    it("isOperatorPenaltyCleared", async () => {
+      expect(await nor.isOperatorPenaltyCleared(firstNodeOperatorId)).to.be.true;
+    });
+    it("getStuckPenaltyDelay", async () => {
+      expect(await nor.getStuckPenaltyDelay()).to.be.equal(0n);
+    });
+  });
+
   context("reportValidatorExitDelay", () => {
     it("reverts when called by sender without STAKING_ROUTER_ROLE", async () => {
       expect(await acl["hasPermission(address,address,bytes32)"](stranger, nor, await nor.STAKING_ROUTER_ROLE())).to.be
@@ -157,9 +170,9 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
       await nor
         .connect(stakingRouter)
         .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec);
-      const tx =  nor
-      .connect(stakingRouter)
-      .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec);
+      const tx = nor
+        .connect(stakingRouter)
+        .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, testPublicKey, eligibleToExitInSec);
 
       await expect(tx).to.not.be.reverted;
       await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
@@ -246,15 +259,19 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
   });
 
   context("exitPenaltyCutoffTimestamp", () => {
-
     const reportingWindow = 3600n; // 1 hour
 
     let cutoff: bigint;
 
     beforeEach(async () => {
-      await deployer.provider.send("hardhat_mine", [`0x${(BigInt(await deployer.provider.getBlockNumber()) + 3000n).toString(16)}`, 12000]);
+      await deployer.provider.send("hardhat_mine", [
+        `0x${(BigInt(await deployer.provider.getBlockNumber()) + 3000n).toString(16)}`,
+        12000,
+      ]);
 
-      const tx = await nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(exitDeadlineThreshold, reportingWindow);
+      const tx = await nor
+        .connect(nodeOperatorsManager)
+        .setExitDeadlineThreshold(exitDeadlineThreshold, reportingWindow);
 
       // Fetch actual cutoff timestamp from the contract
       cutoff = BigInt(await nor.exitPenaltyCutoffTimestamp());
@@ -269,12 +286,7 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
     it("reverts oldCutoffTimestamp <= currentCutoffTimestamp", async () => {
       await expect(
-        nor
-          .connect(nodeOperatorsManager)
-          .setExitDeadlineThreshold(
-            eligibleToExitInSec,
-            eligibleToExitInSec + 100_000n,
-          ),
+        nor.connect(nodeOperatorsManager).setExitDeadlineThreshold(eligibleToExitInSec, eligibleToExitInSec + 100_000n),
       ).to.be.revertedWith("INVALID_EXIT_PENALTY_CUTOFF_TIMESTAMP");
     });
 
@@ -334,6 +346,14 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
       )
         .to.emit(nor, "ValidatorExitStatusUpdated")
         .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, cutoff + exitDeadlineThreshold);
+
+        const result = await nor.isValidatorExitDelayPenaltyApplicable(
+          firstNodeOperatorId,
+            cutoff + exitDeadlineThreshold,
+            testPublicKey,
+            eligibleToExitInSec,
+        );
+        expect(result).to.be.false;
     });
   });
 

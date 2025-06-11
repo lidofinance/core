@@ -6,7 +6,9 @@
  original: https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
 */
 
-pragma solidity 0.8.25;
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
 
 import {BeaconBlockHeader, Validator} from "./BeaconTypes.sol";
 import {GIndex} from "./GIndex.sol";
