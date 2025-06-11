@@ -105,13 +105,12 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      */
     error TooManyExitRequestsInReport(uint256 requestsCount, uint256 maxRequestsPerReport);
 
-    /// @dev Events
-
     /**
      * @notice Emitted when an entity with the SUBMIT_REPORT_HASH_ROLE role submits a hash of the exit requests data.
      * @param exitRequestsHash keccak256 hash of the encoded validators list
      */
     event RequestsHashSubmitted(bytes32 exitRequestsHash);
+
     /**
      * @notice Emitted when validator exit requested.
      * @param stakingModuleId Id of staking module.
@@ -127,6 +126,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         bytes validatorPubkey,
         uint256 timestamp
     );
+
     /**
      * @notice Emitted when limits configs are set.
      * @param maxExitRequestsLimit The maximum number of exit requests.
@@ -134,6 +134,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
      */
     event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
+
     /**
      * @notice Emitted when exit requests were delivered
      * @param exitRequestsHash keccak256 hash of the encoded validators list
@@ -569,7 +570,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
 
         if (requestStatusMap[exitRequestsHash].deliveredExitDataTimestamp != 0) {
-           return;
+            return;
         }
 
         requestStatusMap[exitRequestsHash] = RequestStatus({
@@ -579,7 +580,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
         emit RequestsHashSubmitted(exitRequestsHash);
     }
-
 
     function _storeNewHashRequestStatus(
         bytes32 exitRequestsHash,
