@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { BigNumberish, BytesLike, randomBytes, ZeroHash, zeroPadValue } from "ethers";
 import { ethers } from "hardhat";
 
-import { GIndex__Test, GIndexLibrary__Test } from "typechain-types";
+import { GIndex__Harness, GIndexLibrary__Harness } from "typechain-types";
 
 import { Snapshot } from "test/suite";
 
@@ -10,7 +10,7 @@ import { Snapshot } from "test/suite";
  * Wrapper for the GIndex operations to match the Solidity test
  */
 class GIndexWrapper {
-  constructor(private contract: GIndex__Test) {}
+  constructor(private contract: GIndex__Harness) {}
 
   async wrap(value: BytesLike): Promise<string> {
     return await this.contract.wrap(value);
@@ -60,8 +60,8 @@ class GIndexWrapper {
 describe("GIndex", () => {
   let originalState: string;
 
-  let gIndexTest: GIndex__Test;
-  let library: GIndexLibrary__Test;
+  let gIndexTest: GIndex__Harness;
+  let library: GIndexLibrary__Harness;
   let gIndex: GIndexWrapper;
 
   let ZERO: string;
@@ -70,8 +70,8 @@ describe("GIndex", () => {
 
   before(async () => {
     // Deploy the test contracts
-    gIndexTest = await ethers.deployContract("GIndex__Test");
-    library = await ethers.deployContract("GIndexLibrary__Test");
+    gIndexTest = await ethers.deployContract("GIndex__Harness");
+    library = await ethers.deployContract("GIndexLibrary__Harness");
 
     gIndex = new GIndexWrapper(gIndexTest);
 

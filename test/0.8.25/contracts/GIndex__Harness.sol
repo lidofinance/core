@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 pragma solidity 0.8.25;
@@ -8,7 +8,7 @@ import {GIndex, pack, IndexOutOfRange, fls} from "contracts/0.8.25/lib/GIndex.so
 /**
  * @dev Test contract for GIndex library in TypeScript tests
  */
-contract GIndex__Test {
+contract GIndex__Harness {
     function wrap(bytes32 value) external pure returns (GIndex) {
         return GIndex.wrap(value);
     }
@@ -57,7 +57,7 @@ contract GIndex__Test {
 /**
  * @dev Library wrapper for testing error cases
  */
-contract GIndexLibrary__Test {
+contract GIndexLibrary__Harness {
     function concat(GIndex lhs, GIndex rhs) public returns (GIndex) {
         return lhs.concat(rhs);
     }
