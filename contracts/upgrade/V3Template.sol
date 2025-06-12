@@ -11,6 +11,7 @@ import {IBurner as IBurnerWithoutAccessControl} from "contracts/common/interface
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
 import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
@@ -222,6 +223,11 @@ contract V3Template is V3Addresses {
         _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);
         _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), AGENT);
         _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
+
+        // LazyOracle
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), LazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE(), AGENT);
+        _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
 
         // TODO: add PausableUntilWithRoles checks when gate seal is added
 

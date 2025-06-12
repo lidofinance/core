@@ -114,8 +114,8 @@ abstract contract Permissions is AccessControlConfirmable {
     bool public initialized;
 
     constructor(address _vaultHub, address _lidoLocator) {
-        if (_vaultHub == address(0)) revert ZeroArgument("_vaultHub");
-        if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
+        _requireNotZero(_vaultHub);
+        _requireNotZero(_lidoLocator);
 
         _SELF = address(this);
         // @dev vaultHub is cached as immutable to save gas for main operations
@@ -143,7 +143,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _confirmExpiry The confirmation expiry time in seconds
      */
     function _initialize(address _defaultAdmin, uint256 _confirmExpiry) internal initializer {
-        if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
+        _requireNotZero(_defaultAdmin);
 
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
         _validateConfirmExpiry(_confirmExpiry);
@@ -167,7 +167,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev If an account is already a member of a role, doesn't revert, emits no events.
      */
     function grantRoles(RoleAssignment[] calldata _assignments) external {
-        if (_assignments.length == 0) revert ZeroArgument("_assignments");
+        _requireNotZero(_assignments.length);
 
         for (uint256 i = 0; i < _assignments.length; i++) {
             grantRole(_assignments[i].role, _assignments[i].account);
@@ -181,7 +181,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev If an account is not a member of a role, doesn't revert, emits no events.
      */
     function revokeRoles(RoleAssignment[] calldata _assignments) external {
-        if (_assignments.length == 0) revert ZeroArgument("_assignments");
+        if (_assignments.length == 0) revert ZeroArgument();
 
         for (uint256 i = 0; i < _assignments.length; i++) {
             revokeRole(_assignments[i].role, _assignments[i].account);
@@ -378,6 +378,14 @@ abstract contract Permissions is AccessControlConfirmable {
         return OperatorGrid(LIDO_LOCATOR.operatorGrid());
     }
 
+    function _requireNotZero(uint256 _value) internal pure {
+        if (_value == 0) revert ZeroArgument();
+    }
+
+    function _requireNotZero(address _address) internal pure {
+        if (_address == address(0)) revert ZeroAddress();
+    }
+
     /**
      * @notice Emitted when the contract is initialized
      */
@@ -395,7 +403,11 @@ abstract contract Permissions is AccessControlConfirmable {
 
     /**
      * @notice Error thrown for when a given value cannot be zero
-     * @param argument Name of the argument
      */
-    error ZeroArgument(string argument);
+    error ZeroArgument();
+
+    /**
+     * @notice Error thrown for when a given address cannot be zero
+     */
+    error ZeroAddress();
 }

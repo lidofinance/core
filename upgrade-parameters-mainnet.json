@@ -4,6 +4,12 @@
       "relativeShareLimitBP": 1000
     }
   },
+  "lazyOracle": {
+    "deployParameters": {
+      "quarantinePeriod": 259200,
+      "maxRewardRatioBP": 350
+    }
+  },
   "predepositGuarantee": {
     "deployParameters": {
       "genesisForkVersion": "0x00000000",

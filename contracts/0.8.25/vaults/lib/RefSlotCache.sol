@@ -4,9 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-interface IHashConsensus {
-    function getCurrentFrame() external view returns (uint256 refSlot, uint256);
-}
+import {IHashConsensus} from "../interfaces/IHashConsensus.sol";
 
 library RefSlotCache {
     struct Uint112WithRefSlotCache {
