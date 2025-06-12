@@ -46,6 +46,9 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
     },
+    "custom": {
+      url: RPC_URL,
+    },
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
     },
