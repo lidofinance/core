@@ -587,7 +587,10 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (_vaultAcceptor == address(0)) {
             // internalize the bad debt to the protocol
-            _storage().badDebtToInternalize.updateCacheAndIncreaseValue(_hashConsensus(), uint112(badDebtToSocialize));
+            _storage().badDebtToInternalize = _storage().badDebtToInternalize.withValueIncreased(
+                _hashConsensus(),
+                uint112(badDebtToSocialize)
+            );
         } else {
             if (_nodeOperator(_vaultAcceptor) != _nodeOperator(_badDebtVault)) revert BadDebtSocializationNotAllowed();
 
