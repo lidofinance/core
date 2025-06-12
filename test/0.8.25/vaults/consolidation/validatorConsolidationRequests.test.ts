@@ -141,7 +141,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         ),
       )
         .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
-        .withArgs("dashboardAddress");
+        .withArgs("dashboard");
     });
   });
 
