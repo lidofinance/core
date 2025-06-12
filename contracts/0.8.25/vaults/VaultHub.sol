@@ -1084,8 +1084,8 @@ contract VaultHub is PausableUntilWithRoles {
 
         _record.liabilityShares = uint96(liabilityShares_ - _amountOfShares);
 
-        _operatorGrid().onBurnedShares(_vault, _amountOfShares);
         _decreaseRedemptions(_vault, _amountOfShares);
+        _operatorGrid().onBurnedShares(_vault, _amountOfShares);
     }
 
     function _rebalanceShortfall(
