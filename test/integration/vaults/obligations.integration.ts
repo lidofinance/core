@@ -604,7 +604,35 @@ describe("Integration: Vault obligations", () => {
     });
   });
 
-  context("Manual settlement via dashboard", () => {
+  context("Settling small values", () => {
+    let liabilityShares: bigint;
+
+    beforeEach(async () => {
+      liabilityShares = 1n;
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+    });
+
+    it("Should correctly settle small fees (1 wei)", async () => {
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: 1n }))
+        .to.emit(vaultHub, "VaultObligationsSettled")
+        .withArgs(stakingVaultAddress, 0n, 1n, 0n, 0n, 1n);
+    });
+
+    it("Should correctly settle small redemptions (1 wei)", async () => {
+      await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
+      expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(liabilityShares);
+
+      await addRedemptionsObligation(1n);
+
+      await expect(vaultHub.settleVaultObligations(stakingVaultAddress))
+        .to.emit(vaultHub, "VaultObligationsSettled")
+        .withArgs(stakingVaultAddress, 2n, 0n, 0n, 0n, 0n);
+
+      expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(0);
+    });
+  });
+
+  context("Manual permissionless settlement", () => {
     let liabilityShares: bigint;
     let maxRedemptions: bigint;
     let accruedLidoFees: bigint;

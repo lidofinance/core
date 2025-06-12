@@ -15,7 +15,6 @@ import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 import {OperatorGrid} from "./OperatorGrid.sol";
 import {LazyOracle} from "./LazyOracle.sol";
 
-
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
 /// Also, it facilitates the individual per-vault reports from the lazy oracle to the vaults and charges Lido fees
@@ -1143,6 +1142,7 @@ contract VaultHub is PausableUntilWithRoles {
      * @param _record The record of the vault
      * @param _obligations The obligations of the vault to be settled
      * @return valueToRebalance The ETH amount to be rebalanced for redemptions
+     * @return sharesToRebalance The shares to be rebalanced for redemptions
      * @return valueToTransferToLido The ETH amount to be sent to the Lido
      * @return unsettledRedemptions The remaining redemptions after the planned settlement
      * @return unsettledLidoFees The remaining Lido fees after the planned settlement
@@ -1154,16 +1154,21 @@ contract VaultHub is PausableUntilWithRoles {
         VaultObligations storage _obligations
     ) internal view returns (
         uint256 valueToRebalance,
+        uint256 sharesToRebalance,
         uint256 valueToTransferToLido,
         uint256 unsettledRedemptions,
         uint256 unsettledLidoFees,
         uint256 totalUnsettled
     ) {
         uint256 vaultBalance = _vault.balance;
-        uint256 liability = _getPooledEthBySharesRoundUp(_record.liabilityShares);
 
-        uint256 cappedRedemptions = Math256.min(_obligations.redemptions, liability);
-        valueToRebalance = Math256.min(cappedRedemptions, vaultBalance);
+        sharesToRebalance = Math256.min(
+            LIDO.getSharesByPooledEthRoundUp(_obligations.redemptions),
+            _record.liabilityShares
+        );
+
+        uint256 adjustedRedemptions = _getPooledEthBySharesRoundUp(sharesToRebalance);
+        valueToRebalance = Math256.min(adjustedRedemptions, vaultBalance);
         uint256 remainingBalance = vaultBalance - valueToRebalance;
 
         if (_vaultConnection(_vault).pendingDisconnect) {
@@ -1181,7 +1186,7 @@ contract VaultHub is PausableUntilWithRoles {
             valueToTransferToLido = Math256.min(_obligations.unsettledLidoFees, availableForFees);
         }
 
-        unsettledRedemptions = cappedRedemptions - valueToRebalance;
+        unsettledRedemptions = adjustedRedemptions - valueToRebalance;
         unsettledLidoFees = _obligations.unsettledLidoFees - valueToTransferToLido;
         totalUnsettled = unsettledRedemptions + unsettledLidoFees;
     }
@@ -1199,9 +1204,9 @@ contract VaultHub is PausableUntilWithRoles {
         VaultObligations storage _obligations,
         uint256 _allowedUnsettled
     ) internal {
-        // TODO: here it will revert if valueToRebalance < 1 share (1 wei)
         (
-            uint256 valueToRebalance, // TODO: return shares
+            uint256 valueToRebalance,
+            uint256 sharesToRebalance,
             uint256 valueToTransferToLido,
             uint256 unsettledRedemptions,
             uint256 unsettledLidoFees,
@@ -1219,7 +1224,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         if (valueToRebalance > 0) {
-            _rebalanceEther(_vault, _record, valueToRebalance, _getSharesByPooledEth(valueToRebalance));
+            _rebalanceEther(_vault, _record, valueToRebalance, sharesToRebalance);
         }
 
         if (valueToTransferToLido > 0) {
