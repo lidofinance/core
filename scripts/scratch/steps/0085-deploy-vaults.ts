@@ -15,10 +15,12 @@ export async function main() {
   const wstethAddress = state[Sk.wstETH].address;
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const lidoAddress = state[Sk.appLido].proxy.address;
+  const hashConsensusAddress = state[Sk.hashConsensusForAccountingOracle].address;
 
   const vaultHubParams = state[Sk.vaultHub].deployParameters;
   const operatorGridParams = state[Sk.operatorGrid].deployParameters;
   const pdgDeployParams = state[Sk.predepositGuarantee].deployParameters;
+  const lazyOracleParams = state[Sk.lazyOracle].deployParameters;
 
   const depositContract = state.chainSpec.depositContract;
   const proxyContractsOwner = deployer;
@@ -70,6 +72,7 @@ export async function main() {
   const vaultHub_ = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     locatorAddress,
     lidoAddress,
+    hashConsensusAddress,
     vaultHubParams.maxRelativeShareLimitBP,
   ]);
   const vaultHubAddress = vaultHub_.address;
@@ -91,7 +94,14 @@ export async function main() {
   await makeTx(vaultHub, "renounceRole", [vaultCodehashRole, deployer], { from: deployer });
 
   // Deploy LazyOracle
-  await deployBehindOssifiableProxy(Sk.lazyOracle, "LazyOracle", proxyContractsOwner, deployer, [locatorAddress]);
+  const lazyOracle_ = await deployBehindOssifiableProxy(Sk.lazyOracle, "LazyOracle", proxyContractsOwner, deployer, [
+    locatorAddress,
+    hashConsensusAddress
+  ]);
+
+  const lazyOracleAdmin = deployer;
+  const lazyOracle = await loadContract("LazyOracle", lazyOracle_.address);
+  await makeTx(lazyOracle, "initialize", [lazyOracleAdmin, lazyOracleParams.quarantinePeriod, lazyOracleParams.maxRewardRatioBP], { from: deployer });
 
   // Deploy Dashboard implementation contract
   const dashboard = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [

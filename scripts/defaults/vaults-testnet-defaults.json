@@ -82,6 +82,12 @@
       "maxRelativeShareLimitBP": 1000
     }
   },
+  "lazyOracle": {
+    "deployParameters": {
+      "quarantinePeriod": 259200, 
+      "maxRewardRatioBP": 350
+    }
+  },
   "accountingOracle": {
     "deployParameters": {
       "consensusVersion": 3

@@ -5,6 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  LazyOracle__MockForNodeOperatorFee,
   LidoLocator,
   NodeOperatorFee__Harness,
   StakingVault__MockForNodeOperatorFee,
@@ -41,6 +42,7 @@ describe("NodeOperatorFee.sol", () => {
   let vault: StakingVault__MockForNodeOperatorFee;
   let nodeOperatorFee: NodeOperatorFee__Harness;
   let beacon: UpgradeableBeacon;
+  let lazyOracle: LazyOracle__MockForNodeOperatorFee;
 
   let originalState: string;
 
@@ -53,8 +55,14 @@ describe("NodeOperatorFee.sol", () => {
 
     steth = await ethers.deployContract("StETH__MockForNodeOperatorFee");
     wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
+    lazyOracle = await ethers.deployContract("LazyOracle__MockForNodeOperatorFee");
 
-    lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth, predepositGuarantee: vaultDepositor });
+    lidoLocator = await deployLidoLocator({
+      lido: steth,
+      wstETH: wsteth,
+      predepositGuarantee: vaultDepositor,
+      lazyOracle,
+    });
     hub = await ethers.deployContract("VaultHub__MockForNodeOperatorFee", [lidoLocator, steth]);
 
     nodeOperatorFeeImpl = await ethers.deployContract("NodeOperatorFee__Harness", [hub, lidoLocator]);
@@ -666,6 +674,43 @@ describe("NodeOperatorFee.sol", () => {
       await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
         nodeOperatorFee,
         "AdjustmentNotReported",
+      );
+    });
+
+    it("reverts if the vault is quarantined", async () => {
+      // grant vaultOwner the NODE_OPERATOR_MANAGER_ROLE to set the fee rate
+      // to simplify the test
+      await nodeOperatorFee
+        .connect(nodeOperatorManager)
+        .grantRole(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), vaultOwner);
+
+      const noFeeRate = await nodeOperatorFee.nodeOperatorFeeRate();
+
+      const rewards = ether("1");
+
+      await hub.setReport(
+        {
+          totalValue: rewards,
+          inOutDelta: 0n,
+        },
+        await getCurrentBlockTimestamp(),
+        true,
+      );
+
+      const expectedFee = (rewards * noFeeRate) / BP_BASE;
+
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedFee);
+
+      await lazyOracle.mock__setQuarantineInfo({
+        isActive: true,
+        pendingTotalValueIncrease: 0,
+        startTimestamp: 0,
+        endTimestamp: 0,
+      });
+
+      await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
+        nodeOperatorFee,
+        "VaultQuarantined",
       );
     });
 
