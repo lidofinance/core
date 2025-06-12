@@ -172,6 +172,36 @@ NODE_OPERATORS_REGISTRY_IMPL = "${NOR.address}"
 VALIDATOR_EXIT_VERIFIER = "${validatorExitDelayVerifier.address}"
 TRIGGERABLE_WITHDRAWALS_GATEWAY = "${triggerableWithdrawalsGateway.address}"
 `);
+    console.log(state[Sk.appVoting].proxy.address,
+      {
+        // Contract addresses
+        agent: agent,
+        lido_locator: state[Sk.lidoLocator].proxy.address,
+        lido_locator_impl: lidoLocator.address,
+        validators_exit_bus_oracle: await locator.validatorsExitBusOracle(),
+        validators_exit_bus_oracle_impl: validatorsExitBusOracle.address,
+        triggerable_withdrawals_gateway: triggerableWithdrawalsGateway.address,
+        withdrawal_vault: await locator.withdrawalVault(),
+        withdrawal_vault_impl: withdrawalVault.address,
+        accounting_oracle: await locator.accountingOracle(),
+        accounting_oracle_impl: accountingOracle.address,
+        staking_router: await locator.stakingRouter(),
+        staking_router_impl: stakingRouterAddress.address,
+        validator_exit_verifier: validatorExitDelayVerifier.address,
+        node_operators_registry: state[Sk.appNodeOperatorsRegistry].proxy.address,
+        node_operators_registry_impl: NOR.address,
+        oracle_daemon_config: await locator.oracleDaemonConfig(),
+        nor_app_repo: "0x0D97E876ad14DB2b183CFeEB8aa1A5C788eB1831",
+
+        // Other parameters
+        node_operators_registry_app_id: state[Sk.appNodeOperatorsRegistry].aragonApp.id,
+        nor_version: parameters[Sk.appNodeOperatorsRegistry]?.newVersion || [2, 0, 0],
+        vebo_consensus_version: 4,
+        ao_consensus_version: 4,
+        nor_exit_deadline_in_sec: 30 * 60, // 30 minutes
+        exit_events_lookback_window_in_slots: 7200,
+        nor_content_uri: state[Sk.appNodeOperatorsRegistry].aragonApp.contentURI,
+      })
 
   await deployWithoutProxy(Sk.TWVoteScript, "TWVoteScript", deployer, [
     state[Sk.appVoting].proxy.address,
@@ -197,7 +227,7 @@ TRIGGERABLE_WITHDRAWALS_GATEWAY = "${triggerableWithdrawalsGateway.address}"
 
       // Other parameters
       node_operators_registry_app_id: state[Sk.appNodeOperatorsRegistry].aragonApp.id,
-      nor_version: parameters[Sk.appNodeOperatorsRegistry]?.newVersion || [2, 0, 0],
+      nor_version: [6, 0, 0],
       vebo_consensus_version: 4,
       ao_consensus_version: 4,
       nor_exit_deadline_in_sec: 30 * 60, // 30 minutes
