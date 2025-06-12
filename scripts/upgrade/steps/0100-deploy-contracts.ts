@@ -7,6 +7,7 @@ import {
   Burner,
   ICSModule,
   IOracleReportSanityChecker_preV3,
+  LazyOracle,
   LidoLocator,
   OperatorGrid,
   PredepositGuarantee,
@@ -33,7 +34,9 @@ export async function main() {
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
   const vaultHubParams = parameters[Sk.vaultHub].deployParameters;
+  const lazyOracleParams = parameters[Sk.lazyOracle].deployParameters;
   const depositContract = state.chainSpec.depositContractAddress;
+  const hashConsensusAddress = state[Sk.hashConsensusForAccountingOracle].address;
   const pdgDeployParams = parameters[Sk.predepositGuarantee].deployParameters;
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
@@ -97,6 +100,7 @@ export async function main() {
   const csmModule = await loadContract<ICSModule>("ICSModule", csm.stakingModuleAddress);
   const csmAccountingAddress = await csmModule.accounting();
 
+  // TODO: upon TW upgrade NOR dont need the role anymore
   await makeTx(burner, "grantRole", [requestBurnSharesRole, nodeOperatorsRegistryAddress], { from: deployer });
   await makeTx(burner, "grantRole", [requestBurnSharesRole, simpleDvtAddress], { from: deployer });
   await makeTx(burner, "grantRole", [requestBurnSharesRole, csmAccountingAddress], { from: deployer });
@@ -108,7 +112,27 @@ export async function main() {
   // Deploy LazyOracle
   //
 
-  const lazyOracle = await deployWithoutProxy(Sk.lazyOracle, "LazyOracle", deployer, [locatorAddress]);
+  const lazyOracle_ = await deployBehindOssifiableProxy(Sk.lazyOracle, "LazyOracle", proxyContractsOwner, deployer, [
+    locatorAddress,
+    hashConsensusAddress,
+  ]);
+
+  const lazyOracle = await loadContract<LazyOracle>("LazyOracle", lazyOracle_.address);
+  await makeTx(
+    lazyOracle,
+    "initialize",
+    [deployer, lazyOracleParams.quarantinePeriod, lazyOracleParams.maxRewardRatioBP],
+    { from: deployer },
+  );
+  log("LazyOracle initialized with admin", deployer);
+
+  const updateSanityParamsRole = await lazyOracle.UPDATE_SANITY_PARAMS_ROLE();
+
+  await makeTx(lazyOracle, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
+  await makeTx(lazyOracle, "grantRole", [updateSanityParamsRole, agentAddress], { from: deployer });
+
+  await makeTx(lazyOracle, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+
   //
   // Deploy StakingVault implementation contract
   //
@@ -142,6 +166,7 @@ export async function main() {
   const vaultHub_ = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     locatorAddress,
     lidoAddress,
+    hashConsensusAddress,
     vaultHubParams.relativeShareLimitBP,
   ]);
 

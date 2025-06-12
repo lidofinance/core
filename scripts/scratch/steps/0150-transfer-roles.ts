@@ -24,10 +24,11 @@ export async function main() {
     { name: "WithdrawalQueueERC721", address: state[Sk.withdrawalQueueERC721].proxy.address },
     { name: "OracleDaemonConfig", address: state[Sk.oracleDaemonConfig].address },
     { name: "OracleReportSanityChecker", address: state[Sk.oracleReportSanityChecker].address },
+    { name: "TriggerableWithdrawalsGateway", address: state[Sk.triggerableWithdrawalsGateway].address },
     { name: "VaultHub", address: state[Sk.vaultHub].proxy.address },
     { name: "PredepositGuarantee", address: state[Sk.predepositGuarantee].proxy.address },
     { name: "OperatorGrid", address: state[Sk.operatorGrid].proxy.address },
-    { name: "TriggerableWithdrawalsGateway", address: state.triggerableWithdrawalsGateway.address },
+    { name: "LazyOracle", address: state[Sk.lazyOracle].proxy.address },
   ];
 
   for (const contract of ozAdminTransfers) {

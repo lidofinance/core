@@ -2,6 +2,7 @@ import { ethers } from "hardhat";
 
 import {
   Burner,
+  LazyOracle,
   OperatorGrid,
   StakingRouter,
   TriggerableWithdrawalsGateway,
@@ -34,6 +35,7 @@ export async function main() {
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
   const triggerableWithdrawalsGatewayAddress = state[Sk.triggerableWithdrawalsGateway].address;
+  const lazyOracleAddress = state[Sk.lazyOracle].proxy.address;
 
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
@@ -114,6 +116,7 @@ export async function main() {
   const burner = await loadContract<Burner>("Burner", burnerAddress);
   const requestBurnSharesRole = await burner.REQUEST_BURN_SHARES_ROLE();
   // NB: REQUEST_BURN_SHARES_ROLE is already granted to Lido in Burner constructor
+  // TODO: upon TW upgrade NOR dont need the role anymore
   await makeTx(burner, "grantRole", [requestBurnSharesRole, nodeOperatorsRegistryAddress], {
     from: deployer,
   });
@@ -138,4 +141,9 @@ export async function main() {
   await makeTx(operatorGrid, "grantRole", [await operatorGrid.REGISTRY_ROLE(), agentAddress], {
     from: deployer,
   });
+
+  // LazyOracle
+  const lazyOracle = await loadContract<LazyOracle>("LazyOracle", lazyOracleAddress);
+  const updateSanityParamsRole = await lazyOracle.UPDATE_SANITY_PARAMS_ROLE();
+  await makeTx(lazyOracle, "grantRole", [updateSanityParamsRole, agentAddress], { from: deployer });
 }

@@ -90,6 +90,7 @@ contract V3Addresses {
     address payable public immutable VAULT_HUB;
     address public immutable PREDEPOSIT_GUARANTEE;
     address public immutable OPERATOR_GRID;
+    address public immutable LAZY_ORACLE;
     address public immutable VAULT_FACTORY;
     address public immutable UPGRADEABLE_BEACON;
     address public immutable STAKING_VAULT_IMPL;
@@ -154,6 +155,7 @@ contract V3Addresses {
         VAULT_FACTORY = newLocatorImpl.vaultFactory();
         PREDEPOSIT_GUARANTEE = newLocatorImpl.predepositGuarantee();
         OPERATOR_GRID = newLocatorImpl.operatorGrid();
+        LAZY_ORACLE = newLocatorImpl.lazyOracle();
 
         EL_REWARDS_VAULT = newLocatorImpl.elRewardsVault();
         STAKING_ROUTER = newLocatorImpl.stakingRouter();

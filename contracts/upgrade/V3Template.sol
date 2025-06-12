@@ -11,6 +11,7 @@ import {IBurner as IBurnerWithoutAccessControl} from "contracts/common/interface
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
 import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
@@ -113,6 +114,7 @@ contract V3Template is V3Addresses {
     /// @param _params Params required to initialize the addresses contract
     constructor(V3AddressesParams memory _params) V3Addresses(_params) {
         contractsWithBurnerAllowances.push(WITHDRAWAL_QUEUE);
+        // TODO: upon TW upgrade NOR has no allowance
         contractsWithBurnerAllowances.push(NODE_OPERATORS_REGISTRY);
         contractsWithBurnerAllowances.push(SIMPLE_DVT);
         contractsWithBurnerAllowances.push(CSM_ACCOUNTING);
@@ -158,6 +160,7 @@ contract V3Template is V3Addresses {
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), OLD_LOCATOR_IMPL);
         _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), OLD_ACCOUNTING_ORACLE_IMPL);
         _assertAragonAppImplementation(IAragonAppRepo(ARAGON_APP_LIDO_REPO), OLD_LIDO_IMPL);
+        // TODO: check burner allowance for NOR is zero
 
         // Check allowances of the old burner
         address[] memory contractsWithBurnerAllowances_ = contractsWithBurnerAllowances;
@@ -222,6 +225,11 @@ contract V3Template is V3Addresses {
         _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);
         _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), AGENT);
         _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
+
+        // LazyOracle
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), LazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE(), AGENT);
+        _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
 
         // TODO: add PausableUntilWithRoles checks when gate seal is added
 
