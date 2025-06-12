@@ -39,14 +39,11 @@ import { deployAndConfigureAccountingOracle } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 const getDefaultExtraData = (): ExtraDataType => ({
-  stuckKeys: [
-    { moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
-    { moduleId: 2, nodeOpIds: [0], keysCounts: [2] },
-    { moduleId: 3, nodeOpIds: [2], keysCounts: [3] },
-  ],
   exitedKeys: [
-    { moduleId: 2, nodeOpIds: [1, 2], keysCounts: [1, 3] },
-    { moduleId: 3, nodeOpIds: [1], keysCounts: [2] },
+    { moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
+    { moduleId: 2, nodeOpIds: [0, 1, 2, 3, 4], keysCounts: [0, 1, 2, 3, 4] },
+    { moduleId: 3, nodeOpIds: [1, 2], keysCounts: [2, 3] },
+    { moduleId: 4, nodeOpIds: [0], keysCounts: [2] },
   ],
 });
 
@@ -182,6 +179,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
     reportFields,
     config,
   }: ConstructOracleReportWithDefaultValuesProps) {
+    await consensus.advanceTimeToNextFrameStart();
     const data = await constructOracleReportWithDefaultValuesForCurrentRefSlot({
       extraData,
       reportFields,
@@ -219,6 +217,35 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
     });
   });
 
+  context("deprecated invariants", () => {
+    it("reverts when trying to submit deprecated EXTRA_DATA_TYPE_STUCK_VALIDATORS", async () => {
+      await consensus.advanceTimeToNextFrameStart();
+
+      // Manually encode a STUCK_VALIDATORS item
+      const invalidItem = encodeExtraDataItem(0, EXTRA_DATA_TYPE_STUCK_VALIDATORS, 1, [1], [1]);
+
+      const extraDataList = packExtraDataList([invalidItem]);
+      const extraDataHash = calcExtraDataListHash(extraDataList);
+
+      const reportFields = getDefaultReportFields({
+        extraDataHash,
+        extraDataFormat: EXTRA_DATA_FORMAT_LIST,
+        extraDataItemsCount: 1,
+        refSlot: (await consensus.getCurrentFrame()).refSlot,
+      });
+
+      const reportHash = calcReportDataHash(getReportDataItems(reportFields));
+
+      // Submit the report hash and data
+      await consensus.connect(member1).submitReport(reportFields.refSlot, reportHash, AO_CONSENSUS_VERSION);
+      await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+
+      // Verify it reverts with DeprecatedExtraDataType
+      await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
+        .to.be.revertedWithCustomError(oracle, "DeprecatedExtraDataType")
+        .withArgs(0, EXTRA_DATA_TYPE_STUCK_VALIDATORS);
+    });
+  });
   context("submitReportExtraDataList", () => {
     beforeEach(takeSnapshot);
     afterEach(rollback);
@@ -229,7 +256,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         expect(extraDataChunks.length).to.be.equal(1);
         await oracleMemberSubmitReportData(report);
         const tx = await oracleMemberSubmitExtraData(extraDataChunks[0]);
-        await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, 5, 5);
+        await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, 4, 4);
       });
 
       it("submit extra data report within two transaction", async () => {
@@ -247,38 +274,41 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
           (BigInt(itemType) << 240n) | (BigInt(moduleId) << 64n) | BigInt(firstNodeOpId);
 
         const stateBeforeProcessingStart = await oracle.getExtraDataProcessingState();
-        expect(stateBeforeProcessingStart.itemsCount).to.be.equal(5);
+        expect(stateBeforeProcessingStart.itemsCount).to.be.equal(4);
         expect(stateBeforeProcessingStart.itemsProcessed).to.be.equal(0);
         expect(stateBeforeProcessingStart.submitted).to.be.equal(false);
         expect(stateBeforeProcessingStart.lastSortingKey).to.be.equal(0);
         expect(stateBeforeProcessingStart.dataHash).to.be.equal(extraDataChunkHashes[0]);
 
         const tx1 = await oracleMemberSubmitExtraData(extraDataChunks[0]);
-        await expect(tx1).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, 3, 5);
+        await expect(tx1).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, 3, 4);
         const state1 = await oracle.getExtraDataProcessingState();
-        expect(state1.itemsCount).to.be.equal(5);
+        expect(state1.itemsCount).to.be.equal(4);
         expect(state1.itemsProcessed).to.be.equal(3);
         expect(state1.submitted).to.be.equal(false);
         expect(state1.lastSortingKey).to.be.equal(
           calcSortingKey(
-            EXTRA_DATA_TYPE_STUCK_VALIDATORS,
-            defaultExtraData.stuckKeys[2].moduleId,
-            defaultExtraData.stuckKeys[2].nodeOpIds[0],
+            EXTRA_DATA_TYPE_EXITED_VALIDATORS,
+            defaultExtraData.exitedKeys[2].moduleId,
+            defaultExtraData.exitedKeys[2].nodeOpIds[1],
+
+            // defaultExtraData.stuckKeys[2].moduleId,
+            // defaultExtraData.stuckKeys[2].nodeOpIds[0],
           ),
         );
         expect(state1.dataHash).to.be.equal(extraDataChunkHashes[1]);
 
         const tx2 = await oracleMemberSubmitExtraData(extraDataChunks[1]);
-        await expect(tx2).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, 5, 5);
+        await expect(tx2).to.emit(oracle, "ExtraDataSubmitted").withArgs(report.refSlot, 4, 4);
         const state2 = await oracle.getExtraDataProcessingState();
-        expect(state2.itemsCount).to.be.equal(5);
-        expect(state2.itemsProcessed).to.be.equal(5);
+        expect(state2.itemsCount).to.be.equal(4);
+        expect(state2.itemsProcessed).to.be.equal(4);
         expect(state2.submitted).to.be.equal(true);
         expect(state2.lastSortingKey).to.be.equal(
           calcSortingKey(
             EXTRA_DATA_TYPE_EXITED_VALIDATORS,
-            defaultExtraData.exitedKeys[1].moduleId,
-            defaultExtraData.exitedKeys[1].nodeOpIds[0],
+            defaultExtraData.exitedKeys[3].moduleId,
+            defaultExtraData.exitedKeys[3].nodeOpIds[0],
           ),
         );
         expect(state2.dataHash).to.be.equal(extraDataChunkHashes[1]);
@@ -286,19 +316,15 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
 
       it("submit extra data with multiple items per module splitted on many transactions", async () => {
         const validExtraDataForLargeReport = {
-          stuckKeys: [
-            { moduleId: 1, nodeOpIds: [0, 1, 2], keysCounts: [1, 2, 3] },
-            { moduleId: 1, nodeOpIds: [3, 4, 5], keysCounts: [4, 5, 6] },
-            { moduleId: 2, nodeOpIds: [0], keysCounts: [1] },
-          ],
           exitedKeys: [
-            { moduleId: 1, nodeOpIds: [0, 1, 2, 3], keysCounts: [1, 2, 3, 4] },
-            { moduleId: 1, nodeOpIds: [4, 5], keysCounts: [4, 5] },
-            { moduleId: 2, nodeOpIds: [0], keysCounts: [1] },
+            { moduleId: 1, nodeOpIds: [0, 1, 2], keysCounts: [1, 2, 3] },
+            { moduleId: 2, nodeOpIds: [0, 1, 2], keysCounts: [4, 5, 4] },
+            { moduleId: 2, nodeOpIds: [4, 5], keysCounts: [4, 5] },
+            { moduleId: 3, nodeOpIds: [0], keysCounts: [1] },
           ],
         };
 
-        // Submit report with extra data splitted on many transactions
+        // Submit report with extra data split on many transactions
         // It does not matter on how many transactions we will split extra data
         for (let i = 1; i <= 6; i++) {
           await consensus.advanceTimeToNextFrameStart();
@@ -384,6 +410,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
 
     context("checks ref slot", () => {
       it("reverts with CannotSubmitExtraDataBeforeMainData in attempt of try to pass extra data ahead of submitReportData", async () => {
+        await consensus.advanceTimeToNextFrameStart();
         const { report, reportHash, extraDataChunks } = await constructOracleReportWithDefaultValuesForCurrentRefSlot(
           {},
         );
@@ -395,6 +422,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
       });
 
       it("pass successfully ", async () => {
+        await consensus.advanceTimeToNextFrameStart();
         const { report, reportHash, extraDataChunks } = await constructOracleReportWithDefaultValuesForCurrentRefSlot(
           {},
         );
@@ -413,7 +441,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         const { reportFields, extraDataHash } = await submitReportHash();
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
         const incorrectExtraData = getDefaultExtraData();
-        ++incorrectExtraData.stuckKeys[0].nodeOpIds[0];
+        ++incorrectExtraData.exitedKeys[0].nodeOpIds[0];
         const incorrectExtraDataItems = encodeExtraDataItems(incorrectExtraData);
         const incorrectExtraDataList = packExtraDataList(incorrectExtraDataItems);
         const incorrectExtraDataHash = calcExtraDataListHash(incorrectExtraDataList);
@@ -435,6 +463,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
 
         const incorrectExtraData = getDefaultExtraData();
         ++incorrectExtraData.exitedKeys[0].nodeOpIds[0];
+        ++incorrectExtraData.exitedKeys[3].nodeOpIds[0];
 
         const { extraDataChunks: incorrectExtraDataChunks, extraDataChunkHashes: incorrectExtraDataChunkHashes } =
           await constructOracleReportWithDefaultValuesForCurrentRefSlot({
@@ -545,7 +574,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         });
         expect(extraDataChunks.length).to.be.equal(2);
 
-        const wrongItemsCount = 4;
+        const wrongItemsCount = 5;
         const reportWithWrongItemsCount = { ...report, extraDataItemsCount: wrongItemsCount };
         const hashOfReportWithWrongItemsCount = calcReportDataHash(getReportDataItems(reportWithWrongItemsCount));
 
@@ -554,7 +583,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         await oracleMemberSubmitExtraData(extraDataChunks[0]);
         await expect(oracleMemberSubmitExtraData(extraDataChunks[1]))
           .to.be.revertedWithCustomError(oracle, "UnexpectedExtraDataItemsCount")
-          .withArgs(reportWithWrongItemsCount.extraDataItemsCount, 5);
+          .withArgs(reportWithWrongItemsCount.extraDataItemsCount, 4);
       });
     });
 
@@ -563,7 +592,8 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         await consensus.advanceTimeToNextFrameStart();
         const { reportFields: emptyReport, reportHash: emptyReportHash } =
           await constructOracleReportWithSingeExtraDataTransactionForCurrentRefSlot({
-            extraData: { stuckKeys: [], exitedKeys: [] },
+            // extraData: { stuckKeys: [], exitedKeys: [] },
+            extraData: { exitedKeys: [] },
           });
         const { extraDataList } = await constructOracleReportWithSingeExtraDataTransactionForCurrentRefSlot();
 
@@ -617,7 +647,8 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
 
       it("reverts with ExtraDataAlreadyProcessed if empty extraData has already been processed", async () => {
         const { report: emptyReport } = await constructOracleReportForCurrentFrameAndSubmitReportHash({
-          extraData: { stuckKeys: [], exitedKeys: [] },
+          // extraData: { stuckKeys: [], exitedKeys: [] },
+          extraData: { exitedKeys: [] },
         });
 
         await oracleMemberSubmitReportData(emptyReport);
@@ -652,20 +683,20 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
           .withArgs(invalidItemIndex);
       }
 
-      it("should revert if stuckKeys processed after exitedKeys", async () => {
-        const invalidExtraDataItemsArray = [
-          { type: EXTRA_DATA_TYPE_EXITED_VALIDATORS, moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
-          { type: EXTRA_DATA_TYPE_EXITED_VALIDATORS, moduleId: 2, nodeOpIds: [0], keysCounts: [1] },
-          { type: EXTRA_DATA_TYPE_STUCK_VALIDATORS, moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
-        ];
-
-        await extraDataSubmitShouldRevertWithSortOrderError(invalidExtraDataItemsArray, 2);
-      });
+      // it("should revert if stuckKeys processed after exitedKeys", async () => {
+      //   const invalidExtraDataItemsArray = [
+      //     { type: EXTRA_DATA_TYPE_EXITED_VALIDATORS, moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
+      //     { type: EXTRA_DATA_TYPE_EXITED_VALIDATORS, moduleId: 2, nodeOpIds: [0], keysCounts: [1] },
+      //     { type: EXTRA_DATA_TYPE_STUCK_VALIDATORS, moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
+      //   ];
+      //
+      //   await extraDataSubmitShouldRevertWithSortOrderError(invalidExtraDataItemsArray, 2);
+      // });
 
       it("should revert if modules items not sorted by module id", async () => {
         const invalidStuckKeysItemsOrder = [
-          { type: EXTRA_DATA_TYPE_STUCK_VALIDATORS, moduleId: 2, nodeOpIds: [0], keysCounts: [1] },
-          { type: EXTRA_DATA_TYPE_STUCK_VALIDATORS, moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
+          { type: EXTRA_DATA_TYPE_EXITED_VALIDATORS, moduleId: 2, nodeOpIds: [0], keysCounts: [1] },
+          { type: EXTRA_DATA_TYPE_EXITED_VALIDATORS, moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
         ];
 
         await extraDataSubmitShouldRevertWithSortOrderError(invalidStuckKeysItemsOrder, 1);
@@ -684,7 +715,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
             return [{ type, moduleId: 1, nodeOpIds, keysCounts: Array(nodeOpIds.length).fill(1) }];
           }
 
-          await extraDataSubmitShouldRevertWithSortOrderError(data(EXTRA_DATA_TYPE_STUCK_VALIDATORS), 0);
+          // await extraDataSubmitShouldRevertWithSortOrderError(data(EXTRA_DATA_TYPE_STUCK_VALIDATORS), 0);
           await extraDataSubmitShouldRevertWithSortOrderError(data(EXTRA_DATA_TYPE_EXITED_VALIDATORS), 0);
         }
 
@@ -696,12 +727,12 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
       });
 
       it("should revert if module node operators not sorted within multiple items", async () => {
-        const invalidStuckKeysItemsOrder = [
-          { type: EXTRA_DATA_TYPE_STUCK_VALIDATORS, moduleId: 1, nodeOpIds: [1, 2, 3], keysCounts: [1, 2, 3] },
-          { type: EXTRA_DATA_TYPE_STUCK_VALIDATORS, moduleId: 1, nodeOpIds: [3, 4, 5], keysCounts: [1, 2, 3] },
-        ];
-
-        await extraDataSubmitShouldRevertWithSortOrderError(invalidStuckKeysItemsOrder, 1);
+        // const invalidStuckKeysItemsOrder = [
+        //   { type: EXTRA_DATA_TYPE_STUCK_VALIDATORS, moduleId: 1, nodeOpIds: [1, 2, 3], keysCounts: [1, 2, 3] },
+        //   { type: EXTRA_DATA_TYPE_STUCK_VALIDATORS, moduleId: 1, nodeOpIds: [3, 4, 5], keysCounts: [1, 2, 3] },
+        // ];
+        //
+        // await extraDataSubmitShouldRevertWithSortOrderError(invalidStuckKeysItemsOrder, 1);
 
         const invalidExitedKeysItemsOrder = [
           { type: EXTRA_DATA_TYPE_EXITED_VALIDATORS, moduleId: 1, nodeOpIds: [1, 2, 3], keysCounts: [1, 2, 3] },
@@ -713,14 +744,12 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
 
       it("should revert if second transaction extra data not sorted", async () => {
         const invalidExtraData = {
-          stuckKeys: [
-            { moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
-            { moduleId: 2, nodeOpIds: [3], keysCounts: [2] },
-            // Items for second transaction.
+          exitedKeys: [
+            { moduleId: 1, nodeOpIds: [1, 2], keysCounts: [1, 3] },
+            { moduleId: 2, nodeOpIds: [1, 2], keysCounts: [1, 3] },
             // Break report data sorting order, nodeOpId 3 already processed.
-            { moduleId: 2, nodeOpIds: [3], keysCounts: [4] },
+            { moduleId: 2, nodeOpIds: [2], keysCounts: [3] },
           ],
-          exitedKeys: [{ moduleId: 2, nodeOpIds: [1, 2], keysCounts: [1, 3] }],
         };
 
         const { extraDataChunks } = await submitOracleReport({
@@ -740,12 +769,12 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         // contextual helper to prepeare wrong indexed data
         const getExtraWithCustomLastIndex = (itemsCount: number, lastIndexCustom: number) => {
           const dummyArr = Array.from(Array(itemsCount));
-          const stuckKeys = dummyArr.map((_, i) => ({ moduleId: i + 1, nodeOpIds: [0], keysCounts: [i + 1] }));
-          const extraData = { stuckKeys, exitedKeys: [] };
+          const exitedKeys = dummyArr.map((_, i) => ({ moduleId: i + 1, nodeOpIds: [0], keysCounts: [i + 1] }));
+          const extraData = { exitedKeys };
           const extraDataItems: string[] = [];
-          const type = EXTRA_DATA_TYPE_STUCK_VALIDATORS;
+          const type = EXTRA_DATA_TYPE_EXITED_VALIDATORS;
           dummyArr.forEach((_, i) => {
-            const item = extraData.stuckKeys[i];
+            const item = extraData.exitedKeys[i];
             const index = i < itemsCount - 1 ? i : lastIndexCustom;
             extraDataItems.push(encodeExtraDataItem(index, type, item.moduleId, item.nodeOpIds, item.keysCounts));
           });
@@ -811,10 +840,9 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         // contextual helper to prepeare wrong typed data
         const getExtraWithCustomType = (typeCustom: bigint) => {
           const extraData = {
-            stuckKeys: [{ moduleId: 1, nodeOpIds: [1], keysCounts: [2] }],
-            exitedKeys: [],
+            exitedKeys: [{ moduleId: 1, nodeOpIds: [1], keysCounts: [2] }],
           };
-          const item = extraData.stuckKeys[0];
+          const item = extraData.exitedKeys[0];
           const extraDataItems = [];
           extraDataItems.push(encodeExtraDataItem(0, typeCustom, item.moduleId, item.nodeOpIds, item.keysCounts));
           return {
@@ -845,13 +873,14 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
             .withArgs(wrongTypedIndex, typeCustom);
         });
 
-        it("succeeds if `1` was passed", async () => {
-          const { extraDataItems } = getExtraWithCustomType(1n);
+        it("if type `1` was passed", async () => {
+          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(1n);
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-          const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataList);
-          await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
+          await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList))
+            .to.be.revertedWithCustomError(oracle, "DeprecatedExtraDataType")
+            .withArgs(wrongTypedIndex, typeCustom);
         });
 
         it("succeeds if `2` was passed", async () => {
@@ -868,10 +897,9 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         it("by reverting TooManyNodeOpsPerExtraDataItem if there was too much node operators", async () => {
           const problematicItemIdx = 0;
           const extraData = {
-            stuckKeys: [{ moduleId: 1, nodeOpIds: [1, 2], keysCounts: [2, 3] }],
-            exitedKeys: [],
+            exitedKeys: [{ moduleId: 1, nodeOpIds: [1, 2], keysCounts: [2, 3] }],
           };
-          const problematicItemsCount = extraData.stuckKeys[problematicItemIdx].nodeOpIds.length;
+          const problematicItemsCount = extraData.exitedKeys[problematicItemIdx].nodeOpIds.length;
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
@@ -888,10 +916,9 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         it("should not revert in case when items count exactly equals limit", async () => {
           const problematicItemIdx = 0;
           const extraData = {
-            stuckKeys: [{ moduleId: 1, nodeOpIds: [1, 2], keysCounts: [2, 3] }],
-            exitedKeys: [],
+            exitedKeys: [{ moduleId: 1, nodeOpIds: [1, 2], keysCounts: [2, 3] }],
           };
-          const problematicItemsCount = extraData.stuckKeys[problematicItemIdx].nodeOpIds.length;
+          const problematicItemsCount = extraData.exitedKeys[problematicItemIdx].nodeOpIds.length;
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
@@ -904,13 +931,14 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         it("should revert in case when items count exceed limit", async () => {
           const maxItemsPerChunk = 3;
           const extraData = getDefaultExtraData();
-          const itemsCount = extraData.exitedKeys.length + extraData.stuckKeys.length;
+          // const itemsCount = extraData.exitedKeys.length + extraData.stuckKeys.length;
+          const itemsCount = extraData.exitedKeys.length;
           const { report, extraDataChunks } = await constructOracleReportForCurrentFrameAndSubmitReportHash({
             extraData,
             config: { maxItemsPerChunk },
           });
 
-          expect(itemsCount).to.be.equal(5);
+          expect(itemsCount).to.be.equal(4);
           expect(extraDataChunks.length).to.be.equal(2);
 
           await oracleMemberSubmitReportData(report);
@@ -937,11 +965,10 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         it("reverts if some item not long enough to contain all necessary data — early cut", async () => {
           const invalidItemIndex = 1;
           const extraData = {
-            stuckKeys: [
+            exitedKeys: [
               { moduleId: 1, nodeOpIds: [1], keysCounts: [2] },
               { moduleId: 2, nodeOpIds: [1], keysCounts: [2] },
             ],
-            exitedKeys: [],
           };
           const extraDataItems = encodeExtraDataItems(extraData);
           // Cutting item to provoke error on early stage
@@ -959,11 +986,10 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         it("reverts if some item not long enough to contain all necessary data — late cut", async () => {
           const invalidItemIndex = 1;
           const extraData = {
-            stuckKeys: [
+            exitedKeys: [
               { moduleId: 1, nodeOpIds: [1], keysCounts: [2] },
               { moduleId: 2, nodeOpIds: [1, 2, 3, 4], keysCounts: [2] },
             ],
-            exitedKeys: [],
           };
           const extraDataItems = encodeExtraDataItems(extraData);
           // Providing long items and cutting them from end to provoke error on late stage
@@ -981,11 +1007,10 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
         it("moduleId cannot be zero", async () => {
           const invalidItemIndex = 1;
           const extraData = {
-            stuckKeys: [
+            exitedKeys: [
               { moduleId: 1, nodeOpIds: [1], keysCounts: [2] },
               { moduleId: 0, nodeOpIds: [1], keysCounts: [2] },
             ],
-            exitedKeys: [],
           };
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData });
@@ -1000,11 +1025,10 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
           // Empty nodeOpIds list should provoke check fail
           //  in `_processExtraDataItem` function, 812 line in AccountingOracle, second condition
           const extraData = {
-            stuckKeys: [
+            exitedKeys: [
               { moduleId: 1, nodeOpIds: [], keysCounts: [2] },
               { moduleId: 2, nodeOpIds: [1], keysCounts: [2] },
             ],
-            exitedKeys: [],
           };
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData });
@@ -1042,27 +1066,6 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
     });
 
     context("delivers the data to staking router", () => {
-      it("calls reportStakingModuleStuckValidatorsCountByNodeOperator on StakingRouter", async () => {
-        await consensus.advanceTimeToNextFrameStart();
-        const { reportFields, reportInput, extraDataList } = await submitReportHash();
-        await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
-
-        await oracle.connect(member1).submitReportExtraDataList(extraDataList);
-
-        const callsCount = await stakingRouter.totalCalls_reportStuckKeysByNodeOperator();
-
-        const extraDataValue = reportInput.extraDataValue as ExtraDataType;
-        expect(callsCount).to.equal(extraDataValue.stuckKeys.length);
-
-        for (let i = 0; i < callsCount; i++) {
-          const call = await stakingRouter.calls_reportStuckKeysByNodeOperator(i);
-          const item = extraDataValue.stuckKeys[i];
-          expect(call.stakingModuleId).to.equal(item.moduleId);
-          expect(call.nodeOperatorIds).to.equal("0x" + item.nodeOpIds.map((id) => numberToHex(id, 8)).join(""));
-          expect(call.keysCounts).to.equal("0x" + item.keysCounts.map((count) => numberToHex(count, 16)).join(""));
-        }
-      });
-
       it("calls reportStakingModuleExitedValidatorsCountByNodeOperator on StakingRouter", async () => {
         await consensus.advanceTimeToNextFrameStart();
         const { reportFields, reportInput, extraDataList } = await submitReportHash();
@@ -1104,6 +1107,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
     });
 
     it("reverts if main data has not been processed yet", async () => {
+      await constructOracleReportForCurrentFrameAndSubmitReportHash({});
       await consensus.advanceTimeToNextFrameStart();
       const report1 = await constructOracleReportWithSingeExtraDataTransactionForCurrentRefSlot();
 
@@ -1158,7 +1162,7 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
       expect(stateAfter.itemsProcessed).to.equal(extraDataItemsCount);
       // TODO: figure out how to build this value and test it properly
       expect(stateAfter.lastSortingKey).to.equal(
-        "3533694129556768659166595001485837031654967793751237971583444623713894401",
+        "3533694129556768659166595001485837031654967793751237990030188697423446016",
       );
       expect(stateAfter.dataHash).to.equal(extraDataHash);
     });
@@ -1167,12 +1171,8 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
       await consensus.advanceTimeToNextFrameStart();
 
       const extraDataDay1 = {
-        stuckKeys: [
-          { moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
-          { moduleId: 2, nodeOpIds: [0], keysCounts: [2] },
-          { moduleId: 3, nodeOpIds: [2], keysCounts: [3] },
-        ],
         exitedKeys: [
+          { moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
           { moduleId: 2, nodeOpIds: [1, 2], keysCounts: [1, 3] },
           { moduleId: 3, nodeOpIds: [1], keysCounts: [2] },
         ],
@@ -1181,12 +1181,12 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
       const { report: reportDay1, extraDataChunks: extraDataChunksDay1 } =
         await constructOracleReportWithDefaultValuesForCurrentRefSlot({
           extraData: extraDataDay1,
-          config: { maxItemsPerChunk: 4 },
+          config: { maxItemsPerChunk: 2 },
         });
 
       expect(extraDataChunksDay1.length).to.be.equal(2);
 
-      const validExtraDataItemsCount = 5;
+      const validExtraDataItemsCount = 3;
       const invalidExtraDataItemsCount = 7;
       const reportDay1WithInvalidItemsCount = { ...reportDay1, extraDataItemsCount: invalidExtraDataItemsCount };
 
@@ -1205,13 +1205,12 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
       await consensus.advanceTimeToNextFrameStart();
 
       const extraDataDay2 = JSON.parse(JSON.stringify(extraDataDay1));
-      extraDataDay2.stuckKeys[0].keysCounts = [2];
-      extraDataDay2.exitedKeys[0].keysCounts = [1, 4];
+      extraDataDay2.exitedKeys[2].keysCounts = [4];
 
       const { report: reportDay2, extraDataChunks: extraDataChunksDay2 } =
         await constructOracleReportForCurrentFrameAndSubmitReportHash({
           extraData: extraDataDay2,
-          config: { maxItemsPerChunk: 4 },
+          config: { maxItemsPerChunk: 2 },
         });
 
       await oracleMemberSubmitReportData(reportDay2);

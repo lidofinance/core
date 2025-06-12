@@ -752,7 +752,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       await reportVaultDataWithProof(ctx, stakingVault, { totalValue: TEST_STETH_AMOUNT_WEI }); // slashing
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(false);
-
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.be.revertedWithCustomError(dashboard, "ExceedsMintingCapacity")
         .withArgs(testSharesAmountWei, 0);

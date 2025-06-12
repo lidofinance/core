@@ -111,13 +111,15 @@ describe("OracleReportSanityChecker.sol", () => {
         withdrawalVault: withdrawalVaultAddress,
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
+        validatorExitDelayVerifier: deployer.address,
+        triggerableWithdrawalsGateway: deployer.address,
         accounting: accountingAddress,
+        predepositGuarantee: deployer.address,
+        wstETH: deployer.address,
         vaultHub: deployer.address,
         vaultFactory: deployer.address,
-        wstETH: deployer.address,
-        predepositGuarantee: deployer.address,
-        operatorGrid: deployer.address,
         lazyOracle: deployer.address,
+        operatorGrid: deployer.address,
       }),
     );
 

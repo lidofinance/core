@@ -11,6 +11,20 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     event Mock__OnRewardsMinted(uint256 _totalShares);
     event Mock__ExitedValidatorsCountUpdated(bytes _nodeOperatorIds, bytes _stuckValidatorsCounts);
 
+    event Mock__reportValidatorExitDelay(
+        uint256 nodeOperatorId,
+        uint256 proofSlotTimestamp,
+        bytes publicKeys,
+        uint256 eligibleToExitInSec
+    );
+
+    event Mock__onValidatorExitTriggered(
+        uint256 _nodeOperatorId,
+        bytes publicKeys,
+        uint256 withdrawalRequestPaidFee,
+        uint256 exitType
+    );
+
     function getType() external view returns (bytes32) {
         return keccak256(abi.encodePacked("staking.module"));
     }
@@ -189,18 +203,10 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         emit Mock__TargetValidatorsLimitsUpdated(_nodeOperatorId, _targetLimitMode, _targetLimit);
     }
 
-    event Mock__ValidatorsCountUnsafelyUpdated(
-        uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount,
-        uint256 _stuckValidatorsCount
-    );
+    event Mock__ValidatorsCountUnsafelyUpdated(uint256 _nodeOperatorId, uint256 _exitedValidatorsCount);
 
-    function unsafeUpdateValidatorsCount(
-        uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount,
-        uint256 _stuckValidatorsCount
-    ) external {
-        emit Mock__ValidatorsCountUnsafelyUpdated(_nodeOperatorId, _exitedValidatorsCount, _stuckValidatorsCount);
+    function unsafeUpdateValidatorsCount(uint256 _nodeOperatorId, uint256 _exitedValidatorsCount) external {
+        emit Mock__ValidatorsCountUnsafelyUpdated(_nodeOperatorId, _exitedValidatorsCount);
     }
 
     function obtainDepositData(
@@ -249,5 +255,48 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     function mock__onWithdrawalCredentialsChanged(bool shouldRevert, bool shouldRunOutGas) external {
         onWithdrawalCredentialsChangedShouldRevert = shouldRevert;
         onWithdrawalCredentialsChangedShouldRunOutGas = shouldRunOutGas;
+    }
+
+    bool private shouldBePenalized__mocked;
+
+    function reportValidatorExitDelay(
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKeys,
+        uint256 _eligibleToExitInSec
+    ) external {
+        emit Mock__reportValidatorExitDelay(_nodeOperatorId, _proofSlotTimestamp, _publicKeys, _eligibleToExitInSec);
+    }
+
+    function onValidatorExitTriggered(
+        uint256 _nodeOperatorId,
+        bytes calldata _publicKeys,
+        uint256 _withdrawalRequestPaidFee,
+        uint256 _exitType
+    ) external {
+        emit Mock__onValidatorExitTriggered(_nodeOperatorId, _publicKeys, _withdrawalRequestPaidFee, _exitType);
+    }
+
+    function isValidatorExitDelayPenaltyApplicable(
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKey,
+        uint256 _eligibleToExitInSec
+    ) external view returns (bool) {
+        return shouldBePenalized__mocked;
+    }
+
+    function mock__isValidatorExitDelayPenaltyApplicable(bool _shouldBePenalized) external {
+        shouldBePenalized__mocked = _shouldBePenalized;
+    }
+
+    uint256 private exitDeadlineThreshold__mocked;
+
+    function exitDeadlineThreshold(uint256 _nodeOperatorId) external view returns (uint256) {
+        return exitDeadlineThreshold__mocked;
+    }
+
+    function mock__exitDeadlineThreshold(uint256 _threshold) external {
+        exitDeadlineThreshold__mocked = _threshold;
     }
 }

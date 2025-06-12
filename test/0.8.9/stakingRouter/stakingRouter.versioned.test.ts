@@ -50,7 +50,7 @@ describe("StakingRouter.sol:Versioned", () => {
     it("Increments version", async () => {
       await versioned.initialize(randomAddress(), randomAddress(), randomBytes(32));
 
-      expect(await versioned.getContractVersion()).to.equal(2n);
+      expect(await versioned.getContractVersion()).to.equal(3n);
     });
   });
 });

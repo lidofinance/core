@@ -28,6 +28,8 @@ export async function main() {
     validatorsExitBusOracle: getAddress(Sk.validatorsExitBusOracle, state),
     withdrawalQueue: getAddress(Sk.withdrawalQueueERC721, state),
     withdrawalVault: getAddress(Sk.withdrawalVault, state),
+    validatorExitDelayVerifier: getAddress(Sk.validatorExitDelayVerifier, state),
+    triggerableWithdrawalsGateway: getAddress(Sk.triggerableWithdrawalsGateway, state),
     oracleDaemonConfig: getAddress(Sk.oracleDaemonConfig, state),
     accounting: getAddress(Sk.accounting, state),
     predepositGuarantee: getAddress(Sk.predepositGuarantee, state),
