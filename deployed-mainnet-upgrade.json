@@ -24,7 +24,7 @@
         "nor_app_repo": "0x0D97E876ad14DB2b183CFeEB8aa1A5C788eB1831",
         "node_operators_registry_app_id": "0x7071f283424072341f856ac9e947e7ec0eb68719f757a7e785979b6b8717579d",
         "nor_version": [
-          2,
+          6,
           0,
           0
         ],
@@ -473,7 +473,7 @@
       "maxPositiveTokenRebase": 750000
     }
   },
-  "scratchDeployGasUsed": "24930001",
+  "scratchDeployGasUsed": "24965663",
   "stakingRouter": {
     "proxy": {
       "address": "0xFdDf38947aFB03C621C71b06C9C70bce73f12999",

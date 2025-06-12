@@ -21,5 +21,5 @@ cp deployed-mainnet.json $NETWORK_STATE_FILE
 
 yarn upgrade:deploy
 yarn upgrade:mock-voting
-yarn hardhat --network local run --no-compile scripts/utils/mine.ts
+yarn hardhat --network custom run --no-compile scripts/utils/mine.ts
 # yarn test:integration

@@ -19,8 +19,8 @@ export async function main(): Promise<void> {
   const voting = await loadContract<Voting>("Voting", votingAddress);
 
   const voteId = await voting.votesLength();
-
-  const newVoteBytecode = await voteScript.getNewVoteCallBytecode("V3 Lido Upgrade description placeholder");
+  console.log(await voteScript.getDebugParams())
+  const newVoteBytecode = await voteScript.getNewVoteCallBytecode("TW Lido Upgrade description placeholder");
   await tokenManager.connect(deployer).forward(newVoteBytecode);
   if (!(await voteScript.isValidVoteScript(voteId))) throw new Error("Vote script is not valid");
   await voting.connect(deployer).vote(voteId, true, false);

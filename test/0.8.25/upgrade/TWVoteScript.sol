@@ -39,7 +39,7 @@ interface INodeOperatorsRegistry {
 }
 
 interface IOracleDaemonConfig {
-    function set(string calldata _key, uint256 _value) external;
+    function set(string calldata _key, bytes calldata _value) external;
     function unset(string calldata _key) external;
 }
 
@@ -96,21 +96,7 @@ contract TWVoteScript is OmnibusBase {
 
     function getVoteItems() public view override returns (VoteItem[] memory voteItems) {
         voteItems = new VoteItem[](VOTE_ITEMS_COUNT);
-
-        // Create vote items in smaller batches to reduce stack depth
-        createVoteItems1_1(voteItems, 0);   // Items 1-3
-        createVoteItems1_2(voteItems, 3);   // Items 4-7
-        createVoteItems2_1(voteItems, 7);   // Items 8-10
-        createVoteItems2_2(voteItems, 10);  // Items 11-14
-        createVoteItems3_1(voteItems, 14);  // Items 15-18
-        createVoteItems3_2(voteItems, 18);  // Items 19-22
-
-        // Ensure we have created exactly the expected number of items
-        assert(voteItems.length == VOTE_ITEMS_COUNT);
-    }
-
-    function createVoteItems1_1(VoteItem[] memory voteItems, uint256 startIndex) internal view {
-        uint256 index = startIndex;
+        uint256 index = 0;
 
         // 1. Update locator implementation
         voteItems[index++] = VoteItem({
@@ -140,10 +126,6 @@ contract TWVoteScript is OmnibusBase {
                 abi.encodeCall(IOracleContract.finalizeUpgrade_v2, (600, 13000, 1, 48))
             )
         });
-    }
-
-    function createVoteItems1_2(VoteItem[] memory voteItems, uint256 startIndex) internal view {
-        uint256 index = startIndex;
 
         // 4. Grant VEBO role MANAGE_CONSENSUS_VERSION_ROLE to the AGENT
         bytes32 manageConsensusVersionRole = keccak256("MANAGE_CONSENSUS_VERSION_ROLE");
@@ -185,10 +167,6 @@ contract TWVoteScript is OmnibusBase {
                 abi.encodeCall(IWithdrawalVaultProxy.proxy_upgradeTo, (params.withdrawal_vault_impl, ""))
             )
         });
-    }
-
-    function createVoteItems2_1(VoteItem[] memory voteItems, uint256 startIndex) internal view {
-        uint256 index = startIndex;
 
         // 8. Call finalizeUpgrade_v2 on WithdrawalVault
         voteItems[index++] = VoteItem({
@@ -210,7 +188,6 @@ contract TWVoteScript is OmnibusBase {
         });
 
         // 10. Grant AO MANAGE_CONSENSUS_VERSION_ROLE to the AGENT
-        bytes32 manageConsensusVersionRole = keccak256("MANAGE_CONSENSUS_VERSION_ROLE");
         voteItems[index++] = VoteItem({
             description: "10. Grant AO MANAGE_CONSENSUS_VERSION_ROLE to the AGENT",
             call: _forwardCall(
@@ -219,10 +196,6 @@ contract TWVoteScript is OmnibusBase {
                 abi.encodeCall(IAccessControl.grantRole, (manageConsensusVersionRole, params.agent))
             )
         });
-    }
-
-    function createVoteItems2_2(VoteItem[] memory voteItems, uint256 startIndex) internal view {
-        uint256 index = startIndex;
 
         // 11. Bump AO consensus version
         voteItems[index++] = VoteItem({
@@ -265,10 +238,6 @@ contract TWVoteScript is OmnibusBase {
                 abi.encodeCall(IAccessControl.grantRole, (reportValidatorExitTriggeredRole, params.triggerable_withdrawals_gateway))
             )
         });
-    }
-
-    function createVoteItems3_1(VoteItem[] memory voteItems, uint256 startIndex) internal view {
-        uint256 index = startIndex;
 
         // 15. Publish new NodeOperatorsRegistry implementation in NodeOperatorsRegistry app APM repo
         voteItems[index++] = VoteItem({
@@ -283,9 +252,9 @@ contract TWVoteScript is OmnibusBase {
         voteItems[index++] = VoteItem({
             description: "16. Update NodeOperatorsRegistry implementation",
             call: _votingCall(
-                params.agent,
+                0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc,
                 abi.encodeWithSignature("setApp(bytes32,bytes32,address)",
-                    IKernel(address(0)).APP_BASES_NAMESPACE(),
+                    IKernel(0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc).APP_BASES_NAMESPACE(),
                     params.node_operators_registry_app_id,
                     params.node_operators_registry_impl
                 )
@@ -311,10 +280,6 @@ contract TWVoteScript is OmnibusBase {
                 abi.encodeCall(IAccessControl.grantRole, (configManagerRole, params.agent))
             )
         });
-    }
-
-    function createVoteItems3_2(VoteItem[] memory voteItems, uint256 startIndex) internal view {
-        uint256 index = startIndex;
 
         // 19. Remove NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP variable from OracleDaemonConfig
         voteItems[index++] = VoteItem({
@@ -352,8 +317,27 @@ contract TWVoteScript is OmnibusBase {
             call: _forwardCall(
                 params.agent,
                 params.oracle_daemon_config,
-                abi.encodeCall(IOracleDaemonConfig.set, ("EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS", params.exit_events_lookback_window_in_slots))
+                abi.encodeCall(IOracleDaemonConfig.set, ("EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS", abi.encode(params.exit_events_lookback_window_in_slots)))
             )
         });
+
+        // assert(index == VOTE_ITEMS_COUNT);
+    }
+
+    // Debug helper function
+    function getDebugParams() external view returns (
+        address agent,
+        address lido_locator,
+        address validators_exit_bus_oracle,
+        address withdrawal_vault,
+        bytes32 node_operators_registry_app_id
+    ) {
+        return (
+            params.agent,
+            params.lido_locator,
+            params.validators_exit_bus_oracle,
+            params.withdrawal_vault,
+            params.node_operators_registry_app_id
+        );
     }
 }
