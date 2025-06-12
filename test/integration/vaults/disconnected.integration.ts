@@ -155,7 +155,6 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       ]);
 
       const ownerRoleAsAddress = ethers.zeroPadValue(await owner.getAddress(), 32);
-      const operatorRoleAsAddress = ethers.zeroPadValue(await nodeOperator.getAddress(), 32);
       let confirmTimestamp = await getNextBlockTimestamp();
       let expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
       const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
@@ -170,8 +169,9 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
       confirmTimestamp = await getNextBlockTimestamp();
       expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
-      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n))
-        .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
+      await expect(
+        operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n),
+      ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
     });
 
     describe("Funding", () => {
