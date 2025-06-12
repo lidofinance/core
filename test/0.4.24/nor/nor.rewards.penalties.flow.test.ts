@@ -3,15 +3,12 @@ import { encodeBytes32String } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ACL, Kernel, Lido, LidoLocator, NodeOperatorsRegistry__Harness } from "typechain-types";
 
 import {
   addNodeOperator,
-  advanceChainTime,
   certainAddress,
-  ether,
   NodeOperatorConfig,
   prepIdsCountsPayload,
   RewardDistributionState,
@@ -81,7 +78,7 @@ describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
   ];
 
   const moduleType = encodeBytes32String("curated-onchain-v1");
-  const penaltyDelay = 86400n;
+  const exitDeadlineThreshold = 86400n;
   const contractVersion = 2n;
 
   before(async () => {
@@ -131,7 +128,7 @@ describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
     locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), user);
 
     // Initialize the nor's proxy.
-    await expect(nor.initialize(locator, moduleType, penaltyDelay))
+    await expect(nor.initialize(locator, moduleType, exitDeadlineThreshold))
       .to.emit(nor, "ContractVersionSet")
       .withArgs(contractVersion)
       .and.to.emit(nor, "LocatorContractSet")
@@ -161,139 +158,6 @@ describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
     });
   });
 
-  context("updateStuckValidatorsCount", () => {
-    beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
-        firstNodeOperatorId,
-      );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
-        secondNodeOperatorId,
-      );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
-        thirdNodeOperatorId,
-      );
-
-      await nor.connect(nodeOperatorsManager).setStuckPenaltyDelay(86400n);
-    });
-
-    it("Reverts if has no STAKING_ROUTER_ROLE assigned", async () => {
-      const idsPayload = prepIdsCountsPayload([], []);
-      await expect(nor.updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts)).to.be.revertedWith(
-        "APP_AUTH_FAILED",
-      );
-    });
-
-    it("Reverts with INVALID_REPORT_DATA if report data is malformed", async () => {
-      const idsPayload = prepIdsCountsPayload([1n], [1n]);
-
-      const malformedKeys = idsPayload.keysCounts + "00";
-      await expect(
-        nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, malformedKeys),
-      ).to.be.revertedWith("INVALID_REPORT_DATA");
-    });
-
-    it("Allows calling with zero length data", async () => {
-      const nonce = await nor.getNonce();
-      const idsPayload = prepIdsCountsPayload([], []);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.not.emit(nor, "StuckPenaltyStateChanged");
-    });
-
-    it("Allows updating a single NO", async () => {
-      const nonce = await nor.getNonce();
-      const idsPayload = prepIdsCountsPayload([BigInt(firstNodeOperatorId)], [2n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 2n, 0n, 0n);
-    });
-
-    it("Allows updating a group of NOs", async () => {
-      const nonce = await nor.getNonce();
-      const idsPayload = prepIdsCountsPayload([BigInt(firstNodeOperatorId), BigInt(secondNodeOperatorId)], [2n, 3n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 2n, 0n, 0n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(secondNodeOperatorId, 3n, 0n, 0n);
-    });
-
-    it("Does nothing if stuck keys haven't changed", async () => {
-      const nonce = await nor.getNonce();
-      const idsPayload = prepIdsCountsPayload([BigInt(firstNodeOperatorId)], [2n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 2n, 0n, 0n);
-
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 2n)
-        .to.not.emit(nor, "StuckPenaltyStateChanged");
-    });
-
-    it("Allows setting stuck count to zero after all", async () => {
-      const nonce = await nor.getNonce();
-      const idsPayload = prepIdsCountsPayload([BigInt(firstNodeOperatorId)], [2n]);
-
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 2n, 0n, 0n);
-
-      const idsPayloadZero = prepIdsCountsPayload([BigInt(firstNodeOperatorId)], [0n]);
-
-      const timestamp = BigInt(await time.latest());
-      await expect(
-        nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayloadZero.operatorIds, idsPayloadZero.keysCounts),
-      )
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 0n, 0n, timestamp + 86400n + 1n);
-    });
-
-    it("Penalizes node operators with stuck penalty active", async () => {
-      await lido.connect(user).resume();
-      await user.sendTransaction({ to: await lido.getAddress(), value: ether("1.0") });
-      await lido.connect(user).transfer(await nor.getAddress(), await lido.balanceOf(user));
-
-      const nonce = await nor.getNonce();
-      const idsPayload = prepIdsCountsPayload([1n], [2n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(1n, 2n, 0n, 0n);
-
-      await nor.harness__setRewardDistributionState(RewardDistributionState.ReadyForDistribution);
-      await expect(nor.connect(stakingRouter).distributeReward()).to.emit(nor, "NodeOperatorPenalized");
-    });
-  });
-
   context("updateExitedValidatorsCount", () => {
     beforeEach(async () => {
       expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
@@ -305,8 +169,6 @@ describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
       expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
         thirdNodeOperatorId,
       );
-
-      await nor.connect(nodeOperatorsManager).setStuckPenaltyDelay(86400n);
     });
 
     it("Reverts if has no STAKING_ROUTER_ROLE assigned", async () => {
@@ -404,78 +266,6 @@ describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
     });
   });
 
-  context("updateRefundedValidatorsCount", () => {
-    beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
-        firstNodeOperatorId,
-      );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
-        secondNodeOperatorId,
-      );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[thirdNodeOperatorId])).to.equal(
-        thirdNodeOperatorId,
-      );
-
-      await nor.connect(nodeOperatorsManager).setStuckPenaltyDelay(86400n);
-    });
-
-    it("Revers if no such an operator exists", async () => {
-      await expect(nor.updateRefundedValidatorsCount(4n, 0n)).to.be.revertedWith("OUT_OF_RANGE");
-    });
-
-    it("Reverts if has no STAKING_ROUTER_ROLE assigned", async () => {
-      await expect(nor.updateRefundedValidatorsCount(firstNodeOperatorId, 0n)).to.be.revertedWith("APP_AUTH_FAILED");
-    });
-
-    it("Allows updating a single NO", async () => {
-      const nonce = await nor.getNonce();
-      await expect(nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 1n))
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 0n, 1n, 0n)
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n);
-    });
-
-    it("Does nothing if refunded keys haven't changed", async () => {
-      const nonce = await nor.getNonce();
-      await expect(nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 1n))
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 0n, 1n, 0n)
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n);
-
-      await expect(nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 1n))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 2n)
-        .to.not.emit(nor, "StuckPenaltyStateChanged");
-    });
-
-    it("Allows setting refunded count to zero after all", async () => {
-      const nonce = await nor.getNonce();
-      await expect(nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 1n))
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 0n, 1n, 0n)
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n);
-
-      await expect(nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 0n))
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 0n, 0n, 0n)
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 2n);
-    });
-  });
-
   context("onExitedAndStuckValidatorsCountsUpdated", () => {
     beforeEach(async () => {
       expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
@@ -501,264 +291,6 @@ describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
       await expect(nor.connect(stakingRouter).onExitedAndStuckValidatorsCountsUpdated())
         .to.emit(nor, "RewardDistributionStateChanged")
         .withArgs(RewardDistributionState.ReadyForDistribution);
-    });
-  });
-
-  context("isOperatorPenalized", () => {
-    beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
-        firstNodeOperatorId,
-      );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
-        secondNodeOperatorId,
-      );
-    });
-
-    it("Returns false if no such an operator exists", async () => {
-      await expect(await nor.isOperatorPenalized(10n)).to.be.false;
-    });
-
-    it("Returns false for non-penalized operator", async () => {
-      expect(await nor.isOperatorPenalized(firstNodeOperatorId)).to.be.false;
-      expect(await nor.isOperatorPenalized(secondNodeOperatorId)).to.be.false;
-    });
-
-    it("Returns true if stuck > refunded", async () => {
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 1n);
-
-      const nonce = await nor.getNonce();
-      let idsPayload = prepIdsCountsPayload([BigInt(firstNodeOperatorId)], [2n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 2n, 1n, 0n);
-
-      idsPayload = prepIdsCountsPayload([BigInt(secondNodeOperatorId)], [2n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(secondNodeOperatorId, 2n, 0n, 0n);
-
-      expect(await nor.isOperatorPenalized(firstNodeOperatorId)).to.be.true;
-      expect(await nor.isOperatorPenalized(secondNodeOperatorId)).to.be.true;
-    });
-
-    it("Returns true if penalty hasn't ended yet", async () => {
-      const nonce = await nor.getNonce();
-      let idsPayload = prepIdsCountsPayload([BigInt(firstNodeOperatorId)], [2n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 2n, 0n, 0n);
-
-      idsPayload = prepIdsCountsPayload([BigInt(secondNodeOperatorId)], [3n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(secondNodeOperatorId, 3n, 0n, 0n);
-
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 2n);
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(secondNodeOperatorId, 3n);
-
-      expect(await nor.isOperatorPenalized(firstNodeOperatorId)).to.be.true;
-      expect(await nor.isOperatorPenalized(secondNodeOperatorId)).to.be.true;
-    });
-  });
-
-  context("isOperatorPenaltyCleared", () => {
-    beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
-        firstNodeOperatorId,
-      );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
-        secondNodeOperatorId,
-      );
-    });
-
-    it("Returns true if no such an operator exists", async () => {
-      await expect(await nor.isOperatorPenaltyCleared(10n)).to.be.true;
-    });
-
-    it("Returns true for non-penalized operator", async () => {
-      expect(await nor.isOperatorPenaltyCleared(firstNodeOperatorId)).to.be.true;
-      expect(await nor.isOperatorPenaltyCleared(secondNodeOperatorId)).to.be.true;
-    });
-
-    it("Returns false if stuck > refunded", async () => {
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 1n);
-
-      const nonce = await nor.getNonce();
-      let idsPayload = prepIdsCountsPayload([BigInt(firstNodeOperatorId)], [2n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 2n, 1n, 0n);
-
-      idsPayload = prepIdsCountsPayload([BigInt(secondNodeOperatorId)], [2n]);
-
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(secondNodeOperatorId, 2n, 0n, 0n);
-
-      expect(await nor.isOperatorPenaltyCleared(firstNodeOperatorId)).to.be.false;
-      expect(await nor.isOperatorPenaltyCleared(secondNodeOperatorId)).to.be.false;
-    });
-
-    it("Returns true if penalty hasn't ended yet", async () => {
-      const nonce = await nor.getNonce();
-      let idsPayload = prepIdsCountsPayload([BigInt(firstNodeOperatorId)], [2n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 2n, 0n, 0n);
-
-      idsPayload = prepIdsCountsPayload([BigInt(secondNodeOperatorId)], [3n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(secondNodeOperatorId, 3n, 0n, 0n);
-
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 2n);
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(secondNodeOperatorId, 3n);
-
-      expect(await nor.isOperatorPenaltyCleared(firstNodeOperatorId)).to.be.false;
-      expect(await nor.isOperatorPenaltyCleared(secondNodeOperatorId)).to.be.false;
-
-      await advanceChainTime((await nor.getStuckPenaltyDelay()) + 1n);
-
-      await nor.clearNodeOperatorPenalty(firstNodeOperatorId);
-
-      expect(await nor.isOperatorPenaltyCleared(firstNodeOperatorId)).to.be.true;
-      expect(await nor.isOperatorPenaltyCleared(secondNodeOperatorId)).to.be.false;
-
-      await nor.clearNodeOperatorPenalty(secondNodeOperatorId);
-
-      expect(await nor.isOperatorPenaltyCleared(firstNodeOperatorId)).to.be.true;
-      expect(await nor.isOperatorPenaltyCleared(secondNodeOperatorId)).to.be.true;
-    });
-  });
-
-  context("clearNodeOperatorPenalty", () => {
-    beforeEach(async () => {
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[firstNodeOperatorId])).to.equal(
-        firstNodeOperatorId,
-      );
-      expect(await addNodeOperator(nor, nodeOperatorsManager, NODE_OPERATORS[secondNodeOperatorId])).to.equal(
-        secondNodeOperatorId,
-      );
-    });
-
-    it("Reverts if no such an operator exists", async () => {
-      await expect(nor.clearNodeOperatorPenalty(10n)).to.be.revertedWith("CANT_CLEAR_PENALTY");
-    });
-
-    it("Reverts if hasn't been penalized yet", async () => {
-      await expect(nor.clearNodeOperatorPenalty(firstNodeOperatorId)).to.be.revertedWith("CANT_CLEAR_PENALTY");
-      await expect(nor.clearNodeOperatorPenalty(secondNodeOperatorId)).to.be.revertedWith("CANT_CLEAR_PENALTY");
-    });
-
-    it("Reverts if the penalty delay hasn't passed yet", async () => {
-      const nonce = await nor.getNonce();
-      let idsPayload = prepIdsCountsPayload([BigInt(firstNodeOperatorId)], [1n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 1n, 0n, 0n);
-
-      idsPayload = prepIdsCountsPayload([BigInt(secondNodeOperatorId)], [2n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(secondNodeOperatorId, 2n, 0n, 0n);
-
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 1n);
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(secondNodeOperatorId, 2n);
-
-      await expect(nor.clearNodeOperatorPenalty(firstNodeOperatorId)).to.be.revertedWith("CANT_CLEAR_PENALTY");
-      await expect(nor.clearNodeOperatorPenalty(secondNodeOperatorId)).to.be.revertedWith("CANT_CLEAR_PENALTY");
-    });
-
-    it("Clear the penalized state", async () => {
-      const nonce = await nor.getNonce();
-      let idsPayload = prepIdsCountsPayload([BigInt(firstNodeOperatorId)], [3n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 3n, 0n, 0n);
-
-      idsPayload = prepIdsCountsPayload([BigInt(secondNodeOperatorId)], [4n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 2n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(secondNodeOperatorId, 4n, 0n, 0n);
-
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(firstNodeOperatorId, 5n);
-      await nor.connect(stakingRouter).updateRefundedValidatorsCount(secondNodeOperatorId, 5n);
-
-      await advanceChainTime((await nor.getStuckPenaltyDelay()) + 1n);
-
-      expect(await nor.isOperatorPenalized(firstNodeOperatorId)).to.be.false;
-      expect(await nor.isOperatorPenalized(secondNodeOperatorId)).to.be.false;
-      expect(await nor.isOperatorPenaltyCleared(firstNodeOperatorId)).to.be.false;
-      expect(await nor.isOperatorPenaltyCleared(secondNodeOperatorId)).to.be.false;
-
-      await expect(await nor.clearNodeOperatorPenalty(firstNodeOperatorId))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 5n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 5n)
-        .to.emit(nor, "NodeOperatorPenaltyCleared")
-        .withArgs(firstNodeOperatorId);
-
-      await expect(await nor.clearNodeOperatorPenalty(secondNodeOperatorId))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 6n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 6n)
-        .to.emit(nor, "NodeOperatorPenaltyCleared")
-        .withArgs(secondNodeOperatorId);
-
-      expect(await nor.isOperatorPenalized(firstNodeOperatorId)).to.be.false;
-      expect(await nor.isOperatorPenalized(secondNodeOperatorId)).to.be.false;
-      expect(await nor.isOperatorPenaltyCleared(firstNodeOperatorId)).to.be.true;
-      expect(await nor.isOperatorPenaltyCleared(secondNodeOperatorId)).to.be.true;
     });
   });
 
@@ -814,16 +346,6 @@ describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
         thirdNodeOperatorId,
       );
 
-      const nonce = await nor.getNonce();
-      const idsPayload = prepIdsCountsPayload([BigInt(firstNodeOperatorId)], [2n]);
-      await expect(nor.connect(stakingRouter).updateStuckValidatorsCount(idsPayload.operatorIds, idsPayload.keysCounts))
-        .to.emit(nor, "KeysOpIndexSet")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "NonceChanged")
-        .withArgs(nonce + 1n)
-        .to.emit(nor, "StuckPenaltyStateChanged")
-        .withArgs(firstNodeOperatorId, 2n, 0n, 0n);
-
       const [recipients, shares, penalized] = await nor.getRewardsDistribution(100n);
 
       expect(recipients.length).to.be.equal(2n);
@@ -840,11 +362,9 @@ describe("NodeOperatorsRegistry.sol:rewards-penalties", () => {
 
       expect(recipients[0]).to.be.equal(NODE_OPERATORS[firstNodeOperatorId].rewardAddress);
       expect(shares[0]).to.be.equal((100n * firstNOActiveKeys) / totalActiveKeys);
-      expect(penalized[0]).to.be.equal(true);
 
       expect(recipients[1]).to.be.equal(NODE_OPERATORS[secondNodeOperatorId].rewardAddress);
       expect(shares[1]).to.be.equal((100n * secondNOActiveKeys) / totalActiveKeys);
-      expect(penalized[1]).to.be.equal(false);
     });
   });
 });

@@ -28,7 +28,7 @@ export function generateWithdrawalRequestPayload(numberOfRequests: number) {
   }
 
   return {
-    pubkeysHexString: `0x${pubkeys.join("")}`,
+    pubkeysHexArray: pubkeys.map((pk) => `0x${pk}`),
     pubkeys,
     fullWithdrawalAmounts,
     partialWithdrawalAmounts,

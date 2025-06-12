@@ -683,13 +683,15 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
 
       // int256(_totalValue) + curInOutDelta - _inOutDelta < 0
-      await expect(reportVaultDataWithProof(ctx, stakingVault, 0n))
-        .to.be.revertedWithCustomError(lazyOracle, "UnderflowInTotalValueCalculation");
+      await expect(reportVaultDataWithProof(ctx, stakingVault, 0n)).to.be.revertedWithCustomError(
+        lazyOracle,
+        "UnderflowInTotalValueCalculation",
+      );
     });
 
     it("InOutDelta cache in fund", async () => {
       const value = ether("1.234");
-      
+
       await advanceChainTime(days(2n));
 
       // first deposit in frame
@@ -754,7 +756,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     });
 
     it("Can't mint until goes healthy", async () => {
-
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.be.revertedWithCustomError(vaultHub, "InsufficientTotalValueToMint")
         .withArgs(await stakingVault.getAddress(), ether("1") + TEST_STETH_AMOUNT_WEI); // inOutDelta diff + testSharesAmountWei is from the report

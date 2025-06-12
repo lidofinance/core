@@ -20,15 +20,7 @@ import {
   VaultHub__MockPermissions,
 } from "typechain-types";
 
-import {
-  certainAddress,
-  days,
-  deployEIP7002WithdrawalRequestContract,
-  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
-  ether,
-  findEvents,
-  getRandomSigners,
-} from "lib";
+import { certainAddress, days, deployEIP7002WithdrawalRequestContract, ether, findEvents, getRandomSigners } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -108,7 +100,8 @@ describe("Permissions", () => {
       stranger,
     ] = await getRandomSigners(30);
 
-    await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
+    // TODO
+    await deployEIP7002WithdrawalRequestContract();
 
     pdg = await ethers.deployContract("PredepositGuarantee__MockPermissions");
 
@@ -744,7 +737,7 @@ describe("Permissions", () => {
         permissions
           .connect(validatorWithdrawalTriggerer)
           .triggerValidatorWithdrawals(pubkeys, [withdrawalAmount], stranger, {
-            value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+            value: 0n,
           }),
       )
         .to.emit(vaultHub, "Mock__ValidatorWithdrawalsTriggered")

@@ -114,6 +114,7 @@ contract V3Template is V3Addresses {
     /// @param _params Params required to initialize the addresses contract
     constructor(V3AddressesParams memory _params) V3Addresses(_params) {
         contractsWithBurnerAllowances.push(WITHDRAWAL_QUEUE);
+        // TODO: upon TW upgrade NOR has no allowance
         contractsWithBurnerAllowances.push(NODE_OPERATORS_REGISTRY);
         contractsWithBurnerAllowances.push(SIMPLE_DVT);
         contractsWithBurnerAllowances.push(CSM_ACCOUNTING);
@@ -159,6 +160,7 @@ contract V3Template is V3Addresses {
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), OLD_LOCATOR_IMPL);
         _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), OLD_ACCOUNTING_ORACLE_IMPL);
         _assertAragonAppImplementation(IAragonAppRepo(ARAGON_APP_LIDO_REPO), OLD_LIDO_IMPL);
+        // TODO: check burner allowance for NOR is zero
 
         // Check allowances of the old burner
         address[] memory contractsWithBurnerAllowances_ = contractsWithBurnerAllowances;

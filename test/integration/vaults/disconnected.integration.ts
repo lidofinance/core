@@ -92,7 +92,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       const { operatorGrid } = ctx.contracts;
       const agentSigner = await ctx.getSigner("agent");
 
-      await dashboard.abandonDashboard(dashboard)
+      await dashboard.abandonDashboard(dashboard);
 
       await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, 1000);
       await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [

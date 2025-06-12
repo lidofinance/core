@@ -34,7 +34,10 @@ contract StakingVault__MockForPDG {
     }
 
     function withdrawalCredentials() public view returns (bytes32) {
-        return withdrawalCredentials_ == bytes32(0) ? bytes32(WC_0X02_PREFIX | uint160(address(this))) : withdrawalCredentials_;
+        return
+            withdrawalCredentials_ == bytes32(0)
+                ? bytes32(WC_0X02_PREFIX | uint160(address(this)))
+                : withdrawalCredentials_;
     }
 
     function nodeOperator() external view returns (address) {

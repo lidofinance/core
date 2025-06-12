@@ -10,7 +10,7 @@ import {
   OssifiableProxy,
   PredepositGuarantee,
   SSZMerkleTree,
-  StakingVault__MockForPDG
+  StakingVault__MockForPDG,
 } from "typechain-types";
 import { IPredepositGuarantee } from "typechain-types/contracts/0.8.25/vaults/interfaces/IPredepositGuarantee";
 
@@ -956,7 +956,9 @@ describe("PredepositGuarantee.sol", () => {
         await pdg.connect(vaultOperator).setNodeOperatorDepositor(stranger);
         const validator = generateValidator();
         const deposit = generatePostDeposit(validator.container);
-        await expect(pdg.connect(vaultOperator).depositToBeaconChain(stakingVault, [deposit])).to.be.revertedWithCustomError(pdg, "NotDepositor");
+        await expect(
+          pdg.connect(vaultOperator).depositToBeaconChain(stakingVault, [deposit]),
+        ).to.be.revertedWithCustomError(pdg, "NotDepositor");
       });
 
       it("reverts to deposit someone else validators", async () => {
@@ -1415,7 +1417,9 @@ describe("PredepositGuarantee.sol", () => {
 
     it("returns the depositor if set", async () => {
       const depositor = certainAddress("depositor");
-      await expect(pdg.setNodeOperatorDepositor(depositor)).to.emit(pdg, "DepositorSet").withArgs(vaultOperator, depositor, vaultOperator);
+      await expect(pdg.setNodeOperatorDepositor(depositor))
+        .to.emit(pdg, "DepositorSet")
+        .withArgs(vaultOperator, depositor, vaultOperator);
       expect(await pdg.nodeOperatorDepositor(vaultOperator)).to.equal(depositor);
     });
 

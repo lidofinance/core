@@ -24,7 +24,7 @@ contract StakingRouter__Harness is StakingRouter {
     }
 
     function testing_setStakingModuleStatus(uint256 _stakingModuleId, StakingModuleStatus _status) external {
-        StakingModule storage stakingModule = _getStakingModuleById(_stakingModuleId);
+        StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
         _setStakingModuleStatus(stakingModule, _status);
     }
 }

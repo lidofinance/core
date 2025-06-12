@@ -25,7 +25,7 @@ Assertion.addMethod("revertedWithOZAccessControlError", async function (address:
   try {
     await ctx;
   } catch (error) {
-    const msg = (error as Error).message.toUpperCase();
+    const msg = (error as Error).message.toUpperCase().replace(/^error:\s*/i, "");
     const reason = `AccessControl: account ${address} is missing role ${role}`;
 
     expect(msg).to.equal(

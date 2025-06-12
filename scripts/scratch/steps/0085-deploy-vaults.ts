@@ -96,12 +96,17 @@ export async function main() {
   // Deploy LazyOracle
   const lazyOracle_ = await deployBehindOssifiableProxy(Sk.lazyOracle, "LazyOracle", proxyContractsOwner, deployer, [
     locatorAddress,
-    hashConsensusAddress
+    hashConsensusAddress,
   ]);
 
   const lazyOracleAdmin = deployer;
   const lazyOracle = await loadContract("LazyOracle", lazyOracle_.address);
-  await makeTx(lazyOracle, "initialize", [lazyOracleAdmin, lazyOracleParams.quarantinePeriod, lazyOracleParams.maxRewardRatioBP], { from: deployer });
+  await makeTx(
+    lazyOracle,
+    "initialize",
+    [lazyOracleAdmin, lazyOracleParams.quarantinePeriod, lazyOracleParams.maxRewardRatioBP],
+    { from: deployer },
+  );
 
   // Deploy Dashboard implementation contract
   const dashboard = await deployWithoutProxy(Sk.dashboardImpl, "Dashboard", deployer, [

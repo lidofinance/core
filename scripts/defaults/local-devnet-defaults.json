@@ -81,7 +81,7 @@
   },
   "lazyOracle": {
     "deployParameters": {
-      "quarantinePeriod": 259200, 
+      "quarantinePeriod": 259200,
       "maxRewardRatioBP": 350
     }
   },
@@ -142,14 +142,16 @@
     "deployParameters": {
       "stakingModuleName": "Curated",
       "stakingModuleTypeId": "curated-onchain-v1",
-      "stuckPenaltyDelay": 172800
+      "exitDeadlineThresholdInSeconds": 86400,
+      "exitsReportingWindow": 86400
     }
   },
   "simpleDvt": {
     "deployParameters": {
       "stakingModuleName": "SimpleDVT",
       "stakingModuleTypeId": "curated-onchain-v1",
-      "stuckPenaltyDelay": 432000
+      "exitDeadlineThresholdInSeconds": 86400,
+      "exitsReportingWindow": 86400
     }
   },
   "withdrawalQueueERC721": {

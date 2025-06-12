@@ -126,7 +126,7 @@ describe("StakingRouter.sol:module-sync", () => {
     const nodeOperatorSummary: Parameters<StakingModule__MockForStakingRouter["mock__getNodeOperatorSummary"]> = [
       1, // targetLimitMode
       100n, // targetValidatorsCount
-      1n, // stuckValidatorsCount
+      0n, // stuckValidatorsCount
       5n, // refundedValidatorsCount
       0n, // stuckPenaltyEndTimestamp
       50, // totalExitedValidators
@@ -344,7 +344,7 @@ describe("StakingRouter.sol:module-sync", () => {
 
   context("updateTargetValidatorsLimits", () => {
     const NODE_OPERATOR_ID = 0n;
-    const TARGET_LIMIT_MODE = 1; // 1 - soft, i.e. on WQ request; 2 - forced
+    const TARGET_LIMIT_MODE = 1; // 1 - soft, i.e. on WQ request; 2 - boosted
     const TARGET_LIMIT = 100n;
 
     it("Reverts if the caller does not have the role", async () => {
@@ -651,10 +651,8 @@ describe("StakingRouter.sol:module-sync", () => {
     const correction: StakingRouter.ValidatorsCountsCorrectionStruct = {
       currentModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,
       currentNodeOperatorExitedValidatorsCount: operatorSummary.totalExitedValidators,
-      currentNodeOperatorStuckValidatorsCount: operatorSummary.stuckValidatorsCount,
       newModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,
       newNodeOperatorExitedValidatorsCount: operatorSummary.totalExitedValidators + 1n,
-      newNodeOperatorStuckValidatorsCount: operatorSummary.stuckValidatorsCount + 1n,
     };
 
     beforeEach(async () => {
@@ -694,11 +692,7 @@ describe("StakingRouter.sol:module-sync", () => {
         }),
       )
         .to.be.revertedWithCustomError(stakingRouter, "UnexpectedCurrentValidatorsCount")
-        .withArgs(
-          correction.currentModuleExitedValidatorsCount,
-          correction.currentNodeOperatorExitedValidatorsCount,
-          correction.currentNodeOperatorStuckValidatorsCount,
-        );
+        .withArgs(correction.currentModuleExitedValidatorsCount, correction.currentNodeOperatorExitedValidatorsCount);
     });
 
     it("Reverts if the number of exited validators of the operator does not match what is stored on the contract", async () => {
@@ -709,26 +703,7 @@ describe("StakingRouter.sol:module-sync", () => {
         }),
       )
         .to.be.revertedWithCustomError(stakingRouter, "UnexpectedCurrentValidatorsCount")
-        .withArgs(
-          correction.currentModuleExitedValidatorsCount,
-          correction.currentNodeOperatorExitedValidatorsCount,
-          correction.currentNodeOperatorStuckValidatorsCount,
-        );
-    });
-
-    it("Reverts if the number of stuck validators of the operator does not match what is stored on the contract", async () => {
-      await expect(
-        stakingRouter.unsafeSetExitedValidatorsCount(moduleId, nodeOperatorId, true, {
-          ...correction,
-          currentNodeOperatorStuckValidatorsCount: 1n,
-        }),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "UnexpectedCurrentValidatorsCount")
-        .withArgs(
-          correction.currentModuleExitedValidatorsCount,
-          correction.currentNodeOperatorExitedValidatorsCount,
-          correction.currentNodeOperatorStuckValidatorsCount,
-        );
+        .withArgs(correction.currentModuleExitedValidatorsCount, correction.currentNodeOperatorExitedValidatorsCount);
     });
 
     it("Reverts if the total exited validators exceed the module's deposited validators", async () => {
@@ -760,11 +735,7 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Update unsafely the number of exited validators on the staking module with finalization hook triggering", async () => {
       await expect(stakingRouter.unsafeSetExitedValidatorsCount(moduleId, nodeOperatorId, true, correction))
         .to.be.emit(stakingModule, "Mock__ValidatorsCountUnsafelyUpdated")
-        .withArgs(
-          moduleId,
-          correction.newNodeOperatorExitedValidatorsCount,
-          correction.newNodeOperatorStuckValidatorsCount,
-        )
+        .withArgs(moduleId, correction.newNodeOperatorExitedValidatorsCount)
         .and.to.emit(stakingModule, "Mock__onExitedAndStuckValidatorsCountsUpdated");
     });
 
@@ -774,93 +745,6 @@ describe("StakingRouter.sol:module-sync", () => {
       await expect(
         stakingRouter.unsafeSetExitedValidatorsCount(moduleId, nodeOperatorId, triggerHook, correction),
       ).not.to.emit(stakingModule, "Mock__onExitedAndStuckValidatorsCountsUpdated");
-    });
-  });
-
-  context("reportStakingModuleStuckValidatorsCountByNodeOperator", () => {
-    const NODE_OPERATOR_IDS = bigintToHex(1n, true, 8);
-    const STUCK_VALIDATOR_COUNTS = bigintToHex(100n, true, 16);
-
-    it("Reverts if the caller does not have the role", async () => {
-      await expect(
-        stakingRouter
-          .connect(user)
-          .reportStakingModuleStuckValidatorsCountByNodeOperator(moduleId, NODE_OPERATOR_IDS, STUCK_VALIDATOR_COUNTS),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE());
-    });
-
-    it("Reverts if the node operators ids are packed incorrectly", async () => {
-      const incorrectlyPackedNodeOperatorIds = bufToHex(new Uint8Array([1]), true, 7);
-
-      await expect(
-        stakingRouter.reportStakingModuleStuckValidatorsCountByNodeOperator(
-          moduleId,
-          incorrectlyPackedNodeOperatorIds,
-          STUCK_VALIDATOR_COUNTS,
-        ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
-        .withArgs(3n);
-    });
-
-    it("Reverts if the validator counts are packed incorrectly", async () => {
-      const incorrectlyPackedValidatorCounts = bufToHex(new Uint8Array([100]), true, 15);
-
-      await expect(
-        stakingRouter.reportStakingModuleStuckValidatorsCountByNodeOperator(
-          moduleId,
-          NODE_OPERATOR_IDS,
-          incorrectlyPackedValidatorCounts,
-        ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
-        .withArgs(3n);
-    });
-
-    it("Reverts if the number of node operators does not match validator counts", async () => {
-      const tooManyValidatorCounts = STUCK_VALIDATOR_COUNTS + bigintToHex(101n, false, 16);
-
-      await expect(
-        stakingRouter.reportStakingModuleStuckValidatorsCountByNodeOperator(
-          moduleId,
-          NODE_OPERATOR_IDS,
-          tooManyValidatorCounts,
-        ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
-        .withArgs(2n);
-    });
-
-    it("Reverts if the number of node operators does not match validator counts", async () => {
-      const tooManyValidatorCounts = STUCK_VALIDATOR_COUNTS + bigintToHex(101n, false, 16);
-
-      await expect(
-        stakingRouter.reportStakingModuleStuckValidatorsCountByNodeOperator(
-          moduleId,
-          NODE_OPERATOR_IDS,
-          tooManyValidatorCounts,
-        ),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
-        .withArgs(2n);
-    });
-
-    it("Reverts if the node operators ids is empty", async () => {
-      await expect(stakingRouter.reportStakingModuleStuckValidatorsCountByNodeOperator(moduleId, "0x", "0x"))
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
-        .withArgs(1n);
-    });
-
-    it("Updates stuck validators count on the module", async () => {
-      await expect(
-        stakingRouter.reportStakingModuleStuckValidatorsCountByNodeOperator(
-          moduleId,
-          NODE_OPERATOR_IDS,
-          STUCK_VALIDATOR_COUNTS,
-        ),
-      )
-        .to.emit(stakingModule, "Mock__StuckValidatorsCountUpdated")
-        .withArgs(NODE_OPERATOR_IDS, STUCK_VALIDATOR_COUNTS);
     });
   });
 

@@ -4,10 +4,10 @@ pragma solidity 0.8.25;
 
 import {Test} from "forge-std/Test.sol";
 
-import {BeaconBlockHeader, Validator} from "../../../contracts/0.8.25/lib/BeaconTypes.sol";
-import {GIndex, pack} from "../../../contracts/0.8.25/lib/GIndex.sol";
+import {BeaconBlockHeader, Validator} from "../../../contracts/common/lib/BeaconTypes.sol";
+import {GIndex, pack} from "../../../contracts/common/lib/GIndex.sol";
 import {Utilities} from "../contracts/Utilities.sol";
-import {SSZ} from "../../../contracts/0.8.25/lib/SSZ.sol";
+import {SSZ} from "../../../contracts/common/lib/SSZ.sol";
 
 // Wrap the library internal methods to make an actual call to them.
 // Supposed to be used with `expectRevert` cheatcode and to pass

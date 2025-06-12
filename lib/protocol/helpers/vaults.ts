@@ -199,12 +199,7 @@ export async function reportVaultDataWithProof(
   const totalValueArg = totalValue ?? (await vaultHub.totalValue(stakingVault));
   const liabilitySharesArg = liabilityShares ?? (await vaultHub.liabilityShares(stakingVault));
 
-  const vaultReport: VaultReportItem = [
-    await stakingVault.getAddress(),
-    totalValueArg,
-    0n,
-    liabilitySharesArg,
-  ];
+  const vaultReport: VaultReportItem = [await stakingVault.getAddress(), totalValueArg, 0n, liabilitySharesArg];
   const reportTree = createVaultsReportTree([vaultReport]);
 
   const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));

@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { AccessControlConfirmable__Harness } from "typechain-types";
 
-import { advanceChainTime, days, getNextBlockTimestamp,hours } from "lib";
+import { advanceChainTime, days, getNextBlockTimestamp, hours } from "lib";
 
 describe("AccessControlConfirmable.sol", () => {
   let harness: AccessControlConfirmable__Harness;
@@ -102,7 +102,7 @@ describe("AccessControlConfirmable.sol", () => {
       await expect(harness.connect(role1Member).setNumber(newNumber))
         .to.emit(harness, "RoleMemberConfirmed")
         .withArgs(role1Member, await harness.ROLE_1(), expiryTimestamp, msgData);
-      expect(await harness.confirmations(msgData, await harness.ROLE_1())).to.equal(expiryTimestamp);
+      expect(await harness.confirmation(msgData, await harness.ROLE_1())).to.equal(expiryTimestamp);
       // still old number
       expect(await harness.number()).to.equal(oldNumber);
 
@@ -112,7 +112,7 @@ describe("AccessControlConfirmable.sol", () => {
       await expect(harness.connect(role2Member).setNumber(newNumber))
         .to.emit(harness, "RoleMemberConfirmed")
         .withArgs(role2Member, await harness.ROLE_2(), newExpiryTimestamp, msgData);
-      expect(await harness.confirmations(msgData, await harness.ROLE_2())).to.equal(newExpiryTimestamp);
+      expect(await harness.confirmation(msgData, await harness.ROLE_2())).to.equal(newExpiryTimestamp);
       // still old number
       expect(await harness.number()).to.equal(oldNumber);
     });

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
 
 import {SSZ} from "./SSZ.sol";
-
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 /**
  * @notice Modified & stripped BLS Lib to support ETH beacon spec for validator deposit message verification.
@@ -71,6 +72,10 @@ library BLS12_381 {
     /// @dev mask to remove sign bit from Fp via bitwise AND
     bytes32 internal constant FP_NO_SIGN_MASK = 0x1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
+    /// @notice Domain for deposit message signing
+    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#domain-types
+    bytes4 internal constant DOMAIN_DEPOSIT_TYPE = 0x03000000;
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    PRECOMPILE ADDRESSES                    */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -109,6 +114,12 @@ library BLS12_381 {
 
     /// @dev provided BLS signature is invalid
     error InvalidSignature();
+
+    /// @dev provided pubkey length is not 48
+    error InvalidPubkeyLength();
+
+    /// @dev provided block header is invalid
+    error InvalidBlockHeader();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         OPERATIONS                         */
@@ -222,22 +233,26 @@ library BLS12_381 {
     }
 
     /**
-     * @notice verifies the deposit message signature using BLS12-381 pairing check
-     * @param deposit staking vault deposit to verify
-     * @param depositY Y coordinates of uncompressed pubkey and signature
-     * @param withdrawalCredentials missing part of deposit message
-     * @param depositDomain domain of the deposit message for the current chain
-     * @dev will revert with `InvalidSignature` if the signature is invalid
-     * @dev will revert with `InputHasInfinityPoints` if the input contains infinity points(zero values)
+     * @notice Verifies the deposit message signature using BLS12-381 pairing check.
+     * @param pubkey The BLS public key of the deposit.
+     * @param signature The BLS signature of the deposit message.
+     * @param amount The amount of the deposit in wei.
+     * @param depositY Y coordinates of the uncompressed pubkey and signature.
+     * @param withdrawalCredentials The withdrawal credentials associated with the deposit.
+     * @param depositDomain The domain of the deposit message for the current chain.
+     * @dev Reverts with `InvalidSignature` if the signature is invalid.
+     * @dev Reverts with `InputHasInfinityPoints` if the input contains infinity points (zero values).
      */
     function verifyDepositMessage(
-        IStakingVault.Deposit calldata deposit,
+        bytes calldata pubkey,
+        bytes calldata signature,
+        uint256 amount,
         DepositY calldata depositY,
         bytes32 withdrawalCredentials,
         bytes32 depositDomain
     ) internal view {
         // Hash the deposit message and map it to G2 point on the curve
-        G2Point memory msgG2 = hashToG2(SSZ.depositMessageSigningRoot(deposit, withdrawalCredentials, depositDomain));
+        G2Point memory msgG2 = hashToG2(depositMessageSigningRoot(pubkey, amount, withdrawalCredentials, depositDomain));
 
         // BLS Pairing check input
         // pubkeyG1 | msgG2 | NEGATED_G1_GENERATOR | signatureG2
@@ -246,7 +261,6 @@ library BLS12_381 {
         // Load pubkeyG1 directly from calldata to input array
         // pubkeyG1.X = 16byte pad | flag_mask & deposit.pubkey(0 - 16 bytes) | deposit.pubkey(16 - 48 bytes)
         // pubkeyG1.Y as is from calldata
-        bytes calldata pubkey = deposit.pubkey;
         /// @solidity memory-safe-assembly
         assembly {
             // load first 32 bytes of pubkey and apply sign mask
@@ -298,7 +312,6 @@ library BLS12_381 {
         //  - signatureG2.X_c1 = 16byte pad | deposit.signature(48 - 64 bytes) | deposit.signature(64 - 96 bytes)
         //  - signatureG2.X_c2 = 16byte pad | flag_mask & deposit.signature(0 - 16 bytes) | deposit.signature(16 - 48 bytes)
         // SignatureG2 Y as is from calldata
-        bytes calldata signature = deposit.signature;
         /// @solidity memory-safe-assembly
         assembly {
             // Load signatureG2.X_c2 skipping 16 bytes of zero padding
@@ -369,5 +382,89 @@ library BLS12_381 {
         if (!isPaired) {
             revert InvalidSignature();
         }
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                         UTILITY                            */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Extracted part from `SSZ.verifyProof` for hashing two leaves
+    /// @dev Combines 2 bytes32 in 64 bytes input for sha256 precompile
+    function sha256Pair(bytes32 left, bytes32 right) internal view returns (bytes32 result) {
+        /// @solidity memory-safe-assembly
+        assembly {
+            // Store `left` at memory position 0x00
+            mstore(0x00, left)
+            // Store `right` at memory position 0x20
+            mstore(0x20, right)
+
+            // Call SHA-256 precompile (0x02) with 64-byte input at memory 0x00
+            let success := staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)
+            if iszero(success) {
+                revert(0, 0)
+            }
+
+            // Load the resulting hash from memory
+            result := mload(0x00)
+        }
+    }
+
+    /// @notice Extracted and modified part from `SSZ.hashTreeRoot` for hashing validator pubkey from calldata
+    /// @dev Reverts if `pubkey` length is not 48
+    function pubkeyRoot(bytes calldata pubkey) internal view returns (bytes32 _pubkeyRoot) {
+        if (pubkey.length != 48) revert InvalidPubkeyLength();
+
+        /// @solidity memory-safe-assembly
+        assembly {
+            // write 32 bytes to 32-64 bytes of scratch space
+            // to ensure last 49-64 bytes of pubkey are zeroed
+            mstore(0x20, 0)
+            // Copy 48 bytes of `pubkey` to start of scratch space
+            calldatacopy(0x00, pubkey.offset, 48)
+
+            // Call the SHA-256 precompile (0x02) with the 64-byte input
+            if iszero(staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)) {
+                revert(0, 0)
+            }
+
+            // Load the resulting SHA-256 hash
+            _pubkeyRoot := mload(0x00)
+        }
+    }
+
+    /// @notice calculation of deposit domain based on fork version
+    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_domain
+    function computeDepositDomain(bytes4 genesisForkVersion) internal view returns (bytes32 depositDomain) {
+        bytes32 forkDataRoot = sha256Pair(genesisForkVersion, bytes32(0));
+        depositDomain = DOMAIN_DEPOSIT_TYPE | (forkDataRoot >> 32);
+    }
+
+    /**
+     * @notice calculates the signing root for deposit message
+     * @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
+     * @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
+     */
+    function depositMessageSigningRoot(
+        bytes calldata pubkey,
+        uint256 amount,
+        bytes32 withdrawalCredentials,
+        bytes32 depositDomain
+    ) internal view returns (bytes32 root) {
+        root = sha256Pair(
+            // merkle root of the deposit message
+            sha256Pair(
+                sha256Pair(
+                    // pubkey must be hashed to be used as leaf
+                    pubkeyRoot(pubkey),
+                    withdrawalCredentials
+                ),
+                sha256Pair(
+                    SSZ.toLittleEndian(amount / 1 gwei),
+                    // filler to make leaf count power of 2
+                    bytes32(0)
+                )
+            ),
+            depositDomain
+        );
     }
 }
