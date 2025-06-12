@@ -7,8 +7,8 @@ pragma solidity 0.8.25;
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
-import {ILido} from "../interfaces/ILido.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {ILido} from "../interfaces/ILido.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 
 import {OperatorGrid} from "./OperatorGrid.sol";
@@ -1084,7 +1084,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _record.liabilityShares = uint96(liabilityShares_ - _amountOfShares);
 
-        _decreaseRedemptions(_vault, _amountOfShares);
+        _decreaseRedemptions(_vault, _getPooledEthBySharesRoundUp(_amountOfShares));
         _operatorGrid().onBurnedShares(_vault, _amountOfShares);
     }
 
