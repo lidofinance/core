@@ -181,33 +181,25 @@ export async function setupLido(ctx: ProtocolContext) {
   await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
 }
 
-// address, totalValue, inOutDelta, treasuryFees, liabilityShares
-export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
+// address, totalValue, treasuryFees, liabilityShares
+export type VaultReportItem = [string, bigint, bigint, bigint];
 
 export function createVaultsReportTree(vaults: VaultReportItem[]) {
-  return StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256", "uint256"]);
+  return StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256"]);
 }
 
 export async function reportVaultDataWithProof(
   ctx: ProtocolContext,
   stakingVault: StakingVault,
   totalValue?: bigint,
-  inOutDelta?: bigint,
   liabilityShares?: bigint,
 ) {
   const { vaultHub, locator, lazyOracle } = ctx.contracts;
 
   const totalValueArg = totalValue ?? (await vaultHub.totalValue(stakingVault));
-  const inOutDeltaArg = inOutDelta ?? (await vaultHub.vaultRecord(stakingVault)).inOutDelta;
   const liabilitySharesArg = liabilityShares ?? (await vaultHub.liabilityShares(stakingVault));
 
-  const vaultReport: VaultReportItem = [
-    await stakingVault.getAddress(),
-    totalValueArg,
-    inOutDeltaArg,
-    0n,
-    liabilitySharesArg,
-  ];
+  const vaultReport: VaultReportItem = [await stakingVault.getAddress(), totalValueArg, 0n, liabilitySharesArg];
   const reportTree = createVaultsReportTree([vaultReport]);
 
   const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
@@ -216,7 +208,6 @@ export async function reportVaultDataWithProof(
   return await lazyOracle.updateVaultData(
     await stakingVault.getAddress(),
     totalValueArg,
-    inOutDeltaArg,
     0n,
     liabilitySharesArg,
     reportTree.getProof(0),
