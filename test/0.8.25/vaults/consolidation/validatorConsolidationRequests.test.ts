@@ -7,12 +7,15 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import {
   Dashboard__Mock,
   EIP7251MaxEffectiveBalanceRequest__Mock,
+  LidoLocator,
   ValidatorConsolidationRequests,
+  VaultHub__MockForDashboard,
 } from "typechain-types";
 
 import { ether } from "lib";
 import { deployEIP7251MaxEffectiveBalanceRequestContract, EIP7251_ADDRESS } from "lib";
 
+import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
 import { generateConsolidationRequestPayload } from "./consolidation_utils";
@@ -24,11 +27,14 @@ const KEY_LENGTH = 48;
 describe("ValidatorConsolidationRequests.sol", () => {
   let actor: HardhatEthersSigner;
   let receiver: HardhatEthersSigner;
+  let stakingVault: HardhatEthersSigner;
 
   let consolidationRequestPredeployed: EIP7251MaxEffectiveBalanceRequest__Mock;
   let validatorConsolidationRequests: ValidatorConsolidationRequests;
   let dashboard: Dashboard__Mock;
   let originalState: string;
+  let locator: LidoLocator;
+  let vaultHub: VaultHub__MockForDashboard;
 
   async function getConsolidationRequestPredeployedContractBalance(): Promise<bigint> {
     const contractAddress = await consolidationRequestPredeployed.getAddress();
@@ -36,15 +42,14 @@ describe("ValidatorConsolidationRequests.sol", () => {
   }
 
   before(async () => {
-    [actor, receiver] = await ethers.getSigners();
+    [actor, receiver, stakingVault] = await ethers.getSigners();
 
     // Set a high balance for the actor account
     await setBalance(actor.address, ether("1000000"));
 
     consolidationRequestPredeployed = await deployEIP7251MaxEffectiveBalanceRequestContract(1n);
-    validatorConsolidationRequests = await ethers.deployContract("ValidatorConsolidationRequests");
-    dashboard = await ethers.deployContract("Dashboard__Mock");
-    await dashboard.mock__setVaultConnection({
+    vaultHub = await ethers.deployContract("VaultHub__MockForDashboard", [ethers.ZeroAddress, ethers.ZeroAddress]);
+    await vaultHub.mock__setVaultConnection(stakingVault.address, {
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 1,
@@ -56,6 +61,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
       reservationFeeBP: 0,
     });
 
+    locator = await deployLidoLocator({
+      vaultHub: vaultHub,
+    });
+    validatorConsolidationRequests = await ethers.deployContract("ValidatorConsolidationRequests", [locator]);
+    dashboard = await ethers.deployContract("Dashboard__Mock");
+    await dashboard.mock__setStakingVault(stakingVault.address);
     expect(await consolidationRequestPredeployed.getAddress()).to.equal(EIP7251_ADDRESS);
   });
 
@@ -135,7 +146,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
   });
 
   it("Should revert if vault is not connected", async function () {
-    await dashboard.mock__setVaultConnection({
+    await vaultHub.mock__setVaultConnection(stakingVault.address, {
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 0,
@@ -158,7 +169,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
 
-    await dashboard.mock__setVaultConnection({
+    await vaultHub.mock__setVaultConnection(stakingVault.address, {
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 1,

@@ -309,6 +309,7 @@ export async function main() {
     Sk.validatorConsolidationRequests,
     "ValidatorConsolidationRequests",
     deployer,
+    [locatorAddress],
   );
   console.log("ValidatorConsolidationRequests address", await validatorConsolidationRequests_.getAddress());
 }

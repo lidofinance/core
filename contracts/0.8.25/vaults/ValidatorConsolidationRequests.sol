@@ -5,24 +5,9 @@
 pragma solidity 0.8.25;
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
-
-/// @title A part of Dashboard interface for increasing rewards adjustment and getting vault connection data
-interface IDashboard {
-     /**
-      * @notice Increases rewards adjustment to correct fee calculation due to non-rewards ether on CL
-      * @param _adjustmentIncrease amount to increase adjustment by
-      * @dev will revert if final adjustment is more than `MANUAL_REWARDS_ADJUSTMENT_LIMIT`
-      */
-    function increaseRewardsAdjustment(
-        uint256 _adjustmentIncrease
-    ) external;
-
-    /**
-     * @notice Returns the vault connection data for the staking vault.
-     * @return VaultConnection struct containing vault data
-     */
-    function vaultConnection() external view returns (VaultHub.VaultConnection memory);
-}
+import {Dashboard} from "contracts/0.8.25/vaults/dashboard/Dashboard.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 /**
  * @title A contract for EIP-7251: Increase the MAX_EFFECTIVE_BALANCE.
@@ -30,6 +15,9 @@ interface IDashboard {
  */
 contract ValidatorConsolidationRequests {
     address public constant CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS = 0x0000BBdDc7CE488642fb579F8B00f3a590007251;
+
+    /// @notice Lido Locator contract
+    ILidoLocator public immutable LIDO_LOCATOR;
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
     uint256 internal constant CONSOLIDATION_REQUEST_CALLDATA_LENGTH = PUBLIC_KEY_LENGTH * 2;
@@ -55,6 +43,10 @@ contract ValidatorConsolidationRequests {
         uint256 adjustmentIncrease
     );
 
+    /// @param _lidoLocator Lido Locator contract
+    constructor(address _lidoLocator) {
+        LIDO_LOCATOR = ILidoLocator(_lidoLocator);
+    }
     /**
      * @dev Send EIP-7251 consolidation requests for the specified public keys.
      *      Each request instructs a validator to consolidate its stake to the target validator.
@@ -107,7 +99,7 @@ contract ValidatorConsolidationRequests {
             revert MismatchingSourceAndTargetPubkeysCount(_sourcePubkeys.length, _targetPubkeys.length);
         }
 
-        VaultHub.VaultConnection memory vaultConnection = IDashboard(_dashboardAddress).vaultConnection();
+        VaultHub.VaultConnection memory vaultConnection = _getVaultConnection(_dashboardAddress);
         if(vaultConnection.vaultIndex == 0 || vaultConnection.pendingDisconnect == true) {
             revert VaultNotConnected();
         }
@@ -138,7 +130,7 @@ contract ValidatorConsolidationRequests {
             if (!success) revert ConsolidationFeeRefundFailed(_refundRecipient, excess);
         }
 
-        IDashboard(_dashboardAddress).increaseRewardsAdjustment(_adjustmentIncrease);
+        Dashboard(payable(_dashboardAddress)).increaseRewardsAdjustment(_adjustmentIncrease);
 
         emit ConsolidationRequestsAdded(msg.sender, _sourcePubkeys, _targetPubkeys, _refundRecipient, excess, _adjustmentIncrease);
     }
@@ -149,6 +141,12 @@ contract ValidatorConsolidationRequests {
      */
     function getConsolidationRequestFee() external view returns (uint256) {
         return _getConsolidationRequestFee();
+    }
+
+    function _getVaultConnection(address _dashboardAddress) internal view returns (VaultHub.VaultConnection memory) {
+        IStakingVault stakingVault = Dashboard(payable(_dashboardAddress)).stakingVault();
+        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        return vaultHub.vaultConnection(address(stakingVault));
     }
 
     function _getConsolidationRequestFee() internal view returns (uint256) {

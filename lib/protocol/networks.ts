@@ -73,7 +73,7 @@ const defaultEnv = {
   // vaults
   stakingVaultFactory: "STAKING_VAULT_FACTORY_ADDRESS",
   stakingVaultBeacon: "STAKING_VAULT_BEACON_ADDRESS",
-  validatorConsolidationRequests: "MAX_EFFECTIVE_BALANCE_INCREASER_ADDRESS",
+  validatorConsolidationRequests: "VALIDATOR_CONSOLIDATION_REQUESTS_ADDRESS",
 } as ProtocolNetworkItems;
 
 const getPrefixedEnv = (prefix: string, obj: ProtocolNetworkItems) =>

@@ -135,6 +135,7 @@ export async function main() {
     Sk.validatorConsolidationRequests,
     "ValidatorConsolidationRequests",
     deployer,
+    [locatorAddress],
   );
   const validatorConsolidationRequestsAddress = await validatorConsolidationRequests_.getAddress();
   console.log("ValidatorConsolidationRequests address", validatorConsolidationRequestsAddress);

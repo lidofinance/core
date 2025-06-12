@@ -3,14 +3,14 @@
 
 pragma solidity 0.8.25;
 
-import {IDashboard} from "contracts/0.8.25/vaults/ValidatorConsolidationRequests.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 
 /**
  * @notice This is a mock of the Dashboard contract.
  */
-contract Dashboard__Mock is IDashboard {
+contract Dashboard__Mock {
     VaultHub.VaultConnection public mock__vaultConnection;
+    address public mock_stakingVault;
 
     event RewardsAdjustmentIncreased(uint256 _amount);
 
@@ -24,5 +24,13 @@ contract Dashboard__Mock is IDashboard {
 
     function mock__setVaultConnection(VaultHub.VaultConnection memory _vaultConnection) external {
         mock__vaultConnection = _vaultConnection;
+    }
+
+    function mock__setStakingVault(address _stakingVault) external {
+        mock_stakingVault = _stakingVault;
+    }
+
+    function stakingVault() public view returns (address) {
+        return mock_stakingVault;
     }
 }
