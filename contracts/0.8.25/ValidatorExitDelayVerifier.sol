@@ -279,7 +279,7 @@ contract ValidatorExitDelayVerifier {
             proof: oldBlock.proof,
             root: beaconBlock.header.stateRoot,
             leaf: oldBlock.header.hashTreeRoot(),
-            gIndex: oldBlock.rootGIndex
+            gI: oldBlock.rootGIndex
         });
     }
 
@@ -314,7 +314,7 @@ contract ValidatorExitDelayVerifier {
             proof: witness.validatorProof,
             root: header.stateRoot,
             leaf: validator.hashTreeRoot(),
-            gIndex: _getValidatorGI(validatorIndex, header.slot)
+            gI: _getValidatorGI(validatorIndex, header.slot)
         });
     }
 

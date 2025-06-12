@@ -72,6 +72,10 @@ library BLS12_381 {
     /// @dev mask to remove sign bit from Fp via bitwise AND
     bytes32 internal constant FP_NO_SIGN_MASK = 0x1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
+    /// @notice Domain for deposit message signing
+    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#domain-types
+    bytes4 internal constant DOMAIN_DEPOSIT_TYPE = 0x03000000;
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    PRECOMPILE ADDRESSES                    */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -110,6 +114,12 @@ library BLS12_381 {
 
     /// @dev provided BLS signature is invalid
     error InvalidSignature();
+
+    /// @dev provided pubkey length is not 48
+    error InvalidPubkeyLength();
+
+    /// @dev provided block header is invalid
+    error InvalidBlockHeader();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         OPERATIONS                         */
@@ -220,36 +230,6 @@ library BLS12_381 {
                 revert(0x1c, 0x04)
             }
         }
-    }
-
-
-    /**
-     * @notice calculates the signing root for deposit message
-     * @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
-     * @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
-     */
-    function depositMessageSigningRoot(
-        bytes calldata depositPubkey,
-        uint256 depositAmount,
-        bytes32 withdrawalCredentials,
-        bytes32 depositDomain
-    ) internal view returns (bytes32 root) {
-        root = SSZ.sha256Pair(
-            // merkle root of the deposit message
-            SSZ.sha256Pair(
-                SSZ.sha256Pair(
-                    // pubkey must be hashed to be used as leaf
-                    SSZ.pubkeyRoot(depositPubkey),
-                    withdrawalCredentials
-                ),
-                SSZ.sha256Pair(
-                    SSZ.toLittleEndian(depositAmount / 1 gwei),
-                    // filler to make leaf count power of 2
-                    bytes32(0)
-                )
-            ),
-            depositDomain
-        );
     }
 
     /**
@@ -404,5 +384,89 @@ library BLS12_381 {
         if (!isPaired) {
             revert InvalidSignature();
         }
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                         UTILITY                            */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Extracted part from `SSZ.verifyProof` for hashing two leaves
+    /// @dev Combines 2 bytes32 in 64 bytes input for sha256 precompile
+    function sha256Pair(bytes32 left, bytes32 right) internal view returns (bytes32 result) {
+        /// @solidity memory-safe-assembly
+        assembly {
+            // Store `left` at memory position 0x00
+            mstore(0x00, left)
+            // Store `right` at memory position 0x20
+            mstore(0x20, right)
+
+            // Call SHA-256 precompile (0x02) with 64-byte input at memory 0x00
+            let success := staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)
+            if iszero(success) {
+                revert(0, 0)
+            }
+
+            // Load the resulting hash from memory
+            result := mload(0x00)
+        }
+    }
+
+    /// @notice Extracted and modified part from `SSZ.hashTreeRoot` for hashing validator pubkey from calldata
+    /// @dev Reverts if `pubkey` length is not 48
+    function pubkeyRoot(bytes calldata pubkey) internal view returns (bytes32 _pubkeyRoot) {
+        if (pubkey.length != 48) revert InvalidPubkeyLength();
+
+        /// @solidity memory-safe-assembly
+        assembly {
+            // write 32 bytes to 32-64 bytes of scratch space
+            // to ensure last 49-64 bytes of pubkey are zeroed
+            mstore(0x20, 0)
+            // Copy 48 bytes of `pubkey` to start of scratch space
+            calldatacopy(0x00, pubkey.offset, 48)
+
+            // Call the SHA-256 precompile (0x02) with the 64-byte input
+            if iszero(staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)) {
+                revert(0, 0)
+            }
+
+            // Load the resulting SHA-256 hash
+            _pubkeyRoot := mload(0x00)
+        }
+    }
+
+    /// @notice calculation of deposit domain based on fork version
+    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_domain
+    function computeDepositDomain(bytes4 genesisForkVersion) internal view returns (bytes32 depositDomain) {
+        bytes32 forkDataRoot = sha256Pair(genesisForkVersion, bytes32(0));
+        depositDomain = DOMAIN_DEPOSIT_TYPE | (forkDataRoot >> 32);
+    }
+
+    /**
+     * @notice calculates the signing root for deposit message
+     * @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
+     * @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
+     */
+    function depositMessageSigningRoot(
+        bytes calldata depositPubkey,
+        uint256 depositAmount,
+        bytes32 withdrawalCredentials,
+        bytes32 depositDomain
+    ) internal view returns (bytes32 root) {
+        root = sha256Pair(
+            // merkle root of the deposit message
+            sha256Pair(
+                sha256Pair(
+                    // pubkey must be hashed to be used as leaf
+                    pubkeyRoot(depositPubkey),
+                    withdrawalCredentials
+                ),
+                sha256Pair(
+                    SSZ.toLittleEndian(depositAmount / 1 gwei),
+                    // filler to make leaf count power of 2
+                    bytes32(0)
+                )
+            ),
+            depositDomain
+        );
     }
 }

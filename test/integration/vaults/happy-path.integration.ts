@@ -6,7 +6,7 @@ import { SecretKey } from "@chainsafe/blst";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Dashboard, SSZHelpers, StakingVault } from "typechain-types";
+import { Dashboard, SSZBLSHelpers, StakingVault } from "typechain-types";
 
 import {
   days,
@@ -254,7 +254,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const depositDomain = await predepositGuarantee.DEPOSIT_DOMAIN();
 
     const validators: {
-      container: SSZHelpers.ValidatorStruct;
+      container: SSZBLSHelpers.ValidatorStruct;
       blsPrivateKey: SecretKey;
       index: number;
       proof: string[];

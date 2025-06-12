@@ -5,6 +5,7 @@ pragma solidity 0.8.25;
 
 import {GIndex, pack, concat, fls} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
+import {BLS12_381} from "contracts/common/lib/BLS.sol";
 
 // As defined in phase0/beacon-chain.md:159
 type Slot is uint64;
@@ -24,10 +25,10 @@ function lt(Slot lhs, Slot rhs) pure returns (bool) {
 using {unwrap, lt as <, gt as >} for Slot global;
 
 /*
- Complement to in-contract SSZ library with methods usefull for testing
+ Complement to in-contract SSZ library with methods useful for testing
  original:  https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
 */
-contract SSZHelpers {
+contract SSZBLSHelpers {
     // As defined in phase0/beacon-chain.md:356
     struct Validator {
         bytes pubkey;
@@ -152,7 +153,7 @@ contract SSZHelpers {
     function getValidatorPubkeyWCParentProof(
         Validator calldata validator
     ) public view returns (bytes32[] memory proof, bytes32 root, bytes32 parentNode, GIndex parentIndex) {
-        bytes32 pubkeyRoot = SSZ.pubkeyRoot(validator.pubkey);
+        bytes32 pubkeyRoot = BLS12_381.pubkeyRoot(validator.pubkey);
 
         // Validator struct depth (8 -> 4 -> 2 -> 1)
         bytes32[8] memory ValidatorL1 = [
@@ -167,20 +168,20 @@ contract SSZHelpers {
         ];
 
         bytes32[4] memory ValidatorL2 = [
-            SSZ.sha256Pair(ValidatorL1[0], ValidatorL1[1]),
-            SSZ.sha256Pair(ValidatorL1[2], ValidatorL1[3]),
-            SSZ.sha256Pair(ValidatorL1[4], ValidatorL1[5]),
-            SSZ.sha256Pair(ValidatorL1[6], ValidatorL1[7])
+            BLS12_381.sha256Pair(ValidatorL1[0], ValidatorL1[1]),
+            BLS12_381.sha256Pair(ValidatorL1[2], ValidatorL1[3]),
+            BLS12_381.sha256Pair(ValidatorL1[4], ValidatorL1[5]),
+            BLS12_381.sha256Pair(ValidatorL1[6], ValidatorL1[7])
         ];
 
         parentNode = ValidatorL2[0];
 
         bytes32[2] memory ValidatorL3 = [
-            SSZ.sha256Pair(ValidatorL2[0], ValidatorL2[1]),
-            SSZ.sha256Pair(ValidatorL2[2], ValidatorL2[3])
+            BLS12_381.sha256Pair(ValidatorL2[0], ValidatorL2[1]),
+            BLS12_381.sha256Pair(ValidatorL2[2], ValidatorL2[3])
         ];
 
-        root = SSZ.sha256Pair(ValidatorL3[0], ValidatorL3[1]);
+        root = BLS12_381.sha256Pair(ValidatorL3[0], ValidatorL3[1]);
         // validates this hardcode against canonical implementation
         require(root == validatorHashTreeRootCalldata(validator), "root mismatch");
 
@@ -284,18 +285,18 @@ contract SSZHelpers {
         ];
 
         bytes32[4] memory BlockHeaderL2 = [
-            SSZ.sha256Pair(BlockHeaderL1[0], BlockHeaderL1[1]),
-            SSZ.sha256Pair(BlockHeaderL1[2], BlockHeaderL1[3]),
-            SSZ.sha256Pair(BlockHeaderL1[4], BlockHeaderL1[5]),
-            SSZ.sha256Pair(BlockHeaderL1[6], BlockHeaderL1[7])
+            BLS12_381.sha256Pair(BlockHeaderL1[0], BlockHeaderL1[1]),
+            BLS12_381.sha256Pair(BlockHeaderL1[2], BlockHeaderL1[3]),
+            BLS12_381.sha256Pair(BlockHeaderL1[4], BlockHeaderL1[5]),
+            BLS12_381.sha256Pair(BlockHeaderL1[6], BlockHeaderL1[7])
         ];
 
         bytes32[2] memory BlockHeaderL3 = [
-            SSZ.sha256Pair(BlockHeaderL2[0], BlockHeaderL2[1]),
-            SSZ.sha256Pair(BlockHeaderL2[2], BlockHeaderL2[3])
+            BLS12_381.sha256Pair(BlockHeaderL2[0], BlockHeaderL2[1]),
+            BLS12_381.sha256Pair(BlockHeaderL2[2], BlockHeaderL2[3])
         ];
 
-        root = SSZ.sha256Pair(BlockHeaderL3[0], BlockHeaderL3[1]);
+        root = BLS12_381.sha256Pair(BlockHeaderL3[0], BlockHeaderL3[1]);
         leaf = header.stateRoot;
 
         // validates this hardcode against canonical implementation

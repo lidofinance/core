@@ -6,11 +6,11 @@ pragma solidity 0.8.25;
 import {GIndex, pack, concat} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 
-import {SSZHelpers} from "./SSZHelpers.sol";
+import {SSZBLSHelpers} from "./SSZBLSHelpers.sol";
 
 /// Merkle tree Implementation that aligns with CL implementation
 /// NOT gas optimized, for testing proposes only
-contract SSZMerkleTree is SSZHelpers {
+contract SSZMerkleTree is SSZBLSHelpers {
     uint256 public immutable TREE_DEPTH; // Adjustable tree depth
     uint256 public leafCount = 0; // Number of leaves in the tree
     mapping(uint256 => bytes32) public nodes; // Merkle tree nodes mapping
@@ -85,7 +85,7 @@ contract SSZMerkleTree is SSZHelpers {
         }
     }
 
-    function addValidatorLeaf(SSZHelpers.Validator calldata validator) public returns (uint256) {
+    function addValidatorLeaf(SSZBLSHelpers.Validator calldata validator) public returns (uint256) {
         return addLeaf(validatorHashTreeRootCalldata(validator));
     }
 }

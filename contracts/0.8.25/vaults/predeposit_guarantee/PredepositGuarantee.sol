@@ -135,7 +135,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         GIndex _gIFirstValidatorAfterChange,
         uint64 _changeSlot
     ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {
-        DEPOSIT_DOMAIN = SSZ.computeDepositDomain(_genesisForkVersion);
+        DEPOSIT_DOMAIN = BLS12_381.computeDepositDomain(_genesisForkVersion);
         _disableInitializers();
         _pauseUntil(PAUSE_INFINITELY);
     }
