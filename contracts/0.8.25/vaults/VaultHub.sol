@@ -1187,14 +1187,12 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 totalUnsettled
     ) {
         uint256 vaultBalance = _vault.balance;
+        uint256 liability = _getPooledEthBySharesRoundUp(_record.liabilityShares);
 
-        sharesToRebalance = Math256.min(
-            LIDO.getSharesByPooledEthRoundUp(_obligations.redemptions),
-            _record.liabilityShares
-        );
+        uint256 cappedRedemptions = Math256.min(_obligations.redemptions, liability);
+        valueToRebalance = Math256.min(cappedRedemptions, vaultBalance);
+        sharesToRebalance = _getSharesByPooledEth(valueToRebalance);
 
-        uint256 adjustedRedemptions = _getPooledEthBySharesRoundUp(sharesToRebalance);
-        valueToRebalance = Math256.min(adjustedRedemptions, vaultBalance);
         uint256 remainingBalance = vaultBalance - valueToRebalance;
 
         if (_vaultConnection(_vault).pendingDisconnect) {
@@ -1212,7 +1210,7 @@ contract VaultHub is PausableUntilWithRoles {
             valueToTransferToLido = Math256.min(_obligations.unsettledLidoFees, availableForFees);
         }
 
-        unsettledRedemptions = adjustedRedemptions - valueToRebalance;
+        unsettledRedemptions = cappedRedemptions - valueToRebalance;
         unsettledLidoFees = _obligations.unsettledLidoFees - valueToTransferToLido;
         totalUnsettled = unsettledRedemptions + unsettledLidoFees;
     }
