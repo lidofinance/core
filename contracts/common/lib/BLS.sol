@@ -234,9 +234,9 @@ library BLS12_381 {
 
     /**
      * @notice Verifies the deposit message signature using BLS12-381 pairing check.
-     * @param depositPubkey The BLS public key of the deposit.
-     * @param depositSignature The BLS signature of the deposit message.
-     * @param depositAmount The amount of the deposit in wei.
+     * @param pubkey The BLS public key of the deposit.
+     * @param signature The BLS signature of the deposit message.
+     * @param amount The amount of the deposit in wei.
      * @param depositY Y coordinates of the uncompressed pubkey and signature.
      * @param withdrawalCredentials The withdrawal credentials associated with the deposit.
      * @param depositDomain The domain of the deposit message for the current chain.
@@ -244,15 +244,15 @@ library BLS12_381 {
      * @dev Reverts with `InputHasInfinityPoints` if the input contains infinity points (zero values).
      */
     function verifyDepositMessage(
-        bytes calldata depositPubkey,
-        bytes calldata depositSignature,
-        uint256 depositAmount,
+        bytes calldata pubkey,
+        bytes calldata signature,
+        uint256 amount,
         DepositY calldata depositY,
         bytes32 withdrawalCredentials,
         bytes32 depositDomain
     ) internal view {
         // Hash the deposit message and map it to G2 point on the curve
-        G2Point memory msgG2 = hashToG2(depositMessageSigningRoot(depositPubkey, depositAmount, withdrawalCredentials, depositDomain));
+        G2Point memory msgG2 = hashToG2(depositMessageSigningRoot(pubkey, amount, withdrawalCredentials, depositDomain));
 
         // BLS Pairing check input
         // pubkeyG1 | msgG2 | NEGATED_G1_GENERATOR | signatureG2
@@ -261,7 +261,6 @@ library BLS12_381 {
         // Load pubkeyG1 directly from calldata to input array
         // pubkeyG1.X = 16byte pad | flag_mask & deposit.pubkey(0 - 16 bytes) | deposit.pubkey(16 - 48 bytes)
         // pubkeyG1.Y as is from calldata
-        bytes calldata pubkey = depositPubkey;
         /// @solidity memory-safe-assembly
         assembly {
             // load first 32 bytes of pubkey and apply sign mask
@@ -313,7 +312,6 @@ library BLS12_381 {
         //  - signatureG2.X_c1 = 16byte pad | deposit.signature(48 - 64 bytes) | deposit.signature(64 - 96 bytes)
         //  - signatureG2.X_c2 = 16byte pad | flag_mask & deposit.signature(0 - 16 bytes) | deposit.signature(16 - 48 bytes)
         // SignatureG2 Y as is from calldata
-        bytes calldata signature = depositSignature;
         /// @solidity memory-safe-assembly
         assembly {
             // Load signatureG2.X_c2 skipping 16 bytes of zero padding
@@ -447,8 +445,8 @@ library BLS12_381 {
      * @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
      */
     function depositMessageSigningRoot(
-        bytes calldata depositPubkey,
-        uint256 depositAmount,
+        bytes calldata pubkey,
+        uint256 amount,
         bytes32 withdrawalCredentials,
         bytes32 depositDomain
     ) internal view returns (bytes32 root) {
@@ -457,11 +455,11 @@ library BLS12_381 {
             sha256Pair(
                 sha256Pair(
                     // pubkey must be hashed to be used as leaf
-                    pubkeyRoot(depositPubkey),
+                    pubkeyRoot(pubkey),
                     withdrawalCredentials
                 ),
                 sha256Pair(
-                    SSZ.toLittleEndian(depositAmount / 1 gwei),
+                    SSZ.toLittleEndian(amount / 1 gwei),
                     // filler to make leaf count power of 2
                     bytes32(0)
                 )
