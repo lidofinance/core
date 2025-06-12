@@ -711,7 +711,7 @@ describe("Integration: Vault obligations", () => {
 
       await expect(
         dashboard.connect(roles.minter).mintShares(roles.burner, mintableShares + 1n),
-      ).to.be.revertedWithCustomError(dashboard, "MintingCapacityExceeded");
+      ).to.be.revertedWithCustomError(dashboard, "ExceedsMintingCapacity");
 
       await expect(dashboard.connect(roles.minter).mintShares(roles.burner, mintableShares))
         .to.emit(vaultHub, "MintedSharesOnVault")
@@ -767,7 +767,7 @@ describe("Integration: Vault obligations", () => {
       expect(withdrawableValue).to.equal(0n);
 
       await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, withdrawableValue + 1n))
-        .to.be.revertedWithCustomError(dashboard, "WithdrawalExceedsWithdrawableValue")
+        .to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable")
         .withArgs(withdrawableValue + 1n, withdrawableValue);
     });
 

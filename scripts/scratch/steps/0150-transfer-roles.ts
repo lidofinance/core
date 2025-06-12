@@ -26,6 +26,7 @@ export async function main() {
     { name: "VaultHub", address: state[Sk.vaultHub].proxy.address },
     { name: "PredepositGuarantee", address: state[Sk.predepositGuarantee].proxy.address },
     { name: "OperatorGrid", address: state[Sk.operatorGrid].proxy.address },
+    { name: "LazyOracle", address: state[Sk.lazyOracle].proxy.address },
   ];
 
   for (const contract of ozAdminTransfers) {

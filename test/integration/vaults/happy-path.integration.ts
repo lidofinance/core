@@ -428,7 +428,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     await report(ctx, params);
 
-    await reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultValue, inOutDelta: VAULT_DEPOSIT });
+    await reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultValue });
 
     const mintedShares = await vaultHub.liabilityShares(stakingVaultAddress);
     expect(mintedShares).to.be.equal(0n); // it's zero because protocol fees deducted not in shares

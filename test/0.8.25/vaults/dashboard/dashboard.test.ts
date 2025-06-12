@@ -669,7 +669,7 @@ describe("Dashboard.sol", () => {
     it("reverts if the amount is greater than withdrawable ether", async () => {
       await expect(dashboard.connect(vaultOwner).withdraw(stranger, ether("2"))).to.be.revertedWithCustomError(
         dashboard,
-        "WithdrawalExceedsWithdrawableValue",
+        "ExceedsWithdrawable",
       );
     });
   });
