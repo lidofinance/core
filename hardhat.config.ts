@@ -152,6 +152,7 @@ const config: HardhatUserConfig = {
       {
         version: "0.8.25",
         settings: {
+          viaIR: true,
           optimizer: {
             enabled: true,
             runs: 200,

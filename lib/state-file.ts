@@ -89,8 +89,10 @@ export enum Sk {
   accounting = "accounting",
   vaultHub = "vaultHub",
   tokenRebaseNotifier = "tokenRebaseNotifier",
+  // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
+  TWVoteScript = "TWVoteScript",
   // Vaults
   predepositGuarantee = "predepositGuarantee",
   stakingVaultImplementation = "stakingVaultImplementation",

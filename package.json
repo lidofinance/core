@@ -17,6 +17,7 @@
     "format": "prettier . --write",
     "test": "hardhat test test/0.8.9/lib/GIndex.test.ts --parallel",
     "upgrade:deploy": "STEPS_FILE=upgrade/steps-deploy.json UPGRADE_PARAMETERS_FILE=upgrade-parameters-mainnet.json yarn hardhat --network custom run scripts/utils/migrate.ts",
+    "upgrade:mock-voting": "STEPS_FILE=upgrade/steps-mock-voting.json UPGRADE_PARAMETERS_FILE=upgrade-parameters-mainnet.json yarn hardhat --network custom run scripts/utils/migrate.ts",
     "test:forge": "forge test",
     "test:coverage": "hardhat coverage",
     "test:sequential": "hardhat test test/**/*.test.ts",
@@ -109,6 +110,7 @@
     "@aragon/os": "4.4.0",
     "@openzeppelin/contracts": "3.4.0",
     "@openzeppelin/contracts-v4.4": "npm:@openzeppelin/contracts@4.4.1",
+    "@openzeppelin/contracts-v5.2": "npm:@openzeppelin/contracts@5.2.0",
     "openzeppelin-solidity": "2.0.0"
   }
 }
