@@ -266,6 +266,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function abandonDashboard(address _newOwner) external {
         if (VAULT_HUB.isVaultConnected(address(_stakingVault()))) revert ConnectedToVaultHub();
+        if (_newOwner == address(this)) revert DashboardNotAllowed();
 
         _acceptOwnership();
         _transferOwnership(_newOwner);
@@ -695,4 +696,9 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error thrown when attempting to connect to VaultHub without confirmed tier change
      */
     error TierChangeNotConfirmed();
+
+    /**
+     * @notice Error when attempting to abandon the Dashboard contract itself.
+     */
+    error DashboardNotAllowed();
 }
