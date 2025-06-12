@@ -4,8 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat} from "contracts/0.8.25/lib/GIndex.sol";
-import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
+import {GIndex, pack, concat} from "contracts/common/lib/GIndex.sol";
+import {SSZ} from "contracts/common/lib/SSZ.sol";
 
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 

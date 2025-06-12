@@ -120,6 +120,19 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
 
   afterEach(async () => (originalState = await Snapshot.refresh(originalState)));
 
+  context("backward compatibility test", () => {
+    it("isOperatorPenalized", async () => {
+      expect(await nor.isOperatorPenalized(firstNodeOperatorId)).to.be.false;
+    });
+
+    it("isOperatorPenaltyCleared", async () => {
+      expect(await nor.isOperatorPenaltyCleared(firstNodeOperatorId)).to.be.true;
+    });
+    it("getStuckPenaltyDelay", async () => {
+      expect(await nor.getStuckPenaltyDelay()).to.be.equal(0n);
+    });
+  });
+
   context("reportValidatorExitDelay", () => {
     it("reverts when called by sender without STAKING_ROUTER_ROLE", async () => {
       expect(await acl["hasPermission(address,address,bytes32)"](stranger, nor, await nor.STAKING_ROUTER_ROLE())).to.be
@@ -333,6 +346,14 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
       )
         .to.emit(nor, "ValidatorExitStatusUpdated")
         .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, cutoff + exitDeadlineThreshold);
+
+      const result = await nor.isValidatorExitDelayPenaltyApplicable(
+        firstNodeOperatorId,
+        cutoff + exitDeadlineThreshold,
+        testPublicKey,
+        eligibleToExitInSec,
+      );
+      expect(result).to.be.false;
     });
   });
 

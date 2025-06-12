@@ -150,13 +150,43 @@ describe("NodeOperatorsRegistry.sol:auxiliary", () => {
     });
 
     it("Reverts if no such an operator exists", async () => {
-      await expect(nor.unsafeUpdateValidatorsCount(3n, 0n, 0n)).to.be.revertedWith("OUT_OF_RANGE");
+      await expect(nor.unsafeUpdateValidatorsCount(3n, 0n)).to.be.revertedWith("OUT_OF_RANGE");
     });
 
     it("Reverts if has not STAKING_ROUTER_ROLE assigned", async () => {
-      await expect(nor.connect(stranger).unsafeUpdateValidatorsCount(firstNodeOperatorId, 0n, 0n)).to.be.revertedWith(
+      await expect(nor.connect(stranger).unsafeUpdateValidatorsCount(firstNodeOperatorId, 0n)).to.be.revertedWith(
         "APP_AUTH_FAILED",
       );
+    });
+
+    it("Can change exited keys arbitrary (even decreasing exited)", async () => {
+      const nonce = await nor.getNonce();
+
+      const beforeNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
+      expect(beforeNOSummary.stuckValidatorsCount).to.equal(0n);
+      expect(beforeNOSummary.totalExitedValidators).to.equal(1n);
+
+      await expect(nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperatorId, 3n))
+        .to.emit(nor, "ExitedSigningKeysCountChanged")
+        .withArgs(firstNodeOperatorId, 3n)
+        .to.emit(nor, "KeysOpIndexSet")
+        .withArgs(nonce + 1n)
+        .to.emit(nor, "NonceChanged")
+        .withArgs(nonce + 1n);
+
+      const middleNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
+      expect(middleNOSummary.totalExitedValidators).to.equal(3n);
+
+      await expect(nor.connect(stakingRouter).unsafeUpdateValidatorsCount(firstNodeOperatorId, 1n))
+        .to.emit(nor, "ExitedSigningKeysCountChanged")
+        .withArgs(firstNodeOperatorId, 1n)
+        .to.emit(nor, "KeysOpIndexSet")
+        .withArgs(nonce + 2n)
+        .to.emit(nor, "NonceChanged")
+        .withArgs(nonce + 2n);
+
+      const lastNOSummary = await nor.getNodeOperatorSummary(firstNodeOperatorId);
+      expect(lastNOSummary.totalExitedValidators).to.equal(1n);
     });
   });
 

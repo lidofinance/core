@@ -7,7 +7,8 @@
 */
 
 // See contracts/COMPILERS.md
-pragma solidity 0.8.25;
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
 
 type GIndex is bytes32;
 

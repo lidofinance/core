@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {BLS12_381} from "contracts/0.8.25/lib/BLS.sol";
+import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 struct PrecomputedDepositMessage {

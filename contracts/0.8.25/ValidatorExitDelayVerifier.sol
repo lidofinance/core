@@ -3,9 +3,9 @@
 
 pragma solidity 0.8.25;
 
-import {BeaconBlockHeader, Validator} from "./lib/BeaconTypes.sol";
-import {GIndex} from "./lib/GIndex.sol";
-import {SSZ} from "./lib/SSZ.sol";
+import {BeaconBlockHeader, Validator} from "../common/lib/BeaconTypes.sol";
+import {GIndex} from "../common/lib/GIndex.sol";
+import {SSZ} from "../common/lib/SSZ.sol";
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {IValidatorsExitBus} from "./interfaces/IValidatorsExitBus.sol";
 import {IStakingRouter} from "./interfaces/IStakingRouter.sol";

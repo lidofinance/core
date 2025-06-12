@@ -3,8 +3,8 @@
 
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat, fls} from "contracts/0.8.25/lib/GIndex.sol";
-import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
+import {GIndex, pack, concat, fls} from "contracts/common/lib/GIndex.sol";
+import {SSZ} from "contracts/common/lib/SSZ.sol";
 
 // As defined in phase0/beacon-chain.md:159
 type Slot is uint64;

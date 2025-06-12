@@ -4,9 +4,9 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {GIndex} from "contracts/0.8.25/lib/GIndex.sol";
-import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
-import {BLS12_381} from "contracts/0.8.25/lib/BLS.sol";
+import {GIndex} from "contracts/common/lib/GIndex.sol";
+import {SSZ} from "contracts/common/lib/SSZ.sol";
+import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
 import {CLProofVerifier} from "./CLProofVerifier.sol";

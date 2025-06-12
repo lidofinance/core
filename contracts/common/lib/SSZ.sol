@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
+
 // See contracts/COMPILERS.md
-pragma solidity 0.8.25;
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
 
 import {BeaconBlockHeader, Validator} from "./BeaconTypes.sol";
 import {GIndex} from "./GIndex.sol";

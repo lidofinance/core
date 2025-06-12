@@ -79,14 +79,13 @@ export async function deployVEBO(
   const { ao, lido } = await deployMockAccountingOracle(secondsPerSlot, genesisTime);
   const triggerableWithdrawalsGateway = await deployTWG();
 
-  // TODO
   const accountingOracleAddress = await ao.getAddress();
   const accountingAddress = await locator.accounting();
 
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
     accountingOracle: accountingOracleAddress,
-    triggerableWithdrawalsGateway, //: await lido.getAddress(), // await TriggerableWithdrawalsGateway.getAddress(),
+    triggerableWithdrawalsGateway: await triggerableWithdrawalsGateway.getAddress(),
   });
 
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(
@@ -99,6 +98,7 @@ export async function deployVEBO(
   await updateLidoLocatorImplementation(locatorAddr, {
     validatorsExitBusOracle: await oracle.getAddress(),
     oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
+    triggerableWithdrawalsGateway: await triggerableWithdrawalsGateway.getAddress(),
   });
 
   await consensus.setTime(genesisTime + initialEpoch * slotsPerEpoch * secondsPerSlot);
