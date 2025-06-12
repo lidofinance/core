@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
-import { advanceChainTime, days, ether, impersonate, randomAddress } from "lib";
+import { advanceChainTime, days, ether, impersonate, randomAddress, TOTAL_BASIS_POINTS } from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -124,10 +124,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const sender = await impersonate(randomAddress(), maxStakeLimit + ether("1"));
 
       await lido.connect(sender).submit(sender, { value: maxStakeLimit });
+      const newLimit = await lido.getCurrentStakeLimit();
 
-      expect(await lido.getCurrentStakeLimit()).to.equal(0); // <-- no more limit
-
-      await dashboard.connect(roles.funder).fund({ value: ether("2") }); // try to fund to go healthy
+      await dashboard.connect(roles.funder).fund({ value: newLimit + ether("2") }); // try to fund to go healthy
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "MintedSharesOnVault")
         .withArgs(stakingVault, testSharesAmountWei, ether("1"));
@@ -250,7 +249,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, ether("2.1"))).to.be.revertedWithCustomError(
         dashboard,
-        "MintingCapacityExceeded",
+        "ExceedsMintingCapacity",
       );
 
       const etherToMint = ether("0.1");
@@ -301,7 +300,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       const smallValue = (ether("1") * maxRewardRatioBP) / 10000n; // small % of the total value
 
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + smallValue);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + smallValue });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(smallValue + ether("1")); // 1 ether is locked in the vault
@@ -310,7 +309,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     it("Should not allow huge CL/EL rewards totalValue increase without quarantine", async () => {
       const value = ether("1000");
 
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1")); // 1 ether is locked in the vault
@@ -320,7 +319,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const value = ether("1000");
 
       // start of quarantine period ----------------------------
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
       const [lastReportTimestamp, ,] = await lazyOracle.latestReportData();
 
@@ -336,7 +335,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // middle of quarantine period ---------------------------
       await advanceChainTime(quarantinePeriod / 2n);
 
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
@@ -348,7 +347,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // end of quarantine period ------------------------------
       await advanceChainTime(quarantinePeriod / 2n + 60n * 60n);
 
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1") + value);
@@ -363,7 +362,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const value = ether("1000");
 
       // start of quarantine period ----------------------------
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
       const [lastReportTimestamp, ,] = await lazyOracle.latestReportData();
 
@@ -391,7 +390,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await advanceChainTime(quarantinePeriod / 2n + 60n * 60n);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      await reportVaultDataWithProof(ctx, stakingVault, ether("2") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("2") + value });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2") + value);
@@ -406,7 +405,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const value = ether("1000");
 
       // start of quarantine period ----------------------------
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
       const [lastReportTimestamp, ,] = await lazyOracle.latestReportData();
 
@@ -427,7 +426,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
 
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2") + value);
@@ -442,7 +441,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const value = ether("1000");
 
       // start of quarantine period ----------------------------
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
       const [lastReportTimestamp, ,] = await lazyOracle.latestReportData();
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1")); // 1 ether is locked in the vault
 
@@ -464,7 +463,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await advanceChainTime(quarantinePeriod + 60n * 60n);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1.7") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1.7") + value });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7") + value);
@@ -479,7 +478,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const value = ether("1000");
 
       // start of quarantine period ----------------------------
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
       const [lastReportTimestamp, ,] = await lazyOracle.latestReportData();
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1")); // 1 ether is locked in the vault
 
@@ -498,7 +497,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await advanceChainTime(quarantinePeriod / 2n - 60n * 60n);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      await reportVaultDataWithProof(ctx, stakingVault, ether("2") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("2") + value });
 
       const [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
 
@@ -516,7 +515,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3"));
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7"));
 
-      await reportVaultDataWithProof(ctx, stakingVault, ether("2") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("2") + value });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7") + value);
@@ -531,7 +530,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const value = ether("1000");
 
       // start of quarantine period ----------------------------
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
       const [lastReportTimestamp, ,] = await lazyOracle.latestReportData();
 
@@ -550,7 +549,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const maxRewardRatioBP = await lazyOracle.maxRewardRatioBP();
       const rewardsValue = (ether("1") * maxRewardRatioBP) / 10000n;
 
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value + rewardsValue);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value + rewardsValue });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
 
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
@@ -560,7 +559,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // end of quarantine period ------------------------------
       await advanceChainTime(quarantinePeriod / 2n + 60n * 60n);
 
-      await reportVaultDataWithProof(ctx, stakingVault, ether("1") + value + rewardsValue);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value + rewardsValue });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1") + value + rewardsValue);
@@ -575,7 +574,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const value = ether("1000");
 
       // start of quarantine period ----------------------------
-      await reportVaultDataWithProof(ctx, stakingVault, value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: value });
       const [firstReportTimestamp, ,] = await lazyOracle.latestReportData();
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1")); // 1 ether is locked in the vault
 
@@ -589,7 +588,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // total value UNSAFE increase in the middle of quarantine period
       await advanceChainTime(quarantinePeriod / 2n);
 
-      await reportVaultDataWithProof(ctx, stakingVault, value * 2n);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: value * 2n });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
 
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
@@ -599,7 +598,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // end of first quarantine = start of second quarantine
       await advanceChainTime(quarantinePeriod / 2n + 60n * 60n);
 
-      await reportVaultDataWithProof(ctx, stakingVault, value * 2n);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: value * 2n });
       const [secondQuarantineTimestamp, ,] = await lazyOracle.latestReportData();
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(value);
@@ -611,7 +610,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // end of second quarantine
       await advanceChainTime(quarantinePeriod);
 
-      await reportVaultDataWithProof(ctx, stakingVault, value * 2n);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: value * 2n });
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(value * 2n);
 
@@ -625,7 +624,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const value = ether("1000");
 
       // start of quarantine period ----------------------------
-      await reportVaultDataWithProof(ctx, stakingVault, value);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: value });
       const [firstReportTimestamp, ,] = await lazyOracle.latestReportData();
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1")); // 1 ether is locked in the vault
 
@@ -642,7 +641,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const maxRewardRatioBP = await lazyOracle.maxRewardRatioBP();
       const rewardsValue = (ether("1") * maxRewardRatioBP) / 10000n;
 
-      await reportVaultDataWithProof(ctx, stakingVault, value + rewardsValue);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: value + rewardsValue });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
 
       quarantine = await lazyOracle.vaultQuarantine(stakingVault);
@@ -652,7 +651,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // end of first quarantine = start of second quarantine
       await advanceChainTime(quarantinePeriod / 2n + 60n * 60n);
 
-      await reportVaultDataWithProof(ctx, stakingVault, value * 2n);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: value * 2n });
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(value);
       const [secondQuarantineTimestamp, ,] = await lazyOracle.latestReportData();
@@ -664,7 +663,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // end of second quarantine
       await advanceChainTime(quarantinePeriod);
 
-      await reportVaultDataWithProof(ctx, stakingVault, value * 2n);
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: value * 2n });
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(value * 2n);
 
@@ -683,7 +682,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
 
       // int256(_totalValue) + curInOutDelta - _inOutDelta < 0
-      await expect(reportVaultDataWithProof(ctx, stakingVault, 0n)).to.be.revertedWithCustomError(
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: 0n })).to.be.revertedWithCustomError(
         lazyOracle,
         "UnderflowInTotalValueCalculation",
       );
@@ -746,32 +745,30 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
   // skipping for now, going to update these tests later
   describe("If vault is unhealthy", () => {
-    beforeEach(async () => {
+    it("Can't mint until goes healthy", async () => {
+      const { lido } = ctx.contracts;
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
 
       await reportVaultDataWithProof(ctx, stakingVault, { totalValue: TEST_STETH_AMOUNT_WEI }); // slashing
-
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(false);
-    });
-
-    it("Can't mint until goes healthy", async () => {
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
-        .to.be.revertedWithCustomError(vaultHub, "InsufficientTotalValueToMint")
-        .withArgs(await stakingVault.getAddress(), ether("1") + TEST_STETH_AMOUNT_WEI); // inOutDelta diff + testSharesAmountWei is from the report
+        .to.be.revertedWithCustomError(dashboard, "ExceedsMintingCapacity")
+        .withArgs(testSharesAmountWei, 0);
 
       await dashboard.connect(roles.funder).fund({ value: ether("2") });
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.equal(true);
 
-      // = (1 ether locked * 100%) / 80% = 1.25 ether
-      const reserve = ether("0.25");
-      const testAmountWithRatio = (TEST_STETH_AMOUNT_WEI * 100n) / 80n;
+      // calculate the lock increase amount
+      const liabilityShares = (await vaultHub.vaultRecord(stakingVault)).liabilityShares + testSharesAmountWei;
+      const liability = await lido.getPooledEthBySharesRoundUp(liabilityShares);
+      const reserveRatioBP = (await vaultHub.vaultConnection(stakingVault)).reserveRatioBP;
+      const lock = (liability * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - reserveRatioBP);
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, testSharesAmountWei, ether("1") + reserve + testAmountWithRatio);
+        .withArgs(stakingVault, testSharesAmountWei, lock);
     });
   });
 });

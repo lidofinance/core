@@ -253,6 +253,7 @@ async function getLocatorConfig(locatorAddress: string) {
     "wstETH",
     "predepositGuarantee",
     "vaultHub",
+    "vaultFactory",
     "lazyOracle",
     "operatorGrid",
   ]);
