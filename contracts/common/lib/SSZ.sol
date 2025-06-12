@@ -86,8 +86,6 @@ library SSZ {
         }
     }
 
-    /// @notice SSZ hash tree root of a CL validator container
-    /// @param validator Validator container struct
     function hashTreeRoot(Validator memory validator) internal view returns (bytes32 root) {
         bytes32 pubkeyRoot;
 
@@ -180,6 +178,7 @@ library SSZ {
     /// @dev Reverts if `leaf` doesn't exist in the Merkle tree with `root`, given `proof`.
     function verifyProof(bytes32[] calldata proof, bytes32 root, bytes32 leaf, GIndex gI) internal view {
         uint256 index = gI.index();
+
         /// @solidity memory-safe-assembly
         assembly {
             // Check if `proof` is empty.
