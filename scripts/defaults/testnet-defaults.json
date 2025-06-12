@@ -96,7 +96,11 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
-      "consensusVersion": 3
+      "consensusVersion": 3,
+      "maxValidatorsPerRequest": 600,
+      "maxExitRequestsLimit": 13000,
+      "exitsPerFrame": 1,
+      "frameDurationInSec": 48
     }
   },
   "depositSecurityModule": {
@@ -155,6 +159,25 @@
       "name": "Lido: stETH Withdrawal NFT",
       "symbol": "unstETH",
       "baseUri": null
+    }
+  },
+  "validatorExitDelayVerifier": {
+    "deployParameters": {
+      "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIHistoricalSummariesPrev": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "gIHistoricalSummariesCurr": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "firstSupportedSlot": 1,
+      "pivotSlot": 1,
+      "shardCommitteePeriodInSeconds": 98304,
+      "shardCommitteePeriodInSecondsComment": "98304 above is 2 ** 8 * 32 * 12"
+    }
+  },
+  "triggerableWithdrawalsGateway": {
+    "deployParameters": {
+      "maxExitRequestsLimit": 13000,
+      "exitsPerFrame": 1,
+      "frameDurationInSec": 48
     }
   },
   "predepositGuarantee": {

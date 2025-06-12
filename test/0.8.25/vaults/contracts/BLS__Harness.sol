@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {BLS12_381} from "contracts/0.8.25/lib/BLS.sol";
+import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 struct PrecomputedDepositMessage {
@@ -23,7 +23,14 @@ contract BLS__Harness {
         BLS12_381.DepositY calldata depositY,
         bytes32 withdrawalCredentials
     ) public view {
-        BLS12_381.verifyDepositMessage(deposit, depositY, withdrawalCredentials, DEPOSIT_DOMAIN);
+        BLS12_381.verifyDepositMessage(
+            deposit.pubkey,
+            deposit.signature,
+            deposit.amount,
+            depositY,
+            withdrawalCredentials,
+            DEPOSIT_DOMAIN
+        );
     }
 
     function verifyDepositMessageCustomDomain(
@@ -32,7 +39,14 @@ contract BLS__Harness {
         bytes32 withdrawalCredentials,
         bytes32 customDomain
     ) public view {
-        BLS12_381.verifyDepositMessage(deposit, depositY, withdrawalCredentials, customDomain);
+        BLS12_381.verifyDepositMessage(
+            deposit.pubkey,
+            deposit.signature,
+            deposit.amount,
+            depositY,
+            withdrawalCredentials,
+            customDomain
+        );
     }
 
     constructor(bytes32 _depositDomain) {

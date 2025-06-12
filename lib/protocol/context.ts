@@ -3,7 +3,7 @@ import hre from "hardhat";
 import { getMode } from "hardhat.helpers";
 
 import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
-import { deployEIP7002WithdrawalRequestContract, EIP7002_MIN_WITHDRAWAL_REQUEST_FEE } from "lib/eips";
+import { deployEIP7002WithdrawalRequestContract } from "lib/eips";
 
 import { discover } from "./discover";
 import { provision } from "./provision";
@@ -28,7 +28,7 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
   }
 
   // TODO: revisit this when Pectra is live
-  await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
+  await deployEIP7002WithdrawalRequestContract(); // TODO
 
   const { contracts, signers } = await discover(skipV3Contracts);
   const interfaces = Object.values(contracts).map((contract) => contract.interface);

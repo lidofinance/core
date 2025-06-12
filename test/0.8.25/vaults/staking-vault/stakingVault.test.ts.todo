@@ -85,7 +85,7 @@ describe("StakingVault.sol", () => {
       toChecksumAddress("0x02" + "00".repeat(11) + de0x(await stakingVault.getAddress())),
     );
 
-    withdrawalRequestContract = await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
+    withdrawalRequestContract = await deployEIP7002WithdrawalRequestContract();
     ethRejector = await ethers.deployContract("EthRejector");
   });
 

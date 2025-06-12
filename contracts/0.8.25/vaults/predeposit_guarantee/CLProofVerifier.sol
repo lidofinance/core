@@ -4,8 +4,9 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {GIndex, pack, concat} from "contracts/0.8.25/lib/GIndex.sol";
-import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
+import {GIndex, pack, concat} from "contracts/common/lib/GIndex.sol";
+import {SSZ} from "contracts/common/lib/SSZ.sol";
+import {BLS12_381} from "contracts/common/lib/BLS.sol";
 
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
@@ -156,7 +157,7 @@ abstract contract CLProofVerifier {
 
         // parent node for first two leaves in validator container tree: pubkey & wc
         // we use 'leaf' instead of 'node' due to proving a subtree where this node is a leaf
-        bytes32 leaf = SSZ.sha256Pair(SSZ.pubkeyRoot(_witness.pubkey), _withdrawalCredentials);
+        bytes32 leaf = BLS12_381.sha256Pair(BLS12_381.pubkeyRoot(_witness.pubkey), _withdrawalCredentials);
 
         // concatenated GIndex for
         // parent(pubkey + wc) ->  Validator Index in state tree -> stateView Index in Beacon block Tree
@@ -169,7 +170,7 @@ abstract contract CLProofVerifier {
             proof: _witness.proof,
             root: _getParentBlockRoot(_witness.childBlockTimestamp),
             leaf: leaf,
-            gIndex: gIndex
+            gI: gIndex
         });
     }
 
@@ -180,7 +181,7 @@ abstract contract CLProofVerifier {
      * This is a trivial case of multi Merkle proofs where a short proof branch proves slot
      */
     function _verifySlot(IPredepositGuarantee.ValidatorWitness calldata _witness) internal view {
-        bytes32 parentSlotProposer = SSZ.sha256Pair(
+        bytes32 parentSlotProposer = BLS12_381.sha256Pair(
             SSZ.toLittleEndian(_witness.slot),
             SSZ.toLittleEndian(_witness.proposerIndex)
         );

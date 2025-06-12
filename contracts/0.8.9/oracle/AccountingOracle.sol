@@ -37,12 +37,6 @@ interface IStakingRouter {
         bytes calldata exitedValidatorsCounts
     ) external;
 
-    function reportStakingModuleStuckValidatorsCountByNodeOperator(
-        uint256 stakingModuleId,
-        bytes calldata nodeOperatorIds,
-        bytes calldata stuckValidatorsCounts
-    ) external;
-
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
 }
 
@@ -62,6 +56,7 @@ contract AccountingOracle is BaseOracle {
     error InvalidExitedValidatorsData();
     error UnsupportedExtraDataFormat(uint256 format);
     error UnsupportedExtraDataType(uint256 itemIndex, uint256 dataType);
+    error DeprecatedExtraDataType(uint256 itemIndex, uint256 dataType);
     error CannotSubmitExtraDataBeforeMainData();
     error ExtraDataAlreadyProcessed();
     error UnexpectedExtraDataHash(bytes32 consensusHash, bytes32 receivedHash);
@@ -94,7 +89,7 @@ contract AccountingOracle is BaseOracle {
     bytes32 internal constant EXTRA_DATA_PROCESSING_STATE_POSITION =
         keccak256("lido.AccountingOracle.extraDataProcessingState");
 
-    bytes32 internal constant ZERO_HASH = bytes32(0);
+    bytes32 internal constant ZERO_BYTES32 = bytes32(0);
 
     ILidoLocator public immutable LOCATOR;
 
@@ -205,15 +200,7 @@ contract AccountingOracle is BaseOracle {
         /// data for a report is possible after its processing deadline passes or a new data report
         /// arrives.
         ///
-        /// Depending on the size of the extra data, the processing might need to be split into
-        /// multiple transactions. Each transaction contains a chunk of report data (an array of items)
-        /// and the hash of the next transaction. The last transaction will contain ZERO_HASH
-        /// as the next transaction hash.
-        ///
-        /// | 32 bytes |    array of items
-        /// | nextHash |         ...
-        ///
-        /// Each item being encoded as follows:
+        /// Extra data is an array of items, each item being encoded as follows:
         ///
         ///    3 bytes    2 bytes      X bytes
         /// | itemIndex | itemType | itemPayload |
@@ -285,8 +272,6 @@ contract AccountingOracle is BaseOracle {
         /// @dev Hash of the extra data. See the constant defining a specific extra data
         /// format for the info on how to calculate the hash.
         ///
-        /// Must be set to a zero hash if the oracle report contains no extra data.
-        ///
         bytes32 extraDataHash;
         /// @dev Number of the extra data items.
         ///
@@ -300,18 +285,27 @@ contract AccountingOracle is BaseOracle {
 
     /// @notice The extra data format used to signify that the oracle report contains no extra data.
     ///
+    /// The `extraDataHash` in `ReportData` must be set to a `ZERO_BYTES32`
+    ///
     uint256 public constant EXTRA_DATA_FORMAT_EMPTY = 0;
 
-    /// @notice The list format for the extra data array. Used when all extra data processing
-    /// fits into a single or multiple transactions.
+    /// @notice The list format for the extra data array. Used when the oracle reports contains extra data.
     ///
-    /// Depend on the extra data size it passed within a single or multiple transactions.
-    /// Each transaction contains next transaction hash and a bytearray containing data items
-    /// packed tightly.
+    /// When extra data is included in a report, it may be split across one or more transactions.
+    /// Each transaction contains:
+    ///   1) A 32-byte keccak256 hash of the next transaction's data (or `ZERO_BYTES32` if none),
+    ///   2) A chunk of report items (an array of items).
     ///
-    /// Hash is a keccak256 hash calculated over the transaction data (next transaction hash and bytearray items).
-    /// The Solidity equivalent of the hash calculation code would be `keccak256(data)`,
-    /// where `data` has the `bytes` type.
+    /// |                   32 bytes                       |     X bytes      |
+    /// |  Next transaction's data hash or `ZERO_BYTES32`  |  array of items  |
+    ///
+    /// The `extraDataHash` in `ReportData` is calculated as shown in the example below:
+    ///
+    /// ReportData.extraDataHash := hash0
+    /// hash0 := keccak256(| hash1 | extraData[0], ... extraData[n] |)
+    /// hash1 := keccak256(| hash2 | extraData[n + 1], ... extraData[m] |)
+    /// ...
+    /// hashK := keccak256(| ZERO_BYTES32 | extraData[x + 1], ... extraData[extraDataItemsCount] |)
     ///
     uint256 public constant EXTRA_DATA_FORMAT_LIST = 1;
 
@@ -348,7 +342,7 @@ contract AccountingOracle is BaseOracle {
 
     /// @notice Submits report extra data in the EXTRA_DATA_FORMAT_LIST format for processing.
     ///
-    /// @param data The extra data chunk with items list. See docs for the `EXTRA_DATA_FORMAT_LIST`
+    /// @param data  The extra data chunk. See docs for the `EXTRA_DATA_FORMAT_LIST`
     ///              constant for details.
     ///
     function submitReportExtraDataList(bytes calldata data) external {
@@ -389,7 +383,7 @@ contract AccountingOracle is BaseOracle {
         ConsensusReport memory report = _storageConsensusReport().value;
         result.currentFrameRefSlot = _getCurrentRefSlot();
 
-        if (report.hash == ZERO_HASH || result.currentFrameRefSlot != report.refSlot) {
+        if (report.hash == ZERO_BYTES32 || result.currentFrameRefSlot != report.refSlot) {
             return result;
         }
 
@@ -445,8 +439,8 @@ contract AccountingOracle is BaseOracle {
 
     function _handleConsensusReportData(ReportData calldata data, uint256 prevRefSlot) internal {
         if (data.extraDataFormat == EXTRA_DATA_FORMAT_EMPTY) {
-            if (data.extraDataHash != ZERO_HASH) {
-                revert UnexpectedExtraDataHash(ZERO_HASH, data.extraDataHash);
+            if (data.extraDataHash != ZERO_BYTES32) {
+                revert UnexpectedExtraDataHash(ZERO_BYTES32, data.extraDataHash);
             }
             if (data.extraDataItemsCount != 0) {
                 revert UnexpectedExtraDataItemsCount(0, data.extraDataItemsCount);
@@ -458,7 +452,7 @@ contract AccountingOracle is BaseOracle {
             if (data.extraDataItemsCount == 0) {
                 revert ExtraDataItemsCountCannotBeZeroForNonEmptyData();
             }
-            if (data.extraDataHash == ZERO_HASH) {
+            if (data.extraDataHash == ZERO_BYTES32) {
                 revert ExtraDataHashCannotBeZeroForNonEmptyData();
             }
         }
@@ -571,7 +565,7 @@ contract AccountingOracle is BaseOracle {
 
         ConsensusReport memory report = _storageConsensusReport().value;
 
-        if (report.hash == ZERO_HASH || procState.refSlot != report.refSlot) {
+        if (report.hash == ZERO_BYTES32 || procState.refSlot != report.refSlot) {
             revert CannotSubmitExtraDataBeforeMainData();
         }
 
@@ -620,7 +614,7 @@ contract AccountingOracle is BaseOracle {
         _processExtraDataItems(data, iter);
         uint256 itemsProcessed = iter.index + 1;
 
-        if (dataHash == ZERO_HASH) {
+        if (dataHash == ZERO_BYTES32) {
             if (itemsProcessed != procState.itemsCount) {
                 revert UnexpectedExtraDataItemsCount(procState.itemsCount, itemsProcessed);
             }
@@ -678,15 +672,21 @@ contract AccountingOracle is BaseOracle {
             iter.itemType = itemType;
             iter.dataOffset = dataOffset;
 
-            if (itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS || itemType == EXTRA_DATA_TYPE_STUCK_VALIDATORS) {
-                uint256 nodeOpsProcessed = _processExtraDataItem(data, iter);
+            /// @dev The EXTRA_DATA_TYPE_STUCK_VALIDATORS item type was deprecated in the Triggerable Withdrawals update.
+            ///      The mechanism for handling stuck validator keys is no longer supported and has been removed.
+            if (itemType == EXTRA_DATA_TYPE_STUCK_VALIDATORS) {
+                revert DeprecatedExtraDataType(index, itemType);
+            }
 
-                if (nodeOpsProcessed > maxNodeOperatorsPerItem) {
-                    maxNodeOperatorsPerItem = nodeOpsProcessed;
-                    maxNodeOperatorItemIndex = index;
-                }
-            } else {
+            if (itemType != EXTRA_DATA_TYPE_EXITED_VALIDATORS) {
                 revert UnsupportedExtraDataType(index, itemType);
+            }
+
+            uint256 nodeOpsProcessed = _processExtraDataItem(data, iter);
+
+            if (nodeOpsProcessed > maxNodeOperatorsPerItem) {
+                maxNodeOperatorsPerItem = nodeOpsProcessed;
+                maxNodeOperatorItemIndex = index;
             }
 
             assert(iter.dataOffset > dataOffset);
@@ -775,19 +775,8 @@ contract AccountingOracle is BaseOracle {
             revert InvalidExtraDataItem(iter.index);
         }
 
-        if (iter.itemType == EXTRA_DATA_TYPE_STUCK_VALIDATORS) {
-            IStakingRouter(iter.stakingRouter).reportStakingModuleStuckValidatorsCountByNodeOperator(
-                moduleId,
-                nodeOpIds,
-                valuesCounts
-            );
-        } else {
-            IStakingRouter(iter.stakingRouter).reportStakingModuleExitedValidatorsCountByNodeOperator(
-                moduleId,
-                nodeOpIds,
-                valuesCounts
-            );
-        }
+        IStakingRouter(iter.stakingRouter)
+                .reportStakingModuleExitedValidatorsCountByNodeOperator(moduleId, nodeOpIds, valuesCounts);
 
         iter.dataOffset = dataOffset;
         return nodeOpsCount;

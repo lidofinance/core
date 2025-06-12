@@ -1,63 +1,23 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
-// See contracts/COMPILERS.md
-pragma solidity 0.8.25;
-
-import {BeaconBlockHeader, Validator} from "./BeaconTypes.sol";
-import {GIndex} from "./GIndex.sol";
-
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 /*
  SSZ library from CSM
  original: https://github.com/lidofinance/community-staking-module/blob/7071c2096983a7780a5f147963aaa5405c0badb1/src/lib/SSZ.sol
 */
+
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
+
+import {BeaconBlockHeader, Validator} from "./BeaconTypes.sol";
+import {GIndex} from "./GIndex.sol";
+
 library SSZ {
     error BranchHasMissingItem();
     error BranchHasExtraItem();
     error InvalidProof();
-    error InvalidPubkeyLength();
-    error InvalidBlockHeader();
 
-    /// @notice Domain for deposit message signing
-    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#domain-types
-    bytes4 internal constant DOMAIN_DEPOSIT_TYPE = 0x03000000;
-
-    /// @notice calculation of deposit domain based on fork version
-    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_domain
-    function computeDepositDomain(bytes4 genesisForkVersion) internal view returns (bytes32 depositDomain) {
-        bytes32 forkDataRoot = sha256Pair(genesisForkVersion, bytes32(0));
-        depositDomain = DOMAIN_DEPOSIT_TYPE | (forkDataRoot >> 32);
-    }
-
-    /// @notice calculation of signing root for deposit message
-    /// @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
-    /// @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
-    function depositMessageSigningRoot(
-        IStakingVault.Deposit calldata deposit,
-        bytes32 withdrawalCredentials,
-        bytes32 depositDomain
-    ) internal view returns (bytes32 root) {
-        root = sha256Pair(
-            // merkle root of the deposit message
-            sha256Pair(
-                sha256Pair(
-                    // pubkey must be hashed to be used as leaf
-                    pubkeyRoot(deposit.pubkey),
-                    withdrawalCredentials
-                ),
-                sha256Pair(
-                    toLittleEndian(deposit.amount / 1 gwei),
-                    // filler to make leaf count power of 2
-                    bytes32(0)
-                )
-            ),
-            depositDomain
-        );
-    }
-
-    /// @notice SSZ hash tree root of a CL Beacon Block Header
-    /// @param header Beacon Block Header container struct
     function hashTreeRoot(BeaconBlockHeader memory header) internal view returns (bytes32 root) {
         bytes32[8] memory nodes = [
             toLittleEndian(header.slot),
@@ -126,10 +86,8 @@ library SSZ {
         }
     }
 
-    /// @notice SSZ hash tree root of a CL validator container
-    /// @param validator Validator container struct
     function hashTreeRoot(Validator memory validator) internal view returns (bytes32 root) {
-        bytes32 _pubkeyRoot;
+        bytes32 pubkeyRoot;
 
         assembly {
             // Dynamic data types such as bytes are stored at the specified offset.
@@ -146,11 +104,11 @@ library SSZ {
                 revert(0, 0)
             }
 
-            _pubkeyRoot := mload(0x00)
+            pubkeyRoot := mload(0x00)
         }
 
         bytes32[8] memory nodes = [
-            _pubkeyRoot,
+            pubkeyRoot,
             validator.withdrawalCredentials,
             toLittleEndian(validator.effectiveBalance),
             toLittleEndian(validator.slashed),
@@ -218,8 +176,9 @@ library SSZ {
 
     /// @notice Modified version of `verify` from Solady `MerkleProofLib` to support generalized indices and sha256 precompile.
     /// @dev Reverts if `leaf` doesn't exist in the Merkle tree with `root`, given `proof`.
-    function verifyProof(bytes32[] calldata proof, bytes32 root, bytes32 leaf, GIndex gIndex) internal view {
-        uint256 index = gIndex.index();
+    function verifyProof(bytes32[] calldata proof, bytes32 root, bytes32 leaf, GIndex gI) internal view {
+        uint256 index = gI.index();
+
         /// @solidity memory-safe-assembly
         assembly {
             // Check if `proof` is empty.
@@ -285,50 +244,6 @@ library SSZ {
                 mstore(0x00, 0x09bde339)
                 revert(0x1c, 0x04)
             }
-        }
-    }
-
-    /// @notice Extracted part from `verifyProof` for hashing two leaves
-    /// @dev Combines 2 bytes32 in 64 bytes input for sha256 precompile
-    function sha256Pair(bytes32 left, bytes32 right) internal view returns (bytes32 result) {
-        /// @solidity memory-safe-assembly
-        assembly {
-            // Store `left` at memory position 0x00
-            mstore(0x00, left)
-            // Store `right` at memory position 0x20
-            mstore(0x20, right)
-
-            // Call SHA-256 precompile (0x02) with 64-byte input at memory 0x00
-            let success := staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)
-            if iszero(success) {
-                revert(0, 0)
-            }
-
-            // Load the resulting hash from memory
-            result := mload(0x00)
-        }
-    }
-
-    /// @notice Extracted and modified part from `hashTreeRoot` for hashing validator pubkey from calldata
-    /// @dev Reverts if `pubkey` length is not 48
-    function pubkeyRoot(bytes calldata pubkey) internal view returns (bytes32 _pubkeyRoot) {
-        if (pubkey.length != 48) revert InvalidPubkeyLength();
-
-        /// @solidity memory-safe-assembly
-        assembly {
-            // write 32 bytes to 32-64 bytes of scratch space
-            // to ensure last 49-64 bytes of pubkey are zeroed
-            mstore(0x20, 0)
-            // Copy 48 bytes of `pubkey` to start of scratch space
-            calldatacopy(0x00, pubkey.offset, 48)
-
-            // Call the SHA-256 precompile (0x02) with the 64-byte input
-            if iszero(staticcall(gas(), 0x02, 0x00, 0x40, 0x00, 0x20)) {
-                revert(0, 0)
-            }
-
-            // Load the resulting SHA-256 hash
-            _pubkeyRoot := mload(0x00)
         }
     }
 

@@ -9,7 +9,7 @@ import {Test} from "forge-std/Test.sol";
 import {CommonBase} from "forge-std/Base.sol";
 import {StdAssertions} from "forge-std/StdAssertions.sol";
 
-import {BLS12_381, SSZ} from "contracts/0.8.25/lib/BLS.sol";
+import {BLS12_381, SSZ} from "contracts/common/lib/BLS.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 struct PrecomputedDepositMessage {

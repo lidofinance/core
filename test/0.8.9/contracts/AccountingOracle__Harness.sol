@@ -22,6 +22,10 @@ contract AccountingOracle__Harness is AccountingOracle, ITimeProvider {
         CONTRACT_VERSION_POSITION.setStorageUint256(0);
     }
 
+    function setContractVersion(uint256 version) external {
+        CONTRACT_VERSION_POSITION.setStorageUint256(version);
+    }
+
     function getTime() external view returns (uint256) {
         return _getTime();
     }
