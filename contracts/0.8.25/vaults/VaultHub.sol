@@ -916,7 +916,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _connection.pendingDisconnect = true;
 
-        OperatorGrid(LIDO_LOCATOR.operatorGrid()).resetVaultTier(_vault);
+        _operatorGrid().resetVaultTier(_vault);
     }
 
     function _applyVaultReport(
@@ -1190,6 +1190,7 @@ contract VaultHub is PausableUntilWithRoles {
      * @notice Settles redemptions and Lido fee obligations for a vault
      * @param _vault The address of the vault to settle obligations for
      * @param _record The record of the vault to settle obligations for
+     * @param _obligations The obligations of the vault to be settled
      * @param _allowedUnsettled The maximum allowable unsettled obligations post-settlement (triggers reverts)
      */
     function _settleObligations(
