@@ -6,8 +6,6 @@ pragma solidity ^0.8.25;
 
 import {SSZ} from "./SSZ.sol";
 
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
-
 /**
  * @notice Modified & stripped BLS Lib to support ETH beacon spec for validator deposit message verification.
  * @author Lido
@@ -224,23 +222,57 @@ library BLS12_381 {
         }
     }
 
+
     /**
-     * @notice verifies the deposit message signature using BLS12-381 pairing check
-     * @param deposit staking vault deposit to verify
-     * @param depositY Y coordinates of uncompressed pubkey and signature
-     * @param withdrawalCredentials missing part of deposit message
-     * @param depositDomain domain of the deposit message for the current chain
-     * @dev will revert with `InvalidSignature` if the signature is invalid
-     * @dev will revert with `InputHasInfinityPoints` if the input contains infinity points(zero values)
+     * @notice calculates the signing root for deposit message
+     * @dev per https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#compute_signing_root
+     * @dev not be confused with `depositDataRoot`, used for verifying BLS deposit signature
+     */
+    function depositMessageSigningRoot(
+        bytes calldata depositPubkey,
+        uint256 depositAmount,
+        bytes32 withdrawalCredentials,
+        bytes32 depositDomain
+    ) internal view returns (bytes32 root) {
+        root = SSZ.sha256Pair(
+            // merkle root of the deposit message
+            SSZ.sha256Pair(
+                SSZ.sha256Pair(
+                    // pubkey must be hashed to be used as leaf
+                    SSZ.pubkeyRoot(depositPubkey),
+                    withdrawalCredentials
+                ),
+                SSZ.sha256Pair(
+                    SSZ.toLittleEndian(depositAmount / 1 gwei),
+                    // filler to make leaf count power of 2
+                    bytes32(0)
+                )
+            ),
+            depositDomain
+        );
+    }
+
+    /**
+     * @notice Verifies the deposit message signature using BLS12-381 pairing check.
+     * @param depositPubkey The BLS public key of the deposit.
+     * @param depositSignature The BLS signature of the deposit message.
+     * @param depositAmount The amount of the deposit in wei.
+     * @param depositY Y coordinates of the uncompressed pubkey and signature.
+     * @param withdrawalCredentials The withdrawal credentials associated with the deposit.
+     * @param depositDomain The domain of the deposit message for the current chain.
+     * @dev Reverts with `InvalidSignature` if the signature is invalid.
+     * @dev Reverts with `InputHasInfinityPoints` if the input contains infinity points (zero values).
      */
     function verifyDepositMessage(
-        IStakingVault.Deposit calldata deposit,
+        bytes calldata depositPubkey,
+        bytes calldata depositSignature,
+        uint256 depositAmount,
         DepositY calldata depositY,
         bytes32 withdrawalCredentials,
         bytes32 depositDomain
     ) internal view {
         // Hash the deposit message and map it to G2 point on the curve
-        G2Point memory msgG2 = hashToG2(SSZ.depositMessageSigningRoot(deposit, withdrawalCredentials, depositDomain));
+        G2Point memory msgG2 = hashToG2(depositMessageSigningRoot(depositPubkey, depositAmount, withdrawalCredentials, depositDomain));
 
         // BLS Pairing check input
         // pubkeyG1 | msgG2 | NEGATED_G1_GENERATOR | signatureG2
@@ -249,7 +281,7 @@ library BLS12_381 {
         // Load pubkeyG1 directly from calldata to input array
         // pubkeyG1.X = 16byte pad | flag_mask & deposit.pubkey(0 - 16 bytes) | deposit.pubkey(16 - 48 bytes)
         // pubkeyG1.Y as is from calldata
-        bytes calldata pubkey = deposit.pubkey;
+        bytes calldata pubkey = depositPubkey;
         /// @solidity memory-safe-assembly
         assembly {
             // load first 32 bytes of pubkey and apply sign mask
@@ -301,7 +333,7 @@ library BLS12_381 {
         //  - signatureG2.X_c1 = 16byte pad | deposit.signature(48 - 64 bytes) | deposit.signature(64 - 96 bytes)
         //  - signatureG2.X_c2 = 16byte pad | flag_mask & deposit.signature(0 - 16 bytes) | deposit.signature(16 - 48 bytes)
         // SignatureG2 Y as is from calldata
-        bytes calldata signature = deposit.signature;
+        bytes calldata signature = depositSignature;
         /// @solidity memory-safe-assembly
         assembly {
             // Load signatureG2.X_c2 skipping 16 bytes of zero padding

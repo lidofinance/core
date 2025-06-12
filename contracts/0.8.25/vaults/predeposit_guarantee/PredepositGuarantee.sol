@@ -239,7 +239,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         BLS12_381.DepositY calldata _depositsY,
         bytes32 _withdrawalCredentials
     ) public view {
-        BLS12_381.verifyDepositMessage(_deposit, _depositsY, _withdrawalCredentials, DEPOSIT_DOMAIN);
+        BLS12_381.verifyDepositMessage(_deposit.pubkey, _deposit.signature, _deposit.amount, _depositsY, _withdrawalCredentials, DEPOSIT_DOMAIN);
     }
 
     /**

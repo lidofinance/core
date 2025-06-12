@@ -8,7 +8,7 @@ import { AccountingOracle__Harness } from "typechain-types";
 import { deployAndConfigureAccountingOracle } from "test/deploy";
 
 describe("AccountingOracle.sol:upgrade", () => {
-  context("finalizeUpgrade_v2", () => {
+  context("finalizeUpgrade_v3", () => {
     let admin: HardhatEthersSigner;
     let oracle: AccountingOracle__Harness;
     const NEW_CONSENSUS_VERSION = 42n; // Just a test value
