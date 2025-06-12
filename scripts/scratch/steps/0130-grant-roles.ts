@@ -5,6 +5,7 @@ import {
   LazyOracle,
   OperatorGrid,
   StakingRouter,
+  TriggerableWithdrawalsGateway,
   ValidatorsExitBusOracle,
   VaultHub,
   WithdrawalQueueERC721,
@@ -33,6 +34,7 @@ export async function main() {
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
   const vaultHubAddress = state[Sk.vaultHub].proxy.address;
   const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
+  const triggerableWithdrawalsGatewayAddress = state[Sk.triggerableWithdrawalsGateway].address;
   const lazyOracleAddress = state[Sk.lazyOracle].proxy.address;
 
   // StakingRouter
@@ -58,6 +60,12 @@ export async function main() {
   await makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), accountingAddress], {
     from: deployer,
   });
+  await makeTx(
+    stakingRouter,
+    "grantRole",
+    [await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(), triggerableWithdrawalsGatewayAddress],
+    { from: deployer },
+  );
 
   // ValidatorsExitBusOracle
   if (gateSealAddress) {
@@ -72,6 +80,18 @@ export async function main() {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
     log.emptyLine();
   }
+
+  // TriggerableWithdrawalsGateway
+  const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
+    "TriggerableWithdrawalsGateway",
+    triggerableWithdrawalsGatewayAddress,
+  );
+  await makeTx(
+    triggerableWithdrawalsGateway,
+    "grantRole",
+    [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), validatorsExitBusOracleAddress],
+    { from: deployer },
+  );
 
   // WithdrawalQueue
   const withdrawalQueue = await loadContract<WithdrawalQueueERC721>("WithdrawalQueueERC721", withdrawalQueueAddress);
@@ -96,6 +116,7 @@ export async function main() {
   const burner = await loadContract<Burner>("Burner", burnerAddress);
   const requestBurnSharesRole = await burner.REQUEST_BURN_SHARES_ROLE();
   // NB: REQUEST_BURN_SHARES_ROLE is already granted to Lido in Burner constructor
+  // TODO: upon TW upgrade NOR dont need the role anymore
   await makeTx(burner, "grantRole", [requestBurnSharesRole, nodeOperatorsRegistryAddress], {
     from: deployer,
   });

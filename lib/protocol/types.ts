@@ -26,8 +26,10 @@ import {
   OracleReportSanityChecker,
   PredepositGuarantee,
   StakingRouter,
+  TriggerableWithdrawalsGateway,
   UpgradeableBeacon,
   ValidatorConsolidationRequests,
+  ValidatorExitDelayVerifier,
   ValidatorsExitBusOracle,
   VaultFactory,
   VaultHub,
@@ -51,7 +53,9 @@ export type ProtocolNetworkItems = {
   oracleReportSanityChecker: string;
   burner: string;
   stakingRouter: string;
+  validatorExitDelayVerifier: string;
   validatorsExitBusOracle: string;
+  triggerableWithdrawalsGateway: string;
   withdrawalQueue: string;
   withdrawalVault: string;
   oracleDaemonConfig: string;
@@ -85,6 +89,7 @@ export interface ContractTypes {
   OracleReportSanityChecker: OracleReportSanityChecker;
   Burner: Burner;
   StakingRouter: StakingRouter;
+  ValidatorExitDelayVerifier: ValidatorExitDelayVerifier;
   ValidatorsExitBusOracle: ValidatorsExitBusOracle;
   WithdrawalQueueERC721: WithdrawalQueueERC721;
   WithdrawalVault: WithdrawalVault;
@@ -95,6 +100,7 @@ export interface ContractTypes {
   PredepositGuarantee: PredepositGuarantee;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
   WstETH: WstETH;
+  TriggerableWithdrawalsGateway: TriggerableWithdrawalsGateway;
   VaultFactory: VaultFactory;
   UpgradeableBeacon: UpgradeableBeacon;
   VaultHub: VaultHub;
@@ -123,11 +129,13 @@ export type CoreContracts = {
   oracleReportSanityChecker: LoadedContract<OracleReportSanityChecker>;
   burner: LoadedContract<Burner>;
   stakingRouter: LoadedContract<StakingRouter>;
+  validatorExitDelayVerifier: LoadedContract<ValidatorExitDelayVerifier>;
   validatorsExitBusOracle: LoadedContract<ValidatorsExitBusOracle>;
   withdrawalQueue: LoadedContract<WithdrawalQueueERC721>;
   withdrawalVault: LoadedContract<WithdrawalVault>;
   oracleDaemonConfig: LoadedContract<OracleDaemonConfig>;
   wstETH: LoadedContract<WstETH>;
+  triggerableWithdrawalsGateway: LoadedContract<TriggerableWithdrawalsGateway>;
 };
 
 export type AragonContracts = {

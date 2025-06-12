@@ -21,6 +21,8 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address withdrawalVault;
         address postTokenRebaseReceiver;
         address oracleDaemonConfig;
+        address validatorExitDelayVerifier;
+        address triggerableWithdrawalsGateway;
         address accounting;
         address predepositGuarantee;
         address wstETH;
@@ -43,6 +45,8 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable postTokenRebaseReceiver;
     address public immutable oracleDaemonConfig;
+    address public immutable validatorExitDelayVerifier;
+    address public immutable triggerableWithdrawalsGateway;
     address public immutable accounting;
     address public immutable predepositGuarantee;
     address public immutable wstETH;
@@ -65,6 +69,8 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         withdrawalVault = addresses.withdrawalVault;
         postTokenRebaseReceiver = addresses.postTokenRebaseReceiver;
         oracleDaemonConfig = addresses.oracleDaemonConfig;
+        validatorExitDelayVerifier = addresses.validatorExitDelayVerifier;
+        triggerableWithdrawalsGateway = addresses.triggerableWithdrawalsGateway;
         accounting = addresses.accounting;
         wstETH = addresses.wstETH;
         predepositGuarantee = addresses.predepositGuarantee;

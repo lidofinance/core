@@ -19,10 +19,14 @@ const services = [
   "withdrawalQueue",
   "withdrawalVault",
   "oracleDaemonConfig",
+  "validatorExitDelayVerifier",
+  "triggerableWithdrawalsGateway",
   "accounting",
+  "predepositGuarantee",
   "wstETH",
   "vaultHub",
-  "predepositGuarantee",
+  "vaultFactory",
+  "lazyOracle",
   "operatorGrid",
 ] as const;
 
