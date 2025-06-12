@@ -181,21 +181,21 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the max locked amount of ether for the vault (excluding the Lido and node operator fees)
+     * @notice Returns the max total lockable amount of ether for the vault (excluding the Lido and node operator fees)
      */
-    function maxLocked() public view returns (uint256) {
-        uint256 maxLocked_ = VAULT_HUB.maxLocked(address(_stakingVault()));
+    function maxLockableValue() public view returns (uint256) {
+        uint256 maxLockableValue_ = VAULT_HUB.maxLockableValue(address(_stakingVault()));
         uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
-        return maxLocked_ > nodeOperatorFee ? maxLocked_ - nodeOperatorFee : 0;
+        return maxLockableValue_ > nodeOperatorFee ? maxLockableValue_ - nodeOperatorFee : 0;
     }
 
     /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() public view returns (uint256) {
-        uint256 totalSharesMintingCapacity = _operatorGrid().vaultTotalMintingCapacity(address(_stakingVault()));
+        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
 
-        return Math256.min(totalSharesMintingCapacity, _mintableShares(maxLocked()));
+        return Math256.min(effectiveShareLimit, _mintableShares(maxLockableValue()));
     }
 
     /**
@@ -205,15 +205,13 @@ contract Dashboard is NodeOperatorFee {
      * @return the number of shares that can be minted using additional ether
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) public view returns (uint256) {
-        uint256 remainingMintingCapacity = _operatorGrid().vaultRemainingMintingCapacity(address(_stakingVault()));
-        if (remainingMintingCapacity == 0) return 0;
-
-        uint256 vaultMintableShares = _mintableShares(maxLocked() + _etherToFund);
+        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
+        uint256 vaultMintableSharesByRR = _mintableShares(maxLockableValue() + _etherToFund);
         uint256 vaultLiabilityShares = liabilityShares();
 
         return Math256.min(
-            remainingMintingCapacity,
-            vaultMintableShares > vaultLiabilityShares ? vaultMintableShares - vaultLiabilityShares : 0
+            effectiveShareLimit > vaultLiabilityShares ? effectiveShareLimit - vaultLiabilityShares : 0,
+            vaultMintableSharesByRR > vaultLiabilityShares ? vaultMintableSharesByRR - vaultLiabilityShares : 0
         );
     }
 
@@ -221,7 +219,10 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the amount of ether that can be instantly withdrawn from the staking vault.
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for fees and obligations.
      */
-    function withdrawableEther() public view returns (uint256) {
+    function withdrawableValue() public view returns (uint256) {
+        // On pending disconnect, the vault does not allow any withdrawals, so need to return 0 here
+        if (VAULT_HUB.vaultConnection(address(_stakingVault())).pendingDisconnect) return 0;
+
         uint256 withdrawable = VAULT_HUB.withdrawableValue(address(_stakingVault()));
         uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
 
@@ -289,6 +290,18 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Changes the tier of the vault and connects to VaultHub
+     * @param _tierId The tier to change to
+     * @param _requestedShareLimit The requested share limit
+     */
+    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit) external payable {
+        connectToVaultHub();
+        if (!_changeTier(_tierId, _requestedShareLimit)) {
+            revert TierChangeNotConfirmed();
+        }
+    }
+
+    /**
      * @notice Funds the staking vault with ether
      */
     function fund() external payable {
@@ -301,10 +314,9 @@ contract Dashboard is NodeOperatorFee {
      * @param _ether Amount of ether to withdraw
      */
     function withdraw(address _recipient, uint256 _ether) external {
-        uint256 withdrawableEther_ = withdrawableEther();
-
-        if (_ether > withdrawableEther_) {
-            revert WithdrawalExceedsWithdrawable(_ether, withdrawableEther_);
+        uint256 withdrawableEther = withdrawableValue();
+        if (_ether > withdrawableEther) {
+            revert WithdrawalExceedsWithdrawableValue(_ether, withdrawableEther);
         }
 
         _withdraw(_recipient, _ether);
@@ -399,9 +411,9 @@ contract Dashboard is NodeOperatorFee {
             totalAmount += _deposits[i].amount;
         }
 
-        uint256 withdrawableEther_ = withdrawableEther();
-        if (totalAmount > withdrawableEther_) {
-            revert WithdrawalExceedsWithdrawable(totalAmount, withdrawableEther_);
+        uint256 withdrawableEther = withdrawableValue();
+        if (totalAmount > withdrawableEther) {
+            revert WithdrawalExceedsWithdrawableValue(totalAmount, withdrawableEther);
         }
 
         _disableFundOnReceive();
@@ -543,9 +555,10 @@ contract Dashboard is NodeOperatorFee {
      * @notice Requests a change of tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
+     * @return bool Whether the tier change was confirmed.
      */
-    function requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) external {
-        _requestTierChange(_tierId, _requestedShareLimit);
+    function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external returns (bool) {
+        return _changeTier(_tierId, _requestedShareLimit);
     }
 
     // ==================== Internal Functions ====================
@@ -659,9 +672,9 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Emitted when the withdrawable amount of ether is exceeded
      * @param amount The amount of ether that was attempted to be withdrawn
-     * @param withdrawableEther The amount of withdrawable ether available
+     * @param withdrawableValue The amount of withdrawable ether available
      */
-    error WithdrawalExceedsWithdrawable(uint256 amount, uint256 withdrawableEther);
+    error WithdrawalExceedsWithdrawableValue(uint256 amount, uint256 withdrawableValue);
 
     /**
      * @notice Error thrown when minting capacity is exceeded
@@ -677,4 +690,9 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error when the StakingVault is still connected to the VaultHub.
      */
     error ConnectedToVaultHub();
+
+    /**
+     * @notice Error thrown when attempting to connect to VaultHub without confirmed tier change
+     */
+    error TierChangeNotConfirmed();
 }

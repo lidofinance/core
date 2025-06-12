@@ -176,14 +176,14 @@ contract LazyOracle is ILazyOracle {
 
     function _mintableStETH(address _vault) internal view returns (uint256) {
         VaultHub vaultHub = _vaultHub();
-        uint256 maxLocked = vaultHub.maxLocked(_vault);
+        uint256 maxLockableValue = vaultHub.maxLockableValue(_vault);
         uint256 reserveRatioBP = vaultHub.vaultConnection(_vault).reserveRatioBP;
-        uint256 mintableStETH = maxLocked * (TOTAL_BASIS_POINTS - reserveRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 mintableStETHByRR = maxLockableValue * (TOTAL_BASIS_POINTS - reserveRatioBP) / TOTAL_BASIS_POINTS;
 
-        uint256 totalMintingCapacity = _operatorGrid().vaultTotalMintingCapacity(_vault);
-        uint256 mintingStETHCapacity = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(totalMintingCapacity);
+        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(_vault);
+        uint256 mintableStEthByShareLimit = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(effectiveShareLimit);
 
-        return Math256.min(mintableStETH, mintingStETHCapacity);
+        return Math256.min(mintableStETHByRR, mintableStEthByShareLimit);
     }
 
     function _vaultHub() internal view returns (VaultHub) {

@@ -97,7 +97,7 @@ abstract contract Permissions is AccessControlConfirmable {
     /**
      * @dev Permission for requesting change of tier on the OperatorGrid.
      */
-    bytes32 public constant REQUEST_TIER_CHANGE_ROLE = keccak256("vaults.Permissions.RequestTierChange");
+    bytes32 public constant CHANGE_TIER_ROLE = keccak256("vaults.Permissions.ChangeTier");
 
     /**
      * @notice Address of the implementation contract
@@ -146,6 +146,7 @@ abstract contract Permissions is AccessControlConfirmable {
         if (_defaultAdmin == address(0)) revert ZeroArgument("_defaultAdmin");
 
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
+        _validateConfirmExpiry(_confirmExpiry);
         _setConfirmExpiry(_confirmExpiry);
     }
 
@@ -345,20 +346,19 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the confirming roles and sets the owner on the StakingVault.
      * @param _newOwner The address to set the owner to.
      */
-    function _transferVaultOwnership(address _newOwner) internal onlyConfirmed(confirmingRoles()) {
+    function _transferVaultOwnership(address _newOwner) internal {
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return;
         VAULT_HUB.transferVaultOwnership(address(_stakingVault()), _newOwner);
     }
 
     /**
-     * @dev Checks the REQUEST_TIER_CHANGE_ROLE and requests a change of the tier on the OperatorGrid.
+     * @dev Checks the CHANGE_TIER_ROLE and requests a change of the tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
+     * @return bool Whether the tier change was confirmed.
      */
-    function _requestTierChange(
-        uint256 _tierId,
-        uint256 _requestedShareLimit
-    ) internal onlyRoleMemberOrAdmin(REQUEST_TIER_CHANGE_ROLE) {
-        _operatorGrid().requestTierChange(address(_stakingVault()), _tierId, _requestedShareLimit);
+    function _changeTier(uint256 _tierId, uint256 _requestedShareLimit) internal onlyRoleMemberOrAdmin(CHANGE_TIER_ROLE) returns (bool) {
+        return _operatorGrid().changeTier(address(_stakingVault()), _tierId, _requestedShareLimit);
     }
 
     /**
