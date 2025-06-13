@@ -54,7 +54,11 @@ contract ValidatorConsolidationRequests {
      * 1. **Externally Owned Account (EOA)**:
      *    - The EOA owner should invoke this function via a delegate call using account abstraction (EIP-7702 delegation).
      *
-     * 2. **Gnosis Safe**:
+     * 2. **Smart Contract**:
+     *    - The smart contract should invoke this function via delegatecall if such functionality is supported.
+     *    - Alternatively, if the contract is behind a proxy, this functionality can be added via an upgrade.
+     *
+     * 3. **Gnosis Safe**:
      *    a. Build a transaction with delegatecall flag enabled.
      *    b. Sign the transaction with the minimum number of owners required to meet the Safe's threshold, then execute it.
      *
