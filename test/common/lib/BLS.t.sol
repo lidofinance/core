@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.25;
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
 
 import "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
@@ -22,7 +24,9 @@ struct PrecomputedDepositMessage {
 contract BLSHarness {
     function verifyDepositMessage(PrecomputedDepositMessage calldata message) public view {
         BLS12_381.verifyDepositMessage(
-            message.deposit,
+            message.deposit.pubkey,
+            message.deposit.signature,
+            message.deposit.amount,
             message.depositYComponents,
             message.withdrawalCredentials,
             0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9
@@ -31,8 +35,9 @@ contract BLSHarness {
 
     function depositMessageSigningRoot(PrecomputedDepositMessage calldata message) public view returns (bytes32) {
         return
-            SSZ.depositMessageSigningRoot(
-                message.deposit,
+            BLS12_381.depositMessageSigningRoot(
+                message.deposit.pubkey,
+                message.deposit.amount,
                 message.withdrawalCredentials,
                 0x03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9
             );
@@ -71,6 +76,16 @@ contract BLSVerifyingKeyTest is Test {
     function test_verifyDeposit_MAINNET() external view {
         PrecomputedDepositMessage memory message = BENCHMARK_MAINNET_MESSAGE();
         harness.verifyDepositMessage(message);
+    }
+
+    function test_computeDepositDomainMainnet() public view {
+        bytes32 depositDomain = BLS12_381.computeDepositDomain(bytes4(0));
+        assertEq(depositDomain, hex"03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9");
+    }
+
+    function test_computeDepositDomainHoodi() public view {
+        bytes32 depositDomain = BLS12_381.computeDepositDomain(bytes4(hex"10000910"));
+        assertEq(depositDomain, hex"03000000719103511efa4f1362ff2a50996cccf329cc84cb410c5e5c7d351d03");
     }
 
     function LOCAL_MESSAGE_1() internal pure returns (PrecomputedDepositMessage memory) {

@@ -1,13 +1,16 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.25;
+
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
 
 import {Test} from "forge-std/Test.sol";
 
-import {BeaconBlockHeader, Validator} from "../../../contracts/common/lib/BeaconTypes.sol";
-import {GIndex, pack} from "../../../contracts/common/lib/GIndex.sol";
+import {BeaconBlockHeader, Validator} from "contracts/common/lib/BeaconTypes.sol";
+import {GIndex, pack} from "contracts/common/lib/GIndex.sol";
+import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {Utilities} from "../contracts/Utilities.sol";
-import {SSZ} from "../../../contracts/common/lib/SSZ.sol";
 
 // Wrap the library internal methods to make an actual call to them.
 // Supposed to be used with `expectRevert` cheatcode and to pass
@@ -23,16 +26,6 @@ contract SSZTest is Utilities, Test {
 
     function setUp() public {
         lib = new Library();
-    }
-
-    function test_computeDepositDomainMainnet() public view {
-        bytes32 depositDomain = SSZ.computeDepositDomain(bytes4(0));
-        assertEq(depositDomain, hex"03000000f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9");
-    }
-
-    function test_computeDepositDomainHoodi() public view {
-        bytes32 depositDomain = SSZ.computeDepositDomain(bytes4(hex"10000910"));
-        assertEq(depositDomain, hex"03000000719103511efa4f1362ff2a50996cccf329cc84cb410c5e5c7d351d03");
     }
 
     function test_toLittleEndianUint() public pure {
