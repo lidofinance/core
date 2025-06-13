@@ -27,7 +27,6 @@ import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/Accou
 import { certainAddress, ether, getCurrentBlockTimestamp, impersonate } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 
@@ -96,20 +95,8 @@ describe("Accounting.sol:report", () => {
     };
     await operatorGrid.initialize(deployer, defaultTierParams);
 
-    const vaultHubImpl = await ethers.deployContract(
-      "VaultHub",
-      [locator, lido, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP],
-      deployer,
-    );
-
-    const vaultHubProxy = await ethers.deployContract(
-      "OssifiableProxy",
-      [vaultHubImpl, deployer, new Uint8Array()],
-      deployer,
-    );
-    const vaultHub = await ethers.getContractAt("VaultHub", vaultHubProxy, deployer);
+    const vaultHub = await ethers.deployContract("VaultHub__MockForAccountingReport", deployer);
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub });
-    await vaultHub.initialize(deployer);
 
     const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100.0"));
     accounting = accounting.connect(accountingOracleSigner);
