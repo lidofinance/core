@@ -84,11 +84,6 @@ describe("AccountingOracle.sol:submitReport", () => {
     const { refSlot } = await deployed.consensus.getCurrentFrame();
 
     extraData = {
-      stuckKeys: [
-        { moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
-        { moduleId: 2, nodeOpIds: [0], keysCounts: [2] },
-        { moduleId: 3, nodeOpIds: [2], keysCounts: [3] },
-      ],
       exitedKeys: [
         { moduleId: 2, nodeOpIds: [1, 2], keysCounts: [1, 3] },
         { moduleId: 3, nodeOpIds: [1], keysCounts: [2] },
@@ -181,6 +176,7 @@ describe("AccountingOracle.sol:submitReport", () => {
 
     it("processing state reverts to pre-report state ", async () => {
       const state = await oracle.getProcessingState();
+      console.debug({ state });
       expect(state.mainDataHash).to.equal(ZeroHash);
       expect(state.extraDataHash).to.equal(ZeroHash);
       expect(state.extraDataFormat).to.equal(0);

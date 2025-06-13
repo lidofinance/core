@@ -1,7 +1,32 @@
 {
+  "validatorExitDelayVerifier": {
+    "deployParameters": {
+      "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIHistoricalSummariesPrev": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "gIHistoricalSummariesCurr": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "firstSupportedSlot": 1,
+      "pivotSlot": 1,
+      "shardCommitteePeriodInSeconds": 98304,
+      "shardCommitteePeriodInSecondsComment": "98304 above is 2 ** 8 * 32 * 12"
+    }
+  },
+  "triggerableWithdrawalsGateway": {
+    "deployParameters": {
+      "maxExitRequestsLimit": 13000,
+      "exitsPerFrame": 1,
+      "frameDurationInSec": 48
+    }
+  },
   "vaultHub": {
     "deployParameters": {
       "relativeShareLimitBP": 1000
+    }
+  },
+  "lazyOracle": {
+    "deployParameters": {
+      "quarantinePeriod": 259200,
+      "maxRewardRatioBP": 350
     }
   },
   "predepositGuarantee": {

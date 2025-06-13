@@ -11,6 +11,7 @@ export async function main() {
   const state = readNetworkState({ deployer });
 
   const agent = state[Sk.appAgent].proxy.address;
+  const voting = state[Sk.appVoting].proxy.address;
 
   // Transfer OZ admin roles for various contracts
   const ozAdminTransfers = [
@@ -23,9 +24,11 @@ export async function main() {
     { name: "WithdrawalQueueERC721", address: state[Sk.withdrawalQueueERC721].proxy.address },
     { name: "OracleDaemonConfig", address: state[Sk.oracleDaemonConfig].address },
     { name: "OracleReportSanityChecker", address: state[Sk.oracleReportSanityChecker].address },
+    { name: "TriggerableWithdrawalsGateway", address: state[Sk.triggerableWithdrawalsGateway].address },
     { name: "VaultHub", address: state[Sk.vaultHub].proxy.address },
     { name: "PredepositGuarantee", address: state[Sk.predepositGuarantee].proxy.address },
     { name: "OperatorGrid", address: state[Sk.operatorGrid].proxy.address },
+    { name: "LazyOracle", address: state[Sk.lazyOracle].proxy.address },
   ];
 
   for (const contract of ozAdminTransfers) {
@@ -63,4 +66,8 @@ export async function main() {
   // Transfer ownership of LidoTemplate to agent
   const lidoTemplate = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
   await makeTx(lidoTemplate, "setOwner", [agent], { from: deployer });
+
+  // Transfer admin for WithdrawalsManagerProxy from deployer to voting
+  const withdrawalsManagerProxy = await loadContract("WithdrawalsManagerProxy", state.withdrawalVault.proxy.address);
+  await makeTx(withdrawalsManagerProxy, "proxy_changeAdmin", [voting], { from: deployer });
 }

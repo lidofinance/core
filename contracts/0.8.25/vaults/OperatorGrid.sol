@@ -135,7 +135,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
      *         The storage namespace is used to prevent upgrade collisions
      *         keccak256(abi.encode(uint256(keccak256("Lido.Vaults.OperatorGrid")) - 1)) & ~bytes32(uint256(0xff))
      */
-    bytes32 private constant ERC7201_STORAGE_LOCATION =
+    bytes32 private constant OPERATOR_GRID_STORAGE_LOCATION =
         0x6b64617c951381e2c1eff2be939fe368ab6d76b7d335df2e47ba2309eba1c700;
 
 
@@ -451,19 +451,17 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         // 2. Vault is created, its tier is changed before connecting to VaultHub.
         //    In this case, `VaultConnection` is still zero, and updateConnection must be skipped.
         // Hence, we update the VaultHub connection only if the vault is already connected.
-        if (isVaultConnected) {
-            vaultHub.updateConnection(
-                _vault,
-                _requestedShareLimit,
-                requestedTier.reserveRatioBP,
-                requestedTier.forcedRebalanceThresholdBP,
-                requestedTier.infraFeeBP,
-                requestedTier.liquidityFeeBP,
-                requestedTier.reservationFeeBP
-            );
-        }
+        vaultHub.updateConnection(
+            _vault,
+            _requestedShareLimit,
+            requestedTier.reserveRatioBP,
+            requestedTier.forcedRebalanceThresholdBP,
+            requestedTier.infraFeeBP,
+            requestedTier.liquidityFeeBP,
+            requestedTier.reservationFeeBP
+        );
 
-        emit TierChanged(_vault, _requestedTierId);
+        emit TierChanged(_vault, _requestedTierId, _requestedShareLimit);
 
         return true;
     }
@@ -479,7 +477,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if ($.vaultTier[_vault] != DEFAULT_TIER_ID) {
             $.vaultTier[_vault] = DEFAULT_TIER_ID;
 
-            emit TierChanged(_vault, DEFAULT_TIER_ID);
+            emit TierChanged(_vault, DEFAULT_TIER_ID, $.tiers[DEFAULT_TIER_ID].shareLimit);
         }
     }
 
@@ -650,7 +648,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
-            $.slot := ERC7201_STORAGE_LOCATION
+            $.slot := OPERATOR_GRID_STORAGE_LOCATION
         }
     }
 
@@ -669,7 +667,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         uint256 liquidityFeeBP,
         uint256 reservationFeeBP
     );
-    event TierChanged(address indexed vault, uint256 indexed tierId);
+    event TierChanged(address indexed vault, uint256 indexed tierId, uint256 shareLimit);
     event TierUpdated(
       uint256 indexed tierId,
       uint256 shareLimit,

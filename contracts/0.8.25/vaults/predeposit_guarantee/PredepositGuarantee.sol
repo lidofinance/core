@@ -4,9 +4,9 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {GIndex} from "contracts/0.8.25/lib/GIndex.sol";
-import {SSZ} from "contracts/0.8.25/lib/SSZ.sol";
-import {BLS12_381} from "contracts/0.8.25/lib/BLS.sol";
+import {GIndex} from "contracts/common/lib/GIndex.sol";
+import {SSZ} from "contracts/common/lib/SSZ.sol";
+import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
 import {CLProofVerifier} from "./CLProofVerifier.sol";
@@ -135,7 +135,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         GIndex _gIFirstValidatorAfterChange,
         uint64 _changeSlot
     ) CLProofVerifier(_gIFirstValidator, _gIFirstValidatorAfterChange, _changeSlot) {
-        DEPOSIT_DOMAIN = SSZ.computeDepositDomain(_genesisForkVersion);
+        DEPOSIT_DOMAIN = BLS12_381.computeDepositDomain(_genesisForkVersion);
         _disableInitializers();
         _pauseUntil(PAUSE_INFINITELY);
     }
@@ -239,7 +239,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         BLS12_381.DepositY calldata _depositsY,
         bytes32 _withdrawalCredentials
     ) public view {
-        BLS12_381.verifyDepositMessage(_deposit, _depositsY, _withdrawalCredentials, DEPOSIT_DOMAIN);
+        BLS12_381.verifyDepositMessage(_deposit.pubkey, _deposit.signature, _deposit.amount, _depositsY, _withdrawalCredentials, DEPOSIT_DOMAIN);
     }
 
     /**

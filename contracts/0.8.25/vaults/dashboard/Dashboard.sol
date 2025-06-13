@@ -70,8 +70,8 @@ contract Dashboard is NodeOperatorFee {
         address _vaultHub,
         address _lidoLocator
     ) NodeOperatorFee(_vaultHub, _lidoLocator) {
-        if (_stETH == address(0)) revert ZeroArgument("_stETH");
-        if (_wstETH == address(0)) revert ZeroArgument("_wstETH");
+        _requireNotZero(_stETH);
+        _requireNotZero(_wstETH);
 
         // stETH and wstETH are cached as immutable to save gas for main operations
         STETH = IStETH(_stETH);
@@ -266,6 +266,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function abandonDashboard(address _newOwner) external {
         if (VAULT_HUB.isVaultConnected(address(_stakingVault()))) revert ConnectedToVaultHub();
+        if (_newOwner == address(this)) revert DashboardNotAllowed();
 
         _acceptOwnership();
         _transferOwnership(_newOwner);
@@ -316,7 +317,7 @@ contract Dashboard is NodeOperatorFee {
     function withdraw(address _recipient, uint256 _ether) external {
         uint256 withdrawableEther = withdrawableValue();
         if (_ether > withdrawableEther) {
-            revert WithdrawalExceedsWithdrawableValue(_ether, withdrawableEther);
+            revert ExceedsWithdrawable(_ether, withdrawableEther);
         }
 
         _withdraw(_recipient, _ether);
@@ -413,7 +414,7 @@ contract Dashboard is NodeOperatorFee {
 
         uint256 withdrawableEther = withdrawableValue();
         if (totalAmount > withdrawableEther) {
-            revert WithdrawalExceedsWithdrawableValue(totalAmount, withdrawableEther);
+            revert ExceedsWithdrawable(totalAmount, withdrawableEther);
         }
 
         _disableFundOnReceive();
@@ -472,9 +473,9 @@ contract Dashboard is NodeOperatorFee {
         address _recipient,
         uint256 _amount
     ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
-        if (_token == address(0)) revert ZeroArgument("_token");
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_amount == 0) revert ZeroArgument("_amount");
+        _requireNotZero(_token);
+        _requireNotZero(_recipient);
+        _requireNotZero(_amount);
 
         if (_token == ETH) {
             (bool success,) = payable(_recipient).call{value: _amount}("");
@@ -499,8 +500,8 @@ contract Dashboard is NodeOperatorFee {
         uint256 _tokenId,
         address _recipient
     ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
-        if (_token == address(0)) revert ZeroArgument("_token");
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+        _requireNotZero(_token);
+        _requireNotZero(_recipient);
 
         IERC721(_token).safeTransferFrom(address(this), _recipient, _tokenId);
 
@@ -581,7 +582,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function _mintSharesWithinMintingCapacity(address _recipient, uint256 _amountOfShares) internal {
         uint256 remainingShares = remainingMintingCapacityShares(0);
-        if (_amountOfShares > remainingShares) revert MintingCapacityExceeded(_amountOfShares, remainingShares);
+        if (_amountOfShares > remainingShares) revert ExceedsMintingCapacity(_amountOfShares, remainingShares);
 
         _mintShares(_recipient, _amountOfShares);
     }
@@ -674,12 +675,12 @@ contract Dashboard is NodeOperatorFee {
      * @param amount The amount of ether that was attempted to be withdrawn
      * @param withdrawableValue The amount of withdrawable ether available
      */
-    error WithdrawalExceedsWithdrawableValue(uint256 amount, uint256 withdrawableValue);
+    error ExceedsWithdrawable(uint256 amount, uint256 withdrawableValue);
 
     /**
      * @notice Error thrown when minting capacity is exceeded
      */
-    error MintingCapacityExceeded(uint256 requestedShares, uint256 remainingShares);
+    error ExceedsMintingCapacity(uint256 requestedShares, uint256 remainingShares);
 
     /**
      * @notice Error thrown when recovery of ETH fails on transfer to recipient
@@ -695,4 +696,9 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error thrown when attempting to connect to VaultHub without confirmed tier change
      */
     error TierChangeNotConfirmed();
+
+    /**
+     * @notice Error when attempting to abandon the Dashboard contract itself.
+     */
+    error DashboardNotAllowed();
 }

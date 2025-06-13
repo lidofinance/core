@@ -4,9 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-interface IHashConsensus {
-    function getCurrentFrame() external view returns (uint256 refSlot, uint256);
-}
+import {IHashConsensus} from "../interfaces/IHashConsensus.sol";
 
 library RefSlotCache {
     struct Uint112WithRefSlotCache {
@@ -19,20 +17,24 @@ library RefSlotCache {
     /// @param _storage The storage slot to update
     /// @param _consensus The consensus contract to get the current refSlot
     /// @param _increment increment the value by this amount
-    function updateCacheAndIncreaseValue(
+    /// @return the updated struct to be saved in storage
+    function withValueIncreased(
         Uint112WithRefSlotCache storage _storage,
         IHashConsensus _consensus,
         uint112 _increment
-    ) internal {
+    ) internal view returns (Uint112WithRefSlotCache memory) {
         (uint256 refSlot, ) = _consensus.getCurrentFrame();
 
-        uint112 currentValue = _storage.value;
-        if (_storage.refSlot != uint32(refSlot)) { // 32 bits is enough precision for this kind of comparison
-            _storage.valueOnRefSlot = currentValue;
-            _storage.refSlot = uint32(refSlot);
+        Uint112WithRefSlotCache memory newStorage = _storage;
+
+        if (newStorage.refSlot != uint32(refSlot)) { // 32 bits is enough precision for this kind of comparison
+            newStorage.valueOnRefSlot = _storage.value;
+            newStorage.refSlot = uint32(refSlot);
         }
 
-        _storage.value = currentValue + _increment;
+        newStorage.value += _increment;
+
+        return newStorage;
     }
 
     /// @notice Returns the value for the current refSlot
