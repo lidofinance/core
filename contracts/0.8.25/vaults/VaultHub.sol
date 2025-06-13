@@ -1217,7 +1217,7 @@ contract VaultHub is PausableUntilWithRoles {
             valueToTransferToLido = Math256.min(_obligations.unsettledLidoFees, availableForFees);
         }
 
-        unsettledRedemptions = _getPooledEthByShares(cappedRedemptionsShares - sharesToRebalance);
+        unsettledRedemptions = _getPooledEthBySharesRoundUp(cappedRedemptionsShares - sharesToRebalance);
         unsettledLidoFees = _obligations.unsettledLidoFees - valueToTransferToLido;
         totalUnsettled = unsettledRedemptions + unsettledLidoFees;
     }
