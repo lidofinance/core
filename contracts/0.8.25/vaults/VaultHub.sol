@@ -1187,7 +1187,13 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 totalUnsettled
     ) {
         uint256 vaultBalance = _vault.balance;
-        uint256 cappedRedemptionsShares = Math256.min(_record.liabilityShares, _getSharesByPooledEthRoundUp(_obligations.redemptions));
+
+        uint256 redemptionShares = _getSharesByPooledEth(_obligations.redemptions);
+        uint256 maxRedemptionsValue = _getPooledEthBySharesRoundUp(redemptionShares);
+        // if the max redemptions value is less than the redemptions, we need to round up the redemptions shares
+        if (maxRedemptionsValue < _obligations.redemptions) redemptionShares += 1;
+
+        uint256 cappedRedemptionsShares = Math256.min(_record.liabilityShares, redemptionShares);
         sharesToRebalance = Math256.min(cappedRedemptionsShares, _getSharesByPooledEth(vaultBalance));
         valueToRebalance = _getPooledEthBySharesRoundUp(sharesToRebalance);
         uint256 remainingBalance = vaultBalance - valueToRebalance;
@@ -1349,10 +1355,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _getPooledEthBySharesRoundUp(uint256 _shares) internal view returns (uint256) {
         return LIDO.getPooledEthBySharesRoundUp(_shares);
-    }
-
-    function _getSharesByPooledEthRoundUp(uint256 _ether) internal view returns (uint256) {
-        return LIDO.getSharesByPooledEthRoundUp(_ether);
     }
 
     // -----------------------------

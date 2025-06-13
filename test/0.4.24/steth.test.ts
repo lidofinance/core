@@ -483,27 +483,6 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
     }
   });
 
-  context("getSharesByPooledEthRoundUp", () => {
-    for (const [rebase, factor] of [
-      ["neutral", 100n], // 1
-      ["positive", 103n], // 0.97
-      ["negative", 97n], // 1.03
-    ]) {
-      it(`Returns the correct rate after a ${rebase} rebase`, async () => {
-        // before the first rebase, steth are equivalent to shares
-        expect(await steth.getSharesByPooledEthRoundUp(ONE_STETH)).to.equal(ONE_SHARE);
-
-        const rebasedSupply = (totalSupply * (factor as bigint)) / 100n;
-        await steth.setTotalPooledEther(rebasedSupply);
-
-        expect(await steth.getPooledEthByShares(await steth.getSharesByPooledEthRoundUp(1))).to.equal(1n);
-        expect(await steth.getPooledEthByShares(await steth.getSharesByPooledEthRoundUp(ONE_STETH))).to.equal(
-          ONE_STETH,
-        );
-      });
-    }
-  });
-
   context("_mintInitialShares", () => {
     it("Mints shares to the recipient and fires the transfer events", async () => {
       const balanceOfInitialSharesHolderBefore = await steth.balanceOf(INITIAL_SHARES_HOLDER);

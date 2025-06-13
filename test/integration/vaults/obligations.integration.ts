@@ -18,7 +18,7 @@ import {
   VaultRoles,
 } from "lib/protocol";
 
-import { Snapshot } from "test/suite";
+import { SHARE_RATE_PRECISION, Snapshot, Tracing } from "test/suite";
 
 const TOTAL_BASIS_POINTS = 100_00n;
 
@@ -601,19 +601,128 @@ describe("Integration: Vault obligations", () => {
         .withArgs(stakingVaultAddress, 0n, 1n, 0n, 0n, 1n);
     });
 
-    // TODO: fix
-    it.skip("Should correctly settle small redemptions (1 wei)", async () => {
+    it("Should correctly settle small redemptions (1 wei)", async () => {
       await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
       expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(liabilityShares);
 
       await addRedemptionsObligation(1n);
 
+      const etherByShare = await ctx.contracts.lido.getPooledEthBySharesRoundUp(1n);
       await expect(vaultHub.settleVaultObligations(stakingVaultAddress))
         .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 2n, 0n, 0n, 0n, 0n);
+        .withArgs(stakingVaultAddress, etherByShare, 0n, 0n, 0n, 0n);
 
       expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(0);
     });
+
+    for (const [burnAmount, shareRate] of [
+      ["1", 1n],
+      ["15000", 2n],
+      ["30000", 3n],
+      ["45000", 4n],
+      ["60000", 5n],
+    ] as [string, bigint][]) {
+      context(`Share rate: ${shareRate}`, () => {
+        beforeEach(async function () {
+          if (!ctx.isScratch) this.skip();
+
+          const { lido, burner } = ctx.contracts;
+
+          // Burn some shares to make share > 2 (on scratch)
+          const burnerSigner = await impersonate(burner.address, ether("1"));
+          await lido.connect(whale).submit(ZeroAddress, { value: ether(burnAmount) });
+          await lido.connect(whale).transfer(burnerSigner, ether(burnAmount));
+          await lido.connect(burnerSigner).burnShares(ether(burnAmount));
+
+          const shareRateValue = (await lido.getTotalPooledEther()) / (await lido.getTotalShares());
+          expect(shareRateValue).to.equal(shareRate);
+        });
+
+        it(`Should round correctly on 1 wei redemption on 1 share with share rate = ${shareRate} (only on scratch)`, async function () {
+          // Can't be reproduced on mainnet fork
+          if (!ctx.isScratch) this.skip();
+
+          await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
+          expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(liabilityShares);
+
+          await addRedemptionsObligation(1n);
+
+          const etherByShare = await ctx.contracts.lido.getPooledEthBySharesRoundUp(1n);
+          await expect(vaultHub.settleVaultObligations(stakingVaultAddress))
+            .to.emit(vaultHub, "VaultObligationsSettled")
+            .withArgs(stakingVaultAddress, etherByShare, 0n, 0n, 0n, 0n);
+
+          expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(0);
+        });
+
+        it(`Should round correctly 1 wei redemption on 10^18 shares with share rate = ${shareRate} (only on scratch)`, async function () {
+          // Can't be reproduced on mainnet fork
+          if (!ctx.isScratch) this.skip();
+
+          liabilityShares = ether("1");
+
+          await dashboard.connect(roles.funder).fund({ value: ether("1") * shareRate });
+          await dashboard.connect(roles.minter).mintShares(roles.burner, liabilityShares);
+          expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(liabilityShares);
+
+          await addRedemptionsObligation(1n);
+
+          const etherByShare = await ctx.contracts.lido.getPooledEthBySharesRoundUp(1n);
+          const expectedLiabilityShares = liabilityShares - 1n;
+          await expect(vaultHub.settleVaultObligations(stakingVaultAddress))
+            .to.emit(vaultHub, "VaultObligationsSettled")
+            .withArgs(stakingVaultAddress, etherByShare, 0n, 0n, 0n, 0n);
+
+          expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(expectedLiabilityShares);
+        });
+
+        it(`Should round correctly 1 ether redemption on 10^18 shares with share rate = ${shareRate} (only on scratch)`, async function () {
+          // Can't be reproduced on mainnet fork
+          if (!ctx.isScratch) this.skip();
+
+          const shares = ether("1");
+          const redemption = ether("1");
+
+          await dashboard.connect(roles.funder).fund({ value: ether("1") * shareRate });
+          await dashboard.connect(roles.minter).mintShares(roles.burner, shares);
+          expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(shares);
+
+          await addRedemptionsObligation(redemption); // 1 ether from shares
+
+          let redemtionShares = await ctx.contracts.lido.getSharesByPooledEth(redemption);
+          let expectedRedemptionSettled = await ctx.contracts.lido.getPooledEthBySharesRoundUp(redemtionShares);
+          if (expectedRedemptionSettled < redemption) {
+            redemtionShares += 1n;
+            expectedRedemptionSettled = await ctx.contracts.lido.getPooledEthBySharesRoundUp(redemtionShares);
+          }
+
+          await expect(vaultHub.settleVaultObligations(stakingVaultAddress))
+            .to.emit(vaultHub, "VaultObligationsSettled")
+            .withArgs(stakingVaultAddress, expectedRedemptionSettled, 0n, 0n, 0n, 0n);
+
+          expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(shares - redemtionShares);
+        });
+
+        it("Should correctly settle full liability", async function () {
+          // Can't be reproduced on mainnet fork
+          if (!ctx.isScratch) this.skip();
+
+          const shares = ether("1");
+          const redemption = await ctx.contracts.lido.getPooledEthBySharesRoundUp(shares);
+
+          await dashboard.connect(roles.funder).fund({ value: ether("1") * shareRate });
+          await dashboard.connect(roles.minter).mintShares(roles.burner, shares);
+
+          await addRedemptionsObligation(redemption);
+
+          await expect(vaultHub.settleVaultObligations(stakingVaultAddress))
+            .to.emit(vaultHub, "VaultObligationsSettled")
+            .withArgs(stakingVaultAddress, redemption, 0n, 0n, 0n, 0n);
+
+          expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(0);
+        });
+      });
+    }
   });
 
   context("Manual permissionless settlement", () => {
