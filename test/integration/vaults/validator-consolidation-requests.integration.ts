@@ -2,7 +2,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, EIP7251MaxEffectiveBalanceRequest__Mock } from "typechain-types";
+import { Dashboard, EIP7251MaxEffectiveBalanceRequest__Mock, StakingVault } from "typechain-types";
 
 import { deployEIP7251MaxEffectiveBalanceRequestContract } from "lib";
 import { createVaultWithDashboard, getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -19,13 +19,14 @@ describe("Integration: ValidatorConsolidationRequests", () => {
   let stranger: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let dashboard: Dashboard;
+  let stakingVault: StakingVault;
 
   before(async () => {
     consolidationRequestPredeployed = await deployEIP7251MaxEffectiveBalanceRequestContract(1n);
     ctx = await getProtocolContext();
     [owner, stranger, nodeOperator] = await ethers.getSigners();
 
-    ({ dashboard } = await createVaultWithDashboard(
+    ({ dashboard, stakingVault } = await createVaultWithDashboard(
       ctx,
       ctx.contracts.stakingVaultFactory,
       owner,
@@ -48,7 +49,7 @@ describe("Integration: ValidatorConsolidationRequests", () => {
     const feeForRequest = 10n;
     const totalFee = BigInt(totalSourcePubkeysCount) * feeForRequest;
     await consolidationRequestPredeployed.mock__setFee(feeForRequest);
-    const dashboardAddress = await dashboard.getAddress();
+    const stakingVaultAddress = await stakingVault.getAddress();
 
     await dashboard
       .connect(nodeOperator)
@@ -62,7 +63,7 @@ describe("Integration: ValidatorConsolidationRequests", () => {
             sourcePubkeys,
             targetPubkeys,
             stranger.address,
-            dashboardAddress,
+            stakingVaultAddress,
             adjustmentIncrease,
           ]),
           { value: totalFee },

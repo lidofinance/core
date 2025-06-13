@@ -77,20 +77,20 @@ contract ValidatorConsolidationRequests {
      *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
      *
      * @param _refundRecipient The address to refund the excess consolidation fee to.
-     * @param _dashboard The address of the dashboard contract.
+     * @param _vault The address of the vault contract.
      * @param _adjustmentIncrease The sum of the balances of the source validators to increase the rewards adjustment by.
      */
     function addConsolidationRequests(
         bytes[] calldata _sourcePubkeys,
         bytes[] calldata _targetPubkeys,
         address _refundRecipient,
-        address _dashboard,
+        address _vault,
         uint256 _adjustmentIncrease
     ) external payable onlyDelegateCall {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
         if (_targetPubkeys.length == 0) revert ZeroArgument("targetPubkeys");
-        if (_dashboard == address(0)) revert ZeroArgument("dashboard");
+        if (_vault == address(0)) revert ZeroArgument("vault");
 
         // If the refund recipient is not set, use the sender as the refund recipient
         if (_refundRecipient == address(0)) {
@@ -101,7 +101,9 @@ contract ValidatorConsolidationRequests {
             revert MismatchingSourceAndTargetPubkeysCount(_sourcePubkeys.length, _targetPubkeys.length);
         }
 
-        VaultHub.VaultConnection memory vaultConnection = _getVaultConnection(_dashboard);
+        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(_vault);
+
         if(vaultConnection.vaultIndex == 0 || vaultConnection.pendingDisconnect == true) {
             revert VaultNotConnected();
         }
@@ -132,7 +134,9 @@ contract ValidatorConsolidationRequests {
             if (!success) revert ConsolidationFeeRefundFailed(_refundRecipient, excess);
         }
 
-        Dashboard(payable(_dashboard)).increaseRewardsAdjustment(_adjustmentIncrease);
+        if(_adjustmentIncrease > 0) {
+            Dashboard(payable(vaultConnection.owner)).increaseRewardsAdjustment(_adjustmentIncrease);
+        }
 
         emit ConsolidationRequestsAdded(msg.sender, _sourcePubkeys, _targetPubkeys, _refundRecipient, excess, _adjustmentIncrease);
     }
@@ -181,12 +185,6 @@ contract ValidatorConsolidationRequests {
         }
 
         return keysCount;
-    }
-
-    function _getVaultConnection(address _dashboard) private view returns (VaultHub.VaultConnection memory) {
-        IStakingVault stakingVault = Dashboard(payable(_dashboard)).stakingVault();
-        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
-        return vaultHub.vaultConnection(address(stakingVault));
     }
 
     function _processConsolidationRequest(

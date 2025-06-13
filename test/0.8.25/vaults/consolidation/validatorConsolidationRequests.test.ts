@@ -51,11 +51,14 @@ describe("ValidatorConsolidationRequests.sol", () => {
     // Set a high balance for the actor account
     await setBalance(actor.address, ether("1000000"));
 
+    dashboard = await ethers.deployContract("Dashboard__Mock");
+    dashboardAddress = await dashboard.getAddress();
+
     delegateCaller = await ethers.deployContract("DelegateCaller", [], { from: actor });
     consolidationRequestPredeployed = await deployEIP7251MaxEffectiveBalanceRequestContract(1n);
     vaultHub = await ethers.deployContract("VaultHub__MockForDashboard", [ethers.ZeroAddress, ethers.ZeroAddress]);
     await vaultHub.mock__setVaultConnection(stakingVault.address, {
-      owner: actor.address,
+      owner: dashboardAddress,
       shareLimit: 0,
       vaultIndex: 1,
       pendingDisconnect: false,
@@ -71,8 +74,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     });
     validatorConsolidationRequests = await ethers.deployContract("ValidatorConsolidationRequests", [locator]);
     validatorConsolidationRequestsAddress = await validatorConsolidationRequests.getAddress();
-    dashboard = await ethers.deployContract("Dashboard__Mock");
-    dashboardAddress = await dashboard.getAddress();
+
     await dashboard.mock__setStakingVault(stakingVault.address);
     expect(await consolidationRequestPredeployed.getAddress()).to.equal(EIP7251_ADDRESS);
   });
@@ -89,6 +91,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     it("Should return the address of the EIP 7251 max effective balance request contract", async function () {
       expect(await validatorConsolidationRequests.CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS()).to.equal(EIP7251_ADDRESS);
     });
+
     it("Should THIS point to contract address", async function () {
       expect(await validatorConsolidationRequests.THIS()).to.equal(validatorConsolidationRequestsAddress);
     });
@@ -129,7 +132,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
             [],
             [],
             receiver.address,
-            dashboardAddress,
+            stakingVault.address,
             0,
           ]),
         ),
@@ -144,7 +147,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
             [],
             [],
             receiver.address,
-            dashboardAddress,
+            stakingVault.address,
             0,
           ]),
           { value: 1n },
@@ -160,7 +163,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
             [EMPTY_PUBKEYS],
             [],
             receiver.address,
-            dashboardAddress,
+            stakingVault.address,
             0,
           ]),
           { value: 1n },
@@ -183,7 +186,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         ),
       )
         .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
-        .withArgs("dashboard");
+        .withArgs("vault");
     });
   });
 
@@ -193,7 +196,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         [EMPTY_PUBKEYS],
         [EMPTY_PUBKEYS],
         receiver.address,
-        dashboard,
+        stakingVault.address,
         1n,
         { value: 1n },
       ),
@@ -220,7 +223,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           [EMPTY_PUBKEYS],
           [EMPTY_PUBKEYS],
           receiver.address,
-          dashboardAddress,
+          stakingVault.address,
           1n,
         ]),
         { value: 1n },
@@ -246,7 +249,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           [EMPTY_PUBKEYS],
           [EMPTY_PUBKEYS],
           receiver.address,
-          await dashboard.getAddress(),
+          stakingVault.address,
           1n,
         ]),
         { value: 1n },
@@ -262,7 +265,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           [EMPTY_PUBKEYS],
           [EMPTY_PUBKEYS, EMPTY_PUBKEYS],
           receiver.address,
-          dashboardAddress,
+          stakingVault.address,
           1n,
         ]),
         { value: 1n },
@@ -285,7 +288,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           sourcePubkeys,
           targetPubkeys,
           receiver.address,
-          dashboardAddress,
+          stakingVault.address,
           adjustmentIncrease,
         ]),
         { value: insufficientFee },
@@ -307,7 +310,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           [invalidPubkeyHexString],
           targetPubkeys,
           receiver.address,
-          dashboardAddress,
+          stakingVault.address,
           adjustmentIncrease,
         ]),
         { value: fee },
@@ -321,7 +324,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           sourcePubkeys,
           [invalidPubkeyHexString],
           receiver.address,
-          dashboardAddress,
+          stakingVault.address,
           adjustmentIncrease,
         ]),
         { value: fee },
@@ -345,7 +348,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           sourcePubkeys,
           targetPubkeys,
           receiver.address,
-          dashboardAddress,
+          stakingVault.address,
           adjustmentIncrease,
         ]),
         { value: fee },
@@ -369,7 +372,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           sourcePubkeys,
           targetPubkeys,
           receiver.address,
-          dashboardAddress,
+          stakingVault.address,
           adjustmentIncrease,
         ]),
         { value: fee },
@@ -394,7 +397,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
           sourcePubkeys,
           targetPubkeys,
           receiver.address,
-          dashboardAddress,
+          stakingVault.address,
           adjustmentIncrease,
         ]),
         { value: fee },
@@ -418,7 +421,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
             sourcePubkeys,
             targetPubkeys,
             receiver.address,
-            dashboardAddress,
+            stakingVault.address,
             adjustmentIncrease,
           ]),
           { value: fee * BigInt(totalSourcePubkeysCount) },
@@ -441,7 +444,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
             sourcePubkeys,
             targetPubkeys,
             receiver.address,
-            dashboardAddress,
+            stakingVault.address,
             adjustmentIncrease,
           ]),
           { value: highFee * BigInt(totalSourcePubkeysCount) },
@@ -469,7 +472,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
             sourcePubkeys,
             targetPubkeys,
             receiver.address,
-            dashboardAddress,
+            stakingVault.address,
             adjustmentIncrease,
           ]),
           { value: excessFee * BigInt(totalSourcePubkeysCount) },
@@ -495,7 +498,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
             sourcePubkeys,
             targetPubkeys,
             receiver.address,
-            dashboardAddress,
+            stakingVault.address,
             adjustmentIncrease,
           ]),
           { value: extremelyHighFee * BigInt(totalSourcePubkeysCount) },
@@ -523,7 +526,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         sourcePubkeys,
         targetPubkeys,
         receiver.address,
-        dashboardAddress,
+        stakingVault.address,
         adjustmentIncrease,
       ]),
       { value: expectedTotalConsolidationFee },
@@ -556,7 +559,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         sourcePubkeys,
         targetPubkeys,
         receiver.address,
-        dashboardAddress,
+        stakingVault.address,
         adjustmentIncrease,
       ]),
       { value: expectedTotalConsolidationFee },
@@ -581,7 +584,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         sourcePubkeys,
         targetPubkeys,
         receiver.address,
-        dashboardAddress,
+        stakingVault.address,
         adjustmentIncrease,
       ]),
       { value: expectedTotalConsolidationFee },
@@ -609,6 +612,30 @@ describe("ValidatorConsolidationRequests.sol", () => {
     }
   });
 
+  it("Should not call the dashboard if the adjustment increase is 0", async function () {
+    const requestCount = 1;
+    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount } = generateConsolidationRequestPayload(requestCount);
+
+    const fee = 3n;
+    await consolidationRequestPredeployed.mock__setFee(fee);
+
+    const tx = await delegateCaller.callDelegate(
+      validatorConsolidationRequestsAddress,
+      validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
+        sourcePubkeys,
+        targetPubkeys,
+        receiver.address,
+        stakingVault.address,
+        0,
+      ]),
+      { value: fee * BigInt(totalSourcePubkeysCount) },
+    );
+    const receipt = await tx.wait();
+
+    const events = findDashboardMockEvents(receipt!);
+    expect(events.length).to.equal(0);
+  });
+
   it("Should ensure the dashboard is called with the correct adjustment increases", async function () {
     const requestCount = 3;
     const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncrease } =
@@ -623,7 +650,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         sourcePubkeys,
         targetPubkeys,
         receiver.address,
-        dashboardAddress,
+        stakingVault.address,
         adjustmentIncrease,
       ]),
       { value: fee * BigInt(totalSourcePubkeysCount) },
