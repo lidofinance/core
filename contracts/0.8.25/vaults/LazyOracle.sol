@@ -113,6 +113,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     constructor(address _lidoLocator) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
+
+        _disableInitializers();
     }
 
     /// @notice Initializes the contract
@@ -120,12 +122,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @param _quarantinePeriod the quarantine period, seconds
     /// @param _maxRewardRatioBP the max reward ratio, basis points
     function initialize(address _admin, uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) external initializer {
-        _disableInitializers();
-
-        _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP);
-
         if (_admin == address(0)) revert AdminCannotBeZero();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+
+        _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP);
     }
 
     /// @notice returns the latest report data
