@@ -1257,34 +1257,6 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /**
-     * @notice Calculates the remaining unsettled obligations after settlement
-     * @param _obligations The obligations of the vault
-     * @param _sharesToRebalance The shares being rebalanced for redemptions
-     * @param _valueToTransferToLido The ETH amount being transferred to Lido
-     * @return unsettledRedemptions The remaining redemptions after the planned settlement
-     * @return unsettledLidoFees The remaining Lido fees after the planned settlement
-     * @return totalUnsettled The total ETH value of obligations remaining after the planned settlement
-     */
-    function _calculateUnsettledAmounts(
-        VaultObligations storage _obligations,
-        uint256 _sharesToRebalance,
-        uint256 _valueToTransferToLido
-    ) internal view returns (
-        uint256 unsettledRedemptions,
-        uint256 unsettledLidoFees,
-        uint256 totalUnsettled
-    ) {
-        uint256 redemptionShares = _getSharesByPooledEth(_obligations.redemptions);
-        uint256 maxRedemptionsValue = _getPooledEthBySharesRoundUp(redemptionShares);
-        // if the max redemptions value is less than the redemptions, we need to round up the redemptions shares
-        if (maxRedemptionsValue < _obligations.redemptions) redemptionShares += 1;
-
-
-        unsettledLidoFees = _obligations.unsettledLidoFees - _valueToTransferToLido;
-        totalUnsettled = unsettledRedemptions + unsettledLidoFees;
-    }
-
-    /**
      * @notice Settles redemptions and Lido fee obligations for a vault
      * @param _vault The address of the vault to settle obligations for
      * @param _record The record of the vault to settle obligations for
