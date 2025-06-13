@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.4;
+// See contracts/COMPILERS.md
+pragma solidity 0.8.9;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -423,10 +424,6 @@ library StorageSlot {
  * proxy admin from the DAO Voting contract to a zero address (which is an irreversible action).
  */
 contract WithdrawalsManagerProxy is ERC1967Proxy {
-    /**
-     * @dev The address of Lido DAO Voting contract.
-     */
-    address internal immutable LIDO_VOTING;
 
     /**
      * @dev Storage slot with the admin of the contract.
@@ -443,9 +440,8 @@ contract WithdrawalsManagerProxy is ERC1967Proxy {
     /**
      * @dev Initializes the upgradeable proxy with the initial stub implementation.
      */
-    constructor(address voting, address impl) ERC1967Proxy(impl, new bytes(0)) {
-        LIDO_VOTING = voting;
-        _setAdmin(voting);
+    constructor(address admin, address impl) ERC1967Proxy(impl, new bytes(0)) {
+        _setAdmin(admin);
     }
 
     /**
