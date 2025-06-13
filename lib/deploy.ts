@@ -120,6 +120,7 @@ export async function deployWithoutProxy(
 
   if (withStateFile) {
     const contractPath = await getContractPath(artifactName);
+    console.log(`Contract path: ${contractPath}`, nameInState);
     updateObjectInState(nameInState, {
       contract: contractPath,
       [addressFieldName]: contract.address,
