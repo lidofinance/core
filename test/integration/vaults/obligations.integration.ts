@@ -54,6 +54,7 @@ describe("Integration: Vault obligations", () => {
     ({ vaultHub } = ctx.contracts);
 
     [owner, nodeOperator, redemptionMaster, validatorExit, stranger, whale] = await ethers.getSigners();
+    await setBalance(whale.address, ether("100000000"));
 
     // Owner can create a vault with operator as a node operator
     ({ stakingVault, dashboard, roles } = await createVaultWithDashboard(
