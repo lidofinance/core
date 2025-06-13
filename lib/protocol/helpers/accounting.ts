@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionResponse, formatEther, Result } from "ethers";
+import { ContractTransactionResponse, formatEther, hexlify, Result } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -392,10 +392,11 @@ const simulateReport = async (
   const accountingOracleAddr = await accountingOracle.getAddress();
   const callParams = [transactionObject, "latest"];
   const LAST_PROCESSING_REF_SLOT_POSITION = streccak("lido.BaseOracle.lastProcessingRefSlot");
+
   const stateDiff = {
     [accountingOracleAddr]: {
       stateDiff: {
-        [LAST_PROCESSING_REF_SLOT_POSITION]: refSlot, // setting the processing refslot for the sanity checker
+        [LAST_PROCESSING_REF_SLOT_POSITION]: ethers.zeroPadValue(ethers.toBeHex(refSlot), 32), // setting the processing refslot for the sanity checker
       },
     },
   };

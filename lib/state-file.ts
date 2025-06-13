@@ -206,8 +206,9 @@ export async function resetStateFile(networkName: string = hardhatNetwork.name):
     }
     // If file does not exist, create it with default values
   } finally {
-    const templateFileName = _getFileName("scripts/defaults", "testnet-defaults", "");
-    const templateData = readFileSync(templateFileName, "utf8");
+    // const templateFileName = _getFileName("scripts/defaults", "testnet-defaults", "");
+
+    const templateData = readFileSync("scripts/scratch/deployed-testnet-defaults.json", "utf8");
     writeFileSync(fileName, templateData, { encoding: "utf8", flag: "w" });
   }
 }
