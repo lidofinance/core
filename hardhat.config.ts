@@ -60,7 +60,12 @@ const config: HardhatUserConfig = {
     "holesky": {
       url: process.env.HOLESKY_RPC_URL || RPC_URL,
       chainId: 17000,
-      accounts: loadAccounts("holesky"),
+      // accounts: loadAccounts("holesky"),
+    },
+    "hoodi": {
+      url: process.env.HOLESKY_RPC_URL || RPC_URL,
+      chainId: 560048,
+      // accounts: loadAccounts("holesky"),
     },
     "sepolia": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
@@ -148,6 +153,7 @@ const config: HardhatUserConfig = {
             enabled: true,
             runs: 200,
           },
+          viaIR: true,
           evmVersion: "cancun",
         },
       },

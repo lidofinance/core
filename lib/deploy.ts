@@ -246,6 +246,8 @@ async function getLocatorConfig(locatorAddress: string) {
     "withdrawalQueue",
     "withdrawalVault",
     "oracleDaemonConfig",
+    "validatorExitDelayVerifier",
+    "triggerableWithdrawalsGateway",
   ] as (keyof LidoLocator.ConfigStruct)[];
 
   const configPromises = addresses.map((name) => locator[name]());
