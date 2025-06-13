@@ -810,7 +810,7 @@ describe("Integration: Vault obligations", () => {
       // 1 ether of the connection deposit will be settled to the treasury
       await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") });
 
-      let totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
+      const totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
 
       await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
 
@@ -824,7 +824,7 @@ describe("Integration: Vault obligations", () => {
       // 1 ether of the connection deposit will be settled to the treasury
       await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") });
 
-      let totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
+      const totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
 
       // successfully disconnect
       await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
@@ -847,7 +847,7 @@ describe("Integration: Vault obligations", () => {
       // 1 ether of the connection deposit will be settled to the treasury
       await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") });
 
-      let totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
+      const totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
 
       // successfully disconnect
       await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
