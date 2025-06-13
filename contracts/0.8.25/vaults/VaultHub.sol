@@ -581,7 +581,11 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     function fund(address _vault) external payable whenResumed {
-        _checkConnectionAndOwner(_vault);
+        if (_vault == address(0)) revert VaultZeroAddress();
+
+        VaultConnection storage connection = _vaultConnection(_vault);
+        if (connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
+        if (msg.sender != connection.owner) revert NotAuthorized();
 
         _updateInOutDelta(_vault, _vaultRecord(_vault), int112(int256(msg.value)));
 
