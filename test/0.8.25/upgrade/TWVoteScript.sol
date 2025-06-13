@@ -321,7 +321,7 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // assert(index == VOTE_ITEMS_COUNT);
+        assert(index == VOTE_ITEMS_COUNT);
     }
 
     // Debug helper function
