@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="3210"  lines-covered="3182"  line-rate="0.9913"  branches-valid="1460"  branches-covered="1420"  branch-rate="0.9726"  timestamp="1749807761783" complexity="0" version="0.1">
+<coverage lines-valid="3210"  lines-covered="3182"  line-rate="0.9913"  branches-valid="1460"  branches-covered="1420"  branch-rate="0.9726"  timestamp="1749816427344" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2208,8 +2208,8 @@
 			<method name="getGuardianIndex"  hits="24"  signature="()V" >
 				<lines><line number="283"  hits="24" /></lines>
 			</method>
-			<method name="_getGuardianIndex"  hits="123"  signature="()V" >
-				<lines><line number="287"  hits="123" /></lines>
+			<method name="_getGuardianIndex"  hits="122"  signature="()V" >
+				<lines><line number="287"  hits="122" /></lines>
 			</method>
 			<method name="addGuardian"  hits="45"  signature="()V" >
 				<lines><line number="298"  hits="45" /></lines>
@@ -2250,8 +2250,8 @@
 			<method name="_verifyAttestSignatures"  hits="13"  signature="()V" >
 				<lines><line number="525"  hits="13" /></lines>
 			</method>
-			<method name="unvetSigningKeys"  hits="61"  signature="()V" >
-				<lines><line number="573"  hits="61" /></lines>
+			<method name="unvetSigningKeys"  hits="59"  signature="()V" >
+				<lines><line number="573"  hits="59" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -2294,7 +2294,7 @@
 			<line number="270"  hits="6"  branch="false" />
 			<line number="274"  hits="166"  branch="false" />
 			<line number="284"  hits="24"  branch="false" />
-			<line number="288"  hits="123"  branch="false" />
+			<line number="288"  hits="122"  branch="false" />
 			<line number="299"  hits="45"  branch="false" />
 			<line number="300"  hits="43"  branch="false" />
 			<line number="311"  hits="43"  branch="false" />
@@ -2369,20 +2369,20 @@
 			<line number="544"  hits="17"  branch="false" />
 			<line number="546"  hits="17"  branch="false" />
 			<line number="547"  hits="17"  branch="false" />
-			<line number="583"  hits="61"  branch="false" />
-			<line number="584"  hits="61"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="586"  hits="60"  branch="false" />
-			<line number="588"  hits="60"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="583"  hits="59"  branch="false" />
+			<line number="584"  hits="59"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="586"  hits="58"  branch="false" />
+			<line number="588"  hits="58"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="594"  hits="4"  branch="false" />
-			<line number="597"  hits="56"  branch="false" />
-			<line number="598"  hits="56"  branch="false" />
-			<line number="600"  hits="56"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="601"  hits="14"  branch="false" />
-			<line number="615"  hits="14"  branch="false" />
-			<line number="616"  hits="13"  branch="false" />
-			<line number="617"  hits="13"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="620"  hits="54"  branch="true"  condition-coverage="100% (4/4)" />
-			<line number="622"  hits="51"  branch="false" />
+			<line number="597"  hits="54"  branch="false" />
+			<line number="598"  hits="54"  branch="false" />
+			<line number="600"  hits="54"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="601"  hits="15"  branch="false" />
+			<line number="615"  hits="15"  branch="false" />
+			<line number="616"  hits="14"  branch="false" />
+			<line number="617"  hits="14"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="620"  hits="52"  branch="true"  condition-coverage="100% (4/4)" />
+			<line number="622"  hits="49"  branch="false" />
 		</lines>
 		</class>
 		<class name="EIP712StETH.sol"  filename="contracts/0.8.9/EIP712StETH.sol"  line-rate="1"  branch-rate="1" >
