@@ -6,7 +6,6 @@ pragma solidity 0.8.25;
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {Dashboard} from "contracts/0.8.25/vaults/dashboard/Dashboard.sol";
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 /**
@@ -46,7 +45,7 @@ contract ValidatorConsolidationRequests {
      *    any excess will be refunded to the `_refundRecipient` address.
      *  - The `sourcePublicKeys` and `targetPublicKey` must be valid and belong to registered validators.
      *  - `_adjustmentIncrease` must match the total balance of source validators on the Consensus Layer.
-     *  - A valid Dashboard contract address must be provided.
+     *  - A valid Staking Vault contract address must be provided.
      *
      * Execution Flows:
      *  This function can be called from a Withdrawal Credentials (WC) account, which may be an EOA, a Gnosis Safe, or another smart contract.
@@ -81,20 +80,20 @@ contract ValidatorConsolidationRequests {
      *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
      *
      * @param _refundRecipient The address to refund the excess consolidation fee to.
-     * @param _vault The address of the vault contract.
+     * @param _stakingVault The address of the staking vault contract.
      * @param _adjustmentIncrease The sum of the balances of the source validators to increase the rewards adjustment by.
      */
     function addConsolidationRequests(
         bytes[] calldata _sourcePubkeys,
         bytes[] calldata _targetPubkeys,
         address _refundRecipient,
-        address _vault,
+        address _stakingVault,
         uint256 _adjustmentIncrease
     ) external payable onlyDelegateCall {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
         if (_targetPubkeys.length == 0) revert ZeroArgument("targetPubkeys");
-        if (_vault == address(0)) revert ZeroArgument("vault");
+        if (_stakingVault == address(0)) revert ZeroArgument("stakingVault");
 
         // If the refund recipient is not set, use the sender as the refund recipient
         if (_refundRecipient == address(0)) {
@@ -106,7 +105,7 @@ contract ValidatorConsolidationRequests {
         }
 
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
-        VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(_vault);
+        VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(_stakingVault);
 
         if(vaultConnection.vaultIndex == 0 || vaultConnection.pendingDisconnect == true) {
             revert VaultNotConnected();

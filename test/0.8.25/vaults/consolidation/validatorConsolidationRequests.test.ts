@@ -186,7 +186,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         ),
       )
         .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
-        .withArgs("vault");
+        .withArgs("stakingVault");
     });
   });
 
