@@ -292,8 +292,8 @@ contract Accounting {
         );
 
         if (_pre.badDebtToInternalize > 0) {
-            LIDO.internalizeExternalBadDebt(_pre.badDebtToInternalize);
             _contracts.vaultHub.decreaseInternalizedBadDebt(_pre.badDebtToInternalize);
+            LIDO.internalizeExternalBadDebt(_pre.badDebtToInternalize);
         }
 
         if (_update.totalSharesToBurn > 0) {

@@ -163,7 +163,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice role that allows to trigger validator exits under extreme conditions
     bytes32 public constant VALIDATOR_EXIT_ROLE = keccak256("vaults.VaultHub.ValidatorExitRole");
     /// @notice role that allows to bail out vaults with bad debt
-    bytes32 public constant SOCIALIZE_BAD_DEBT_ROLE = keccak256("vaults.VaultHub.SocializeBadDebtRole");
+    bytes32 public constant BAD_DEBT_MASTER_ROLE = keccak256("vaults.VaultHub.BadDebtMasterRole");
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
 
@@ -580,48 +580,64 @@ contract VaultHub is PausableUntilWithRoles {
         address _badDebtVault,
         address _vaultAcceptor,
         uint256 _maxSharesToSocialize
-    ) external onlyRole(SOCIALIZE_BAD_DEBT_ROLE) {
+    ) external onlyRole(BAD_DEBT_MASTER_ROLE) {
         _requireNotZero(_badDebtVault);
+        _requireNotZero(_vaultAcceptor);
         _requireNotZero(_maxSharesToSocialize);
+        if (_nodeOperator(_vaultAcceptor) != _nodeOperator(_badDebtVault)) revert BadDebtSocializationNotAllowed();
 
         VaultConnection storage badDebtConnection = _vaultConnection(_badDebtVault);
         _requireConnected(badDebtConnection, _badDebtVault); // require connected but may be pending disconnect
 
-        VaultRecord storage badDebtRecord = _vaultRecord(_badDebtVault);
-        uint256 liabilityShares_ = badDebtRecord.liabilityShares;
-        uint256 totalValueShares = _getSharesByPooledEth(_totalValue(badDebtRecord));
-        if (totalValueShares > liabilityShares_) {
-            revert NoBadDebtToSocialize(_badDebtVault, totalValueShares, liabilityShares_);
-        }
+        uint256 badDebtToSocialize = _writeOffBadDebt({
+            _vault: _badDebtVault,
+            _record: _vaultRecord(_badDebtVault),
+            _maxSharesToWriteOff: _maxSharesToSocialize
+        });
 
-        uint256 badDebtToSocialize = Math256.min(liabilityShares_ - totalValueShares, _maxSharesToSocialize);
+        VaultConnection storage connectionAcceptor = _vaultConnection(_vaultAcceptor);
+        _requireConnected(connectionAcceptor, _vaultAcceptor);
 
-        _decreaseLiability(_badDebtVault, badDebtRecord, badDebtToSocialize);
-
-        if (_vaultAcceptor == address(0)) {
-            // internalize the bad debt to the protocol
-            _storage().badDebtToInternalize = _storage().badDebtToInternalize.withValueIncreased(
-                _hashConsensus(),
-                uint112(badDebtToSocialize)
-            );
-        } else {
-            if (_nodeOperator(_vaultAcceptor) != _nodeOperator(_badDebtVault)) revert BadDebtSocializationNotAllowed();
-
-            VaultConnection storage connectionAcceptor = _vaultConnection(_vaultAcceptor);
-            _requireConnected(connectionAcceptor, _vaultAcceptor);
-
-            VaultRecord storage recordAcceptor = _vaultRecord(_vaultAcceptor);
-            _increaseLiability(
-                _vaultAcceptor,
-                recordAcceptor,
-                badDebtToSocialize,
-                connectionAcceptor.reserveRatioBP,
-                TOTAL_BASIS_POINTS, // maxMintableRatio up to 100% of total value
-                _getSharesByPooledEth(recordAcceptor.locked) // we can occupy all the locked amount
-            );
-        }
+        VaultRecord storage recordAcceptor = _vaultRecord(_vaultAcceptor);
+        _increaseLiability({
+            _vault: _vaultAcceptor,
+            _record: recordAcceptor,
+            _amountOfShares: badDebtToSocialize,
+            _reserveRatioBP: connectionAcceptor.reserveRatioBP,
+            _maxMintableRatioBP: TOTAL_BASIS_POINTS, // maxMintableRatio up to 100% of total value
+            _shareLimit: _getSharesByPooledEth(recordAcceptor.locked) // we can occupy all the locked amount
+        });
 
         emit BadDebtSocialized(_badDebtVault, _vaultAcceptor, badDebtToSocialize);
+    }
+
+    /// @notice Internalize the bad debt to the protocol
+    /// @param _badDebtVault address of the vault that has the bad debt
+    /// @param _maxSharesToInternalize maximum amount of shares to internalize
+    /// @dev msg.sender must have BAD_DEBT_MASTER_ROLE
+    function internalizeBadDebt(
+        address _badDebtVault,
+        uint256 _maxSharesToInternalize
+    ) external onlyRole(BAD_DEBT_MASTER_ROLE) {
+        _requireNotZero(_badDebtVault);
+        _requireNotZero(_maxSharesToInternalize);
+
+        VaultConnection storage badDebtConnection = _vaultConnection(_badDebtVault);
+        _requireConnected(badDebtConnection, _badDebtVault);
+
+        uint256 badDebtToInternalize = _writeOffBadDebt({
+            _vault: _badDebtVault,
+            _record: _vaultRecord(_badDebtVault),
+            _maxSharesToWriteOff: _maxSharesToInternalize
+        });
+
+        // internalize the bad debt to the protocol
+        _storage().badDebtToInternalize = _storage().badDebtToInternalize.withValueIncrease({
+            _consensus: _hashConsensus(),
+            _increment: uint112(badDebtToInternalize)
+        });
+
+        emit BadDebtWrittenOffToBeInternalized(_badDebtVault, badDebtToInternalize);
     }
 
     /// @notice Reset the internalized bad debt to zero
@@ -719,15 +735,14 @@ contract VaultHub is PausableUntilWithRoles {
         _requireFreshReport(_vault, record);
 
         uint256 reserveRatioBP = connection.reserveRatioBP;
-        uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - reserveRatioBP;
-        _increaseLiability(
-            _vault,
-            record,
-            _amountOfShares,
-            reserveRatioBP,
-            maxMintableRatioBP,
-            connection.shareLimit
-        );
+        _increaseLiability({
+            _vault: _vault,
+            _record: record,
+            _amountOfShares: _amountOfShares,
+            _reserveRatioBP: reserveRatioBP,
+            _maxMintableRatioBP: TOTAL_BASIS_POINTS - reserveRatioBP,
+            _shareLimit: connection.shareLimit
+        });
 
         LIDO.mintExternalShares(_recipient, _amountOfShares);
 
@@ -1098,6 +1113,22 @@ contract VaultHub is PausableUntilWithRoles {
 
         _decreaseRedemptions(_vault, _getPooledEthBySharesRoundUp(_amountOfShares));
         _operatorGrid().onBurnedShares(_vault, _amountOfShares);
+    }
+
+    function _writeOffBadDebt(
+        address _vault,
+        VaultRecord storage _record,
+        uint256 _maxSharesToWriteOff
+    ) internal returns (uint256 badDebtWrittenOff) {
+        uint256 liabilityShares_ = _record.liabilityShares;
+        uint256 totalValueShares = _getSharesByPooledEth(_totalValue(_record));
+        if (totalValueShares > liabilityShares_) {
+            revert NoBadDebtToWriteOff(_vault, totalValueShares, liabilityShares_);
+        }
+
+        badDebtWrittenOff = Math256.min(liabilityShares_ - totalValueShares, _maxSharesToWriteOff);
+
+        _decreaseLiability(_vault, _record, badDebtWrittenOff);
     }
 
     function _rebalanceShortfall(
@@ -1574,6 +1605,7 @@ contract VaultHub is PausableUntilWithRoles {
     // -----------------------------
 
     event BadDebtSocialized(address indexed vaultDonor, address indexed vaultAcceptor, uint256 badDebtShares);
+    event BadDebtWrittenOffToBeInternalized(address indexed vault, uint256 badDebtShares);
 
     error ZeroBalance();
 
@@ -1627,8 +1659,7 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultHasUnsettledObligations(address vault, uint256 unsettledObligations, uint256 allowedUnsettled);
     error PartialValidatorWithdrawalNotAllowed();
     error ForcedValidatorExitNotAllowed();
-    error NoBadDebtToSocialize(address vault, uint256 totalValueShares, uint256 liabilityShares);
-    error NoBadDebtToInternalize(address vault, uint256 totalValueShares, uint256 liabilityShares);
+    error NoBadDebtToWriteOff(address vault, uint256 totalValueShares, uint256 liabilityShares);
     error SocializeIsLimitedByReserve(address vault, uint256 reserveShares, uint256 amountOfSharesToSocialize);
     error BadDebtSocializationNotAllowed();
 }

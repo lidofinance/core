@@ -18,7 +18,7 @@ library RefSlotCache {
     /// @param _consensus The consensus contract to get the current refSlot
     /// @param _increment increment the value by this amount
     /// @return the updated struct to be saved in storage
-    function withValueIncreased(
+    function withValueIncrease(
         Uint112WithRefSlotCache storage _storage,
         IHashConsensus _consensus,
         uint112 _increment
