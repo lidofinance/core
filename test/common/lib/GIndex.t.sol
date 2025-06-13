@@ -1,11 +1,14 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.25;
+
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
 
 import {Test} from "forge-std/Test.sol";
 
-import {GIndex, pack, IndexOutOfRange, fls} from "../../../contracts/common/lib/GIndex.sol";
-import {SSZ} from "../../../contracts/common/lib/SSZ.sol";
+import {GIndex, pack, IndexOutOfRange, fls} from "contracts/common/lib/GIndex.sol";
+import {SSZ} from "contracts/common/lib/SSZ.sol";
 
 // Wrap the library internal methods to make an actual call to them.
 // Supposed to be used with `expectRevert` cheatcode.

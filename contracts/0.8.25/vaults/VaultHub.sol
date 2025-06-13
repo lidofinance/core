@@ -681,7 +681,10 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     function fund(address _vault) external payable whenResumed {
-        _checkConnectionAndOwner(_vault);
+        _requireNotZero(_vault);
+        VaultConnection storage connection = _vaultConnection(_vault);
+        if (connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
+        if (msg.sender != connection.owner) revert NotAuthorized();
 
         _updateInOutDelta(_vault, _vaultRecord(_vault), int112(int256(msg.value)));
 
@@ -1310,12 +1313,15 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 totalUnsettled
     ) {
         uint256 vaultBalance = _vault.balance;
-        uint256 liability = _getPooledEthBySharesRoundUp(_record.liabilityShares);
 
-        uint256 cappedRedemptions = Math256.min(_obligations.redemptions, liability);
-        valueToRebalance = Math256.min(cappedRedemptions, vaultBalance);
-        sharesToRebalance = _getSharesByPooledEth(valueToRebalance);
+        uint256 redemptionShares = _getSharesByPooledEth(_obligations.redemptions);
+        uint256 maxRedemptionsValue = _getPooledEthBySharesRoundUp(redemptionShares);
+        // if the max redemptions value is less than the redemptions, we need to round up the redemptions shares
+        if (maxRedemptionsValue < _obligations.redemptions) redemptionShares += 1;
 
+        uint256 cappedRedemptionsShares = Math256.min(_record.liabilityShares, redemptionShares);
+        sharesToRebalance = Math256.min(cappedRedemptionsShares, _getSharesByPooledEth(vaultBalance));
+        valueToRebalance = _getPooledEthBySharesRoundUp(sharesToRebalance);
         uint256 remainingBalance = vaultBalance - valueToRebalance;
 
         if (_vaultConnection(_vault).pendingDisconnect) {
@@ -1333,7 +1339,7 @@ contract VaultHub is PausableUntilWithRoles {
             valueToTransferToLido = Math256.min(_obligations.unsettledLidoFees, availableForFees);
         }
 
-        unsettledRedemptions = cappedRedemptions - valueToRebalance;
+        unsettledRedemptions = _getPooledEthBySharesRoundUp(cappedRedemptionsShares - sharesToRebalance);
         unsettledLidoFees = _obligations.unsettledLidoFees - valueToTransferToLido;
         totalUnsettled = unsettledRedemptions + unsettledLidoFees;
     }
@@ -1472,6 +1478,10 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _getSharesByPooledEth(uint256 _ether) internal view returns (uint256) {
         return LIDO.getSharesByPooledEth(_ether);
+    }
+
+    function _getPooledEthByShares(uint256 _ether) internal view returns (uint256) {
+        return LIDO.getPooledEthByShares(_ether);
     }
 
     function _getPooledEthBySharesRoundUp(uint256 _shares) internal view returns (uint256) {

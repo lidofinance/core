@@ -15,8 +15,6 @@ interface ILido is IERC20, IERC20Permit, IVersioned {
 
     function getPooledEthByShares(uint256) external view returns (uint256);
 
-    function getSharesByPooledEthRoundUp(uint256) external view returns (uint256);
-
     function getPooledEthBySharesRoundUp(uint256) external view returns (uint256);
 
     function transferSharesFrom(address, address, uint256) external returns (uint256);

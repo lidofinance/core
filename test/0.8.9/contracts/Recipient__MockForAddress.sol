@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.4;
+pragma solidity 0.8.9;
 
 contract Recipient__MockForAddress {
     bool private receiveShouldRevert;
