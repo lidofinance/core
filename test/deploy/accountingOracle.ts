@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { AccountingOracle, HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
@@ -75,7 +76,7 @@ export async function deployAccountingOracleSetup(
     accountingAddress,
     admin,
   );
-  const lazyOracle = await ethers.deployContract("LazyOracle", [locatorAddr]);
+  const lazyOracle = await ethers.deployContract("LazyOracle", [locatorAddr, ZeroAddress]);
 
   await updateLidoLocatorImplementation(locatorAddr, {
     oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),

@@ -77,7 +77,7 @@ export function getReportDataItems(r: OracleReport) {
 export function calcReportDataHash(reportItems: ReportAsArray) {
   const data = ethers.AbiCoder.defaultAbiCoder().encode(
     [
-      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], bool, uint256, uint256, bytes32, string, uint256, bytes32, uint256)",
+      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], bool, uint256, bytes32, string, uint256, bytes32, uint256)",
     ],
     [reportItems],
   );

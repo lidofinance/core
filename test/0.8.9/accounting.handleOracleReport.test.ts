@@ -98,7 +98,7 @@ describe("Accounting.sol:report", () => {
 
     const vaultHubImpl = await ethers.deployContract(
       "VaultHub",
-      [locator, lido, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP],
+      [locator, lido, ZeroAddress, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP],
       deployer,
     );
 
