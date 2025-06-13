@@ -61,9 +61,9 @@ async function main(): Promise<void> {
   const HISTORICAL_SUMMARIES_CURR_GINDEX = HISTORICAL_SUMMARIES_PREV_GINDEX;
 
   // TriggerableWithdrawalsGateway params
-  const TRIGGERABLE_WITHDRAWALS_GAS_LIMIT = 13_000;
-  const TRIGGERABLE_WITHDRAWALS_MIN_PRIORITY_FEE = 1; // wei
-  const TRIGGERABLE_WITHDRAWALS_MAX_VALIDATORS = 48;
+  const TRIGGERABLE_WITHDRAWALS_MAX_LIMIT = 13_000;
+  const TRIGGERABLE_WITHDRAWALS_LIMIT_PER_FRAME = 1;
+  const TRIGGERABLE_WITHDRAWALS_FRAME_DURATION = 48;
 
   const agent = state["app:aragon-agent"].proxy.address;
   log(`Using agent: ${agent}`);
@@ -91,9 +91,9 @@ async function main(): Promise<void> {
     [
       agent,
       locator.address,
-      TRIGGERABLE_WITHDRAWALS_GAS_LIMIT,
-      TRIGGERABLE_WITHDRAWALS_MIN_PRIORITY_FEE,
-      TRIGGERABLE_WITHDRAWALS_MAX_VALIDATORS,
+      TRIGGERABLE_WITHDRAWALS_MAX_LIMIT,
+      TRIGGERABLE_WITHDRAWALS_LIMIT_PER_FRAME,
+      TRIGGERABLE_WITHDRAWALS_FRAME_DURATION,
     ],
   );
   log.success(`TriggerableWithdrawalsGateway: ${triggerableWithdrawalsGateway.address}`);
