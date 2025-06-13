@@ -1190,17 +1190,53 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 unsettledLidoFees,
         uint256 totalUnsettled
     ) {
-        uint256 vaultBalance = _vault.balance;
+        (valueToRebalance, sharesToRebalance, unsettledRedemptions) = _planRebalance(_vault, _record, _obligations);
+        (valueToTransferToLido, unsettledLidoFees) = _planLidoTransfer(_vault, _record, _obligations, valueToRebalance);
+        totalUnsettled = unsettledRedemptions + unsettledLidoFees;
+    }
 
+    /**
+     * @notice Plans the amounts and shares to rebalance for redemptions
+     * @param _vault The address of the vault
+     * @param _record The record of the vault
+     * @param _obligations The obligations of the vault
+     * @return valueToRebalance The ETH amount to be rebalanced for redemptions
+     * @return sharesToRebalance The shares to be rebalanced for redemptions
+     * @return unsettledRedemptions The remaining redemptions after the planned settlement
+     */
+    function _planRebalance(
+        address _vault,
+        VaultRecord storage _record,
+        VaultObligations storage _obligations
+    ) internal view returns (uint256 valueToRebalance, uint256 sharesToRebalance, uint256 unsettledRedemptions) {
         uint256 redemptionShares = _getSharesByPooledEth(_obligations.redemptions);
         uint256 maxRedemptionsValue = _getPooledEthBySharesRoundUp(redemptionShares);
         // if the max redemptions value is less than the redemptions, we need to round up the redemptions shares
         if (maxRedemptionsValue < _obligations.redemptions) redemptionShares += 1;
 
         uint256 cappedRedemptionsShares = Math256.min(_record.liabilityShares, redemptionShares);
-        sharesToRebalance = Math256.min(cappedRedemptionsShares, _getSharesByPooledEth(vaultBalance));
+        sharesToRebalance = Math256.min(cappedRedemptionsShares, _getSharesByPooledEth(_vault.balance));
         valueToRebalance = _getPooledEthBySharesRoundUp(sharesToRebalance);
-        uint256 remainingBalance = vaultBalance - valueToRebalance;
+        unsettledRedemptions = _getPooledEthBySharesRoundUp(redemptionShares - sharesToRebalance);
+    }
+
+    /**
+     * @notice Plans the amount to transfer to Lido for fees
+     * @param _vault The address of the vault
+     * @param _record The record of the vault
+     * @param _obligations The obligations of the vault
+     * @param _valueToRebalance The ETH amount already allocated for rebalancing
+     * @return valueToTransferToLido The ETH amount to be sent to the Lido
+     * @return unsettledLidoFees The remaining Lido fees after the planned settlement
+     */
+    function _planLidoTransfer(
+        address _vault,
+        VaultRecord storage _record,
+        VaultObligations storage _obligations,
+        uint256 _valueToRebalance
+    ) internal view returns (uint256 valueToTransferToLido, uint256 unsettledLidoFees) {
+        uint256 vaultBalance = _vault.balance;
+        uint256 remainingBalance = vaultBalance - _valueToRebalance;
 
         if (_vaultConnection(_vault).pendingDisconnect) {
             /// @dev connection deposit is unlocked, so it's available for fees
@@ -1211,14 +1247,40 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 totalValue_ = _totalValue(_record);
             uint256 unlockedValue = totalValue_ > lockedValue ? totalValue_ - lockedValue : 0;
             uint256 availableForFees = Math256.min(
-                unlockedValue > valueToRebalance ? unlockedValue - valueToRebalance : 0,
+                unlockedValue > _valueToRebalance ? unlockedValue - _valueToRebalance : 0,
                 remainingBalance
             );
             valueToTransferToLido = Math256.min(_obligations.unsettledLidoFees, availableForFees);
         }
 
-        unsettledRedemptions = _getPooledEthBySharesRoundUp(cappedRedemptionsShares - sharesToRebalance);
         unsettledLidoFees = _obligations.unsettledLidoFees - valueToTransferToLido;
+    }
+
+    /**
+     * @notice Calculates the remaining unsettled obligations after settlement
+     * @param _obligations The obligations of the vault
+     * @param _sharesToRebalance The shares being rebalanced for redemptions
+     * @param _valueToTransferToLido The ETH amount being transferred to Lido
+     * @return unsettledRedemptions The remaining redemptions after the planned settlement
+     * @return unsettledLidoFees The remaining Lido fees after the planned settlement
+     * @return totalUnsettled The total ETH value of obligations remaining after the planned settlement
+     */
+    function _calculateUnsettledAmounts(
+        VaultObligations storage _obligations,
+        uint256 _sharesToRebalance,
+        uint256 _valueToTransferToLido
+    ) internal view returns (
+        uint256 unsettledRedemptions,
+        uint256 unsettledLidoFees,
+        uint256 totalUnsettled
+    ) {
+        uint256 redemptionShares = _getSharesByPooledEth(_obligations.redemptions);
+        uint256 maxRedemptionsValue = _getPooledEthBySharesRoundUp(redemptionShares);
+        // if the max redemptions value is less than the redemptions, we need to round up the redemptions shares
+        if (maxRedemptionsValue < _obligations.redemptions) redemptionShares += 1;
+
+
+        unsettledLidoFees = _obligations.unsettledLidoFees - _valueToTransferToLido;
         totalUnsettled = unsettledRedemptions + unsettledLidoFees;
     }
 
