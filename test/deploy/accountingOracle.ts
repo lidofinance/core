@@ -28,6 +28,10 @@ async function deployMockAccountingAndStakingRouter() {
   return { accounting, stakingRouter, withdrawalQueue };
 }
 
+async function deployMockLazyOracle() {
+  return ethers.deployContract("LazyOracle__MockForAccountingOracle");
+}
+
 export async function deployAccountingOracleSetup(
   admin: string,
   {
@@ -69,13 +73,14 @@ export async function deployAccountingOracleSetup(
     accounting: accountingAddress,
   });
 
+  const lazyOracle = await deployMockLazyOracle();
+
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(
     locatorAddr,
     accountingOracleAddress,
     accountingAddress,
     admin,
   );
-  const lazyOracle = await ethers.deployContract("LazyOracle", [locatorAddr]);
 
   await updateLidoLocatorImplementation(locatorAddr, {
     oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),

@@ -207,14 +207,12 @@ describe("Permissions", () => {
   context("constructor()", () => {
     it("reverts if the vault hub is the zero address", async () => {
       await expect(ethers.deployContract("Permissions__Harness", [ZeroAddress, lidoLocator]))
-        .to.be.revertedWithCustomError(permissions, "ZeroArgument")
-        .withArgs("_vaultHub");
+        .to.be.revertedWithCustomError(permissions, "ZeroAddress");
     });
 
     it("reverts if the lido locator is the zero address", async () => {
       await expect(ethers.deployContract("Permissions__Harness", [vaultHub, ZeroAddress]))
-        .to.be.revertedWithCustomError(permissions, "ZeroArgument")
-        .withArgs("_lidoLocator");
+        .to.be.revertedWithCustomError(permissions, "ZeroAddress");
     });
   });
 
@@ -273,8 +271,7 @@ describe("Permissions", () => {
           tierChanger,
         } as PermissionsConfigStruct),
       )
-        .to.be.revertedWithCustomError(permissions, "ZeroArgument")
-        .withArgs("_defaultAdmin");
+        .to.be.revertedWithCustomError(permissions, "ZeroAddress");
     });
   });
 
@@ -389,8 +386,7 @@ describe("Permissions", () => {
 
     it("reverts if there are no assignments", async () => {
       await expect(permissions.connect(defaultAdmin).grantRoles([]))
-        .to.be.revertedWithCustomError(permissions, "ZeroArgument")
-        .withArgs("_assignments");
+        .to.be.revertedWithCustomError(permissions, "ZeroArgument");
     });
   });
 
@@ -476,7 +472,6 @@ describe("Permissions", () => {
     it("reverts if there are no assignments", async () => {
       await expect(permissions.connect(defaultAdmin).revokeRoles([]))
         .to.be.revertedWithCustomError(permissions, "ZeroArgument")
-        .withArgs("_assignments");
     });
   });
 

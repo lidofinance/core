@@ -207,7 +207,7 @@ export async function reportVaultDataWithProof(
     totalValueArg,
     params.accruedLidoFees ?? 0n,
     liabilitySharesArg,
-    0n
+    0n,
   ];
   const reportTree = createVaultsReportTree([vaultReport]);
 
