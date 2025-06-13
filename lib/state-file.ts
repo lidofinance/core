@@ -87,24 +87,10 @@ export enum Sk {
   chainSpec = "chainSpec",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
-  accounting = "accounting",
-  vaultHub = "vaultHub",
-  tokenRebaseNotifier = "tokenRebaseNotifier",
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
   TWVoteScript = "TWVoteScript",
-  // Vaults
-  predepositGuarantee = "predepositGuarantee",
-  stakingVaultImplementation = "stakingVaultImplementation",
-  stakingVaultFactory = "stakingVaultFactory",
-  dashboardImpl = "dashboardImpl",
-  stakingVaultBeacon = "stakingVaultBeacon",
-  v3Template = "v3Template",
-  v3Addresses = "v3Addresses",
-  v3VoteScript = "v3VoteScript",
-  operatorGrid = "operatorGrid",
-  lazyOracle = "lazyOracle",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -125,16 +111,10 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorsExitBusOracle:
     case Sk.withdrawalQueueERC721:
     case Sk.withdrawalVault:
-    case Sk.lazyOracle:
-    case Sk.operatorGrid:
-    case Sk.accounting:
     case Sk.burner:
     case Sk.appSimpleDvt:
     case Sk.aragonNodeOperatorsRegistryAppRepo:
     case Sk.aragonSimpleDvtAppRepo:
-    case Sk.predepositGuarantee:
-    case Sk.vaultHub:
-      return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:
     case Sk.daoFactory:
@@ -156,11 +136,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.oracleReportSanityChecker:
     case Sk.wstETH:
     case Sk.depositContract:
-    case Sk.tokenRebaseNotifier:
     case Sk.validatorExitDelayVerifier:
     case Sk.triggerableWithdrawalsGateway:
-    case Sk.stakingVaultFactory:
-      return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
   }
@@ -251,7 +228,6 @@ export function persistNetworkState(state: DeploymentState): void {
 function _getStateFileFileName(networkStateFile = "") {
   // Use the specified network state file or the one from the environment
   networkStateFile = networkStateFile || process.env.NETWORK_STATE_FILE || "";
-
   return networkStateFile
     ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
     : _getFileName(NETWORK_STATE_FILE_DIR, hardhatNetwork.name);

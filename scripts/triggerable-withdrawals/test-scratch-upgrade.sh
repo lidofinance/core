@@ -7,7 +7,7 @@
 
 export RPC_URL=${RPC_URL:="http://127.0.0.1:8545"}  # if defined use the value set to default otherwise
 export SLOTS_PER_EPOCH=32
-export GENESIS_TIME=1639659600  # just some time
+export GENESIS_TIME=1606824023  # just some time
 # export WITHDRAWAL_QUEUE_BASE_URI="<< SET IF REQUIED >>"
 # export DSM_PREDEFINED_ADDRESS="<< SET IF REQUIED >>"
 
@@ -21,5 +21,6 @@ cp deployed-mainnet.json $NETWORK_STATE_FILE
 
 yarn upgrade:deploy
 yarn upgrade:mock-voting
-yarn hardhat --network custom run --no-compile scripts/utils/mine.ts
-# yarn test:integration
+cp  $NETWORK_STATE_FILE deployed-mainnet.json
+# yarn hardhat --network custom run --no-compile scripts/utils/mine.ts
+yarn test:integration
