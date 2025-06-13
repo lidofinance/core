@@ -9,26 +9,6 @@ import { cy, deployImplementation, loadContract, log, persistNetworkState, readN
 dotenv.config({ path: join(__dirname, "../../.env") });
 
 //--------------------------------------------------------------------------
-// Constants
-//--------------------------------------------------------------------------
-
-// Consensus‑spec constants
-const SECONDS_PER_SLOT = 12;
-const SLOTS_PER_EPOCH = 32;
-const SHARD_COMMITTEE_PERIOD_SLOTS = 2 ** 8 * SLOTS_PER_EPOCH; // 8192
-
-// G‑indices (phase0 spec)
-const VALIDATOR_PREV_GINDEX = "0x0000000000000000000000000000000000000000000000000096000000000028";
-const VALIDATOR_CURR_GINDEX = VALIDATOR_PREV_GINDEX;
-const HISTORICAL_SUMMARIES_PREV_GINDEX = "0x0000000000000000000000000000000000000000000000000000000000005b00";
-const HISTORICAL_SUMMARIES_CURR_GINDEX = HISTORICAL_SUMMARIES_PREV_GINDEX;
-
-// TriggerableWithdrawalsGateway params
-const TRIGGERABLE_WITHDRAWALS_GAS_LIMIT = 13_000;
-const TRIGGERABLE_WITHDRAWALS_MIN_PRIORITY_FEE = 1; // wei
-const TRIGGERABLE_WITHDRAWALS_MAX_VALIDATORS = 48;
-
-//--------------------------------------------------------------------------
 // Helpers
 //--------------------------------------------------------------------------
 
@@ -48,7 +28,6 @@ async function main(): Promise<void> {
   // Environment & chain context
   // -----------------------------------------------------------------------
   const deployer = ethers.getAddress(requireEnv("DEPLOYER"));
-  const genesisTime = parseInt(requireEnv("GENESIS_TIME"), 10);
 
   const { chainId } = await ethers.provider.getNetwork();
   log(cy(`Deploying contracts on chain ${chainId}`));
@@ -59,8 +38,32 @@ async function main(): Promise<void> {
   const state = readNetworkState();
   persistNetworkState(state);
 
-  const chainSpec = state[Sk.chainSpec];
+  const chainSpec = state[Sk.chainSpec] as {
+    slotsPerEpoch: number;
+    secondsPerSlot: number;
+    genesisTime: number;
+    depositContractAddress: string;
+  };
+
   log(`Chain spec: ${JSON.stringify(chainSpec, null, 2)}`);
+
+  // Consensus‑spec constants
+  const SECONDS_PER_SLOT = chainSpec.secondsPerSlot;
+  const SLOTS_PER_EPOCH = chainSpec.slotsPerEpoch;
+  const GENESIS_TIME = chainSpec.genesisTime;
+  const DEPOSIT_CONTRACT_ADDRESS = chainSpec.depositContractAddress;
+  const SHARD_COMMITTEE_PERIOD_SLOTS = 2 ** 8 * SLOTS_PER_EPOCH; // 8192
+
+  // G‑indices (phase0 spec)
+  const VALIDATOR_PREV_GINDEX = "0x0000000000000000000000000000000000000000000000000096000000000028";
+  const VALIDATOR_CURR_GINDEX = VALIDATOR_PREV_GINDEX;
+  const HISTORICAL_SUMMARIES_PREV_GINDEX = "0x0000000000000000000000000000000000000000000000000000000000005b00";
+  const HISTORICAL_SUMMARIES_CURR_GINDEX = HISTORICAL_SUMMARIES_PREV_GINDEX;
+
+  // TriggerableWithdrawalsGateway params
+  const TRIGGERABLE_WITHDRAWALS_GAS_LIMIT = 13_000;
+  const TRIGGERABLE_WITHDRAWALS_MIN_PRIORITY_FEE = 1; // wei
+  const TRIGGERABLE_WITHDRAWALS_MAX_VALIDATORS = 48;
 
   const agent = state["app:aragon-agent"].proxy.address;
   log(`Using agent: ${agent}`);
@@ -76,7 +79,7 @@ async function main(): Promise<void> {
     Sk.validatorsExitBusOracle,
     "ValidatorsExitBusOracle",
     deployer,
-    [SECONDS_PER_SLOT, genesisTime, locator.address],
+    [SECONDS_PER_SLOT, GENESIS_TIME, locator.address],
   );
   log.success(`ValidatorsExitBusOracle: ${validatorsExitBusOracle.address}`);
 
@@ -116,7 +119,7 @@ async function main(): Promise<void> {
     Sk.stakingRouter,
     "StakingRouter",
     deployer,
-    [chainSpec.depositContractAddress],
+    [DEPOSIT_CONTRACT_ADDRESS],
     { libraries },
   );
   log.success(`StakingRouter: ${stakingRouter.address}`);
@@ -142,7 +145,7 @@ async function main(): Promise<void> {
       1, // pivotSlot
       SLOTS_PER_EPOCH,
       SECONDS_PER_SLOT,
-      genesisTime,
+      GENESIS_TIME,
       SHARD_COMMITTEE_PERIOD_SLOTS * SECONDS_PER_SLOT, // seconds
     ],
   );
@@ -153,8 +156,8 @@ async function main(): Promise<void> {
     locator.address,
     await locator.lido(),
     await locator.legacyOracle(),
-    Number(chainSpec.secondsPerSlot),
-    Number(chainSpec.genesisTime),
+    SECONDS_PER_SLOT,
+    GENESIS_TIME,
   ]);
   log.success(`AccountingOracle: ${accountingOracle.address}`);
 
