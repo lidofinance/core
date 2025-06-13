@@ -20,13 +20,17 @@ contract ValidatorConsolidationRequests {
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
     uint256 internal constant CONSOLIDATION_REQUEST_CALLDATA_LENGTH = PUBLIC_KEY_LENGTH * 2;
 
-    /// @notice Lido Locator contract
+    /// @notice Lido Locator contract.
     ILidoLocator public immutable LIDO_LOCATOR;
 
-    /// @param _lidoLocator Lido Locator contract
+    /// @notice This contract address.
+    address public immutable THIS;
+
+    /// @param _lidoLocator Lido Locator contract.
     constructor(address _lidoLocator) {
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
+        THIS = address(this);
     }
 
     /**
@@ -48,7 +52,7 @@ contract ValidatorConsolidationRequests {
      *  This function can be called from a Withdrawal Credentials (WC) account, which may be an EOA, a Gnosis Safe, or another smart contract.
      *
      * 1. **Externally Owned Account (EOA)**:
-     *    - The EOA owner should invoke this function via a delegate call using account abstraction.
+     *    - The EOA owner should invoke this function via a delegate call using account abstraction (EIP-7702 delegation).
      *
      * 2. **Gnosis Safe**:
      *    a. Build a transaction with delegatecall flag enabled.
@@ -82,7 +86,7 @@ contract ValidatorConsolidationRequests {
         address _refundRecipient,
         address _dashboard,
         uint256 _adjustmentIncrease
-    ) external payable {
+    ) external payable onlyDelegateCall {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
         if (_targetPubkeys.length == 0) revert ZeroArgument("targetPubkeys");
@@ -139,6 +143,11 @@ contract ValidatorConsolidationRequests {
      */
     function getConsolidationRequestFee() external view returns (uint256) {
         return _getConsolidationRequestFee();
+    }
+
+    modifier onlyDelegateCall() {
+        if(address(this) == THIS) revert NotDelegateCall();
+        _;
     }
 
     function _getConsolidationRequestFee() private view returns (uint256) {
@@ -228,4 +237,5 @@ contract ValidatorConsolidationRequests {
     error InsufficientValidatorConsolidationFee(uint256 provided, uint256 required);
     error ZeroArgument(string argName);
     error VaultNotConnected();
+    error NotDelegateCall();
 }
