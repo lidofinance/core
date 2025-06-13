@@ -789,23 +789,42 @@ describe("Integration: Vault obligations", () => {
         .withArgs(stakingVaultAddress);
     });
 
-    // TODO: fix the test, it's not working, looks like sanity checker can't pass reports in pending state
-    it.skip("Should not allow to disconnect when there is not enough balance to cover the exit fees", async () => {
+    it("Should allow to fund when is pending disconnect", async () => {
+      // 1 ether of the connection deposit will be settled to the treasury
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1.1") });
+
+      // add some more ether to the vault to cover all the fees before disconnecting
+      await dashboard.connect(roles.funder).fund({ value: ether("0.1") });
+
+      await expect(dashboard.connect(roles.disconnecter).voluntaryDisconnect())
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
+        .withArgs(stakingVaultAddress);
+      
+      await dashboard.connect(roles.funder).fund({ value: ether("0.1") });
+
+      expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("0.1"));
+      expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(ether("0.1"));
+    });
+
+    it("Should not allow to disconnect when there is not enough balance to cover the exit fees", async () => {
       // 1 ether of the connection deposit will be settled to the treasury
       await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") });
+
+      const totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
 
       await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
 
       // take the last fees from the post disconnect report (1.1 ether because fees are cumulative)
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1.1") }))
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: totalValueOnRefSlot, accruedLidoFees: ether("1.1") }))
         .to.be.revertedWithCustomError(vaultHub, "VaultHasUnsettledObligations")
         .withArgs(stakingVaultAddress, ether("0.1"), 0);
     });
 
-    // TODO: fix the test, it's not working, looks like sanity checker can't pass reports in pending state
-    it.skip("Should take last fees from the post disconnect report", async () => {
+    it("Should take last fees from the post disconnect report with direct transfer", async () => {
       // 1 ether of the connection deposit will be settled to the treasury
       await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") });
+
+      const totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
 
       // successfully disconnect
       await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
@@ -814,7 +833,30 @@ describe("Integration: Vault obligations", () => {
       await owner.sendTransaction({ to: stakingVaultAddress, value: ether("1") });
 
       // take the last fees from the post disconnect report (1.1 ether because fees are cumulative)
-      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1.1") }))
+      await expect(await reportVaultDataWithProof(ctx, stakingVault, {totalValue: totalValueOnRefSlot, accruedLidoFees: ether("1.1") }))
+        .to.emit(vaultHub, "VaultObligationsSettled")
+        .withArgs(stakingVaultAddress, 0n, ether("0.1"), 0n, 0n, ether("1.1"))
+        .to.emit(vaultHub, "VaultDisconnectCompleted")
+        .withArgs(stakingVaultAddress);
+
+      // 0.9 ether should be left in the vault
+      expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("0.9"));
+    });
+
+    it("Should take last fees from the post disconnect report with fund", async () => {
+      // 1 ether of the connection deposit will be settled to the treasury
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") });
+
+      const totalValueOnRefSlot = await vaultHub.totalValue(stakingVaultAddress);
+
+      // successfully disconnect
+      await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
+
+      // adding 1 ether to cover the exit fees
+      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+
+      // take the last fees from the post disconnect report (1.1 ether because fees are cumulative)
+      await expect(await reportVaultDataWithProof(ctx, stakingVault, {totalValue: totalValueOnRefSlot, accruedLidoFees: ether("1.1") }))
         .to.emit(vaultHub, "VaultObligationsSettled")
         .withArgs(stakingVaultAddress, 0n, ether("0.1"), 0n, 0n, ether("1.1"))
         .to.emit(vaultHub, "VaultDisconnectCompleted")
