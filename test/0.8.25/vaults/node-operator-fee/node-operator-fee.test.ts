@@ -200,8 +200,7 @@ describe("NodeOperatorFee.sol", () => {
 
     it("reverts if the new node operator fee recipient is the zero address", async () => {
       await expect(nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeRecipient(ZeroAddress))
-        .to.be.revertedWithCustomError(nodeOperatorFee, "ZeroArgument")
-        .withArgs("nodeOperatorFeeRecipient");
+        .to.be.revertedWithCustomError(nodeOperatorFee, "ZeroAddress")
     });
 
     it("sets the new node operator fee recipient", async () => {
