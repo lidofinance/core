@@ -394,4 +394,16 @@ export async function main() {
     operatorGrid.address,
   ];
   await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
+
+  //
+  // Deploy ValidatorConsolidationRequests
+  //
+
+  const validatorConsolidationRequests_ = await deployWithoutProxy(
+    Sk.validatorConsolidationRequests,
+    "ValidatorConsolidationRequests",
+    deployer,
+    [locatorAddress],
+  );
+  console.log("ValidatorConsolidationRequests address", await validatorConsolidationRequests_.getAddress());
 }

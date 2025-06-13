@@ -11,7 +11,6 @@ import {
   PredepositGuarantee_HarnessForFactory,
   StakingVault__MockForOperatorGrid,
   StETH__MockForOperatorGrid,
-  VaultHub,
   VaultHub__MockForOperatorGrid,
   WstETH__HarnessForVault,
 } from "typechain-types";
@@ -59,14 +58,11 @@ describe("OperatorGrid.sol", () => {
       totalValue: 1000n,
       inOutDelta: 1000n,
     },
-    locked: 1000n,
     liabilityShares: 555n,
-    inOutDelta: {
-      value: 1000n,
-      refSlotValue: 0n,
-      refSlot: 0n,
-    },
+    locked: 1000n,
     reportTimestamp: 2122n,
+    inOutDelta: 1000n,
+    feeSharesCharged: 1n,
   };
 
   before(async () => {
@@ -110,52 +106,52 @@ describe("OperatorGrid.sol", () => {
     vaultHub = await ethers.deployContract("VaultHub__MockForOperatorGrid", []);
 
     await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
-      owner: vaultOwner,
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
-      vaultIndex: 1,
-      pendingDisconnect: false,
       reserveRatioBP: 2000,
       forcedRebalanceThresholdBP: 1800,
       infraFeeBP: 500,
       liquidityFeeBP: 400,
       reservationFeeBP: 100,
-      isBeaconDepositsManuallyPaused: false,
+      owner: vaultOwner,
+      vaultIndex: 1,
+      liabilityShares: 0,
+      pendingDisconnect: false,
     });
     await vaultHub.mock__setVaultConnection(vault_NO1_V2, {
-      owner: vaultOwner,
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
-      vaultIndex: 2,
-      pendingDisconnect: false,
       reserveRatioBP: 2000,
       forcedRebalanceThresholdBP: 1800,
       infraFeeBP: 500,
       liquidityFeeBP: 400,
       reservationFeeBP: 100,
-      isBeaconDepositsManuallyPaused: false,
+      owner: vaultOwner,
+      vaultIndex: 2,
+      liabilityShares: 0,
+      pendingDisconnect: false,
     });
     await vaultHub.mock__setVaultConnection(vault_NO2_V1, {
-      owner: vaultOwner,
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
-      vaultIndex: 3,
-      pendingDisconnect: false,
       reserveRatioBP: 2000,
       forcedRebalanceThresholdBP: 1800,
       infraFeeBP: 500,
       liquidityFeeBP: 400,
       reservationFeeBP: 100,
-      isBeaconDepositsManuallyPaused: false,
+      owner: vaultOwner,
+      vaultIndex: 3,
+      liabilityShares: 0,
+      pendingDisconnect: false,
     });
     await vaultHub.mock__setVaultConnection(vault_NO2_V2, {
-      owner: vaultOwner,
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
-      vaultIndex: 4,
-      pendingDisconnect: false,
       reserveRatioBP: 2000,
       forcedRebalanceThresholdBP: 1800,
       infraFeeBP: 500,
       liquidityFeeBP: 400,
       reservationFeeBP: 100,
-      isBeaconDepositsManuallyPaused: false,
+      owner: vaultOwner,
+      vaultIndex: 4,
+      liabilityShares: 0,
+      pendingDisconnect: false,
     });
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
@@ -462,27 +458,27 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("alterTiers - validateParams - reverts if _infraFeeBP is greater than 100_00", async function () {
-      const _infraFeeBP = 700_01;
-      const maxFeeBP = 65535;
+      const _infraFeeBP = 100_01;
+      const totalBasisPoints = 100_00;
       await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], infraFeeBP: _infraFeeBP }]))
         .to.be.revertedWithCustomError(operatorGrid, "InfraFeeTooHigh")
-        .withArgs("0", _infraFeeBP, maxFeeBP);
+        .withArgs("0", _infraFeeBP, totalBasisPoints);
     });
 
     it("alterTiers - validateParams - reverts if _liquidityFeeBP is greater than 100_00", async function () {
-      const _liquidityFeeBP = 700_01;
-      const maxFeeBP = 65535;
+      const _liquidityFeeBP = 100_01;
+      const totalBasisPoints = 100_00;
       await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], liquidityFeeBP: _liquidityFeeBP }]))
         .to.be.revertedWithCustomError(operatorGrid, "LiquidityFeeTooHigh")
-        .withArgs("0", _liquidityFeeBP, maxFeeBP);
+        .withArgs("0", _liquidityFeeBP, totalBasisPoints);
     });
 
     it("alterTiers - validateParams - reverts if _reservationFeeBP is greater than 100_00", async function () {
-      const _reservationFeeBP = 700_01;
-      const maxFeeBP = 65535;
+      const _reservationFeeBP = 100_01;
+      const totalBasisPoints = 100_00;
       await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], reservationFeeBP: _reservationFeeBP }]))
         .to.be.revertedWithCustomError(operatorGrid, "ReservationFeeTooHigh")
-        .withArgs("0", _reservationFeeBP, maxFeeBP);
+        .withArgs("0", _reservationFeeBP, totalBasisPoints);
     });
 
     it("alterTiers - reverts if arrays length mismatch", async function () {
@@ -744,7 +740,6 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         pendingDisconnect: false,
-        isBeaconDepositsManuallyPaused: false,
       });
 
       await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
@@ -787,7 +782,6 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         pendingDisconnect: false,
-        isBeaconDepositsManuallyPaused: false,
       });
 
       await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
@@ -829,8 +823,8 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
+        liabilityShares: _liabilityShares,
         pendingDisconnect: false,
-        isBeaconDepositsManuallyPaused: false,
       });
       //and update tier sharesMinted
       await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares);
@@ -838,7 +832,7 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
       await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit))
         .to.be.emit(operatorGrid, "TierChanged")
-        .withArgs(vault_NO1_V1, 1, shareLimit);
+        .withArgs(vault_NO1_V1, 1);
     });
 
     it("works if vault not in default tier ", async function () {
@@ -875,7 +869,6 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         pendingDisconnect: false,
-        isBeaconDepositsManuallyPaused: false,
       });
 
       await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
@@ -906,7 +899,7 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 2, shareLimit);
       await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 2, shareLimit))
         .to.be.emit(operatorGrid, "TierChanged")
-        .withArgs(vault_NO1_V1, 2, shareLimit);
+        .withArgs(vault_NO1_V1, 2);
 
       const tier0after = await operatorGrid.tier(0);
       const tier1after = await operatorGrid.tier(1);
@@ -916,7 +909,7 @@ describe("OperatorGrid.sol", () => {
       expect(tier2after.liabilityShares).to.equal(_liabilityShares);
     });
 
-    it("reverts on changeTier if vault is not connected to VaultHub", async function () {
+    it("changeTier without connection to VaultHub", async function () {
       const shareLimit = 1000;
       await operatorGrid.registerGroup(nodeOperator1, 1000);
       await operatorGrid.registerTiers(nodeOperator1, [
@@ -935,7 +928,8 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
       const tx = operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit);
 
-      await expect(tx).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub").withArgs(vault_NO1_V1);
+      await expect(tx).to.not.emit(vaultHub, "VaultConnectionUpdated");
+      await expect(tx).to.emit(operatorGrid, "TierChanged");
     });
   });
 
@@ -992,7 +986,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         pendingDisconnect: false,
-        isBeaconDepositsManuallyPaused: false,
+        liabilityShares: 0,
       });
 
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, tierId, tierShareLimit);
@@ -1156,7 +1150,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         pendingDisconnect: false,
-        isBeaconDepositsManuallyPaused: false,
+        liabilityShares: 0,
       });
 
       const vaultShareLimit = tierShareLimit / 2;
@@ -1277,7 +1271,7 @@ describe("OperatorGrid.sol", () => {
         infraFeeBP: 500,
         liquidityFeeBP: 400,
         reservationFeeBP: 100,
-        isBeaconDepositsManuallyPaused: false,
+        liabilityShares: 0,
       });
 
       const tier_NO1_Id1 = 1;

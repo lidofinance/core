@@ -28,6 +28,7 @@ import {
   StakingRouter,
   TriggerableWithdrawalsGateway,
   UpgradeableBeacon,
+  ValidatorConsolidationRequests,
   ValidatorExitDelayVerifier,
   ValidatorsExitBusOracle,
   VaultFactory,
@@ -74,6 +75,7 @@ export type ProtocolNetworkItems = {
   vaultHub: string;
   predepositGuarantee: string;
   operatorGrid: string;
+  validatorConsolidationRequests: string;
   lazyOracle: string;
 };
 
@@ -105,6 +107,7 @@ export interface ContractTypes {
   OperatorGrid: OperatorGrid;
   IStakingModule: IStakingModule;
   ICSModule: ICSModule;
+  ValidatorConsolidationRequests: ValidatorConsolidationRequests;
   LazyOracle: LazyOracle;
 }
 
@@ -162,6 +165,7 @@ export type VaultsContracts = {
   vaultHub: LoadedContract<VaultHub>;
   predepositGuarantee: LoadedContract<PredepositGuarantee>;
   operatorGrid: LoadedContract<OperatorGrid>;
+  validatorConsolidationRequests: LoadedContract<ValidatorConsolidationRequests>;
   lazyOracle: LoadedContract<LazyOracle>;
 };
 
