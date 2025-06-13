@@ -647,12 +647,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _auth(getLidoLocator().vaultHub());
         _whenNotStopped();
 
-        uint256 newExternalShares = EXTERNAL_SHARES_POSITION.getStorageUint256().add(_amountOfShares);
-        uint256 maxMintableExternalShares = _getMaxMintableExternalShares();
+        require(_amountOfShares <= _getMaxMintableExternalShares(), "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
-        require(newExternalShares <= maxMintableExternalShares, "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
-
-        EXTERNAL_SHARES_POSITION.setStorageUint256(newExternalShares);
+        EXTERNAL_SHARES_POSITION.setStorageUint256(
+            EXTERNAL_SHARES_POSITION.getStorageUint256()
+            .add(_amountOfShares)
+        );
 
         _mintShares(_recipient, _amountOfShares);
         // emit event after minting shares because we are always having the net new ether under the hood
@@ -987,9 +987,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return internalShares;
     }
 
-    /// @notice Calculate the maximum amount of external shares that can be minted while maintaining
+    /// @notice Calculate the maximum amount of external shares that can be additionally minted while maintaining
     ///         maximum allowed external ratio limits
-    /// @return Maximum amount of external shares that can be minted
+    /// @return Maximum amount of external shares that can be additionally minted
     /// @dev This function enforces the ratio between external and total shares to stay below a limit.
     ///      The limit is defined by some maxRatioBP out of totalBP.
     ///
