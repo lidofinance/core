@@ -5,7 +5,6 @@
 pragma solidity 0.8.25;
 
 import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
-import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
 
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
@@ -107,18 +106,14 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     bytes32 public constant UPDATE_SANITY_PARAMS_ROLE = keccak256("UPDATE_SANITY_PARAMS_ROLE");
 
-    // total basis points = 100%
-    uint256 internal constant TOTAL_BP = 100_00;
-
     ILidoLocator public immutable LIDO_LOCATOR;
-    IHashConsensus public immutable HASH_CONSENSUS;
 
     /// @dev basis points base
     uint256 private constant TOTAL_BASIS_POINTS = 100_00;
+    uint256 private constant MAX_SANE_TOTAL_VALUE = type(uint96).max;
 
-    constructor(address _lidoLocator, address _hashConsensus) {
+    constructor(address _lidoLocator) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
-        HASH_CONSENSUS = IHashConsensus(_hashConsensus);
     }
 
     /// @notice Initializes the contract
@@ -165,7 +160,12 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             return QuarantineInfo(false, 0, 0, 0);
         }
 
-        return QuarantineInfo(true, q.pendingTotalValueIncrease, q.startTimestamp, q.startTimestamp + _storage().quarantinePeriod);
+        return QuarantineInfo({
+            isActive: true,
+            pendingTotalValueIncrease: q.pendingTotalValueIncrease,
+            startTimestamp: q.startTimestamp,
+            endTimestamp: q.startTimestamp + _storage().quarantinePeriod
+        });
     }
 
     /// @notice returns batch of vaults info
@@ -279,62 +279,73 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @notice handle sanity checks for the vault lazy report data
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault in refSlot
-    /// @return totalValue the smoothed total value of the vault after sanity checks
-    /// @return inOutDelta the inOutDelta in the refSlot
-    function _handleSanityChecks(address _vault, uint256 _totalValue) public returns (uint256 totalValue, int256 inOutDelta) {
+    /// @return totalValueWithoutQuarantine the smoothed total value of the vault after sanity checks
+    /// @return inOutDeltaOnRefSlot the inOutDelta in the refSlot
+    function _handleSanityChecks(
+        address _vault,
+        uint256 _totalValue
+    ) public returns (uint256 totalValueWithoutQuarantine, int256 inOutDeltaOnRefSlot) {
         VaultHub vaultHub = _vaultHub();
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
         // 1. Calculate inOutDelta in the refSlot
-        int256 curInOutDelta = record.inOutDelta.value;
-        (uint256 refSlot, ) = HASH_CONSENSUS.getCurrentFrame();
-        if (record.inOutDelta.refSlot == refSlot) {
-            inOutDelta = record.inOutDelta.refSlotValue;
-        } else {
-            inOutDelta = curInOutDelta;
-        }
+        int256 currentInOutDelta = record.inOutDelta.value;
+        inOutDeltaOnRefSlot = vaultHub.inOutDeltaAsOfLastRefSlot(_vault);
 
         // 2. Sanity check for total value increase
-        totalValue = _processTotalValue(_vault, _totalValue, inOutDelta, record);
+        totalValueWithoutQuarantine = _processTotalValue(_vault, _totalValue, inOutDeltaOnRefSlot, record);
 
         // 3. Sanity check for dynamic total value underflow
-        if (int256(totalValue) + curInOutDelta - inOutDelta < 0) revert UnderflowInTotalValueCalculation();
-
-        return (totalValue, inOutDelta);
+        if (int256(totalValueWithoutQuarantine) + currentInOutDelta - inOutDeltaOnRefSlot < 0) {
+            revert UnderflowInTotalValueCalculation();
+        }
     }
 
-    function _processTotalValue(address _vault, uint256 _totalValue, int256 _inOutDelta, VaultHub.VaultRecord memory record) internal returns (uint256) {
+    function _processTotalValue(
+        address _vault,
+        uint256 _reportedTotalValue,
+        int256 _inOutDeltaOnRefSlot,
+        VaultHub.VaultRecord memory record
+    ) internal returns (uint256 totalValueWithoutQuarantine) {
+        if (_reportedTotalValue > MAX_SANE_TOTAL_VALUE) {
+            revert TotalValueTooLarge();
+        }
+
         Storage storage $ = _storage();
 
-        uint256 refSlotTotalValue = uint256(int256(uint256(record.report.totalValue)) + _inOutDelta - record.report.inOutDelta);
+        // total value from the previous report with inOutDelta correction till the current refSlot
+        // it does not include CL difference and EL rewards for the period
+        uint256 onchainTotalValueOnRefSlot =
+            uint256(int256(uint256(record.report.totalValue)) + _inOutDeltaOnRefSlot - record.report.inOutDelta);
         // some percentage of funds hasn't passed through the vault's balance is allowed for the EL and CL rewards handling
-        uint256 limit = refSlotTotalValue * (TOTAL_BP + $.maxRewardRatioBP) / TOTAL_BP;
+        uint256 maxSaneTotalValue = onchainTotalValueOnRefSlot *
+            (TOTAL_BASIS_POINTS + $.maxRewardRatioBP) / TOTAL_BASIS_POINTS;
 
-        if (_totalValue > limit) {
+        if (_reportedTotalValue > maxSaneTotalValue) {
             Quarantine storage q = $.vaultQuarantines[_vault];
             uint64 reportTs = $.vaultsDataTimestamp;
             uint128 quarDelta = q.pendingTotalValueIncrease;
-            uint128 delta = SafeCast.toUint128(_totalValue - refSlotTotalValue);
+            uint128 delta = uint128(_reportedTotalValue - onchainTotalValueOnRefSlot);
 
             if (quarDelta == 0) { // first overlimit report
-                _totalValue = refSlotTotalValue;
+                _reportedTotalValue = onchainTotalValueOnRefSlot;
                 q.pendingTotalValueIncrease = delta;
                 q.startTimestamp = reportTs;
                 emit QuarantinedDeposit(_vault, delta);
             } else if (reportTs - q.startTimestamp < $.quarantinePeriod) { // quarantine not expired
-                _totalValue = refSlotTotalValue;
-            } else if (delta <= quarDelta + refSlotTotalValue * $.maxRewardRatioBP / TOTAL_BP) { // quarantine expired
+                _reportedTotalValue = onchainTotalValueOnRefSlot;
+            } else if (delta <= quarDelta + onchainTotalValueOnRefSlot * $.maxRewardRatioBP / TOTAL_BASIS_POINTS) { // quarantine expired
                 q.pendingTotalValueIncrease = 0;
                 emit QuarantineExpired(_vault, delta);
             } else { // start new quarantine
-                _totalValue = refSlotTotalValue + quarDelta;
+                _reportedTotalValue = onchainTotalValueOnRefSlot + quarDelta;
                 q.pendingTotalValueIncrease = delta - quarDelta;
                 q.startTimestamp = reportTs;
                 emit QuarantinedDeposit(_vault, delta - quarDelta);
             }
         }
 
-        return _totalValue;
+        return _reportedTotalValue;
     }
 
     function _updateSanityParams(uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) internal {
@@ -378,4 +389,5 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     error NotAuthorized();
     error InvalidProof();
     error UnderflowInTotalValueCalculation();
+    error TotalValueTooLarge();
 }

@@ -18,16 +18,13 @@ import {LazyOracle} from "./LazyOracle.sol";
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 import {RefSlotCache} from "./lib/RefSlotCache.sol";
 
-interface IAccountingOracle {
-    function getConsensusContract() external view returns (IHashConsensus);
-}
-
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
 /// Also, it facilitates the individual per-vault reports from the lazy oracle to the vaults and charges Lido fees
 /// @author folkyatina
 contract VaultHub is PausableUntilWithRoles {
     using RefSlotCache for RefSlotCache.Uint112WithRefSlotCache;
+    using RefSlotCache for RefSlotCache.Int112WithRefSlotCache;
 
     // -----------------------------
     //           STORAGE STRUCTS
@@ -86,7 +83,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint96 liabilityShares;
         // ### 3rd slot
         /// @notice inOutDelta of the vault (all deposits - all withdrawals)
-        Int112WithRefSlotCache inOutDelta;
+        RefSlotCache.Int112WithRefSlotCache inOutDelta;
         // ### 4th slot
         /// @notice timestamp of the latest report
         uint64 reportTimestamp;
@@ -98,15 +95,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint128 totalValue;
         /// @notice inOutDelta of the report
         int112 inOutDelta;
-    }
-
-    struct Int112WithRefSlotCache {
-        /// @notice current value
-        int112 value;
-        /// @notice cached value of the latest refSlot
-        int112 refSlotValue;
-        /// @notice cached refSlot number
-        uint32 refSlot;
     }
 
     /**
@@ -336,7 +324,15 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice amount of bad debt to be internalized to become the protocol loss
     function badDebtToInternalizeAsOfLastRefSlot() external view returns (uint256) {
-        return _storage().badDebtToInternalize.getValueForLastRefSlot(_hashConsensus());
+        return _storage().badDebtToInternalize.getValueForLastRefSlot(CONSENSUS_CONTRACT);
+    }
+
+    /// @notice inOutDelta of the vault as of the last refSlot
+    /// @param _vault vault address
+    /// @return inOutDelta of the vault as of the last refSlot
+    /// @dev returns 0 if the vault is not connected
+    function inOutDeltaAsOfLastRefSlot(address _vault) external view returns (int256) {
+        return _vaultRecord(_vault).inOutDelta.getValueForLastRefSlot(CONSENSUS_CONTRACT);
     }
 
     /// @notice Set if a vault proxy codehash is allowed to be connected to the hub
@@ -633,7 +629,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // internalize the bad debt to the protocol
         _storage().badDebtToInternalize = _storage().badDebtToInternalize.withValueIncrease({
-            _consensus: _hashConsensus(),
+            _consensus: CONSENSUS_CONTRACT,
             _increment: uint112(badDebtToInternalize)
         });
 
@@ -977,9 +973,9 @@ contract VaultHub is PausableUntilWithRoles {
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
             reportTimestamp: _lazyOracle().latestReportTimestamp(),
-            inOutDelta: Int112WithRefSlotCache({
+            inOutDelta: RefSlotCache.Int112WithRefSlotCache({
                 value: report.inOutDelta,
-                refSlotValue: 0,
+                valueOnRefSlot: 0,
                 refSlot: 0
             })
         });
@@ -1256,20 +1252,13 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @dev Caches the inOutDelta of the latest refSlot and updates the value
-    function _updateInOutDelta(address _vault, VaultRecord storage record_, int112 increment_) internal {
-        Int112WithRefSlotCache memory inOutDelta_ = record_.inOutDelta;
+    function _updateInOutDelta(address _vault, VaultRecord storage _record, int112 _increment) internal {
+        _record.inOutDelta = _record.inOutDelta.withValueIncrease({
+            _consensus: CONSENSUS_CONTRACT,
+            _increment: _increment
+        });
 
-        // cache inOutDelta if the refSlot is different from the cached refSlot
-        (uint256 refSlot, ) = CONSENSUS_CONTRACT.getCurrentFrame();
-        if (inOutDelta_.refSlot != refSlot) {
-            inOutDelta_.refSlotValue =  inOutDelta_.value;
-            inOutDelta_.refSlot = uint32(refSlot);
-        }
-
-        inOutDelta_.value += increment_;
-        record_.inOutDelta = inOutDelta_;
-
-        emit VaultInOutDeltaUpdated(_vault, inOutDelta_.value);
+        emit VaultInOutDeltaUpdated(_vault, _record.inOutDelta.value);
     }
 
     /**
@@ -1479,10 +1468,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _predepositGuarantee() internal view returns (IPredepositGuarantee) {
         return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee());
-    }
-
-    function _hashConsensus() internal view returns (IHashConsensus) {
-        return IAccountingOracle(LIDO_LOCATOR.accountingOracle()).getConsensusContract();
     }
 
     function _getSharesByPooledEth(uint256 _ether) internal view returns (uint256) {
