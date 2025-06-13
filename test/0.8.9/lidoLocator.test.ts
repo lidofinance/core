@@ -24,6 +24,8 @@ const services = [
   "vaultHub",
   "predepositGuarantee",
   "operatorGrid",
+  "vaultFactory",
+  "lazyOracle",
 ] as const;
 
 type ArrayToUnion<A extends readonly unknown[]> = A[number];

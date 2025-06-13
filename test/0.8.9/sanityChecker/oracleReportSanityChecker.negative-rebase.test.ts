@@ -91,6 +91,8 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
         vaultHub: deployer.address,
         predepositGuarantee: deployer.address,
         operatorGrid: deployer.address,
+        lazyOracle: deployer.address,
+        vaultFactory: deployer.address,
       },
     ]);
 

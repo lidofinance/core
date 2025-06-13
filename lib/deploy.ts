@@ -255,6 +255,7 @@ async function getLocatorConfig(locatorAddress: string) {
     "vaultHub",
     "lazyOracle",
     "operatorGrid",
+    "vaultFactory",
   ]);
 
   const config = await Promise.all(locatorKeys.map((name) => locator[name]()));

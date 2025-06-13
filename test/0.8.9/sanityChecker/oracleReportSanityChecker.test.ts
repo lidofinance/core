@@ -117,6 +117,7 @@ describe("OracleReportSanityChecker.sol", () => {
         predepositGuarantee: deployer.address,
         operatorGrid: deployer.address,
         lazyOracle: deployer.address,
+        vaultFactory: deployer.address,
       }),
     );
 
