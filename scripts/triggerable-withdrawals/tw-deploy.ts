@@ -21,13 +21,12 @@ function getEnvVariable(name: string, defaultValue?: string) {
   }
 }
 
-// Must comply with the specification
-// https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
-const SECONDS_PER_SLOT = 12;
-
-// Must match the beacon chain genesis_time: https://beaconstate-mainnet.chainsafe.io/eth/v1/beacon/genesis
-// and the current value: https://etherscan.io/address/0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb
-const genesisTime = parseInt(getEnvVariable("GENESIS_TIME"));
+type ChainSpec = {
+  slotsPerEpoch: number;
+  secondsPerSlot: number;
+  genesisTime: number;
+  depositContractAddress: string;
+};
 
 async function main() {
   const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
@@ -38,7 +37,7 @@ async function main() {
   const state = readNetworkState();
   persistNetworkState(state);
 
-  const chainSpec = state[Sk.chainSpec];
+  const chainSpec = state[Sk.chainSpec] as ChainSpec;
 
   log(`Chain spec: ${JSON.stringify(chainSpec, null, 2)}`);
 
@@ -52,7 +51,7 @@ async function main() {
 
   // Deploy ValidatorExitBusOracle
   // uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator
-  const validatorsExitBusOracleArgs = [SECONDS_PER_SLOT, genesisTime, locator.address];
+  const validatorsExitBusOracleArgs = [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address];
 
   const validatorsExitBusOracle = await deployImplementation(
     Sk.validatorsExitBusOracle,
@@ -116,7 +115,7 @@ async function main() {
     1, // uint64 pivotSlot,
     32, // uint32 slotsPerEpoch,
     12, // uint32 secondsPerSlot,
-    genesisTime, // uint64 genesisTime,
+    chainSpec.genesisTime, // uint64 genesisTime,
     2 ** 8 * 32 * 12, // uint32 shardCommitteePeriodInSeconds
   ];
 
@@ -162,7 +161,7 @@ async function main() {
   log(`Configuration for voting script:`);
   log(`
 LIDO_LOCATOR_IMPL = "${lidoLocator.address}"
-ACCOUNTING_ORACLE = "${accountingOracle.address}"
+ACCOUNTING_ORACLE_IMPL = "${accountingOracle.address}"
 VALIDATORS_EXIT_BUS_ORACLE_IMPL = "${validatorsExitBusOracle.address}"
 WITHDRAWAL_VAULT_IMPL = "${withdrawalVault.address}"
 STAKING_ROUTER_IMPL = "${stakingRouterAddress.address}"
