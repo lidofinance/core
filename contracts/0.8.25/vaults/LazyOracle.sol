@@ -16,7 +16,6 @@ import {VaultHub} from "./VaultHub.sol";
 import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IHashConsensus} from "./interfaces/IHashConsensus.sol";
 import {ILido} from "../interfaces/ILido.sol";
 
 contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
