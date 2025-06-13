@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.4;
+pragma solidity 0.8.9;
 
-import {Proxy} from "contracts/0.8.4/WithdrawalsManagerProxy.sol";
+import {Proxy} from "contracts/0.8.9/proxy/WithdrawalsManagerProxy.sol";
 
 contract Proxy__Harness is Proxy {
     address private impl;

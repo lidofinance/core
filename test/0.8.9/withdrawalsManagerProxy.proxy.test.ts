@@ -13,7 +13,7 @@ import { ether } from "lib";
 import { Snapshot } from "test/suite";
 
 // This is a test suite for a low-level OZ contract located in
-// contracts/0.8.4/WithdrawalsManagerProxy.sol:Proxy
+// contracts/0.8.9/WithdrawalsManagerProxy.sol:Proxy
 // Normally, we do not cover OZ contracts.
 // However, this contract code is not included in the source files,
 // as opposed to fetching from the OZ repository.
