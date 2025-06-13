@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.25;
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
 
 contract BLSG2ADD__Mock {
     fallback(bytes calldata) external returns (bytes memory) {
