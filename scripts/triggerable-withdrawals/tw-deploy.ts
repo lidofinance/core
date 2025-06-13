@@ -8,126 +8,147 @@ import { cy, deployImplementation, loadContract, log, persistNetworkState, readN
 
 dotenv.config({ path: join(__dirname, "../../.env") });
 
-function getEnvVariable(name: string, defaultValue?: string) {
-  const value = process.env[name];
-  if (value === undefined) {
-    if (defaultValue === undefined) {
-      throw new Error(`Env variable ${name} must be set`);
-    }
-    return defaultValue;
-  } else {
-    log(`Using env variable ${name}=${value}`);
-    return value;
-  }
+//--------------------------------------------------------------------------
+// Constants
+//--------------------------------------------------------------------------
+
+// Consensus‑spec constants
+const SECONDS_PER_SLOT = 12;
+const SLOTS_PER_EPOCH = 32;
+const SHARD_COMMITTEE_PERIOD_SLOTS = 2 ** 8 * SLOTS_PER_EPOCH; // 8192
+
+// G‑indices (phase0 spec)
+const VALIDATOR_PREV_GINDEX = "0x0000000000000000000000000000000000000000000000000096000000000028";
+const VALIDATOR_CURR_GINDEX = VALIDATOR_PREV_GINDEX;
+const HISTORICAL_SUMMARIES_PREV_GINDEX = "0x0000000000000000000000000000000000000000000000000000000000005b00";
+const HISTORICAL_SUMMARIES_CURR_GINDEX = HISTORICAL_SUMMARIES_PREV_GINDEX;
+
+// TriggerableWithdrawalsGateway params
+const TRIGGERABLE_WITHDRAWALS_GAS_LIMIT = 13_000;
+const TRIGGERABLE_WITHDRAWALS_MIN_PRIORITY_FEE = 1; // wei
+const TRIGGERABLE_WITHDRAWALS_MAX_VALIDATORS = 48;
+
+//--------------------------------------------------------------------------
+// Helpers
+//--------------------------------------------------------------------------
+
+function requireEnv(variable: string): string {
+  const value = process.env[variable];
+  if (!value) throw new Error(`Environment variable ${variable} is not set`);
+  log(`Using env variable ${variable}=${value}`);
+  return value;
 }
 
-type ChainSpec = {
-  slotsPerEpoch: number;
-  secondsPerSlot: number;
-  genesisTime: number;
-  depositContractAddress: string;
-};
+//--------------------------------------------------------------------------
+// Main
+//--------------------------------------------------------------------------
 
-async function main() {
-  const deployer = ethers.getAddress(getEnvVariable("DEPLOYER"));
-  const chainId = (await ethers.provider.getNetwork()).chainId;
+async function main(): Promise<void> {
+  // -----------------------------------------------------------------------
+  // Environment & chain context
+  // -----------------------------------------------------------------------
+  const deployer = ethers.getAddress(requireEnv("DEPLOYER"));
+  const genesisTime = parseInt(requireEnv("GENESIS_TIME"), 10);
 
-  log(cy(`Deploy of contracts on chain ${chainId}`));
+  const { chainId } = await ethers.provider.getNetwork();
+  log(cy(`Deploying contracts on chain ${chainId}`));
 
+  // -----------------------------------------------------------------------
+  // State & configuration
+  // -----------------------------------------------------------------------
   const state = readNetworkState();
   persistNetworkState(state);
 
-  const chainSpec = state[Sk.chainSpec] as ChainSpec;
-
+  const chainSpec = state[Sk.chainSpec];
   log(`Chain spec: ${JSON.stringify(chainSpec, null, 2)}`);
 
   const agent = state["app:aragon-agent"].proxy.address;
   log(`Using agent: ${agent}`);
-  // Read contracts addresses from config
+
   const locator = await loadContract<LidoLocator>("LidoLocator", state[Sk.lidoLocator].proxy.address);
 
-  const LIDO_PROXY = await locator.lido();
-  const TREASURY_PROXY = await locator.treasury();
+  // -----------------------------------------------------------------------
+  // Deployments
+  // -----------------------------------------------------------------------
 
-  // Deploy ValidatorExitBusOracle
-  // uint256 secondsPerSlot, uint256 genesisTime, address lidoLocator
-  const validatorsExitBusOracleArgs = [chainSpec.secondsPerSlot, chainSpec.genesisTime, locator.address];
-
+  // 1. ValidatorsExitBusOracle
   const validatorsExitBusOracle = await deployImplementation(
     Sk.validatorsExitBusOracle,
     "ValidatorsExitBusOracle",
     deployer,
-    validatorsExitBusOracleArgs,
+    [SECONDS_PER_SLOT, genesisTime, locator.address],
   );
-  log.success(`ValidatorsExitBusOracle address: ${validatorsExitBusOracle.address}`);
-  log.emptyLine();
+  log.success(`ValidatorsExitBusOracle: ${validatorsExitBusOracle.address}`);
 
+  // 2. TriggerableWithdrawalsGateway
   const triggerableWithdrawalsGateway = await deployImplementation(
     Sk.triggerableWithdrawalsGateway,
     "TriggerableWithdrawalsGateway",
     deployer,
-    [agent, locator.address, 13000, 1, 48],
+    [
+      agent,
+      locator.address,
+      TRIGGERABLE_WITHDRAWALS_GAS_LIMIT,
+      TRIGGERABLE_WITHDRAWALS_MIN_PRIORITY_FEE,
+      TRIGGERABLE_WITHDRAWALS_MAX_VALIDATORS,
+    ],
   );
-  log.success(`TriggerableWithdrawalsGateway implementation address: ${triggerableWithdrawalsGateway.address}`);
-  log.emptyLine();
+  log.success(`TriggerableWithdrawalsGateway: ${triggerableWithdrawalsGateway.address}`);
 
-  const withdrawalVaultArgs = [LIDO_PROXY, TREASURY_PROXY, triggerableWithdrawalsGateway.address];
+  // 3. WithdrawalVault
+  const withdrawalVault = await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [
+    await locator.lido(),
+    await locator.treasury(),
+    triggerableWithdrawalsGateway.address,
+  ]);
+  log.success(`WithdrawalVault: ${withdrawalVault.address}`);
 
-  const withdrawalVault = await deployImplementation(
-    Sk.withdrawalVault,
-    "WithdrawalVault",
-    deployer,
-    withdrawalVaultArgs,
-  );
-  log.success(`WithdrawalVault address implementation: ${withdrawalVault.address}`);
-
+  // -----------------------------------------------------------------------
+  // Shared libraries
+  // -----------------------------------------------------------------------
   const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
   const libraries = {
     MinFirstAllocationStrategy: minFirstAllocationStrategyAddress,
-  };
+  } as const;
 
-  const DEPOSIT_CONTRACT_ADDRESS = state[Sk.chainSpec].depositContract;
-  log(`Deposit contract address: ${DEPOSIT_CONTRACT_ADDRESS}`);
-  const stakingRouterAddress = await deployImplementation(
+  // 4. StakingRouter
+  const stakingRouter = await deployImplementation(
     Sk.stakingRouter,
     "StakingRouter",
     deployer,
-    [DEPOSIT_CONTRACT_ADDRESS],
+    [chainSpec.depositContractAddress],
     { libraries },
   );
+  log.success(`StakingRouter: ${stakingRouter.address}`);
 
-  log(`StakingRouter implementation address: ${stakingRouterAddress.address}`);
-
-  const NOR = await deployImplementation(Sk.appNodeOperatorsRegistry, "NodeOperatorsRegistry", deployer, [], {
+  // 5. NodeOperatorsRegistry
+  const nor = await deployImplementation(Sk.appNodeOperatorsRegistry, "NodeOperatorsRegistry", deployer, [], {
     libraries,
   });
+  log.success(`NodeOperatorsRegistry: ${nor.address}`);
 
-  log.success(`NOR implementation address: ${NOR.address}`);
-  log.emptyLine();
-
-  const validatorExitDelayVerifierArgs = [
-    locator.address,
-    "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorPrev,
-    "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorCurr,
-    "0x0000000000000000000000000000000000000000000000000000000000005b00", // GIndex gIHistoricalSummariesPrev,
-    "0x0000000000000000000000000000000000000000000000000000000000005b00", // GIndex gIHistoricalSummariesCurr,
-    1, // uint64 firstSupportedSlot,
-    1, // uint64 pivotSlot,
-    32, // uint32 slotsPerEpoch,
-    12, // uint32 secondsPerSlot,
-    chainSpec.genesisTime, // uint64 genesisTime,
-    2 ** 8 * 32 * 12, // uint32 shardCommitteePeriodInSeconds
-  ];
-
+  // 6. ValidatorExitDelayVerifier
   const validatorExitDelayVerifier = await deployImplementation(
     Sk.validatorExitDelayVerifier,
     "ValidatorExitDelayVerifier",
     deployer,
-    validatorExitDelayVerifierArgs,
+    [
+      locator.address,
+      VALIDATOR_PREV_GINDEX,
+      VALIDATOR_CURR_GINDEX,
+      HISTORICAL_SUMMARIES_PREV_GINDEX,
+      HISTORICAL_SUMMARIES_CURR_GINDEX,
+      1, // firstSupportedSlot
+      1, // pivotSlot
+      SLOTS_PER_EPOCH,
+      SECONDS_PER_SLOT,
+      genesisTime,
+      SHARD_COMMITTEE_PERIOD_SLOTS * SECONDS_PER_SLOT, // seconds
+    ],
   );
-  log.success(`ValidatorExitDelayVerifier implementation address: ${validatorExitDelayVerifier.address}`);
-  log.emptyLine();
+  log.success(`ValidatorExitDelayVerifier: ${validatorExitDelayVerifier.address}`);
 
+  // 7. AccountingOracle
   const accountingOracle = await deployImplementation(Sk.accountingOracle, "AccountingOracle", deployer, [
     locator.address,
     await locator.lido(),
@@ -135,8 +156,11 @@ async function main() {
     Number(chainSpec.secondsPerSlot),
     Number(chainSpec.genesisTime),
   ]);
+  log.success(`AccountingOracle: ${accountingOracle.address}`);
 
-  // fetch contract addresses that will not changed
+  // -----------------------------------------------------------------------
+  // New LidoLocator (all addresses consolidated)
+  // -----------------------------------------------------------------------
   const locatorConfig = [
     await locator.accountingOracle(),
     await locator.depositSecurityModule(),
@@ -146,34 +170,37 @@ async function main() {
     await locator.oracleReportSanityChecker(),
     await locator.postTokenRebaseReceiver(),
     await locator.burner(),
-    await locator.stakingRouter(),
+    stakingRouter.address,
     await locator.treasury(),
-    await locator.validatorsExitBusOracle(),
+    validatorsExitBusOracle.address,
     await locator.withdrawalQueue(),
-    await locator.withdrawalVault(),
+    withdrawalVault.address,
     await locator.oracleDaemonConfig(),
     validatorExitDelayVerifier.address,
     triggerableWithdrawalsGateway.address,
   ];
 
-  const lidoLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
+  const newLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
+  log.success(`LidoLocator: ${newLocator.address}`);
 
-  log(`Configuration for voting script:`);
-  log(`
-LIDO_LOCATOR_IMPL = "${lidoLocator.address}"
-ACCOUNTING_ORACLE_IMPL = "${accountingOracle.address}"
-VALIDATORS_EXIT_BUS_ORACLE_IMPL = "${validatorsExitBusOracle.address}"
-WITHDRAWAL_VAULT_IMPL = "${withdrawalVault.address}"
-STAKING_ROUTER_IMPL = "${stakingRouterAddress.address}"
-NODE_OPERATORS_REGISTRY_IMPL = "${NOR.address}"
-VALIDATOR_EXIT_VERIFIER = "${validatorExitDelayVerifier.address}"
-TRIGGERABLE_WITHDRAWALS_GATEWAY = "${triggerableWithdrawalsGateway.address}"
-`);
+  // -----------------------------------------------------------------------
+  // Governance summary
+  // -----------------------------------------------------------------------
+  log.emptyLine();
+  log(`Configuration for governance script:`);
+  log.emptyLine();
+  log(`LIDO_LOCATOR_IMPL = "${newLocator.address}"`);
+  log(`ACCOUNTING_ORACLE_IMPL = "${accountingOracle.address}"`);
+  log(`VALIDATORS_EXIT_BUS_ORACLE_IMPL = "${validatorsExitBusOracle.address}"`);
+  log(`WITHDRAWAL_VAULT_IMPL = "${withdrawalVault.address}"`);
+  log(`STAKING_ROUTER_IMPL = "${stakingRouter.address}"`);
+  log(`NODE_OPERATORS_REGISTRY_IMPL = "${nor.address}"`);
+  log(`VALIDATOR_EXIT_DELAY_VERIFIER_IMPL = "${validatorExitDelayVerifier.address}"`);
+  log(`TRIGGERABLE_WITHDRAWALS_GATEWAY_IMPL = "${triggerableWithdrawalsGateway.address}"\n`);
+  log.emptyLine();
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    log.error(error);
-    process.exit(1);
-  });
+main().catch((error) => {
+  log.error(error);
+  process.exitCode = 1;
+});
