@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub, WstETH__HarnessForVault } from "typechain-types";
+import { LidoLocator, OssifiableProxy, StETH__Harness, VaultHub } from "typechain-types";
 
 import { ether } from "lib";
 import { TOTAL_BASIS_POINTS } from "lib/constants";
@@ -21,7 +21,6 @@ describe("VaultHub.sol:initialization", () => {
   let proxy: OssifiableProxy;
   let vaultHubImpl: VaultHub;
   let steth: StETH__Harness;
-  let wsteth: WstETH__HarnessForVault;
   let locator: LidoLocator;
   let vaultHub: VaultHub;
 
@@ -31,11 +30,7 @@ describe("VaultHub.sol:initialization", () => {
     [admin, user, holder, stranger] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__Harness", [holder], { value: ether("10.0") });
-    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
-    locator = await deployLidoLocator({
-      lido: steth,
-      wstETH: wsteth,
-    });
+    locator = await deployLidoLocator({ lido: steth });
 
     // VaultHub
     vaultHubImpl = await ethers.deployContract("VaultHub", [

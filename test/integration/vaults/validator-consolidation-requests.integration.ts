@@ -1,22 +1,21 @@
+import { expect } from "chai";
+import { ContractTransactionReceipt } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, EIP7251MaxEffectiveBalanceRequest__Mock, StakingVault } from "typechain-types";
+import { Dashboard, StakingVault } from "typechain-types";
 
-import {
-  deployEIP7251MaxEffectiveBalanceRequestContract,
-  ensureEIP7251MaxEffectiveBalanceRequestContractPresent,
-} from "lib";
+import { EIP7251_ADDRESS } from "lib";
 import { createVaultWithDashboard, getProtocolContext, ProtocolContext } from "lib/protocol";
 
-import { generateConsolidationRequestPayload } from "test/0.8.25/vaults/consolidation/consolidation_utils";
-import { testEIP7251Mock } from "test/0.8.25/vaults/consolidation/eip7251Mock";
+import { generateConsolidationRequestPayload } from "test/0.8.25/vaults/consolidation/consolidationHelper";
 import { Snapshot } from "test/suite";
+
+const KEY_LENGTH = 48;
 
 describe("Integration: ValidatorConsolidationRequests", () => {
   let ctx: ProtocolContext;
-  let consolidationRequestPredeployed: EIP7251MaxEffectiveBalanceRequest__Mock;
   let originalState: string;
   let owner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
@@ -25,7 +24,6 @@ describe("Integration: ValidatorConsolidationRequests", () => {
   let stakingVault: StakingVault;
 
   before(async () => {
-    consolidationRequestPredeployed = await deployEIP7251MaxEffectiveBalanceRequestContract(1n);
     ctx = await getProtocolContext();
     [owner, stranger, nodeOperator] = await ethers.getSigners();
 
@@ -42,42 +40,55 @@ describe("Integration: ValidatorConsolidationRequests", () => {
 
   afterEach(async () => await Snapshot.restore(originalState));
 
-  // TODO: fix this test
-  it.skip("Consolidates validators by calling max effective balance increaser through contract using delegatecall", async () => {
-    const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount, adjustmentIncrease } =
-      generateConsolidationRequestPayload(1);
+  it("Consolidates validators by calling max effective balance increaser through contract using delegatecall", async () => {
+    const { validatorConsolidationRequests } = ctx.contracts;
+
+    const payload = generateConsolidationRequestPayload(1);
+    const { sourcePubkeys, targetPubkeys } = payload;
 
     const delegateCaller = await ethers.deployContract("DelegateCaller", [], { from: owner });
     const delegateCallerAddress = await delegateCaller.getAddress();
-
-    const feeForRequest = 10n;
-    const totalFee = BigInt(totalSourcePubkeysCount) * feeForRequest;
-    await consolidationRequestPredeployed.mock__setFee(feeForRequest);
     const stakingVaultAddress = await stakingVault.getAddress();
+
+    // send empty tx to EIP7251 to get fee per request
+    const feeForRequest = BigInt(await ethers.provider.call({ to: EIP7251_ADDRESS, data: "0x" }));
+    const totalFee = BigInt(payload.totalSourcePubkeysCount) * feeForRequest;
 
     await dashboard
       .connect(nodeOperator)
       .grantRole(await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), delegateCallerAddress);
 
-    await ensureEIP7251MaxEffectiveBalanceRequestContractPresent();
-
-    await testEIP7251Mock(
-      () =>
-        delegateCaller.callDelegate(
-          ctx.contracts.validatorConsolidationRequests.address,
-          ctx.contracts.validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-            sourcePubkeys,
-            targetPubkeys,
-            stranger.address,
-            stakingVaultAddress,
-            adjustmentIncrease,
-          ]),
-          { value: totalFee },
-        ),
-      delegateCallerAddress,
-      sourcePubkeys,
-      targetPubkeys,
-      feeForRequest,
+    const tx = await delegateCaller.callDelegate(
+      validatorConsolidationRequests.address,
+      validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
+        sourcePubkeys,
+        targetPubkeys,
+        stranger.address,
+        stakingVaultAddress,
+        payload.adjustmentIncrease,
+      ]),
+      { value: totalFee },
     );
+    const receipt = (await tx.wait()) as ContractTransactionReceipt;
+
+    const totalPubkeysCount = sourcePubkeys.reduce(
+      (acc, pubkeys) => acc + BigInt(Math.floor(pubkeys.length / KEY_LENGTH)),
+      0n,
+    );
+
+    const eip7251Events = receipt.logs.filter((log) => log.address === EIP7251_ADDRESS);
+    expect(eip7251Events.length).to.equal(totalPubkeysCount);
+
+    // verify mainnet format of the events, on scratch we use a mock, so no need to verify anything except the number
+    if (!ctx.isScratch) {
+      for (let i = 0; i < sourcePubkeys.length; i++) {
+        const pubkeysCount = Math.floor(sourcePubkeys[i].length / KEY_LENGTH);
+        for (let j = 0; j < pubkeysCount; j++) {
+          const expectedSourcePubkey = sourcePubkeys[i].slice(j * KEY_LENGTH, (j + 1) * KEY_LENGTH);
+          const result = ethers.concat([delegateCallerAddress, expectedSourcePubkey, targetPubkeys[i]]);
+          expect(eip7251Events[i * pubkeysCount + j].data).to.equal(result);
+        }
+      }
+    }
   });
 });
