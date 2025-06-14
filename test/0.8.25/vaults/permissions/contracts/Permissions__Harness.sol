@@ -94,9 +94,9 @@ contract Permissions__Harness is Permissions {
     function withdrawForUnguaranteedDepositToBeaconChain(uint256 _ether) external {
         _withdrawForUnguaranteedDepositToBeaconChain(_ether);
     }
-    
-    function requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) external {
-        _requestTierChange(_tierId, _requestedShareLimit);
+
+    function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external {
+        _changeTier(_tierId, _requestedShareLimit);
     }
 
     function transferVaultOwnership(address _newOwner) external {

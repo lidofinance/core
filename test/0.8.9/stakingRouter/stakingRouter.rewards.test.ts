@@ -7,6 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { StakingModule__MockForStakingRouter, StakingRouter } from "typechain-types";
 
 import { certainAddress, ether, proxify } from "lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { Snapshot } from "test/suite";
 
@@ -20,8 +21,8 @@ describe("StakingRouter.sol:rewards", () => {
 
   const DEPOSIT_VALUE = ether("32.0");
   const DEFAULT_CONFIG: ModuleConfig = {
-    stakeShareLimit: 100_00n,
-    priorityExitShareThreshold: 100_00n,
+    stakeShareLimit: TOTAL_BASIS_POINTS,
+    priorityExitShareThreshold: TOTAL_BASIS_POINTS,
     moduleFee: 5_00n,
     treasuryFee: 5_00n,
     maxDepositsPerBlock: 150n,

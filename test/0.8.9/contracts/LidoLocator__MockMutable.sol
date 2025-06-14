@@ -20,12 +20,15 @@ contract LidoLocator__MockMutable is ILidoLocator {
         address withdrawalQueue;
         address withdrawalVault;
         address oracleDaemonConfig;
+        address validatorExitDelayVerifier;
+        address triggerableWithdrawalsGateway;
         address accounting;
         address predepositGuarantee;
         address wstETH;
         address vaultHub;
-        address operatorGrid;
+        address vaultFactory;
         address lazyOracle;
+        address operatorGrid;
     }
 
     error ZeroAddress();
@@ -43,12 +46,15 @@ contract LidoLocator__MockMutable is ILidoLocator {
     address public immutable withdrawalQueue;
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
+    address public immutable validatorExitDelayVerifier;
+    address public immutable triggerableWithdrawalsGateway;
     address public immutable accounting;
     address public immutable predepositGuarantee;
     address public immutable wstETH;
     address public immutable vaultHub;
-    address public immutable operatorGrid;
+    address public immutable vaultFactory;
     address public immutable lazyOracle;
+    address public immutable operatorGrid;
 
     constructor(Config memory _config) {
         accountingOracle = _assertNonZero(_config.accountingOracle);
@@ -64,12 +70,15 @@ contract LidoLocator__MockMutable is ILidoLocator {
         withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
+        validatorExitDelayVerifier = _assertNonZero(_config.validatorExitDelayVerifier);
+        triggerableWithdrawalsGateway = _assertNonZero(_config.triggerableWithdrawalsGateway);
         accounting = _assertNonZero(_config.accounting);
         wstETH = _assertNonZero(_config.wstETH);
         predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
         vaultHub = _assertNonZero(_config.vaultHub);
-        operatorGrid = _assertNonZero(_config.operatorGrid);
+        vaultFactory = _assertNonZero(_config.vaultFactory);
         lazyOracle = _assertNonZero(_config.lazyOracle);
+        operatorGrid = _assertNonZero(_config.operatorGrid);
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {
