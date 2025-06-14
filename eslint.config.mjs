@@ -57,6 +57,10 @@ export default [
       },
     },
     rules: {
+      "no-restricted-syntax": ["error", {
+        selector: "CallExpression[callee.type=\"MemberExpression\"][callee.object.name=\"Tracing\"][callee.property.name=\"enable\"]",
+        message: "Tracing.enable() is not allowed in tests"
+      }],
       "@typescript-eslint/no-unused-expressions": ["off"],
     },
   },

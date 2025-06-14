@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness, ValidatorsExitBusOracle } from "typechain-types";
 
-import { CONSENSUS_VERSION, SECONDS_PER_SLOT } from "lib";
+import { SECONDS_PER_SLOT, VEBO_CONSENSUS_VERSION } from "lib";
 
 import { deployVEBO, initVEBO } from "test/deploy";
 
@@ -23,8 +23,22 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
     it("initialize reverts if admin address is zero", async () => {
       const deployed = await deployVEBO(admin.address);
 
+      const maxValidatorsPerReport = 50;
+      const maxExitRequestsLimit = 100;
+      const exitsPerFrame = 1;
+      const frameDuration = 48;
+
       await expect(
-        deployed.oracle.initialize(ZeroAddress, await deployed.consensus.getAddress(), CONSENSUS_VERSION, 0),
+        deployed.oracle.initialize(
+          ZeroAddress,
+          await deployed.consensus.getAddress(),
+          VEBO_CONSENSUS_VERSION,
+          0,
+          maxValidatorsPerReport,
+          maxExitRequestsLimit,
+          exitsPerFrame,
+          frameDuration,
+        ),
       ).to.be.revertedWithCustomError(defaultOracle, "AdminCannotBeZero");
     });
 
@@ -41,6 +55,7 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
 
       before(async () => {
         const deployed = await deployVEBO(admin.address);
+
         await initVEBO({
           admin: admin.address,
           oracle: deployed.oracle,
@@ -64,7 +79,7 @@ describe("ValidatorsExitBusOracle.sol:deploy", () => {
 
       it("initial configuration is correct", async () => {
         expect(await oracle.getConsensusContract()).to.equal(await consensus.getAddress());
-        expect(await oracle.getConsensusVersion()).to.equal(CONSENSUS_VERSION);
+        expect(await oracle.getConsensusVersion()).to.equal(VEBO_CONSENSUS_VERSION);
         expect(await oracle.SECONDS_PER_SLOT()).to.equal(SECONDS_PER_SLOT);
         expect(await oracle.isPaused()).to.equal(true);
       });

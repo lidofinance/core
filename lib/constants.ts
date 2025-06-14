@@ -26,11 +26,13 @@ export const INVALID_INTERFACE_ID = "0xffffffff";
 // Chain related
 export const SECONDS_PER_SLOT = 12n;
 export const EPOCHS_PER_FRAME = 225n; // one day;
-
+export const GENESIS_FORK_VERSION = "0x00000000"; // for mainnet
 // Oracle report related
 export const GENESIS_TIME = 100n;
 export const SLOTS_PER_EPOCH = 32n;
-export const CONSENSUS_VERSION = 2n;
+export const BASE_CONSENSUS_VERSION = 1n;
+export const AO_CONSENSUS_VERSION = 3n;
+export const VEBO_CONSENSUS_VERSION = 2n;
 export const INITIAL_EPOCH = 1n;
 export const INITIAL_FAST_LANE_LENGTH_SLOTS = 0n;
 
@@ -55,3 +57,7 @@ export const EMPTY_PUBLIC_KEY = "0x".padEnd(PUBKEY_LENGTH_HEX + 2, "0");
 export const EMPTY_SIGNATURE = "0x".padEnd(SIGNATURE_LENGTH_HEX + 2, "0");
 
 export const ONE_GWEI = 1_000_000_000n;
+
+export const TOTAL_BASIS_POINTS = 100_00n;
+
+export const MAX_FEE_BP = 65_535n;

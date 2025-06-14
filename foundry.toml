@@ -20,6 +20,9 @@ cache_path = 'foundry/cache'
 # Only run tests in contracts matching the specified glob pattern
 match_path = '**/test/**/*.t.sol'
 
+# Enable latest EVM features
+evm_version = "prague"
+
 # https://book.getfoundry.sh/reference/config/testing#fuzz
 # fuzz = { runs = 256 }
 # https://book.getfoundry.sh/reference/config/testing#invariant

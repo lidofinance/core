@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import { ReportProcessor__Mock } from "typechain-types";
 
 import {
-  CONSENSUS_VERSION,
+  BASE_CONSENSUS_VERSION,
   EPOCHS_PER_FRAME,
   GENESIS_TIME,
   INITIAL_EPOCH,
@@ -35,7 +35,7 @@ export async function deployHashConsensus(
   }: DeployHashConsensusParams = {},
 ) {
   if (!reportProcessor) {
-    reportProcessor = await ethers.deployContract("ReportProcessor__Mock", [CONSENSUS_VERSION]);
+    reportProcessor = await ethers.deployContract("ReportProcessor__Mock", [BASE_CONSENSUS_VERSION]);
   }
 
   const consensus = await ethers.deployContract("HashConsensus__Harness", [

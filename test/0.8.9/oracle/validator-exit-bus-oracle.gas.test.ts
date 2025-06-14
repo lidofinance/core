@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
 
-import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
 import {
   computeTimestampAtSlot,
@@ -57,13 +57,12 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     data: string;
   }
 
-  const calcValidatorsExitBusReportDataHash = (items: ReturnType<typeof getValidatorsExitBusReportDataItems>) => {
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [items]);
-    return ethers.keccak256(data);
-  };
-
-  const getValidatorsExitBusReportDataItems = (r: ReportFields) => {
-    return [r.consensusVersion, r.refSlot, r.requestsCount, r.dataFormat, r.data];
+  const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
+    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
+    const reportDataHash = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
+    );
+    return reportDataHash;
   };
 
   const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
@@ -76,29 +75,10 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     return "0x" + requests.map(encodeExitRequestHex).join("");
   };
 
-  const deploy = async () => {
-    const deployed = await deployVEBO(admin.address);
-    oracle = deployed.oracle;
-    consensus = deployed.consensus;
-
-    await initVEBO({
-      admin: admin.address,
-      oracle,
-      consensus,
-      resumeAfterDeploy: true,
-    });
-
-    oracleVersion = await oracle.getContractVersion();
-
-    await consensus.addMember(member1, 1);
-    await consensus.addMember(member2, 2);
-    await consensus.addMember(member3, 2);
-  };
-
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
-    await consensus.connect(member1).submitReport(refSlot, hash, CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, hash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
@@ -124,7 +104,23 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
 
   before(async () => {
     [admin, member1, member2, member3] = await ethers.getSigners();
-    await deploy();
+
+    const deployed = await deployVEBO(admin.address);
+    oracle = deployed.oracle;
+    consensus = deployed.consensus;
+
+    await initVEBO({
+      admin: admin.address,
+      oracle,
+      consensus,
+      resumeAfterDeploy: true,
+    });
+
+    oracleVersion = await oracle.getContractVersion();
+
+    await consensus.addMember(member1, 1);
+    await consensus.addMember(member2, 2);
+    await consensus.addMember(member3, 2);
   });
 
   after(async () => {
@@ -141,7 +137,6 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     context(`Total requests: ${totalRequests}`, () => {
       let exitRequests: { requests: ExitRequest[]; requestsPerModule: number; requestsPerNodeOp: number };
       let reportFields: ReportFields;
-      let reportItems: ReturnType<typeof getValidatorsExitBusReportDataItems>;
       let reportHash: string;
       let originalState: string;
 
@@ -166,15 +161,14 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
         exitRequests = generateExitRequests(totalRequests);
 
         reportFields = {
-          consensusVersion: CONSENSUS_VERSION,
+          consensusVersion: VEBO_CONSENSUS_VERSION,
           refSlot: refSlot,
           requestsCount: exitRequests.requests.length,
           dataFormat: DATA_FORMAT_LIST,
           data: encodeExitRequestsDataList(exitRequests.requests),
         };
 
-        reportItems = getValidatorsExitBusReportDataItems(reportFields);
-        reportHash = calcValidatorsExitBusReportDataHash(reportItems);
+        reportHash = calcValidatorsExitBusReportDataHash(reportFields);
 
         await triggerConsensusOnHash(reportHash);
       });

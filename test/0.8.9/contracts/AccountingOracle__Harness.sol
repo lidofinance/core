@@ -15,13 +15,15 @@ contract AccountingOracle__Harness is AccountingOracle, ITimeProvider {
 
     constructor(
         address lidoLocator,
-        address lido,
-        address legacyOracle,
         uint256 secondsPerSlot,
         uint256 genesisTime
-    ) AccountingOracle(lidoLocator, lido, legacyOracle, secondsPerSlot, genesisTime) {
+    ) AccountingOracle(lidoLocator, secondsPerSlot, genesisTime) {
         // allow usage without a proxy for tests
         CONTRACT_VERSION_POSITION.setStorageUint256(0);
+    }
+
+    function setContractVersion(uint256 version) external {
+        CONTRACT_VERSION_POSITION.setStorageUint256(version);
     }
 
     function getTime() external view returns (uint256) {

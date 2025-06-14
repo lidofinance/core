@@ -1,0 +1,8 @@
+{
+  "steps": [
+    "upgrade/steps/0000-check-env",
+    "upgrade/steps/0100-deploy-contracts",
+    "upgrade/steps/0300-deploy-upgrading-contracts",
+    "upgrade/steps/0500-mock-aragon-voting"
+  ]
+}
