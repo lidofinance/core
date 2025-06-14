@@ -237,7 +237,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         if (msg.sender != LIDO_LOCATOR.accountingOracle()) revert NotAuthorized();
 
         Storage storage $ = _storage();
-        $.vaultsDataTimestamp = uint32(_vaultsDataTimestamp);
+        $.vaultsDataTimestamp = uint64(_vaultsDataTimestamp);
         $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
         $.vaultsDataReportCid = _vaultsDataReportCid;
 
