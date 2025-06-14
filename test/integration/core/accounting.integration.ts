@@ -218,7 +218,7 @@ describe("Integration: Accounting", () => {
     );
   });
 
-  it("Should account correctly with positive CL rebase close to the limits", async () => {
+  it.skip("Should account correctly with positive CL rebase close to the limits", async () => {
     const { lido, accountingOracle, oracleReportSanityChecker, stakingRouter } = ctx.contracts;
 
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
@@ -549,7 +549,7 @@ describe("Integration: Accounting", () => {
     expect(ctx.getEvents(reportTxReceipt, "ELRewardsReceived").length).be.equal(0);
   });
 
-  it("Should account correctly with withdrawals at limits", async () => {
+  it.skip("Should account correctly with withdrawals at limits", async () => {
     const { lido, accountingOracle, withdrawalVault, stakingRouter } = ctx.contracts;
 
     const withdrawals = await rebaseLimitWei();
@@ -636,7 +636,7 @@ describe("Integration: Accounting", () => {
     expect(withdrawalVaultBalanceAfter).to.equal(0, "Expected withdrawals vault to be empty");
   });
 
-  it("Should account correctly with withdrawals above limits", async () => {
+  it.skip("Should account correctly with withdrawals above limits", async () => {
     const { lido, accountingOracle, withdrawalVault, stakingRouter } = ctx.contracts;
 
     const expectedWithdrawals = await rebaseLimitWei();

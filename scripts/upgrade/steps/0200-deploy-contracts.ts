@@ -19,7 +19,7 @@ import {
 import { ether, log } from "lib";
 import { loadContract } from "lib/contract";
 import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy";
-import { readNetworkState, Sk } from "lib/state-file";
+import { readNetworkState, Sk, getAddress } from "lib/state-file";
 
 const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
 
@@ -43,6 +43,9 @@ export async function main() {
   const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
   const validatorExitDelayVerifierParams = parameters[Sk.validatorExitDelayVerifier].deployParameters;
   const triggerableWithdrawalsGatewayParams = parameters[Sk.triggerableWithdrawalsGateway].deployParameters;
+
+  const validatorExitDelayVerifierAddress = getAddress(Sk.validatorExitDelayVerifier, state);
+  const triggerableWithdrawalsGatewayAddress = getAddress(Sk.triggerableWithdrawalsGateway, state);
 
   const proxyContractsOwner = agentAddress;
 
@@ -304,62 +307,6 @@ export async function main() {
     dashboardImplAddress,
   ]);
   console.log("VaultFactory address", await vaultFactory.getAddress());
-
-  const validatorExitDelayVerifier = await deployWithoutProxy(
-    Sk.validatorExitDelayVerifier,
-    "ValidatorExitDelayVerifier",
-    deployer,
-    [
-      locator.address,
-      validatorExitDelayVerifierParams.gIFirstValidatorPrev,
-      validatorExitDelayVerifierParams.gIFirstValidatorCurr,
-      validatorExitDelayVerifierParams.gIHistoricalSummariesPrev,
-      validatorExitDelayVerifierParams.gIHistoricalSummariesCurr,
-      validatorExitDelayVerifierParams.firstSupportedSlot,
-      validatorExitDelayVerifierParams.pivotSlot,
-      chainSpec.slotsPerEpoch,
-      chainSpec.secondsPerSlot,
-      genesisTime,
-      // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
-      validatorExitDelayVerifierParams.shardCommitteePeriodInSeconds,
-    ],
-  );
-
-  //
-  // Deploy Triggerable Withdrawals Gateway
-  //
-
-  const triggerableWithdrawalsGateway_ = await deployWithoutProxy(
-    Sk.triggerableWithdrawalsGateway,
-    "TriggerableWithdrawalsGateway",
-    deployer,
-    [
-      deployer,
-      locator.address,
-      triggerableWithdrawalsGatewayParams.maxExitRequestsLimit,
-      triggerableWithdrawalsGatewayParams.exitsPerFrame,
-      triggerableWithdrawalsGatewayParams.frameDurationInSec,
-    ],
-  );
-  // TODO: move to voting script
-  // await makeTx(
-  //   stakingRouter,
-  //   "grantRole",
-  //   [await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(), triggerableWithdrawalsGateway_.address],
-  //   { from: deployer },
-  // );
-  const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
-    "TriggerableWithdrawalsGateway",
-    triggerableWithdrawalsGateway_.address,
-  );
-  await makeTx(
-    triggerableWithdrawalsGateway,
-    "grantRole",
-    [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), await locator.validatorsExitBusOracle()],
-    { from: deployer },
-  );
-  await makeTx(triggerableWithdrawalsGateway, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
-  await makeTx(triggerableWithdrawalsGateway, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
 
   //
   // Deploy new LidoLocator implementation
