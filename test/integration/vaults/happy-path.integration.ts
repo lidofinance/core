@@ -33,6 +33,10 @@ const ONE_YEAR = 365n * ONE_DAY;
 const TARGET_APR = 3_00n; // 3% APR
 const PROTOCOL_FEE = 10_00n; // 10% fee (5% treasury + 5% node operators)
 
+const INFRA_FEE_BP = 5_00n;
+const LIQUIDITY_FEE_BP = 4_00n;
+const RESERVATION_FEE_BP = 1_00n;
+
 const VAULT_CONNECTION_DEPOSIT = ether("1");
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator performance fee
 const CONFIRM_EXPIRY = days(7n);
@@ -53,10 +57,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   let stakingVaultAddress: string;
   let stakingVaultCLBalance = 0n;
   let stakingVaultMaxMintingShares = 0n;
-
-  const infraFeeBP = 5_00n; // 5% of the infra fee
-  const liquidityFeeBP = 4_00n; // 4% of the liquidity fee
-  const reservationFeeBP = 1_00n; // 1% of the reservation fee
 
   let snapshot: string;
 
@@ -138,9 +138,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
           shareLimit,
           reserveRatioBP: reserveRatio,
           forcedRebalanceThresholdBP: forcedRebalanceThreshold,
-          infraFeeBP: infraFeeBP,
-          liquidityFeeBP: liquidityFeeBP,
-          reservationFeeBP: reservationFeeBP,
+          infraFeeBP: INFRA_FEE_BP,
+          liquidityFeeBP: LIQUIDITY_FEE_BP,
+          reservationFeeBP: RESERVATION_FEE_BP,
         },
       ],
     );
@@ -365,14 +365,13 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const params = {
       clDiff: elapsedProtocolReward,
       excludeVaultsBalances: true,
-      vaultsTotalTreasuryFeesShares: vaultValue,
     } as OracleReportParams;
 
     await report(ctx, params);
 
     expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.be.equal(stakingVaultMaxMintingShares);
 
-    const reportResponse = await reportVaultDataWithProof(ctx, stakingVault, vaultValue);
+    const reportResponse = await reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultValue });
     const reportTxReceipt = (await reportResponse.wait()) as ContractTransactionReceipt;
     const vaultReportedEvents = ctx.getEvents(reportTxReceipt, "VaultReportApplied", [vaultHub.interface]);
     expect(vaultReportedEvents.length).to.equal(1n);
@@ -429,7 +428,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     await report(ctx, params);
 
-    await reportVaultDataWithProof(ctx, stakingVault, vaultValue);
+    await reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultValue });
 
     const mintedShares = await vaultHub.liabilityShares(stakingVaultAddress);
     expect(mintedShares).to.be.equal(0n); // it's zero because protocol fees deducted not in shares

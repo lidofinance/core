@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.4;
+pragma solidity 0.8.9;
 
-import {Address} from "contracts/0.8.4/WithdrawalsManagerProxy.sol";
+import {Address} from "contracts/0.8.9/proxy/WithdrawalsManagerProxy.sol";
 
 contract Address__Harness {
     function isContract(address account) external view returns (bool) {

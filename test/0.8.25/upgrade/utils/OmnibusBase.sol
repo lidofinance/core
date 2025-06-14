@@ -81,14 +81,14 @@ abstract contract OmnibusBase {
         (
             ,
             ,
+            ,
+            ,
             /*open*/ ,
             /*executed*/ ,
             /*startDate*/ ,
             /*snapshotBlock*/ ,
             /*supportRequired*/ ,
-            /*minAcceptQuorum*/ ,
-            /*yea*/ ,
-            /*nay*/ /*votingPower*/ bytes memory script,
+            /*minAcceptQuorum*/ /*yea*/ /*nay*/ /*votingPower*/ bytes memory script,
 
         ) = /*phase*/ VOTING_CONTRACT.getVote(voteId);
         return keccak256(script) == keccak256(getEVMScript());

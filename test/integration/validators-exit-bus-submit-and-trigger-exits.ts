@@ -30,7 +30,8 @@ const hashExitRequest = (request: { dataFormat: number; data: string }) => {
   );
 };
 
-describe("ValidatorsExitBus integration", () => {
+// TODO: enable when upgrade for TW will enable
+describe.skip("ValidatorsExitBus integration", () => {
   let ctx: ProtocolContext;
   let snapshot: string;
 

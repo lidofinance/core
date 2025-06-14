@@ -174,7 +174,7 @@ export async function createVaultWithDashboard(
 /**
  * Sets up the protocol with a maximum external ratio
  */
-export async function setupLido(ctx: ProtocolContext) {
+export async function setupLidoForVaults(ctx: ProtocolContext) {
   const { lido } = ctx.contracts;
   const votingSigner = await ctx.getSigner("voting");
 
@@ -191,15 +191,23 @@ export function createVaultsReportTree(vaults: VaultReportItem[]) {
 export async function reportVaultDataWithProof(
   ctx: ProtocolContext,
   stakingVault: StakingVault,
-  totalValue?: bigint,
-  liabilityShares?: bigint,
+  params: {
+    totalValue?: bigint;
+    accruedLidoFees?: bigint;
+    liabilityShares?: bigint;
+  } = {},
 ) {
   const { vaultHub, locator, lazyOracle } = ctx.contracts;
 
-  const totalValueArg = totalValue ?? (await vaultHub.totalValue(stakingVault));
-  const liabilitySharesArg = liabilityShares ?? (await vaultHub.liabilityShares(stakingVault));
+  const totalValueArg = params.totalValue ?? (await vaultHub.totalValue(stakingVault));
+  const liabilitySharesArg = params.liabilityShares ?? (await vaultHub.liabilityShares(stakingVault));
 
-  const vaultReport: VaultReportItem = [await stakingVault.getAddress(), totalValueArg, 0n, liabilitySharesArg];
+  const vaultReport: VaultReportItem = [
+    await stakingVault.getAddress(),
+    totalValueArg,
+    params.accruedLidoFees ?? 0n,
+    liabilitySharesArg,
+  ];
   const reportTree = createVaultsReportTree([vaultReport]);
 
   const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
@@ -208,7 +216,7 @@ export async function reportVaultDataWithProof(
   return await lazyOracle.updateVaultData(
     await stakingVault.getAddress(),
     totalValueArg,
-    0n,
+    params.accruedLidoFees ?? 0n,
     liabilitySharesArg,
     reportTree.getProof(0),
   );
@@ -310,11 +318,13 @@ export const generatePredepositData = async (
 };
 
 export const getProofAndDepositData = async (
-  predepositGuarantee: LoadedContract<PredepositGuarantee>,
+  ctx: ProtocolContext,
   validator: Validator,
   withdrawalCredentials: string,
   amount: bigint = ether("31"),
 ) => {
+  const { predepositGuarantee } = ctx.contracts;
+
   // Step 3: Prove and deposit the validator
   const pivot_slot = await predepositGuarantee.PIVOT_SLOT();
 

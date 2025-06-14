@@ -4,14 +4,21 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
+import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
+
+import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+
+import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 import {VaultHub} from "./VaultHub.sol";
+import {OperatorGrid} from "./OperatorGrid.sol";
+
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IHashConsensus} from "./interfaces/IHashConsensus.sol";
-import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/MerkleProof.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
-import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {ILido} from "../interfaces/ILido.sol";
 
 contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @custom:storage-location erc7201:LazyOracle
@@ -32,14 +39,14 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     /*
         A quarantine is a timelock applied to any sudden jump in a vault's reported total value
-        that cannot be immediately confirmed on-chain (via the inOutDelta difference). If the 
-        reported total value exceeds the expected routine EL/CL rewards, the excess is pushed 
-        into a quarantine buffer for a predefined cooldown period. Only after this delay is the 
+        that cannot be immediately confirmed on-chain (via the inOutDelta difference). If the
+        reported total value exceeds the expected routine EL/CL rewards, the excess is pushed
+        into a quarantine buffer for a predefined cooldown period. Only after this delay is the
         quarantined value released into VaultHub's total value.
 
-        Normal top-ups — where the vault owner funds the contract directly using the `fund()` 
-        function — do not go through quarantine, as they can be verified on-chain via the 
-        inOutDelta value. These direct fundings are reflected immediately. In contrast, 
+        Normal top-ups — where the vault owner funds the contract directly using the `fund()`
+        function — do not go through quarantine, as they can be verified on-chain via the
+        inOutDelta value. These direct fundings are reflected immediately. In contrast,
         consolidations or deposits that bypass the vault's balance must sit in quarantine.
 
         Example flow:
@@ -80,9 +87,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     struct VaultInfo {
         address vault;
+        uint96 vaultIndex;
         uint256 balance;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
+        uint256 mintableStETH;
         uint96 shareLimit;
         uint16 reserveRatioBP;
         uint16 forcedRebalanceThresholdBP;
@@ -103,6 +112,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     ILidoLocator public immutable LIDO_LOCATOR;
     IHashConsensus public immutable HASH_CONSENSUS;
+
+    /// @dev basis points base
+    uint256 private constant TOTAL_BASIS_POINTS = 100_00;
 
     constructor(address _lidoLocator, address _hashConsensus) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
@@ -161,8 +173,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @param _limit maximum number of vaults to return
     /// @return batch of vaults info
     function batchVaultsInfo(uint256 _offset, uint256 _limit) external view returns (VaultInfo[] memory) {
-        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
-
+        VaultHub vaultHub = _vaultHub();
         uint256 vaultCount = vaultHub.vaultsCount();
         uint256 batchSize;
         if (_offset > vaultCount) {
@@ -179,9 +190,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             VaultHub.VaultRecord memory record = vaultHub.vaultRecord(vaultAddress);
             batch[i] = VaultInfo(
                 vaultAddress,
+                connection.vaultIndex,
                 address(vault).balance,
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
+                _mintableStETH(vaultAddress),
                 connection.shareLimit,
                 connection.reserveRatioBP,
                 connection.forcedRebalanceThresholdBP,
@@ -223,33 +236,32 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @notice Permissionless update of the vault data
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault
-    /// @param _feeSharesCharged the feeSharesCharged of the vault
+    /// @param _cumulativeLidoFees the cumulative Lido fees accrued on the vault (nominated in ether)
     /// @param _liabilityShares the liabilityShares of the vault
     /// @param _proof the proof of the reported data
     function updateVaultData(
         address _vault,
         uint256 _totalValue,
-        uint256 _feeSharesCharged,
+        uint256 _cumulativeLidoFees,
         uint256 _liabilityShares,
         bytes32[] calldata _proof
     ) external {
         bytes32 leaf = keccak256(
-            bytes.concat(keccak256(abi.encode(_vault, _totalValue, _feeSharesCharged, _liabilityShares)))
+            bytes.concat(keccak256(abi.encode(_vault, _totalValue, _cumulativeLidoFees, _liabilityShares)))
         );
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
         int256 inOutDelta;
         (_totalValue, inOutDelta) = _handleSanityChecks(_vault, _totalValue);
 
-        VaultHub(payable(LIDO_LOCATOR.vaultHub()))
-            .applyVaultReport(
-                _vault,
-                _storage().vaultsDataTimestamp,
-                _totalValue,
-                inOutDelta,
-                _feeSharesCharged,
-                _liabilityShares
-            );
+        _vaultHub().applyVaultReport(
+            _vault,
+            _storage().vaultsDataTimestamp,
+            _totalValue,
+            inOutDelta,
+            _cumulativeLidoFees,
+            _liabilityShares
+        );
     }
 
     /// @notice handle sanity checks for the vault lazy report data
@@ -258,7 +270,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @return totalValue the smoothed total value of the vault after sanity checks
     /// @return inOutDelta the inOutDelta in the refSlot
     function _handleSanityChecks(address _vault, uint256 _totalValue) public returns (uint256 totalValue, int256 inOutDelta) {
-        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        VaultHub vaultHub = _vaultHub();
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
         // 1. Calculate inOutDelta in the refSlot
@@ -320,10 +332,30 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         emit SanityParamsUpdated(_quarantinePeriod, _maxRewardRatioBP);
     }
 
+    function _mintableStETH(address _vault) internal view returns (uint256) {
+        VaultHub vaultHub = _vaultHub();
+        uint256 maxLockableValue = vaultHub.maxLockableValue(_vault);
+        uint256 reserveRatioBP = vaultHub.vaultConnection(_vault).reserveRatioBP;
+        uint256 mintableStETHByRR = maxLockableValue * (TOTAL_BASIS_POINTS - reserveRatioBP) / TOTAL_BASIS_POINTS;
+
+        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(_vault);
+        uint256 mintableStEthByShareLimit = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(effectiveShareLimit);
+
+        return Math256.min(mintableStETHByRR, mintableStEthByShareLimit);
+    }
+
     function _storage() internal pure returns (Storage storage $) {
         assembly {
             $.slot := LAZY_ORACLE_STORAGE_LOCATION
         }
+    }
+
+    function _vaultHub() internal view returns (VaultHub) {
+        return VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+    }
+
+    function _operatorGrid() internal view returns (OperatorGrid) {
+        return OperatorGrid(LIDO_LOCATOR.operatorGrid());
     }
 
     event VaultsReportDataUpdated(uint256 indexed timestamp, bytes32 indexed root, string cid);

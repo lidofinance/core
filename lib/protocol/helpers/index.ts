@@ -24,6 +24,6 @@ export {
   createVaultWithDashboard,
   getPubkeys,
   reportVaultDataWithProof,
-  setupLido,
+  setupLidoForVaults,
   VaultRoles,
 } from "./vaults";

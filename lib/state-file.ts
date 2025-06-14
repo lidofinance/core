@@ -103,6 +103,7 @@ export enum Sk {
   v3Addresses = "v3Addresses",
   v3VoteScript = "v3VoteScript",
   operatorGrid = "operatorGrid",
+  validatorConsolidationRequests = "validatorConsolidationRequests",
   lazyOracle = "lazyOracle",
 }
 
@@ -160,6 +161,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.triggerableWithdrawalsGateway:
     case Sk.stakingVaultFactory:
     case Sk.minFirstAllocationStrategy:
+    case Sk.validatorConsolidationRequests:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);

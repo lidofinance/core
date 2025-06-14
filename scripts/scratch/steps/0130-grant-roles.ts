@@ -135,6 +135,12 @@ export async function main() {
   await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_CODEHASH_SET_ROLE(), deployer], {
     from: deployer,
   });
+  await makeTx(vaultHub, "grantRole", [await vaultHub.REDEMPTION_MASTER_ROLE(), agentAddress], {
+    from: deployer,
+  });
+  await makeTx(vaultHub, "grantRole", [await vaultHub.VALIDATOR_EXIT_ROLE(), agentAddress], {
+    from: deployer,
+  });
 
   // OperatorGrid
   const operatorGrid = await loadContract<OperatorGrid>("OperatorGrid", operatorGridAddress);

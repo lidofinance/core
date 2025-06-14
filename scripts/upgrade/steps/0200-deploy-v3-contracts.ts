@@ -17,7 +17,7 @@ import {
 import { ether, log } from "lib";
 import { loadContract } from "lib/contract";
 import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy";
-import { getAddress,readNetworkState, Sk } from "lib/state-file";
+import { getAddress, readNetworkState, Sk } from "lib/state-file";
 
 const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
 
@@ -173,6 +173,8 @@ export async function main() {
 
   const vaultMasterRole = await vaultHub.VAULT_MASTER_ROLE();
   const vaultCodehashRole = await vaultHub.VAULT_CODEHASH_SET_ROLE();
+  const redemptionMasterRole = await vaultHub.REDEMPTION_MASTER_ROLE();
+  const validatorExitRole = await vaultHub.VALIDATOR_EXIT_ROLE();
 
   await makeTx(vaultHub, "grantRole", [vaultCodehashRole, deployer], { from: deployer });
   await makeTx(vaultHub, "setAllowedCodehash", [vaultBeaconProxyCodeHash], { from: deployer });
@@ -181,6 +183,8 @@ export async function main() {
   await makeTx(vaultHub, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
   await makeTx(vaultHub, "grantRole", [vaultMasterRole, agentAddress], { from: deployer });
   await makeTx(vaultHub, "grantRole", [vaultCodehashRole, agentAddress], { from: deployer });
+  await makeTx(vaultHub, "grantRole", [redemptionMasterRole, agentAddress], { from: deployer });
+  await makeTx(vaultHub, "grantRole", [validatorExitRole, agentAddress], { from: deployer });
 
   await makeTx(vaultHub, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
 
@@ -326,4 +330,16 @@ export async function main() {
     operatorGrid: operatorGrid.address,
   };
   await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
+
+  //
+  // Deploy ValidatorConsolidationRequests
+  //
+
+  const validatorConsolidationRequests_ = await deployWithoutProxy(
+    Sk.validatorConsolidationRequests,
+    "ValidatorConsolidationRequests",
+    deployer,
+    [locatorAddress],
+  );
+  console.log("ValidatorConsolidationRequests address", await validatorConsolidationRequests_.getAddress());
 }

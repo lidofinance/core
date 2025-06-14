@@ -616,7 +616,7 @@ describe("OperatorGrid.sol", () => {
       ]);
 
       const vaultOwnerRole = ethers.zeroPadValue(await vaultOwner.getAddress(), 32);
-      const confirmTimestamp = await getNextBlockTimestamp()
+      const confirmTimestamp = await getNextBlockTimestamp();
       const expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
       const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
         await vault_NO1_V1.getAddress(),
@@ -870,7 +870,7 @@ describe("OperatorGrid.sol", () => {
         vaultIndex: 1,
         pendingDisconnect: false,
       });
-      
+
       await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
         ...record,
         liabilityShares: _liabilityShares,
@@ -920,16 +920,16 @@ describe("OperatorGrid.sol", () => {
           infraFeeBP: 500,
           liquidityFeeBP: 400,
           reservationFeeBP: 100,
-        }
+        },
       ]);
 
       await vaultHub.mock__deleteVaultConnection(vault_NO1_V1);
 
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
       const tx = operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit);
-      
-      await expect(tx).to.not.emit(vaultHub, "VaultConnectionUpdated")
-      await expect(tx).to.emit(operatorGrid, "TierChanged")
+
+      await expect(tx).to.not.emit(vaultHub, "VaultConnectionUpdated");
+      await expect(tx).to.emit(operatorGrid, "TierChanged");
     });
   });
 

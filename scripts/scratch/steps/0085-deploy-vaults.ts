@@ -5,7 +5,7 @@ import { VaultHub } from "typechain-types";
 
 import { ether, loadContract, makeTx } from "lib";
 import { deployBehindOssifiableProxy, deployWithoutProxy } from "lib/deploy";
-import { readNetworkState, Sk } from "lib/state-file";
+import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -144,4 +144,17 @@ export async function main() {
   const pdg = await loadContract("PredepositGuarantee", pdgAddress);
   const pdgAdmin = deployer;
   await makeTx(pdg, "initialize", [pdgAdmin], { from: deployer });
+
+  // Deploy ValidatorConsolidationRequests
+  const validatorConsolidationRequests_ = await deployWithoutProxy(
+    Sk.validatorConsolidationRequests,
+    "ValidatorConsolidationRequests",
+    deployer,
+    [locatorAddress],
+  );
+  const validatorConsolidationRequestsAddress = await validatorConsolidationRequests_.getAddress();
+  console.log("ValidatorConsolidationRequests address", validatorConsolidationRequestsAddress);
+  updateObjectInState(Sk.validatorConsolidationRequests, {
+    validatorConsolidationRequests: validatorConsolidationRequestsAddress,
+  });
 }

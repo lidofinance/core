@@ -27,10 +27,10 @@ export const ensureDsmGuardians = async (ctx: ProtocolContext, minGuardiansCount
   let count = addresses.length;
   const newGuardians: string[] = [];
   while (count < minGuardiansCount) {
-    log.warning(`Adding DSM guardian ${count}`);
-
     const address = certainAddress(`dsm_guardian_${count}`);
     newGuardians.push(address);
+
+    log.debug(`Added DSM guardian`, { Count: count, Address: address });
 
     count++;
   }

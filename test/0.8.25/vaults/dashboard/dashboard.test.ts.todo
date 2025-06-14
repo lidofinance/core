@@ -79,7 +79,6 @@ describe("Dashboard.sol", () => {
   const LIQUIDITY_FEE = 400;
   const RESERVATION_FEE = 100;
 
-
   const record: Readonly<VaultHub.VaultRecordStruct> = {
     report: {
       totalValue: 1000n,
@@ -175,7 +174,10 @@ describe("Dashboard.sol", () => {
       },
     ]);
 
-    await updateLidoLocatorImplementation(await lidoLocator.getAddress(), { vaultHub: hub.getAddress(), operatorGrid: operatorGrid.getAddress() });
+    await updateLidoLocatorImplementation(await lidoLocator.getAddress(), {
+      vaultHub: hub.getAddress(),
+      operatorGrid: operatorGrid.getAddress(),
+    });
 
     dashboardImpl = await ethers.deployContract("Dashboard", [steth, wsteth, hub, lidoLocator]);
     vaultImpl = await ethers.deployContract("StakingVault", [depositContract]);
@@ -486,11 +488,11 @@ describe("Dashboard.sol", () => {
       });
     });
 
-    context("withdrawableEther", () => {
+    context("withdrawableValue", () => {
       it("returns the trivial amount can withdraw ether", async () => {
         await setup({ totalValue: 0n, locked: 0n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(0n);
+        expect(await dashboard.withdrawableValue()).to.equal(0n);
       });
 
       it("returns totalValue if balance > totalValue and locked = 0", async () => {
@@ -498,7 +500,7 @@ describe("Dashboard.sol", () => {
         const amount = ether("1");
         await setup({ totalValue: amount, locked: 0n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(amount);
+        expect(await dashboard.withdrawableValue()).to.equal(amount);
       });
 
       it("returns totalValue - locked if balance > totalValue and locked > 0", async () => {
@@ -506,21 +508,21 @@ describe("Dashboard.sol", () => {
         const amount = ether("1");
         await setup({ totalValue: amount, locked: amount / 2n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(amount / 2n);
+        expect(await dashboard.withdrawableValue()).to.equal(amount / 2n);
       });
 
       it("returns balance if balance < totalValue and locked = 0", async () => {
         const amount = ether("1");
         await setBalance(await vault.getAddress(), amount - 1n);
         await setup({ totalValue: amount, locked: 0n });
-        expect(await dashboard.withdrawableEther()).to.equal(amount - 1n);
+        expect(await dashboard.withdrawableValue()).to.equal(amount - 1n);
       });
 
       it("returns balance if balance < totalValue and locked <= (totalValue - balance)", async () => {
         const amount = ether("1");
         await setBalance(await vault.getAddress(), amount - 2n);
         await setup({ totalValue: amount, locked: 1n });
-        expect(await dashboard.withdrawableEther()).to.equal(amount - 2n);
+        expect(await dashboard.withdrawableValue()).to.equal(amount - 2n);
       });
 
       it("returns 0 if no balance, even if totalValue > locked", async () => {
@@ -528,7 +530,7 @@ describe("Dashboard.sol", () => {
         const amount = ether("1");
         await setup({ totalValue: amount, locked: amount / 2n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(0n);
+        expect(await dashboard.withdrawableValue()).to.equal(0n);
       });
     });
   });
@@ -566,7 +568,7 @@ describe("Dashboard.sol", () => {
         nodeOperator.address,
         nodeOperatorFeeBP,
         confirmExpiry,
-        defaultAdminRoles
+        defaultAdminRoles,
       );
       const createVaultReceipt = await createVaultTx.wait();
       if (!createVaultReceipt) throw new Error("Vault creation receipt not found");
@@ -592,19 +594,20 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if change tier is not confirmed by node operator", async () => {
-      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n))
-        .to.be.revertedWithCustomError(newDashboard, "TierChangeNotConfirmed");
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+        newDashboard,
+        "TierChangeNotConfirmed",
+      );
     });
 
     it("works", async () => {
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
-      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n))
-        .to.emit(hub, "Mock__VaultConnected")
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.emit(hub, "Mock__VaultConnected");
     });
 
     it("works with connection deposit", async () => {
       const connectDeposit = await hub.CONNECT_DEPOSIT();
-      
+
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
       await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, { value: connectDeposit }))
         .to.emit(hub, "Mock__VaultConnected")
@@ -666,7 +669,7 @@ describe("Dashboard.sol", () => {
     it("reverts if the amount is greater than withdrawable ether", async () => {
       await expect(dashboard.connect(vaultOwner).withdraw(stranger, ether("2"))).to.be.revertedWithCustomError(
         dashboard,
-        "WithdrawalExceedsWithdrawable",
+        "ExceedsWithdrawable",
       );
     });
   });

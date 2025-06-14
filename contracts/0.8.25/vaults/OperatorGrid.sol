@@ -6,8 +6,11 @@ pragma solidity 0.8.25;
 
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
-import {Confirmable2Addresses} from "contracts/0.8.25/utils/Confirmable2Addresses.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
+import {Confirmable2Addresses} from "../utils/Confirmable2Addresses.sol";
+
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {VaultHub} from "./VaultHub.sol";
 
@@ -87,6 +90,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
+    /// @dev max value for fees in basis points - it's about 650%
+    uint256 internal constant MAX_FEE_BP = type(uint16).max;
 
     // -----------------------------
     //            STRUCTS
@@ -130,7 +135,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
      *         The storage namespace is used to prevent upgrade collisions
      *         keccak256(abi.encode(uint256(keccak256("Lido.Vaults.OperatorGrid")) - 1)) & ~bytes32(uint256(0xff))
      */
-    bytes32 private constant ERC7201_STORAGE_LOCATION =
+    bytes32 private constant OPERATOR_GRID_STORAGE_LOCATION =
         0x6b64617c951381e2c1eff2be939fe368ab6d76b7d335df2e47ba2309eba1c700;
 
 
@@ -398,10 +403,10 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (_requestedTierId >= $.tiers.length) revert TierNotExists();
         if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
-        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        VaultHub vaultHub = _vaultHub();
         bool isVaultConnected = vaultHub.isVaultConnected(_vault);
- 
-        address vaultOwner = isVaultConnected 
+
+        address vaultOwner = isVaultConnected
             ? vaultHub.vaultConnection(_vault).owner
             : IStakingVault(_vault).owner();
 
@@ -416,7 +421,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
-
         uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
 
         //check if tier limit is exceeded
@@ -447,19 +451,17 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         // 2. Vault is created, its tier is changed before connecting to VaultHub.
         //    In this case, `VaultConnection` is still zero, and updateConnection must be skipped.
         // Hence, we update the VaultHub connection only if the vault is already connected.
-        if (isVaultConnected) {
-            vaultHub.updateConnection(
-                _vault,
-                _requestedShareLimit,
-                requestedTier.reserveRatioBP,
-                requestedTier.forcedRebalanceThresholdBP,
-                requestedTier.infraFeeBP,
-                requestedTier.liquidityFeeBP,
-                requestedTier.reservationFeeBP
-            );
-        }
+        vaultHub.updateConnection(
+            _vault,
+            _requestedShareLimit,
+            requestedTier.reserveRatioBP,
+            requestedTier.forcedRebalanceThresholdBP,
+            requestedTier.infraFeeBP,
+            requestedTier.liquidityFeeBP,
+            requestedTier.reservationFeeBP
+        );
 
-        emit TierChanged(_vault, _requestedTierId);
+        emit TierChanged(_vault, _requestedTierId, _requestedShareLimit);
 
         return true;
     }
@@ -475,7 +477,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if ($.vaultTier[_vault] != DEFAULT_TIER_ID) {
             $.vaultTier[_vault] = DEFAULT_TIER_ID;
 
-            emit TierChanged(_vault, DEFAULT_TIER_ID);
+            emit TierChanged(_vault, DEFAULT_TIER_ID, $.tiers[DEFAULT_TIER_ID].shareLimit);
         }
     }
 
@@ -575,6 +577,39 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         reservationFeeBP = t.reservationFeeBP;
     }
 
+    /// @notice Returns the effective share limit of a vault according to the OperatorGrid and vault share limits
+    /// @param _vault address of the vault
+    /// @return shareLimit effective share limit of the vault
+    function effectiveShareLimit(address _vault) public view returns (uint256) {
+        VaultHub vaultHub = _vaultHub();
+        uint256 shareLimit = vaultHub.vaultConnection(_vault).shareLimit;
+        uint256 liabilityShares = vaultHub.liabilityShares(_vault);
+
+        uint256 gridShareLimit = _gridRemainingShareLimit(_vault) + liabilityShares;
+        return Math256.min(gridShareLimit, shareLimit);
+    }
+
+    /// @notice Returns the remaining share limit in a given tier and group
+    /// @param _vault address of the vault
+    /// @return remaining share limit
+    /// @dev remaining share limit inherits the limits of the vault tier and group,
+    ///      and accounts liabilities of other vaults belonging to the same tier and group
+    function _gridRemainingShareLimit(address _vault) internal view returns (uint256) {
+        ERC7201Storage storage $ = _getStorage();
+        uint256 tierId = $.vaultTier[_vault];
+        Tier storage t = $.tiers[tierId];
+
+        uint256 tierLimit = t.shareLimit;
+        uint256 tierRemaining = tierLimit > t.liabilityShares ? tierLimit - t.liabilityShares : 0;
+
+        if (tierId == DEFAULT_TIER_ID) return tierRemaining;
+
+        Group storage g = $.groups[t.operator];
+        uint256 groupLimit = g.shareLimit;
+        uint256 groupRemaining = groupLimit > g.liabilityShares ? groupLimit - g.liabilityShares : 0;
+        return Math256.min(tierRemaining, groupRemaining);
+    }
+
     /// @notice Validates tier parameters
     /// @param _reserveRatioBP Reserve ratio
     /// @param _forcedRebalanceThresholdBP Forced rebalance threshold
@@ -597,19 +632,23 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (_forcedRebalanceThresholdBP > _reserveRatioBP)
             revert ForcedRebalanceThresholdTooHigh(_tierId, _forcedRebalanceThresholdBP, _reserveRatioBP);
 
-        if (_infraFeeBP > TOTAL_BASIS_POINTS)
-            revert InfraFeeTooHigh(_tierId, _infraFeeBP, TOTAL_BASIS_POINTS);
+        if (_infraFeeBP > MAX_FEE_BP)
+            revert InfraFeeTooHigh(_tierId, _infraFeeBP, MAX_FEE_BP);
 
-        if (_liquidityFeeBP > TOTAL_BASIS_POINTS)
-            revert LiquidityFeeTooHigh(_tierId, _liquidityFeeBP, TOTAL_BASIS_POINTS);
+        if (_liquidityFeeBP > MAX_FEE_BP)
+            revert LiquidityFeeTooHigh(_tierId, _liquidityFeeBP, MAX_FEE_BP);
 
-        if (_reservationFeeBP > TOTAL_BASIS_POINTS)
-            revert ReservationFeeTooHigh(_tierId, _reservationFeeBP, TOTAL_BASIS_POINTS);
+        if (_reservationFeeBP > MAX_FEE_BP)
+            revert ReservationFeeTooHigh(_tierId, _reservationFeeBP, MAX_FEE_BP);
+    }
+
+    function _vaultHub() internal view returns (VaultHub) {
+        return VaultHub(payable(LIDO_LOCATOR.vaultHub()));
     }
 
     function _getStorage() private pure returns (ERC7201Storage storage $) {
         assembly {
-            $.slot := ERC7201_STORAGE_LOCATION
+            $.slot := OPERATOR_GRID_STORAGE_LOCATION
         }
     }
 
@@ -628,7 +667,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         uint256 liquidityFeeBP,
         uint256 reservationFeeBP
     );
-    event TierChanged(address indexed vault, uint256 indexed tierId);
+    event TierChanged(address indexed vault, uint256 indexed tierId, uint256 shareLimit);
     event TierUpdated(
       uint256 indexed tierId,
       uint256 shareLimit,

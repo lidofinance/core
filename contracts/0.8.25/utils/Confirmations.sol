@@ -35,7 +35,7 @@ abstract contract Confirmations {
      *         The storage namespace is used to prevent upgrade collisions
      *         keccak256(abi.encode(uint256(keccak256("Lido.Vaults.storage.Confirmations")) - 1)) & ~bytes32(uint256(0xff))
      */
-    bytes32 private constant ERC7201_STORAGE_LOCATION =
+    bytes32 private constant CONFIRMATIONS_STORAGE_LOCATION =
         0x1b8b5828bd311c11f60881dedc705c95b2fbc3408c25f5c1964af0a81ceb0900;
 
 
@@ -190,7 +190,7 @@ abstract contract Confirmations {
 
     function _getConfirmationsStorage() private pure returns (ConfirmationStorage storage $) {
         assembly {
-            $.slot := ERC7201_STORAGE_LOCATION
+            $.slot := CONFIRMATIONS_STORAGE_LOCATION
         }
     }
 

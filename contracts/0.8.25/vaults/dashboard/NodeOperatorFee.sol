@@ -4,9 +4,10 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
+
 import {VaultHub} from "../VaultHub.sol";
 import {Permissions} from "./Permissions.sol";
-import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 
 /**
  * @title NodeOperatorFee
@@ -95,7 +96,7 @@ contract NodeOperatorFee is Permissions {
         uint256 _nodeOperatorFeeRate,
         uint256 _confirmExpiry
     ) internal {
-        if (_nodeOperatorManager == address(0)) revert ZeroArgument("_nodeOperatorManager");
+        _requireNotZero(_nodeOperatorManager);
 
         super._initialize(_defaultAdmin, _confirmExpiry);
 
@@ -205,8 +206,7 @@ contract NodeOperatorFee is Permissions {
         if (rewardsAdjustment.amount != 0) revert AdjustmentNotSettled();
 
         // If the vault is quarantined, the total value is reduced and may not reflect the adjustment
-        if (ILazyOracle(LIDO_LOCATOR.lazyOracle()).vaultQuarantine(address(_stakingVault())).isActive)
-            revert VaultQuarantined();
+        if (_lazyOracle().vaultQuarantine(address(_stakingVault())).isActive) revert VaultQuarantined();
 
         // Validate fee rate before collecting confirmations
         _validateNodeOperatorFeeRate(_newNodeOperatorFeeRate);
@@ -240,7 +240,7 @@ contract NodeOperatorFee is Permissions {
      */
     function setConfirmExpiry(uint256 _newConfirmExpiry) external returns (bool) {
         _validateConfirmExpiry(_newConfirmExpiry);
-        
+
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
         _setConfirmExpiry(_newConfirmExpiry);
@@ -301,7 +301,7 @@ contract NodeOperatorFee is Permissions {
     }
 
     function _setNodeOperatorFeeRecipient(address _newNodeOperatorFeeRecipient) internal {
-        if (_newNodeOperatorFeeRecipient == address(0)) revert ZeroArgument("nodeOperatorFeeRecipient");
+        _requireNotZero(_newNodeOperatorFeeRecipient);
         if (_newNodeOperatorFeeRecipient == nodeOperatorFeeRecipient) revert SameRecipient();
 
         address oldNodeOperatorFeeRecipient = nodeOperatorFeeRecipient;
@@ -335,6 +335,10 @@ contract NodeOperatorFee is Permissions {
      */
     function _validateNodeOperatorFeeRate(uint256 _nodeOperatorFeeRate) internal pure {
         if (_nodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
+    }
+
+    function _lazyOracle() internal view returns (ILazyOracle) {
+        return ILazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
     // ==================== Events ====================
