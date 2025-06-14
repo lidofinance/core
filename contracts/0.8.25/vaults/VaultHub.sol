@@ -51,7 +51,7 @@ contract VaultHub is PausableUntilWithRoles {
         address owner;
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 shareLimit;
-        // ### 2th slot
+        // ### 2nd slot
         /// @notice index of the vault in the list of vaults. Indexes is guaranteed to be stable only if there was no deletions.
         /// @dev vaultIndex is always greater than 0
         uint96 vaultIndex;
