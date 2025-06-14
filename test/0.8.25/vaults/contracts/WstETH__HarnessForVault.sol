@@ -12,4 +12,8 @@ contract WstETH__HarnessForVault is WstETH {
     function harness__mint(address recipient, uint256 amount) public {
         _mint(recipient, amount);
     }
+
+    function harness__burn(address account, uint256 amount) public {
+        _burn(account, amount);
+    }
 }

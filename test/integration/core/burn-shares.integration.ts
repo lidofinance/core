@@ -74,7 +74,6 @@ describe("Scenario: Burn Shares", () => {
       sharesRequestedToBurn: sharesToBurn,
       withdrawalVaultBalance: 0n,
       elRewardsVaultBalance: 0n,
-      vaultsTotalDeficit: 0n,
       vaultsDataTreeRoot: ethers.ZeroHash,
       vaultsDataTreeCid: "",
     });

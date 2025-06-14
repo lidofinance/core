@@ -41,19 +41,19 @@ contract Lido__MockForAccounting {
         beaconBalance = 0;
     }
 
-    function getTotalPooledEther() external view returns (uint256) {
+    function getTotalPooledEther() external pure returns (uint256) {
         return 3201000000000000000000;
     }
 
-    function getTotalShares() external view returns (uint256) {
+    function getTotalShares() external pure returns (uint256) {
         return 1000000000000000000;
     }
 
-    function getExternalShares() external view returns (uint256) {
+    function getExternalShares() external pure returns (uint256) {
         return 0;
     }
 
-    function getExternalEther() external view returns (uint256) {
+    function getExternalEther() external pure returns (uint256) {
         return 0;
     }
 

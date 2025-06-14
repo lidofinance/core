@@ -71,4 +71,6 @@ interface ILido is IERC20, IERC20Permit, IVersioned {
     ) external;
 
     function mintShares(address _recipient, uint256 _sharesAmount) external;
+
+    function internalizeExternalBadDebt(uint256 _amountOfShares) external;
 }

@@ -18,7 +18,7 @@ contract LazyOracle__MockForNodeOperatorFee is ILazyOracle {
         quarantineInfo = _quarantineInfo;
     }
 
-    function vaultQuarantine(address _vault) external view returns (QuarantineInfo memory) {
+    function vaultQuarantine(address) external view returns (QuarantineInfo memory) {
         return quarantineInfo;
     }
 }

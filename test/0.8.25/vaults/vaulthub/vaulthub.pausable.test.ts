@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -9,7 +10,7 @@ import { OperatorGrid, OssifiableProxy, StETH__HarnessForVaultHub, VaultHub } fr
 import { ether, MAX_UINT256 } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
-import { Snapshot, VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 
@@ -49,7 +50,12 @@ describe("VaultHub.sol:pausableUntil", () => {
     await operatorGrid.initialize(user, defaultTierParams);
     await operatorGrid.connect(user).grantRole(await operatorGrid.REGISTRY_ROLE(), user);
 
-    const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_RELATIVE_SHARE_LIMIT_BP]);
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [
+      locator,
+      steth,
+      ZeroAddress,
+      VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP,
+    ]);
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
     vaultHubAdmin = await ethers.getContractAt("VaultHub", proxy);
@@ -191,11 +197,10 @@ describe("VaultHub.sol:pausableUntil", () => {
     });
 
     it("reverts rebalance() if paused", async () => {
-      await expect(vaultHub.rebalance()).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
+      await expect(vaultHub.rebalance(ZeroAddress, 0n)).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
     });
 
-    // transferAndBurnShares is not pausable. Need recheck.
-    it.skip("reverts transferAndBurnShares() if paused", async () => {
+    it("reverts transferAndBurnShares() if paused", async () => {
       await steth.connect(user).approve(vaultHub, 1000n);
 
       await expect(vaultHub.transferAndBurnShares(stranger, 1000n)).to.be.revertedWithCustomError(

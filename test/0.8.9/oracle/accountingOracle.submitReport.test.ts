@@ -70,7 +70,6 @@ describe("AccountingOracle.sol:submitReport", () => {
     sharesRequestedToBurn: ether("3"),
     withdrawalFinalizationBatches: [1],
     isBunkerMode: true,
-    vaultsTotalDeficit: ether("4"),
     vaultsDataTreeRoot: ethers.ZeroHash,
     vaultsDataTreeCid: "",
     extraDataFormat: EXTRA_DATA_FORMAT_LIST,
@@ -177,7 +176,6 @@ describe("AccountingOracle.sol:submitReport", () => {
 
     it("processing state reverts to pre-report state ", async () => {
       const state = await oracle.getProcessingState();
-      console.debug({ state });
       expect(state.mainDataHash).to.equal(ZeroHash);
       expect(state.extraDataHash).to.equal(ZeroHash);
       expect(state.extraDataFormat).to.equal(0);

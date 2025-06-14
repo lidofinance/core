@@ -41,6 +41,7 @@ describe("VaultHub.sol:initialization", () => {
     vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       await locator.lido(),
+      ZeroAddress,
       VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP,
     ]);
 
@@ -62,9 +63,7 @@ describe("VaultHub.sol:initialization", () => {
     });
 
     it("reverts on `_admin` address is zero", async () => {
-      await expect(vaultHub.initialize(ZeroAddress))
-        .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
-        .withArgs("_admin");
+      await expect(vaultHub.initialize(ZeroAddress)).to.be.revertedWithCustomError(vaultHub, "ZeroAddress");
     });
 
     it("initialization happy path", async () => {
@@ -78,14 +77,16 @@ describe("VaultHub.sol:initialization", () => {
 
   context("constructor", () => {
     it("reverts on `_maxRelativeShareLimitBP` is zero", async () => {
-      await expect(ethers.deployContract("VaultHub", [locator, await locator.lido(), 0n]))
-        .to.be.revertedWithCustomError(vaultHubImpl, "ZeroArgument")
-        .withArgs("_maxRelativeShareLimitBP");
+      await expect(
+        ethers.deployContract("VaultHub", [locator, await locator.lido(), ZeroAddress, 0n]),
+      ).to.be.revertedWithCustomError(vaultHubImpl, "ZeroArgument");
     });
 
     it("reverts if `_maxRelativeShareLimitBP` is greater than `TOTAL_BASIS_POINTS`", async () => {
-      await expect(ethers.deployContract("VaultHub", [locator, await locator.lido(), TOTAL_BASIS_POINTS + 1n]))
-        .to.be.revertedWithCustomError(vaultHubImpl, "MaxRelativeShareLimitBPTooHigh")
+      await expect(
+        ethers.deployContract("VaultHub", [locator, await locator.lido(), ZeroAddress, TOTAL_BASIS_POINTS + 1n]),
+      )
+        .to.be.revertedWithCustomError(vaultHubImpl, "InvalidBasisPoints")
         .withArgs(TOTAL_BASIS_POINTS + 1n, TOTAL_BASIS_POINTS);
     });
   });

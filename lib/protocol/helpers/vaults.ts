@@ -181,11 +181,11 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
   await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
 }
 
-// address, totalValue, treasuryFees, liabilityShares
-export type VaultReportItem = [string, bigint, bigint, bigint];
+// address, totalValue, treasuryFees, liabilityShares, slashingReserve
+export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
 
 export function createVaultsReportTree(vaults: VaultReportItem[]) {
-  return StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256"]);
+  return StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256", "uint256"]);
 }
 
 export async function reportVaultDataWithProof(
@@ -207,6 +207,7 @@ export async function reportVaultDataWithProof(
     totalValueArg,
     params.accruedLidoFees ?? 0n,
     liabilitySharesArg,
+    0n,
   ];
   const reportTree = createVaultsReportTree([vaultReport]);
 
@@ -218,6 +219,7 @@ export async function reportVaultDataWithProof(
     totalValueArg,
     params.accruedLidoFees ?? 0n,
     liabilitySharesArg,
+    0n,
     reportTree.getProof(0),
   );
 }
