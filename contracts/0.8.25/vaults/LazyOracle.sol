@@ -83,6 +83,13 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint64 startTimestamp;
     }
 
+    struct QuarantineInfo {
+        bool isActive;
+        uint256 pendingTotalValueIncrease;
+        uint256 startTimestamp;
+        uint256 endTimestamp;
+    }
+
     struct VaultInfo {
         address vault;
         uint96 vaultIndex;
@@ -211,7 +218,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @notice update the sanity parameters
     /// @param _quarantinePeriod the quarantine period
     /// @param _maxRewardRatioBP the max EL CL rewards
-    function updateSanityParams(uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) external onlyRole(UPDATE_SANITY_PARAMS_ROLE) {
+    function updateSanityParams(
+        uint64 _quarantinePeriod,
+        uint16 _maxRewardRatioBP
+    ) external onlyRole(UPDATE_SANITY_PARAMS_ROLE) {
         _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP);
     }
 
@@ -227,7 +237,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         if (msg.sender != LIDO_LOCATOR.accountingOracle()) revert NotAuthorized();
 
         Storage storage $ = _storage();
-        $.vaultsDataTimestamp = uint64(_vaultsDataTimestamp);
+        $.vaultsDataTimestamp = uint32(_vaultsDataTimestamp);
         $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
         $.vaultsDataReportCid = _vaultsDataReportCid;
 

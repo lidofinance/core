@@ -5,23 +5,13 @@
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity ^0.8.9;
 
-
 /**
  * Interface to connect AccountingOracle with LazyOracle and force type consistency
  */
 interface ILazyOracle {
-    struct QuarantineInfo {
-        bool isActive;
-        uint256 pendingTotalValueIncrease;
-        uint256 startTimestamp;
-        uint256 endTimestamp;
-    }
-
     function updateReportData(
         uint256 _timestamp,
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataReportCid
     ) external;
-
-    function vaultQuarantine(address _vault) external view returns (QuarantineInfo memory);
 }

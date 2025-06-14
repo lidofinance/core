@@ -4,9 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
-
 import {VaultHub} from "../VaultHub.sol";
+import {LazyOracle} from "../LazyOracle.sol";
 import {Permissions} from "./Permissions.sol";
 
 /**
@@ -27,7 +26,7 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Maximum value that can be set via manual adjustment
      */
-    uint128 public constant MANUAL_REWARDS_ADJUSTMENT_LIMIT = 10_000_000 ether;
+    uint256 public constant MANUAL_REWARDS_ADJUSTMENT_LIMIT = 10_000_000 ether;
 
     /**
      * @notice Node operator manager role:
@@ -60,8 +59,8 @@ contract NodeOperatorFee is Permissions {
     address public nodeOperatorFeeRecipient;
 
     struct RewardsAdjustment {
-        uint128 amount;
-        uint64 latestTimestamp;
+        uint112 amount;
+        uint32 latestTimestamp;
     }
 
     /**
@@ -155,16 +154,16 @@ contract NodeOperatorFee is Permissions {
     function nodeOperatorDisbursableFee() public view returns (uint256) {
         VaultHub.Report memory periodStart = feePeriodStartReport;
         VaultHub.Report memory periodEnd = latestReport();
-        int128 adjustment = _toSignedClamped(rewardsAdjustment.amount);
+        int256 adjustment = _toSignedClamped(rewardsAdjustment.amount);
 
         // the total increase/decrease of the vault value during the fee period
-        int128 growth = int128(periodEnd.totalValue) - int128(periodStart.totalValue) -
+        int256 growth = int112(periodEnd.totalValue) - int112(periodStart.totalValue) -
                         (periodEnd.inOutDelta - periodStart.inOutDelta);
 
         // the actual rewards that are subject to the fee
-        int128 rewards = growth - adjustment;
+        int256 rewards = growth - adjustment;
 
-        return rewards <= 0 ? 0 : (uint256(uint128(rewards)) * nodeOperatorFeeRate) / TOTAL_BASIS_POINTS;
+        return rewards <= 0 ? 0 : (uint256(rewards) * nodeOperatorFeeRate) / TOTAL_BASIS_POINTS;
     }
 
     /**
@@ -199,7 +198,7 @@ contract NodeOperatorFee is Permissions {
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
 
         // Latest adjustment must be earlier than the latest fresh report timestamp
-        if (rewardsAdjustment.latestTimestamp >= VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault())))
+        if (rewardsAdjustment.latestTimestamp >= _lazyOracle().latestReportTimestamp())
             revert AdjustmentNotReported();
 
         // Adjustment must be settled before the fee rate change
@@ -269,7 +268,7 @@ contract NodeOperatorFee is Permissions {
         uint256 newAdjustment = rewardsAdjustment.amount + _adjustmentIncrease;
         // sanity check, though value will be cast safely during fee calculation
         if (newAdjustment > MANUAL_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
-        _setRewardsAdjustment(uint128(newAdjustment));
+        _setRewardsAdjustment(newAdjustment);
     }
 
     /**
@@ -287,7 +286,7 @@ contract NodeOperatorFee is Permissions {
             revert InvalidatedAdjustmentVote(rewardsAdjustment.amount, _expectedAdjustment);
         if (_proposedAdjustment > MANUAL_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
-        _setRewardsAdjustment(uint128(_proposedAdjustment));
+        _setRewardsAdjustment(_proposedAdjustment);
         return true;
     }
 
@@ -313,13 +312,13 @@ contract NodeOperatorFee is Permissions {
      * @notice sets InOut adjustment for correct fee calculation
      * @param _newAdjustment new adjustment value
      */
-    function _setRewardsAdjustment(uint128 _newAdjustment) internal {
+    function _setRewardsAdjustment(uint256 _newAdjustment) internal {
         uint256 oldAdjustment = rewardsAdjustment.amount;
 
         if (_newAdjustment == oldAdjustment) revert SameAdjustment();
 
-        rewardsAdjustment.amount = _newAdjustment;
-        rewardsAdjustment.latestTimestamp = uint64(block.timestamp);
+        rewardsAdjustment.amount = uint112(_newAdjustment);
+        rewardsAdjustment.latestTimestamp = uint32(block.timestamp);
 
         emit RewardsAdjustmentSet(_newAdjustment, oldAdjustment);
     }
@@ -337,8 +336,8 @@ contract NodeOperatorFee is Permissions {
         if (_nodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
     }
 
-    function _lazyOracle() internal view returns (ILazyOracle) {
-        return ILazyOracle(LIDO_LOCATOR.lazyOracle());
+    function _lazyOracle() internal view returns (LazyOracle) {
+        return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
     // ==================== Events ====================

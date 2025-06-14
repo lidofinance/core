@@ -70,6 +70,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 reservationFeeBP;
         /// @notice if true, vault owner manually paused the beacon chain deposits
         bool isBeaconDepositsManuallyPaused;
+        /// 64 bits gap
     }
 
     struct VaultRecord {
@@ -84,17 +85,15 @@ contract VaultHub is PausableUntilWithRoles {
         // ### 3rd slot
         /// @notice inOutDelta of the vault (all deposits - all withdrawals)
         RefSlotCache.Int112WithRefSlotCache inOutDelta;
-        // ### 4th slot
-        /// @notice timestamp of the latest report
-        uint64 reportTimestamp;
-        // 192 bits of gap
     }
 
     struct Report {
         /// @notice total value of the vault
-        uint128 totalValue;
+        uint112 totalValue;
         /// @notice inOutDelta of the report
         int112 inOutDelta;
+        /// @notice last 32 bits of the timestamp (in seconds)
+        uint32 timestamp;
     }
 
     /**
@@ -291,12 +290,6 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev returns empty struct if the vault is not connected
     function latestReport(address _vault) external view returns (Report memory) {
         return _vaultRecord(_vault).report;
-    }
-
-    /// @return latest report timestamp for the vault
-    /// @dev returns 0 if the vault is not connected
-    function latestVaultReportTimestamp(address _vault) external view returns (uint64) {
-        return _storage().records[_vault].reportTimestamp;
     }
 
     /// @return true if the report for the vault is fresh, false otherwise
@@ -505,14 +498,14 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice update of the vault data by the lazy oracle report
     /// @param _vault the address of the vault
-    /// @param _reportTimestamp the timestamp of the report
+    /// @param _reportTimestamp the timestamp of the report (last 32 bits of it)
     /// @param _reportTotalValue the total value of the vault
     /// @param _reportInOutDelta the inOutDelta of the vault
     /// @param _reportCumulativeLidoFees the cumulative Lido fees of the vault
     /// @param _reportLiabilityShares the liabilityShares of the vault
     function applyVaultReport(
         address _vault,
-        uint64 _reportTimestamp,
+        uint256 _reportTimestamp,
         uint256 _reportTotalValue,
         int256 _reportInOutDelta,
         uint256 _reportCumulativeLidoFees,
@@ -965,18 +958,16 @@ contract VaultHub is PausableUntilWithRoles {
         if (vaultBalance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, vaultBalance, CONNECT_DEPOSIT);
 
         // Connecting a new vault with totalValue == balance
-        Report memory report = Report({
-            totalValue: uint128(vaultBalance),
-            inOutDelta: int112(int256(vaultBalance))
-        });
-
         VaultRecord memory record = VaultRecord({
-            report: report,
+            report: Report({
+                totalValue: uint112(vaultBalance),
+                inOutDelta: int112(int256(vaultBalance)),
+                timestamp: uint32(_lazyOracle().latestReportTimestamp())
+            }),
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
-            reportTimestamp: _lazyOracle().latestReportTimestamp(),
             inOutDelta: RefSlotCache.Int112WithRefSlotCache({
-                value: report.inOutDelta,
+                value: int112(int256(vaultBalance)),
                 valueOnRefSlot: 0,
                 refSlot: 0
             })
@@ -1019,7 +1010,7 @@ contract VaultHub is PausableUntilWithRoles {
     function _applyVaultReport(
         VaultRecord storage _record,
         VaultConnection storage _connection,
-        uint64 _reportTimestamp,
+        uint256 _reportTimestamp,
         uint256 _reportTotalValue,
         uint256 _reportLiabilityShares,
         int256 _reportInOutDelta
@@ -1033,10 +1024,10 @@ contract VaultHub is PausableUntilWithRoles {
         );
 
         _record.locked = uint128(lockedEther);
-        _record.reportTimestamp = _reportTimestamp;
         _record.report = Report({
-            totalValue: uint128(_reportTotalValue),
-            inOutDelta: int112(_reportInOutDelta)
+            totalValue: uint112(_reportTotalValue),
+            inOutDelta: int112(_reportInOutDelta),
+            timestamp: uint32(_reportTimestamp)
         });
     }
 
@@ -1190,7 +1181,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 latestReportTimestamp = _lazyOracle().latestReportTimestamp();
         return
             // check if AccountingOracle brought fresh report
-            latestReportTimestamp == _record.reportTimestamp &&
+            uint32(latestReportTimestamp) == _record.report.timestamp &&
             // if Accounting Oracle stop bringing the report, last report is fresh for 2 days
             block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }
