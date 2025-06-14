@@ -27,9 +27,14 @@ async function deployMockAccountingOracle(secondsPerSlot = SECONDS_PER_SLOT, gen
   return { ao, lido };
 }
 
-async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, admin: string) {
+async function deployOracleReportSanityCheckerForExitBus(
+  lidoLocator: string,
+  accountingOracle: string,
+  accounting: string,
+  admin: string,
+) {
   return await ethers.getContractFactory("OracleReportSanityChecker").then((f) =>
-    f.deploy(lidoLocator, admin, {
+    f.deploy(lidoLocator, accountingOracle, accounting, admin, {
       exitedValidatorsPerDayLimit: 0n,
       appearedValidatorsPerDayLimit: 0n,
       annualBalanceIncreaseBPLimit: 0n,
@@ -43,6 +48,10 @@ async function deployOracleReportSanityCheckerForExitBus(lidoLocator: string, ad
       clBalanceOraclesErrorUpperBPLimit: 0n,
     }),
   );
+}
+
+async function deployTWG() {
+  return await ethers.deployContract("TriggerableWithdrawalsGateway__MockForVEB");
 }
 
 export async function deployVEBO(
@@ -68,26 +77,39 @@ export async function deployVEBO(
   });
 
   const { ao, lido } = await deployMockAccountingOracle(secondsPerSlot, genesisTime);
+  const triggerableWithdrawalsGateway = await deployTWG();
+
+  const accountingOracleAddress = await ao.getAddress();
+  const accountingAddress = await locator.accounting();
 
   await updateLidoLocatorImplementation(locatorAddr, {
     lido: await lido.getAddress(),
-    accountingOracle: await ao.getAddress(),
+    accountingOracle: accountingOracleAddress,
+    triggerableWithdrawalsGateway: await triggerableWithdrawalsGateway.getAddress(),
   });
 
-  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(locatorAddr, admin);
+  const oracleReportSanityChecker = await deployOracleReportSanityCheckerForExitBus(
+    locatorAddr,
+    accountingOracleAddress,
+    accountingAddress,
+    admin,
+  );
 
   await updateLidoLocatorImplementation(locatorAddr, {
     validatorsExitBusOracle: await oracle.getAddress(),
     oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),
+    triggerableWithdrawalsGateway: await triggerableWithdrawalsGateway.getAddress(),
   });
 
   await consensus.setTime(genesisTime + initialEpoch * slotsPerEpoch * secondsPerSlot);
 
   return {
+    locator,
     locatorAddr,
     oracle,
     consensus,
     oracleReportSanityChecker,
+    triggerableWithdrawalsGateway,
   };
 }
 
@@ -99,6 +121,10 @@ interface VEBOConfig {
   consensusVersion?: bigint;
   lastProcessingRefSlot?: number;
   resumeAfterDeploy?: boolean;
+  maxRequestsPerBatch?: number;
+  maxExitRequestsLimit?: number;
+  exitsPerFrame?: number;
+  frameDurationInSec?: number;
 }
 
 export async function initVEBO({
@@ -109,8 +135,21 @@ export async function initVEBO({
   consensusVersion = VEBO_CONSENSUS_VERSION,
   lastProcessingRefSlot = 0,
   resumeAfterDeploy = false,
+  maxRequestsPerBatch = 600,
+  maxExitRequestsLimit = 13000,
+  exitsPerFrame = 1,
+  frameDurationInSec = 48,
 }: VEBOConfig) {
-  const initTx = await oracle.initialize(admin, await consensus.getAddress(), consensusVersion, lastProcessingRefSlot);
+  const initTx = await oracle.initialize(
+    admin,
+    await consensus.getAddress(),
+    consensusVersion,
+    lastProcessingRefSlot,
+    maxRequestsPerBatch,
+    maxExitRequestsLimit,
+    exitsPerFrame,
+    frameDurationInSec,
+  );
 
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_CONTRACT_ROLE(), admin);
   await oracle.grantRole(await oracle.MANAGE_CONSENSUS_VERSION_ROLE(), admin);

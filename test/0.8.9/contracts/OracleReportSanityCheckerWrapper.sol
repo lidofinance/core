@@ -4,7 +4,12 @@
 
 pragma solidity 0.8.9;
 
-import {OracleReportSanityChecker, LimitsList, LimitsListPacked, LimitsListPacker} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
+import {
+    OracleReportSanityChecker,
+    LimitsList,
+    LimitsListPacked,
+    LimitsListPacker
+} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 
 contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
     using LimitsListPacker for LimitsList;
@@ -13,9 +18,11 @@ contract OracleReportSanityCheckerWrapper is OracleReportSanityChecker {
 
     constructor(
         address _lidoLocator,
+        address _accountingOracle,
+        address _accounting,
         address _admin,
         LimitsList memory _limitsList
-    ) OracleReportSanityChecker(_lidoLocator, _admin, _limitsList) {}
+    ) OracleReportSanityChecker(_lidoLocator, _accountingOracle, _accounting, _admin, _limitsList) {}
 
     function addReportData(uint256 _timestamp, uint256 _exitedValidatorsCount, uint256 _negativeCLRebase) public {
         _addReportData(_timestamp, _exitedValidatorsCount, _negativeCLRebase);

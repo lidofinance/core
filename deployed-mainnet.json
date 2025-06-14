@@ -197,6 +197,21 @@
       "contract": "@aragon/os/contracts/kernel/KernelProxy.sol"
     }
   },
+  "aragon-lido-app-repo": {
+    "proxy": {
+      "address": "0xF5Dc67E54FC96F993CD06073f71ca732C1E654B1"
+    }
+  },
+  "aragon-node-operators-registry-app-repo": {
+    "proxy": {
+      "address": "0x0D97E876ad14DB2b183CFeEB8aa1A5C788eB1831"
+    }
+  },
+  "aragon-simple-dvt-app-repo": {
+    "proxy": {
+      "address": "0x2325b0a607808dE42D918DB07F925FFcCfBb2968"
+    }
+  },
   "aragonIDAddress": "0x546aa2eae2514494eeadb7bbb35243348983c59d",
   "burner": {
     "address": "0xD15a672319Cf0352560eE76d9e89eAB0889046D3",
@@ -273,6 +288,9 @@
     "constructorArgs": ["0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"]
   },
   "ensAddress": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
+  "easyTrackEVMScriptExecutor": {
+    "address": "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977"
+  },
   "executionLayerRewardsVault": {
     "address": "0x388C818CA8B9251b393131C08a736A67ccB19297",
     "contract": "contracts/0.8.9/LidoExecutionLayerRewardsVault.sol",

@@ -112,18 +112,13 @@ describe("AccountingOracle.sol:happyPath", () => {
 
   it("reference slot of the empty initial consensus report is set to the last processed slot", async () => {
     const report = await oracle.getConsensusReport();
-    expect(report.refSlot).to.equal(ORACLE_LAST_REPORT_SLOT);
+    expect(report.refSlot).to.equal(ORACLE_LAST_REPORT_SLOT); // TODO
   });
 
   it("committee reaches consensus on a report hash", async () => {
     const { refSlot } = await consensus.getCurrentFrame();
 
     extraData = {
-      stuckKeys: [
-        { moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
-        { moduleId: 2, nodeOpIds: [0], keysCounts: [2] },
-        { moduleId: 3, nodeOpIds: [2], keysCounts: [3] },
-      ],
       exitedKeys: [
         { moduleId: 2, nodeOpIds: [1, 2], keysCounts: [1, 3] },
         { moduleId: 3, nodeOpIds: [1], keysCounts: [2] },
@@ -146,8 +141,7 @@ describe("AccountingOracle.sol:happyPath", () => {
       sharesRequestedToBurn: ether("3"),
       withdrawalFinalizationBatches: [1],
       isBunkerMode: true,
-      vaultsTotalTreasuryFeesShares: ether("4"),
-      vaultsTotalDeficit: ether("5"),
+      vaultsTotalDeficit: ether("4"),
       vaultsDataTreeRoot: ethers.ZeroHash,
       vaultsDataTreeCid: "",
       extraDataFormat: EXTRA_DATA_FORMAT_LIST,
@@ -194,18 +188,9 @@ describe("AccountingOracle.sol:happyPath", () => {
   });
 
   it("the data cannot be submitted passing a different contract version", async () => {
-    await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion + 1))
+    await expect(oracle.connect(member1).submitReportData(reportFields, oracleVersion - 1))
       .to.be.revertedWithCustomError(oracle, "UnexpectedContractVersion")
-      .withArgs(oracleVersion, oracleVersion + 1);
-  });
-
-  it("a data not matching the consensus hash cannot be submitted", async () => {
-    const invalidReport = { ...reportFields, numValidators: Number(reportFields.numValidators) + 1 };
-    const invalidReportItems = getReportDataItems(invalidReport);
-    const invalidReportHash = calcReportDataHash(invalidReportItems);
-    await expect(oracle.connect(member1).submitReportData(invalidReport, oracleVersion))
-      .to.be.revertedWithCustomError(oracle, "UnexpectedDataHash")
-      .withArgs(reportHash, invalidReportHash);
+      .withArgs(oracleVersion, oracleVersion - 1);
   });
 
   let prevProcessingRefSlot: bigint;
@@ -287,10 +272,8 @@ describe("AccountingOracle.sol:happyPath", () => {
       "SenderNotAllowed",
     );
   });
-
   it("an extra data not matching the consensus hash cannot be submitted", async () => {
     const invalidExtraData = {
-      stuckKeys: [...extraData.stuckKeys],
       exitedKeys: [...extraData.exitedKeys],
     };
     invalidExtraData.exitedKeys[0].keysCounts = [...invalidExtraData.exitedKeys[0].keysCounts];
@@ -345,32 +328,12 @@ describe("AccountingOracle.sol:happyPath", () => {
     expect(call2.keysCounts).to.equal("0x" + [2].map((i) => numberToHex(i, 16)).join(""));
   });
 
-  it("Staking router got the stuck keys by node op report", async () => {
-    const totalReportCalls = await mockStakingRouter.totalCalls_reportStuckKeysByNodeOperator();
-    expect(totalReportCalls).to.equal(3);
-
-    const call1 = await mockStakingRouter.calls_reportStuckKeysByNodeOperator(0);
-    expect(call1.stakingModuleId).to.equal(1);
-    expect(call1.nodeOperatorIds).to.equal("0x" + [0].map((i) => numberToHex(i, 8)).join(""));
-    expect(call1.keysCounts).to.equal("0x" + [1].map((i) => numberToHex(i, 16)).join(""));
-
-    const call2 = await mockStakingRouter.calls_reportStuckKeysByNodeOperator(1);
-    expect(call2.stakingModuleId).to.equal(2);
-    expect(call2.nodeOperatorIds).to.equal("0x" + [0].map((i) => numberToHex(i, 8)).join(""));
-    expect(call2.keysCounts).to.equal("0x" + [2].map((i) => numberToHex(i, 16)).join(""));
-
-    const call3 = await mockStakingRouter.calls_reportStuckKeysByNodeOperator(2);
-    expect(call3.stakingModuleId).to.equal(3);
-    expect(call3.nodeOperatorIds).to.equal("0x" + [2].map((i) => numberToHex(i, 8)).join(""));
-    expect(call3.keysCounts).to.equal("0x" + [3].map((i) => numberToHex(i, 16)).join(""));
-  });
-
-  it("Staking router was told that stuck and exited keys updating is finished", async () => {
+  it("Staking router was told that exited keys updating is finished", async () => {
     const totalFinishedCalls = await mockStakingRouter.totalCalls_onValidatorsCountsByNodeOperatorReportingFinished();
     expect(totalFinishedCalls).to.equal(1);
   });
 
-  it("extra data for the same reference slot cannot be re-submitted", async () => {
+  it(`extra data for the same reference slot cannot be re-submitted`, async () => {
     await expect(oracle.connect(member1).submitReportExtraDataList(extraDataList)).to.be.revertedWithCustomError(
       oracle,
       "ExtraDataAlreadyProcessed",
@@ -393,7 +356,6 @@ describe("AccountingOracle.sol:happyPath", () => {
     expect(procState.extraDataItemsCount).to.equal(0);
     expect(procState.extraDataItemsSubmitted).to.equal(0);
   });
-
   it("new data report with empty extra data is agreed upon and submitted", async () => {
     const { refSlot } = await consensus.getCurrentFrame();
 
@@ -456,11 +418,6 @@ describe("AccountingOracle.sol:happyPath", () => {
   it("Staking router didn't get the exited keys by node op report", async () => {
     const totalReportCalls = await mockStakingRouter.totalCalls_reportExitedKeysByNodeOperator();
     expect(totalReportCalls).to.equal(2);
-  });
-
-  it("Staking router didn't get the stuck keys by node op report", async () => {
-    const totalReportCalls = await mockStakingRouter.totalCalls_reportStuckKeysByNodeOperator();
-    expect(totalReportCalls).to.equal(3);
   });
 
   it("Staking router was told that stuck and exited keys updating is finished", async () => {

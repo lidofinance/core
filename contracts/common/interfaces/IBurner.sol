@@ -5,7 +5,13 @@
 // solhint-disable-next-line
 pragma solidity >=0.4.24 <0.9.0;
 
+
 interface IBurner {
+
+    function REQUEST_BURN_MY_STETH_ROLE() external view returns (bytes32);
+
+    function REQUEST_BURN_SHARES_ROLE() external view returns (bytes32);
+
     /**
      * Commit cover/non-cover burning requests and logs cover/non-cover shares amount just burnt.
      *
@@ -17,6 +23,8 @@ interface IBurner {
      * Request burn shares
      */
     function requestBurnShares(address _from, uint256 _sharesAmount) external;
+
+    function requestBurnMyShares(uint256 _sharesAmountToBurn) external;
 
     /**
       * Returns the current amount of shares locked on the contract to be burnt.

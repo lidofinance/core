@@ -5,7 +5,15 @@ import { before, beforeEach } from "mocha";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Burner, ERC20__Harness, ERC721__Harness, LidoLocator, StETH__Harness } from "typechain-types";
+import {
+  Burner,
+  Burner__MockForMigration,
+  ERC20__Harness,
+  ERC721__Harness,
+  LidoLocator,
+  OssifiableProxy__factory,
+  StETH__Harness,
+} from "typechain-types";
 
 import { batch, certainAddress, ether, impersonate } from "lib";
 
@@ -23,13 +31,32 @@ describe("Burner.sol", () => {
   let burner: Burner;
   let steth: StETH__Harness;
   let locator: LidoLocator;
+  let oldBurner: Burner__MockForMigration;
 
   const treasury = certainAddress("test:burner:treasury");
   const accounting = certainAddress("test:burner:accounting");
   const coverSharesBurnt = 0n;
   const nonCoverSharesBurnt = 0n;
 
+  const oldCoverSharesBurnRequested = 100n;
+  const oldNonCoverSharesBurnRequested = 200n;
+  const oldTotalCoverSharesBurnt = 300n;
+  const oldTotalNonCoverSharesBurnt = 400n;
+
   let originalState: string;
+
+  async function deployBurner() {
+    let burner_: Burner;
+    burner_ = await ethers.getContractFactory("Burner").then((f) => f.connect(deployer).deploy(locator, steth));
+    const proxyFactory = new OssifiableProxy__factory(deployer);
+    const burnerProxy = await proxyFactory.deploy(
+      await burner_.getAddress(),
+      await deployer.getAddress(),
+      new Uint8Array(),
+    );
+    burner_ = burner_.attach(await burnerProxy.getAddress()) as Burner;
+    return burner_;
+  }
 
   before(async () => {
     [deployer, admin, holder, stranger] = await ethers.getSigners();
@@ -37,9 +64,10 @@ describe("Burner.sol", () => {
     locator = await deployLidoLocator({ treasury, accounting }, deployer);
     steth = await ethers.deployContract("StETH__Harness", [holder], { value: ether("10.0"), from: deployer });
 
-    burner = await ethers
-      .getContractFactory("Burner")
-      .then((f) => f.connect(deployer).deploy(admin.address, locator, steth, coverSharesBurnt, nonCoverSharesBurnt));
+    burner = await deployBurner();
+
+    const isMigrationAllowed = false;
+    await burner.initialize(admin, isMigrationAllowed);
 
     steth = steth.connect(holder);
     burner = burner.connect(holder);
@@ -49,6 +77,12 @@ describe("Burner.sol", () => {
     // Accounting is granted the permission to burn shares as a part of the protocol setup
     accountingSigner = await impersonate(accounting, ether("1.0"));
     await burner.connect(admin).grantRole(await burner.REQUEST_BURN_SHARES_ROLE(), accountingSigner);
+
+    oldBurner = await ethers.deployContract("Burner__MockForMigration", []);
+    await oldBurner
+      .connect(admin)
+      .setSharesRequestedToBurn(oldCoverSharesBurnRequested, oldNonCoverSharesBurnRequested);
+    await oldBurner.connect(admin).setSharesBurnt(oldTotalCoverSharesBurnt, oldTotalNonCoverSharesBurnt);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -57,41 +91,25 @@ describe("Burner.sol", () => {
 
   context("constructor", () => {
     context("Reverts", () => {
-      it("if admin is zero address", async () => {
-        await expect(
-          ethers
-            .getContractFactory("Burner")
-            .then((f) =>
-              f.connect(deployer).deploy(ZeroAddress, locator, steth, coverSharesBurnt, nonCoverSharesBurnt),
-            ),
-        )
-          .to.be.revertedWithCustomError(burner, "ZeroAddress")
-          .withArgs("_admin");
-      });
-
       it("if locator is zero address", async () => {
-        await expect(
-          ethers
-            .getContractFactory("Burner")
-            .then((f) =>
-              f.connect(deployer).deploy(admin.address, ZeroAddress, steth, coverSharesBurnt, nonCoverSharesBurnt),
-            ),
-        )
+        await expect(ethers.getContractFactory("Burner").then((f) => f.connect(deployer).deploy(ZeroAddress, steth)))
           .to.be.revertedWithCustomError(burner, "ZeroAddress")
           .withArgs("_locator");
       });
 
       it("if stETH is zero address", async () => {
-        await expect(
-          ethers
-            .getContractFactory("Burner")
-            .then((f) =>
-              f.connect(deployer).deploy(admin.address, locator, ZeroAddress, coverSharesBurnt, nonCoverSharesBurnt),
-            ),
-        )
+        await expect(ethers.getContractFactory("Burner").then((f) => f.connect(deployer).deploy(locator, ZeroAddress)))
           .to.be.revertedWithCustomError(burner, "ZeroAddress")
           .withArgs("_stETH");
       });
+    });
+  });
+
+  context("initialize", () => {
+    it("if admin is zero address", async () => {
+      await expect(burner.connect(admin).initialize(ZeroAddress, false))
+        .to.be.revertedWithCustomError(burner, "ZeroAddress")
+        .withArgs("_admin");
     });
 
     it("Sets up roles, addresses and shares burnt", async () => {
@@ -100,8 +118,7 @@ describe("Burner.sol", () => {
       expect(await burner.hasRole(adminRole, admin)).to.equal(true);
 
       const requestBurnSharesRole = await burner.REQUEST_BURN_SHARES_ROLE();
-      expect(await burner.getRoleMemberCount(requestBurnSharesRole)).to.equal(2);
-      expect(await burner.hasRole(requestBurnSharesRole, steth)).to.equal(true);
+      expect(await burner.getRoleMemberCount(requestBurnSharesRole)).to.equal(1);
       expect(await burner.hasRole(requestBurnSharesRole, accounting)).to.equal(true);
 
       expect(await burner.LIDO()).to.equal(steth);
@@ -111,20 +128,76 @@ describe("Burner.sol", () => {
       expect(await burner.getNonCoverSharesBurnt()).to.equal(nonCoverSharesBurnt);
     });
 
-    it("Sets shares burnt to non-zero values", async () => {
-      const differentCoverSharesBurnt = 1n;
-      const differentNonCoverSharesBurntNonZero = 3n;
+    it("Sets isMigrationAllowed correctly", async () => {
+      const burnerMigrationOn = await deployBurner();
+      await burnerMigrationOn.connect(admin).initialize(admin, true);
+      expect(await burnerMigrationOn.isMigrationAllowed()).to.equal(true);
 
-      const deployed = await ethers
-        .getContractFactory("Burner")
-        .then((f) =>
-          f
-            .connect(deployer)
-            .deploy(admin.address, locator, steth, differentCoverSharesBurnt, differentNonCoverSharesBurntNonZero),
+      const burnerMigrationOff = await deployBurner();
+      await burnerMigrationOff.connect(admin).initialize(admin, false);
+      expect(await burnerMigrationOff.isMigrationAllowed()).to.equal(false);
+    });
+  });
+
+  context("migration", () => {
+    context("Reverts", () => {
+      it("if called by non-Lido", async () => {
+        await expect(burner.connect(stranger).migrate(ZeroAddress)).to.be.revertedWithCustomError(
+          burner,
+          "OnlyLidoCanMigrate",
         );
+      });
 
-      expect(await deployed.getCoverSharesBurnt()).to.equal(differentCoverSharesBurnt);
-      expect(await deployed.getNonCoverSharesBurnt()).to.equal(differentNonCoverSharesBurntNonZero);
+      it("if old burner address is zero", async () => {
+        await expect(burner.connect(stethSigner).migrate(ZeroAddress))
+          .to.be.revertedWithCustomError(burner, "ZeroAddress")
+          .withArgs("_oldBurner");
+      });
+
+      it("if migration is not allowed", async () => {
+        const burnerMigrationOff = await deployBurner();
+        await burnerMigrationOff.connect(admin).initialize(admin, false);
+
+        const anyAddress = deployer.address;
+        await expect(burnerMigrationOff.connect(stethSigner).migrate(anyAddress)).to.be.revertedWithCustomError(
+          burnerMigrationOff,
+          "MigrationNotAllowedOrAlreadyMigrated",
+        );
+      });
+
+      it("if migration is already performed", async () => {
+        const burnerMigrationOn = await deployBurner();
+        await burnerMigrationOn.initialize(admin, true);
+
+        await burnerMigrationOn.connect(stethSigner).migrate(oldBurner.target);
+        expect(await burnerMigrationOn.isMigrationAllowed()).to.equal(false);
+
+        await expect(burnerMigrationOn.connect(stethSigner).migrate(oldBurner.target)).to.be.revertedWithCustomError(
+          burnerMigrationOn,
+          "MigrationNotAllowedOrAlreadyMigrated",
+        );
+      });
+
+      it("if burner is not initialized", async () => {
+        const burnerMigrationOn = await deployBurner();
+        await expect(burnerMigrationOn.connect(stethSigner).migrate(oldBurner.target)).to.be.revertedWithCustomError(
+          burnerMigrationOn,
+          "UnexpectedContractVersion",
+        );
+      });
+    });
+
+    it("Migrates state from old burner correctly", async () => {
+      const burnerMigrationOn = await deployBurner();
+      await burnerMigrationOn.connect(deployer).initialize(deployer, true);
+
+      await burnerMigrationOn.connect(stethSigner).migrate(oldBurner.target);
+
+      expect(await burnerMigrationOn.getCoverSharesBurnt()).to.equal(oldTotalCoverSharesBurnt);
+      expect(await burnerMigrationOn.getNonCoverSharesBurnt()).to.equal(oldTotalNonCoverSharesBurnt);
+      const [coverShares, nonCoverShares] = await burnerMigrationOn.getSharesRequestedToBurn();
+      expect(coverShares).to.equal(oldCoverSharesBurnRequested);
+      expect(nonCoverShares).to.equal(oldNonCoverSharesBurnRequested);
     });
   });
 
@@ -172,7 +245,7 @@ describe("Burner.sol", () => {
         sharesRequestToBurn: burner.getSharesRequestedToBurn(),
       });
 
-      await expect(burner.requestBurnMyStETHForCover(burnAmount))
+      await expect(burner.connect(holder).requestBurnMyStETHForCover(burnAmount))
         .to.emit(steth, "Transfer")
         .withArgs(holder.address, await burner.getAddress(), burnAmount)
         .and.to.emit(burner, "StETHBurnRequested")
@@ -212,7 +285,7 @@ describe("Burner.sol", () => {
         sharesRequestToBurn: burner.getSharesRequestedToBurn(),
       });
 
-      await expect(burner.requestBurnMyStETH(burnAmount))
+      await expect(burner.connect(holder).requestBurnMyStETH(burnAmount))
         .to.emit(steth, "Transfer")
         .withArgs(holder.address, await burner.getAddress(), burnAmount)
         .and.to.emit(burner, "StETHBurnRequested")
@@ -252,10 +325,9 @@ describe("Burner.sol", () => {
       });
 
       it("if the burn amount is zero", async () => {
-        await expect(burner.connect(stethSigner).requestBurnSharesForCover(holder, 0n)).to.be.revertedWithCustomError(
-          burner,
-          "ZeroBurnAmount",
-        );
+        await expect(
+          burner.connect(accountingSigner).requestBurnSharesForCover(holder, 0n),
+        ).to.be.revertedWithCustomError(burner, "ZeroBurnAmount");
       });
     });
 
@@ -265,11 +337,11 @@ describe("Burner.sol", () => {
         sharesRequestToBurn: burner.getSharesRequestedToBurn(),
       });
 
-      await expect(burner.connect(stethSigner).requestBurnSharesForCover(holder, burnAmount))
+      await expect(burner.connect(accountingSigner).requestBurnSharesForCover(holder, burnAmount))
         .to.emit(steth, "Transfer")
         .withArgs(holder.address, await burner.getAddress(), burnAmount)
         .and.to.emit(burner, "StETHBurnRequested")
-        .withArgs(true, await steth.getAddress(), burnAmount, burnAmountInShares);
+        .withArgs(true, accounting, burnAmount, burnAmountInShares);
 
       const balancesAfter = await batch({
         holderBalance: steth.balanceOf(holder),
@@ -294,7 +366,7 @@ describe("Burner.sol", () => {
       });
 
       it("if the burn amount is zero", async () => {
-        await expect(burner.connect(stethSigner).requestBurnShares(holder, 0n)).to.be.revertedWithCustomError(
+        await expect(burner.connect(accountingSigner).requestBurnShares(holder, 0n)).to.be.revertedWithCustomError(
           burner,
           "ZeroBurnAmount",
         );
@@ -307,11 +379,11 @@ describe("Burner.sol", () => {
         sharesRequestToBurn: burner.getSharesRequestedToBurn(),
       });
 
-      await expect(burner.connect(stethSigner).requestBurnShares(holder, burnAmount))
+      await expect(burner.connect(accountingSigner).requestBurnShares(holder, burnAmount))
         .to.emit(steth, "Transfer")
         .withArgs(holder.address, await burner.getAddress(), burnAmount)
         .and.to.emit(burner, "StETHBurnRequested")
-        .withArgs(false, await steth.getAddress(), burnAmount, burnAmountInShares);
+        .withArgs(false, accounting, burnAmount, burnAmountInShares);
 
       const balancesAfter = await batch({
         holderBalance: steth.balanceOf(holder),
@@ -499,7 +571,7 @@ describe("Burner.sol", () => {
       const coverSharesToBurn = ether("1.0");
 
       // request cover share to burn
-      await burner.connect(stethSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
+      await burner.connect(accountingSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
 
       const balancesBefore = await batch({
         stethRequestedToBurn: steth.getSharesByPooledEth(coverSharesToBurn),
@@ -528,7 +600,7 @@ describe("Burner.sol", () => {
     it("Marks shares as burnt when there are only cover shares to burn", async () => {
       const nonCoverSharesToBurn = ether("1.0");
 
-      await burner.connect(stethSigner).requestBurnShares(holder, nonCoverSharesToBurn);
+      await burner.connect(accountingSigner).requestBurnShares(holder, nonCoverSharesToBurn);
 
       const balancesBefore = await batch({
         stethRequestedToBurn: steth.getSharesByPooledEth(nonCoverSharesToBurn),
@@ -559,8 +631,8 @@ describe("Burner.sol", () => {
       const nonCoverSharesToBurn = ether("2.0");
       const totalCoverSharesToBurn = coverSharesToBurn + nonCoverSharesToBurn;
 
-      await burner.connect(stethSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
-      await burner.connect(stethSigner).requestBurnShares(holder, nonCoverSharesToBurn);
+      await burner.connect(accountingSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
+      await burner.connect(accountingSigner).requestBurnShares(holder, nonCoverSharesToBurn);
 
       const balancesBefore = await batch({
         coverStethRequestedToBurn: steth.getSharesByPooledEth(coverSharesToBurn),
@@ -604,8 +676,8 @@ describe("Burner.sol", () => {
       expect(balancesBefore.coverShares).to.equal(0);
       expect(balancesBefore.nonCoverShares).to.equal(0);
 
-      await burner.connect(stethSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
-      await burner.connect(stethSigner).requestBurnShares(holder, nonCoverSharesToBurn);
+      await burner.connect(accountingSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
+      await burner.connect(accountingSigner).requestBurnShares(holder, nonCoverSharesToBurn);
 
       const balancesAfter = await burner.getSharesRequestedToBurn();
       expect(balancesAfter.coverShares).to.equal(coverSharesToBurn);
@@ -619,7 +691,7 @@ describe("Burner.sol", () => {
       await steth.approve(burner, MaxUint256);
 
       await burner.getSharesRequestedToBurn();
-      await burner.connect(stethSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
+      await burner.connect(accountingSigner).requestBurnSharesForCover(holder, coverSharesToBurn);
 
       const coverSharesToBurnBefore = await burner.getCoverSharesBurnt();
 
@@ -635,7 +707,7 @@ describe("Burner.sol", () => {
       await steth.approve(burner, MaxUint256);
 
       await burner.getSharesRequestedToBurn();
-      await burner.connect(stethSigner).requestBurnShares(holder, nonCoverSharesToBurn);
+      await burner.connect(accountingSigner).requestBurnShares(holder, nonCoverSharesToBurn);
 
       const nonCoverSharesToBurnBefore = await burner.getNonCoverSharesBurnt();
 

@@ -57,13 +57,12 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     data: string;
   }
 
-  const calcValidatorsExitBusReportDataHash = (items: ReturnType<typeof getValidatorsExitBusReportDataItems>) => {
-    const data = ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [items]);
-    return ethers.keccak256(data);
-  };
-
-  const getValidatorsExitBusReportDataItems = (r: ReportFields) => {
-    return [r.consensusVersion, r.refSlot, r.requestsCount, r.dataFormat, r.data];
+  const calcValidatorsExitBusReportDataHash = (items: ReportFields) => {
+    const reportData = [items.consensusVersion, items.refSlot, items.requestsCount, items.dataFormat, items.data];
+    const reportDataHash = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(["(uint256,uint256,uint256,uint256,bytes)"], [reportData]),
+    );
+    return reportDataHash;
   };
 
   const encodeExitRequestHex = ({ moduleId, nodeOpId, valIndex, valPubkey }: ExitRequest) => {
@@ -138,7 +137,6 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
     context(`Total requests: ${totalRequests}`, () => {
       let exitRequests: { requests: ExitRequest[]; requestsPerModule: number; requestsPerNodeOp: number };
       let reportFields: ReportFields;
-      let reportItems: ReturnType<typeof getValidatorsExitBusReportDataItems>;
       let reportHash: string;
       let originalState: string;
 
@@ -170,8 +168,7 @@ describe("ValidatorsExitBusOracle.sol:gas", () => {
           data: encodeExitRequestsDataList(exitRequests.requests),
         };
 
-        reportItems = getValidatorsExitBusReportDataItems(reportFields);
-        reportHash = calcValidatorsExitBusReportDataHash(reportItems);
+        reportHash = calcValidatorsExitBusReportDataHash(reportFields);
 
         await triggerConsensusOnHash(reportHash);
       });

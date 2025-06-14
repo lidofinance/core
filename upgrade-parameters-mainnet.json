@@ -1,0 +1,60 @@
+{
+  "validatorExitDelayVerifier": {
+    "deployParameters": {
+      "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIHistoricalSummariesPrev": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "gIHistoricalSummariesCurr": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "firstSupportedSlot": 1,
+      "pivotSlot": 1,
+      "shardCommitteePeriodInSeconds": 98304,
+      "shardCommitteePeriodInSecondsComment": "98304 above is 2 ** 8 * 32 * 12"
+    }
+  },
+  "triggerableWithdrawalsGateway": {
+    "deployParameters": {
+      "maxExitRequestsLimit": 13000,
+      "exitsPerFrame": 1,
+      "frameDurationInSec": 48
+    }
+  },
+  "vaultHub": {
+    "deployParameters": {
+      "relativeShareLimitBP": 1000
+    }
+  },
+  "lazyOracle": {
+    "deployParameters": {
+      "quarantinePeriod": 259200,
+      "maxRewardRatioBP": 350
+    }
+  },
+  "predepositGuarantee": {
+    "deployParameters": {
+      "genesisForkVersion": "0x00000000",
+      "gIndex": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIndexAfterChange": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "changeSlot": 0
+    }
+  },
+  "delegation": {
+    "deployParameters": {
+      "wethContract": "0x94373a4919B3240D86eA41593D5eBa789FEF3848"
+    }
+  },
+  "app:lido": {
+    "newVersion": [5, 0, 0]
+  },
+  "operatorGrid": {
+    "deployParameters": {
+      "defaultTierParams": {
+        "shareLimitInEther": "1000",
+        "reserveRatioBP": 2000,
+        "forcedRebalanceThresholdBP": 1800,
+        "infraFeeBP": 500,
+        "liquidityFeeBP": 400,
+        "reservationFeeBP": 100
+      }
+    }
+  }
+}

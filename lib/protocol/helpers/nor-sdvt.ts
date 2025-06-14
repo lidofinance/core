@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ethers } from "ethers";
+import { CallExceptionError, ethers } from "ethers";
 
 import { NodeOperatorsRegistry } from "typechain-types";
 
@@ -23,6 +23,7 @@ export const norSdvtEnsureOperators = async (
   module: LoadedContract<NodeOperatorsRegistry>,
   minOperatorsCount = MIN_OPS_COUNT,
   minOperatorKeysCount = MIN_OP_KEYS_COUNT,
+  numKeysPerNodeOperatorToDeposit = 1n,
 ) => {
   const { numBefore, numAdded } = await norSdvtEnsureOperatorsHaveMinKeys(
     ctx,
@@ -52,7 +53,7 @@ export const norSdvtEnsureOperators = async (
 
   if (numAdded > 0) {
     const moduleId = (await isNor(module, ctx)) ? NOR_MODULE_ID : SDVT_MODULE_ID;
-    await depositAndReportValidators(ctx, moduleId, numAdded * (minOperatorKeysCount / 2n));
+    await depositAndReportValidators(ctx, moduleId, numAdded * numKeysPerNodeOperatorToDeposit);
   }
   return { numBefore, numAdded };
 };
@@ -146,8 +147,6 @@ export const norSdvtAddNodeOperator = async (
     "Reward address": rewardAddress,
   });
 
-  log.success(`Added fake NOR operator ${operatorId}`);
-
   return operatorId;
 };
 
@@ -173,7 +172,6 @@ export const norSdvtAddOperatorKeys = async (
   const unusedKeysBefore = await module.getUnusedSigningKeyCount(operatorId);
 
   const votingSigner = await ctx.getSigner("voting");
-
   await module
     .connect(votingSigner)
     .addSigningKeys(operatorId, keysToAdd, randomPubkeys(Number(keysToAdd)), randomSignatures(Number(keysToAdd)));
@@ -192,8 +190,6 @@ export const norSdvtAddOperatorKeys = async (
     "Unused keys before": unusedKeysBefore,
     "Unused keys after": unusedKeysAfter,
   });
-
-  log.success(`Added fake keys to NOR operator ${operatorId}`);
 };
 
 /**
@@ -214,10 +210,18 @@ export const norSdvtSetOperatorStakingLimit = async (
     "Limit": ethers.formatEther(limit),
   });
 
-  const votingSigner = await ctx.getSigner("voting");
-  await module.connect(votingSigner).setNodeOperatorStakingLimit(operatorId, limit);
-
-  log.success(`Set NOR operator ${operatorId} staking limit`);
+  try {
+    // For SDVT scratch deployment and for NOR
+    const votingSigner = await ctx.getSigner("voting");
+    await module.connect(votingSigner).setNodeOperatorStakingLimit(operatorId, limit);
+  } catch (error: unknown) {
+    if ((error as CallExceptionError).message.includes("APP_AUTH_FAILED")) {
+      const easyTrackSigner = await ctx.getSigner("easyTrack");
+      await module.connect(easyTrackSigner).setNodeOperatorStakingLimit(operatorId, limit);
+    } else {
+      throw error;
+    }
+  }
 };
 
 export const getOperatorName = (module: StakingModuleName, id: bigint, group: bigint = 0n) =>

@@ -16,7 +16,12 @@ contract VaultHub__MockPermissions {
     event Mock__BeaconChainDepositsPaused(address indexed _vault);
     event Mock__BeaconChainDepositsResumed(address indexed _vault);
     event Mock__ValidatorExitRequested(address indexed _vault, bytes _pubkeys);
-    event Mock__ValidatorWithdrawalsTriggered(address indexed _vault, bytes _pubkeys, uint64[] _amounts, address _refundRecipient);
+    event Mock__ValidatorWithdrawalsTriggered(
+        address indexed _vault,
+        bytes _pubkeys,
+        uint64[] _amounts,
+        address _refundRecipient
+    );
     event Mock__CompensateDisprovenPredepositFromPDG(address indexed _vault, bytes _pubkey, address _recipient);
     event Mock__ProveUnknownValidatorToPDG(address indexed _vault, IPredepositGuarantee.ValidatorWitness _witness);
     event Mock__WithdrawForUnguaranteedDepositToBeaconChain(address indexed _vault, uint256 _ether);
@@ -64,16 +69,28 @@ contract VaultHub__MockPermissions {
         emit Mock__ValidatorExitRequested(_vault, _pubkeys);
     }
 
-    function triggerValidatorWithdrawals(address _vault, bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
+    function triggerValidatorWithdrawals(
+        address _vault,
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) external payable {
         emit Mock__ValidatorWithdrawalsTriggered(_vault, _pubkeys, _amounts, _refundRecipient);
     }
 
-    function compensateDisprovenPredepositFromPDG(address _vault, bytes calldata _pubkey, address _recipient) external returns (uint256) {
+    function compensateDisprovenPredepositFromPDG(
+        address _vault,
+        bytes calldata _pubkey,
+        address _recipient
+    ) external returns (uint256) {
         emit Mock__CompensateDisprovenPredepositFromPDG(_vault, _pubkey, _recipient);
         return 0;
     }
 
-    function proveUnknownValidatorToPDG(address _vault, IPredepositGuarantee.ValidatorWitness calldata _witness) external {
+    function proveUnknownValidatorToPDG(
+        address _vault,
+        IPredepositGuarantee.ValidatorWitness calldata _witness
+    ) external {
         emit Mock__ProveUnknownValidatorToPDG(_vault, _witness);
     }
 

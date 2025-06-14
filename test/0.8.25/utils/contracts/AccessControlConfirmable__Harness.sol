@@ -13,6 +13,7 @@ contract AccessControlConfirmable__Harness is AccessControlConfirmable {
 
     constructor(address _admin) {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        __Confirmations_init();
     }
 
     function confirmingRoles() public pure returns (bytes32[] memory) {
@@ -26,11 +27,13 @@ contract AccessControlConfirmable__Harness is AccessControlConfirmable {
         _setConfirmExpiry(_confirmExpiry);
     }
 
-    function setNumber(uint256 _number) external onlyConfirmed(confirmingRoles()) {
+    function setNumber(uint256 _number) external {
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return;
         number = _number;
     }
 
-    function decrementWithZeroRoles() external onlyConfirmed(new bytes32[](0)) {
+    function decrementWithZeroRoles() external {
+        if (!_collectAndCheckConfirmations(msg.data, new bytes32[](0))) return;
         number--;
     }
 }

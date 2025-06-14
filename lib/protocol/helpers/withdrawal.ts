@@ -1,6 +1,6 @@
 import { ZeroAddress } from "ethers";
 
-import { certainAddress, ether, impersonate, log } from "lib";
+import { advanceChainTime, certainAddress, ether, impersonate, log } from "lib";
 
 import { ProtocolContext } from "../types";
 
@@ -27,8 +27,8 @@ export const unpauseWithdrawalQueue = async (ctx: ProtocolContext) => {
 export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
   const { lido, withdrawalQueue } = ctx.contracts;
 
-  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000"));
-  const stEthHolder = await impersonate(certainAddress("withdrawalQueue:stEth:whale"), ether("100000"));
+  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000000"));
+  const stEthHolder = await impersonate(certainAddress("withdrawalQueue:stEth:whale"), ether("100000000"));
   const stEthHolderAmount = ether("10000");
 
   // Here sendTransaction is used to validate native way of submitting ETH for stETH
@@ -38,7 +38,7 @@ export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
   let lastRequestId = await withdrawalQueue.getLastRequestId();
 
   while (lastFinalizedRequestId != lastRequestId) {
-    await report(ctx);
+    await report(ctx, { clDiff: 0n });
 
     lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
     lastRequestId = await withdrawalQueue.getLastRequestId();
@@ -49,9 +49,9 @@ export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
     });
 
     await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
-  }
 
-  await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
+    await advanceChainTime(12n * 60n * 60n); // To avoid reaching STAKE_LIMIT
+  }
 
   log.success("Finalized withdrawal queue");
 };

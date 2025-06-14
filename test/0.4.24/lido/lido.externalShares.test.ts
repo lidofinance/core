@@ -7,11 +7,10 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { ACL, Lido, LidoLocator } from "typechain-types";
 
 import { ether, impersonate, MAX_UINT256 } from "lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao } from "test/deploy";
 import { Snapshot } from "test/suite";
-
-const TOTAL_BASIS_POINTS = 10000n;
 
 describe("Lido.sol:externalShares", () => {
   let deployer: HardhatEthersSigner;
@@ -223,6 +222,34 @@ describe("Lido.sol:externalShares", () => {
       // Verify external balance was increased
       const externalEther = await lido.getExternalEther();
       expect(externalEther).to.equal(etherToMint);
+    });
+
+    it("Mints maximum mintable external shares when already minted some", async () => {
+      // Set the maximum external ratio to allow minting
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+
+      const sharesToMintInitially = 12345n;
+      await lido.connect(vaultHubSigner).mintExternalShares(whale, sharesToMintInitially);
+      await expect(await lido.getExternalShares()).to.equal(sharesToMintInitially);
+
+      // Get the maximum amount of external shares that can be minted
+      const maxMintableShares = await lido.getMaxMintableExternalShares();
+
+      // Mint the maximum amount of external shares
+      const etherToMint = await lido.getPooledEthByShares(maxMintableShares);
+
+      await expect(lido.connect(vaultHubSigner).mintExternalShares(whale, maxMintableShares))
+        .to.emit(lido, "Transfer")
+        .withArgs(ZeroAddress, whale, etherToMint)
+        .to.emit(lido, "TransferShares")
+        .withArgs(ZeroAddress, whale, maxMintableShares)
+        .to.emit(lido, "ExternalSharesMinted")
+        .withArgs(whale, maxMintableShares, etherToMint);
+
+      // Verify external balance was increased to the maximum mintable amount
+      const initiallyMintedEther = await lido.getPooledEthByShares(sharesToMintInitially);
+      const externalEther = await lido.getExternalEther();
+      expect(externalEther).to.equal(initiallyMintedEther + etherToMint);
     });
   });
 

@@ -62,19 +62,19 @@ describe("StakingRouter.sol:misc", () => {
     it("Initializes the contract version, sets up roles and variables", async () => {
       await expect(stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials))
         .to.emit(stakingRouter, "ContractVersionSet")
-        .withArgs(2)
+        .withArgs(3)
         .and.to.emit(stakingRouter, "RoleGranted")
         .withArgs(await stakingRouter.DEFAULT_ADMIN_ROLE(), stakingRouterAdmin.address, user.address)
         .and.to.emit(stakingRouter, "WithdrawalCredentialsSet")
         .withArgs(withdrawalCredentials, user.address);
 
-      expect(await stakingRouter.getContractVersion()).to.equal(2);
+      expect(await stakingRouter.getContractVersion()).to.equal(3);
       expect(await stakingRouter.getLido()).to.equal(lido);
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(withdrawalCredentials);
     });
   });
 
-  context("finalizeUpgrade_v2()", () => {
+  context("finalizeUpgrade_v3()", () => {
     const STAKE_SHARE_LIMIT = 1_00n;
     const PRIORITY_EXIT_SHARE_THRESHOLD = STAKE_SHARE_LIMIT;
     const MODULE_FEE = 5_00n;
@@ -83,9 +83,6 @@ describe("StakingRouter.sol:misc", () => {
     const MIN_DEPOSIT_BLOCK_DISTANCE = 25n;
 
     const modulesCount = 3;
-    const newPriorityExitShareThresholds = [2_01n, 2_02n, 2_03n];
-    const newMaxDepositsPerBlock = [201n, 202n, 203n];
-    const newMinDepositBlockDistances = [31n, 32n, 33n];
 
     beforeEach(async () => {
       // initialize staking router
@@ -113,79 +110,27 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("fails with UnexpectedContractVersion error when called on implementation", async () => {
-      await expect(impl.finalizeUpgrade_v2([], [], []))
+      await expect(impl.finalizeUpgrade_v3())
         .to.be.revertedWithCustomError(impl, "UnexpectedContractVersion")
-        .withArgs(MAX_UINT256, 1);
+        .withArgs(MAX_UINT256, 2);
     });
 
     it("fails with UnexpectedContractVersion error when called on deployed from scratch SRv2", async () => {
-      await expect(stakingRouter.finalizeUpgrade_v2([], [], []))
+      await expect(stakingRouter.finalizeUpgrade_v3())
         .to.be.revertedWithCustomError(impl, "UnexpectedContractVersion")
-        .withArgs(2, 1);
+        .withArgs(3, 2);
     });
 
-    context("simulate upgrade from v1", () => {
+    context("simulate upgrade from v2", () => {
       beforeEach(async () => {
         // reset contract version
-        await stakingRouter.testing_setBaseVersion(1);
-      });
-
-      it("fails with ArraysLengthMismatch error when _priorityExitShareThresholds input array length mismatch", async () => {
-        const wrongPriorityExitShareThresholds = [1n];
-        await expect(
-          stakingRouter.finalizeUpgrade_v2(
-            wrongPriorityExitShareThresholds,
-            newMaxDepositsPerBlock,
-            newMinDepositBlockDistances,
-          ),
-        )
-          .to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch")
-          .withArgs(3, 1);
-      });
-
-      it("fails with ArraysLengthMismatch error when _maxDepositsPerBlock input array length mismatch", async () => {
-        const wrongMaxDepositsPerBlock = [100n, 101n];
-        await expect(
-          stakingRouter.finalizeUpgrade_v2(
-            newPriorityExitShareThresholds,
-            wrongMaxDepositsPerBlock,
-            newMinDepositBlockDistances,
-          ),
-        )
-          .to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch")
-          .withArgs(3, 2);
-      });
-
-      it("fails with ArraysLengthMismatch error when _minDepositBlockDistances input array length mismatch", async () => {
-        const wrongMinDepositBlockDistances = [41n, 42n, 43n, 44n];
-        await expect(
-          stakingRouter.finalizeUpgrade_v2(
-            newPriorityExitShareThresholds,
-            newMaxDepositsPerBlock,
-            wrongMinDepositBlockDistances,
-          ),
-        )
-          .to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch")
-          .withArgs(3, 4);
+        await stakingRouter.testing_setBaseVersion(2);
       });
 
       it("sets correct contract version", async () => {
-        expect(await stakingRouter.getContractVersion()).to.equal(1);
-        await stakingRouter.finalizeUpgrade_v2(
-          newPriorityExitShareThresholds,
-          newMaxDepositsPerBlock,
-          newMinDepositBlockDistances,
-        );
-        expect(await stakingRouter.getContractVersion()).to.be.equal(2);
-
-        const modules = await stakingRouter.getStakingModules();
-        expect(modules.length).to.be.equal(modulesCount);
-
-        for (let i = 0; i < modulesCount; i++) {
-          expect(modules[i].priorityExitShareThreshold).to.be.equal(newPriorityExitShareThresholds[i]);
-          expect(modules[i].maxDepositsPerBlock).to.be.equal(newMaxDepositsPerBlock[i]);
-          expect(modules[i].minDepositBlockDistance).to.be.equal(newMinDepositBlockDistances[i]);
-        }
+        expect(await stakingRouter.getContractVersion()).to.equal(2);
+        await stakingRouter.finalizeUpgrade_v3();
+        expect(await stakingRouter.getContractVersion()).to.be.equal(3);
       });
     });
   });

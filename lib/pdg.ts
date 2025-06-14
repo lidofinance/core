@@ -3,12 +3,12 @@ import { ethers } from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
 
-import { IStakingVault, SSZHelpers, SSZMerkleTree } from "typechain-types";
+import { IStakingVault, SSZBLSHelpers, SSZMerkleTree } from "typechain-types";
 import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
 import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "lib";
 
-export type Validator = { container: SSZHelpers.ValidatorStruct; blsPrivateKey: SecretKey };
+export type Validator = { container: SSZBLSHelpers.ValidatorStruct; blsPrivateKey: SecretKey };
 
 export const randomBytes32 = (): string => hexlify(randomBytes(32));
 export const randomValidatorPubkey = (): string => hexlify(randomBytes(48));
@@ -105,7 +105,7 @@ export const generatePredeposit = async (
 };
 
 export const generatePostDeposit = (
-  validator: SSZHelpers.ValidatorStruct,
+  validator: SSZBLSHelpers.ValidatorStruct,
   amount = ether("31"),
 ): IStakingVault.DepositStruct => {
   // signature is not checked for post-deposit
@@ -143,7 +143,7 @@ export const setBeaconBlockRoot = async (root: string) => {
       data: root,
     })
     .then((tx) => tx.getBlock());
-  if (!block) throw new Error("ivariant");
+  if (!block) throw new Error("invariant");
   return block.timestamp;
 };
 
@@ -155,7 +155,7 @@ export const prepareLocalMerkleTree = async (
   const firstValidator = generateValidator();
 
   await sszMerkleTree.addValidatorLeaf(firstValidator.container);
-  const validators: SSZHelpers.ValidatorStruct[] = [firstValidator.container];
+  const validators: SSZBLSHelpers.ValidatorStruct[] = [firstValidator.container];
 
   const firstValidatorLeafIndex = (await sszMerkleTree.leafCount()) - 1n;
   const gIFirstValidator = await sszMerkleTree.getGeneralizedIndex(firstValidatorLeafIndex);
@@ -164,7 +164,7 @@ export const prepareLocalMerkleTree = async (
   if (BigInt(gIFirstValidator) >> 8n !== BigInt(gIndex) >> 8n)
     throw new Error("Invariant: sszMerkleTree implementation is broken");
 
-  const addValidator = async (validator: SSZHelpers.ValidatorStruct) => {
+  const addValidator = async (validator: SSZBLSHelpers.ValidatorStruct) => {
     await sszMerkleTree.addValidatorLeaf(validator);
     validators.push(validator);
 
@@ -188,7 +188,7 @@ export const prepareLocalMerkleTree = async (
 
   const buildProof = async (
     validatorIndex: number,
-    beaconBlockHeader: SSZHelpers.BeaconBlockHeaderStruct,
+    beaconBlockHeader: SSZBLSHelpers.BeaconBlockHeaderStruct,
   ): Promise<string[]> => {
     const [validatorProof, stateProof, beaconBlockProof] = await Promise.all([
       sszMerkleTree.getValidatorPubkeyWCParentProof(validators[Number(validatorIndex)]).then((r) => r.proof),

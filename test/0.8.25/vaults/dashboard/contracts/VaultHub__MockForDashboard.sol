@@ -73,6 +73,19 @@ contract VaultHub__MockForDashboard {
     }
 
     function connectVault(address vault) external {
+        vaultConnections[vault] = VaultHub.VaultConnection({
+            owner: IStakingVault(vault).owner(),
+            shareLimit: 1,
+            vaultIndex: 2,
+            pendingDisconnect: false,
+            reserveRatioBP: 500,
+            forcedRebalanceThresholdBP: 100,
+            infraFeeBP: 100,
+            liquidityFeeBP: 100,
+            reservationFeeBP: 100,
+            isBeaconDepositsManuallyPaused: false
+        });
+        
         emit Mock__VaultConnected(vault);
     }
 
@@ -105,7 +118,12 @@ contract VaultHub__MockForDashboard {
         emit Mock__ValidatorExitRequested(_vault, _pubkeys);
     }
 
-    function triggerValidatorWithdrawals(address _vault, bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable {
+    function triggerValidatorWithdrawals(
+        address _vault,
+        bytes calldata _pubkeys,
+        uint64[] calldata _amounts,
+        address _refundRecipient
+    ) external payable {
         emit Mock__ValidatorWithdrawalsTriggered(_vault, _pubkeys, _amounts, _refundRecipient);
     }
 
@@ -125,17 +143,33 @@ contract VaultHub__MockForDashboard {
         emit Mock__Withdrawn(_vault, _recipient, _amount);
     }
 
-    function compensateDisprovenPredepositFromPDG(address _vault, bytes calldata _validatorPubkey, address _recipient) external returns (uint256) {
+    function compensateDisprovenPredepositFromPDG(
+        address _vault,
+        bytes calldata _validatorPubkey,
+        address _recipient
+    ) external returns (uint256) {
         emit Mock__CompensatedDisprovenPredepositFromPDG(_vault, _validatorPubkey, _recipient);
         return 1 ether;
     }
 
-    function proveUnknownValidatorToPDG(address _vault, IPredepositGuarantee.ValidatorWitness calldata _witness) external {
+    function proveUnknownValidatorToPDG(
+        address _vault,
+        IPredepositGuarantee.ValidatorWitness calldata _witness
+    ) external {
         emit Mock__ValidatorProvedToPDG(_vault, _witness);
     }
 
     function transferVaultOwnership(address _vault, address _newOwner) external {
         emit Mock__VaultOwnershipTransferred(_vault, _newOwner);
+    }
+
+    function isVaultConnected(address _vault) public view returns (bool) {
+        return vaultConnections[_vault].vaultIndex != 0;
+    }
+
+    function updateConnection(address _vault, uint256 _shareLimit, uint256 _reserveRatioBP, uint256 _forcedRebalanceThresholdBP, uint256 _infraFeeBP, uint256 _liquidityFeeBP, uint256 _reservationFeeBP) external {
+        if (!isVaultConnected(_vault)) revert NotConnectedToHub(_vault);
+        emit Mock__VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _infraFeeBP, _liquidityFeeBP, _reservationFeeBP);
     }
 
     event Mock__ValidatorExitRequested(address vault, bytes pubkeys);
@@ -152,6 +186,8 @@ contract VaultHub__MockForDashboard {
     event Mock__VaultDisconnectInitiated(address vault);
     event Mock__Rebalanced(address vault, uint256 amount);
     event Mock__VaultConnected(address vault);
+    event Mock__VaultConnectionUpdated(address vault, uint256 shareLimit, uint256 reserveRatioBP, uint256 forcedRebalanceThresholdBP, uint256 infraFeeBP, uint256 liquidityFeeBP, uint256 reservationFeeBP);
 
     error ZeroArgument(string argument);
+    error NotConnectedToHub(address vault);
 }

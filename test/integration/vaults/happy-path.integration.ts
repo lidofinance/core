@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, hexlify, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, hexlify } from "ethers";
 import { ethers } from "hardhat";
 
 import { SecretKey } from "@chainsafe/blst";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Dashboard, SSZHelpers, StakingVault } from "typechain-types";
+import { Dashboard, SSZBLSHelpers, StakingVault } from "typechain-types";
 
 import {
   days,
@@ -14,25 +14,16 @@ import {
   generatePostDeposit,
   generatePredeposit,
   generateValidator,
-  impersonate,
   log,
   prepareLocalMerkleTree,
   updateBalance,
 } from "lib";
-import {
-  getProtocolContext,
-  getReportTimeElapsed,
-  norSdvtEnsureOperators,
-  OracleReportParams,
-  ProtocolContext,
-  report,
-} from "lib/protocol";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
+import { getProtocolContext, getReportTimeElapsed, OracleReportParams, ProtocolContext, report } from "lib/protocol";
 import { reportVaultDataWithProof } from "lib/protocol/helpers/vaults";
 
 import { bailOnFailure, Snapshot } from "test/suite";
-import { CURATED_MODULE_ID, MAX_DEPOSIT, ONE_DAY, SIMPLE_DVT_MODULE_ID, ZERO_HASH } from "test/suite/constants";
-
-const LIDO_DEPOSIT = ether("640");
+import { ONE_DAY } from "test/suite/constants";
 
 const VALIDATORS_PER_VAULT = 2n;
 const VALIDATOR_DEPOSIT_SIZE = ether("32");
@@ -41,7 +32,10 @@ const VAULT_DEPOSIT = VALIDATOR_DEPOSIT_SIZE * VALIDATORS_PER_VAULT;
 const ONE_YEAR = 365n * ONE_DAY;
 const TARGET_APR = 3_00n; // 3% APR
 const PROTOCOL_FEE = 10_00n; // 10% fee (5% treasury + 5% node operators)
-const TOTAL_BASIS_POINTS = 100_00n; // 100%
+
+const INFRA_FEE_BP = 5_00n;
+const LIQUIDITY_FEE_BP = 4_00n;
+const RESERVATION_FEE_BP = 1_00n;
 
 const VAULT_CONNECTION_DEPOSIT = ether("1");
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator performance fee
@@ -50,7 +44,6 @@ const CONFIRM_EXPIRY = days(7n);
 describe("Scenario: Staking Vaults Happy Path", () => {
   let ctx: ProtocolContext;
 
-  let ethHolder: HardhatEthersSigner;
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let depositContract: string;
@@ -65,16 +58,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   let stakingVaultCLBalance = 0n;
   let stakingVaultMaxMintingShares = 0n;
 
-  const infraFeeBP = 5_00n; // 5% of the infra fee
-  const liquidityFeeBP = 4_00n; // 4% of the liquidity fee
-  const reservationFeeBP = 1_00n; // 1% of the reservation fee
-
   let snapshot: string;
 
   before(async () => {
     ctx = await getProtocolContext();
 
-    [ethHolder, owner, nodeOperator] = await ethers.getSigners();
+    [, owner, nodeOperator] = await ethers.getSigners();
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
@@ -119,29 +108,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     return vault101Balance + stakingVaultCLBalance;
   }
 
-  it("Should have at least 10 deposited node operators in NOR", async () => {
-    const { depositSecurityModule, lido } = ctx.contracts;
-
-    await norSdvtEnsureOperators(ctx, ctx.contracts.nor, 10n, 1n);
-    await norSdvtEnsureOperators(ctx, ctx.contracts.sdvt, 10n, 1n);
-    expect(await ctx.contracts.nor.getNodeOperatorsCount()).to.be.at.least(10n);
-    expect(await ctx.contracts.sdvt.getNodeOperatorsCount()).to.be.at.least(10n);
-
-    // Send 640 ETH to lido
-    await lido.connect(ethHolder).submit(ZeroAddress, { value: LIDO_DEPOSIT });
-
-    const dsmSigner = await impersonate(depositSecurityModule.address, LIDO_DEPOSIT);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, SIMPLE_DVT_MODULE_ID, ZERO_HASH);
-
-    const reportData: Partial<OracleReportParams> = {
-      clDiff: LIDO_DEPOSIT,
-      clAppearedValidators: 20n,
-    };
-
-    await report(ctx, reportData);
-  });
-
   it("Should have vaults factory deployed and adopted by DAO", async () => {
     const { stakingVaultFactory, stakingVaultBeacon } = ctx.contracts;
 
@@ -172,9 +138,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
           shareLimit,
           reserveRatioBP: reserveRatio,
           forcedRebalanceThresholdBP: forcedRebalanceThreshold,
-          infraFeeBP: infraFeeBP,
-          liquidityFeeBP: liquidityFeeBP,
-          reservationFeeBP: reservationFeeBP,
+          infraFeeBP: INFRA_FEE_BP,
+          liquidityFeeBP: LIQUIDITY_FEE_BP,
+          reservationFeeBP: RESERVATION_FEE_BP,
         },
       ],
     );
@@ -288,7 +254,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const depositDomain = await predepositGuarantee.DEPOSIT_DOMAIN();
 
     const validators: {
-      container: SSZHelpers.ValidatorStruct;
+      container: SSZBLSHelpers.ValidatorStruct;
       blsPrivateKey: SecretKey;
       index: number;
       proof: string[];
@@ -399,14 +365,13 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const params = {
       clDiff: elapsedProtocolReward,
       excludeVaultsBalances: true,
-      vaultsTotalTreasuryFeesShares: vaultValue,
     } as OracleReportParams;
 
     await report(ctx, params);
 
     expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.be.equal(stakingVaultMaxMintingShares);
 
-    const reportResponse = await reportVaultDataWithProof(ctx, stakingVault, vaultValue);
+    const reportResponse = await reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultValue });
     const reportTxReceipt = (await reportResponse.wait()) as ContractTransactionReceipt;
     const vaultReportedEvents = ctx.getEvents(reportTxReceipt, "VaultReportApplied", [vaultHub.interface]);
     expect(vaultReportedEvents.length).to.equal(1n);
@@ -463,7 +428,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     await report(ctx, params);
 
-    await reportVaultDataWithProof(ctx, stakingVault, vaultValue, VAULT_DEPOSIT);
+    await reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultValue });
 
     const mintedShares = await vaultHub.liabilityShares(stakingVaultAddress);
     expect(mintedShares).to.be.equal(0n); // it's zero because protocol fees deducted not in shares

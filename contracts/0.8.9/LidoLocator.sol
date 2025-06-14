@@ -27,10 +27,13 @@ contract LidoLocator is ILidoLocator {
         address withdrawalQueue;
         address withdrawalVault;
         address oracleDaemonConfig;
+        address validatorExitDelayVerifier;
+        address triggerableWithdrawalsGateway;
         address accounting;
         address predepositGuarantee;
         address wstETH;
         address vaultHub;
+        address vaultFactory;
         address lazyOracle;
         address operatorGrid;
     }
@@ -51,10 +54,13 @@ contract LidoLocator is ILidoLocator {
     address public immutable withdrawalQueue;
     address public immutable withdrawalVault;
     address public immutable oracleDaemonConfig;
+    address public immutable validatorExitDelayVerifier;
+    address public immutable triggerableWithdrawalsGateway;
     address public immutable accounting;
     address public immutable predepositGuarantee;
     address public immutable wstETH;
     address public immutable vaultHub;
+    address public immutable vaultFactory;
     address public immutable lazyOracle;
     address public immutable operatorGrid;
     //solhint-enable immutable-vars-naming
@@ -78,10 +84,13 @@ contract LidoLocator is ILidoLocator {
         withdrawalQueue = _assertNonZero(_config.withdrawalQueue);
         withdrawalVault = _assertNonZero(_config.withdrawalVault);
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
+        validatorExitDelayVerifier = _assertNonZero(_config.validatorExitDelayVerifier);
+        triggerableWithdrawalsGateway = _assertNonZero(_config.triggerableWithdrawalsGateway);
         accounting = _assertNonZero(_config.accounting);
         predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
         wstETH = _assertNonZero(_config.wstETH);
         vaultHub = _assertNonZero(_config.vaultHub);
+        vaultFactory = _assertNonZero(_config.vaultFactory);
         lazyOracle = _assertNonZero(_config.lazyOracle);
         operatorGrid = _assertNonZero(_config.operatorGrid);
     }

@@ -46,6 +46,14 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
       hardfork: "prague",
+      mining: {
+        mempool: {
+          order: "fifo",
+        },
+      },
+    },
+    "custom": {
+      url: RPC_URL,
     },
     // local nodes
     "local": {
@@ -146,16 +154,6 @@ const config: HardhatUserConfig = {
         },
       },
       {
-        version: "0.8.4",
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
-          },
-          evmVersion: "istanbul",
-        },
-      },
-      {
         version: "0.8.9",
         settings: {
           optimizer: {
@@ -172,6 +170,7 @@ const config: HardhatUserConfig = {
             enabled: true,
             runs: 200,
           },
+          viaIR: true,
           evmVersion: "cancun",
         },
       },
