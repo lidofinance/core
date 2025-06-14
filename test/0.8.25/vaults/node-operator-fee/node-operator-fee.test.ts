@@ -13,7 +13,7 @@ import {
   UpgradeableBeacon,
   VaultFactory__MockForNodeOperatorFee,
   VaultHub__MockForNodeOperatorFee,
-  WstETH__HarnessForVault,
+  WstETH__Harness,
 } from "typechain-types";
 
 import { advanceChainTime, days, ether, findEvents, getCurrentBlockTimestamp, getNextBlockTimestamp } from "lib";
@@ -34,7 +34,7 @@ describe("NodeOperatorFee.sol", () => {
 
   let lidoLocator: LidoLocator;
   let steth: StETH__MockForNodeOperatorFee;
-  let wsteth: WstETH__HarnessForVault;
+  let wsteth: WstETH__Harness;
   let hub: VaultHub__MockForNodeOperatorFee;
   let vaultImpl: StakingVault__MockForNodeOperatorFee;
   let nodeOperatorFeeImpl: NodeOperatorFee__Harness;
@@ -54,7 +54,7 @@ describe("NodeOperatorFee.sol", () => {
       await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForNodeOperatorFee");
-    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
+    wsteth = await ethers.deployContract("WstETH__Harness", [steth]);
     lazyOracle = await ethers.deployContract("LazyOracle__MockForNodeOperatorFee");
 
     lidoLocator = await deployLidoLocator({
@@ -199,8 +199,9 @@ describe("NodeOperatorFee.sol", () => {
     });
 
     it("reverts if the new node operator fee recipient is the zero address", async () => {
-      await expect(nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeRecipient(ZeroAddress))
-        .to.be.revertedWithCustomError(nodeOperatorFee, "ZeroAddress")
+      await expect(
+        nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeRecipient(ZeroAddress),
+      ).to.be.revertedWithCustomError(nodeOperatorFee, "ZeroAddress");
     });
 
     it("sets the new node operator fee recipient", async () => {

@@ -13,13 +13,12 @@ import {
   VaultHub__MockForDashboard,
 } from "typechain-types";
 
-import { ether } from "lib";
-import { deployEIP7251MaxEffectiveBalanceRequestContract, EIP7251_ADDRESS } from "lib";
+import { deployEIP7251MaxEffectiveBalanceRequestContract, EIP7251_ADDRESS, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-import { generateConsolidationRequestPayload } from "./consolidation_utils";
+import { generateConsolidationRequestPayload } from "./consolidationHelper";
 import { findDashboardMockEvents, findEIP7251MockEvents, testEIP7251Mock } from "./eip7251Mock";
 
 const EMPTY_PUBKEYS = "0x";

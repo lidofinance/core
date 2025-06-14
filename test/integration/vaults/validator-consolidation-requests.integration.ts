@@ -10,7 +10,7 @@ import {
 } from "lib";
 import { createVaultWithDashboard, getProtocolContext, ProtocolContext } from "lib/protocol";
 
-import { generateConsolidationRequestPayload } from "test/0.8.25/vaults/consolidation/consolidation_utils";
+import { generateConsolidationRequestPayload } from "test/0.8.25/vaults/consolidation/consolidationHelper";
 import { testEIP7251Mock } from "test/0.8.25/vaults/consolidation/eip7251Mock";
 import { Snapshot } from "test/suite";
 
