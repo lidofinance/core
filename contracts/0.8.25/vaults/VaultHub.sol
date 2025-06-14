@@ -568,10 +568,9 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Transfer the bad debt from the donor vault to the acceptor vault
     /// @param _badDebtVault address of the vault that has the bad debt
-    /// @param _vaultAcceptor address of the vault that will accept the bad debt or 0 if the bad debt is internalized to the protocol
+    /// @param _vaultAcceptor address of the vault that will accept the bad debt
     /// @param _maxSharesToSocialize maximum amount of shares to socialize
-    /// @dev msg.sender must have SOCIALIZE_BAD_DEBT_ROLE
-    /// @dev if _vaultAcceptor is 0, the bad debt is internalized to the protocol
+    /// @dev msg.sender must have BAD_DEBT_MASTER_ROLE
     function socializeBadDebt(
         address _badDebtVault,
         address _vaultAcceptor,
