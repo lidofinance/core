@@ -745,29 +745,23 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         VaultObligations storage obligations = _vaultObligations(_vault);
 
-        uint256 totalRequestedAmount = 0;
-        bool hasPartialWithdrawals = false;
-
-        for (uint256 i = 0; i < _amounts.length; i++) {
-            if (_amounts[i] > 0) {
-                totalRequestedAmount += _amounts[i];
-                hasPartialWithdrawals = true;
+        /// @dev NB: Disallow partial withdrawals when the vault is unhealthy or has redemptions over the threshold
+        ///          in order to prevent the vault owner from clogging the consensus layer withdrawal queue
+        ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
+        ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
+        ///          settle the unsettled obligations
+        if (!_isVaultHealthy(connection, record) || obligations.redemptions >= UNSETTLED_THRESHOLD) {
+            uint256 minPartialAmount = type(uint256).max;
+            for (uint256 i = 0; i < _amounts.length; i++) {
+                if (_amounts[i] > 0 && _amounts[i] < minPartialAmount) minPartialAmount = _amounts[i];
             }
-        }
 
-        if (hasPartialWithdrawals) {
-            /// @dev NB: Disallow partial withdrawals when the vault is unhealthy or has redemptions over the threshold
-            ///          in order to prevent the vault owner from clogging the consensus layer withdrawal queue
-            ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
-            ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
-            ///          settle the unsettled obligations
-            if (!_isVaultHealthy(connection, record) || obligations.redemptions >= UNSETTLED_THRESHOLD) {
+            if (minPartialAmount < type(uint256).max) {
                 uint256 currentVaultBalance = _vault.balance;
                 uint256 required = _totalUnsettledObligations(obligations) + _rebalanceShortfall(connection, record);
                 uint256 amountToCover = required > currentVaultBalance ? required - currentVaultBalance : 0;
-                if (totalRequestedAmount < amountToCover) {
-                    revert PartialValidatorWithdrawalNotAllowed();
-                }
+
+                if (minPartialAmount < amountToCover) revert PartialValidatorWithdrawalNotAllowed();
             }
         }
 
