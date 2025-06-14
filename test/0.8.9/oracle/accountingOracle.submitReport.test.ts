@@ -176,7 +176,6 @@ describe("AccountingOracle.sol:submitReport", () => {
 
     it("processing state reverts to pre-report state ", async () => {
       const state = await oracle.getProcessingState();
-      console.debug({ state });
       expect(state.mainDataHash).to.equal(ZeroHash);
       expect(state.extraDataHash).to.equal(ZeroHash);
       expect(state.extraDataFormat).to.equal(0);

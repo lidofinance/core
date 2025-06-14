@@ -32,7 +32,7 @@ jobs:
           path: ./coverage/cobertura-coverage.xml
           publish: true
           # TODO: restore to 95% before release
-          threshold: 75
+          threshold: 80
           diff: true
           diff-branch: master
           diff-storage: _core_coverage_reports
