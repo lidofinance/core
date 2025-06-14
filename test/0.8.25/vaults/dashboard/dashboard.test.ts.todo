@@ -488,11 +488,11 @@ describe("Dashboard.sol", () => {
       });
     });
 
-    context("withdrawableEther", () => {
+    context("withdrawableValue", () => {
       it("returns the trivial amount can withdraw ether", async () => {
         await setup({ totalValue: 0n, locked: 0n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(0n);
+        expect(await dashboard.withdrawableValue()).to.equal(0n);
       });
 
       it("returns totalValue if balance > totalValue and locked = 0", async () => {
@@ -500,7 +500,7 @@ describe("Dashboard.sol", () => {
         const amount = ether("1");
         await setup({ totalValue: amount, locked: 0n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(amount);
+        expect(await dashboard.withdrawableValue()).to.equal(amount);
       });
 
       it("returns totalValue - locked if balance > totalValue and locked > 0", async () => {
@@ -508,21 +508,21 @@ describe("Dashboard.sol", () => {
         const amount = ether("1");
         await setup({ totalValue: amount, locked: amount / 2n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(amount / 2n);
+        expect(await dashboard.withdrawableValue()).to.equal(amount / 2n);
       });
 
       it("returns balance if balance < totalValue and locked = 0", async () => {
         const amount = ether("1");
         await setBalance(await vault.getAddress(), amount - 1n);
         await setup({ totalValue: amount, locked: 0n });
-        expect(await dashboard.withdrawableEther()).to.equal(amount - 1n);
+        expect(await dashboard.withdrawableValue()).to.equal(amount - 1n);
       });
 
       it("returns balance if balance < totalValue and locked <= (totalValue - balance)", async () => {
         const amount = ether("1");
         await setBalance(await vault.getAddress(), amount - 2n);
         await setup({ totalValue: amount, locked: 1n });
-        expect(await dashboard.withdrawableEther()).to.equal(amount - 2n);
+        expect(await dashboard.withdrawableValue()).to.equal(amount - 2n);
       });
 
       it("returns 0 if no balance, even if totalValue > locked", async () => {
@@ -530,7 +530,7 @@ describe("Dashboard.sol", () => {
         const amount = ether("1");
         await setup({ totalValue: amount, locked: amount / 2n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(0n);
+        expect(await dashboard.withdrawableValue()).to.equal(0n);
       });
     });
   });
@@ -669,7 +669,7 @@ describe("Dashboard.sol", () => {
     it("reverts if the amount is greater than withdrawable ether", async () => {
       await expect(dashboard.connect(vaultOwner).withdraw(stranger, ether("2"))).to.be.revertedWithCustomError(
         dashboard,
-        "WithdrawalExceedsWithdrawable",
+        "ExceedsWithdrawable",
       );
     });
   });

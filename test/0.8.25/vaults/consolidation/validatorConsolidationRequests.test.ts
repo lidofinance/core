@@ -67,6 +67,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       infraFeeBP: 0,
       liquidityFeeBP: 0,
       reservationFeeBP: 0,
+      isBeaconDepositsManuallyPaused: false,
     });
 
     locator = await deployLidoLocator({
@@ -214,6 +215,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       infraFeeBP: 0,
       liquidityFeeBP: 0,
       reservationFeeBP: 0,
+      isBeaconDepositsManuallyPaused: false,
     });
 
     await expect(
@@ -240,6 +242,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       infraFeeBP: 0,
       liquidityFeeBP: 0,
       reservationFeeBP: 0,
+      isBeaconDepositsManuallyPaused: false,
     });
 
     await expect(

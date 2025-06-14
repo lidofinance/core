@@ -13,7 +13,7 @@ import {
   generateValidator,
   getNextBlockTimestamp,
 } from "lib";
-import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLido } from "lib/protocol";
+import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
 import { getProofAndDepositData, getPubkeys, reportVaultDataWithProof, VaultRoles } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
@@ -37,7 +37,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     ctx = await getProtocolContext();
 
-    await setupLido(ctx);
+    await setupLidoForVaults(ctx);
 
     [owner, nodeOperator, stranger] = await ethers.getSigners();
 
@@ -85,48 +85,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
       await dashboard.reconnectToVaultHub();
 
-      expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
-    });
-
-    it("Can change the tier as dashboard is owner of the vault", async () => {
-      const { operatorGrid } = ctx.contracts;
-      const agentSigner = await ctx.getSigner("agent");
-
-      await dashboard.abandonDashboard(dashboard);
-
-      await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, 1000);
-      await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
-        {
-          shareLimit: 1000,
-          reserveRatioBP: 2000,
-          forcedRebalanceThresholdBP: 1800,
-          infraFeeBP: 500,
-          liquidityFeeBP: 400,
-          reservationFeeBP: 100,
-        },
-      ]);
-
-      const ownerMemberIndex = ethers.zeroPadValue(await dashboard.getAddress(), 32);
-      const operatorMemberIndex = ethers.zeroPadValue(await nodeOperator.getAddress(), 32);
-      let confirmTimestamp = await getNextBlockTimestamp();
-      let expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
-      const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
-        await stakingVault.getAddress(),
-        1,
-        1000,
-      ]);
-
-      await expect(dashboard.connect(roles.tierChanger).changeTier(1n, 1000n))
-        .to.emit(operatorGrid, "RoleMemberConfirmed")
-        .withArgs(dashboard, ownerMemberIndex, confirmTimestamp, expiryTimestamp, msgData);
-
-      confirmTimestamp = await getNextBlockTimestamp();
-      expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
-      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n))
-        .to.emit(operatorGrid, "RoleMemberConfirmed")
-        .withArgs(nodeOperator, operatorMemberIndex, confirmTimestamp, expiryTimestamp, msgData)
-        .to.emit(operatorGrid, "TierChanged")
-        .withArgs(stakingVault, 1);
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
     });
   });
 
@@ -158,7 +117,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .to.emit(stakingVault, "OwnershipTransferred")
           .withArgs(owner, vaultHub);
 
-        expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
+        expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
       });
 
       it("Can reconnect the vault to the dashboard and then to the hub", async () => {
@@ -175,12 +134,12 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(dashboard, vaultHub)
           .to.emit(vaultHub, "VaultConnected");
 
-        expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
+        expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
       });
     });
 
-    it("Can change the tier as owner of the vault", async () => {
-      const { operatorGrid } = ctx.contracts;
+    it("Can not change the tier as owner of the vault", async () => {
+      const { operatorGrid, vaultHub } = ctx.contracts;
       const agentSigner = await ctx.getSigner("agent");
 
       await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, 1000);
@@ -196,7 +155,6 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       ]);
 
       const ownerRoleAsAddress = ethers.zeroPadValue(await owner.getAddress(), 32);
-      const operatorRoleAsAddress = ethers.zeroPadValue(await nodeOperator.getAddress(), 32);
       let confirmTimestamp = await getNextBlockTimestamp();
       let expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
       const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
@@ -211,11 +169,9 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
       confirmTimestamp = await getNextBlockTimestamp();
       expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
-      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n))
-        .to.emit(operatorGrid, "RoleMemberConfirmed")
-        .withArgs(nodeOperator, operatorRoleAsAddress, confirmTimestamp, expiryTimestamp, msgData)
-        .to.emit(operatorGrid, "TierChanged")
-        .withArgs(stakingVault, 1);
+      await expect(
+        operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n),
+      ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
     });
 
     describe("Funding", () => {
@@ -364,7 +320,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(1, ether("1"));
 
         const { witnesses, postdeposit } = await getProofAndDepositData(
-          predepositGuarantee,
+          ctx,
           validator,
           withdrawalCredentials,
           ether("2048"),

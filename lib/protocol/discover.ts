@@ -249,6 +249,7 @@ export async function discover(skipV3Contracts: boolean) {
     "Vault Hub": contracts.vaultHub?.address,
     "Predeposit Guarantee": contracts.predepositGuarantee?.address,
     "Operator Grid": contracts.operatorGrid?.address,
+    "Lazy Oracle": contracts.lazyOracle?.address,
     "Validator Consolidation Requests": contracts.validatorConsolidationRequests?.address,
   });
 

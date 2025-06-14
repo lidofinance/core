@@ -147,8 +147,6 @@ export const norSdvtAddNodeOperator = async (
     "Reward address": rewardAddress,
   });
 
-  log.success(`Added fake NOR operator ${operatorId}`);
-
   return operatorId;
 };
 
@@ -192,8 +190,6 @@ export const norSdvtAddOperatorKeys = async (
     "Unused keys before": unusedKeysBefore,
     "Unused keys after": unusedKeysAfter,
   });
-
-  log.success(`Added fake keys to NOR operator ${operatorId}`);
 };
 
 /**
@@ -226,8 +222,6 @@ export const norSdvtSetOperatorStakingLimit = async (
       throw error;
     }
   }
-
-  log.success(`Set NOR operator ${operatorId} staking limit`);
 };
 
 export const getOperatorName = (module: StakingModuleName, id: bigint, group: bigint = 0n) =>

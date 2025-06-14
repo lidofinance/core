@@ -23,8 +23,6 @@ struct ReportValues {
     /// @notice the ascendingly-sorted array of withdrawal request IDs obtained by calling
     /// WithdrawalQueue.calculateFinalizationBatches. Can be empty array if no withdrawal to finalize
     uint256[] withdrawalFinalizationBatches;
-    /// @notice overall vaults treasury fees
-    uint256 vaultsTotalTreasuryFeesShares;
     /// @notice overall vaults total deficit
     uint256 vaultsTotalDeficit;
 }
