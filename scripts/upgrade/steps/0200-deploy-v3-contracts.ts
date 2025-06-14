@@ -3,7 +3,6 @@ import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
-  AccountingOracle,
   Burner,
   ICSModule,
   IOracleReportSanityChecker_preV3,
@@ -12,14 +11,13 @@ import {
   OperatorGrid,
   PredepositGuarantee,
   StakingRouter,
-  TriggerableWithdrawalsGateway,
   VaultHub,
 } from "typechain-types";
 
 import { ether, log } from "lib";
 import { loadContract } from "lib/contract";
 import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy";
-import { readNetworkState, Sk, getAddress } from "lib/state-file";
+import { getAddress,readNetworkState, Sk } from "lib/state-file";
 
 const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
 
@@ -41,11 +39,6 @@ export async function main() {
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
-  const validatorExitDelayVerifierParams = parameters[Sk.validatorExitDelayVerifier].deployParameters;
-  const triggerableWithdrawalsGatewayParams = parameters[Sk.triggerableWithdrawalsGateway].deployParameters;
-
-  const validatorExitDelayVerifierAddress = getAddress(Sk.validatorExitDelayVerifier, state);
-  const triggerableWithdrawalsGatewayAddress = getAddress(Sk.triggerableWithdrawalsGateway, state);
 
   const proxyContractsOwner = agentAddress;
 
@@ -298,9 +291,6 @@ export async function main() {
   // Deploy VaultFactory
   //
 
-  const accountingOracle = await loadContract<AccountingOracle>("AccountingOracle", await locator.accountingOracle());
-  const genesisTime = await accountingOracle.GENESIS_TIME();
-
   const vaultFactory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     locatorAddress,
     beacon.address,
@@ -311,30 +301,29 @@ export async function main() {
   //
   // Deploy new LidoLocator implementation
   //
-
-  const locatorConfig: string[] = [
-    accountingOracle.address,
-    await locator.depositSecurityModule(),
-    await locator.elRewardsVault(),
-    lidoAddress,
-    newSanityChecker.address,
-    ZeroAddress,
-    burner.address,
-    await locator.stakingRouter(),
-    treasuryAddress,
-    await locator.validatorsExitBusOracle(),
-    await locator.withdrawalQueue(),
-    await locator.withdrawalVault(),
-    await locator.oracleDaemonConfig(),
-    validatorExitDelayVerifier.address,
-    triggerableWithdrawalsGateway_.address,
-    accounting.address,
-    predepositGuarantee.address,
-    wstethAddress,
-    vaultHub.address,
-    vaultFactory.address,
-    lazyOracle.address,
-    operatorGrid.address,
-  ];
+  const locatorConfig: LidoLocator.ConfigStruct = {
+    accountingOracle: await locator.accountingOracle(),
+    depositSecurityModule: await locator.depositSecurityModule(),
+    elRewardsVault: await locator.elRewardsVault(),
+    lido: lidoAddress,
+    oracleReportSanityChecker: newSanityChecker.address,
+    postTokenRebaseReceiver: ZeroAddress,
+    burner: burner.address,
+    stakingRouter: await locator.stakingRouter(),
+    treasury: treasuryAddress,
+    validatorsExitBusOracle: await locator.validatorsExitBusOracle(),
+    withdrawalQueue: await locator.withdrawalQueue(),
+    withdrawalVault: await locator.withdrawalVault(),
+    oracleDaemonConfig: await locator.oracleDaemonConfig(),
+    validatorExitDelayVerifier: getAddress(Sk.validatorExitDelayVerifier, state),
+    triggerableWithdrawalsGateway: getAddress(Sk.triggerableWithdrawalsGateway, state),
+    accounting: accounting.address,
+    predepositGuarantee: predepositGuarantee.address,
+    wstETH: wstethAddress,
+    vaultHub: vaultHub.address,
+    vaultFactory: vaultFactory.address,
+    lazyOracle: lazyOracle.address,
+    operatorGrid: operatorGrid.address,
+  };
   await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
 }

@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import { join } from "path";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import { LidoLocator } from "typechain-types";
+import { LidoLocator, TriggerableWithdrawalsGateway } from "typechain-types";
 
 import {
   cy,
@@ -11,6 +11,7 @@ import {
   deployWithoutProxy,
   loadContract,
   log,
+  makeTx,
   persistNetworkState,
   readNetworkState,
   Sk,
@@ -80,27 +81,14 @@ export async function main() {
   log.success(`ValidatorsExitBusOracle address: ${validatorsExitBusOracle.address}`);
   log.emptyLine();
 
-  const triggerableWithdrawalsGateway = await deployImplementation(
-    Sk.triggerableWithdrawalsGateway,
-    "TriggerableWithdrawalsGateway",
-    deployer,
-    [agent, locator.address, 13000, 1, 48],
-  );
-  log.success(`TriggerableWithdrawalsGateway implementation address: ${triggerableWithdrawalsGateway.address}`);
-  log.emptyLine();
-
-  //
-  // Withdrawal Vault
-  //
-
-  const withdrawalVaultArgs = [LIDO_PROXY, TREASURY_PROXY, triggerableWithdrawalsGateway.address];
-  const withdrawalVault = await deployImplementation(
-    Sk.withdrawalVault,
-    "WithdrawalVault",
-    deployer,
-    withdrawalVaultArgs,
-  );
-  log.success(`WithdrawalVault address implementation: ${withdrawalVault.address}`);
+  // const triggerableWithdrawalsGateway_ = await deployWithoutProxy(
+  //   Sk.triggerableWithdrawalsGateway,
+  //   "TriggerableWithdrawalsGateway",
+  //   deployer,
+  //   [agent, locator.address, 13000, 1, 48],
+  // );
+  // log.success(`TriggerableWithdrawalsGateway implementation address: ${triggerableWithdrawalsGateway.address}`);
+  // log.emptyLine();
 
   const minFirstAllocationStrategyAddress = getAddress(Sk.minFirstAllocationStrategy, state);
   const libraries = {
@@ -191,8 +179,21 @@ export async function main() {
     [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), await locator.validatorsExitBusOracle()],
     { from: deployer },
   );
-  await makeTx(triggerableWithdrawalsGateway, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
+  await makeTx(triggerableWithdrawalsGateway, "grantRole", [DEFAULT_ADMIN_ROLE, agent], { from: deployer });
   await makeTx(triggerableWithdrawalsGateway, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+
+  //
+  // Withdrawal Vault
+  //
+
+  const withdrawalVaultArgs = [LIDO_PROXY, TREASURY_PROXY, triggerableWithdrawalsGateway_.address];
+  const withdrawalVault = await deployImplementation(
+    Sk.withdrawalVault,
+    "WithdrawalVault",
+    deployer,
+    withdrawalVaultArgs,
+  );
+  log.success(`WithdrawalVault address implementation: ${withdrawalVault.address}`);
 
   // const validatorExitDelayVerifierArgs = [
   //   locator.address,

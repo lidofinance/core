@@ -79,19 +79,18 @@ abstract contract OmnibusBase {
     /// @return A boolean value indicating whether the vote is valid.
     function isValidVoteScript(uint256 voteId) external view returns (bool) {
         (
-             /*open*/,
-             /*executed*/,
-             /*startDate*/,
-             /*snapshotBlock*/,
-             /*supportRequired*/,
-             /*minAcceptQuorum*/,
-             /*yea*/,
-             /*nay*/,
-             /*votingPower*/,
-            bytes memory script,
+            ,
+            ,
+            /*open*/ ,
+            /*executed*/ ,
+            /*startDate*/ ,
+            /*snapshotBlock*/ ,
+            /*supportRequired*/ ,
+            /*minAcceptQuorum*/ ,
+            /*yea*/ ,
+            /*nay*/ /*votingPower*/ bytes memory script,
 
-        ) = /*phase*/
-            VOTING_CONTRACT.getVote(voteId);
+        ) = /*phase*/ VOTING_CONTRACT.getVote(voteId);
         return keccak256(script) == keccak256(getEVMScript());
     }
 
