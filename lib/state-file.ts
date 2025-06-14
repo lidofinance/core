@@ -38,6 +38,9 @@ export enum Sk {
   aragonId = "aragonID",
   aragonKernel = "aragon-kernel",
   aragonRepoBase = "aragon-repo-base",
+  aragonLidoAppRepo = "aragon-lido-app-repo",
+  aragonNodeOperatorsRegistryAppRepo = "aragon-node-operators-registry-app-repo",
+  aragonSimpleDvtAppRepo = "aragon-simple-dvt-app-repo",
   appAgent = "app:aragon-agent",
   appFinance = "app:aragon-finance",
   appTokenManager = "app:aragon-token-manager",
@@ -50,7 +53,6 @@ export enum Sk {
   evmScriptRegistryFactory = "evmScriptRegistryFactory",
   ensSubdomainRegistrar = "ensSubdomainRegistrar",
   ldo = "ldo",
-  // lido = "lido",
   lidoApm = "lidoApm",
   lidoApmEnsName = "lidoApmEnsName",
   lidoApmEnsRegDurationSec = "lidoApmEnsRegDurationSec",
@@ -87,13 +89,19 @@ export enum Sk {
   accounting = "accounting",
   vaultHub = "vaultHub",
   tokenRebaseNotifier = "tokenRebaseNotifier",
+  validatorExitDelayVerifier = "validatorExitDelayVerifier",
+  triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
   // Vaults
   predepositGuarantee = "predepositGuarantee",
-  stakingVaultImpl = "stakingVaultImpl",
+  stakingVaultImplementation = "stakingVaultImplementation",
   stakingVaultFactory = "stakingVaultFactory",
   dashboardImpl = "dashboardImpl",
   stakingVaultBeacon = "stakingVaultBeacon",
+  v3Template = "v3Template",
+  v3Addresses = "v3Addresses",
+  v3VoteScript = "v3VoteScript",
   operatorGrid = "operatorGrid",
+  validatorConsolidationRequests = "validatorConsolidationRequests",
   lazyOracle = "lazyOracle",
 }
 
@@ -116,9 +124,16 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.withdrawalQueueERC721:
     case Sk.withdrawalVault:
     case Sk.lazyOracle:
+    case Sk.operatorGrid:
+    case Sk.accounting:
+    case Sk.burner:
+    case Sk.appSimpleDvt:
+    case Sk.aragonNodeOperatorsRegistryAppRepo:
+    case Sk.aragonSimpleDvtAppRepo:
+    case Sk.predepositGuarantee:
+    case Sk.vaultHub:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
-    case Sk.burner:
     case Sk.callsScript:
     case Sk.daoFactory:
     case Sk.depositSecurityModule:
@@ -139,9 +154,11 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.oracleReportSanityChecker:
     case Sk.wstETH:
     case Sk.depositContract:
-    case Sk.accounting:
     case Sk.tokenRebaseNotifier:
-    case Sk.operatorGrid:
+    case Sk.validatorExitDelayVerifier:
+    case Sk.triggerableWithdrawalsGateway:
+    case Sk.stakingVaultFactory:
+    case Sk.validatorConsolidationRequests:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);

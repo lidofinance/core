@@ -59,12 +59,12 @@ describe("Scenario: Burn Shares", () => {
   });
 
   it("Should burn shares after report", async () => {
-    const { lido, burner } = ctx.contracts;
+    const { lido, burner, accounting } = ctx.contracts;
 
     await lido.connect(stranger).approve(burner.address, ether("1000000"));
 
-    const lidoSigner = await impersonate(lido.address);
-    await burner.connect(lidoSigner).requestBurnSharesForCover(stranger, sharesToBurn);
+    const accountingSigner = await impersonate(accounting.address, ether("1"));
+    await burner.connect(accountingSigner).requestBurnSharesForCover(stranger, sharesToBurn);
 
     const { beaconValidators, beaconBalance } = await lido.getBeaconStat();
 
@@ -74,7 +74,6 @@ describe("Scenario: Burn Shares", () => {
       sharesRequestedToBurn: sharesToBurn,
       withdrawalVaultBalance: 0n,
       elRewardsVaultBalance: 0n,
-      vaultsTotalTreasuryFeesShares: 0n,
       vaultsTotalDeficit: 0n,
       vaultsDataTreeRoot: ethers.ZeroHash,
       vaultsDataTreeCid: "",

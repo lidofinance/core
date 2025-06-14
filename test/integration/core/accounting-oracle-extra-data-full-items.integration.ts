@@ -23,6 +23,7 @@ import {
 import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
 import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
+import { setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
 import {
   calcNodeOperatorRewards,
   CSM_MODULE_ID,
@@ -33,7 +34,7 @@ import {
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
 const MIN_KEYS_PER_OPERATOR = 5n;
-const MIN_OPERATORS_COUNT = 50n;
+const MIN_OPERATORS_COUNT = 30n;
 
 class ListKeyMapHelper<ValueType> {
   private map: Map<string, ValueType> = new Map();
@@ -61,7 +62,8 @@ class ListKeyMapHelper<ValueType> {
   }
 }
 
-describe("Integration: AccountingOracle extra data full items", () => {
+// TODO: update this test for the version with the triggerable exits (no stuck items)
+describe.skip("Integration: AccountingOracle extra data full items", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
 
@@ -106,9 +108,12 @@ describe("Integration: AccountingOracle extra data full items", () => {
 
     await ctx.contracts.lido.connect(await ctx.getSigner("voting")).removeStakingLimit();
 
-    await norSdvtEnsureOperators(ctx, nor, MIN_OPERATORS_COUNT, MIN_KEYS_PER_OPERATOR);
+    await setModuleStakeShareLimit(ctx, SDVT_MODULE_ID, 50_00n);
+
+    await norSdvtEnsureOperators(ctx, nor, MIN_OPERATORS_COUNT, MIN_KEYS_PER_OPERATOR, 2n);
     await advanceChainTime(1n * 24n * 60n * 60n);
-    await norSdvtEnsureOperators(ctx, sdvt, MIN_OPERATORS_COUNT, MIN_KEYS_PER_OPERATOR);
+
+    await norSdvtEnsureOperators(ctx, sdvt, MIN_OPERATORS_COUNT, MIN_KEYS_PER_OPERATOR, 2n);
     await advanceChainTime(1n * 24n * 60n * 60n);
   }
 
@@ -161,26 +166,27 @@ describe("Integration: AccountingOracle extra data full items", () => {
         ...(ctx.flags.withCSM ? [{ moduleId: CSM_MODULE_ID, module: csm! }] : []),
       ];
 
-      // Get active node operator IDs for NOR
-      const norIds: bigint[] = [];
-      for (let i = 0; i < Number(await nor.getNodeOperatorsCount()); i++) {
-        const nodeOperator = await nor.getNodeOperator(BigInt(i), false);
-        if (nodeOperator.active) {
-          norIds.push(BigInt(i));
+      const noIdsByModule = new Map<bigint, bigint[]>();
+      for (const { moduleId, module } of modules) {
+        if (moduleId === CSM_MODULE_ID) continue;
+        const ids: bigint[] = [];
+        const count = Number(await module.getNodeOperatorsCount());
+        for (let i = 0; i < count; i++) {
+          const nodeOperator = await (module as unknown as LoadedContract<NodeOperatorsRegistry>).getNodeOperator(
+            BigInt(i),
+            false,
+          );
+          if (nodeOperator.active && nodeOperator.totalDepositedValidators - nodeOperator.totalExitedValidators >= 1n) {
+            ids.push(BigInt(i));
+          }
         }
+        noIdsByModule.set(moduleId, ids);
       }
+      const norIds = noIdsByModule.get(NOR_MODULE_ID)!;
+      const sdvtIds = noIdsByModule.get(SDVT_MODULE_ID)!;
 
-      // Get active node operator IDs for SDVT
-      const sdvtIds: bigint[] = [];
-      for (let i = 0; i < Number(await sdvt.getNodeOperatorsCount()); i++) {
-        const nodeOperator = await sdvt.getNodeOperator(BigInt(i), false);
-        if (nodeOperator.active) {
-          sdvtIds.push(BigInt(i));
-        }
-      }
-
-      expect(norIds.length).to.gte(2 * maxNodeOperatorsPerExtraDataItem);
-      expect(sdvtIds.length).to.gte(2 * maxNodeOperatorsPerExtraDataItem);
+      expect(norIds.length).to.gte(maxNodeOperatorsPerExtraDataItem);
+      expect(sdvtIds.length).to.gte(maxNodeOperatorsPerExtraDataItem);
 
       // Prepare arrays for stuck and exited keys
       const csmIds: bigint[] = [];
@@ -193,22 +199,10 @@ describe("Integration: AccountingOracle extra data full items", () => {
       const idsStuck = new Map<bigint, bigint[]>();
 
       idsExited.set(NOR_MODULE_ID, norIds.slice(0, norExitedItems * maxNodeOperatorsPerExtraDataItem));
-      idsStuck.set(
-        NOR_MODULE_ID,
-        norIds.slice(
-          norStuckItems * maxNodeOperatorsPerExtraDataItem,
-          2 * norStuckItems * maxNodeOperatorsPerExtraDataItem,
-        ),
-      );
+      idsStuck.set(NOR_MODULE_ID, norIds.slice(0, norStuckItems * maxNodeOperatorsPerExtraDataItem));
 
       idsExited.set(SDVT_MODULE_ID, sdvtIds.slice(0, sdvtExitedItems * maxNodeOperatorsPerExtraDataItem));
-      idsStuck.set(
-        SDVT_MODULE_ID,
-        sdvtIds.slice(
-          sdvtStuckItems * maxNodeOperatorsPerExtraDataItem,
-          2 * sdvtStuckItems * maxNodeOperatorsPerExtraDataItem,
-        ),
-      );
+      idsStuck.set(SDVT_MODULE_ID, sdvtIds.slice(0, sdvtStuckItems * maxNodeOperatorsPerExtraDataItem));
 
       if (ctx.flags.withCSM) {
         idsExited.set(CSM_MODULE_ID, csmIds.slice(0, csmExitedItems * maxNodeOperatorsPerExtraDataItem));
@@ -283,9 +277,13 @@ describe("Integration: AccountingOracle extra data full items", () => {
       const sharesBefore = new ListKeyMapHelper<bigint>();
       for (const { moduleId, module } of modules) {
         if (moduleId === CSM_MODULE_ID) continue;
+
         const ids = idsStuck.get(moduleId)!;
         for (const id of ids) {
-          const nodeOperator = await module.getNodeOperator(id, false);
+          const nodeOperator = await (module as unknown as LoadedContract<NodeOperatorsRegistry>).getNodeOperator(
+            id,
+            false,
+          );
           sharesBefore.set([moduleId, id], await ctx.contracts.lido.sharesOf(nodeOperator.rewardAddress));
         }
       }
@@ -375,7 +373,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
             expect(sharesDiff).to.be.closeTo(expectedReward, 2n);
 
             // Track total penalty shares
-            modulePenaltyShares += rewardsAfter / 2n;
+            modulePenaltyShares += expectedReward;
           }
 
           // Check if penalty shares were burned

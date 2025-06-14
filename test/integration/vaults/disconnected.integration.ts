@@ -5,8 +5,15 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
-import { certainAddress, ether, generatePostDeposit, generatePredeposit, generateValidator } from "lib";
-import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLido } from "lib/protocol";
+import {
+  certainAddress,
+  ether,
+  generatePostDeposit,
+  generatePredeposit,
+  generateValidator,
+  getNextBlockTimestamp,
+} from "lib";
+import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
 import { getProofAndDepositData, getPubkeys, reportVaultDataWithProof, VaultRoles } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
@@ -30,7 +37,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     ctx = await getProtocolContext();
 
-    await setupLido(ctx);
+    await setupLidoForVaults(ctx);
 
     [owner, nodeOperator, stranger] = await ethers.getSigners();
 
@@ -78,7 +85,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
       await dashboard.reconnectToVaultHub();
 
-      expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
     });
   });
 
@@ -110,7 +117,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .to.emit(stakingVault, "OwnershipTransferred")
           .withArgs(owner, vaultHub);
 
-        expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
+        expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
       });
 
       it("Can reconnect the vault to the dashboard and then to the hub", async () => {
@@ -127,8 +134,44 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(dashboard, vaultHub)
           .to.emit(vaultHub, "VaultConnected");
 
-        expect((await vaultHub.vaultConnection(stakingVault)).vaultIndex).to.not.equal(0);
+        expect(await vaultHub.isVaultConnected(stakingVault)).to.equal(true);
       });
+    });
+
+    it("Can not change the tier as owner of the vault", async () => {
+      const { operatorGrid, vaultHub } = ctx.contracts;
+      const agentSigner = await ctx.getSigner("agent");
+
+      await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, 1000);
+      await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
+        {
+          shareLimit: 1000,
+          reserveRatioBP: 2000,
+          forcedRebalanceThresholdBP: 1800,
+          infraFeeBP: 500,
+          liquidityFeeBP: 400,
+          reservationFeeBP: 100,
+        },
+      ]);
+
+      const ownerRoleAsAddress = ethers.zeroPadValue(await owner.getAddress(), 32);
+      let confirmTimestamp = await getNextBlockTimestamp();
+      let expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
+      const msgData = operatorGrid.interface.encodeFunctionData("changeTier", [
+        await stakingVault.getAddress(),
+        1,
+        1000,
+      ]);
+
+      await expect(operatorGrid.connect(owner).changeTier(stakingVault, 1n, 1000n))
+        .to.emit(operatorGrid, "RoleMemberConfirmed")
+        .withArgs(owner, ownerRoleAsAddress, confirmTimestamp, expiryTimestamp, msgData);
+
+      confirmTimestamp = await getNextBlockTimestamp();
+      expiryTimestamp = confirmTimestamp + (await operatorGrid.getConfirmExpiry());
+      await expect(
+        operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, 1000n),
+      ).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
     });
 
     describe("Funding", () => {
@@ -277,7 +320,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(1, ether("1"));
 
         const { witnesses, postdeposit } = await getProofAndDepositData(
-          predepositGuarantee,
+          ctx,
           validator,
           withdrawalCredentials,
           ether("2048"),

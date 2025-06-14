@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { AccessControlConfirmable__Harness } from "typechain-types";
 
-import { advanceChainTime, days, getNextBlockTimestamp } from "lib";
+import { advanceChainTime, days, getNextBlockTimestamp, hours } from "lib";
 
 describe("AccessControlConfirmable.sol", () => {
   let harness: AccessControlConfirmable__Harness;
@@ -18,9 +18,6 @@ describe("AccessControlConfirmable.sol", () => {
     [admin, stranger, role1Member, role2Member] = await ethers.getSigners();
 
     harness = await ethers.deployContract("AccessControlConfirmable__Harness", [admin], admin);
-    expect(await harness.getConfirmExpiry()).to.equal(await harness.MIN_CONFIRM_EXPIRY());
-    expect(await harness.hasRole(await harness.DEFAULT_ADMIN_ROLE(), admin)).to.be.true;
-    expect(await harness.getRoleMemberCount(await harness.DEFAULT_ADMIN_ROLE())).to.equal(1);
 
     await harness.grantRole(await harness.ROLE_1(), role1Member);
     expect(await harness.hasRole(await harness.ROLE_1(), role1Member)).to.be.true;
@@ -31,16 +28,27 @@ describe("AccessControlConfirmable.sol", () => {
     expect(await harness.getRoleMemberCount(await harness.ROLE_2())).to.equal(1);
   });
 
+  context("constructor", () => {
+    it("sets the default admin", async () => {
+      expect(await harness.hasRole(await harness.DEFAULT_ADMIN_ROLE(), admin)).to.be.true;
+      expect(await harness.getRoleMemberCount(await harness.DEFAULT_ADMIN_ROLE())).to.equal(1);
+    });
+
+    it("sets the confirm expiry to 1 day", async () => {
+      expect(await harness.getConfirmExpiry()).to.equal(days(1n));
+    });
+  });
+
   context("constants", () => {
     it("returns the correct constants", async () => {
-      expect(await harness.MIN_CONFIRM_EXPIRY()).to.equal(days(1n));
+      expect(await harness.MIN_CONFIRM_EXPIRY()).to.equal(hours(1n));
       expect(await harness.MAX_CONFIRM_EXPIRY()).to.equal(days(30n));
     });
   });
 
   context("getConfirmExpiry()", () => {
     it("returns the minimal expiry initially", async () => {
-      expect(await harness.getConfirmExpiry()).to.equal(await harness.MIN_CONFIRM_EXPIRY());
+      expect(await harness.getConfirmExpiry()).to.equal(days(1n));
     });
   });
 
@@ -99,20 +107,22 @@ describe("AccessControlConfirmable.sol", () => {
       const expiryTimestamp = (await getNextBlockTimestamp()) + (await harness.getConfirmExpiry());
       const msgData = harness.interface.encodeFunctionData("setNumber", [newNumber]);
 
+      const confirmTimestamp1 = await getNextBlockTimestamp();
       await expect(harness.connect(role1Member).setNumber(newNumber))
         .to.emit(harness, "RoleMemberConfirmed")
-        .withArgs(role1Member, await harness.ROLE_1(), expiryTimestamp, msgData);
-      expect(await harness.confirmations(msgData, await harness.ROLE_1())).to.equal(expiryTimestamp);
+        .withArgs(role1Member, await harness.ROLE_1(), confirmTimestamp1, expiryTimestamp, msgData);
+      expect(await harness.confirmation(msgData, await harness.ROLE_1())).to.equal(expiryTimestamp);
       // still old number
       expect(await harness.number()).to.equal(oldNumber);
 
       await advanceChainTime(expiryTimestamp + 1n);
 
+      const confirmTimestamp2 = await getNextBlockTimestamp();
       const newExpiryTimestamp = (await getNextBlockTimestamp()) + (await harness.getConfirmExpiry());
       await expect(harness.connect(role2Member).setNumber(newNumber))
         .to.emit(harness, "RoleMemberConfirmed")
-        .withArgs(role2Member, await harness.ROLE_2(), newExpiryTimestamp, msgData);
-      expect(await harness.confirmations(msgData, await harness.ROLE_2())).to.equal(newExpiryTimestamp);
+        .withArgs(role2Member, await harness.ROLE_2(), confirmTimestamp2, newExpiryTimestamp, msgData);
+      expect(await harness.confirmation(msgData, await harness.ROLE_2())).to.equal(newExpiryTimestamp);
       // still old number
       expect(await harness.number()).to.equal(oldNumber);
     });

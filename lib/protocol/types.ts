@@ -2,6 +2,10 @@ import { BaseContract as EthersBaseContract, ContractTransactionReceipt, Interfa
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
+export type LogDescriptionExtended = LogDescription & {
+  address?: string;
+};
+
 import {
   Accounting,
   AccountingOracle,
@@ -10,6 +14,7 @@ import {
   DepositSecurityModule,
   HashConsensus,
   ICSModule,
+  IStakingModule,
   Kernel,
   LazyOracle,
   Lido,
@@ -21,7 +26,10 @@ import {
   OracleReportSanityChecker,
   PredepositGuarantee,
   StakingRouter,
+  TriggerableWithdrawalsGateway,
   UpgradeableBeacon,
+  ValidatorConsolidationRequests,
+  ValidatorExitDelayVerifier,
   ValidatorsExitBusOracle,
   VaultFactory,
   VaultHub,
@@ -45,7 +53,9 @@ export type ProtocolNetworkItems = {
   oracleReportSanityChecker: string;
   burner: string;
   stakingRouter: string;
+  validatorExitDelayVerifier: string;
   validatorsExitBusOracle: string;
+  triggerableWithdrawalsGateway: string;
   withdrawalQueue: string;
   withdrawalVault: string;
   oracleDaemonConfig: string;
@@ -65,6 +75,7 @@ export type ProtocolNetworkItems = {
   vaultHub: string;
   predepositGuarantee: string;
   operatorGrid: string;
+  validatorConsolidationRequests: string;
   lazyOracle: string;
 };
 
@@ -78,6 +89,7 @@ export interface ContractTypes {
   OracleReportSanityChecker: OracleReportSanityChecker;
   Burner: Burner;
   StakingRouter: StakingRouter;
+  ValidatorExitDelayVerifier: ValidatorExitDelayVerifier;
   ValidatorsExitBusOracle: ValidatorsExitBusOracle;
   WithdrawalQueueERC721: WithdrawalQueueERC721;
   WithdrawalVault: WithdrawalVault;
@@ -88,11 +100,14 @@ export interface ContractTypes {
   PredepositGuarantee: PredepositGuarantee;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
   WstETH: WstETH;
+  TriggerableWithdrawalsGateway: TriggerableWithdrawalsGateway;
   VaultFactory: VaultFactory;
   UpgradeableBeacon: UpgradeableBeacon;
   VaultHub: VaultHub;
   OperatorGrid: OperatorGrid;
+  IStakingModule: IStakingModule;
   ICSModule: ICSModule;
+  ValidatorConsolidationRequests: ValidatorConsolidationRequests;
   LazyOracle: LazyOracle;
 }
 
@@ -114,11 +129,13 @@ export type CoreContracts = {
   oracleReportSanityChecker: LoadedContract<OracleReportSanityChecker>;
   burner: LoadedContract<Burner>;
   stakingRouter: LoadedContract<StakingRouter>;
+  validatorExitDelayVerifier: LoadedContract<ValidatorExitDelayVerifier>;
   validatorsExitBusOracle: LoadedContract<ValidatorsExitBusOracle>;
   withdrawalQueue: LoadedContract<WithdrawalQueueERC721>;
   withdrawalVault: LoadedContract<WithdrawalVault>;
   oracleDaemonConfig: LoadedContract<OracleDaemonConfig>;
   wstETH: LoadedContract<WstETH>;
+  triggerableWithdrawalsGateway: LoadedContract<TriggerableWithdrawalsGateway>;
 };
 
 export type AragonContracts = {
@@ -129,7 +146,7 @@ export type AragonContracts = {
 export type StakingModuleContracts = {
   nor: LoadedContract<NodeOperatorsRegistry>;
   sdvt: LoadedContract<NodeOperatorsRegistry>;
-  csm?: LoadedContract<ICSModule>;
+  csm?: LoadedContract<IStakingModule>;
 };
 
 export type StakingModuleName = "nor" | "sdvt";
@@ -148,6 +165,7 @@ export type VaultsContracts = {
   vaultHub: LoadedContract<VaultHub>;
   predepositGuarantee: LoadedContract<PredepositGuarantee>;
   operatorGrid: LoadedContract<OperatorGrid>;
+  validatorConsolidationRequests: LoadedContract<ValidatorConsolidationRequests>;
   lazyOracle: LoadedContract<LazyOracle>;
 };
 
@@ -181,7 +199,7 @@ export type ProtocolContext = {
     receipt: ContractTransactionReceipt,
     eventName: string,
     extraInterfaces?: Interface[], // additional interfaces to parse
-  ) => LogDescription[];
+  ) => LogDescriptionExtended[];
 };
 
 export type RequireAllKeys<O, A extends readonly (keyof O)[]> =

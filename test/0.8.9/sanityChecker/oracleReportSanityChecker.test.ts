@@ -15,13 +15,13 @@ import {
 } from "typechain-types";
 
 import { ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
+import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { Snapshot } from "test/suite";
 
 const MAX_UINT16 = 2 ** 16;
 const MAX_UINT32 = 2 ** 32;
 const MAX_UINT64 = 2 ** 64;
-const TOTAL_BASIS_POINTS = 100_00n;
 
 describe("OracleReportSanityChecker.sol", () => {
   let checker: OracleReportSanityChecker;
@@ -33,6 +33,8 @@ describe("OracleReportSanityChecker.sol", () => {
 
   let locatorAddress: string;
   let withdrawalVaultAddress: string;
+  let accountingOracleAddress: string;
+  let accountingAddress: string;
 
   const defaultLimits = {
     exitedValidatorsPerDayLimit: 55n,
@@ -88,11 +90,11 @@ describe("OracleReportSanityChecker.sol", () => {
 
     stakingRouter = await ethers.deployContract("StakingRouter__MockForSanityChecker");
 
-    const accountingOracleAddress = await accountingOracle.getAddress();
+    accountingOracleAddress = await accountingOracle.getAddress();
     const burnerAddress = await burner.getAddress();
     const stakingRouterAddress = await stakingRouter.getAddress();
     const withdrawalQueueAddress = await withdrawalQueueMock.getAddress();
-    const accountingAddress = await accounting.getAddress();
+    accountingAddress = await accounting.getAddress();
 
     locator = await ethers.getContractFactory("LidoLocator__MockForSanityChecker").then((factory) =>
       factory.deploy({
@@ -109,19 +111,22 @@ describe("OracleReportSanityChecker.sol", () => {
         withdrawalVault: withdrawalVaultAddress,
         postTokenRebaseReceiver: deployer.address,
         oracleDaemonConfig: deployer.address,
+        validatorExitDelayVerifier: deployer.address,
+        triggerableWithdrawalsGateway: deployer.address,
         accounting: accountingAddress,
-        vaultHub: deployer.address,
-        wstETH: deployer.address,
         predepositGuarantee: deployer.address,
-        operatorGrid: deployer.address,
+        wstETH: deployer.address,
+        vaultHub: deployer.address,
+        vaultFactory: deployer.address,
         lazyOracle: deployer.address,
+        operatorGrid: deployer.address,
       }),
     );
 
     locatorAddress = await locator.getAddress();
     checker = await ethers
       .getContractFactory("OracleReportSanityChecker")
-      .then((f) => f.deploy(locatorAddress, admin, defaultLimits));
+      .then((f) => f.deploy(locatorAddress, accountingOracleAddress, accountingAddress, admin.address, defaultLimits));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -131,7 +136,13 @@ describe("OracleReportSanityChecker.sol", () => {
   context("constructor", () => {
     it("reverts if admin address is zero", async () => {
       await expect(
-        ethers.deployContract("OracleReportSanityChecker", [locatorAddress, ZeroAddress, defaultLimits]),
+        ethers.deployContract("OracleReportSanityChecker", [
+          locatorAddress,
+          accountingOracleAddress,
+          accountingAddress,
+          ZeroAddress,
+          defaultLimits,
+        ]),
       ).to.be.revertedWithCustomError(checker, "AdminCannotBeZero");
     });
   });
