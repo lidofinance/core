@@ -59,8 +59,8 @@ contract NodeOperatorFee is Permissions {
     address public nodeOperatorFeeRecipient;
 
     struct RewardsAdjustment {
-        uint112 amount;
-        uint32 latestTimestamp;
+        uint128 amount;
+        uint64 latestTimestamp;
     }
 
     /**
@@ -317,8 +317,8 @@ contract NodeOperatorFee is Permissions {
 
         if (_newAdjustment == oldAdjustment) revert SameAdjustment();
 
-        rewardsAdjustment.amount = uint112(_newAdjustment);
-        rewardsAdjustment.latestTimestamp = uint32(block.timestamp);
+        rewardsAdjustment.amount = uint128(_newAdjustment);
+        rewardsAdjustment.latestTimestamp = uint64(block.timestamp);
 
         emit RewardsAdjustmentSet(_newAdjustment, oldAdjustment);
     }
