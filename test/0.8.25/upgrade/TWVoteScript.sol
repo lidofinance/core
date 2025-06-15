@@ -7,13 +7,6 @@ import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol
 
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
 
-// interface IOssifiableProxy {
-//     function proxy__upgradeTo(address newImplementation) external;
-//     function proxy__changeAdmin(address newAdmin) external;
-//     function proxy__getAdmin() external view returns (address);
-//     function proxy__getImplementation() external view returns (address);
-// }
-
 interface IRepo {
     function newVersion(
         uint16[3] calldata _newSemanticVersion,
@@ -90,7 +83,7 @@ contract TWVoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 22;
+    uint256 public constant VOTE_ITEMS_COUNT = 20;
 
     //
     // Structured storage
@@ -105,15 +98,16 @@ contract TWVoteScript is OmnibusBase {
         voteItems = new VoteItem[](VOTE_ITEMS_COUNT);
         uint256 index = 0;
 
-        // 1. Update locator implementation
-        voteItems[index++] = VoteItem({
-            description: "1. Update locator implementation",
-            call: _forwardCall(
-                params.agent,
-                params.lido_locator,
-                abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (params.lido_locator_impl))
-            )
-        });
+        // NB: will be upgraded in V3VoteScript
+        // // 1. Update locator implementation
+        // voteItems[index++] = VoteItem({
+        //     description: "1. Update locator implementation",
+        //     call: _forwardCall(
+        //         params.agent,
+        //         params.lido_locator,
+        //         abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (params.lido_locator_impl))
+        //     )
+        // });
 
         // 2. Update VEBO implementation
         voteItems[index++] = VoteItem({
@@ -184,15 +178,16 @@ contract TWVoteScript is OmnibusBase {
             call: _votingCall(params.withdrawal_vault, abi.encodeCall(IWithdrawalVault.finalizeUpgrade_v2, ()))
         });
 
-        // 9. Update Accounting Oracle implementation
-        voteItems[index++] = VoteItem({
-            description: "9. Update Accounting Oracle implementation",
-            call: _forwardCall(
-                params.agent,
-                params.accounting_oracle,
-                abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (params.accounting_oracle_impl))
-            )
-        });
+        // NB: will be upgraded in V3VoteScript
+        // // 9. Update Accounting Oracle implementation
+        // voteItems[index++] = VoteItem({
+        //     description: "9. Update Accounting Oracle implementation",
+        //     call: _forwardCall(
+        //         params.agent,
+        //         params.accounting_oracle,
+        //         abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (params.accounting_oracle_impl))
+        //     )
+        // });
 
         // 10. Grant AO MANAGE_CONSENSUS_VERSION_ROLE to the AGENT
         voteItems[index++] = VoteItem({

@@ -85,7 +85,7 @@ contract V3Template is V3Addresses {
 
     uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 3;
     uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
-    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 4;
+    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 5;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
@@ -114,8 +114,7 @@ contract V3Template is V3Addresses {
     /// @param _params Params required to initialize the addresses contract
     constructor(V3AddressesParams memory _params) V3Addresses(_params) {
         contractsWithBurnerAllowances.push(WITHDRAWAL_QUEUE);
-        // TODO: upon TW upgrade NOR has no allowance
-        contractsWithBurnerAllowances.push(NODE_OPERATORS_REGISTRY);
+        // NB: NOR allowance is set to 0 in TW upgrade
         contractsWithBurnerAllowances.push(SIMPLE_DVT);
         contractsWithBurnerAllowances.push(CSM_ACCOUNTING);
     }
@@ -160,7 +159,6 @@ contract V3Template is V3Addresses {
         _assertProxyImplementation(IOssifiableProxy(LOCATOR), OLD_LOCATOR_IMPL);
         _assertProxyImplementation(IOssifiableProxy(ACCOUNTING_ORACLE), OLD_ACCOUNTING_ORACLE_IMPL);
         _assertAragonAppImplementation(IAragonAppRepo(ARAGON_APP_LIDO_REPO), OLD_LIDO_IMPL);
-        // TODO: check burner allowance for NOR is zero
 
         // Check allowances of the old burner
         address[] memory contractsWithBurnerAllowances_ = contractsWithBurnerAllowances;
@@ -168,6 +166,9 @@ contract V3Template is V3Addresses {
             if (ILidoWithFinalizeUpgrade(LIDO).allowance(contractsWithBurnerAllowances_[i], OLD_BURNER) != INFINITE_ALLOWANCE) {
                 revert IncorrectBurnerAllowance(contractsWithBurnerAllowances_[i], OLD_BURNER);
             }
+        }
+        if (ILidoWithFinalizeUpgrade(LIDO).allowance(NODE_OPERATORS_REGISTRY, OLD_BURNER) != 0) {
+            revert IncorrectBurnerAllowance(NODE_OPERATORS_REGISTRY, OLD_BURNER);
         }
 
         if (!IBurner(BURNER).isMigrationAllowed()) revert BurnerMigrationNotAllowed();
