@@ -31,7 +31,6 @@ const config: HardhatUserConfig = {
     enabled: !process.env.SKIP_GAS_REPORT,
     reportPureAndViewMethods: true,
     etherscan: process.env.ETHERSCAN_API_KEY || "",
-    outputFile: "gas-report.txt",
   },
   networks: {
     "hardhat": {
