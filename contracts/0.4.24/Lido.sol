@@ -8,13 +8,14 @@ import {AragonApp, UnstructuredStorage} from "@aragon/os/contracts/apps/AragonAp
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 
 import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
-import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from "./lib/StakeLimitUtils.sol";
 import {Math256} from "../common/lib/Math256.sol";
 
 import {StETHPermit} from "./StETHPermit.sol";
 
 import {Versioned} from "./utils/Versioned.sol";
 
+import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from "./lib/StakeLimitUtils.sol";
+import {UnstructuredStorageUint128} from "./utils/UnstructuredStorageUint128.sol";
 
 interface IBurnerMigration {
     function migrate(address _oldBurner) external;
@@ -78,6 +79,7 @@ interface IWithdrawalVault {
 contract Lido is Versioned, StETHPermit, AragonApp {
     using SafeMath for uint256;
     using UnstructuredStorage for bytes32;
+    using UnstructuredStorageUint128 for bytes32;
     using StakeLimitUnstructuredStorage for bytes32;
     using StakeLimitUtils for StakeLimitState.Data;
 
@@ -116,9 +118,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev Just a counter of total amount of execution layer rewards received by Lido contract. Not used in the logic.
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb; // keccak256("lido.Lido.totalELRewardsCollected");
-    /// @dev amount of stETH shares backed by external ether sources
-    bytes32 internal constant EXTERNAL_SHARES_POSITION =
-        0x2ab18be87d6c30f8dc2a29c9950ab4796c891232dbcc6a95a6b44b9f8aad9352; // keccak256("lido.Lido.externalShares");
     /// @dev maximum allowed ratio of external shares to total shares in basis points
     bytes32 internal constant MAX_EXTERNAL_RATIO_POSITION =
         0xf243b7ab6a2698a3d0a16e54fb43706d25b46e82d0a92f60e7e1a4aa86c30e1f; // keccak256("lido.Lido.maxExternalRatioBP")
@@ -509,7 +508,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @return the total amount of shares backed by external ether sources
      */
     function getExternalShares() external view returns (uint256) {
-        return EXTERNAL_SHARES_POSITION.getStorageUint256();
+        return _getExternalShares();
     }
 
     /**
@@ -652,10 +651,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         require(_amountOfShares <= _getMaxMintableExternalShares(), "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
-        EXTERNAL_SHARES_POSITION.setStorageUint256(
-            EXTERNAL_SHARES_POSITION.getStorageUint256()
-            .add(_amountOfShares)
-        );
+        _setExternalShares(_getExternalShares() + _amountOfShares);
 
         _mintShares(_recipient, _amountOfShares);
         // emit event after minting shares because we are always having the net new ether under the hood
@@ -674,10 +670,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _auth(getLidoLocator().vaultHub());
         _whenNotStopped();
 
-        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
+        uint256 externalShares = _getExternalShares();
 
         if (externalShares < _amountOfShares) revert("EXT_SHARES_TOO_SMALL");
-        EXTERNAL_SHARES_POSITION.setStorageUint256(externalShares - _amountOfShares);
+        _setExternalShares(externalShares - _amountOfShares);
 
         _burnShares(msg.sender, _amountOfShares);
 
@@ -698,16 +694,16 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _auth(getLidoLocator().vaultHub());
         _whenNotStopped();
 
-        uint256 shares = getSharesByPooledEth(msg.value);
-        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
+        uint256 amountOfShares = getSharesByPooledEth(msg.value);
+        uint256 externalShares = _getExternalShares();
 
-        if (externalShares < shares) revert("EXT_SHARES_TOO_SMALL");
+        if (externalShares < amountOfShares) revert("EXT_SHARES_TOO_SMALL");
 
         // here the external balance is decreased (totalShares remains the same)
-        EXTERNAL_SHARES_POSITION.setStorageUint256(externalShares - shares);
+        _setExternalShares(externalShares - amountOfShares);
 
         // here the buffer is increased
-        _setBufferedEther(_getBufferedEther().add(msg.value));
+        _setBufferedEther(_getBufferedEther() + msg.value);
 
         // the result can be a smallish rebase like 1-2 wei per tx
         // but it's not worth then using submit for it,
@@ -750,11 +746,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _whenNotStopped();
         _auth(getLidoLocator().accounting());
 
-        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
+        uint256 externalShares = _getExternalShares();
 
         require(externalShares >= _amountOfShares, "EXT_SHARES_TOO_SMALL");
 
-        EXTERNAL_SHARES_POSITION.setStorageUint256(externalShares - _amountOfShares);
+        _setExternalShares(externalShares - _amountOfShares);
 
          // mint to INITIAL_TOKEN_HOLDER to dilute the shareRate
          // and maintain the invariant sum(sharesOf(address)) = totalShares
@@ -985,9 +981,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /// @dev Calculate the amount of ether controlled by external entities
     function _getExternalEther(uint256 _internalEther) internal view returns (uint256) {
-        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
-        uint256 internalShares = _getTotalShares() - externalShares;
-        return externalShares.mul(_internalEther).div(internalShares);
+        (uint256 totalShares, uint256 externalShares) = _getTotalAndExternalShares();
+        uint256 internalShares = totalShares - externalShares;
+        return externalShares * _internalEther / internalShares;
     }
 
     /// @dev Get the total amount of ether controlled by the protocol and external entities
@@ -1007,8 +1003,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /// @dev the denominator (in shares) of the share rate for StETH conversion between shares and ether and vice versa.
     function _getShareRateDenominator() internal view returns (uint256) {
-        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
-        uint256 internalShares = _getTotalShares() - externalShares; // never 0 because of the stone in the elevator
+        (uint256 totalShares, uint256 externalShares) = _getTotalAndExternalShares();
+        uint256 internalShares = totalShares - externalShares; // never 0 because of the stone in the elevator
         return internalShares;
     }
 
@@ -1029,15 +1025,29 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         if (maxRatioBP == 0) return 0;
         if (maxRatioBP == TOTAL_BASIS_POINTS) return uint256(-1);
 
-        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
-        uint256 totalShares = _getTotalShares();
+        (uint256 totalShares, uint256 externalShares) = _getTotalAndExternalShares();
 
-        if (totalShares.mul(maxRatioBP) <= externalShares.mul(TOTAL_BASIS_POINTS)) return 0;
+        if (totalShares * maxRatioBP <= externalShares * TOTAL_BASIS_POINTS) return 0;
 
         return
-            (totalShares.mul(maxRatioBP) - externalShares.mul(TOTAL_BASIS_POINTS)).div(
-                TOTAL_BASIS_POINTS - maxRatioBP
-            );
+            (totalShares * maxRatioBP - externalShares * TOTAL_BASIS_POINTS) /
+            (TOTAL_BASIS_POINTS - maxRatioBP);
+    }
+
+    /// @return amount of external shares
+    /// @dev we are storing external shares in the high 128 bits of the total shares
+    function _getExternalShares() internal view returns (uint256) {
+        return TOTAL_SHARES_POSITION.getStorageUint128High();
+    }
+
+    function _getTotalAndExternalShares() internal view returns (uint256, uint256) {
+        // we are storing external shares in the high 128 bits of the total shares
+        return TOTAL_SHARES_POSITION.getLowAndHighUint128();
+    }
+
+    /// @dev we are storing external shares in the high 128 bits of the total shares
+    function _setExternalShares(uint256 _externalShares) internal {
+        TOTAL_SHARES_POSITION.setStorageUint128High(_externalShares);
     }
 
     function _pauseStaking() internal {
