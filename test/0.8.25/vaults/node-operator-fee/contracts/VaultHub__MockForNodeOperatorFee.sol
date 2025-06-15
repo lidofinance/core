@@ -14,7 +14,6 @@ contract VaultHub__MockForNodeOperatorFee {
     StETH__MockForNodeOperatorFee public immutable steth;
 
     VaultHub.Report public latestVaultReport;
-    uint64 public latestReportTimestamp;
     bool public isVaultReportFresh;
 
     event Mock__Withdrawn(address vault, address recipient, uint256 amount);
@@ -28,25 +27,20 @@ contract VaultHub__MockForNodeOperatorFee {
     event Mock__Rebalanced(uint256 amount);
     event Mock__VaultConnected(address vault);
 
-    function setReport(VaultHub.Report memory _report, uint64 _timestamp, bool _isReportFresh) external {
+    function setReport(VaultHub.Report calldata _report, bool _isReportFresh) external {
         latestVaultReport = _report;
-        if (_timestamp == 0) {
-            _timestamp = uint64(block.timestamp);
+        if (_report.timestamp == 0) {
+            latestVaultReport.timestamp = uint32(block.timestamp);
         }
-        latestReportTimestamp = _timestamp;
         isVaultReportFresh = _isReportFresh;
     }
 
-    function latestReport(address vault) external view returns (VaultHub.Report memory) {
+    function latestReport(address) external view returns (VaultHub.Report memory) {
         return latestVaultReport;
     }
 
-    function isReportFresh(address vault) external view returns (bool) {
+    function isReportFresh(address) external view returns (bool) {
         return isVaultReportFresh;
-    }
-
-    function latestVaultReportTimestamp(address vault) external view returns (uint64) {
-        return latestReportTimestamp;
     }
 
     function connectVault(address vault) external {

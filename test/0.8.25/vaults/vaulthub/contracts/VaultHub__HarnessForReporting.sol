@@ -62,11 +62,10 @@ contract VaultHub__HarnessForReporting is VaultHub {
         $.connections[_vault] = connection;
 
         VaultHub.VaultRecord memory record = VaultHub.VaultRecord({
-            report: VaultHub.Report(0, 0),
+            report: VaultHub.Report(0, 0, 0),
             locked: 0,
             liabilityShares: uint96(_shareLimit),
-            inOutDelta: RefSlotCache.Int112WithRefSlotCache({value: 0, valueOnRefSlot: 0, refSlot: 0}),
-            reportTimestamp: uint64(block.timestamp)
+            inOutDelta: RefSlotCache.Int112WithRefSlotCache({value: 0, valueOnRefSlot: 0, refSlot: 0})
         });
 
         $.records[_vault] = record;
