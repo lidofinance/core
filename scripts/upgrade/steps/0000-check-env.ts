@@ -17,4 +17,8 @@ export async function main() {
   if (!process.env.GAS_MAX_FEE) {
     throw new Error("Env variable GAS_MAX_FEE is not set");
   }
+
+  if (!process.env.GENESIS_TIME) {
+    throw new Error("Env variable GENESIS_TIME is not set");
+  }
 }

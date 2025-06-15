@@ -5,7 +5,7 @@ import { IAragonAppRepo, IOssifiableProxy, OssifiableProxy__factory } from "type
 
 import { loadContract } from "lib/contract";
 import { deployWithoutProxy } from "lib/deploy";
-import { readNetworkState, Sk } from "lib/state-file";
+import { getAddress, readNetworkState, Sk } from "lib/state-file";
 
 export async function main() {
   const deployerSigner = await ethers.provider.getSigner();
@@ -13,8 +13,8 @@ export async function main() {
   const state = readNetworkState();
   const parameters = readUpgradeParameters();
 
-  const locator = OssifiableProxy__factory.connect(state[Sk.lidoLocator].proxy.address, deployerSigner);
-  const oldLocatorImplementation = await locator.proxy__getImplementation();
+  const locatorProxy = OssifiableProxy__factory.connect(getAddress(Sk.lidoLocator, state), deployerSigner);
+  const oldLocatorImplementation = await locatorProxy.proxy__getImplementation();
   const accountingOracle = await loadContract<IOssifiableProxy>(
     "IOssifiableProxy",
     state[Sk.accountingOracle].proxy.address,
