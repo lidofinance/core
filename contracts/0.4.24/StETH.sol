@@ -300,7 +300,9 @@ contract StETH is IERC20, Pausable {
     }
 
     /**
+     * @param _ethAmount the amount of ether to convert to shares. Must be less than UINT128_MAX.
      * @return the amount of shares that corresponds to `_ethAmount` protocol-controlled Ether.
+     * @dev the result is rounded down.
      */
     function getSharesByPooledEth(uint256 _ethAmount) public view returns (uint256) {
         require(_ethAmount < UINT128_MAX, "ETH_TOO_LARGE");
@@ -310,7 +312,9 @@ contract StETH is IERC20, Pausable {
     }
 
     /**
+     * @param _sharesAmount the amount of shares to convert to ether. Must be less than UINT128_MAX.
      * @return the amount of ether that corresponds to `_sharesAmount` token shares.
+     * @dev the result is rounded down.
      */
     function getPooledEthByShares(uint256 _sharesAmount) public view returns (uint256) {
         require(_sharesAmount < UINT128_MAX, "SHARES_TOO_LARGE");
@@ -320,6 +324,7 @@ contract StETH is IERC20, Pausable {
     }
 
     /**
+     * @param _sharesAmount the amount of shares to convert to ether. Must be less than UINT128_MAX.
      * @return the amount of ether that corresponds to `_sharesAmount` token shares.
      * @dev The result is rounded up. So,
      *  for `shareRate >= 0.5`, `getSharesByPooledEth(getPooledEthBySharesRoundUp(1))` will be 1.
@@ -396,6 +401,7 @@ contract StETH is IERC20, Pausable {
     /**
      * @return the numerator of the protocol's share rate (in ether).
      * @dev used to convert shares to tokens and vice versa.
+     * @dev can be overridden in a derived contract.
      */
     function _getShareRateNumerator() internal view returns (uint256) {
         return _getTotalPooledEther();
@@ -404,6 +410,7 @@ contract StETH is IERC20, Pausable {
     /**
      * @return the denominator of the protocol's share rate (in shares).
      * @dev used to convert shares to tokens and vice versa.
+     * @dev can be overridden in a derived contract.
      */
     function _getShareRateDenominator() internal view returns (uint256) {
         return _getTotalShares();
