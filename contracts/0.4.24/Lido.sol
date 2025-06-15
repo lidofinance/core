@@ -96,16 +96,19 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     uint256 internal constant TOTAL_BASIS_POINTS = 10000;
 
     /// @dev storage slot position for the Lido protocol contracts locator
+    /// Since version 3, high 96 bits are used for the max external ratio BP
     bytes32 internal constant LIDO_LOCATOR_POSITION =
         0x9ef78dff90f100ea94042bd00ccb978430524befc391d3e510b5f55ff3166df7; // keccak256("lido.Lido.lidoLocator")
     /// @dev storage slot position of the staking rate limit structure
     bytes32 internal constant STAKING_STATE_POSITION =
         0xa3678de4a579be090bed1177e0a24f77cc29d181ac22fd7688aca344d8938015; // keccak256("lido.Lido.stakeLimit");
     /// @dev amount of ether (on the current Ethereum side) buffered on this smart contract balance
+    /// Since version 3, high 128 bits are used for the deposited validators count
     bytes32 internal constant BUFFERED_ETHER_POSITION =
         0xed310af23f61f96daefbcd140b306c0bdbf8c178398299741687b90e794772b0; // keccak256("lido.Lido.bufferedEther");
     /// @dev total amount of ether on Consensus Layer (sum of all the balances of Lido validators)
     // "beacon" in the `keccak256()` parameter is staying here for compatibility reason
+    /// Since version 3, high 128 bits are used for the CL validators count
     bytes32 internal constant CL_BALANCE_POSITION =
         0xa66d35f054e68143c18f32c990ed5cb972bb68a68f500cd2dd3a16bbf3686483; // keccak256("lido.Lido.beaconBalance");
     /// @dev Just a counter of total amount of execution layer rewards received by Lido contract. Not used in the logic.
@@ -200,7 +203,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function initialize(address _lidoLocator, address _eip712StETH) public payable onlyInit {
         _bootstrapInitialHolder(); // stone in the elevator
 
-        LIDO_LOCATOR_POSITION.setStorageAddress(_lidoLocator);
+        LIDO_LOCATOR_POSITION.setLowUint160(uint160(_lidoLocator));
         emit LidoLocatorSet(_lidoLocator);
         _initializeEIP712StETH(_eip712StETH);
 
@@ -249,7 +252,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         bytes32 DEPOSITED_VALIDATORS_POSITION =
             0xe6e35175eb53fc006520a2a9c3e9711a7c00de6ff2c32dd31df8c5a24cac1b5c; // keccak256("lido.Lido.depositedValidators");
 
-        BUFFERED_ETHER_POSITION.setStorageUint128High(DEPOSITED_VALIDATORS_POSITION.getStorageUint256());
+        BUFFERED_ETHER_POSITION.setHighUint128(DEPOSITED_VALIDATORS_POSITION.getStorageUint256());
         DEPOSITED_VALIDATORS_POSITION.setStorageUint256(0);
 
         // number of Lido's validators available in the Consensus Layer state
@@ -257,7 +260,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         bytes32 CL_VALIDATORS_POSITION =
             0x9f70001d82b6ef54e9d3725b46581c3eb9ee3aa02b941b6aa54d678a9ca35b10; // keccak256("lido.Lido.beaconValidators");
 
-        CL_BALANCE_POSITION.setStorageUint128High(CL_VALIDATORS_POSITION.getStorageUint256());
+        CL_BALANCE_POSITION.setHighUint128(CL_VALIDATORS_POSITION.getStorageUint256());
         CL_VALIDATORS_POSITION.setStorageUint256(0);
     }
 
@@ -597,10 +600,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
             ///     even if the StakingRouter is a trusted contract.
 
-            uint256 newDepositedValidators = _getDepositedValidators().add(depositsCount);
-            _setBufferedEtherAndDepositedValidators(_getBufferedEther().sub(depositsValue), newDepositedValidators);
+            (uint256 bufferedEther, uint256 depositedValidators) = _getBufferedEtherAndDepositedValidators();
+            depositedValidators = depositedValidators.add(depositsCount);
+
+            _setBufferedEtherAndDepositedValidators(bufferedEther.sub(depositsValue), depositedValidators);
             emit Unbuffered(depositsValue);
-            emit DepositedValidatorsChanged(newDepositedValidators);
+            emit DepositedValidatorsChanged(depositedValidators);
         }
 
         /// @dev transfer ether to StakingRouter and make a deposit at the same time. All the ether
@@ -655,7 +660,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         require(_amountOfShares <= _getMaxMintableExternalShares(), "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
-        _setExternalShares(uint128(_getExternalShares() + _amountOfShares));
+        _setExternalShares(_getExternalShares() + _amountOfShares);
 
         _mintShares(_recipient, _amountOfShares);
         // emit event after minting shares because we are always having the net new ether under the hood
@@ -952,43 +957,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return sharesAmount;
     }
 
-    /// @dev Get the amount of ether temporary buffered on this contract balance
-    function _getBufferedEther() internal view returns (uint256) {
-        return BUFFERED_ETHER_POSITION.getStorageUint128Low();
-    }
-
-    /// @dev Set the amount of ether temporary buffered on this contract balance
-    function _setBufferedEther(uint256 _newBufferedEther) internal {
-        BUFFERED_ETHER_POSITION.setStorageUint128Low(_newBufferedEther);
-    }
-
-    function _getDepositedValidators() internal view returns (uint256) {
-        return BUFFERED_ETHER_POSITION.getStorageUint128High();
-    }
-
-    function _setDepositedValidators(uint256 _newDepositedValidators) internal {
-        BUFFERED_ETHER_POSITION.setStorageUint128High(_newDepositedValidators);
-    }
-
-    function _getBufferedEtherAndDepositedValidators() internal view returns (uint256, uint256) {
-        return BUFFERED_ETHER_POSITION.getLowAndHighUint128();
-    }
-
-    function _setBufferedEtherAndDepositedValidators(
-        uint256 _newBufferedEther,
-        uint256 _newDepositedValidators
-    ) internal {
-        BUFFERED_ETHER_POSITION.setLowAndHighUint128(_newBufferedEther, _newDepositedValidators);
-    }
-
-    function _getClBalanceAndClValidators() internal view returns (uint256, uint256) {
-        return CL_BALANCE_POSITION.getLowAndHighUint128();
-    }
-
-    function _setClBalanceAndClValidators(uint256 _newClBalance, uint256 _newClValidators) internal {
-        CL_BALANCE_POSITION.setLowAndHighUint128(_newClBalance, _newClValidators);
-    }
-
     /// @dev Get the total amount of ether controlled by the protocol internally
     /// (buffered + CL balance of StakingRouter controlled validators + transient)
     function _getInternalEther() internal view returns (uint256) {
@@ -1064,17 +1032,53 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @return amount of external shares
     /// @dev we are storing external shares in the high 128 bits of the total shares
     function _getExternalShares() internal view returns (uint256) {
-        return TOTAL_SHARES_POSITION.getStorageUint128High();
+        return TOTAL_SHARES_POSITION.getHighUint128();
     }
 
     function _getTotalAndExternalShares() internal view returns (uint256, uint256) {
-        // we are storing external shares in the high 128 bits of the total shares
         return TOTAL_SHARES_POSITION.getLowAndHighUint128();
     }
 
     /// @dev we are storing external shares in the high 128 bits of the total shares
     function _setExternalShares(uint256 _externalShares) internal {
-        TOTAL_SHARES_POSITION.setStorageUint128High(_externalShares);
+        TOTAL_SHARES_POSITION.setHighUint128(_externalShares);
+    }
+
+    /// @dev Get the amount of ether temporary buffered on this contract balance
+    function _getBufferedEther() internal view returns (uint256) {
+        return BUFFERED_ETHER_POSITION.getLowUint128();
+    }
+
+    /// @dev Set the amount of ether temporary buffered on this contract balance
+    function _setBufferedEther(uint256 _newBufferedEther) internal {
+        BUFFERED_ETHER_POSITION.setLowUint128(_newBufferedEther);
+    }
+
+    function _getDepositedValidators() internal view returns (uint256) {
+        return BUFFERED_ETHER_POSITION.getHighUint128();
+    }
+
+    function _setDepositedValidators(uint256 _newDepositedValidators) internal {
+        BUFFERED_ETHER_POSITION.setHighUint128(_newDepositedValidators);
+    }
+
+    function _getBufferedEtherAndDepositedValidators() internal view returns (uint256, uint256) {
+        return BUFFERED_ETHER_POSITION.getLowAndHighUint128();
+    }
+
+    function _setBufferedEtherAndDepositedValidators(
+        uint256 _newBufferedEther,
+        uint256 _newDepositedValidators
+    ) internal {
+        BUFFERED_ETHER_POSITION.setLowAndHighUint128(_newBufferedEther, _newDepositedValidators);
+    }
+
+    function _getClBalanceAndClValidators() internal view returns (uint256, uint256) {
+        return CL_BALANCE_POSITION.getLowAndHighUint128();
+    }
+
+    function _setClBalanceAndClValidators(uint256 _newClBalance, uint256 _newClValidators) internal {
+        CL_BALANCE_POSITION.setLowAndHighUint128(_newClBalance, _newClValidators);
     }
 
     function _pauseStaking() internal {

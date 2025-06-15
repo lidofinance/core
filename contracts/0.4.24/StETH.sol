@@ -469,7 +469,7 @@ contract StETH is IERC20, Pausable {
      * @return the total amount of shares in existence.
      */
     function _getTotalShares() internal view returns (uint256) {
-        return TOTAL_SHARES_POSITION.getStorageUint128Low();
+        return TOTAL_SHARES_POSITION.getLowUint128();
     }
 
     /**
@@ -517,7 +517,7 @@ contract StETH is IERC20, Pausable {
         require(_recipient != address(0), "MINT_TO_ZERO_ADDR");
 
         newTotalShares = _getTotalShares().add(_sharesAmount);
-        TOTAL_SHARES_POSITION.setStorageUint128Low(newTotalShares);
+        TOTAL_SHARES_POSITION.setLowUint128(uint128(newTotalShares));
 
         shares[_recipient] = shares[_recipient].add(_sharesAmount);
 
@@ -548,7 +548,7 @@ contract StETH is IERC20, Pausable {
         uint256 preRebaseTokenAmount = getPooledEthByShares(_sharesAmount);
 
         newTotalShares = _getTotalShares().sub(_sharesAmount);
-        TOTAL_SHARES_POSITION.setStorageUint128Low(newTotalShares);
+        TOTAL_SHARES_POSITION.setLowUint128(uint128(newTotalShares));
 
         shares[_account] = accountShares.sub(_sharesAmount);
 

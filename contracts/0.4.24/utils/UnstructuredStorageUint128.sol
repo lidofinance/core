@@ -17,20 +17,20 @@ library UnstructuredStorageUint128 {
     uint256 constant internal UINT160_LOW_MASK = ~uint160(0);
     uint256 constant internal UINT96_HIGH_MASK = UINT160_LOW_MASK << 160;
 
-    function getStorageUint128Low(bytes32 position) internal view returns (uint256) {
+    function getLowUint128(bytes32 position) internal view returns (uint256) {
         return position.getStorageUint256() & UINT128_LOW_MASK;
     }
 
-    function setStorageUint128Low(bytes32 position, uint256 data) internal {
+    function setLowUint128(bytes32 position, uint256 data) internal {
         uint256 high128 = position.getStorageUint256() & UINT128_HIGH_MASK;
         position.setStorageUint256(high128 | (data & UINT128_LOW_MASK));
     }
 
-    function getStorageUint128High(bytes32 position) internal view returns (uint256) {
+    function getHighUint128(bytes32 position) internal view returns (uint256) {
         return position.getStorageUint256() >> 128;
     }
 
-    function setStorageUint128High(bytes32 position, uint256 data) internal {
+    function setHighUint128(bytes32 position, uint256 data) internal {
         uint256 low128 = position.getStorageUint256() & UINT128_LOW_MASK;
         position.setStorageUint256((data << 128) | low128);
     }
