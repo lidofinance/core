@@ -14,26 +14,50 @@ library UnstructuredStorageUint128 {
 
     uint256 constant internal UINT128_LOW_MASK = ~uint128(0);
     uint256 constant internal UINT128_HIGH_MASK = UINT128_LOW_MASK << 128;
+    uint256 constant internal UINT160_LOW_MASK = ~uint160(0);
+    uint256 constant internal UINT96_HIGH_MASK = UINT160_LOW_MASK << 160;
 
-    function getStorageUint128Low(bytes32 position) internal view returns (uint256 low) {
-        low = position.getStorageUint256() & UINT128_LOW_MASK;
+    function getStorageUint128Low(bytes32 position) internal view returns (uint256) {
+        return position.getStorageUint256() & UINT128_LOW_MASK;
     }
 
     function setStorageUint128Low(bytes32 position, uint256 data) internal {
-        position.setStorageUint256((data & UINT128_LOW_MASK) | (position.getStorageUint256() & UINT128_HIGH_MASK));
+        uint256 high128 = position.getStorageUint256() & UINT128_HIGH_MASK;
+        position.setStorageUint256(high128 | (data & UINT128_LOW_MASK));
     }
 
-    function getStorageUint128High(bytes32 position) internal view returns (uint256 high) {
-        high = position.getStorageUint256() >> 128;
+    function getStorageUint128High(bytes32 position) internal view returns (uint256) {
+        return position.getStorageUint256() >> 128;
     }
 
     function setStorageUint128High(bytes32 position, uint256 data) internal {
-        position.setStorageUint256((data << 128) | (position.getStorageUint256() & UINT128_LOW_MASK));
+        uint256 low128 = position.getStorageUint256() & UINT128_LOW_MASK;
+        position.setStorageUint256((data << 128) | low128);
     }
 
     function getLowAndHighUint128(bytes32 position) internal view returns (uint256 low, uint256 high) {
         uint256 value = position.getStorageUint256();
         low = value & UINT128_LOW_MASK;
         high = value >> 128;
+    }
+
+    function setLowAndHighUint128(bytes32 position, uint256 low, uint256 high) internal {
+        position.setStorageUint256((high << 128) | (low & UINT128_LOW_MASK));
+    }
+
+    function getLowUint160(bytes32 position) internal view returns (uint256) {
+        return position.getStorageUint256() & UINT160_LOW_MASK;
+    }
+
+    function setLowUint160(bytes32 position, uint256 data) internal {
+        position.setStorageUint256((position.getStorageUint256() & UINT96_HIGH_MASK) | (data & UINT160_LOW_MASK));
+    }
+
+    function getHighUint96(bytes32 position) internal view returns (uint256) {
+        return position.getStorageUint256() >> 160;
+    }
+
+    function setHighUint96(bytes32 position, uint256 data) internal {
+        position.setStorageUint256((data << 160) | (position.getStorageUint256() & UINT160_LOW_MASK));
     }
 }
