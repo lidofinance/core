@@ -52,6 +52,7 @@ contract StETH is IERC20, Pausable {
 
     address constant internal INITIAL_TOKEN_HOLDER = 0xdead;
     uint256 constant internal INFINITE_ALLOWANCE = ~uint256(0);
+    uint256 constant internal UINT128_MAX = ~uint128(0);
 
     /**
      * @dev StETH balances are dynamic and are calculated based on the accounts' shares
@@ -302,18 +303,20 @@ contract StETH is IERC20, Pausable {
      * @return the amount of shares that corresponds to `_ethAmount` protocol-controlled Ether.
      */
     function getSharesByPooledEth(uint256 _ethAmount) public view returns (uint256) {
+        require(_ethAmount < UINT128_MAX, "ETH_TOO_LARGE");
         return _ethAmount
-            .mul(_getShareRateDenominator()) // denominator in shares
-            .div(_getShareRateNumerator()); // numerator in ether
+            * _getShareRateDenominator() // denominator in shares
+            / _getShareRateNumerator(); // numerator in ether
     }
 
     /**
      * @return the amount of ether that corresponds to `_sharesAmount` token shares.
      */
     function getPooledEthByShares(uint256 _sharesAmount) public view returns (uint256) {
+        require(_sharesAmount < UINT128_MAX, "SHARES_TOO_LARGE");
         return _sharesAmount
-            .mul(_getShareRateNumerator()) // numerator in ether
-            .div(_getShareRateDenominator()); // denominator in shares
+            * _getShareRateNumerator() // numerator in ether
+            / _getShareRateDenominator(); // denominator in shares
     }
 
     /**
@@ -322,14 +325,15 @@ contract StETH is IERC20, Pausable {
      *  for `shareRate >= 0.5`, `getSharesByPooledEth(getPooledEthBySharesRoundUp(1))` will be 1.
      */
     function getPooledEthBySharesRoundUp(uint256 _sharesAmount) public view returns (uint256 etherAmount) {
+        require(_sharesAmount < UINT128_MAX, "SHARES_TOO_LARGE");
         uint256 numeratorInEther = _getShareRateNumerator();
         uint256 denominatorInShares = _getShareRateDenominator();
 
         etherAmount = _sharesAmount
-            .mul(numeratorInEther)
-            .div(denominatorInShares);
+            * numeratorInEther
+            / denominatorInShares;
 
-        if (_sharesAmount.mul(numeratorInEther) != etherAmount.mul(denominatorInShares)) {
+        if (_sharesAmount * numeratorInEther != etherAmount * denominatorInShares) {
             ++etherAmount;
         }
     }
