@@ -51,7 +51,7 @@ contract VaultHub is PausableUntilWithRoles {
         address owner;
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 shareLimit;
-        // ### 2th slot
+        // ### 2nd slot
         /// @notice index of the vault in the list of vaults. Indexes is guaranteed to be stable only if there was no deletions.
         /// @dev vaultIndex is always greater than 0
         uint96 vaultIndex;
@@ -122,8 +122,8 @@ contract VaultHub is PausableUntilWithRoles {
      *  - Minting new stETH is limited by unsettled Lido fees (NB: redemptions do not affect minting capacity)
      *  - Vault disconnect is refused until both unsettled redemptions and Lido fees obligations hit zero
      *
-     * NB: Under extreme conditions, Lido protocol may trigger validator exits to withdraw ether to the vault and
-     *     rebalance it to settle redemptions.
+     * @dev NB: Under extreme conditions, Lido protocol may trigger validator exits to withdraw ether to the vault and
+     *          rebalance it to settle redemptions.
      */
     struct VaultObligations {
         /// @notice cumulative value for Lido fees that were settled on the vault
@@ -187,6 +187,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @param _locator Lido Locator contract
     /// @param _lido Lido stETH contract
+    /// @param _consensusContract Hash consensus contract
     /// @param _maxRelativeShareLimitBP Maximum share limit relative to TVL in basis points
     constructor(ILidoLocator _locator, ILido _lido, IHashConsensus _consensusContract, uint256 _maxRelativeShareLimitBP) {
         _requireNotZero(_maxRelativeShareLimitBP);
@@ -759,6 +760,8 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
+    /// @param _vault vault address
+    /// @param _amountOfShares amount of shares to transfer and burn
     /// @dev msg.sender should be vault's owner
     function transferAndBurnShares(address _vault, uint256 _amountOfShares) external {
         LIDO.transferSharesFrom(msg.sender, address(this), _amountOfShares);
@@ -802,9 +805,10 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Triggers validator withdrawals for the vault using EIP-7002
     /// @param _vault vault address
-    /// @param _pubkeys array of public keys of the validators to exit
+    /// @param _pubkeys array of public keys of the validators to withdraw from
+    /// @param _amounts array of amounts to withdraw from each validator (0 for full withdrawal)
+    /// @param _refundRecipient address that will receive the refund for transaction costs
     /// @dev msg.sender should be vault's owner
-    /// @dev partial withdrawals are not allowed when the vault is unhealthy
     function triggerValidatorWithdrawals(
         address _vault,
         bytes calldata _pubkeys,
@@ -813,16 +817,25 @@ contract VaultHub is PausableUntilWithRoles {
     ) external payable {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
+        VaultObligations storage obligations = _vaultObligations(_vault);
 
-        // 20min jounrey: allow partials when amounts > unsettled obligations + rebalanceShortfall - vault.balance
-        //                not easy because 0 in amounts is valid and may be from 32 to 2048 ether
-
-        // disallow partial validator withdrawals when the vault is unhealthy or has redemptions over the threshold
-        // in order to prevent the vault owner from clogging the consensus layer withdrawal queue
-        // front-running and delaying the forceful validator exits required for rebalancing the vault
-        if (!_isVaultHealthy(connection, record) || _vaultObligations(_vault).redemptions >= UNSETTLED_THRESHOLD) {
+        /// @dev NB: Disallow partial withdrawals when the vault is unhealthy or has redemptions over the threshold
+        ///          in order to prevent the vault owner from clogging the consensus layer withdrawal queue
+        ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
+        ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
+        ///          settle the unsettled obligations
+        if (!_isVaultHealthy(connection, record) || obligations.redemptions >= UNSETTLED_THRESHOLD) {
+            uint256 minPartialAmount = type(uint256).max;
             for (uint256 i = 0; i < _amounts.length; i++) {
-                if (_amounts[i] > 0) revert PartialValidatorWithdrawalNotAllowed();
+                if (_amounts[i] > 0 && _amounts[i] < minPartialAmount) minPartialAmount = _amounts[i];
+            }
+
+            if (minPartialAmount < type(uint256).max) {
+                uint256 currentVaultBalance = _vault.balance;
+                uint256 required = _totalUnsettledObligations(obligations) + _rebalanceShortfall(connection, record);
+                uint256 amountToCover = required > currentVaultBalance ? required - currentVaultBalance : 0;
+
+                if (minPartialAmount < amountToCover) revert PartialValidatorWithdrawalNotAllowed();
             }
         }
 
@@ -832,6 +845,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault is
     ///         unhealthy or has redemptions obligation over the threshold
     /// @param _vault address of the vault to exit validators from
+    /// @param _pubkeys array of public keys of the validators to exit
     /// @param _refundRecipient address that will receive the refund for transaction costs
     /// @dev    When the vault becomes unhealthy, trusted actor with the role can force its validators to exit the beacon chain
     ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
@@ -918,6 +932,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _pubkey pubkey of the validator
     /// @param _recipient address to compensate the disproven validator predeposit to
+    /// @return amount of compensated ether
     function compensateDisprovenPredepositFromPDG(
         address _vault,
         bytes calldata _pubkey,
@@ -1355,6 +1370,8 @@ contract VaultHub is PausableUntilWithRoles {
             valueToTransferToLido = Math256.min(_obligations.unsettledLidoFees, remainingBalance);
         } else {
             /// @dev connection deposit is permanently locked, so it's not available for fees
+            /// @dev NB: Fees are deducted from the vault's current balance, which reduces the total value, so the
+            ///          current locked value must be considered to prevent the vault from entering an unhealthy state
             uint256 lockedValue = _record.locked;
             uint256 totalValue_ = _totalValue(_record);
             uint256 unlockedValue = totalValue_ > lockedValue ? totalValue_ - lockedValue : 0;
