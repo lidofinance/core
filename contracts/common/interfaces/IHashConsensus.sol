@@ -4,7 +4,6 @@
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity >=0.4.24 <0.9.0;
 
-pragma solidity 0.8.25;
 
 interface IHashConsensus {
     function getIsMember(address addr) external view returns (bool);

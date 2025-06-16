@@ -9,6 +9,7 @@ import {IBurner} from "contracts/common/interfaces/IBurner.sol";
 import {IOracleReportSanityChecker} from "contracts/common/interfaces/IOracleReportSanityChecker.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
+import {IVaultHub} from "contracts/common/interfaces/IVaultHub.sol";
 
 import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
 
@@ -29,7 +30,7 @@ contract Accounting {
         WithdrawalQueue withdrawalQueue;
         IPostTokenRebaseReceiver postTokenRebaseReceiver;
         StakingRouter stakingRouter;
-        address vaultHub;
+        IVaultHub vaultHub;
     }
 
     struct PreReportState {
@@ -448,7 +449,7 @@ contract Accounting {
                 WithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
                 StakingRouter(payable(stakingRouter)),
-                payable(vaultHub)
+                IVaultHub(payable(vaultHub))
             );
     }
 

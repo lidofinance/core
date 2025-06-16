@@ -8,6 +8,7 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
+import {IVaultHub} from "contracts/common/interfaces/IVaultHub.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";

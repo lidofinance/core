@@ -11,8 +11,7 @@ import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
 import {ILido as IStETH} from "contracts/common/interfaces/ILido.sol";
 
-import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
-
+import {IDepositContract} from "../../interfaces/IDepositContract.sol";
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";
