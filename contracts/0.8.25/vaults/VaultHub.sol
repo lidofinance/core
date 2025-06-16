@@ -1064,14 +1064,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _shares) internal {
-        uint256 liabilityShares_ = _record.liabilityShares;
-        if (liabilityShares_ < _shares) revert InsufficientSharesToBurn(_vault, liabilityShares_);
-
         uint256 valueToRebalance = _getPooledEthBySharesRoundUp(_shares);
-        if (valueToRebalance > _vault.balance) revert InsufficientBalance(_vault.balance, valueToRebalance);
-
-        uint256 totalValue_ = _totalValue(_record);
-        if (valueToRebalance > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, valueToRebalance);
 
         _decreaseLiability(_vault, _record, _shares);
         _rebalanceEther(_vault, _record, valueToRebalance);
@@ -1668,12 +1661,6 @@ contract VaultHub is PausableUntilWithRoles {
      */
     error InsufficientUnlocked(uint256 unlocked, uint256 expectedUnlocked);
 
-    /**
-     * @notice Thrown when attempting to rebalance more ether than the current total value of the vault
-     * @param totalValue Current total value of the vault
-     * @param rebalanceAmount Amount attempting to rebalance
-     */
-    error RebalanceAmountExceedsTotalValue(uint256 totalValue, uint256 rebalanceAmount);
     error AlreadyHealthy(address vault);
     error VaultMintingCapacityExceeded(
         address vault,
