@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity >=0.4.24 <0.9.0;
+
 pragma solidity 0.8.25;
 
 interface IHashConsensus {
@@ -20,4 +23,4 @@ interface IHashConsensus {
     function getFrameConfig() external view returns (uint256 initialEpoch, uint256 epochsPerFrame);
 
     function getInitialRefSlot() external view returns (uint256);
-} 
+}

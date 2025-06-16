@@ -37,15 +37,15 @@ contract VaultHub__MockForNodeOperatorFee {
         isVaultReportFresh = _isReportFresh;
     }
 
-    function latestReport(address vault) external view returns (VaultHub.Report memory) {
+    function latestReport(address /* vault */) external view returns (VaultHub.Report memory) {
         return latestVaultReport;
     }
 
-    function isReportFresh(address vault) external view returns (bool) {
+    function isReportFresh(address /* vault */) external view returns (bool) {
         return isVaultReportFresh;
     }
 
-    function latestVaultReportTimestamp(address vault) external view returns (uint64) {
+    function latestVaultReportTimestamp(address /* vault */) external view returns (uint64) {
         return latestReportTimestamp;
     }
 

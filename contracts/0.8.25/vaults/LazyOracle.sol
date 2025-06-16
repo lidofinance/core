@@ -12,13 +12,13 @@ import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upg
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
+import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
 import {VaultHub} from "./VaultHub.sol";
 import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IHashConsensus} from "./interfaces/IHashConsensus.sol";
-import {ILido} from "../interfaces/ILido.sol";
 
 contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @custom:storage-location erc7201:LazyOracle

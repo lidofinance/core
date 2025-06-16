@@ -3,12 +3,13 @@
 
 pragma solidity 0.8.25;
 
-import {BeaconBlockHeader, Validator} from "../common/lib/BeaconTypes.sol";
-import {GIndex} from "../common/lib/GIndex.sol";
-import {SSZ} from "../common/lib/SSZ.sol";
-import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
+import {IStakingRouter} from "contracts/common/interfaces/IStakingRouter.sol";
+import {BeaconBlockHeader, Validator} from "contracts/common/lib/BeaconTypes.sol";
+import {GIndex} from "contracts/common/lib/GIndex.sol";
+import {SSZ} from "contracts/common/lib/SSZ.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 import {IValidatorsExitBus} from "./interfaces/IValidatorsExitBus.sol";
-import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
 
 struct ExitRequestData {
     bytes data;

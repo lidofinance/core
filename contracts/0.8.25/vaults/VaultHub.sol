@@ -6,11 +6,11 @@ pragma solidity 0.8.25;
 
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
+import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {ILido} from "../interfaces/ILido.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
-import {IHashConsensus} from "./interfaces/IHashConsensus.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
 import {OperatorGrid} from "./OperatorGrid.sol";

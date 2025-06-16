@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
-pragma solidity 0.8.25;
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity >=0.4.24 <0.9.0;
 
-import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
-import {IERC20Permit} from "@openzeppelin/contracts-v5.2/token/ERC20/extensions/IERC20Permit.sol";
+import {IERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
+
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 
-interface ILido is IERC20, IERC20Permit, IVersioned {
+interface ILido is IERC20, IVersioned {
     function sharesOf(address) external view returns (uint256);
 
     function getSharesByPooledEth(uint256) external view returns (uint256);

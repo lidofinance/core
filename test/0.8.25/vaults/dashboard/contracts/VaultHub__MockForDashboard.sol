@@ -85,7 +85,7 @@ contract VaultHub__MockForDashboard {
             reservationFeeBP: 100,
             isBeaconDepositsManuallyPaused: false
         });
-        
+
         emit Mock__VaultConnected(vault);
     }
 
@@ -167,9 +167,25 @@ contract VaultHub__MockForDashboard {
         return vaultConnections[_vault].vaultIndex != 0;
     }
 
-    function updateConnection(address _vault, uint256 _shareLimit, uint256 _reserveRatioBP, uint256 _forcedRebalanceThresholdBP, uint256 _infraFeeBP, uint256 _liquidityFeeBP, uint256 _reservationFeeBP) external {
+    function updateConnection(
+        address _vault,
+        uint256 _shareLimit,
+        uint256 _reserveRatioBP,
+        uint256 _forcedRebalanceThresholdBP,
+        uint256 _infraFeeBP,
+        uint256 _liquidityFeeBP,
+        uint256 _reservationFeeBP
+    ) external {
         if (!isVaultConnected(_vault)) revert NotConnectedToHub(_vault);
-        emit Mock__VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP, _infraFeeBP, _liquidityFeeBP, _reservationFeeBP);
+        emit Mock__VaultConnectionUpdated(
+            _vault,
+            _shareLimit,
+            _reserveRatioBP,
+            _forcedRebalanceThresholdBP,
+            _infraFeeBP,
+            _liquidityFeeBP,
+            _reservationFeeBP
+        );
     }
 
     event Mock__ValidatorExitRequested(address vault, bytes pubkeys);
@@ -186,7 +202,15 @@ contract VaultHub__MockForDashboard {
     event Mock__VaultDisconnectInitiated(address vault);
     event Mock__Rebalanced(address vault, uint256 amount);
     event Mock__VaultConnected(address vault);
-    event Mock__VaultConnectionUpdated(address vault, uint256 shareLimit, uint256 reserveRatioBP, uint256 forcedRebalanceThresholdBP, uint256 infraFeeBP, uint256 liquidityFeeBP, uint256 reservationFeeBP);
+    event Mock__VaultConnectionUpdated(
+        address vault,
+        uint256 shareLimit,
+        uint256 reserveRatioBP,
+        uint256 forcedRebalanceThresholdBP,
+        uint256 infraFeeBP,
+        uint256 liquidityFeeBP,
+        uint256 reservationFeeBP
+    );
 
     error ZeroArgument(string argument);
     error NotConnectedToHub(address vault);

@@ -7,11 +7,12 @@ pragma solidity 0.8.25;
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
 
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 import {VaultHub} from "./VaultHub.sol";
 import {Permissions} from "./dashboard/Permissions.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {Dashboard} from "./dashboard/Dashboard.sol";
+import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /**
  * @title VaultFactory
@@ -120,7 +121,7 @@ contract VaultFactory {
 
         dashboard.grantRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), _nodeOperatorManager);
         dashboard.revokeRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), address(this));
- 
+
         emit VaultCreated(address(vault));
         emit DashboardCreated(address(dashboard), address(vault), _defaultAdmin);
     }

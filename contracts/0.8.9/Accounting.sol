@@ -2,18 +2,19 @@
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
-pragma solidity 0.8.25;
+pragma solidity 0.8.9;
 
-import {VaultHub} from "./vaults/VaultHub.sol";
-
-import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
-import {IBurner} from "../common/interfaces/IBurner.sol";
-import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
-import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
-import {IOracleReportSanityChecker} from "./interfaces/IOracleReportSanityChecker.sol";
-import {IWithdrawalQueue} from "./interfaces/IWithdrawalQueue.sol";
-import {ILido} from "./interfaces/ILido.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+import {IOracleReportSanityChecker} from "contracts/common/interfaces/IOracleReportSanityChecker.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
+
+import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
+
+import {WithdrawalQueue} from "./WithdrawalQueue.sol";
+import {StakingRouter} from "./StakingRouter.sol";
+
 
 /// @title Lido Accounting contract
 /// @author folkyatina
@@ -22,13 +23,13 @@ import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 /// and distributing calculated values to relevant parts of the protocol
 contract Accounting {
     struct Contracts {
-        address accountingOracleAddress;
+        address accountingOracle;
         IOracleReportSanityChecker oracleReportSanityChecker;
         IBurner burner;
-        IWithdrawalQueue withdrawalQueue;
+        WithdrawalQueue withdrawalQueue;
         IPostTokenRebaseReceiver postTokenRebaseReceiver;
-        IStakingRouter stakingRouter;
-        VaultHub vaultHub;
+        StakingRouter stakingRouter;
+        address vaultHub;
     }
 
     struct PreReportState {
@@ -120,7 +121,7 @@ contract Accounting {
     /// @dev periodically called by the AccountingOracle contract
     function handleOracleReport(ReportValues calldata _report) external {
         Contracts memory contracts = _loadOracleReportContracts();
-        if (msg.sender != contracts.accountingOracleAddress) revert NotAuthorized("handleOracleReport", msg.sender);
+        if (msg.sender != contracts.accountingOracle) revert NotAuthorized("handleOracleReport", msg.sender);
 
         (
             PreReportState memory pre,
@@ -377,7 +378,7 @@ contract Accounting {
 
     /// @dev mints protocol fees to the treasury and node operators
     function _distributeFee(
-        IStakingRouter _stakingRouter,
+        StakingRouter _stakingRouter,
         StakingRewardsDistribution memory _rewardsDistribution,
         uint256 _sharesToMintAsFees
     ) internal {
@@ -422,7 +423,7 @@ contract Accounting {
     /// @dev loads the required contracts from the LidoLocator to the struct in the memory
     function _loadOracleReportContracts() internal view returns (Contracts memory) {
         (
-            address accountingOracleAddress,
+            address accountingOracle,
             address oracleReportSanityChecker,
             address burner,
             address withdrawalQueue,
@@ -433,19 +434,19 @@ contract Accounting {
 
         return
             Contracts(
-                accountingOracleAddress,
+                accountingOracle,
                 IOracleReportSanityChecker(oracleReportSanityChecker),
                 IBurner(burner),
-                IWithdrawalQueue(withdrawalQueue),
+                WithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
-                IStakingRouter(stakingRouter),
-                VaultHub(payable(vaultHub))
+                StakingRouter(payable(stakingRouter)),
+                payable(vaultHub)
             );
     }
 
     /// @dev loads the staking rewards distribution to the struct in the memory
     function _getStakingRewardsDistribution(
-        IStakingRouter _stakingRouter
+        StakingRouter _stakingRouter
     ) internal view returns (StakingRewardsDistribution memory ret) {
         (ret.recipients, ret.moduleIds, ret.modulesFees, ret.totalFee, ret.precisionPoints) = _stakingRouter
             .getStakingRewardsDistribution();
