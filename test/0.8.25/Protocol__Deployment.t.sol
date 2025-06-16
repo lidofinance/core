@@ -14,7 +14,9 @@ import {LidoLocator} from "contracts/0.8.9/LidoLocator.sol";
 import {LimitsList} from "contracts/0.8.9/sanity_checks/OracleReportSanityChecker.sol";
 
 import {StakingRouter__MockForLidoAccountingFuzzing} from "./contracts/StakingRouter__MockForLidoAccountingFuzzing.sol";
-import {SecondOpinionOracle__MockForAccountingFuzzing} from "./contracts/SecondOpinionOracle__MockForAccountingFuzzing.sol";
+import {
+    SecondOpinionOracle__MockForAccountingFuzzing
+} from "./contracts/SecondOpinionOracle__MockForAccountingFuzzing.sol";
 import {WithdrawalQueue, IWstETH} from "../../contracts/0.8.9/WithdrawalQueue.sol";
 import {WithdrawalQueueERC721} from "../../contracts/0.8.9/WithdrawalQueueERC721.sol";
 
@@ -265,7 +267,7 @@ contract BaseProtocolTest is Test {
         // Deploy AccountingOracle
         deployCodeTo(
             "AccountingOracle.sol:AccountingOracle",
-            abi.encode(address(lidoLocator), lidoLocator.legacyOracle(), 12, genesisTimestamp),
+            abi.encode(address(lidoLocator), 12, genesisTimestamp),
             lidoLocator.accountingOracle()
         );
 
@@ -296,6 +298,8 @@ contract BaseProtocolTest is Test {
             "OracleReportSanityChecker.sol:OracleReportSanityChecker",
             abi.encode(
                 address(lidoLocator),
+                lidoLocator.accountingOracle(),
+                lidoLocator.accounting(),
                 rootAccount,
                 [
                     limitList.exitedValidatorsPerDayLimit,
@@ -394,7 +398,6 @@ contract BaseProtocolTest is Test {
             accountingOracle: makeAddr("dummy-locator:accountingOracle"),
             depositSecurityModule: makeAddr("dummy-locator:depositSecurityModule"),
             elRewardsVault: makeAddr("dummy-locator:elRewardsVault"),
-            legacyOracle: makeAddr("dummy-locator:legacyOracle"),
             lido: lido,
             oracleReportSanityChecker: makeAddr("dummy-locator:oracleReportSanityChecker"),
             postTokenRebaseReceiver: address(0),
@@ -408,7 +411,12 @@ contract BaseProtocolTest is Test {
             accounting: makeAddr("dummy-locator:accounting"),
             predepositGuarantee: makeAddr("dummy-locator:predeposit_guarantee"),
             wstETH: wstETHAdr,
-            vaultHub: makeAddr("dummy-locator:vaultHub")
+            vaultHub: makeAddr("dummy-locator:vaultHub"),
+            lazyOracle: makeAddr("dummy-locator:lazyOracle"),
+            operatorGrid: makeAddr("dummy-locator:operatorGrid"),
+            validatorExitDelayVerifier: makeAddr("dummy-locator:validatorExitDelayVerifier"),
+            triggerableWithdrawalsGateway: makeAddr("dummy-locator:triggerableWithdrawalsGateway"),
+            vaultFactory: makeAddr("dummy-locator:vaultFactory")
         });
 
         return LidoLocator(deployCode("LidoLocator.sol:LidoLocator", abi.encode(config)));
