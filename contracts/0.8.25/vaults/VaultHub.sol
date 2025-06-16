@@ -888,9 +888,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (sharesToRebalance == 0) revert AlreadyHealthy(_vault);
 
         // TODO: add some gas compensation here
-
-        uint256 balanceInShares = _getSharesByPooledEth(_vault.balance);
-        _rebalance(_vault, record, Math256.min(sharesToRebalance, balanceInShares));
+        _rebalance(_vault, record, Math256.min(sharesToRebalance, _getSharesByPooledEth(_vault.balance)));
     }
 
     /// @notice Accrues a redemption obligation on the vault under extreme conditions
