@@ -4,7 +4,7 @@
 
 // See contracts/COMPILERS.md
 // solhint-disable-next-line
-pragma solidity ^0.4.24;
+pragma solidity 0.4.24;
 
 
 import {UnstructuredStorage} from "@aragon/os/contracts/apps/AragonApp.sol";

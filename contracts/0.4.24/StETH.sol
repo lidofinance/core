@@ -310,8 +310,8 @@ contract StETH is IERC20, Pausable {
      */
     function getSharesByPooledEth(uint256 _ethAmount) public view returns (uint256) {
         require(_ethAmount < UINT128_MAX, "ETH_TOO_LARGE");
-        return _ethAmount
-            * _getShareRateDenominator() // denominator in shares
+        return (_ethAmount
+            * _getShareRateDenominator()) // denominator in shares
             / _getShareRateNumerator(); // numerator in ether
     }
 
@@ -322,8 +322,8 @@ contract StETH is IERC20, Pausable {
      */
     function getPooledEthByShares(uint256 _sharesAmount) public view returns (uint256) {
         require(_sharesAmount < UINT128_MAX, "SHARES_TOO_LARGE");
-        return _sharesAmount
-            * _getShareRateNumerator() // numerator in ether
+        return (_sharesAmount
+            * _getShareRateNumerator()) // numerator in ether
             / _getShareRateDenominator(); // denominator in shares
     }
 
@@ -338,8 +338,8 @@ contract StETH is IERC20, Pausable {
         uint256 numeratorInEther = _getShareRateNumerator();
         uint256 denominatorInShares = _getShareRateDenominator();
 
-        etherAmount = _sharesAmount
-            * numeratorInEther
+        etherAmount = (_sharesAmount
+            * numeratorInEther)
             / denominatorInShares;
 
         if (_sharesAmount * numeratorInEther != etherAmount * denominatorInShares) {
