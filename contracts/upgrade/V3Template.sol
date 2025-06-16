@@ -116,7 +116,7 @@ contract V3Template is V3Addresses {
 
     // Slot for the upgrade started flag
     // keccak256("V3Template.upgradeStartedFlag")
-    bytes32 private constant UPGRADE_STARTED_SLOT =
+    bytes32 public constant UPGRADE_STARTED_SLOT =
         0x058d69f67a3d86c424c516d23a070ff8bed34431617274caa2049bd702675e3f;
 
 
