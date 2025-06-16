@@ -15,6 +15,41 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {DepositContract__MockForStakingVault} from "./contracts/DepositContract__MockForStakingVault.sol";
 import {RandomLib} from "./RandomLib.sol";
 import {RewardSimulator} from "./RewardSimulator.sol";
+import {IHashConsensus} from "contracts/0.8.25/vaults/interfaces/IHashConsensus.sol";
+
+contract ConsensusContractMock is IHashConsensus {
+    uint256 public refSlot;
+    uint256 public reportProcessingDeadlineSlot;
+
+    constructor(uint256 _refSlot, uint256 _reportProcessingDeadlineSlot) {
+        refSlot = _refSlot;
+        reportProcessingDeadlineSlot = _reportProcessingDeadlineSlot;
+    }
+
+    function getCurrentFrame() external view returns (uint256 refSlot, uint256 reportProcessingDeadlineSlot) {
+        return (refSlot, reportProcessingDeadlineSlot);
+    }
+
+    function getIsMember(address addr) external view returns (bool) {
+        return true;
+    }
+
+    function getChainConfig()
+        external
+        view
+        returns (uint256 slotsPerEpoch, uint256 secondsPerSlot, uint256 genesisTime)
+    {
+        return (0, 0, 0);
+    }
+
+    function getFrameConfig() external view returns (uint256 initialEpoch, uint256 epochsPerFrame) {
+        return (0, 0);
+    }
+
+    function getInitialRefSlot() external view returns (uint256) {
+        return 0;
+    }
+}
 
 contract OperatorGridMock {
     uint256 public shareLimit;
@@ -60,6 +95,10 @@ contract OperatorGridMock {
     }
 
     function onBurnedShares(address, uint256) external pure {
+        return;
+    }
+
+    function resetVaultTier(address) external pure {
         return;
     }
 }
@@ -251,6 +290,7 @@ contract VaultHubTest is Test {
     RewardSimulator rewardSimulatorForCoreProtocol;
     OperatorGridMock operatorGrid;
     LazyOracleMock lazyOracle;
+    ConsensusContractMock consensusContract;
 
     address private owner = makeAddr("owner");
     address private predepositGuarantee = makeAddr("predepositGuarantee");
@@ -319,9 +359,11 @@ contract VaultHubTest is Test {
             address(operatorGrid),
             address(lazyOracle)
         );
+        consensusContract = new ConsensusContractMock(0, 0);
         VaultHub vaultHub = new VaultHub(
             ILidoLocator(address(lidoLocator)),
             ILido(address(lido)),
+            IHashConsensus(address(consensusContract)),
             relativeShareLimitBp
         );
         ERC1967Proxy proxy = new ERC1967Proxy(
@@ -441,7 +483,7 @@ contract VaultHubTest is Test {
             Vault memory vault = vaults[i];
             VaultHub.VaultRecord memory vaultRecord = vaultHubProxy.vaultRecord(address(vault.stakingVaultProxy));
             uint256 valuation = address(vault.stakingVaultProxy).balance;
-            int256 inOutDelta = vaultRecord.inOutDelta;
+            VaultHub.Int112WithRefSlotCache memory inOutDelta = vaultRecord.inOutDelta;
             uint256 sharesMinted = vaultRecord.liabilityShares;
             uint256 treasureFeeShares = 0;
 
@@ -450,7 +492,7 @@ contract VaultHubTest is Test {
                 address(vault.stakingVaultProxy),
                 uint64(block.timestamp),
                 uint256(valuation),
-                int256(inOutDelta),
+                int256(inOutDelta.value),
                 treasureFeeShares,
                 sharesMinted
             );
@@ -619,6 +661,9 @@ contract VaultHubTest is Test {
 
     function transitionValidatorSlashedPenalty(StakingVault _stakingVault) internal {
         uint256 penalty = 1 ether;
+        if (address(_stakingVault).balance < penalty) {
+            penalty = address(_stakingVault).balance;
+        }
         vm.deal(address(_stakingVault), address(_stakingVault).balance - penalty);
     }
 
@@ -632,26 +677,13 @@ contract VaultHubTest is Test {
         VaultHub.VaultConnection memory vaultConnection = vaultHubProxy.vaultConnection(address(_stakingVault));
         VaultHub.VaultRecord memory vaultRecord = vaultHubProxy.vaultRecord(address(_stakingVault));
 
-        uint256 sharesLimitedByShareLimit = vaultConnection.shareLimit - vaultRecord.liabilityShares;
         uint256 maxMintableRatioBP = TOTAL_BASIS_POINTS - vaultConnection.reserveRatioBP;
-
-        uint256 sharesLimitedByValuation = 0;
-        uint256 maxSharesLimitedByValuation = (vaultHubProxy.totalValue(address(_stakingVault)) *
-            totalShares *
-            maxMintableRatioBP) / (totalPooledEther * TOTAL_BASIS_POINTS);
-        if (maxSharesLimitedByValuation > vaultRecord.liabilityShares) {
-            sharesLimitedByValuation = maxSharesLimitedByValuation - vaultRecord.liabilityShares;
-        }
-        uint256 sharesLimit = Math256.min(sharesLimitedByShareLimit, sharesLimitedByValuation);
-
-        uint256 sharesLimitedByLocked = 0;
-        uint256 maxSharesLimitedByLocked = (vaultRecord.locked * totalShares * maxMintableRatioBP) /
-            (totalPooledEther * TOTAL_BASIS_POINTS);
-        if (maxSharesLimitedByLocked > vaultRecord.liabilityShares) {
-            sharesLimitedByLocked = maxSharesLimitedByLocked - vaultRecord.liabilityShares;
-        }
-
-        uint256 amountOfSharesToMint = Math256.min(sharesLimit, sharesLimitedByLocked);
+        uint256 maxLockableValue = vaultHubProxy.maxLockableValue(address(_stakingVault));
+        uint256 maxMintableEther = (maxLockableValue * maxMintableRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 maxMintableShares = lido.getSharesByPooledEth(maxMintableEther);
+        uint256 sharesLimitedByMaxMintableShares = maxMintableShares - vaultRecord.liabilityShares;
+        uint256 sharesLimitedByShareLimit = vaultConnection.shareLimit - vaultRecord.liabilityShares;
+        uint256 amountOfSharesToMint = Math256.min(sharesLimitedByMaxMintableShares, sharesLimitedByShareLimit);
 
         if (amountOfSharesToMint == 0) {
             return;
@@ -717,13 +749,10 @@ contract VaultHubTest is Test {
             return;
         }
 
-        uint256 unlockedAmount = vaultHubProxy.unlocked(address(_stakingVault));
-        uint256 withdrawAmount = rnd.randInt(unlockedAmount);
-        console2.log("withdrawAmount", withdrawAmount);
+        uint256 maxWithdrawableAmount = vaultHubProxy.withdrawableValue(address(_stakingVault));
+        uint256 withdrawAmount = rnd.randInt(maxWithdrawableAmount);
         vm.prank(owner);
-        console2.log("vault balance", address(_stakingVault).balance);
         vaultHubProxy.withdraw(address(_stakingVault), address(owner), withdrawAmount);
-        console2.log("vault balance after", address(_stakingVault).balance);
     }
 
     function getVaultState(Vault memory _vault) internal view returns (VaultState) {
