@@ -315,9 +315,9 @@ contract VaultHub is PausableUntilWithRoles {
         return _isVaultHealthy(_vaultConnection(_vault), _vaultRecord(_vault));
     }
 
-    /// @notice calculate ether amount to make the vault healthy using rebalance
+    /// @notice calculate shares amount to make the vault healthy using rebalance
     /// @param _vault vault address
-    /// @return amount to rebalance or UINT256_MAX if it's impossible to make the vault healthy using rebalance
+    /// @return amount of shares to rebalance or UINT256_MAX if it's impossible to make the vault healthy using rebalance
     /// @dev returns 0 if the vault is not connected
     function rebalanceShortfall(address _vault) external view returns (uint256) {
         return _rebalanceShortfall(_vaultConnection(_vault), _vaultRecord(_vault));
@@ -710,14 +710,13 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Rebalances StakingVault by withdrawing ether to VaultHub
     /// @param _vault vault address
-    /// @param _ether amount of ether to rebalance
+    /// @param _shares amount of shares to rebalance
     /// @dev msg.sender should be vault's owner
-    function rebalance(address _vault, uint256 _ether) external whenResumed {
-        _requireNotZero(_ether);
-        if (_ether > _vault.balance) revert InsufficientBalance(_vault.balance, _ether);
+    function rebalance(address _vault, uint256 _shares) external whenResumed {
+        _requireNotZero(_shares);
         _checkConnectionAndOwner(_vault);
 
-        _rebalance(_vault, _vaultRecord(_vault), _ether);
+        _rebalance(_vault, _vaultRecord(_vault), _shares);
     }
 
     /// @notice mint StETH shares backed by vault external balance to the receiver address
@@ -885,11 +884,13 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        uint256 fullRebalanceAmount = _rebalanceShortfall(connection, record);
-        if (fullRebalanceAmount == 0) revert AlreadyHealthy(_vault);
+        uint256 sharesToRebalance = _rebalanceShortfall(connection, record);
+        if (sharesToRebalance == 0) revert AlreadyHealthy(_vault);
 
         // TODO: add some gas compensation here
-        _rebalance(_vault, record, Math256.min(fullRebalanceAmount, _vault.balance));
+
+        uint256 balanceInShares = _getSharesByPooledEth(_vault.balance);
+        _rebalance(_vault, record, Math256.min(sharesToRebalance, balanceInShares));
     }
 
     /// @notice Accrues a redemption obligation on the vault under extreme conditions
@@ -1064,18 +1065,20 @@ contract VaultHub is PausableUntilWithRoles {
         LIDO.rebalanceExternalEtherToInternal{value: _ether}();
     }
 
-    function _rebalance(address _vault, VaultRecord storage _record, uint256 _ether) internal {
-        uint256 totalValue_ = _totalValue(_record);
-        if (_ether > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, _ether);
-
-        uint256 sharesToBurn = _getSharesByPooledEth(_ether);
+    function _rebalance(address _vault, VaultRecord storage _record, uint256 _shares) internal {
         uint256 liabilityShares_ = _record.liabilityShares;
-        if (liabilityShares_ < sharesToBurn) revert InsufficientSharesToBurn(_vault, liabilityShares_);
+        if (liabilityShares_ < _shares) revert InsufficientSharesToBurn(_vault, liabilityShares_);
 
-        _decreaseLiability(_vault, _record, sharesToBurn);
-        _rebalanceEther(_vault, _record, _ether);
+        uint256 valueToRebalance = _getPooledEthBySharesRoundUp(_shares);
+        if (valueToRebalance > _vault.balance) revert InsufficientBalance(_vault.balance, valueToRebalance);
 
-        emit VaultRebalanced(_vault, sharesToBurn, _ether);
+        uint256 totalValue_ = _totalValue(_record);
+        if (valueToRebalance > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, valueToRebalance);
+
+        _decreaseLiability(_vault, _record, _shares);
+        _rebalanceEther(_vault, _record, valueToRebalance);
+
+        emit VaultRebalanced(_vault, _shares, valueToRebalance);
     }
 
     function _withdraw(
@@ -1124,7 +1127,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _record.liabilityShares = uint96(liabilityShares_ - _amountOfShares);
 
-        _decreaseRedemptions(_vault, _getPooledEthBySharesRoundUp(_amountOfShares));
+        _decreaseRedemptions(_vault, _amountOfShares);
         _operatorGrid().onBurnedShares(_vault, _amountOfShares);
     }
 
@@ -1189,7 +1192,7 @@ contract VaultHub is PausableUntilWithRoles {
         // RR = 100 - MR
         // X = (LS * 100 - TV * MR) / RR
 
-        return (liabilityStETH * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio) / reserveRatioBP;
+        return _getSharesByPooledEth((liabilityStETH * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio) / reserveRatioBP);
     }
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
@@ -1449,11 +1452,12 @@ contract VaultHub is PausableUntilWithRoles {
         });
     }
 
-    function _decreaseRedemptions(address _vault, uint256 _ether) internal {
+    function _decreaseRedemptions(address _vault, uint256 _shares) internal {
         VaultObligations storage obligations = _vaultObligations(_vault);
 
         if (obligations.redemptions > 0) {
-            uint256 decrease = Math256.min(obligations.redemptions, _ether);
+            uint256 redemptionsValue = _getPooledEthBySharesRoundUp(_shares);
+            uint256 decrease = Math256.min(obligations.redemptions, redemptionsValue);
             if (decrease > 0) {
                 obligations.redemptions -= uint128(decrease);
                 emit RedemptionsUpdated(_vault, obligations.redemptions);
