@@ -386,11 +386,19 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Rebalances the vault by transferring ether
-     * @param _ether Amount of ether to rebalance
+     * @notice Rebalances StakingVault by withdrawing ether to VaultHub corresponding to shares amount provided
+     * @param _shares amount of shares to rebalance
      */
-    function rebalanceVault(uint256 _ether) external payable fundable {
-        _rebalanceVault(_ether);
+    function rebalanceVaultWithShares(uint256 _shares) external {
+        _rebalanceVault(_shares);
+    }
+
+    /**
+     * @notice Rebalances the vault by transferring ether given the shares amount
+     * @param _ether amount of ether to rebalance
+     */
+    function rebalanceVaultWithEther(uint256 _ether) external payable fundable {
+        _rebalanceVault(_getSharesByPooledEth(_ether));
     }
 
     /**
