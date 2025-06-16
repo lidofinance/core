@@ -884,10 +884,13 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        uint256 sharesToRebalance = _rebalanceShortfall(connection, record);
+        uint256 sharesToRebalance = Math256.min(
+            _rebalanceShortfall(connection, record),
+            _getSharesByPooledEth(_vault.balance)
+        );
         if (sharesToRebalance == 0) revert AlreadyHealthy(_vault);
 
-        _rebalance(_vault, record, Math256.min(sharesToRebalance, _getSharesByPooledEth(_vault.balance)));
+        _rebalance(_vault, record, sharesToRebalance);
     }
 
     /// @notice Accrues a redemption obligation on the vault under extreme conditions
