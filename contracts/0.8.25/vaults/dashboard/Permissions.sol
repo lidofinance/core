@@ -246,11 +246,11 @@ abstract contract Permissions is AccessControlConfirmable {
 
     /**
      * @dev Checks the REBALANCE_ROLE and rebalances the StakingVault.
-     * @param _ether The amount of ether to rebalance the StakingVault with.
+     * @param _shares The amount of shares to rebalance the StakingVault with.
      * @dev The zero check for parameters is performed in the StakingVault contract.
      */
-    function _rebalanceVault(uint256 _ether) internal onlyRoleMemberOrAdmin(REBALANCE_ROLE) {
-        VAULT_HUB.rebalance(address(_stakingVault()), _ether);
+    function _rebalanceVault(uint256 _shares) internal onlyRoleMemberOrAdmin(REBALANCE_ROLE) {
+        VAULT_HUB.rebalance(address(_stakingVault()), _shares);
     }
 
     /**

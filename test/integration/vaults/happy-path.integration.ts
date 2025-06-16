@@ -442,19 +442,17 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     await dashboard.connect(owner).mintShares(owner, 10n);
 
-    const stETHToRebalance = await lido.getPooledEthByShares(await vaultHub.liabilityShares(stakingVaultAddress));
+    const sharesToRebalance = await vaultHub.liabilityShares(stakingVaultAddress);
+    const stETHToRebalance = await lido.getPooledEthByShares(sharesToRebalance);
 
-    await dashboard.connect(owner).rebalanceVault(stETHToRebalance, { value: stETHToRebalance });
+    // Top-up and rebalance the vault
+    await dashboard.connect(owner).rebalanceVault(sharesToRebalance, { value: stETHToRebalance });
 
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_CONNECTION_DEPOSIT); // 1 ETH locked as a connection fee
   });
 
   it("Should allow Manager to disconnect vaults from the hub", async () => {
-    const { lido, vaultHub } = ctx.contracts;
-
-    const stETHToBurn = await lido.getPooledEthByShares(await vaultHub.liabilityShares(stakingVaultAddress));
-    await lido.connect(owner).approve(dashboard, stETHToBurn);
-    await dashboard.connect(owner).burnShares(stETHToBurn);
+    const { vaultHub } = ctx.contracts;
 
     const disconnectTx = await dashboard.connect(owner).voluntaryDisconnect();
     const disconnectTxReceipt = (await disconnectTx.wait()) as ContractTransactionReceipt;

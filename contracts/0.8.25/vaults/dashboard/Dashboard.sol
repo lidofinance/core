@@ -386,11 +386,11 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Rebalances the vault by transferring ether
-     * @param _ether Amount of ether to rebalance
+     * @notice Rebalances the vault by transferring shares
+     * @param _shares amount of shares to rebalance
      */
-    function rebalanceVault(uint256 _ether) external payable fundable {
-        _rebalanceVault(_ether);
+    function rebalanceVault(uint256 _shares) external payable fundable {
+        _rebalanceVault(_shares);
     }
 
     /**
