@@ -887,7 +887,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 sharesToRebalance = _rebalanceShortfall(connection, record);
         if (sharesToRebalance == 0) revert AlreadyHealthy(_vault);
 
-        // TODO: add some gas compensation here
         _rebalance(_vault, record, Math256.min(sharesToRebalance, _getSharesByPooledEth(_vault.balance)));
     }
 
@@ -1054,15 +1053,6 @@ contract VaultHub is PausableUntilWithRoles {
         });
     }
 
-    function _rebalanceEther(
-        address _vault,
-        VaultRecord storage _record,
-        uint256 _ether
-    ) internal {
-        _withdraw(_vault, _record, address(this), _ether);
-        LIDO.rebalanceExternalEtherToInternal{value: _ether}();
-    }
-
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _shares) internal {
         uint256 valueToRebalance = _getPooledEthBySharesRoundUp(_shares);
 
@@ -1070,7 +1060,8 @@ contract VaultHub is PausableUntilWithRoles {
         if (valueToRebalance > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, valueToRebalance);
 
         _decreaseLiability(_vault, _record, _shares);
-        _rebalanceEther(_vault, _record, valueToRebalance);
+        _withdraw(_vault, _record, address(this), valueToRebalance);
+        _rebalanceExternalEtherToInternal(valueToRebalance);
 
         emit VaultRebalanced(_vault, _shares, valueToRebalance);
     }
@@ -1163,7 +1154,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
         uint256 sharesByTotalValue = _getSharesByPooledEth(totalValue_);
 
-        // Impossible to rebalance a vault with deficit
+        // Impossible to rebalance a vault with bad debt
         if (liabilityShares_ >= sharesByTotalValue) {
             // return MAX_UINT_256
             return type(uint256).max;
@@ -1424,7 +1415,8 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (valueToRebalance > 0) {
             _decreaseLiability(_vault, _record, sharesToRebalance);
-            _rebalanceEther(_vault, _record, valueToRebalance);
+            _withdraw(_vault, _record, address(this), valueToRebalance);
+            _rebalanceExternalEtherToInternal(valueToRebalance);
         }
 
         if (valueToTransferToLido > 0) {
@@ -1533,6 +1525,10 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _getPooledEthBySharesRoundUp(uint256 _shares) internal view returns (uint256) {
         return LIDO.getPooledEthBySharesRoundUp(_shares);
+    }
+
+    function _rebalanceExternalEtherToInternal(uint256 _ether) internal {
+        LIDO.rebalanceExternalEtherToInternal{value: _ether}();
     }
 
     function _nodeOperator(address _vault) internal view returns (address) {
