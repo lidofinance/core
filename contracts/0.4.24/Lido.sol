@@ -998,7 +998,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function _getExternalEther(uint256 _internalEther) internal view returns (uint256) {
         (uint256 totalShares, uint256 externalShares) = _getTotalAndExternalShares();
         uint256 internalShares = totalShares - externalShares;
-        return externalShares * _internalEther / internalShares;
+        return (externalShares * _internalEther) / internalShares;
     }
 
     /// @dev Get the total amount of ether controlled by the protocol and external entities
