@@ -60,7 +60,6 @@
   "chainSpec": {
     "slotsPerEpoch": 32,
     "secondsPerSlot": 12,
-    "genesisTime": null,
     "depositContract": "0x00000000219ab540356cBB839Cbe05303d7705Fa"
   }
 }

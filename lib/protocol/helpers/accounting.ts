@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Accounting, AccountingOracle } from "typechain-types";
+import { AccountingOracle } from "typechain-types";
 
 import {
   advanceChainTime,
@@ -19,7 +19,6 @@ import {
   log,
   ONE_GWEI,
   prepareExtraData,
-  streccak,
 } from "lib";
 
 import { ProtocolContext } from "../types";
@@ -153,8 +152,6 @@ export const report = async (
     if (!simulatedReport) {
       throw new Error("Failed to simulate report");
     }
-
-    console.debug({ simulatedReport });
 
     const { postTotalPooledEther, postTotalShares, withdrawals, elRewards } = simulatedReport;
 
@@ -357,9 +354,7 @@ const simulateReport = async (
     vaultsTotalDeficit,
   }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
-  const { hashConsensus, accounting, accountingOracle } = ctx.contracts;
-
-  const accountingOracleSigner = await impersonate(accountingOracle.address, ether("100"));
+  const { hashConsensus, accounting } = ctx.contracts;
 
   const { genesisTime, secondsPerSlot } = await hashConsensus.getChainConfig();
   const reportTimestamp = genesisTime + refSlot * secondsPerSlot;
@@ -372,27 +367,6 @@ const simulateReport = async (
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
   });
 
-  //
-  // Version from TW
-  //
-
-  // NOTE: To enable negative rebase sanity checker, the static call below
-  //    replaced with advanced eth_call with stateDiff.
-  // const [postTotalPooledEther1, postTotalShares1, withdrawals1, elRewards1] = await lido
-  //   .connect(accountingOracleAccount)
-  //   .handleOracleReport.staticCall(
-  //     reportTimestamp,
-  //     1n * 24n * 60n * 60n, // 1 day
-  //     beaconValidators,
-  //     clBalance,
-  //     withdrawalVaultBalance,
-  //     elRewardsVaultBalance,
-  //     0n,
-  //     [],
-  //     0n,
-  //   );
-
-  // Step 1: Encode the function call data
   const withdrawalShareRate = 0n;
   const reportValues = {
     timestamp: reportTimestamp,
@@ -405,61 +379,8 @@ const simulateReport = async (
     withdrawalFinalizationBatches: [],
     vaultsTotalDeficit,
   };
-  const data = accounting.interface.encodeFunctionData("simulateOracleReport", [reportValues, withdrawalShareRate]);
-  console.debug({ reportValues });
-
-  // Step 2: Prepare the transaction object
-  const transactionObject = {
-    to: accounting.address,
-    from: accountingOracleSigner.address,
-    data: data,
-  };
-
-  // Step 3: Prepare call parameters, state diff and perform eth_call
-  const accountingOracleAddr = await accountingOracle.getAddress();
-  const callParams = [transactionObject, "latest"];
-  const LAST_PROCESSING_REF_SLOT_POSITION = streccak("lido.BaseOracle.lastProcessingRefSlot");
-
-  const stateDiff = {
-    [accountingOracleAddr]: {
-      stateDiff: {
-        [LAST_PROCESSING_REF_SLOT_POSITION]: ethers.zeroPadValue(ethers.toBeHex(refSlot), 32), // setting the processing refslot for the sanity checker
-      },
-    },
-  };
-  // const { timeElapsed } = await getReportTimeElapsed(ctx);
-  // const update = await accounting.simulateOracleReport(
-  //   {
-  //     timestamp: reportTimestamp,
-  //     timeElapsed,
-  //     clValidators: beaconValidators,
-  //     clBalance,
-  //     withdrawalVaultBalance,
-  //     elRewardsVaultBalance,
-  //     sharesRequestedToBurn: 0n,
-  //     withdrawalFinalizationBatches: [],
-  //     vaultsTotalDeficit,
-  //   },
-  // };
-
-  const returnData = await ethers.provider.send("eth_call", [...callParams, stateDiff]);
-
-  // Step 4: Decode the returned data
-  // const [[postTotalPooledEther, postTotalShares, withdrawals, elRewards]] = accounting.interface.decodeFunctionResult(
-  const calculatedValues = accounting.interface.decodeFunctionResult(
-    "simulateOracleReport",
-    returnData,
-  )[0] as Accounting.CalculatedValuesStructOutput;
-  console.debug({ calculatedValues });
-  const [postTotalPooledEther, postTotalShares, withdrawals, elRewards] = calculatedValues;
-
-  // //
-  // // Version from feat/vaults
-  // //
-  // const { timeElapsed } = await getReportTimeElapsed(ctx);
-  // // const { postTotalPooledEther, postTotalShares, withdrawals, elRewards } = await accounting.simulateOracleReport(
-  // const pureSimulateResult = await accounting.simulateOracleReport(reportValues, withdrawalShareRate);
-  // console.debug({ pureSimulateResult });
+  const update = await accounting.simulateOracleReport(reportValues, withdrawalShareRate);
+  const [postTotalPooledEther, postTotalShares, withdrawals, elRewards] = update;
 
   log.debug("Simulation result", {
     "Post Total Pooled Ether": formatEther(postTotalPooledEther),
