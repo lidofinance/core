@@ -120,7 +120,7 @@ contract VaultFactory {
 
         dashboard.grantRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), _nodeOperatorManager);
         dashboard.revokeRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), address(this));
- 
+
         emit VaultCreated(address(vault));
         emit DashboardCreated(address(dashboard), address(vault), _defaultAdmin);
     }

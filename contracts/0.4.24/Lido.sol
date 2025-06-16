@@ -196,6 +196,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // External ether transferred to buffer
     event ExternalEtherTransferredToBuffer(uint256 amount);
 
+    // Bad debt internalized
+    event ExternalBadDebtInternalized(uint256 amountOfShares);
+
     /**
      * @dev As AragonApp, Lido contract must be initialized with following variables:
      *      NB: by default, staking and the whole Lido pool are in paused state
@@ -736,6 +739,32 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
         // cl balance change are logged in ETHDistributed event later
+    }
+
+    /**
+     * @notice Internalize external bad debt
+     * @param _amountOfShares amount of shares to internalize
+     */
+    function internalizeExternalBadDebt(uint256 _amountOfShares) external {
+        require(_amountOfShares != 0, "BAD_DEBT_ZERO_SHARES");
+        _whenNotStopped();
+        _auth(getLidoLocator().accounting());
+
+        uint256 externalShares = EXTERNAL_SHARES_POSITION.getStorageUint256();
+
+        require(externalShares >= _amountOfShares, "EXT_SHARES_TOO_SMALL");
+
+        // total shares remains the same
+        // external shares are decreased
+        // => external ether is decreased as well
+        // internal shares are increased
+        // internal ether stays the same
+        // => total pooled ether is decreased
+        // => share rate is decreased
+        // ==> losses are split between token holders
+        EXTERNAL_SHARES_POSITION.setStorageUint256(externalShares - _amountOfShares);
+
+        emit ExternalBadDebtInternalized(_amountOfShares);
     }
 
     /**
