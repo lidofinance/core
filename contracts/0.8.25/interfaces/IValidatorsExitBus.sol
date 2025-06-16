@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
-pragma solidity 0.8.25;
+pragma solidity >=0.5.0;
 
 interface IValidatorsExitBus {
     function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 timestamp);

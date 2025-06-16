@@ -3,7 +3,7 @@
 
 // See contracts/COMPILERS.md
 // solhint-disable-next-line lido/fixed-compiler-version
-pragma solidity ^0.8.9;
+pragma solidity >=0.5.0;
 
 /**
  * Interface to connect AccountingOracle with LazyOracle and force type consistency

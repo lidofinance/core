@@ -3,7 +3,7 @@
 
 // See contracts/COMPILERS.md
 // solhint-disable-next-line lido/fixed-compiler-version
-pragma solidity >=0.8.0 <0.9.0;
+pragma solidity >=0.8.0;
 
 import {IERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
 

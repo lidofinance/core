@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
-pragma solidity 0.8.25;
+pragma solidity >=0.8.0;
 
 import {IStakingVault} from "./IStakingVault.sol";
 

@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.25;
+// See contracts/COMPILERS.md
+pragma solidity >=0.5.0;
 
 /// @notice An interface to subscribe on the `stETH` token rebases (defined in the `Lido` core contract)
 interface IPostTokenRebaseReceiver {
