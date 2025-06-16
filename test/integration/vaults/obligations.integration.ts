@@ -389,7 +389,7 @@ describe("Integration: Vault obligations", () => {
         const rebalanceShares = liabilityShares / 2n;
         const rebalanceAmount = await lido.getPooledEthBySharesRoundUp(rebalanceShares);
         const expectedRedemptions = maxRedemptions - rebalanceAmount;
-        await expect(dashboard.connect(roles.rebalancer).rebalanceVault(rebalanceShares))
+        await expect(dashboard.connect(roles.rebalancer).rebalanceVaultWithShares(rebalanceShares))
           .to.emit(vaultHub, "RedemptionsUpdated")
           .withArgs(stakingVaultAddress, expectedRedemptions);
 

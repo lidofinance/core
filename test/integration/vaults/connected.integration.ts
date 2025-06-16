@@ -203,7 +203,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const sharesBurnt = await vaultHub.liabilityShares(stakingVault);
       const etherToRebalance = await lido.getPooledEthBySharesRoundUp(sharesBurnt);
 
-      await expect(dashboard.connect(roles.rebalancer).rebalanceVault(sharesBurnt))
+      await expect(dashboard.connect(roles.rebalancer).rebalanceVaultWithShares(sharesBurnt))
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(vaultHub, etherToRebalance)
         .to.emit(vaultHub, "VaultInOutDeltaUpdated")

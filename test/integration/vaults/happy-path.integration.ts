@@ -438,15 +438,14 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Manager to rebalance the vault to reduce the debt", async () => {
-    const { vaultHub, lido } = ctx.contracts;
+    const { vaultHub } = ctx.contracts;
 
     await dashboard.connect(owner).mintShares(owner, 10n);
 
     const sharesToRebalance = await vaultHub.liabilityShares(stakingVaultAddress);
-    const stETHToRebalance = await lido.getPooledEthByShares(sharesToRebalance);
 
     // Top-up and rebalance the vault
-    await dashboard.connect(owner).rebalanceVault(sharesToRebalance, { value: stETHToRebalance });
+    await dashboard.connect(owner).rebalanceVaultWithShares(sharesToRebalance);
 
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_CONNECTION_DEPOSIT); // 1 ETH locked as a connection fee
   });
