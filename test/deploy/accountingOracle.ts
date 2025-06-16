@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { AccountingOracle, HashConsensus__Harness, ReportProcessor__Mock } from "typechain-types";
@@ -27,6 +26,10 @@ async function deployMockAccountingAndStakingRouter() {
   const withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForAccountingOracle");
   const accounting = await ethers.deployContract("Accounting__MockForAccountingOracle");
   return { accounting, stakingRouter, withdrawalQueue };
+}
+
+async function deployMockLazyOracle() {
+  return ethers.deployContract("LazyOracle__MockForAccountingOracle");
 }
 
 export async function deployAccountingOracleSetup(
@@ -70,13 +73,14 @@ export async function deployAccountingOracleSetup(
     accounting: accountingAddress,
   });
 
+  const lazyOracle = await deployMockLazyOracle();
+
   const oracleReportSanityChecker = await deployOracleReportSanityCheckerForAccounting(
     locatorAddr,
     accountingOracleAddress,
     accountingAddress,
     admin,
   );
-  const lazyOracle = await ethers.deployContract("LazyOracle", [locatorAddr, ZeroAddress]);
 
   await updateLidoLocatorImplementation(locatorAddr, {
     oracleReportSanityChecker: await oracleReportSanityChecker.getAddress(),

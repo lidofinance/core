@@ -41,8 +41,7 @@ contract AccountingOracle__MockForSanityChecker {
                 data.withdrawalVaultBalance,
                 data.elRewardsVaultBalance,
                 data.sharesRequestedToBurn,
-                data.withdrawalFinalizationBatches,
-                data.vaultsTotalDeficit
+                data.withdrawalFinalizationBatches
             )
         );
     }

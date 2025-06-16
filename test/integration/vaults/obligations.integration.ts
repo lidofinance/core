@@ -386,7 +386,7 @@ describe("Integration: Vault obligations", () => {
         const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
         expect(obligationsBefore.redemptions).to.equal(maxRedemptions);
 
-        const rebalanceAmount = (await lido.getPooledEthBySharesRoundUp(liabilityShares)) / 2n;
+        const rebalanceAmount = await lido.getPooledEthBySharesRoundUp(liabilityShares / 2n);
         const expectedRedemptions = maxRedemptions - rebalanceAmount;
         await expect(dashboard.connect(roles.rebalancer).rebalanceVault(rebalanceAmount))
           .to.emit(vaultHub, "RedemptionsUpdated")

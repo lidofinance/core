@@ -27,5 +27,11 @@ subtask(TASK_COMPILE_SOLIDITY_GET_SOURCE_PATHS).setAction(async (_, hre, runSupe
  */
 subtask(TASK_TEST_GET_TEST_FILES).setAction(async (_, __, runSuper) => {
   const paths = await runSuper();
-  return process.env.COVERAGE ? paths.filter((x: string) => !x.includes("test/integration/")) : paths;
+  if (process.env.COVERAGE === "unit") {
+    return paths.filter((x: string) => !x.includes("test/integration/"));
+  }
+  if (process.env.COVERAGE === "integration") {
+    return paths.filter((x: string) => !x.includes(".test.ts"));
+  }
+  return paths;
 });

@@ -422,7 +422,7 @@ contract Dashboard is NodeOperatorFee {
         // Instead of relying on auto-reset at the end of the transaction,
         // re-enable fund-on-receive manually to restore the default receive() behavior in the same transaction
         _enableFundOnReceive();
-        _setRewardsAdjustment(uint128(rewardsAdjustment.amount + totalAmount));
+        _setRewardsAdjustment(rewardsAdjustment.amount + totalAmount);
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
 
