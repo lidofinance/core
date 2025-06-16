@@ -298,6 +298,8 @@ contract BaseProtocolTest is Test {
             "OracleReportSanityChecker.sol:OracleReportSanityChecker",
             abi.encode(
                 address(lidoLocator),
+                lidoLocator.accountingOracle(),
+                lidoLocator.accounting(),
                 rootAccount,
                 [
                     limitList.exitedValidatorsPerDayLimit,
@@ -411,7 +413,10 @@ contract BaseProtocolTest is Test {
             wstETH: wstETHAdr,
             vaultHub: makeAddr("dummy-locator:vaultHub"),
             lazyOracle: makeAddr("dummy-locator:lazyOracle"),
-            operatorGrid: makeAddr("dummy-locator:operatorGrid")
+            operatorGrid: makeAddr("dummy-locator:operatorGrid"),
+            validatorExitDelayVerifier: makeAddr("dummy-locator:validatorExitDelayVerifier"),
+            triggerableWithdrawalsGateway: makeAddr("dummy-locator:triggerableWithdrawalsGateway"),
+            vaultFactory: makeAddr("dummy-locator:vaultFactory")
         });
 
         return LidoLocator(deployCode("LidoLocator.sol:LidoLocator", abi.encode(config)));

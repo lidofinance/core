@@ -247,7 +247,6 @@ contract AccountingHandler is CommonBase, StdCheats, StdUtils {
             withdrawalVaultBalance: 0,
             sharesRequestedToBurn: 0,
             withdrawalFinalizationBatches: new uint256[](0),
-            vaultsTotalTreasuryFeesShares: 0,
             vaultsTotalDeficit: 0
         });
 
