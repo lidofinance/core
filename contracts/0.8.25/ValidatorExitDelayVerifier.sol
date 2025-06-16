@@ -8,8 +8,7 @@ import {BeaconBlockHeader, Validator} from "contracts/common/lib/BeaconTypes.sol
 import {GIndex} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-
-import {IValidatorsExitBus} from "./interfaces/IValidatorsExitBus.sol";
+import {IValidatorsExitBus} from "contracts/common/interfaces/IValidatorsExitBus.sol";
 
 struct ExitRequestData {
     bytes data;
