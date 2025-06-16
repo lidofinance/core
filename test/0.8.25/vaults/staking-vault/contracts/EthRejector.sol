@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.0;
 
 contract EthRejector {
     error ReceiveRejected();
