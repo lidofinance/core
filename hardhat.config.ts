@@ -29,6 +29,8 @@ const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   gasReporter: {
     enabled: !process.env.SKIP_GAS_REPORT,
+    reportPureAndViewMethods: true,
+    etherscan: process.env.ETHERSCAN_API_KEY || "",
   },
   networks: {
     "hardhat": {
