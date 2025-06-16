@@ -754,11 +754,15 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         require(externalShares >= _amountOfShares, "EXT_SHARES_TOO_SMALL");
 
+        // total shares remains the same
+        // external shares are decreased
+        // => external ether is decreased as well
+        // internal shares are increased
+        // internal ether stays the same
+        // => total pooled ether is decreased
+        // => share rate is decreased
+        // ==> losses are split between token holders
         EXTERNAL_SHARES_POSITION.setStorageUint256(externalShares - _amountOfShares);
-
-         // mint to INITIAL_TOKEN_HOLDER to dilute the shareRate
-         // and maintain the invariant sum(sharesOf(address)) = totalShares
-        _mintShares(INITIAL_TOKEN_HOLDER, _amountOfShares);
 
         emit ExternalBadDebtInternalized(_amountOfShares);
     }
