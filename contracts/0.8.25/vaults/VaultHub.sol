@@ -703,7 +703,7 @@ contract VaultHub is PausableUntilWithRoles {
         _requireFreshReport(_vault, record);
 
         uint256 withdrawable = _withdrawableValue(_vault, record);
-        if (_ether > withdrawable) revert VaultInsufficientWithdrawableValue(_vault, withdrawable, _ether);
+        if (_ether > withdrawable) revert AmountExceedsWithdrawableValue(_vault, withdrawable, _ether);
 
         _withdraw(_vault, record, _recipient, _ether);
     }
@@ -1066,6 +1066,9 @@ contract VaultHub is PausableUntilWithRoles {
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _shares) internal {
         uint256 valueToRebalance = _getPooledEthBySharesRoundUp(_shares);
 
+        uint256 totalValue_ = _totalValue(_record);
+        if (valueToRebalance > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, valueToRebalance);
+
         _decreaseLiability(_vault, _record, _shares);
         _rebalanceEther(_vault, _record, valueToRebalance);
 
@@ -1156,22 +1159,21 @@ contract VaultHub is PausableUntilWithRoles {
             return 0;
         }
 
-        uint256 liabilityStETH = _getPooledEthBySharesRoundUp(liabilityShares_);
         uint256 reserveRatioBP = _connection.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
+        uint256 sharesByTotalValue = _getSharesByPooledEth(totalValue_);
 
         // Impossible to rebalance a vault with deficit
-        if (liabilityStETH >= totalValue_) {
+        if (liabilityShares_ >= sharesByTotalValue) {
             // return MAX_UINT_256
             return type(uint256).max;
         }
 
         // Solve the equation for X:
-
-        // LS - liabilityStETH, TV - totalValue, MR - maxMintableRatio, 100 - TOTAL_BASIS_POINTS, RR - reserveRatio
-
-        // X - amount of ETH that should be withdrawn (TV - X) and used to repay the debt (LS - X)
-        // to reduce the LS/TV ratio back to MR
+        // LS - liabilityShares, TV - sharesByTotalValue
+        // MR - maxMintableRatio, 100 - TOTAL_BASIS_POINTS, RR - reserveRatio
+        // X - amount of shares that should be withdrawn (TV - X) and used to repay the debt (LS - X)
+        // to reduce the LS/TVS ratio back to MR
 
         // (LS - X) / (TV - X) = MR / 100
         // (LS - X) * 100 = (TV - X) * MR
@@ -1183,7 +1185,7 @@ contract VaultHub is PausableUntilWithRoles {
         // RR = 100 - MR
         // X = (LS * 100 - TV * MR) / RR
 
-        return _getSharesByPooledEth((liabilityStETH * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio) / reserveRatioBP);
+        return (liabilityShares_ * TOTAL_BASIS_POINTS - sharesByTotalValue * maxMintableRatio) / reserveRatioBP;
     }
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
@@ -1650,16 +1652,19 @@ contract VaultHub is PausableUntilWithRoles {
     error ZeroBalance();
 
     /**
-     * @notice Thrown when trying to withdraw more ether than the balance of `StakingVault`
-     * @param balance Current balance
+     * @notice Thrown when attempting to rebalance more ether than the current total value of the vault
+     * @param totalValue Current total value of the vault
+     * @param rebalanceAmount Amount attempting to rebalance (in ether)
      */
-    error InsufficientBalance(uint256 balance, uint256 expectedBalance);
+    error RebalanceAmountExceedsTotalValue(uint256 totalValue, uint256 rebalanceAmount);
 
     /**
-     * @notice Thrown when trying to withdraw more than the unlocked amount
-     * @param unlocked Current unlocked amount
+     * @notice Thrown when attempting to withdraw more ether than the available value of the vault
+     * @param vault The address of the vault
+     * @param withdrawable The available value of the vault
+     * @param requested The amount attempting to withdraw
      */
-    error InsufficientUnlocked(uint256 unlocked, uint256 expectedUnlocked);
+    error AmountExceedsWithdrawableValue(address vault, uint256 withdrawable, uint256 requested);
 
     error AlreadyHealthy(address vault);
     error VaultMintingCapacityExceeded(
@@ -1683,7 +1688,6 @@ contract VaultHub is PausableUntilWithRoles {
     error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
     error VaultOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
-    error VaultInsufficientWithdrawableValue(address vault, uint256 withdrawable, uint256 requested);
     error VaultReportStale(address vault);
     error PDGNotDepositor(address vault);
     error ZeroCodehash();
@@ -1694,6 +1698,5 @@ contract VaultHub is PausableUntilWithRoles {
     error PartialValidatorWithdrawalNotAllowed();
     error ForcedValidatorExitNotAllowed();
     error NoBadDebtToWriteOff(address vault, uint256 totalValueShares, uint256 liabilityShares);
-    error SocializeIsLimitedByReserve(address vault, uint256 reserveShares, uint256 amountOfSharesToSocialize);
     error BadDebtSocializationNotAllowed();
 }
