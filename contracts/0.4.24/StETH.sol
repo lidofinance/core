@@ -85,6 +85,8 @@ contract StETH is IERC20, Pausable {
      * see https://github.com/lidofinance/lido-dao/issues/181#issuecomment-736098834
      *
      * keccak256("lido.StETH.totalShares")
+     *
+     * @dev Since version 3, high 128 bits can be used to store the external shares from Lido contract
      */
     bytes32 internal constant TOTAL_SHARES_POSITION =
         0xe3b4b636e601189b5f4c6742edf2538ac12bb61ed03e6da26949d69838fa447e;
