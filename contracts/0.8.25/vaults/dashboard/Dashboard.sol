@@ -5,13 +5,13 @@
 pragma solidity 0.8.25;
 
 import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC20.sol";
-import {Math256} from "contracts/common/lib/Math256.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
+import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILido as IStETH} from "contracts/common/interfaces/ILido.sol";
+import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
 
-import {IDepositContract} from "../../interfaces/IDepositContract.sol";
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {NodeOperatorFee} from "./NodeOperatorFee.sol";

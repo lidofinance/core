@@ -5,7 +5,7 @@
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity >=0.8.0;
 
-import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
+import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
 
 /**
  * @title IStakingVault

@@ -7,9 +7,9 @@ pragma solidity 0.8.25;
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
 import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
+import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
 
 import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
-import {IDepositContract} from "../interfaces/IDepositContract.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /**
