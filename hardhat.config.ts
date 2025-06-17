@@ -56,6 +56,7 @@ const config: HardhatUserConfig = {
     },
     "custom": {
       url: RPC_URL,
+      timeout: 120_000,
     },
     // local nodes
     "local": {

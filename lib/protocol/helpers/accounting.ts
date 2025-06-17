@@ -159,7 +159,8 @@ export const report = async (
       "El Rewards": formatEther(elRewards),
     });
 
-    const simulatedShareRate = (postTotalPooledEther * SHARE_RATE_PRECISION) / postTotalShares;
+    const simulatedShareRate =
+      postTotalShares === 0n ? 0n : (postTotalPooledEther * SHARE_RATE_PRECISION) / postTotalShares;
 
     if (withdrawalFinalizationBatches.length === 0) {
       withdrawalFinalizationBatches = await getFinalizationBatches(ctx, {
@@ -354,33 +355,32 @@ const simulateReport = async (
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
   });
 
-  const { timeElapsed } = await getReportTimeElapsed(ctx);
-  const update = await accounting.simulateOracleReport(
-    {
-      timestamp: reportTimestamp,
-      timeElapsed,
-      clValidators: beaconValidators,
-      clBalance,
-      withdrawalVaultBalance,
-      elRewardsVaultBalance,
-      sharesRequestedToBurn: 0n,
-      withdrawalFinalizationBatches: [],
-    },
-    0n,
-  );
+  const withdrawalShareRate = 0n;
+  const reportValues = {
+    timestamp: reportTimestamp,
+    timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
+    clValidators: beaconValidators,
+    clBalance,
+    withdrawalVaultBalance,
+    elRewardsVaultBalance,
+    sharesRequestedToBurn: 0n,
+    withdrawalFinalizationBatches: [],
+  };
+  const update = await accounting.simulateOracleReport(reportValues, withdrawalShareRate);
+  const [postTotalPooledEther, postTotalShares, withdrawals, elRewards] = update;
 
   log.debug("Simulation result", {
-    "Post Total Pooled Ether": formatEther(update.postTotalPooledEther),
-    "Post Total Shares": update.postTotalShares,
-    "Withdrawals": formatEther(update.withdrawals),
-    "El Rewards": formatEther(update.elRewards),
+    "Post Total Pooled Ether": formatEther(postTotalPooledEther),
+    "Post Total Shares": postTotalShares,
+    "Withdrawals": formatEther(withdrawals),
+    "El Rewards": formatEther(elRewards),
   });
 
   return {
-    postTotalPooledEther: update.postTotalPooledEther,
-    postTotalShares: update.postTotalShares,
-    withdrawals: update.withdrawals,
-    elRewards: update.elRewards,
+    postTotalPooledEther,
+    postTotalShares,
+    withdrawals,
+    elRewards,
   };
 };
 

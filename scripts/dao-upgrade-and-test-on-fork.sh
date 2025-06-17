@@ -15,6 +15,7 @@ cp deployed-mainnet.json $NETWORK_STATE_FILE
 GAS_PRIORITY_FEE=1 \
 GAS_MAX_FEE=100 \
 DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
+GENESIS_TIME=1606824023 \
 yarn upgrade:deploy
 
 yarn upgrade:mock-voting

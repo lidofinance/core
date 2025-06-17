@@ -1,7 +1,8 @@
 import { expect } from "chai";
 import hre from "hardhat";
 import { beforeEach } from "mocha";
-import { createVoteAndGetExecuteTxPromise } from "scripts/upgrade/steps/0500-mock-aragon-voting";
+import { main as mockTWAragonVoting } from "scripts/upgrade/steps/0400-mock-tw-aragon-voting";
+import { createVoteAndGetExecuteTxPromise } from "scripts/upgrade/steps/0500-mock-v3-aragon-voting";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
@@ -44,9 +45,10 @@ describe("Integration: Upgrade Template V3 tests", () => {
 
     agentSigner = await ctx.getSigner("agent");
 
-    // const agentMockFactory = new V3Template__Harness__factory(deployer);
     agentMock = await new V3Template__Harness__factory(deployer).deploy(await template.getAddress());
     await agentMock.waitForDeployment();
+
+    await mockTWAragonVoting();
   });
 
   after(async () => await Snapshot.restore(originalSnapshot));
