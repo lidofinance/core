@@ -1,4 +1,5 @@
 import { log } from "lib";
+import { ensureEIP4788BeaconBlockRootContractPresent, ensureEIP7002WithdrawalRequestContractPresent } from "lib/eips";
 
 import {
   ensureHashConsensusInitialEpoch,
@@ -23,6 +24,11 @@ export const provision = async (ctx: ProtocolContext) => {
     return;
   }
 
+  // Ensure necessary precompiled contracts are present
+  await ensureEIP7002WithdrawalRequestContractPresent();
+  await ensureEIP4788BeaconBlockRootContractPresent();
+
+  // Ensure protocol is fully operational
   await ensureHashConsensusInitialEpoch(ctx);
 
   await ensureOracleCommitteeMembers(ctx, 5n);
