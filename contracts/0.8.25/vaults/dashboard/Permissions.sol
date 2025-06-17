@@ -6,10 +6,10 @@ pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {OperatorGrid} from "../OperatorGrid.sol";
 import {VaultHub} from "../VaultHub.sol";
 

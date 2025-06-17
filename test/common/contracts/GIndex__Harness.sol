@@ -3,7 +3,7 @@
 
 // See contracts/COMPILERS.md
 // solhint-disable-next-line lido/fixed-compiler-version
-pragma solidity ^0.8.25;
+pragma solidity >=0.8.25;
 
 import {GIndex, pack, IndexOutOfRange, fls} from "contracts/common/lib/GIndex.sol";
 

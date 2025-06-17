@@ -10,10 +10,11 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/Upgra
 import {IBurner as IBurnerWithoutAccessControl} from "contracts/common/interfaces/IBurner.sol";
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
+
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
-import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 
 import {V3Addresses} from "./V3Addresses.sol";

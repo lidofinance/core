@@ -6,12 +6,13 @@ pragma solidity 0.8.9;
 
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import {Math256} from "../../common/lib/Math256.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {PositiveTokenRebaseLimiter, TokenRebaseLimiterData} from "../lib/PositiveTokenRebaseLimiter.sol";
-import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
-import {IBurner} from "../../common/interfaces/IBurner.sol";
-import {StakingRouter} from "../../0.8.9/StakingRouter.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+
+import {StakingRouter} from "../StakingRouter.sol";
 import {ISecondOpinionOracle} from "../interfaces/ISecondOpinionOracle.sol";
 
 interface IWithdrawalQueue {

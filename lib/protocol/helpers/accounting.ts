@@ -339,13 +339,7 @@ type SimulateReportResult = {
  */
 const simulateReport = async (
   ctx: ProtocolContext,
-  {
-    refSlot,
-    beaconValidators,
-    clBalance,
-    withdrawalVaultBalance,
-    elRewardsVaultBalance,
-  }: SimulateReportParams,
+  { refSlot, beaconValidators, clBalance, withdrawalVaultBalance, elRewardsVaultBalance }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
 
