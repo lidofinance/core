@@ -145,8 +145,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7002 {
      *      Each full withdrawal request instructs a validator to fully withdraw its stake and exit its duties as a validator.
      *      Each partial withdrawal request instructs a validator to withdraw a specified amount of ETH.
      *
-     * @param pubkeys A tightly packed array of 48-byte public keys corresponding to validators requesting partial withdrawals.
-     *                | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
+     * @param pubkeys An array of 48-byte public keys corresponding to validators requesting withdrawals.
      *
      * @param amounts An array of 8-byte unsigned integers that represent the amounts, denominated in Gwei,
      *                to be withdrawn for each corresponding public key.
