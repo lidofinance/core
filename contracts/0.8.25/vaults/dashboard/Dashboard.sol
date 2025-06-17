@@ -53,7 +53,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Slot for the fund-on-receive flag
      *         keccak256("vaults.Dashboard.fundOnReceive")
      */
-    bytes32 private constant FUND_ON_RECEIVE_FLAG_SLOT =
+    bytes32 public constant FUND_ON_RECEIVE_FLAG_SLOT =
         0x7408b7b034fda7051615c19182918ecb91d753231cffd86f81a45d996d63e038;
 
     /**
