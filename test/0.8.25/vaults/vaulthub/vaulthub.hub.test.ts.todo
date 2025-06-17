@@ -12,7 +12,7 @@ import {
   OperatorGrid,
   OperatorGrid__MockForVaultHub,
   OssifiableProxy,
-  PredepositGuarantee_HarnessForFactory,
+  PredepositGuarantee__HarnessForFactory,
   StakingVault__MockForVaultHub,
   VaultFactory__MockForVaultHub,
   VaultHub,
@@ -50,7 +50,7 @@ describe("VaultHub.sol:hub", () => {
   let stranger: HardhatEthersSigner;
   let whale: HardhatEthersSigner;
 
-  let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
+  let predepositGuarantee: PredepositGuarantee__HarnessForFactory;
   let locator: LidoLocator;
   let vaultHub: VaultHub;
   let depositContract: DepositContract__MockForVaultHub;
@@ -106,7 +106,7 @@ describe("VaultHub.sol:hub", () => {
   before(async () => {
     [deployer, user, stranger, whale] = await ethers.getSigners();
 
-    predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee__HarnessForFactory", [
       GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
