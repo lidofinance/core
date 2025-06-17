@@ -367,7 +367,7 @@ const simulateReport = async (
     withdrawalFinalizationBatches: [],
   };
   const update = await accounting.simulateOracleReport(reportValues, withdrawalShareRate);
-  const [postTotalPooledEther, postTotalShares, withdrawals, elRewards] = update;
+  const { postTotalPooledEther, postTotalShares, withdrawals, elRewards } = update;
 
   log.debug("Simulation result", {
     "Post Total Pooled Ether": formatEther(postTotalPooledEther),
