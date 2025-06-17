@@ -40,8 +40,8 @@ contract Permissions__Harness is Permissions {
         _burnShares(_shares);
     }
 
-    function rebalanceVault(uint256 _ether) external {
-        _rebalanceVault(_ether);
+    function rebalanceVault(uint256 _shares) external {
+        _rebalanceVault(_shares);
     }
 
     function pauseBeaconChainDeposits() external {

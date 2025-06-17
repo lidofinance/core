@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
 
 contract IStETH {
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {}
@@ -61,6 +62,14 @@ contract VaultHub__MockForDashboard {
 
     function latestReport(address _vault) external view returns (VaultHub.Report memory) {
         return vaultRecords[_vault].report;
+    }
+
+    function maxLockableValue(address _vault) external view returns (uint256) {
+        return vaultRecords[_vault].report.totalValue;
+    }
+
+    function withdrawableValue(address _vault) external view returns (uint256) {
+        return Math256.min(vaultRecords[_vault].report.totalValue - vaultRecords[_vault].locked, _vault.balance);
     }
 
     function disconnect(address vault) external {

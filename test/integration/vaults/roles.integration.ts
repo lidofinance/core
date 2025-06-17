@@ -347,10 +347,23 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           );
         });
 
-        it("rebalanceVault", async () => {
+        it("rebalanceVaultWithShares", async () => {
           await testMethod(
             testDashboard,
-            "rebalanceVault",
+            "rebalanceVaultWithShares",
+            {
+              successUsers: [rebalancer, owner],
+              failingUsers: allRoles.filter((r) => r !== rebalancer && r !== owner),
+            },
+            [1n],
+            await testDashboard.REBALANCE_ROLE(),
+          );
+        });
+
+        it("rebalanceVaultWithEther", async () => {
+          await testMethod(
+            testDashboard,
+            "rebalanceVaultWithEther",
             {
               successUsers: [rebalancer, owner],
               failingUsers: allRoles.filter((r) => r !== rebalancer && r !== owner),

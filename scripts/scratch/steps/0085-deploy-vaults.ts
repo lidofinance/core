@@ -96,7 +96,6 @@ export async function main() {
   // Deploy LazyOracle
   const lazyOracle_ = await deployBehindOssifiableProxy(Sk.lazyOracle, "LazyOracle", proxyContractsOwner, deployer, [
     locatorAddress,
-    hashConsensusAddress,
   ]);
 
   const lazyOracleAdmin = deployer;
