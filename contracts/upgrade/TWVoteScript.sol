@@ -70,20 +70,24 @@ contract TWVoteScript is OmnibusBase {
         address node_operators_registry_impl;
         address oracle_daemon_config;
         address nor_app_repo;
+        address sdvt_app_repo;
         // Other parameters
         bytes32 node_operators_registry_app_id;
+        bytes32 sdvt_app_id;
         uint16[3] nor_version;
+        uint16[3] sdvt_version;
         uint256 vebo_consensus_version;
         uint256 ao_consensus_version;
         uint256 nor_exit_deadline_in_sec;
         uint256 exit_events_lookback_window_in_slots;
         bytes nor_content_uri;
+        bytes sdvt_content_uri;
     }
 
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 20;
+    uint256 public constant VOTE_ITEMS_COUNT = 22;
 
     //
     // Structured storage
@@ -332,6 +336,32 @@ contract TWVoteScript is OmnibusBase {
                 abi.encodeCall(
                     IOracleDaemonConfig.set,
                     ("EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS", abi.encode(params.exit_events_lookback_window_in_slots))
+                )
+            )
+        });
+
+        // 23. Publish new NodeOperatorsRegistry implementation in SimpleDVT app APM repo
+        voteItems[index++] = VoteItem({
+            description: "23. Publish new NodeOperatorsRegistry implementation in SimpleDVT app APM repo",
+            call: _votingCall(
+                params.sdvt_app_repo,
+                abi.encodeCall(
+                    IRepo.newVersion,
+                    (params.sdvt_version, params.node_operators_registry_impl, params.nor_content_uri)
+                )
+            )
+        });
+
+        // 24. Update SimpleDVT implementation
+        voteItems[index++] = VoteItem({
+            description: "24. Update SimpleDVT implementation",
+            call: _votingCall(
+                0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc,
+                abi.encodeWithSignature(
+                    "setApp(bytes32,bytes32,address)",
+                    IKernel(0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc).APP_BASES_NAMESPACE(),
+                    params.sdvt_app_id,
+                    params.node_operators_registry_impl
                 )
             )
         });
