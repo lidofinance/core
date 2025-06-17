@@ -10,10 +10,11 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/Upgra
 import {IBurner as IBurnerWithoutAccessControl} from "contracts/common/interfaces/IBurner.sol";
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
+
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
-import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 
 import {V3Addresses} from "./V3Addresses.sol";
@@ -110,6 +111,15 @@ contract V3Template is V3Addresses {
     uint256 public initialTotalPooledEther;
     address[] public contractsWithBurnerAllowances;
 
+    //
+    // Slots for transient storage
+    //
+
+    // Slot for the upgrade started flag
+    // keccak256("V3Template.upgradeStartedFlag")
+    bytes32 public constant UPGRADE_STARTED_SLOT =
+        0x058d69f67a3d86c424c516d23a070ff8bed34431617274caa2049bd702675e3f;
+
 
     /// @param _params Params required to initialize the addresses contract
     constructor(V3AddressesParams memory _params) V3Addresses(_params) {
@@ -123,8 +133,11 @@ contract V3Template is V3Addresses {
     function startUpgrade() external {
         if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
         if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
+        if (isUpgradeFinished) revert UpgradeAlreadyFinished();
+        if (_isStartCalledInThisTx()) revert StartAlreadyCalledInThisTx();
         if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
 
+        assembly { tstore(UPGRADE_STARTED_SLOT, 1) }
         upgradeBlockNumber = block.number;
 
         initialTotalShares = ILidoWithFinalizeUpgrade(LIDO).getTotalShares();
@@ -140,8 +153,8 @@ contract V3Template is V3Addresses {
 
     function finishUpgrade() external {
         if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
-        if (upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
         if (isUpgradeFinished) revert UpgradeAlreadyFinished();
+        if (!_isStartCalledInThisTx()) revert StartAndFinishMustBeInSameTx();
 
         isUpgradeFinished = true;
 
@@ -357,6 +370,12 @@ contract V3Template is V3Addresses {
         }
     }
 
+    function _isStartCalledInThisTx() internal view returns (bool isStartCalledInThisTx) {
+        assembly {
+            isStartCalledInThisTx := tload(UPGRADE_STARTED_SLOT)
+        }
+    }
+
     error OnlyAgentCanUpgrade();
     error UpgradeAlreadyStarted();
     error UpgradeAlreadyFinished();
@@ -367,6 +386,8 @@ contract V3Template is V3Addresses {
     error NonZeroRoleHolders(address contractAddress, bytes32 role);
     error IncorrectAragonAppImplementation(address repo, address implementation);
     error StartAndFinishMustBeInSameBlock();
+    error StartAndFinishMustBeInSameTx();
+    error StartAlreadyCalledInThisTx();
     error Expired();
     error IncorrectBurnerSharesMigration();
     error IncorrectBurnerAllowance(address contractAddress, address burner);

@@ -3,7 +3,7 @@
 
 // See contracts/COMPILERS.md
 // solhint-disable-next-line lido/fixed-compiler-version
-pragma solidity ^0.8.25;
+pragma solidity >=0.8.25;
 
 import {BLS12_381} from "contracts/common/lib/BLS.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";

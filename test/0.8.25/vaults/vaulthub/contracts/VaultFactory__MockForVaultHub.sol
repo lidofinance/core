@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.0;
 
 import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol";
 import {BeaconProxy} from "@openzeppelin/contracts-v5.2/proxy/beacon/BeaconProxy.sol";

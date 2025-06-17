@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.0;
 
 import {TierParams} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 

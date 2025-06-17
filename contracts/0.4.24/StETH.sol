@@ -8,6 +8,7 @@ import {IERC20} from "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStorage.sol";
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 import {Pausable} from "./utils/Pausable.sol";
+import {UnstructuredStorageUint128} from "./utils/UnstructuredStorageUint128.sol";
 
 /**
  * @title Interest-bearing ERC20-like token for Lido Liquid Stacking protocol.
@@ -49,9 +50,11 @@ import {Pausable} from "./utils/Pausable.sol";
 contract StETH is IERC20, Pausable {
     using SafeMath for uint256;
     using UnstructuredStorage for bytes32;
+    using UnstructuredStorageUint128 for bytes32;
 
     address constant internal INITIAL_TOKEN_HOLDER = 0xdead;
     uint256 constant internal INFINITE_ALLOWANCE = ~uint256(0);
+    uint256 constant internal UINT128_MAX = ~uint128(0);
 
     /**
      * @dev StETH balances are dynamic and are calculated based on the accounts' shares
@@ -82,6 +85,8 @@ contract StETH is IERC20, Pausable {
      * see https://github.com/lidofinance/lido-dao/issues/181#issuecomment-736098834
      *
      * keccak256("lido.StETH.totalShares")
+     *
+     * @dev Since version 3, high 128 bits can be used to store the external shares from Lido contract
      */
     bytes32 internal constant TOTAL_SHARES_POSITION =
         0xe3b4b636e601189b5f4c6742edf2538ac12bb61ed03e6da26949d69838fa447e;
@@ -299,37 +304,45 @@ contract StETH is IERC20, Pausable {
     }
 
     /**
+     * @param _ethAmount the amount of ether to convert to shares. Must be less than UINT128_MAX.
      * @return the amount of shares that corresponds to `_ethAmount` protocol-controlled Ether.
+     * @dev the result is rounded down.
      */
     function getSharesByPooledEth(uint256 _ethAmount) public view returns (uint256) {
-        return _ethAmount
-            .mul(_getShareRateDenominator()) // denominator in shares
-            .div(_getShareRateNumerator()); // numerator in ether
+        require(_ethAmount < UINT128_MAX, "ETH_TOO_LARGE");
+        return (_ethAmount
+            * _getShareRateDenominator()) // denominator in shares
+            / _getShareRateNumerator(); // numerator in ether
     }
 
     /**
+     * @param _sharesAmount the amount of shares to convert to ether. Must be less than UINT128_MAX.
      * @return the amount of ether that corresponds to `_sharesAmount` token shares.
+     * @dev the result is rounded down.
      */
     function getPooledEthByShares(uint256 _sharesAmount) public view returns (uint256) {
-        return _sharesAmount
-            .mul(_getShareRateNumerator()) // numerator in ether
-            .div(_getShareRateDenominator()); // denominator in shares
+        require(_sharesAmount < UINT128_MAX, "SHARES_TOO_LARGE");
+        return (_sharesAmount
+            * _getShareRateNumerator()) // numerator in ether
+            / _getShareRateDenominator(); // denominator in shares
     }
 
     /**
+     * @param _sharesAmount the amount of shares to convert to ether. Must be less than UINT128_MAX.
      * @return the amount of ether that corresponds to `_sharesAmount` token shares.
      * @dev The result is rounded up. So,
      *  for `shareRate >= 0.5`, `getSharesByPooledEth(getPooledEthBySharesRoundUp(1))` will be 1.
      */
     function getPooledEthBySharesRoundUp(uint256 _sharesAmount) public view returns (uint256 etherAmount) {
+        require(_sharesAmount < UINT128_MAX, "SHARES_TOO_LARGE");
         uint256 numeratorInEther = _getShareRateNumerator();
         uint256 denominatorInShares = _getShareRateDenominator();
 
-        etherAmount = _sharesAmount
-            .mul(numeratorInEther)
-            .div(denominatorInShares);
+        etherAmount = (_sharesAmount
+            * numeratorInEther)
+            / denominatorInShares;
 
-        if (_sharesAmount.mul(numeratorInEther) != etherAmount.mul(denominatorInShares)) {
+        if (_sharesAmount * numeratorInEther != etherAmount * denominatorInShares) {
             ++etherAmount;
         }
     }
@@ -392,6 +405,7 @@ contract StETH is IERC20, Pausable {
     /**
      * @return the numerator of the protocol's share rate (in ether).
      * @dev used to convert shares to tokens and vice versa.
+     * @dev can be overridden in a derived contract.
      */
     function _getShareRateNumerator() internal view returns (uint256) {
         return _getTotalPooledEther();
@@ -400,6 +414,7 @@ contract StETH is IERC20, Pausable {
     /**
      * @return the denominator of the protocol's share rate (in shares).
      * @dev used to convert shares to tokens and vice versa.
+     * @dev can be overridden in a derived contract.
      */
     function _getShareRateDenominator() internal view returns (uint256) {
         return _getTotalShares();
@@ -456,7 +471,7 @@ contract StETH is IERC20, Pausable {
      * @return the total amount of shares in existence.
      */
     function _getTotalShares() internal view returns (uint256) {
-        return TOTAL_SHARES_POSITION.getStorageUint256();
+        return TOTAL_SHARES_POSITION.getLowUint128();
     }
 
     /**
@@ -504,7 +519,7 @@ contract StETH is IERC20, Pausable {
         require(_recipient != address(0), "MINT_TO_ZERO_ADDR");
 
         newTotalShares = _getTotalShares().add(_sharesAmount);
-        TOTAL_SHARES_POSITION.setStorageUint256(newTotalShares);
+        TOTAL_SHARES_POSITION.setLowUint128(uint128(newTotalShares));
 
         shares[_recipient] = shares[_recipient].add(_sharesAmount);
 
@@ -535,7 +550,7 @@ contract StETH is IERC20, Pausable {
         uint256 preRebaseTokenAmount = getPooledEthByShares(_sharesAmount);
 
         newTotalShares = _getTotalShares().sub(_sharesAmount);
-        TOTAL_SHARES_POSITION.setStorageUint256(newTotalShares);
+        TOTAL_SHARES_POSITION.setLowUint128(uint128(newTotalShares));
 
         shares[_account] = accountShares.sub(_sharesAmount);
 

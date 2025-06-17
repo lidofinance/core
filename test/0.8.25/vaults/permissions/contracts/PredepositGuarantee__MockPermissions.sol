@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.0;
 
 contract PredepositGuarantee__MockPermissions {
     event Mock__CompensateDisprovenPredeposit(bytes pubkey, address recipient);

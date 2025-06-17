@@ -5,13 +5,12 @@
 pragma solidity 0.8.25;
 
 import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC20.sol";
-import {Math256} from "contracts/common/lib/Math256.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
-import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
-
-import {ILido as IStETH} from "contracts/0.8.25/interfaces/ILido.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
+import {ILido as IStETH} from "contracts/common/interfaces/ILido.sol";
+import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
@@ -53,7 +52,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Slot for the fund-on-receive flag
      *         keccak256("vaults.Dashboard.fundOnReceive")
      */
-    bytes32 private constant FUND_ON_RECEIVE_FLAG_SLOT =
+    bytes32 public constant FUND_ON_RECEIVE_FLAG_SLOT =
         0x7408b7b034fda7051615c19182918ecb91d753231cffd86f81a45d996d63e038;
 
     /**
@@ -386,11 +385,19 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Rebalances the vault by transferring ether
-     * @param _ether Amount of ether to rebalance
+     * @notice Rebalances StakingVault by withdrawing ether to VaultHub corresponding to shares amount provided
+     * @param _shares amount of shares to rebalance
      */
-    function rebalanceVault(uint256 _ether) external payable fundable {
-        _rebalanceVault(_ether);
+    function rebalanceVaultWithShares(uint256 _shares) external {
+        _rebalanceVault(_shares);
+    }
+
+    /**
+     * @notice Rebalances the vault by transferring ether given the shares amount
+     * @param _ether amount of ether to rebalance
+     */
+    function rebalanceVaultWithEther(uint256 _ether) external payable fundable {
+        _rebalanceVault(_getSharesByPooledEth(_ether));
     }
 
     /**
@@ -422,7 +429,7 @@ contract Dashboard is NodeOperatorFee {
         // Instead of relying on auto-reset at the end of the transaction,
         // re-enable fund-on-receive manually to restore the default receive() behavior in the same transaction
         _enableFundOnReceive();
-        _setRewardsAdjustment(uint128(rewardsAdjustment.amount + totalAmount));
+        _setRewardsAdjustment(rewardsAdjustment.amount + totalAmount);
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
 

@@ -2,18 +2,20 @@
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
-pragma solidity 0.8.25;
+pragma solidity 0.8.9;
 
-import {VaultHub} from "./vaults/VaultHub.sol";
-
-import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
-import {IBurner} from "../common/interfaces/IBurner.sol";
-import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
-import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
-import {IOracleReportSanityChecker} from "./interfaces/IOracleReportSanityChecker.sol";
-import {IWithdrawalQueue} from "./interfaces/IWithdrawalQueue.sol";
-import {ILido} from "./interfaces/ILido.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+import {IOracleReportSanityChecker} from "contracts/common/interfaces/IOracleReportSanityChecker.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
+import {IVaultHub} from "contracts/common/interfaces/IVaultHub.sol";
+
+import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
+
+import {WithdrawalQueue} from "./WithdrawalQueue.sol";
+import {StakingRouter} from "./StakingRouter.sol";
+
 
 /// @title Lido Accounting contract
 /// @author folkyatina
@@ -22,13 +24,13 @@ import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 /// and distributing calculated values to relevant parts of the protocol
 contract Accounting {
     struct Contracts {
-        address accountingOracleAddress;
+        address accountingOracle;
         IOracleReportSanityChecker oracleReportSanityChecker;
         IBurner burner;
-        IWithdrawalQueue withdrawalQueue;
+        WithdrawalQueue withdrawalQueue;
         IPostTokenRebaseReceiver postTokenRebaseReceiver;
-        IStakingRouter stakingRouter;
-        VaultHub vaultHub;
+        StakingRouter stakingRouter;
+        IVaultHub vaultHub;
     }
 
     struct PreReportState {
@@ -39,6 +41,7 @@ contract Accounting {
         uint256 depositedValidators;
         uint256 externalShares;
         uint256 externalEther;
+        uint256 badDebtToInternalize;
     }
 
     /// @notice precalculated values that is used to change the state of the protocol during the report
@@ -110,7 +113,7 @@ contract Accounting {
         uint256 _withdrawalShareRate
     ) public view returns (CalculatedValues memory update) {
         Contracts memory contracts = _loadOracleReportContracts();
-        PreReportState memory pre = _snapshotPreReportState();
+        PreReportState memory pre = _snapshotPreReportState(contracts);
 
         return _simulateOracleReport(contracts, pre, _report, _withdrawalShareRate);
     }
@@ -120,7 +123,7 @@ contract Accounting {
     /// @dev periodically called by the AccountingOracle contract
     function handleOracleReport(ReportValues calldata _report) external {
         Contracts memory contracts = _loadOracleReportContracts();
-        if (msg.sender != contracts.accountingOracleAddress) revert NotAuthorized("handleOracleReport", msg.sender);
+        if (msg.sender != contracts.accountingOracle) revert NotAuthorized("handleOracleReport", msg.sender);
 
         (
             PreReportState memory pre,
@@ -136,7 +139,7 @@ contract Accounting {
         Contracts memory _contracts,
         ReportValues calldata _report
     ) internal view returns (PreReportState memory pre, CalculatedValues memory update, uint256 withdrawalsShareRate) {
-        pre = _snapshotPreReportState();
+        pre = _snapshotPreReportState(_contracts);
 
         CalculatedValues memory updateNoWithdrawals = _simulateOracleReport(_contracts, pre, _report, 0);
 
@@ -146,12 +149,13 @@ contract Accounting {
     }
 
     /// @dev reads the current state of the protocol to the memory
-    function _snapshotPreReportState() internal view returns (PreReportState memory pre) {
+    function _snapshotPreReportState(Contracts memory _contracts) internal view returns (PreReportState memory pre) {
         (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
         pre.externalEther = LIDO.getExternalEther();
+        pre.badDebtToInternalize = _contracts.vaultHub.badDebtToInternalizeAsOfLastRefSlot();
     }
 
     /// @dev calculates all the state changes that is required to apply the report
@@ -211,10 +215,11 @@ contract Accounting {
         // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
         update.sharesToMintAsFees = _calculateLidoProtocolFeeShares(_report, update, postInternalSharesBeforeFees, update.postInternalEther);
 
-        update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees;
+        update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees + _pre.badDebtToInternalize;
+        uint256 postExternalShares = _pre.externalShares - _pre.badDebtToInternalize; // can't underflow by design
 
-        update.postTotalShares = update.postInternalShares + _pre.externalShares;
-        update.postTotalPooledEther = update.postInternalEther + _pre.externalShares * update.postInternalEther / update.postInternalShares;
+        update.postTotalShares = update.postInternalShares + postExternalShares;
+        update.postTotalPooledEther = update.postInternalEther + postExternalShares * update.postInternalEther / update.postInternalShares;
     }
 
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
@@ -287,6 +292,11 @@ contract Accounting {
             _report.clValidators,
             _report.clBalance
         );
+
+        if (_pre.badDebtToInternalize > 0) {
+            _contracts.vaultHub.decreaseInternalizedBadDebt(_pre.badDebtToInternalize);
+            LIDO.internalizeExternalBadDebt(_pre.badDebtToInternalize);
+        }
 
         if (_update.totalSharesToBurn > 0) {
             _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
@@ -377,7 +387,7 @@ contract Accounting {
 
     /// @dev mints protocol fees to the treasury and node operators
     function _distributeFee(
-        IStakingRouter _stakingRouter,
+        StakingRouter _stakingRouter,
         StakingRewardsDistribution memory _rewardsDistribution,
         uint256 _sharesToMintAsFees
     ) internal {
@@ -422,7 +432,7 @@ contract Accounting {
     /// @dev loads the required contracts from the LidoLocator to the struct in the memory
     function _loadOracleReportContracts() internal view returns (Contracts memory) {
         (
-            address accountingOracleAddress,
+            address accountingOracle,
             address oracleReportSanityChecker,
             address burner,
             address withdrawalQueue,
@@ -433,19 +443,19 @@ contract Accounting {
 
         return
             Contracts(
-                accountingOracleAddress,
+                accountingOracle,
                 IOracleReportSanityChecker(oracleReportSanityChecker),
                 IBurner(burner),
-                IWithdrawalQueue(withdrawalQueue),
+                WithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
-                IStakingRouter(stakingRouter),
-                VaultHub(payable(vaultHub))
+                StakingRouter(payable(stakingRouter)),
+                IVaultHub(payable(vaultHub))
             );
     }
 
     /// @dev loads the staking rewards distribution to the struct in the memory
     function _getStakingRewardsDistribution(
-        IStakingRouter _stakingRouter
+        StakingRouter _stakingRouter
     ) internal view returns (StakingRewardsDistribution memory ret) {
         (ret.recipients, ret.moduleIds, ret.modulesFees, ret.totalFee, ret.precisionPoints) = _stakingRouter
             .getStakingRewardsDistribution();
