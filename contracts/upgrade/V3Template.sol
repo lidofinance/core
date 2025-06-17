@@ -133,9 +133,9 @@ contract V3Template is V3Addresses {
     function startUpgrade() external {
         if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
         if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
-        if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
         if (isUpgradeFinished) revert UpgradeAlreadyFinished();
         if (_isStartCalledInThisTx()) revert StartAlreadyCalledInThisTx();
+        if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
 
         assembly { tstore(UPGRADE_STARTED_SLOT, 1) }
         upgradeBlockNumber = block.number;
