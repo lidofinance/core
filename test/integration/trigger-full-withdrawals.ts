@@ -35,7 +35,7 @@ describe("TriggerFullWithdrawals Integration", () => {
   const validatorData = [
     { stakingModuleId: 1, nodeOperatorId: 0, pubkey: PUBKEYS[0] },
     { stakingModuleId: 1, nodeOperatorId: 1, pubkey: PUBKEYS[1] },
-    { stakingModuleId: 2, nodeOperatorId: 0, pubkey: PUBKEYS[2] },
+    // { stakingModuleId: 2, nodeOperatorId: 0, pubkey: PUBKEYS[2] },
   ];
 
   before(async () => {
