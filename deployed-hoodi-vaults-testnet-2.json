@@ -11,7 +11,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/Accounting.sol",
-      "address": "0xa833E5Bc6c38Ab06dfe2ef27947Abb26323538dD",
+      "address": "0xA125e823C724Ea94F5935554DA3e76b65631682F",
       "constructorArgs": ["0xD7c1B80fA86965B48cCA3aDcCB08E1DAEa291980", "0x2C220A2a91602dd93bEAC7b3A1773cdADE369ba1"]
     }
   },
@@ -670,7 +670,7 @@
       ]
     }
   },
-  "scratchDeployGasUsed": "157280773",
+  "scratchDeployGasUsed": "159122409",
   "simpleDvt": {
     "deployParameters": {
       "stakingModuleName": "SimpleDVT",
