@@ -244,7 +244,7 @@ describe("Scenario: Protocol Happy Path", () => {
     });
   });
 
-  it.skip("Should rebase correctly", async () => {
+  it("Should rebase correctly", async () => {
     const { lido, withdrawalQueue, locator, burner, nor, sdvt } = ctx.contracts;
 
     const treasuryAddress = await locator.treasury();
