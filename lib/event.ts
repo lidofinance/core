@@ -1,5 +1,7 @@
 import { ContractTransactionReceipt, EventLog, Interface, Log, LogDescription } from "ethers";
 
+import { LogDescriptionExtended } from "lib/protocol/types";
+
 import { log } from "./log";
 
 const parseEventLog = (entry: EventLog): LogDescription | null => {
@@ -38,13 +40,35 @@ export function findEventsWithInterfaces(
   receipt: ContractTransactionReceipt,
   eventName: string,
   interfaces: Interface[],
-): LogDescription[] {
-  const events: LogDescription[] = [];
+  numberOfIndexedParams?: number,
+): LogDescriptionExtended[] {
+  const events: LogDescriptionExtended[] = [];
   const notParsedLogs: Log[] = [];
 
+  const topics0OfInterest = interfaces.map((iface) => {
+    return iface.getEvent(eventName)?.topicHash;
+  });
+
   receipt.logs.forEach((entry) => {
-    const logDescription = parseLogEntry(entry, interfaces);
+    if (
+      !topics0OfInterest.includes(entry.topics[0]) ||
+      (numberOfIndexedParams !== undefined && entry.topics.length !== numberOfIndexedParams + 1)
+    ) {
+      // We do preliminary filtering here to avoid unnecessary parsing
+      // and possible 'Error parsing log with interface "data out-of-bounds"'
+      // errors in iface.parseLog used inside of parseLogEntry if parseLog
+      // called upon log not matching the interface
+      // We also filter out logs with different number of indexed params
+      // to distinguish cases like Transfer of ERC20 and NFT which have
+      // the same signature but different number of indexed params:
+      //   event Transfer(address indexed from, address indexed to, uint256 value);
+      //   event Transfer(address indexed from, address indexed to, uint256 indexed requestId);
+      return;
+    }
+
+    const logDescription = parseLogEntry(entry, interfaces) as LogDescriptionExtended;
     if (logDescription) {
+      logDescription.address = entry.address;
       events.push(logDescription);
     } else {
       notParsedLogs.push(entry);
@@ -58,6 +82,8 @@ export function findEventsWithInterfaces(
   return events.filter((e) => e.name === eventName);
 }
 
+// NB: This function might mislead because receipt.logs might be Log[]
+//     instead of EventLog[] and no event would be found
 export function findEvents(receipt: ContractTransactionReceipt, eventName: string) {
   const events = [];
 

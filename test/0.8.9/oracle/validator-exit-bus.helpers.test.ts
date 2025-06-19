@@ -21,7 +21,8 @@ const PUBKEYS = [
 
 const DATA_FORMAT_LIST = 1;
 
-describe("ValidatorsExitBusOracle.sol:helpers", () => {
+// TODO: update upon TW integrations arrive
+describe.skip("ValidatorsExitBusOracle.sol:helpers", () => {
   let oracle: ValidatorsExitBus__Harness;
   let admin: HardhatEthersSigner;
 

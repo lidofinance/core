@@ -347,13 +347,13 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         .to.emit(nor, "ValidatorExitStatusUpdated")
         .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, cutoff + exitDeadlineThreshold);
 
-        const result = await nor.isValidatorExitDelayPenaltyApplicable(
-          firstNodeOperatorId,
-            cutoff + exitDeadlineThreshold,
-            testPublicKey,
-            eligibleToExitInSec,
-        );
-        expect(result).to.be.false;
+      const result = await nor.isValidatorExitDelayPenaltyApplicable(
+        firstNodeOperatorId,
+        cutoff + exitDeadlineThreshold,
+        testPublicKey,
+        eligibleToExitInSec,
+      );
+      expect(result).to.be.false;
     });
   });
 

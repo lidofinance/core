@@ -2,9 +2,12 @@ import { ethers } from "hardhat";
 
 import {
   Burner,
+  LazyOracle,
+  OperatorGrid,
   StakingRouter,
   TriggerableWithdrawalsGateway,
   ValidatorsExitBusOracle,
+  VaultHub,
   WithdrawalQueueERC721,
 } from "typechain-types";
 
@@ -22,13 +25,17 @@ export async function main() {
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const simpleDvtApp = state[Sk.appSimpleDvt].proxy.address;
   const gateSealAddress = state.gateSeal.address;
-  const burnerAddress = state[Sk.burner].address;
+  const burnerAddress = state[Sk.burner].proxy.address;
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const withdrawalQueueAddress = state[Sk.withdrawalQueueERC721].proxy.address;
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
+  const accountingAddress = state[Sk.accounting].proxy.address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
+  const vaultHubAddress = state[Sk.vaultHub].proxy.address;
+  const operatorGridAddress = state[Sk.operatorGrid].proxy.address;
   const triggerableWithdrawalsGatewayAddress = state[Sk.triggerableWithdrawalsGateway].address;
+  const lazyOracleAddress = state[Sk.lazyOracle].proxy.address;
 
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
@@ -48,6 +55,9 @@ export async function main() {
     from: deployer,
   });
   await makeTx(stakingRouter, "grantRole", [await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), agentAddress], {
+    from: deployer,
+  });
+  await makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), accountingAddress], {
     from: deployer,
   });
   await makeTx(
@@ -104,11 +114,42 @@ export async function main() {
 
   // Burner
   const burner = await loadContract<Burner>("Burner", burnerAddress);
+  const requestBurnSharesRole = await burner.REQUEST_BURN_SHARES_ROLE();
   // NB: REQUEST_BURN_SHARES_ROLE is already granted to Lido in Burner constructor
-  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), nodeOperatorsRegistryAddress], {
+  // TODO: upon TW upgrade NOR dont need the role anymore
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, nodeOperatorsRegistryAddress], {
     from: deployer,
   });
-  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), simpleDvtApp], {
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, simpleDvtApp], {
     from: deployer,
   });
+  await makeTx(burner, "grantRole", [requestBurnSharesRole, accountingAddress], {
+    from: deployer,
+  });
+
+  // VaultHub
+  const vaultHub = await loadContract<VaultHub>("VaultHub", vaultHubAddress);
+  await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_MASTER_ROLE(), agentAddress], {
+    from: deployer,
+  });
+  await makeTx(vaultHub, "grantRole", [await vaultHub.VAULT_CODEHASH_SET_ROLE(), deployer], {
+    from: deployer,
+  });
+  await makeTx(vaultHub, "grantRole", [await vaultHub.REDEMPTION_MASTER_ROLE(), agentAddress], {
+    from: deployer,
+  });
+  await makeTx(vaultHub, "grantRole", [await vaultHub.VALIDATOR_EXIT_ROLE(), agentAddress], {
+    from: deployer,
+  });
+
+  // OperatorGrid
+  const operatorGrid = await loadContract<OperatorGrid>("OperatorGrid", operatorGridAddress);
+  await makeTx(operatorGrid, "grantRole", [await operatorGrid.REGISTRY_ROLE(), agentAddress], {
+    from: deployer,
+  });
+
+  // LazyOracle
+  const lazyOracle = await loadContract<LazyOracle>("LazyOracle", lazyOracleAddress);
+  const updateSanityParamsRole = await lazyOracle.UPDATE_SANITY_PARAMS_ROLE();
+  await makeTx(lazyOracle, "grantRole", [updateSanityParamsRole, agentAddress], { from: deployer });
 }

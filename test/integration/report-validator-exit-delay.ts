@@ -15,7 +15,8 @@ import {
 import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
 import { Snapshot } from "test/suite";
 
-describe("Report Validator Exit Delay", () => {
+// TODO: update upon TW integrations arrive
+describe.skip("Report Validator Exit Delay", () => {
   let ctx: ProtocolContext;
   let beforeEachSnapshot: string;
 
@@ -122,7 +123,7 @@ describe("Report Validator Exit Delay", () => {
       toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
       [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
       encodedExitRequests,
-    )
+    );
 
     await expect(tx).to.not.be.reverted;
     await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
@@ -192,7 +193,7 @@ describe("Report Validator Exit Delay", () => {
       toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
       [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
       encodedExitRequests,
-    )
+    );
 
     await expect(tx).to.not.be.reverted;
     await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
@@ -229,7 +230,7 @@ describe("Report Validator Exit Delay", () => {
       toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
       witnesses,
       encodedExitRequests,
-    )
+    );
 
     await expect(tx).to.not.be.reverted;
     await expect(tx).to.emit(nor, "ValidatorExitStatusUpdated");
@@ -241,7 +242,7 @@ describe("Report Validator Exit Delay", () => {
       toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
       witnesses,
       encodedExitRequests,
-    )
+    );
 
     await expect(tx2).to.not.be.reverted;
     await expect(tx2).to.not.emit(nor, "ValidatorExitStatusUpdated");

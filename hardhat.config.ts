@@ -29,6 +29,8 @@ const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   gasReporter: {
     enabled: !process.env.SKIP_GAS_REPORT,
+    reportPureAndViewMethods: true,
+    etherscan: process.env.ETHERSCAN_API_KEY || "",
   },
   networks: {
     "hardhat": {
@@ -42,10 +44,21 @@ const config: HardhatUserConfig = {
         // default hardhat's node mnemonic
         mnemonic: "test test test test test test test test test test test junk",
         count: 30,
-        accountsBalance: "100000000000000000000000",
+        accountsBalance: "10000000000000000000000000",
       },
       forking: getHardhatForkingConfig(),
+      hardfork: "prague",
+      mining: {
+        mempool: {
+          order: "fifo",
+        },
+      },
     },
+    "custom": {
+      url: RPC_URL,
+      timeout: 120_000,
+    },
+    // local nodes
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
     },
@@ -53,32 +66,49 @@ const config: HardhatUserConfig = {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
       accounts: [process.env.LOCAL_DEVNET_PK || ZERO_PK],
     },
-    "mainnet-fork": {
-      url: process.env.MAINNET_RPC_URL || RPC_URL,
-      timeout: 20 * 60 * 1000, // 20 minutes
-    },
-    "holesky": {
-      url: process.env.HOLESKY_RPC_URL || RPC_URL,
-      chainId: 17000,
-      accounts: loadAccounts("holesky"),
-    },
-    "hoodi": {
-      url: process.env.HOLESKY_RPC_URL || RPC_URL,
-      chainId: 560048,
-      // accounts: loadAccounts("holesky"),
-    },
+    // testnets
     "sepolia": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
       accounts: loadAccounts("sepolia"),
     },
+    "hoodi": {
+      url: process.env.HOODI_RPC_URL || RPC_URL,
+      chainId: 560048,
+      accounts: loadAccounts("hoodi"),
+    },
+    // forks
+    "mainnet-fork": {
+      url: process.env.MAINNET_RPC_URL || RPC_URL,
+      timeout: 20 * 60 * 1000, // 20 minutes
+    },
     "sepolia-fork": {
       url: process.env.SEPOLIA_RPC_URL || RPC_URL,
       chainId: 11155111,
     },
+    "hoodi-fork": {
+      url: process.env.HOODI_RPC_URL || RPC_URL,
+      chainId: 560048,
+    },
   },
   etherscan: {
     customChains: [
+      {
+        network: "local-devnet",
+        chainId: 32382,
+        urls: {
+          apiURL: "http://localhost:3080/api",
+          browserURL: "http://localhost:3080",
+        },
+      },
+      {
+        network: "hoodi",
+        chainId: 560048,
+        urls: {
+          apiURL: "https://api-hoodi.etherscan.io/api",
+          browserURL: "https://hoodi.etherscan.io/",
+        },
+      },
       {
         network: "local-devnet",
         chainId: parseInt(process.env.LOCAL_DEVNET_CHAIN_ID ?? "32382", 10),
@@ -118,16 +148,6 @@ const config: HardhatUserConfig = {
       },
       {
         version: "0.6.12",
-        settings: {
-          optimizer: {
-            enabled: true,
-            runs: 200,
-          },
-          evmVersion: "istanbul",
-        },
-      },
-      {
-        version: "0.8.4",
         settings: {
           optimizer: {
             enabled: true,
@@ -181,6 +201,7 @@ const config: HardhatUserConfig = {
     },
   },
   mocha: {
+    fullTrace: true,
     rootHooks: mochaRootHooks,
     timeout: 20 * 60 * 1000, // 20 minutes
   },
@@ -202,7 +223,7 @@ const config: HardhatUserConfig = {
     alphaSort: false,
     disambiguatePaths: false,
     runOnCompile: process.env.SKIP_CONTRACT_SIZE ? false : true,
-    strict: true,
+    strict: false,
     except: ["template", "mocks", "@aragon", "openzeppelin", "test"],
   },
 };

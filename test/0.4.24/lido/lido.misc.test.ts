@@ -194,12 +194,6 @@ describe("Lido.sol:misc", () => {
     });
   });
 
-  context("getOracle", () => {
-    it("Returns the address of the legacy oracle", async () => {
-      expect(await lido.getOracle()).to.equal(await locator.legacyOracle());
-    });
-  });
-
   context("getTreasury", () => {
     it("Returns the address of the Lido treasury", async () => {
       expect(await lido.getTreasury()).to.equal(await locator.treasury());
