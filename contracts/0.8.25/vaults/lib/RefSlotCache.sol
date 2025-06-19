@@ -75,7 +75,7 @@ library RefSlotCache {
         IHashConsensus _consensus
     ) internal view returns (uint112) {
         (uint256 refSlot, ) = _consensus.getCurrentFrame();
-        if (uint32(refSlot) > _storage.refSlot) {
+        if (uint32(refSlot) != _storage.refSlot) {
             return _storage.value;
         } else {
             return _storage.valueOnRefSlot;
@@ -91,7 +91,7 @@ library RefSlotCache {
         IHashConsensus _consensus
     ) internal view returns (int112) {
         (uint256 refSlot, ) = _consensus.getCurrentFrame();
-        if (uint32(refSlot) > _storage.refSlot) {
+        if (uint32(refSlot) != _storage.refSlot) {
             return _storage.value;
         } else {
             return _storage.valueOnRefSlot;
