@@ -114,10 +114,6 @@ contract StakingModule__MockForTriggerableWithdrawals is IStakingModule {
         return;
     }
 
-    function updateRefundedValidatorsCount(uint256, uint256) external pure override {
-        return;
-    }
-
     function updateExitedValidatorsCount(bytes calldata, bytes calldata) external pure override {
         return;
     }
