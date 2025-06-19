@@ -4,7 +4,7 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.9;
 
-import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 /**
  * @title LidoLocator
