@@ -8,9 +8,10 @@ import {AragonApp} from "@aragon/os/contracts/apps/AragonApp.sol";
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStorage.sol";
 
-import {Math256} from "../../common/lib/Math256.sol";
-import {MinFirstAllocationStrategy} from "../../common/lib/MinFirstAllocationStrategy.sol";
-import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
+import {MinFirstAllocationStrategy} from "contracts/common/lib/MinFirstAllocationStrategy.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 import {SigningKeys} from "../lib/SigningKeys.sol";
 import {Packed64x4} from "../lib/Packed64x4.sol";
 import {Versioned} from "../utils/Versioned.sol";
