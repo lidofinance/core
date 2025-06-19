@@ -263,7 +263,7 @@ describe("Burner.sol", () => {
     });
   });
 
-  context("requestBurnMyStETH", () => {
+  context("requestBurnMyStETH/requestBurnMyShares", () => {
     beforeEach(async () => await setupBurnStETH());
 
     context("Reverts", () => {
@@ -272,20 +272,49 @@ describe("Burner.sol", () => {
           stranger.address,
           await burner.REQUEST_BURN_MY_STETH_ROLE(),
         );
+
+        await expect(burner.connect(stranger).requestBurnMyShares(burnAmount)).to.be.revertedWithOZAccessControlError(
+          stranger.address,
+          await burner.REQUEST_BURN_MY_STETH_ROLE(),
+        );
       });
 
       it("if the burn amount is zero", async () => {
         await expect(burner.requestBurnMyStETH(0n)).to.be.revertedWithCustomError(burner, "ZeroBurnAmount");
+        await expect(burner.requestBurnMyShares(0n)).to.be.revertedWithCustomError(burner, "ZeroBurnAmount");
       });
     });
 
-    it("Requests the specified amount of stETH to burn", async () => {
+    it("Requests the specified amount of stETH to burn by requestBurnMyStETH", async () => {
       const balancesBefore = await batch({
         holderBalance: steth.balanceOf(holder),
         sharesRequestToBurn: burner.getSharesRequestedToBurn(),
       });
 
       await expect(burner.connect(holder).requestBurnMyStETH(burnAmount))
+        .to.emit(steth, "Transfer")
+        .withArgs(holder.address, await burner.getAddress(), burnAmount)
+        .and.to.emit(burner, "StETHBurnRequested")
+        .withArgs(false, holder.address, burnAmount, burnAmountInShares);
+
+      const balancesAfter = await batch({
+        holderBalance: steth.balanceOf(holder),
+        sharesRequestToBurn: burner.getSharesRequestedToBurn(),
+      });
+
+      expect(balancesAfter.holderBalance).to.equal(balancesBefore.holderBalance - burnAmount);
+      expect(balancesAfter.sharesRequestToBurn["nonCoverShares"]).to.equal(
+        balancesBefore.sharesRequestToBurn["nonCoverShares"] + burnAmountInShares,
+      );
+    });
+
+    it("Requests the specified amount of stETH to burn by requestBurnMyShares", async () => {
+      const balancesBefore = await batch({
+        holderBalance: steth.balanceOf(holder),
+        sharesRequestToBurn: burner.getSharesRequestedToBurn(),
+      });
+
+      await expect(burner.connect(holder).requestBurnMyShares(burnAmountInShares))
         .to.emit(steth, "Transfer")
         .withArgs(holder.address, await burner.getAddress(), burnAmount)
         .and.to.emit(burner, "StETHBurnRequested")
