@@ -34,16 +34,17 @@ function requireEnv(variable: string): string {
 async function deployGateSeal(
   state: DeploymentState,
   deployer: string,
-  sealableContract: string,
+  sealableContracts: string[],
+  sealDuration: number,
   expiryTimestamp: number,
-  kind: Sk.gateSealVEBO | Sk.gateSealTWG,
+  kind: Sk.gateSeal | Sk.gateSealTW,
 ): Promise<void> {
   const gateSealFactory = await loadContract("IGateSealFactory", state[Sk.gateSeal].factoryAddress);
 
   const receipt = await makeTx(
     gateSealFactory,
     "create_gate_seal",
-    [state[Sk.gateSeal].sealingCommittee, state[Sk.gateSeal].sealDuration, [sealableContract], expiryTimestamp],
+    [state[Sk.gateSeal].sealingCommittee, sealDuration, sealableContracts, expiryTimestamp],
     { from: deployer },
   );
 
@@ -55,7 +56,7 @@ async function deployGateSeal(
   // Update the state with the new GateSeal address
   updateObjectInState(kind, {
     factoryAddress: state[Sk.gateSeal].factoryAddress,
-    sealDuration: state[Sk.gateSeal].sealDuration,
+    sealDuration,
     expiryTimestamp,
     sealingCommittee: state[Sk.gateSeal].sealingCommittee,
     address: gateSealAddress,
@@ -114,7 +115,8 @@ async function main(): Promise<void> {
   const TRIGGERABLE_WITHDRAWALS_FRAME_DURATION = 48;
 
   // GateSeal params
-  const EXPIRY_TIMESTAMP = currentBlock.timestamp + 365 * 24 * 60 * 60; // 1 year
+  const GATE_SEAL_EXPIRY_TIMESTAMP = currentBlock.timestamp + 14 * 24 * 60 * 60; // 1 year
+  const GATE_SEAL_DURATION_SECONDS = 14 * 24 * 60 * 60; // 14 days
 
   const agent = state["app:aragon-agent"].proxy.address;
   log(`Using agent: ${agent}`);
@@ -237,22 +239,24 @@ async function main(): Promise<void> {
   const newLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
   log.success(`LidoLocator: ${newLocator.address}`);
 
-  // 8. GateSeal for ValidatorsExitBusOracle
-  const GATE_SEAL_VEBO = await deployGateSeal(
+  // 8. GateSeal for withdrawalQueueERC721
+  const WQ_GATE_SEAL = await deployGateSeal(
     state,
     deployer,
-    await locator.validatorsExitBusOracle(),
-    EXPIRY_TIMESTAMP,
-    Sk.gateSealVEBO,
+    [state.withdrawalQueueERC721.proxy.address],
+    GATE_SEAL_DURATION_SECONDS,
+    GATE_SEAL_EXPIRY_TIMESTAMP,
+    Sk.gateSeal,
   );
 
-  // 9. GateSeal for TriggerableWithdrawalsGateway
-  const GATE_SEAL_TWG = await deployGateSeal(
+  // 9. GateSeal for Triggerable Withdrawals
+  const TW_GATE_SEAL = await deployGateSeal(
     state,
     deployer,
-    triggerableWithdrawalsGateway.address,
-    EXPIRY_TIMESTAMP,
-    Sk.gateSealTWG,
+    [triggerableWithdrawalsGateway.address, await locator.validatorsExitBusOracle()],
+    GATE_SEAL_DURATION_SECONDS,
+    GATE_SEAL_EXPIRY_TIMESTAMP,
+    Sk.gateSealTW,
   );
 
   // -----------------------------------------------------------------------
@@ -270,8 +274,8 @@ async function main(): Promise<void> {
   log(`VALIDATOR_EXIT_DELAY_VERIFIER_IMPL = "${validatorExitDelayVerifier.address}"`);
   log(`TRIGGERABLE_WITHDRAWALS_GATEWAY_IMPL = "${triggerableWithdrawalsGateway.address}"\n`);
   log.emptyLine();
-  log(`GATE_SEAL_VEBO = "${GATE_SEAL_VEBO}"`);
-  log(`GATE_SEAL_TWG = "${GATE_SEAL_TWG}"`);
+  log(`WQ_GATE_SEAL = "${WQ_GATE_SEAL}"`);
+  log(`TW_GATE_SEAL = "${TW_GATE_SEAL}"`);
   log.emptyLine();
 }
 
