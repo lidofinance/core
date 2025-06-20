@@ -91,7 +91,8 @@ async function main(): Promise<void> {
     slotsPerEpoch: number;
     secondsPerSlot: number;
     genesisTime: number;
-    depositContractAddress: string;
+    depositContractAddress: string; // legacy support
+    depositContract?: string;
   };
 
   log(`Chain spec: ${JSON.stringify(chainSpec, null, 2)}`);
@@ -100,7 +101,7 @@ async function main(): Promise<void> {
   const SECONDS_PER_SLOT = chainSpec.secondsPerSlot;
   const SLOTS_PER_EPOCH = chainSpec.slotsPerEpoch;
   const GENESIS_TIME = chainSpec.genesisTime;
-  const DEPOSIT_CONTRACT_ADDRESS = chainSpec.depositContractAddress;
+  const DEPOSIT_CONTRACT_ADDRESS = chainSpec.depositContractAddress ?? chainSpec.depositContract;
   const SHARD_COMMITTEE_PERIOD_SLOTS = 2 ** 8 * SLOTS_PER_EPOCH; // 8192
 
   // G‑indices (phase0 spec)
