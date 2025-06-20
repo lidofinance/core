@@ -191,10 +191,6 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         emit Mock__ExitedValidatorsCountUpdated(_nodeOperatorIds, _stuckValidatorsCounts);
     }
 
-    function updateRefundedValidatorsCount(uint256 _nodeOperatorId, uint256 _refundedValidatorsCount) external {
-        emit Mock__RefundedValidatorsCountUpdated(_nodeOperatorId, _refundedValidatorsCount);
-    }
-
     function updateTargetValidatorsLimits(
         uint256 _nodeOperatorId,
         uint256 _targetLimitMode,

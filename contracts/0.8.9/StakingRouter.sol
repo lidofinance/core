@@ -362,22 +362,6 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         );
     }
 
-    /// @notice Updates the number of the refunded validators in the staking module with the given
-    /// node operator id.
-    /// @param _stakingModuleId Id of the staking module.
-    /// @param _nodeOperatorId Id of the node operator.
-    /// @param _refundedValidatorsCount New number of refunded validators of the node operator.
-    /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
-    function updateRefundedValidatorsCount(
-        uint256 _stakingModuleId,
-        uint256 _nodeOperatorId,
-        uint256 _refundedValidatorsCount
-    ) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
-        _getIStakingModuleById(_stakingModuleId).updateRefundedValidatorsCount(
-            _nodeOperatorId, _refundedValidatorsCount
-        );
-    }
-
     /// @notice Reports the minted rewards to the staking modules with the specified ids.
     /// @param _stakingModuleIds Ids of the staking modules.
     /// @param _totalShares Total shares minted for the staking modules.
@@ -765,6 +749,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
         /// @notice The number of validators that can't be withdrawn, but deposit costs were
         /// compensated to the Lido by the node operator.
+        /// @dev [deprecated] Refunded validators processing has been removed, this field is no longer used.
         uint256 refundedValidatorsCount;
 
         /// @notice A time when the penalty for stuck validators stops applying to node operator rewards.
@@ -817,7 +802,7 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
             uint256 targetLimitMode,
             uint256 targetValidatorsCount,
             /* uint256 stuckValidatorsCount */,
-            uint256 refundedValidatorsCount,
+            /* uint256 refundedValidatorsCount */,
             /* uint256 stuckPenaltyEndTimestamp */,
             uint256 totalExitedValidators,
             uint256 totalDepositedValidators,
@@ -825,7 +810,6 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
         ) = stakingModule.getNodeOperatorSummary(_nodeOperatorId);
         summary.targetLimitMode = targetLimitMode;
         summary.targetValidatorsCount = targetValidatorsCount;
-        summary.refundedValidatorsCount = refundedValidatorsCount;
         summary.totalExitedValidators = totalExitedValidators;
         summary.totalDepositedValidators = totalDepositedValidators;
         summary.depositableValidatorsCount = depositableValidatorsCount;
