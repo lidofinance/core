@@ -116,7 +116,7 @@ async function main(): Promise<void> {
   const TRIGGERABLE_WITHDRAWALS_FRAME_DURATION = 48;
 
   // GateSeal params
-  const GATE_SEAL_EXPIRY_TIMESTAMP = currentBlock.timestamp + 14 * 24 * 60 * 60; // 1 year
+  const GATE_SEAL_EXPIRY_TIMESTAMP = currentBlock.timestamp + 365 * 24 * 60 * 60; // 1 year
   const GATE_SEAL_DURATION_SECONDS = 14 * 24 * 60 * 60; // 14 days
 
   const agent = state["app:aragon-agent"].proxy.address;
