@@ -8,6 +8,7 @@ import {
   BeaconProxy,
   Dashboard,
   DepositContract__MockForBeaconChainDepositor,
+  LazyOracle__MockForNodeOperatorFee,
   LidoLocator,
   OperatorGrid,
   OssifiableProxy,
@@ -23,6 +24,7 @@ import {
 
 import { days, ether, GENESIS_FORK_VERSION } from "lib";
 import { createVaultProxy } from "lib/protocol/helpers";
+import { createVaultProxyWithoutConnectingToVaultHub } from "lib/protocol/helpers/vaults";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
@@ -52,7 +54,7 @@ describe("VaultFactory.sol", () => {
   let locator: LidoLocator;
   let operatorGrid: OperatorGrid;
   let operatorGridImpl: OperatorGrid;
-
+  let lazyOracle: LazyOracle__MockForNodeOperatorFee;
   let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
 
   let vaultBeaconProxy: BeaconProxy;
@@ -77,10 +79,13 @@ describe("VaultFactory.sol", () => {
       0,
     ]);
 
+    lazyOracle = await ethers.deployContract("LazyOracle__MockForNodeOperatorFee");
+
     locator = await deployLidoLocator({
       lido: steth,
       wstETH: wsteth,
       predepositGuarantee: predepositGuarantee,
+      lazyOracle,
     });
 
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
@@ -101,10 +106,13 @@ describe("VaultFactory.sol", () => {
     await operatorGrid.initialize(admin, defaultTierParams);
     await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
 
-    await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid });
-
     // Accounting
-    vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP]);
+    vaultHubImpl = await ethers.deployContract("VaultHub", [
+      locator,
+      steth,
+      ZeroAddress,
+      VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP,
+    ]);
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
     vaultHub = await ethers.getContractAt("VaultHub", proxy, deployer);
     await vaultHub.initialize(admin);
@@ -131,6 +139,8 @@ describe("VaultFactory.sol", () => {
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
     //add VAULT_CODEHASH_SET_ROLE role to allow admin to add factory and vault implementation to the hub
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), admin);
+
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, operatorGrid });
 
     //the initialize() function cannot be called on a contract
     await expect(implOld.initialize(stranger, operator, predepositGuarantee)).to.revertedWithCustomError(
@@ -161,7 +171,7 @@ describe("VaultFactory.sol", () => {
         .withArgs("_lidoLocator");
     });
 
-    it("reverts if `_implementation` is zero address", async () => {
+    it("reverts if `_beacon` is zero address", async () => {
       await expect(
         ethers.deployContract("VaultFactory", [locator, ZeroAddress, dashboard], {
           from: deployer,
@@ -190,19 +200,32 @@ describe("VaultFactory.sol", () => {
   });
 
   context("createVaultWithDashboard", () => {
+    it("reverts if no value is sent", async () => {
+      await expect(
+        vaultFactory.connect(vaultOwner1).createVaultWithDashboard(vaultOwner1, operator, operator, 200n, days(7n), []),
+      ).to.revertedWithCustomError(vaultFactory, "InsufficientFunds");
+    });
+
     it("works with empty `params`", async () => {
       await vaultHub.connect(admin).setAllowedCodehash(vaultProxyCodeHash, true);
       const {
         tx,
         vault,
         dashboard: dashboard_,
-      } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), []);
+      } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [
+        {
+          role: await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
+          account: vaultOwner1.address,
+        },
+      ]);
 
       await expect(tx).to.emit(vaultFactory, "VaultCreated").withArgs(vault);
 
       await expect(tx).to.emit(vaultFactory, "DashboardCreated").withArgs(dashboard_, vault, vaultOwner1);
 
-      expect(await dashboard_.getAddress()).to.eq(await vault.owner());
+      const vaultConnection = await vaultHub.vaultConnection(vault);
+
+      expect(await dashboard_.getAddress()).to.eq(vaultConnection.owner);
     });
 
     it("check `version()`", async () => {
@@ -229,22 +252,17 @@ describe("VaultFactory.sol", () => {
       //attempting to create and connect a vault without adding a proxy bytecode to the allowed list
       await expect(
         createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), []),
-      ).to.revertedWithCustomError(vaultHub, "VaultProxyNotAllowed");
+      ).to.revertedWithCustomError(vaultHub, "CodehashNotAllowed");
 
       //add proxy code hash to whitelist
       await vaultHub.connect(admin).setAllowedCodehash(vaultProxyCodeHash, true);
 
       //create vaults
-      const { vault: vault1, dashboard: dashboard1 } = await createVaultProxy(
-        vaultOwner1,
-        vaultFactory,
-        vaultOwner1,
-        operator,
-        operator,
-        200n,
-        days(7n),
-        [],
-      );
+      const {
+        vault: vault1,
+        proxy: proxy1,
+        dashboard: dashboard1,
+      } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), []);
       const { vault: vault2, dashboard: dashboard2 } = await createVaultProxy(
         vaultOwner2,
         vaultFactory,
@@ -256,9 +274,12 @@ describe("VaultFactory.sol", () => {
         [],
       );
 
+      const vaultConnection1 = await vaultHub.vaultConnection(vault1);
+      const vaultConnection2 = await vaultHub.vaultConnection(vault2);
+
       //owner of vault is delegator
-      expect(await dashboard1.getAddress()).to.eq(await vault1.owner());
-      expect(await dashboard2.getAddress()).to.eq(await vault2.owner());
+      expect(await dashboard1.getAddress()).to.eq(vaultConnection1.owner);
+      expect(await dashboard2.getAddress()).to.eq(vaultConnection2.owner);
 
       const vaultsAfter = await vaultHub.vaultsCount();
       expect(vaultsAfter).to.eq(2);
@@ -266,8 +287,11 @@ describe("VaultFactory.sol", () => {
       const version1Before = await vault1.version();
       const version2Before = await vault2.version();
 
+      const proxy1ImplBefore = await proxy1.implementation();
+
       const implBefore = await beacon.implementation();
       expect(implBefore).to.eq(await implOld.getAddress());
+      expect(proxy1ImplBefore).to.eq(await implOld.getAddress());
 
       //upgrade beacon to new implementation
       await beacon.connect(admin).upgradeTo(implNew);
@@ -286,6 +310,9 @@ describe("VaultFactory.sol", () => {
         days(7n),
         [],
       );
+
+      const proxy1ImplAfter = await proxy1.implementation();
+      expect(proxy1ImplAfter).to.eq(await implNew.getAddress());
 
       const vault1WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault1, deployer);
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
@@ -371,6 +398,69 @@ describe("VaultFactory.sol", () => {
         vault2WithNewImpl,
         "InvalidInitialization",
       );
+    });
+  });
+
+  context("createVaultWithDashboardWithoutConnectingToVaultHub", () => {
+    it("works with roles assigned to node operator", async () => {
+      const { vault } = await createVaultProxyWithoutConnectingToVaultHub(
+        vaultOwner1,
+        vaultFactory,
+        vaultOwner1,
+        operator,
+        operator,
+        200n,
+        days(7n),
+        [
+          {
+            role: await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+            account: operator.address,
+          },
+        ],
+      );
+
+      const vaultConnection = await vaultHub.vaultConnection(vault);
+
+      expect(await dashboard.getAddress()).to.not.eq(vaultConnection.owner);
+      expect(vaultConnection.vaultIndex).to.eq(0);
+    });
+
+    it("works with empty roles", async () => {
+      const { vault } = await createVaultProxyWithoutConnectingToVaultHub(
+        vaultOwner1,
+        vaultFactory,
+        vaultOwner1,
+        operator,
+        operator,
+        200n,
+        days(7n),
+        [],
+      );
+
+      const vaultConnection = await vaultHub.vaultConnection(vault);
+
+      expect(await dashboard.getAddress()).to.not.eq(vaultConnection.owner);
+      expect(vaultConnection.vaultIndex).to.eq(0);
+    });
+
+    it("reverts if node operator manager try to assign different role", async () => {
+      await expect(
+        createVaultProxyWithoutConnectingToVaultHub(
+          vaultOwner1,
+          vaultFactory,
+          vaultOwner1,
+          operator,
+          operator,
+          200n,
+          days(7n),
+          [
+            {
+              role: await dashboard.WITHDRAW_ROLE(),
+              account: operator.address,
+            },
+          ],
+        ),
+      ).to.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
     });
   });
 });

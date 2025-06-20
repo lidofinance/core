@@ -280,6 +280,54 @@ export async function createVaultProxy(
   };
 }
 
+export async function createVaultProxyWithoutConnectingToVaultHub(
+  caller: HardhatEthersSigner,
+  vaultFactory: VaultFactory,
+  vaultOwner: HardhatEthersSigner,
+  nodeOperator: HardhatEthersSigner,
+  nodeOperatorManager: HardhatEthersSigner,
+  nodeOperatorFeeBP: bigint,
+  confirmExpiry: bigint,
+  roleAssignments: Permissions.RoleAssignmentStruct[],
+): Promise<CreateVaultResponse> {
+  const tx = await vaultFactory
+    .connect(caller)
+    .createVaultWithDashboardWithoutConnectingToVaultHub(
+      vaultOwner,
+      nodeOperator,
+      nodeOperatorManager,
+      nodeOperatorFeeBP,
+      confirmExpiry,
+      roleAssignments,
+    );
+
+  // Get the receipt manually
+  const receipt = (await tx.wait())!;
+  const events = findEventsWithInterfaces(receipt, "VaultCreated", [vaultFactory.interface]);
+
+  if (events.length === 0) throw new Error("Vault creation event not found");
+
+  const event = events[0];
+  const { vault } = event.args;
+
+  const dashboardEvents = findEventsWithInterfaces(receipt, "DashboardCreated", [vaultFactory.interface]);
+
+  if (dashboardEvents.length === 0) throw new Error("Dashboard creation event not found");
+
+  const { dashboard: dashboardAddress } = dashboardEvents[0].args;
+
+  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
+  const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
+  const dashboard = (await ethers.getContractAt("Dashboard", dashboardAddress, caller)) as Dashboard;
+
+  return {
+    tx,
+    proxy,
+    vault: stakingVault,
+    dashboard,
+  };
+}
+
 export const getPubkeys = (num: number): { pubkeys: string[]; stringified: string } => {
   const pubkeys = Array.from({ length: num }, (_, i) => {
     const paddedIndex = (i + 1).toString().padStart(8, "0");
