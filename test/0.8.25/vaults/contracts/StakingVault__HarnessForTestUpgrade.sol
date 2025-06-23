@@ -4,9 +4,10 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
-import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 
-import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
+import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
+
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeable {

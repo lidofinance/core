@@ -89,8 +89,10 @@ export enum Sk {
   accounting = "accounting",
   vaultHub = "vaultHub",
   tokenRebaseNotifier = "tokenRebaseNotifier",
+  // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
+  TWVoteScript = "TWVoteScript",
   // Vaults
   predepositGuarantee = "predepositGuarantee",
   stakingVaultImplementation = "stakingVaultImplementation",
@@ -158,6 +160,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorExitDelayVerifier:
     case Sk.triggerableWithdrawalsGateway:
     case Sk.stakingVaultFactory:
+    case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:
       return state[contractKey].address;
     default:
@@ -250,7 +253,6 @@ export function persistNetworkState(state: DeploymentState): void {
 function _getStateFileFileName(networkStateFile = "") {
   // Use the specified network state file or the one from the environment
   networkStateFile = networkStateFile || process.env.NETWORK_STATE_FILE || "";
-
   return networkStateFile
     ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
     : _getFileName(NETWORK_STATE_FILE_DIR, hardhatNetwork.name);

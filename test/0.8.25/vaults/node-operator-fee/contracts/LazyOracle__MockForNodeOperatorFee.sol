@@ -3,22 +3,29 @@
 
 pragma solidity 0.8.25;
 
-import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
+import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 
-contract LazyOracle__MockForNodeOperatorFee is ILazyOracle {
-    QuarantineInfo internal quarantineInfo;
+contract LazyOracle__MockForNodeOperatorFee {
+    LazyOracle.QuarantineInfo internal quarantineInfo;
 
-    function updateReportData(
-        uint256 _timestamp,
-        bytes32 _vaultsDataTreeRoot,
-        string memory _vaultsDataReportCid
-    ) external {}
+    uint64 timestamp;
 
-    function mock__setQuarantineInfo(QuarantineInfo memory _quarantineInfo) external {
+    function mock__setLatestReportTimestamp(uint64 _timestamp) external {
+        if (_timestamp == 0) {
+            timestamp = uint64(block.timestamp);
+        }
+        timestamp = _timestamp;
+    }
+
+    function mock__setQuarantineInfo(LazyOracle.QuarantineInfo memory _quarantineInfo) external {
         quarantineInfo = _quarantineInfo;
     }
 
-    function vaultQuarantine(address) external view returns (QuarantineInfo memory) {
+    function vaultQuarantine(address) external view returns (LazyOracle.QuarantineInfo memory) {
         return quarantineInfo;
+    }
+
+    function latestReportTimestamp() external view returns (uint64) {
+        return timestamp;
     }
 }

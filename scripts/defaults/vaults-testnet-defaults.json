@@ -66,11 +66,6 @@
       "totalNonCoverSharesBurnt": "0"
     }
   },
-  "legacyOracle": {
-    "deployParameters": {
-      "lastCompletedEpochId": 0
-    }
-  },
   "hashConsensusForAccountingOracle": {
     "deployParameters": {
       "fastLaneLengthSlots": 10,
@@ -101,7 +96,11 @@
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
-      "consensusVersion": 2
+      "consensusVersion": 3,
+      "maxValidatorsPerRequest": 600,
+      "maxExitRequestsLimit": 13000,
+      "exitsPerFrame": 1,
+      "frameDurationInSec": 48
     }
   },
   "depositSecurityModule": {
@@ -113,15 +112,16 @@
   },
   "oracleReportSanityChecker": {
     "deployParameters": {
-      "exitedValidatorsPerDayLimit": 9000,
-      "appearedValidatorsPerDayLimit": 43200,
+      "exitedValidatorsPerDayLimit": 1500,
+      "appearedValidatorsPerDayLimit": 1500,
+      "deprecatedOneOffCLBalanceDecreaseBPLimit": 500,
       "annualBalanceIncreaseBPLimit": 1000,
-      "simulatedShareRateDeviationBPLimit": 50,
-      "maxValidatorExitRequestsPerReport": 600,
+      "simulatedShareRateDeviationBPLimit": 250,
+      "maxValidatorExitRequestsPerReport": 2000,
       "maxItemsPerExtraDataTransaction": 8,
       "maxNodeOperatorsPerExtraDataItem": 24,
       "requestTimestampMargin": 128,
-      "maxPositiveTokenRebase": 750000,
+      "maxPositiveTokenRebase": 5000000,
       "initialSlashingAmountPWei": 1000,
       "inactivityPenaltiesAmountPWei": 101,
       "clBalanceOraclesErrorUpperBPLimit": 50
@@ -161,11 +161,42 @@
       "baseUri": null
     }
   },
+  "validatorExitDelayVerifier": {
+    "deployParameters": {
+      "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIHistoricalSummariesPrev": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "gIHistoricalSummariesCurr": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "firstSupportedSlot": 1,
+      "pivotSlot": 1,
+      "shardCommitteePeriodInSeconds": 98304,
+      "shardCommitteePeriodInSecondsComment": "98304 above is 2 ** 8 * 32 * 12"
+    }
+  },
+  "triggerableWithdrawalsGateway": {
+    "deployParameters": {
+      "maxExitRequestsLimit": 13000,
+      "exitsPerFrame": 1,
+      "frameDurationInSec": 48
+    }
+  },
   "predepositGuarantee": {
     "deployParameters": {
       "gIndex": "0x0000000000000000000000000000000000000000000000000096000000000028",
       "gIndexAfterChange": "0x0000000000000000000000000000000000000000000000000096000000000028",
       "changeSlot": 0
+    }
+  },
+  "operatorGrid": {
+    "deployParameters": {
+      "defaultTierParams": {
+        "shareLimitInEther": "1000",
+        "reserveRatioBP": 2000,
+        "forcedRebalanceThresholdBP": 1800,
+        "infraFeeBP": 500,
+        "liquidityFeeBP": 400,
+        "reservationFeeBP": 100
+      }
     }
   }
 }

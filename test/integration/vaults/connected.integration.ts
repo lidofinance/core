@@ -195,12 +195,15 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
   context("Rebalancing", () => {
     it("Owner can rebalance debt to the protocol", async () => {
+      const { lido } = ctx.contracts;
+
       await dashboard.connect(roles.funder).fund({ value: ether("1") }); // total value is 2 ether
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
-      const etherToRebalance = ether(".5");
-      const sharesBurnt = await ctx.contracts.lido.getSharesByPooledEth(etherToRebalance);
 
-      await expect(dashboard.connect(roles.rebalancer).rebalanceVault(etherToRebalance))
+      const sharesBurnt = await vaultHub.liabilityShares(stakingVault);
+      const etherToRebalance = await lido.getPooledEthBySharesRoundUp(sharesBurnt);
+
+      await expect(dashboard.connect(roles.rebalancer).rebalanceVaultWithShares(sharesBurnt))
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(vaultHub, etherToRebalance)
         .to.emit(vaultHub, "VaultInOutDeltaUpdated")

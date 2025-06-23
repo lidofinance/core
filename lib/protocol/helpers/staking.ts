@@ -166,6 +166,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   await report(ctx, {
     clDiff: ethToDeposit,
     clAppearedValidators: depositsCount,
+    skipWithdrawals: true,
   });
 
   const after = await lido.getBeaconStat();

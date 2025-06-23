@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.0;
 
-import {VaultHub, IHashConsensus} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
-import {IHashConsensus} from "contracts/0.8.25/vaults/interfaces/IHashConsensus.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {VaultHub, IHashConsensus} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {RefSlotCache} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
 
 contract VaultHub__HarnessForReporting is VaultHub {
@@ -62,11 +64,10 @@ contract VaultHub__HarnessForReporting is VaultHub {
         $.connections[_vault] = connection;
 
         VaultHub.VaultRecord memory record = VaultHub.VaultRecord({
-            report: VaultHub.Report(0, 0),
+            report: VaultHub.Report(0, 0, 0),
             locked: 0,
             liabilityShares: uint96(_shareLimit),
-            inOutDelta: RefSlotCache.Int112WithRefSlotCache({value: 0, valueOnRefSlot: 0, refSlot: 0}),
-            reportTimestamp: uint64(block.timestamp)
+            inOutDelta: RefSlotCache.Int112WithRefSlotCache({value: 0, valueOnRefSlot: 0, refSlot: 0})
         });
 
         $.records[_vault] = record;

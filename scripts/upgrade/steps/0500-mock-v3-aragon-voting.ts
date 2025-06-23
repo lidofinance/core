@@ -5,7 +5,7 @@ import { impersonate } from "lib/account";
 import { loadContract } from "lib/contract";
 import { readNetworkState, Sk } from "lib/state-file";
 
-export async function main(): Promise<void> {
+export async function createVoteAndGetExecuteTxPromise() {
   const state = readNetworkState();
   const agentAddress = state[Sk.appAgent].proxy.address;
   const votingAddress = state[Sk.appVoting].proxy.address;
@@ -24,8 +24,14 @@ export async function main(): Promise<void> {
   if (!(await voteScript.isValidVoteScript(voteId))) throw new Error("Vote script is not valid");
   await voting.connect(deployer).vote(voteId, true, false);
   await advanceChainTime(await voting.voteTime());
-  const executeTx = await voting.executeVote(voteId);
+  return voting.executeVote(voteId);
+}
+
+export async function main() {
+  const executeTx = await createVoteAndGetExecuteTxPromise();
 
   const executeReceipt = await executeTx.wait();
   log.success("Voting executed: gas used", executeReceipt!.gasUsed);
+
+  return { executeReceipt };
 }

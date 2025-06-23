@@ -8,7 +8,7 @@ import {Lido} from "contracts/0.4.24/Lido.sol";
 contract Lido__HarnessForFinalizeUpgradeV3 is Lido {
     function harness_initialize_v2(address _lidoLocator) external payable {
         _bootstrapInitialHolder(); // stone in the elevator
-        LIDO_LOCATOR_POSITION.setStorageAddress(_lidoLocator);
+        _setLidoLocator(_lidoLocator);
 
         initialized();
 

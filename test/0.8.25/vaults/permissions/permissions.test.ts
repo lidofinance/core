@@ -206,13 +206,15 @@ describe("Permissions", () => {
 
   context("constructor()", () => {
     it("reverts if the vault hub is the zero address", async () => {
-      await expect(ethers.deployContract("Permissions__Harness", [ZeroAddress, lidoLocator]))
-        .to.be.revertedWithCustomError(permissions, "ZeroAddress");
+      await expect(
+        ethers.deployContract("Permissions__Harness", [ZeroAddress, lidoLocator]),
+      ).to.be.revertedWithCustomError(permissions, "ZeroAddress");
     });
 
     it("reverts if the lido locator is the zero address", async () => {
-      await expect(ethers.deployContract("Permissions__Harness", [vaultHub, ZeroAddress]))
-        .to.be.revertedWithCustomError(permissions, "ZeroAddress");
+      await expect(
+        ethers.deployContract("Permissions__Harness", [vaultHub, ZeroAddress]),
+      ).to.be.revertedWithCustomError(permissions, "ZeroAddress");
     });
   });
 
@@ -270,8 +272,7 @@ describe("Permissions", () => {
           disconnecter,
           tierChanger,
         } as PermissionsConfigStruct),
-      )
-        .to.be.revertedWithCustomError(permissions, "ZeroAddress");
+      ).to.be.revertedWithCustomError(permissions, "ZeroAddress");
     });
   });
 
@@ -385,8 +386,10 @@ describe("Permissions", () => {
     });
 
     it("reverts if there are no assignments", async () => {
-      await expect(permissions.connect(defaultAdmin).grantRoles([]))
-        .to.be.revertedWithCustomError(permissions, "ZeroArgument");
+      await expect(permissions.connect(defaultAdmin).grantRoles([])).to.be.revertedWithCustomError(
+        permissions,
+        "ZeroArgument",
+      );
     });
   });
 
@@ -470,8 +473,10 @@ describe("Permissions", () => {
     });
 
     it("reverts if there are no assignments", async () => {
-      await expect(permissions.connect(defaultAdmin).revokeRoles([]))
-        .to.be.revertedWithCustomError(permissions, "ZeroArgument")
+      await expect(permissions.connect(defaultAdmin).revokeRoles([])).to.be.revertedWithCustomError(
+        permissions,
+        "ZeroArgument",
+      );
     });
   });
 
@@ -606,7 +611,7 @@ describe("Permissions", () => {
       const fundAmount = ether("1");
       await permissions.connect(funder).fund(fundAmount, { value: fundAmount });
 
-      const rebalanceAmount = fundAmount;
+      const rebalanceAmount = fundAmount; // assumption: 1:1 => share : ether
       await expect(permissions.connect(rebalancer).rebalanceVault(rebalanceAmount))
         .to.emit(vaultHub, "Mock__Rebalanced")
         .withArgs(stakingVault, rebalanceAmount);

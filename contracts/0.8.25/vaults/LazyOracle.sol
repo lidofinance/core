@@ -11,12 +11,13 @@ import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upg
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
+import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
 import {VaultHub} from "./VaultHub.sol";
 import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {ILido} from "../interfaces/ILido.sol";
 
 contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @custom:storage-location erc7201:LazyOracle
@@ -81,6 +82,13 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     struct Quarantine {
         uint128 pendingTotalValueIncrease;
         uint64 startTimestamp;
+    }
+
+    struct QuarantineInfo {
+        bool isActive;
+        uint256 pendingTotalValueIncrease;
+        uint256 startTimestamp;
+        uint256 endTimestamp;
     }
 
     struct VaultInfo {
@@ -211,7 +219,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @notice update the sanity parameters
     /// @param _quarantinePeriod the quarantine period
     /// @param _maxRewardRatioBP the max EL CL rewards
-    function updateSanityParams(uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) external onlyRole(UPDATE_SANITY_PARAMS_ROLE) {
+    function updateSanityParams(
+        uint64 _quarantinePeriod,
+        uint16 _maxRewardRatioBP
+    ) external onlyRole(UPDATE_SANITY_PARAMS_ROLE) {
         _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP);
     }
 

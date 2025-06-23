@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {IHashConsensus} from "../interfaces/IHashConsensus.sol";
+import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
 library RefSlotCache {
     struct Int112WithRefSlotCache {

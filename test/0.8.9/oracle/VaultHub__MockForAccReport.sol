@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-
 contract VaultHub__MockForAccountingReport {
     uint256 public badDebtToInternalizeAsOfLastRefSlot;
 
