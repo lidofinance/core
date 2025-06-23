@@ -127,7 +127,7 @@ describe("StakingRouter.sol:module-sync", () => {
       1, // targetLimitMode
       100n, // targetValidatorsCount
       0n, // stuckValidatorsCount
-      5n, // refundedValidatorsCount
+      0n, // refundedValidatorsCount
       0n, // stuckPenaltyEndTimestamp
       50, // totalExitedValidators
       1000n, // totalDepositedValidators
@@ -361,25 +361,6 @@ describe("StakingRouter.sol:module-sync", () => {
       )
         .to.emit(stakingModule, "Mock__TargetValidatorsLimitsUpdated")
         .withArgs(NODE_OPERATOR_ID, TARGET_LIMIT_MODE, TARGET_LIMIT);
-    });
-  });
-
-  context("updateRefundedValidatorsCount", () => {
-    const NODE_OPERATOR_ID = 0n;
-    const REFUNDED_VALIDATORS_COUNT = 10n;
-
-    it("Reverts if the caller does not have the role", async () => {
-      await expect(
-        stakingRouter
-          .connect(user)
-          .updateRefundedValidatorsCount(moduleId, NODE_OPERATOR_ID, REFUNDED_VALIDATORS_COUNT),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
-    });
-
-    it("Redirects the call to the staking module", async () => {
-      await expect(stakingRouter.updateRefundedValidatorsCount(moduleId, NODE_OPERATOR_ID, REFUNDED_VALIDATORS_COUNT))
-        .to.emit(stakingModule, "Mock__RefundedValidatorsCountUpdated")
-        .withArgs(NODE_OPERATOR_ID, REFUNDED_VALIDATORS_COUNT);
     });
   });
 

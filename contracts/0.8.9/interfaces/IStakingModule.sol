@@ -160,11 +160,6 @@ interface IStakingModule {
         bytes calldata _exitedValidatorsCounts
     ) external;
 
-    /// @notice Updates the number of the refunded validators for node operator with the given id
-    /// @param _nodeOperatorId Id of the node operator
-    /// @param _refundedValidatorsCount New number of refunded validators of the node operator
-    function updateRefundedValidatorsCount(uint256 _nodeOperatorId, uint256 _refundedValidatorsCount) external;
-
     /// @notice Updates the limit of the validators that can be used for deposit
     /// @param _nodeOperatorId Id of the node operator
     /// @param _targetLimitMode target limit mode

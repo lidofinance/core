@@ -8,12 +8,12 @@ import {
   LidoLocator,
   OperatorGrid,
   OssifiableProxy,
-  PredepositGuarantee_HarnessForFactory,
+  PredepositGuarantee__HarnessForFactory,
   StakingVault__MockForOperatorGrid,
   StETH__MockForOperatorGrid,
   VaultHub,
   VaultHub__MockForOperatorGrid,
-  WstETH__HarnessForVault,
+  WstETH__Harness,
 } from "typechain-types";
 import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 
@@ -39,10 +39,10 @@ describe("OperatorGrid.sol", () => {
 
   let stranger: HardhatEthersSigner;
 
-  let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
+  let predepositGuarantee: PredepositGuarantee__HarnessForFactory;
   let locator: LidoLocator;
   let steth: StETH__MockForOperatorGrid;
-  let wsteth: WstETH__HarnessForVault;
+  let wsteth: WstETH__Harness;
   let vaultHub: VaultHub__MockForOperatorGrid;
   let operatorGrid: OperatorGrid;
   let operatorGridImpl: OperatorGrid;
@@ -73,9 +73,9 @@ describe("OperatorGrid.sol", () => {
     [deployer, vaultOwner, stranger, nodeOperator1, nodeOperator2] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForOperatorGrid");
-    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
+    wsteth = await ethers.deployContract("WstETH__Harness", [steth]);
 
-    predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee__HarnessForFactory", [
       GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",

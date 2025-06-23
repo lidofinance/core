@@ -23,6 +23,7 @@ contract VaultHub__MockForDashboard {
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
     uint64 public latestReportDataTimestamp;
+    bool public sendWithdraw = false;
 
     constructor(IStETH _steth, address _lidoLocator) {
         steth = _steth;
@@ -31,6 +32,9 @@ contract VaultHub__MockForDashboard {
 
     mapping(address => VaultHub.VaultConnection) public vaultConnections;
     mapping(address => VaultHub.VaultRecord) public vaultRecords;
+    mapping(address => VaultHub.VaultObligations) public _vaultObligations;
+
+    receive() external payable {}
 
     function mock__setVaultConnection(address vault, VaultHub.VaultConnection memory connection) external {
         vaultConnections[vault] = connection;
@@ -42,6 +46,14 @@ contract VaultHub__MockForDashboard {
 
     function mock__setVaultRecord(address vault, VaultHub.VaultRecord memory record) external {
         vaultRecords[vault] = record;
+    }
+
+    function mock__setVaultObligations(address vault, VaultHub.VaultObligations memory obligations) external {
+        _vaultObligations[vault] = obligations;
+    }
+
+    function vaultObligations(address vault) external view returns (VaultHub.VaultObligations memory) {
+        return _vaultObligations[vault];
     }
 
     function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {
@@ -94,6 +106,8 @@ contract VaultHub__MockForDashboard {
             reservationFeeBP: 100,
             isBeaconDepositsManuallyPaused: false
         });
+
+        IStakingVault(vault).acceptOwnership();
 
         emit Mock__VaultConnected(vault);
     }
@@ -148,7 +162,12 @@ contract VaultHub__MockForDashboard {
         emit Mock__Funded(_vault, msg.value);
     }
 
+    function mock__setSendWithdraw(bool _sendWithdraw) external {
+        sendWithdraw = _sendWithdraw;
+    }
+
     function withdraw(address _vault, address _recipient, uint256 _amount) external {
+        if (sendWithdraw) payable(_recipient).call{value: _amount}("");
         emit Mock__Withdrawn(_vault, _recipient, _amount);
     }
 

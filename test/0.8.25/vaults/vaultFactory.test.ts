@@ -12,14 +12,14 @@ import {
   LidoLocator,
   OperatorGrid,
   OssifiableProxy,
-  PredepositGuarantee_HarnessForFactory,
+  PredepositGuarantee__HarnessForFactory,
   StakingVault,
   StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
   UpgradeableBeacon,
   VaultFactory,
   VaultHub,
-  WstETH__HarnessForVault,
+  WstETH__Harness,
 } from "typechain-types";
 
 import { days, ether, GENESIS_FORK_VERSION } from "lib";
@@ -49,13 +49,13 @@ describe("VaultFactory.sol", () => {
   let vaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
-  let wsteth: WstETH__HarnessForVault;
+  let wsteth: WstETH__Harness;
 
   let locator: LidoLocator;
   let operatorGrid: OperatorGrid;
   let operatorGridImpl: OperatorGrid;
   let lazyOracle: LazyOracle__MockForNodeOperatorFee;
-  let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
+  let predepositGuarantee: PredepositGuarantee__HarnessForFactory;
 
   let vaultBeaconProxy: BeaconProxy;
   let vaultBeaconProxyCode: string;
@@ -69,10 +69,10 @@ describe("VaultFactory.sol", () => {
       value: ether("10.0"),
       from: deployer,
     });
-    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
+    wsteth = await ethers.deployContract("WstETH__Harness", [steth]);
 
     //predeposit guarantee
-    predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee__HarnessForFactory", [
       GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",

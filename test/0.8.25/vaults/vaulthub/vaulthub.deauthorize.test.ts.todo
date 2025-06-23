@@ -12,14 +12,14 @@ import {
   OperatorGrid,
   OperatorGrid__MockForVaultHub,
   OssifiableProxy,
-  PredepositGuarantee_HarnessForFactory,
+  PredepositGuarantee__HarnessForFactory,
   StakingVault,
   StakingVault__HarnessForTestUpgrade,
   StETH__HarnessForVaultHub,
   UpgradeableBeacon,
   VaultFactory,
   VaultHub,
-  WstETH__HarnessForVault,
+  WstETH__Harness,
 } from "typechain-types";
 
 import { days, ether, GENESIS_FORK_VERSION, getCurrentBlockTimestamp, impersonate } from "lib";
@@ -45,14 +45,14 @@ describe("VaultHub.sol:deauthorize", () => {
   let vaultHub: VaultHub;
   let implOld: StakingVault;
   let implNew: StakingVault__HarnessForTestUpgrade;
-  let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
+  let predepositGuarantee: PredepositGuarantee__HarnessForFactory;
   let dashboard: Dashboard;
   let vaultFactory: VaultFactory;
   let operatorGrid: OperatorGrid;
   let operatorGridMock: OperatorGrid__MockForVaultHub;
 
   let steth: StETH__HarnessForVaultHub;
-  let wsteth: WstETH__HarnessForVault;
+  let wsteth: WstETH__Harness;
 
   let locator: LidoLocator;
 
@@ -65,9 +65,9 @@ describe("VaultHub.sol:deauthorize", () => {
     [deployer, admin, holder, operator, stranger, vaultOwner1, vaultOwner2] = await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [holder], { value: ether("10000.0") });
-    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
+    wsteth = await ethers.deployContract("WstETH__Harness", [steth]);
 
-    predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee__HarnessForFactory", [
       GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
