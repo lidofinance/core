@@ -244,7 +244,7 @@ async function main(): Promise<void> {
   const WQ_GATE_SEAL = await deployGateSeal(
     state,
     deployer,
-    [state.withdrawalQueueERC721.proxy.address],
+    [state[Sk.withdrawalQueueERC721].proxy.address],
     GATE_SEAL_DURATION_SECONDS,
     GATE_SEAL_EXPIRY_TIMESTAMP,
     Sk.gateSeal,
@@ -254,7 +254,7 @@ async function main(): Promise<void> {
   const TW_GATE_SEAL = await deployGateSeal(
     state,
     deployer,
-    [triggerableWithdrawalsGateway.address, await locator.validatorsExitBusOracle()],
+    [state[Sk.triggerableWithdrawalsGateway].implementation.address, await locator.validatorsExitBusOracle()],
     GATE_SEAL_DURATION_SECONDS,
     GATE_SEAL_EXPIRY_TIMESTAMP,
     Sk.gateSealTW,
