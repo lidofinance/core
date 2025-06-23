@@ -20,7 +20,7 @@ import {
   VaultHub,
   VaultHub__MockForDashboard,
   WETH9__MockForVault,
-  WstETH__HarnessForVault,
+  WstETH__Harness,
 } from "typechain-types";
 
 import {
@@ -48,7 +48,7 @@ describe("Dashboard.sol", () => {
   let steth: StETHPermit__HarnessForDashboard;
   let weth: WETH9__MockForVault;
   let erc721: ERC721__MockForDashboard;
-  let wsteth: WstETH__HarnessForVault;
+  let wsteth: WstETH__Harness;
   let hub: VaultHub__MockForDashboard;
   let depositContract: DepositContract__MockForStakingVault;
 
@@ -172,7 +172,7 @@ describe("Dashboard.sol", () => {
     await steth.mock__setTotalShares(ether("1000000"));
     await steth.mock__setTotalPooledEther(ether("1400000"));
 
-    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
+    wsteth = await ethers.deployContract("WstETH__Harness", [steth]);
 
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
 
