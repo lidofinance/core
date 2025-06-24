@@ -865,5 +865,10 @@
     "contract": "contracts/0.6.12/WstETH.sol",
     "address": "0x05F2927c5c2825BC0dCDc14d258a99A36116bE8B",
     "constructorArgs": ["0x2C220A2a91602dd93bEAC7b3A1773cdADE369ba1"]
+  },
+  "pinnedBeaconProxy": {
+    "contract": "contracts/0.8.25/vaults/PinnedBeaconProxy.sol",
+    "address": "0x1B1370122Fce84DF7C6D81BFE4E8C5C0e87E36cB",
+    "constructorArgs": ["0x8de3b125221d07b44FCbd2CFD7354251858817B3", "0x"]
   }
 }
