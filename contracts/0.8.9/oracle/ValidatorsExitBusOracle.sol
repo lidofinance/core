@@ -40,8 +40,8 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     /// @dev [DEPRECATED] Storage slot: keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed")
     /// This constant defined the storage position where the total number of processed exit requests was stored.
     /// This constant was removed from the contract, but slot can still contain logic.
-    // bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
-    //     keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
+    /// bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
+    ///     keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
 
     /// @dev [DEPRECATED] Storage slot: mapping(uint256 => RequestedValidator) lastRequestedValidatorIndices
     /// This mapping was previously used for storing last requested validator indexes per (moduleId, nodeOpId) key.
