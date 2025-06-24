@@ -48,11 +48,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
     error AdminCannotBeZero();
 
     /**
-     * @notice Thrown when exit request has wrong length
-     */
-    error InvalidRequestsDataLength();
-
-    /**
      * @notice Thrown when a withdrawal fee insufficient
      * @param feeRequired Amount of fee required to cover withdrawal request
      * @param passedValue Amount of fee sent to cover withdrawal request
@@ -85,9 +80,6 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
     bytes32 public constant TW_EXIT_LIMIT_MANAGER_ROLE = keccak256("TW_EXIT_LIMIT_MANAGER_ROLE");
 
     bytes32 public constant TWR_LIMIT_POSITION = keccak256("lido.TriggerableWithdrawalsGateway.maxExitRequestLimit");
-
-    /// Length in bytes of packed triggerable exit request
-    uint256 internal constant PUBLIC_KEY_LENGTH = 48;
 
     uint256 public constant VERSION = 1;
 

@@ -243,6 +243,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * - The data format is not supported.
      * - The data length exceeds the maximum number of requests allowed per payload.
      * - There is no remaining quota available for the current limits.
+     * - The requests was not sorted in strictly increasing order before the report hash submit.
      *
      * Emits `ValidatorExitRequest` events;
      *
