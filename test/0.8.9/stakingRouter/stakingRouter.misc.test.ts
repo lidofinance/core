@@ -129,8 +129,7 @@ describe("StakingRouter.sol:misc", () => {
 
       it("sets correct contract version", async () => {
         expect(await stakingRouter.getContractVersion()).to.equal(2);
-        await stakingRouter.finalizeUpgrade_v3(
-        );
+        await stakingRouter.finalizeUpgrade_v3();
         expect(await stakingRouter.getContractVersion()).to.be.equal(3);
       });
     });

@@ -63,7 +63,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
     uint256 private nodeOperatorNodeOperatorDepositableValidatorsCount__mocked;
 
     function getNodeOperatorSummary(
-        uint256 _nodeOperatorId
+        uint256
     )
         external
         view
@@ -134,16 +134,13 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         activeNodeOperatorsCount__mocked = active;
     }
 
-    function getNodeOperatorIsActive(uint256 _nodeOperatorId) external view returns (bool) {
+    function getNodeOperatorIsActive(uint256) external view returns (bool) {
         return true;
     }
 
     uint256[] private nodeOperatorsIds__mocked;
 
-    function getNodeOperatorIds(
-        uint256 _offset,
-        uint256 _limit
-    ) external view returns (uint256[] memory nodeOperatorIds) {
+    function getNodeOperatorIds(uint256, uint256) external view returns (uint256[] memory nodeOperatorIds) {
         return nodeOperatorsIds__mocked;
     }
 
@@ -164,9 +161,9 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         emit Mock__OnRewardsMinted(_totalShares);
     }
 
-    function mock__revertOnRewardsMinted(bool shouldRevert, bool shoudRunOutOfGas) external {
+    function mock__revertOnRewardsMinted(bool shouldRevert, bool shouldRunOutOfGas) external {
         onRewardsMintedShouldRevert = shouldRevert;
-        onRewardsMintedShouldRunOutGas = shoudRunOutOfGas;
+        onRewardsMintedShouldRunOutGas = shouldRunOutOfGas;
     }
 
     event Mock__VettedSigningKeysCountDecreased(bytes _nodeOperatorIds, bytes _stuckValidatorsCounts);
@@ -202,21 +199,15 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         emit Mock__TargetValidatorsLimitsUpdated(_nodeOperatorId, _targetLimitMode, _targetLimit);
     }
 
-    event Mock__ValidatorsCountUnsafelyUpdated(
-        uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount
-    );
+    event Mock__ValidatorsCountUnsafelyUpdated(uint256 _nodeOperatorId, uint256 _exitedValidatorsCount);
 
-    function unsafeUpdateValidatorsCount(
-        uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount
-    ) external {
+    function unsafeUpdateValidatorsCount(uint256 _nodeOperatorId, uint256 _exitedValidatorsCount) external {
         emit Mock__ValidatorsCountUnsafelyUpdated(_nodeOperatorId, _exitedValidatorsCount);
     }
 
     function obtainDepositData(
         uint256 _depositsCount,
-        bytes calldata _depositCalldata
+        bytes calldata
     ) external returns (bytes memory publicKeys, bytes memory signatures) {
         publicKeys = new bytes(48 * _depositsCount);
         signatures = new bytes(96 * _depositsCount);
@@ -270,12 +261,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         bytes calldata _publicKeys,
         uint256 _eligibleToExitInSec
     ) external {
-        emit Mock__reportValidatorExitDelay(
-            _nodeOperatorId,
-            _proofSlotTimestamp,
-            _publicKeys,
-            _eligibleToExitInSec
-        );
+        emit Mock__reportValidatorExitDelay(_nodeOperatorId, _proofSlotTimestamp, _publicKeys, _eligibleToExitInSec);
     }
 
     function onValidatorExitTriggered(
@@ -284,12 +270,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     ) external {
-        emit Mock__onValidatorExitTriggered(
-            _nodeOperatorId,
-            _publicKeys,
-            _withdrawalRequestPaidFee,
-            _exitType
-        );
+        emit Mock__onValidatorExitTriggered(_nodeOperatorId, _publicKeys, _withdrawalRequestPaidFee, _exitType);
     }
 
     function isValidatorExitDelayPenaltyApplicable(

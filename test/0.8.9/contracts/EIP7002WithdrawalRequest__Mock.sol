@@ -7,6 +7,7 @@ pragma solidity 0.8.9;
  * @notice This is a mock of EIP-7002's pre-deploy contract.
  */
 contract EIP7002WithdrawalRequest__Mock {
+    uint256[100] __gap; // NB: to avoid storage collision with the predeployed withdrawals contract https://github.com/NomicFoundation/edr/issues/865
     bytes public fee;
     bool public mock__failOnAddRequest;
     bool public mock__failOnGetFee;

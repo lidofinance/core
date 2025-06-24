@@ -366,5 +366,4 @@ describe("TriggerableWithdrawalsGateway.sol:triggerFullWithdrawals", () => {
       triggerableWithdrawalsGateway.connect(authorizedEntity).setExitRequestLimit(0, 1, 48),
     ).to.be.revertedWithCustomError(triggerableWithdrawalsGateway, "TooLargeExitsPerFrame");
   });
-
 });

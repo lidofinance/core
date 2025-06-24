@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { HashConsensus__Harness, ValidatorsExitBus__Harness } from "typechain-types";
 
-import { CONSENSUS_VERSION, de0x, numberToHex } from "lib";
+import { de0x, numberToHex, VEBO_CONSENSUS_VERSION } from "lib";
 
 import {
   computeTimestampAtSlot,
@@ -75,7 +75,9 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     return "0x" + requests.map(encodeExitRequestHex).join("");
   };
 
-  const deploy = async () => {
+  before(async () => {
+    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
+
     const deployed = await deployVEBO(admin.address);
     oracle = deployed.oracle;
     consensus = deployed.consensus;
@@ -93,18 +95,12 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     await consensus.addMember(member1, 1);
     await consensus.addMember(member2, 2);
     await consensus.addMember(member3, 2);
-  };
-
-  before(async () => {
-    [admin, member1, member2, member3, stranger] = await ethers.getSigners();
-
-    await deploy();
   });
 
   const triggerConsensusOnHash = async (hash: string) => {
     const { refSlot } = await consensus.getCurrentFrame();
-    await consensus.connect(member1).submitReport(refSlot, hash, CONSENSUS_VERSION);
-    await consensus.connect(member3).submitReport(refSlot, hash, CONSENSUS_VERSION);
+    await consensus.connect(member1).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
+    await consensus.connect(member3).submitReport(refSlot, hash, VEBO_CONSENSUS_VERSION);
     expect((await consensus.getConsensusState()).consensusReport).to.equal(hash);
   };
 
@@ -142,7 +138,7 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
     ];
 
     reportFields = {
-      consensusVersion: CONSENSUS_VERSION,
+      consensusVersion: VEBO_CONSENSUS_VERSION,
       refSlot: refSlot,
       requestsCount: exitRequests.length,
       dataFormat: DATA_FORMAT_LIST,
@@ -192,10 +188,10 @@ describe("ValidatorsExitBusOracle.sol:happyPath", () => {
   });
 
   it("the data cannot be submitted passing a different consensus version", async () => {
-    const invalidReport = { ...reportFields, consensusVersion: CONSENSUS_VERSION + 1n };
+    const invalidReport = { ...reportFields, consensusVersion: VEBO_CONSENSUS_VERSION + 1n };
     await expect(oracle.connect(member1).submitReportData(invalidReport, oracleVersion))
       .to.be.revertedWithCustomError(oracle, "UnexpectedConsensusVersion")
-      .withArgs(CONSENSUS_VERSION, CONSENSUS_VERSION + 1n);
+      .withArgs(VEBO_CONSENSUS_VERSION, VEBO_CONSENSUS_VERSION + 1n);
   });
 
   it("a data not matching the consensus hash cannot be submitted", async () => {

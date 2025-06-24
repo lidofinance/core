@@ -3,7 +3,7 @@ import { ContractTransactionResponse } from "ethers";
 import { ethers } from "hardhat";
 
 import { StakingRouter_Mock, ValidatorExitDelayVerifier, ValidatorsExitBusOracle_Mock } from "typechain-types";
-import { ILidoLocator } from "typechain-types/test/0.8.9/contracts/oracle/OracleReportSanityCheckerMocks.sol";
+import { LidoLocator } from "typechain-types";
 
 import { updateBeaconBlockRoot } from "lib";
 
@@ -128,7 +128,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
-    let locator: ILidoLocator;
+    let locator: LidoLocator;
     let locatorAddr: string;
 
     let vebo: ValidatorsExitBusOracle_Mock;
