@@ -192,10 +192,11 @@ TRIGGERABLE_WITHDRAWALS_GATEWAY = "${triggerableWithdrawalsGateway.address}"
       node_operators_registry: state[Sk.appNodeOperatorsRegistry].proxy.address,
       node_operators_registry_impl: NOR.address,
       oracle_daemon_config: await locator.oracleDaemonConfig(),
-      nor_app_repo: "0x0D97E876ad14DB2b183CFeEB8aa1A5C788eB1831",
+      simple_dvt: state[Sk.appSimpleDvt].proxy.address,
 
       // Other parameters
       node_operators_registry_app_id: state[Sk.appNodeOperatorsRegistry].aragonApp.id,
+      simple_dvt_app_id: state[Sk.appSimpleDvt].aragonApp.id,
       nor_version: [6, 0, 0],
       vebo_consensus_version: 4,
       ao_consensus_version: 4,

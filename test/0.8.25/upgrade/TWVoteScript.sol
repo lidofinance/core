@@ -64,11 +64,12 @@ contract TWVoteScript is OmnibusBase {
         address validator_exit_verifier;
         address node_operators_registry;
         address node_operators_registry_impl;
+        address simple_dvt;
         address oracle_daemon_config;
-        address nor_app_repo;
 
         // Other parameters
         bytes32 node_operators_registry_app_id;
+        bytes32 simple_dvt_app_id;
         uint16[3] nor_version;
         uint256 vebo_consensus_version;
         uint256 ao_consensus_version;
@@ -80,7 +81,7 @@ contract TWVoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 22;
+    uint256 public constant VOTE_ITEMS_COUNT = 23;
 
     //
     // Structured storage
@@ -239,18 +240,9 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 15. Publish new NodeOperatorsRegistry implementation in NodeOperatorsRegistry app APM repo
+        // 15. Update NodeOperatorsRegistry implementation
         voteItems[index++] = VoteItem({
-            description: "15. Publish new NodeOperatorsRegistry implementation in NodeOperatorsRegistry app APM repo",
-            call: _votingCall(
-                params.nor_app_repo,
-                abi.encodeCall(IRepo.newVersion, (params.nor_version, params.node_operators_registry_impl, params.nor_content_uri))
-            )
-        });
-
-        // 16. Update NodeOperatorsRegistry implementation
-        voteItems[index++] = VoteItem({
-            description: "16. Update NodeOperatorsRegistry implementation",
+            description: "17. Update NodeOperatorsRegistry implementation",
             call: _votingCall(
                 0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc,
                 abi.encodeWithSignature("setApp(bytes32,bytes32,address)",
@@ -261,19 +253,41 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 17. Call finalizeUpgrade_v4 on NOR
+        // 16. Call finalizeUpgrade_v4 on NOR
         voteItems[index++] = VoteItem({
-            description: "17. Call finalizeUpgrade_v4 on NOR",
+            description: "19. Call finalizeUpgrade_v4 on NOR",
             call: _votingCall(
                 params.node_operators_registry,
                 abi.encodeCall(INodeOperatorsRegistry.finalizeUpgrade_v4, (params.nor_exit_deadline_in_sec))
             )
         });
 
-        // 18. Grant CONFIG_MANAGER_ROLE role to the AGENT
+        // 17. Update SimpleDVT implementation
+        voteItems[index++] = VoteItem({
+            description: "18. Update SimpleDVT implementation",
+            call: _votingCall(
+                0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc,
+                abi.encodeWithSignature("setApp(bytes32,bytes32,address)",
+                    IKernel(0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc).APP_BASES_NAMESPACE(),
+                    params.simple_dvt_app_id,
+                    params.node_operators_registry_impl
+                )
+            )
+        });
+
+        // 18. Call finalizeUpgrade_v4 on SimpleDVT
+        voteItems[index++] = VoteItem({
+            description: "20. Call finalizeUpgrade_v4 on SimpleDVT",
+            call: _votingCall(
+                params.simple_dvt,
+                abi.encodeCall(INodeOperatorsRegistry.finalizeUpgrade_v4, (params.nor_exit_deadline_in_sec))
+            )
+        });
+
+        // 19. Grant CONFIG_MANAGER_ROLE role to the AGENT
         bytes32 configManagerRole = keccak256("CONFIG_MANAGER_ROLE");
         voteItems[index++] = VoteItem({
-            description: "18. Grant CONFIG_MANAGER_ROLE role to the AGENT",
+            description: "21. Grant CONFIG_MANAGER_ROLE role to the AGENT",
             call: _forwardCall(
                 params.agent,
                 params.oracle_daemon_config,
@@ -281,9 +295,9 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 19. Remove NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP variable from OracleDaemonConfig
+        // 20. Remove NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP variable from OracleDaemonConfig
         voteItems[index++] = VoteItem({
-            description: "19. Remove NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP variable from OracleDaemonConfig",
+            description: "22. Remove NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP variable from OracleDaemonConfig",
             call: _forwardCall(
                 params.agent,
                 params.oracle_daemon_config,
@@ -291,9 +305,9 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 20. Remove VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig
+        // 21. Remove VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig
         voteItems[index++] = VoteItem({
-            description: "20. Remove VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig",
+            description: "23. Remove VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig",
             call: _forwardCall(
                 params.agent,
                 params.oracle_daemon_config,
@@ -301,9 +315,9 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 21. Remove VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig
+        // 22. Remove VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig
         voteItems[index++] = VoteItem({
-            description: "21. Remove VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig",
+            description: "24. Remove VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig",
             call: _forwardCall(
                 params.agent,
                 params.oracle_daemon_config,
@@ -311,9 +325,9 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 22. Add EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS variable to OracleDaemonConfig
+        // 23. Add EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS variable to OracleDaemonConfig
         voteItems[index++] = VoteItem({
-            description: "22. Add EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS variable to OracleDaemonConfig",
+            description: "25. Add EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS variable to OracleDaemonConfig",
             call: _forwardCall(
                 params.agent,
                 params.oracle_daemon_config,
