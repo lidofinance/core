@@ -1174,6 +1174,20 @@ describe("Dashboard.sol", () => {
       );
     });
 
+    it("recovers all eth", async () => {
+      const ethAmount = ether("1");
+      const ethTokenAddress = await dashboard.ETH();
+
+      await setBalance(await dashboard.getAddress(), ethAmount);
+      const preBalance = await ethers.provider.getBalance(stranger);
+
+      await expect(dashboard.recoverERC20(ethTokenAddress, stranger, ethAmount))
+        .to.emit(dashboard, "ERC20Recovered")
+        .withArgs(stranger, ethTokenAddress, ethAmount);
+
+      expect(await ethers.provider.getBalance(stranger)).to.equal(preBalance + ethAmount);
+    });
+
     it("recovers all weth", async () => {
       const preBalance = await weth.balanceOf(vaultOwner);
       const tx = await dashboard.recoverERC20(weth.getAddress(), vaultOwner, amount);
