@@ -14,7 +14,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/oracle/AccountingOracle.sol",
-      "address": "0xCA2689BE9b3Fc8a02F61f7CC3a7d0968119c53b5",
+      "address": "0xE63267AAaC507A329213593e8A9bCa37e2994F1C",
       "constructorArgs": [
         "0x28FAB2059C713A7F9D8c86Db49f9bb0e96Af1ef8",
         "0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034",
@@ -691,7 +691,7 @@
       ]
     ]
   },
-  "scratchDeployGasUsed": "66678077",
+  "scratchDeployGasUsed": "70437128",
   "stakingRouter": {
     "proxy": {
       "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
