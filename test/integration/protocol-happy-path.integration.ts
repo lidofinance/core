@@ -78,7 +78,7 @@ describe("Protocol Happy Path", () => {
     expect(lastFinalizedRequestId).to.equal(lastRequestId);
   });
 
-  it.skip("Should have at least 3 node operators in every module", async () => {
+  it("Should have at least 3 node operators in every module", async () => {
     await norEnsureOperators(ctx, 3n, 5n);
     expect(await ctx.contracts.nor.getNodeOperatorsCount()).to.be.at.least(3n);
 
@@ -247,7 +247,7 @@ describe("Protocol Happy Path", () => {
     });
   });
 
-  it.skip("Should rebase correctly", async () => {
+  it("Should rebase correctly", async () => {
     const { lido, withdrawalQueue, locator, burner, nor, sdvt } = ctx.contracts;
 
     const treasuryAddress = await locator.treasury();
