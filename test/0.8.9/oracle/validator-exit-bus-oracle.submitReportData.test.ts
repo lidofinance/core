@@ -345,6 +345,42 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       expect(storageAfter.requestsProcessed).to.equal(requests.length);
       expect(storageAfter.dataFormat).to.equal(DATA_FORMAT_LIST);
     });
+
+    it("updates total requests processed count", async () => {
+      let currentCount = 0;
+      const countStep0 = await oracle.getTotalRequestsProcessed();
+      expect(countStep0).to.equal(currentCount);
+
+      // Step 1 — process 1 item
+      const requestsStep1 = [{ moduleId: 3, nodeOpId: 1, valIndex: 2, valPubkey: PUBKEYS[1] }];
+      const { reportData: reportStep1 } = await prepareReportAndSubmitHash(requestsStep1);
+      await oracle.connect(member1).submitReportData(reportStep1, oracleVersion);
+      const countStep1 = await oracle.getTotalRequestsProcessed();
+      currentCount += requestsStep1.length;
+      expect(countStep1).to.equal(currentCount);
+
+      // Step 2 — process 2 items
+      await consensus.advanceTimeToNextFrameStart();
+      const requestsStep2 = [
+        { moduleId: 4, nodeOpId: 2, valIndex: 2, valPubkey: PUBKEYS[2] },
+        { moduleId: 5, nodeOpId: 3, valIndex: 2, valPubkey: PUBKEYS[3] },
+      ];
+      const { reportData: reportStep2 } = await prepareReportAndSubmitHash(requestsStep2);
+      await oracle.connect(member1).submitReportData(reportStep2, oracleVersion);
+      const countStep2 = await oracle.getTotalRequestsProcessed();
+      currentCount += requestsStep2.length;
+      expect(countStep2).to.equal(currentCount);
+
+      // // Step 3 — process no items
+      await consensus.advanceTimeToNextFrameStart();
+      const requestsStep3: ExitRequest[] = [];
+      const { reportData: reportStep3 } = await prepareReportAndSubmitHash(requestsStep3);
+      await oracle.connect(member1).submitReportData(reportStep3, oracleVersion);
+
+      const countStep3 = await oracle.getTotalRequestsProcessed();
+      currentCount += requestsStep3.length;
+      expect(countStep3).to.equal(currentCount);
+    });
   });
 
   context(`only consensus member or SUBMIT_DATA_ROLE can submit report on unpaused contract`, () => {
@@ -439,6 +475,51 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       await expect(oracle.connect(member1).submitReportData(reportData, oracleVersion))
         .to.be.revertedWithCustomError(oracle, "ProcessingDeadlineMissed")
         .withArgs(deadline);
+    });
+  });
+
+  context("getTotalRequestsProcessed reflects report history", () => {
+    let originalState: string;
+
+    before(async () => {
+      originalState = await Snapshot.take();
+      await consensus.advanceTimeToNextFrameStart();
+    });
+
+    after(async () => await Snapshot.restore(originalState));
+
+    let requestCount = 0;
+
+    it("should be zero at init", async () => {
+      requestCount = 0;
+      expect(await oracle.getTotalRequestsProcessed()).to.equal(requestCount);
+    });
+
+    it("should increase after report", async () => {
+      const { reportData } = await prepareReportAndSubmitHash([
+        { moduleId: 5, nodeOpId: 3, valIndex: 0, valPubkey: PUBKEYS[0] },
+      ]);
+      await oracle.connect(member1).submitReportData(reportData, oracleVersion, { from: member1 });
+      requestCount += 1;
+      expect(await oracle.getTotalRequestsProcessed()).to.equal(requestCount);
+    });
+
+    it("should double increase for two exits", async () => {
+      await consensus.advanceTimeToNextFrameStart();
+      const { reportData } = await prepareReportAndSubmitHash([
+        { moduleId: 5, nodeOpId: 1, valIndex: 10, valPubkey: PUBKEYS[0] },
+        { moduleId: 5, nodeOpId: 3, valIndex: 1, valPubkey: PUBKEYS[0] },
+      ]);
+      await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+      requestCount += 2;
+      expect(await oracle.getTotalRequestsProcessed()).to.equal(requestCount);
+    });
+
+    it("should not change on empty report", async () => {
+      await consensus.advanceTimeToNextFrameStart();
+      const { reportData } = await prepareReportAndSubmitHash([]);
+      await oracle.connect(member1).submitReportData(reportData, oracleVersion);
+      expect(await oracle.getTotalRequestsProcessed()).to.equal(requestCount);
     });
   });
 

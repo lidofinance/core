@@ -193,6 +193,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     ILidoLocator internal immutable LOCATOR;
 
+    /// @dev Storage slot: uint256 totalRequestsProcessed
+    bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
+         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
     // Storage slot for exit request limit configuration and current quota tracking
     bytes32 internal constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestLimit");
     // Storage slot for the maximum number of validator exit requests allowed per processing report
@@ -268,6 +271,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         _consumeLimit(requestsCount);
 
         _processExitRequestsList(request.data);
+
+        TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(
+            TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + requestsCount
+        );
 
         _updateRequestStatus(requestStatus);
 
@@ -481,6 +488,13 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /// @dev Reverts with `ResumedExpected()` if contract is already paused.
     function pauseUntil(uint256 _pauseUntilInclusive) external onlyRole(PAUSE_ROLE) {
         _pauseUntil(_pauseUntilInclusive);
+    }
+
+    /// @notice Returns the total number of validator exit requests ever processed
+    /// across all received reports.
+    ///
+    function getTotalRequestsProcessed() external view returns (uint256) {
+        return TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256();
     }
 
     /// Internal functions
