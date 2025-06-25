@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {IStakingRouter} from "contracts/0.8.25/interfaces/IStakingRouter.sol";
+import {IStakingRouter} from "contracts/common/interfaces/IStakingRouter.sol";
 
 contract StakingRouter_Mock is IStakingRouter {
     // An event to track when reportValidatorExitDelay is called

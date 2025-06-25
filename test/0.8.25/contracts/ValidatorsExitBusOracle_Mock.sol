@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IValidatorsExitBus} from "contracts/0.8.25/interfaces/IValidatorsExitBus.sol";
+import {IValidatorsExitBus} from "contracts/common/interfaces/IValidatorsExitBus.sol";
 
 struct MockExitRequestData {
     bytes pubkey;
