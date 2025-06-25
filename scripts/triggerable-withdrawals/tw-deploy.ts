@@ -4,7 +4,19 @@ import { join } from "path";
 
 import { LidoLocator } from "typechain-types";
 
-import { cy, deployImplementation, loadContract, log, persistNetworkState, readNetworkState, Sk } from "lib";
+import {
+  cy,
+  deployImplementation,
+  DeploymentState,
+  findEvents,
+  loadContract,
+  log,
+  makeTx,
+  persistNetworkState,
+  readNetworkState,
+  Sk,
+  updateObjectInState,
+} from "lib";
 
 dotenv.config({ path: join(__dirname, "../../.env") });
 
@@ -19,6 +31,40 @@ function requireEnv(variable: string): string {
   return value;
 }
 
+async function deployGateSeal(
+  state: DeploymentState,
+  deployer: string,
+  sealableContracts: string[],
+  sealDuration: number,
+  expiryTimestamp: number,
+  kind: Sk.gateSeal | Sk.gateSealTW,
+): Promise<void> {
+  const gateSealFactory = await loadContract("IGateSealFactory", state[Sk.gateSeal].factoryAddress);
+
+  const receipt = await makeTx(
+    gateSealFactory,
+    "create_gate_seal",
+    [state[Sk.gateSeal].sealingCommittee, sealDuration, sealableContracts, expiryTimestamp],
+    { from: deployer },
+  );
+
+  // Extract and log the new GateSeal address
+  const gateSealAddress = await findEvents(receipt, "GateSealCreated")[0].args.gate_seal;
+  log(`GateSeal created: ${cy(gateSealAddress)}`);
+  log.emptyLine();
+
+  // Update the state with the new GateSeal address
+  updateObjectInState(kind, {
+    factoryAddress: state[Sk.gateSeal].factoryAddress,
+    sealDuration,
+    expiryTimestamp,
+    sealingCommittee: state[Sk.gateSeal].sealingCommittee,
+    address: gateSealAddress,
+  });
+
+  return gateSealAddress;
+}
+
 //--------------------------------------------------------------------------
 // Main
 //--------------------------------------------------------------------------
@@ -30,6 +76,9 @@ async function main(): Promise<void> {
   const deployer = ethers.getAddress(requireEnv("DEPLOYER"));
 
   const { chainId } = await ethers.provider.getNetwork();
+  const currentBlock = await ethers.provider.getBlock("latest");
+  if (!currentBlock) throw new Error("Failed to fetch the latest block");
+
   log(cy(`Deploying contracts on chain ${chainId}`));
 
   // -----------------------------------------------------------------------
@@ -42,7 +91,8 @@ async function main(): Promise<void> {
     slotsPerEpoch: number;
     secondsPerSlot: number;
     genesisTime: number;
-    depositContractAddress: string;
+    depositContractAddress: string; // legacy support
+    depositContract?: string;
   };
 
   log(`Chain spec: ${JSON.stringify(chainSpec, null, 2)}`);
@@ -51,7 +101,7 @@ async function main(): Promise<void> {
   const SECONDS_PER_SLOT = chainSpec.secondsPerSlot;
   const SLOTS_PER_EPOCH = chainSpec.slotsPerEpoch;
   const GENESIS_TIME = chainSpec.genesisTime;
-  const DEPOSIT_CONTRACT_ADDRESS = chainSpec.depositContractAddress;
+  const DEPOSIT_CONTRACT_ADDRESS = chainSpec.depositContractAddress ?? chainSpec.depositContract;
   const SHARD_COMMITTEE_PERIOD_SLOTS = 2 ** 8 * SLOTS_PER_EPOCH; // 8192
 
   // G‑indices (phase0 spec)
@@ -64,6 +114,10 @@ async function main(): Promise<void> {
   const TRIGGERABLE_WITHDRAWALS_MAX_LIMIT = 11_200;
   const TRIGGERABLE_WITHDRAWALS_LIMIT_PER_FRAME = 1;
   const TRIGGERABLE_WITHDRAWALS_FRAME_DURATION = 48;
+
+  // GateSeal params
+  const GATE_SEAL_EXPIRY_TIMESTAMP = currentBlock.timestamp + 365 * 24 * 60 * 60; // 1 year
+  const GATE_SEAL_DURATION_SECONDS = 14 * 24 * 60 * 60; // 14 days
 
   const agent = state["app:aragon-agent"].proxy.address;
   log(`Using agent: ${agent}`);
@@ -186,6 +240,26 @@ async function main(): Promise<void> {
   const newLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
   log.success(`LidoLocator: ${newLocator.address}`);
 
+  // 8. GateSeal for withdrawalQueueERC721
+  const WQ_GATE_SEAL = await deployGateSeal(
+    state,
+    deployer,
+    [state[Sk.withdrawalQueueERC721].proxy.address],
+    GATE_SEAL_DURATION_SECONDS,
+    GATE_SEAL_EXPIRY_TIMESTAMP,
+    Sk.gateSeal,
+  );
+
+  // 9. GateSeal for Triggerable Withdrawals
+  const TW_GATE_SEAL = await deployGateSeal(
+    state,
+    deployer,
+    [state[Sk.triggerableWithdrawalsGateway].implementation.address, await locator.validatorsExitBusOracle()],
+    GATE_SEAL_DURATION_SECONDS,
+    GATE_SEAL_EXPIRY_TIMESTAMP,
+    Sk.gateSealTW,
+  );
+
   // -----------------------------------------------------------------------
   // Governance summary
   // -----------------------------------------------------------------------
@@ -200,6 +274,9 @@ async function main(): Promise<void> {
   log(`NODE_OPERATORS_REGISTRY_IMPL = "${nor.address}"`);
   log(`VALIDATOR_EXIT_DELAY_VERIFIER_IMPL = "${validatorExitDelayVerifier.address}"`);
   log(`TRIGGERABLE_WITHDRAWALS_GATEWAY_IMPL = "${triggerableWithdrawalsGateway.address}"\n`);
+  log.emptyLine();
+  log(`WQ_GATE_SEAL = "${WQ_GATE_SEAL}"`);
+  log(`TW_GATE_SEAL = "${TW_GATE_SEAL}"`);
   log.emptyLine();
 }
 

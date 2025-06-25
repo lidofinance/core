@@ -39,4 +39,29 @@ describe("AccountingOracle.sol:upgrade", () => {
       expect(newConsensusVersion).to.not.equal(initialConsensusVersion);
     });
   });
+
+  context("finalizeUpgrade_v3", () => {
+    let admin: HardhatEthersSigner;
+    let oracle: AccountingOracle__Harness;
+
+    beforeEach(async () => {
+      [admin] = await ethers.getSigners();
+      const deployed = await deployAndConfigureAccountingOracle(admin.address);
+      oracle = deployed.oracle;
+      await oracle.setContractVersion(2); // Set initial contract version to 1
+    });
+
+    it("successfully updates contract and consensus versions", async () => {
+      // Get initial versions
+      const initialContractVersion = await oracle.getContractVersion();
+
+      // Call finalizeUpgrade_v2
+      await oracle.connect(admin).finalizeUpgrade_v3();
+
+      // Verify contract version updated to 2
+      const newContractVersion = await oracle.getContractVersion();
+      expect(newContractVersion).to.equal(3);
+      expect(newContractVersion).to.not.equal(initialContractVersion);
+    });
+  });
 });

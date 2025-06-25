@@ -14,7 +14,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/oracle/AccountingOracle.sol",
-      "address": "0xCA2689BE9b3Fc8a02F61f7CC3a7d0968119c53b5",
+      "address": "0xE63267AAaC507A329213593e8A9bCa37e2994F1C",
       "constructorArgs": [
         "0x28FAB2059C713A7F9D8c86Db49f9bb0e96Af1ef8",
         "0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034",
@@ -489,10 +489,17 @@
   },
   "gateSeal": {
     "factoryAddress": "0x1134F7077055b0B3559BE52AfeF9aA22A0E1eEC2",
-    "sealDuration": 518400,
-    "expiryTimestamp": 1714521600,
+    "sealDuration": 1209600,
+    "expiryTimestamp": 1782208512,
     "sealingCommittee": "0xCD1f9954330AF39a74Fd6e7B25781B4c24ee373f",
-    "address": "0x7f6FA688d4C12a2d51936680b241f3B0F0F9ca60"
+    "address": "0xE900BC859EB750562E1009e912B63743BC877662"
+  },
+  "gateSealTW": {
+    "factoryAddress": "0x1134F7077055b0B3559BE52AfeF9aA22A0E1eEC2",
+    "sealDuration": 1209600,
+    "expiryTimestamp": 1782208512,
+    "sealingCommittee": "0xCD1f9954330AF39a74Fd6e7B25781B4c24ee373f",
+    "address": "0xaEEF47C61f2A9CCe4C4D0363911C5d49e2cFb6f1"
   },
   "hashConsensusForAccountingOracle": {
     "deployParameters": {
@@ -684,7 +691,7 @@
       ]
     ]
   },
-  "scratchDeployGasUsed": "65513521",
+  "scratchDeployGasUsed": "70437128",
   "stakingRouter": {
     "proxy": {
       "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",

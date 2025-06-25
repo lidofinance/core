@@ -165,6 +165,7 @@ contract AccountingOracle is BaseOracle {
         _initialize(admin, consensusContract, consensusVersion, lastProcessingRefSlot);
 
         _updateContractVersion(2);
+        _updateContractVersion(3);
     }
 
     function initializeWithoutMigration(
@@ -178,11 +179,16 @@ contract AccountingOracle is BaseOracle {
         _initialize(admin, consensusContract, consensusVersion, lastProcessingRefSlot);
 
         _updateContractVersion(2);
+        _updateContractVersion(3);
     }
 
     function finalizeUpgrade_v2(uint256 consensusVersion) external {
         _updateContractVersion(2);
         _setConsensusVersion(consensusVersion);
+    }
+
+    function finalizeUpgrade_v3() external {
+        _updateContractVersion(3);
     }
 
     ///

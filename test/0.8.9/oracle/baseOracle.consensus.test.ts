@@ -137,13 +137,13 @@ describe("BaseOracle.sol:consensus", () => {
     });
 
     it("Updates consensus version", async () => {
-      await expect(baseOracle.setConsensusVersion(3))
+      await expect(baseOracle.setConsensusVersion(4))
         .to.emit(baseOracle, "ConsensusVersionSet")
-        .withArgs(3, CONSENSUS_VERSION);
+        .withArgs(4, CONSENSUS_VERSION);
 
       const versionInState = await baseOracle.getConsensusVersion();
 
-      expect(versionInState).to.equal(3);
+      expect(versionInState).to.equal(4);
     });
   });
 
