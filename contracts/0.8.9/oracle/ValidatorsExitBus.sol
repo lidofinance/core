@@ -195,7 +195,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /// @dev Storage slot: uint256 totalRequestsProcessed
     bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
-         keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
+        keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
     // Storage slot for exit request limit configuration and current quota tracking
     bytes32 internal constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestLimit");
     // Storage slot for the maximum number of validator exit requests allowed per processing report
