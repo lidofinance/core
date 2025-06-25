@@ -3,7 +3,6 @@ import { ethers } from "hardhat";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
-  AccountingOracle,
   Burner,
   ICSModule,
   IOracleReportSanityChecker_preV3,
@@ -12,14 +11,13 @@ import {
   OperatorGrid,
   PredepositGuarantee,
   StakingRouter,
-  TriggerableWithdrawalsGateway,
   VaultHub,
 } from "typechain-types";
 
 import { ether, log } from "lib";
 import { loadContract } from "lib/contract";
 import { deployBehindOssifiableProxy, deployImplementation, deployWithoutProxy, makeTx } from "lib/deploy";
-import { readNetworkState, Sk } from "lib/state-file";
+import { getAddress, readNetworkState, Sk } from "lib/state-file";
 
 const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
 
@@ -41,8 +39,6 @@ export async function main() {
   const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
   const nodeOperatorsRegistryAddress = state[Sk.appNodeOperatorsRegistry].proxy.address;
   const simpleDvtAddress = state[Sk.appSimpleDvt].proxy.address;
-  const validatorExitDelayVerifierParams = parameters[Sk.validatorExitDelayVerifier].deployParameters;
-  const triggerableWithdrawalsGatewayParams = parameters[Sk.triggerableWithdrawalsGateway].deployParameters;
 
   const proxyContractsOwner = agentAddress;
 
@@ -114,7 +110,6 @@ export async function main() {
 
   const lazyOracle_ = await deployBehindOssifiableProxy(Sk.lazyOracle, "LazyOracle", proxyContractsOwner, deployer, [
     locatorAddress,
-    hashConsensusAddress,
   ]);
 
   const lazyOracle = await loadContract<LazyOracle>("LazyOracle", lazyOracle_.address);
@@ -299,9 +294,6 @@ export async function main() {
   // Deploy VaultFactory
   //
 
-  const accountingOracle = await loadContract<AccountingOracle>("AccountingOracle", await locator.accountingOracle());
-  const genesisTime = await accountingOracle.GENESIS_TIME();
-
   const vaultFactory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     locatorAddress,
     beacon.address,
@@ -309,90 +301,33 @@ export async function main() {
   ]);
   console.log("VaultFactory address", await vaultFactory.getAddress());
 
-  const validatorExitDelayVerifier = await deployWithoutProxy(
-    Sk.validatorExitDelayVerifier,
-    "ValidatorExitDelayVerifier",
-    deployer,
-    [
-      locator.address,
-      validatorExitDelayVerifierParams.gIFirstValidatorPrev,
-      validatorExitDelayVerifierParams.gIFirstValidatorCurr,
-      validatorExitDelayVerifierParams.gIHistoricalSummariesPrev,
-      validatorExitDelayVerifierParams.gIHistoricalSummariesCurr,
-      validatorExitDelayVerifierParams.firstSupportedSlot,
-      validatorExitDelayVerifierParams.pivotSlot,
-      chainSpec.slotsPerEpoch,
-      chainSpec.secondsPerSlot,
-      genesisTime,
-      // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
-      validatorExitDelayVerifierParams.shardCommitteePeriodInSeconds,
-    ],
-  );
-
-  //
-  // Deploy Triggerable Withdrawals Gateway
-  //
-
-  const triggerableWithdrawalsGateway_ = await deployWithoutProxy(
-    Sk.triggerableWithdrawalsGateway,
-    "TriggerableWithdrawalsGateway",
-    deployer,
-    [
-      deployer,
-      locator.address,
-      triggerableWithdrawalsGatewayParams.maxExitRequestsLimit,
-      triggerableWithdrawalsGatewayParams.exitsPerFrame,
-      triggerableWithdrawalsGatewayParams.frameDurationInSec,
-    ],
-  );
-  // TODO: move to voting script
-  // await makeTx(
-  //   stakingRouter,
-  //   "grantRole",
-  //   [await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(), triggerableWithdrawalsGateway_.address],
-  //   { from: deployer },
-  // );
-  const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
-    "TriggerableWithdrawalsGateway",
-    triggerableWithdrawalsGateway_.address,
-  );
-  await makeTx(
-    triggerableWithdrawalsGateway,
-    "grantRole",
-    [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), await locator.validatorsExitBusOracle()],
-    { from: deployer },
-  );
-  await makeTx(triggerableWithdrawalsGateway, "grantRole", [DEFAULT_ADMIN_ROLE, agentAddress], { from: deployer });
-  await makeTx(triggerableWithdrawalsGateway, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
-
   //
   // Deploy new LidoLocator implementation
   //
-
-  const locatorConfig: string[] = [
-    accountingOracle.address,
-    await locator.depositSecurityModule(),
-    await locator.elRewardsVault(),
-    lidoAddress,
-    newSanityChecker.address,
-    ZeroAddress,
-    burner.address,
-    await locator.stakingRouter(),
-    treasuryAddress,
-    await locator.validatorsExitBusOracle(),
-    await locator.withdrawalQueue(),
-    await locator.withdrawalVault(),
-    await locator.oracleDaemonConfig(),
-    validatorExitDelayVerifier.address,
-    triggerableWithdrawalsGateway_.address,
-    accounting.address,
-    predepositGuarantee.address,
-    wstethAddress,
-    vaultHub.address,
-    vaultFactory.address,
-    lazyOracle.address,
-    operatorGrid.address,
-  ];
+  const locatorConfig: LidoLocator.ConfigStruct = {
+    accountingOracle: await locator.accountingOracle(),
+    depositSecurityModule: await locator.depositSecurityModule(),
+    elRewardsVault: await locator.elRewardsVault(),
+    lido: lidoAddress,
+    oracleReportSanityChecker: newSanityChecker.address,
+    postTokenRebaseReceiver: ZeroAddress,
+    burner: burner.address,
+    stakingRouter: await locator.stakingRouter(),
+    treasury: treasuryAddress,
+    validatorsExitBusOracle: await locator.validatorsExitBusOracle(),
+    withdrawalQueue: await locator.withdrawalQueue(),
+    withdrawalVault: await locator.withdrawalVault(),
+    oracleDaemonConfig: await locator.oracleDaemonConfig(),
+    validatorExitDelayVerifier: getAddress(Sk.validatorExitDelayVerifier, state),
+    triggerableWithdrawalsGateway: getAddress(Sk.triggerableWithdrawalsGateway, state),
+    accounting: accounting.address,
+    predepositGuarantee: predepositGuarantee.address,
+    wstETH: wstethAddress,
+    vaultHub: vaultHub.address,
+    vaultFactory: vaultFactory.address,
+    lazyOracle: lazyOracle.address,
+    operatorGrid: operatorGrid.address,
+  };
   await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
 
   //

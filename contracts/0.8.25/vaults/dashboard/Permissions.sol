@@ -6,10 +6,10 @@ pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {OperatorGrid} from "../OperatorGrid.sol";
 import {VaultHub} from "../VaultHub.sol";
 
@@ -246,11 +246,11 @@ abstract contract Permissions is AccessControlConfirmable {
 
     /**
      * @dev Checks the REBALANCE_ROLE and rebalances the StakingVault.
-     * @param _ether The amount of ether to rebalance the StakingVault with.
+     * @param _shares The amount of shares to rebalance the StakingVault with.
      * @dev The zero check for parameters is performed in the StakingVault contract.
      */
-    function _rebalanceVault(uint256 _ether) internal onlyRoleMemberOrAdmin(REBALANCE_ROLE) {
-        VAULT_HUB.rebalance(address(_stakingVault()), _ether);
+    function _rebalanceVault(uint256 _shares) internal onlyRoleMemberOrAdmin(REBALANCE_ROLE) {
+        VAULT_HUB.rebalance(address(_stakingVault()), _shares);
     }
 
     /**

@@ -4,12 +4,14 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
-import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 
-import {IDepositContract} from "contracts/0.8.25/interfaces/IDepositContract.sol";
+import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
+
+import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
-contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeable {
+contract StakingVault__HarnessForTestUpgrade is IStakingVault, Ownable2StepUpgradeable {
     /// @custom:storage-location erc7201:StakingVault.Vault
     struct ERC7201Storage {
         address nodeOperator;
@@ -133,9 +135,30 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, OwnableUpgradeabl
 
     function ossify() external override {}
 
-    function pendingOwner() external view override returns (address) {}
+    /**
+     * @notice Returns the pending owner of the contract
+     * @dev Fixes solidity interface inference
+     */
+    function pendingOwner() public view override(IStakingVault, Ownable2StepUpgradeable) returns (address) {
+        return Ownable2StepUpgradeable.pendingOwner();
+    }
 
-    function acceptOwnership() external override {}
+    /**
+     * @notice Accepts the pending owner
+     * @dev Fixes solidity interface inference
+     * @dev Can only be called by the pending owner
+     */
+    function acceptOwnership() public override(IStakingVault, Ownable2StepUpgradeable) {
+        Ownable2StepUpgradeable.acceptOwnership();
+    }
 
-    function transferOwnership(address _newOwner) public override(IStakingVault, OwnableUpgradeable) {}
+    /**
+     * @notice Transfers the ownership of the contract to a new owner
+     * @param _newOwner Address of the new owner
+     * @dev Fixes solidity interface inference
+     * @dev Can only be called by the owner
+     */
+    function transferOwnership(address _newOwner) public override(IStakingVault, Ownable2StepUpgradeable) {
+        Ownable2StepUpgradeable.transferOwnership(_newOwner);
+    }
 }

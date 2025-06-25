@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
-pragma solidity 0.8.25;
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity >=0.5.0;
 
 interface IDepositContract {
     function get_deposit_root() external view returns (bytes32 rootHash);

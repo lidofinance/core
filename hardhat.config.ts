@@ -29,6 +29,8 @@ const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
   gasReporter: {
     enabled: !process.env.SKIP_GAS_REPORT,
+    reportPureAndViewMethods: true,
+    etherscan: process.env.ETHERSCAN_API_KEY || "",
   },
   networks: {
     "hardhat": {
@@ -42,7 +44,7 @@ const config: HardhatUserConfig = {
         // default hardhat's node mnemonic
         mnemonic: "test test test test test test test test test test test junk",
         count: 30,
-        accountsBalance: "100000000000000000000000",
+        accountsBalance: "10000000000000000000000000",
       },
       forking: getHardhatForkingConfig(),
       hardfork: "prague",
@@ -54,6 +56,7 @@ const config: HardhatUserConfig = {
     },
     "custom": {
       url: RPC_URL,
+      timeout: 120_000,
     },
     // local nodes
     "local": {

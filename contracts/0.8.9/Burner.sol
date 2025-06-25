@@ -9,11 +9,12 @@ import {IERC721} from "@openzeppelin/contracts-v4.4/token/ERC721/IERC721.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts-v4.4/utils/math/Math.sol";
 
+import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
 import {Versioned} from "./utils/Versioned.sol";
 
-import {IBurner} from "../common/interfaces/IBurner.sol";
-import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 
 /**
  * @title Interface defining Lido contract

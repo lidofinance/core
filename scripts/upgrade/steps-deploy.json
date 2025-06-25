@@ -1,7 +1,9 @@
 {
   "steps": [
     "upgrade/steps/0000-check-env",
-    "upgrade/steps/0100-deploy-contracts",
-    "upgrade/steps/0300-deploy-upgrading-contracts"
+    "upgrade/steps/0050-deploy-tw-contracts",
+    "upgrade/steps/0100-deploy-v3-contracts",
+    "upgrade/steps/0150-deploy-tw-upgrading-contracts",
+    "upgrade/steps/0200-deploy-v3-upgrading-contracts"
   ]
 }

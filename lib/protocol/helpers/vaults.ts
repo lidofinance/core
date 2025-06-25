@@ -181,11 +181,11 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
   await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
 }
 
-// address, totalValue, treasuryFees, liabilityShares
-export type VaultReportItem = [string, bigint, bigint, bigint];
+// address, totalValue, treasuryFees, liabilityShares, slashingReserve
+export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
 
 export function createVaultsReportTree(vaults: VaultReportItem[]) {
-  return StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256"]);
+  return StandardMerkleTree.of(vaults, ["address", "uint256", "uint256", "uint256", "uint256"]);
 }
 
 export async function reportVaultDataWithProof(
@@ -207,6 +207,7 @@ export async function reportVaultDataWithProof(
     totalValueArg,
     params.accruedLidoFees ?? 0n,
     liabilitySharesArg,
+    0n,
   ];
   const reportTree = createVaultsReportTree([vaultReport]);
 
@@ -218,6 +219,7 @@ export async function reportVaultDataWithProof(
     totalValueArg,
     params.accruedLidoFees ?? 0n,
     liabilitySharesArg,
+    0n,
     reportTree.getProof(0),
   );
 }
@@ -249,6 +251,54 @@ export async function createVaultProxy(
       confirmExpiry,
       roleAssignments,
       { value: VAULT_CONNECTION_DEPOSIT },
+    );
+
+  // Get the receipt manually
+  const receipt = (await tx.wait())!;
+  const events = findEventsWithInterfaces(receipt, "VaultCreated", [vaultFactory.interface]);
+
+  if (events.length === 0) throw new Error("Vault creation event not found");
+
+  const event = events[0];
+  const { vault } = event.args;
+
+  const dashboardEvents = findEventsWithInterfaces(receipt, "DashboardCreated", [vaultFactory.interface]);
+
+  if (dashboardEvents.length === 0) throw new Error("Dashboard creation event not found");
+
+  const { dashboard: dashboardAddress } = dashboardEvents[0].args;
+
+  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
+  const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
+  const dashboard = (await ethers.getContractAt("Dashboard", dashboardAddress, caller)) as Dashboard;
+
+  return {
+    tx,
+    proxy,
+    vault: stakingVault,
+    dashboard,
+  };
+}
+
+export async function createVaultProxyWithoutConnectingToVaultHub(
+  caller: HardhatEthersSigner,
+  vaultFactory: VaultFactory,
+  vaultOwner: HardhatEthersSigner,
+  nodeOperator: HardhatEthersSigner,
+  nodeOperatorManager: HardhatEthersSigner,
+  nodeOperatorFeeBP: bigint,
+  confirmExpiry: bigint,
+  roleAssignments: Permissions.RoleAssignmentStruct[],
+): Promise<CreateVaultResponse> {
+  const tx = await vaultFactory
+    .connect(caller)
+    .createVaultWithDashboardWithoutConnectingToVaultHub(
+      vaultOwner,
+      nodeOperator,
+      nodeOperatorManager,
+      nodeOperatorFeeBP,
+      confirmExpiry,
+      roleAssignments,
     );
 
   // Get the receipt manually
