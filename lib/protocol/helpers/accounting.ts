@@ -19,7 +19,7 @@ import {
   ONE_GWEI,
   streccak,
 } from "lib";
-import { prepareExtraData, EXTRA_DATA_FORMAT_LIST } from "lib/oracle";
+import { EXTRA_DATA_FORMAT_LIST,prepareExtraData } from "lib/oracle";
 
 import { ProtocolContext } from "../types";
 
@@ -68,7 +68,6 @@ export type OracleReportPushOptions = {
 export const ZERO_HASH = new Uint8Array(32).fill(0);
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_RATE_PRECISION = 10n ** 27n;
-const MIN_MEMBERS_COUNT = 3n;
 
 /**
  * Prepare and push oracle report.
@@ -736,7 +735,7 @@ export const submitReport = async (
 /**
  * Ensure that the oracle committee has the required number of members.
  */
-export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount = MIN_MEMBERS_COUNT) => {
+export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount: bigint, quorum: bigint) => {
   const { hashConsensus } = ctx.contracts;
 
   const members = await hashConsensus.getFastLaneMembers();
@@ -759,14 +758,10 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
 
   let count = addresses.length;
   while (addresses.length < minMembersCount) {
+    log.warning(`Adding oracle committee member ${count}`);
+
     const address = getOracleCommitteeMemberAddress(count);
-
-    log.debug(`Adding oracle committee member ${count}`, {
-      "Min members count": minMembersCount,
-      "Address": address,
-    });
-
-    await hashConsensus.connect(agentSigner).addMember(address, minMembersCount);
+    await hashConsensus.connect(agentSigner).addMember(address, quorum);
 
     addresses.push(address);
 

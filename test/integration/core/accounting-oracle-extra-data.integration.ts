@@ -8,7 +8,6 @@ import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDi
 import { EXTRA_DATA_FORMAT_LIST, KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import { report } from "lib/protocol/helpers";
-
 import {
   OracleReportOptions,
   reportWithoutExtraData,
@@ -136,6 +135,7 @@ describe("Integration: AccountingOracle extra data", () => {
     expect(extraDataChunkHashes.length).to.equal(1);
 
     const reportData: Partial<OracleReportOptions> = {
+      clDiff: 0n,
       excludeVaultsBalances: true,
       extraDataFormat: EXTRA_DATA_FORMAT_LIST,
       extraDataHash: extraDataChunkHashes[0],

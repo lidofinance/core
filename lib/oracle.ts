@@ -8,6 +8,7 @@ import { AccountingOracle, HashConsensus, OracleReportSanityChecker } from "type
 import { CONSENSUS_VERSION } from "lib/constants";
 
 import { numberToHex } from "./string";
+
 import { ether, impersonate } from ".";
 
 function splitArrayIntoChunks<T>(inputArray: T[], maxItemsPerChunk: number): T[][] {

@@ -9,10 +9,10 @@ import { HashConsensus } from "typechain-types";
 import { ether, impersonate } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
-  report,
-  waitNextAvailableReportTime,
   calcReportDataHash,
   getReportDataItems,
+  report,
+  waitNextAvailableReportTime,
   ZERO_HASH,
 } from "lib/protocol/helpers";
 
