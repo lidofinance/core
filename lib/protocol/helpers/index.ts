@@ -9,9 +9,12 @@ export {
   ensureOracleCommitteeMembers,
   getReportTimeElapsed,
   waitNextAvailableReportTime,
+  getReportDataItems,
+  calcReportDataHash,
   handleOracleReport,
   submitReport,
   report,
+  ZERO_HASH,
 } from "./accounting";
 
 export { sdvtEnsureOperators } from "./sdvt";

@@ -3,11 +3,12 @@ import { assert } from "chai";
 import { keccak256, ZeroHash } from "ethers";
 import { ethers } from "hardhat";
 
-import { AccountingOracle, HashConsensus } from "typechain-types";
+import { AccountingOracle, HashConsensus, OracleReportSanityChecker } from "typechain-types";
 
 import { CONSENSUS_VERSION } from "lib/constants";
 
 import { numberToHex } from "./string";
+import { ether, impersonate } from ".";
 
 function splitArrayIntoChunks<T>(inputArray: T[], maxItemsPerChunk: number): T[][] {
   const result: T[][] = [];
@@ -168,6 +169,27 @@ export function encodeExtraDataItems(data: ExtraDataType) {
   return encodeExtraDataItemsArray(itemsWithType);
 }
 
+export function prepareExtraData(extraData: ExtraData, config?: ExtraDataConfig) {
+  const extraDataItems: string[] = [];
+
+  if (Array.isArray(extraData)) {
+    if (isStringArray(extraData)) {
+      extraDataItems.push(...extraData);
+    } else if (isItemTypeArray(extraData)) {
+      extraDataItems.push(...encodeExtraDataItemsArray(extraData));
+    }
+  } else if (isExtraDataType(extraData)) {
+    extraDataItems.push(...encodeExtraDataItems(extraData));
+  }
+
+  const extraDataItemsCount = extraDataItems.length;
+  const maxItemsPerChunk = config?.maxItemsPerChunk || extraDataItemsCount;
+  const extraDataChunks = packExtraDataItemsToChunksLinkedByHash(extraDataItems, maxItemsPerChunk);
+  const extraDataChunkHashes = extraDataChunks.map((chunk) => calcExtraDataListHash(chunk));
+
+  return { extraDataItemsCount, extraDataChunks, extraDataChunkHashes };
+}
+
 function packChunk(extraDataItems: string[], nextHash: string) {
   const extraDataItemsBytes = extraDataItems.map((s) => s.substring(2)).join("");
   return `${nextHash}${extraDataItemsBytes}`;
@@ -273,4 +295,23 @@ export async function getSecondsPerFrame(consensus: HashConsensus) {
 export async function getSlotTimestamp(slot: bigint, consensus: HashConsensus) {
   const chainConfig = await consensus.getChainConfig();
   return chainConfig.genesisTime + chainConfig.secondsPerSlot * slot;
+}
+
+// Might be useful for tests on scratch where even reporting a single exited validator
+// is too much for the default limit
+export async function setAnnualBalanceIncreaseLimit(sanityChecker: OracleReportSanityChecker, limitBP: bigint) {
+  const adminRole = await sanityChecker.DEFAULT_ADMIN_ROLE();
+
+  const admin = await sanityChecker.getRoleMember(adminRole, 0);
+  const adminSigner = await impersonate(admin, ether("1"));
+
+  const setLimitRole = await sanityChecker.ANNUAL_BALANCE_INCREASE_LIMIT_MANAGER_ROLE();
+
+  // Grant the role to the current signer
+  await sanityChecker.connect(adminSigner).grantRole(setLimitRole, adminSigner.address);
+
+  await sanityChecker.connect(adminSigner).setAnnualBalanceIncreaseBPLimit(limitBP);
+
+  // Revoke the role after setting the limit
+  await sanityChecker.connect(adminSigner).revokeRole(setLimitRole, adminSigner.address);
 }
