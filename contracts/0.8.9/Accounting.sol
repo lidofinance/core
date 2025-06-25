@@ -65,6 +65,10 @@ contract Accounting {
         /// @notice amount of CL ether that is not rewards earned during this report period
         /// the sum of CL balance on the previous report and the amount of fresh deposits since then
         uint256 principalClBalance;
+        /// @notice total number of stETH shares before the report is applied
+        uint256 preTotalShares;
+        /// @notice amount of ether under the protocol before the report is applied
+        uint256 preTotalPooledEther;
         /// @notice total number of internal (not backed by vaults) stETH shares after the report is applied
         uint256 postInternalShares;
         /// @notice amount of ether under the protocol after the report is applied
@@ -166,6 +170,9 @@ contract Accounting {
         ReportValues calldata _report,
         uint256 _withdrawalsShareRate
     ) internal view returns (CalculatedValues memory update) {
+        update.preTotalShares = _pre.totalShares;
+        update.preTotalPooledEther = _pre.totalPooledEther;
+
         update.rewardDistribution = _getStakingRewardsDistribution(_contracts.stakingRouter);
 
         if (_withdrawalsShareRate != 0) {

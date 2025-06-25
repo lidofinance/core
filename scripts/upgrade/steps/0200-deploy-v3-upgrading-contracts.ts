@@ -1,5 +1,4 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import { IAragonAppRepo, IOssifiableProxy, OssifiableProxy__factory } from "typechain-types";
 
@@ -11,7 +10,6 @@ export async function main() {
   const deployerSigner = await ethers.provider.getSigner();
   const deployer = deployerSigner.address;
   const state = readNetworkState();
-  const parameters = readUpgradeParameters();
 
   const locatorProxy = OssifiableProxy__factory.connect(getAddress(Sk.lidoLocator, state), deployerSigner);
   const oldLocatorImplementation = await locatorProxy.proxy__getImplementation();
@@ -49,6 +47,6 @@ export async function main() {
   const template = await deployWithoutProxy(Sk.v3Template, "V3Template", deployer, [addressesParams]);
 
   await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [
-    [template.address, parameters[Sk.appLido].newVersion, state[Sk.appLido].aragonApp.id],
+    [template.address, state[Sk.appLido].aragonApp.id],
   ]);
 }
