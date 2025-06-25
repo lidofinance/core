@@ -12,13 +12,13 @@ import {
   Lido__MockForAccounting,
   Lido__MockForAccounting__factory,
   LidoLocator,
-  OperatorGrid,
   OracleReportSanityChecker__MockForAccounting,
   OracleReportSanityChecker__MockForAccounting__factory,
-  OssifiableProxy,
   PostTokenRebaseReceiver__MockForAccounting__factory,
   StakingRouter__MockForLidoAccounting,
   StakingRouter__MockForLidoAccounting__factory,
+  VaultHub__MockForAccountingReport,
+  VaultHub__MockForAccountingReport__factory,
   WithdrawalQueue__MockForAccounting,
   WithdrawalQueue__MockForAccounting__factory,
 } from "typechain-types";
@@ -27,9 +27,6 @@ import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/oracle/Accou
 import { certainAddress, ether, getCurrentBlockTimestamp, impersonate } from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { VAULTS_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
-
-const DEFAULT_TIER_SHARE_LIMIT = ether("1000");
 
 describe("Accounting.sol:report", () => {
   let deployer: HardhatEthersSigner;
@@ -37,20 +34,18 @@ describe("Accounting.sol:report", () => {
   let accounting: Accounting;
   let postTokenRebaseReceiver: IPostTokenRebaseReceiver;
   let locator: LidoLocator;
-  let operatorGrid: OperatorGrid;
-  let operatorGridImpl: OperatorGrid;
-  let proxy: OssifiableProxy;
 
   let lido: Lido__MockForAccounting;
   let stakingRouter: StakingRouter__MockForLidoAccounting;
   let oracleReportSanityChecker: OracleReportSanityChecker__MockForAccounting;
   let withdrawalQueue: WithdrawalQueue__MockForAccounting;
   let burner: Burner__MockForAccounting;
+  let vaultHub: VaultHub__MockForAccountingReport;
 
   beforeEach(async () => {
     [deployer] = await ethers.getSigners();
 
-    [lido, stakingRouter, oracleReportSanityChecker, postTokenRebaseReceiver, withdrawalQueue, burner] =
+    [lido, stakingRouter, oracleReportSanityChecker, postTokenRebaseReceiver, withdrawalQueue, burner, vaultHub] =
       await Promise.all([
         new Lido__MockForAccounting__factory(deployer).deploy(),
         new StakingRouter__MockForLidoAccounting__factory(deployer).deploy(),
@@ -58,6 +53,7 @@ describe("Accounting.sol:report", () => {
         new PostTokenRebaseReceiver__MockForAccounting__factory(deployer).deploy(),
         new WithdrawalQueue__MockForAccounting__factory(deployer).deploy(),
         new Burner__MockForAccounting__factory(deployer).deploy(),
+        new VaultHub__MockForAccountingReport__factory(deployer).deploy(),
       ]);
 
     locator = await deployLidoLocator(
@@ -68,6 +64,7 @@ describe("Accounting.sol:report", () => {
         postTokenRebaseReceiver,
         withdrawalQueue,
         burner,
+        vaultHub,
       },
       deployer,
     );
@@ -80,36 +77,6 @@ describe("Accounting.sol:report", () => {
     );
     accounting = await ethers.getContractAt("Accounting", accountingProxy, deployer);
     await updateLidoLocatorImplementation(await locator.getAddress(), { accounting });
-
-    // OperatorGrid
-    operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
-    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
-    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
-
-    const defaultTierParams = {
-      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
-      reserveRatioBP: 2000n,
-      forcedRebalanceThresholdBP: 1800n,
-      infraFeeBP: 500n,
-      liquidityFeeBP: 400n,
-      reservationFeeBP: 100n,
-    };
-    await operatorGrid.initialize(deployer, defaultTierParams);
-
-    const vaultHubImpl = await ethers.deployContract(
-      "VaultHub",
-      [locator, lido, VAULTS_RELATIVE_SHARE_LIMIT_BP],
-      deployer,
-    );
-
-    const vaultHubProxy = await ethers.deployContract(
-      "OssifiableProxy",
-      [vaultHubImpl, deployer, new Uint8Array()],
-      deployer,
-    );
-    const vaultHub = await ethers.getContractAt("VaultHub", vaultHubProxy, deployer);
-    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub });
-    await vaultHub.initialize(deployer);
 
     const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100.0"));
     accounting = accounting.connect(accountingOracleSigner);
@@ -125,10 +92,6 @@ describe("Accounting.sol:report", () => {
       elRewardsVaultBalance: 0n,
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches: [],
-      vaultsTotalTreasuryFeesShares: 0n,
-      vaultsTotalDeficit: 0n,
-      vaultsDataTreeRoot: ethers.ZeroHash,
-      vaultsDataTreeCid: "",
       ...overrides,
     };
   }

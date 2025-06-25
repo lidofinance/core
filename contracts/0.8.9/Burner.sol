@@ -9,9 +9,12 @@ import {IERC721} from "@openzeppelin/contracts-v4.4/token/ERC721/IERC721.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts-v4.4/utils/math/Math.sol";
 
+import {IBurner} from "contracts/common/interfaces/IBurner.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
-import {IBurner} from "../common/interfaces/IBurner.sol";
-import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
+import {Versioned} from "./utils/Versioned.sol";
+
 
 /**
  * @title Interface defining Lido contract
@@ -54,7 +57,7 @@ interface ILido is IERC20 {
  *
  * @dev Burning stETH means 'decrease total underlying shares amount to perform stETH positive token rebase'
  */
-contract Burner is IBurner, AccessControlEnumerable {
+contract Burner is IBurner, AccessControlEnumerable, Versioned {
     using SafeERC20 for IERC20;
 
     error AppAuthFailed();
@@ -66,17 +69,34 @@ contract Burner is IBurner, AccessControlEnumerable {
     error BurnAmountExceedsActual(uint256 requestedAmount, uint256 actualAmount);
     error ZeroAddress(string field);
     error OnlyLidoCanMigrate();
+    error NotInitialized();
+
+    // -----------------------------
+    //           STORAGE STRUCTS
+    // -----------------------------
+    /// @custom:storage-location erc7201:Burner
+    struct Storage {
+        uint256 coverSharesBurnRequested;
+        uint256 nonCoverSharesBurnRequested;
+
+        uint256 totalCoverSharesBurnt;
+        uint256 totalNonCoverSharesBurnt;
+    }
+
+    /// @custom:storage-location erc7201:Burner:IsMigrationAllowed-v3Upgrade
+    struct StorageV3Upgrade {
+        bool isMigrationAllowed;
+    }
 
     bytes32 public constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
     bytes32 public constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
 
-    uint256 private coverSharesBurnRequested;
-    uint256 private nonCoverSharesBurnRequested;
+    // keccak256(abi.encode(uint256(keccak256("Burner")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant STORAGE_LOCATION = 0xf01bebc885dbdcd6f86dfe57676112e525cafe0421724bf6b4a9ab1ee741de00;
 
-    uint256 private totalCoverSharesBurnt;
-    uint256 private totalNonCoverSharesBurnt;
-
-    bool public isMigrationAllowed;
+    /// @dev After V3 Upgrade finished is no longer needed and should be removed
+    // keccak256(abi.encode(uint256(keccak256("Burner.IsMigrationAllowed-v3Upgrade")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant STORAGE_V3_UPGRADE_LOCATION = 0xe26691b9ae4d2ff5628fc98afc2ccacdd3dd28e1ab2df809eb32ad4af2845800;
 
     ILidoLocator public immutable LOCATOR;
     ILido public immutable LIDO;
@@ -117,22 +137,33 @@ contract Burner is IBurner, AccessControlEnumerable {
     /**
      * Ctor
      *
-     * @param _admin the Lido DAO Aragon agent contract address
      * @param _locator the Lido locator address
      * @param _stETH stETH token address
-     * @param _isMigrationAllowed whether migration is allowed initially
      */
-    constructor(address _admin, address _locator, address _stETH, bool _isMigrationAllowed) {
-        if (_admin == address(0)) revert ZeroAddress("_admin");
+    constructor(address _locator, address _stETH)
+        Versioned()
+    {
         if (_locator == address(0)) revert ZeroAddress("_locator");
         if (_stETH == address(0)) revert ZeroAddress("_stETH");
 
-        _setupRole(DEFAULT_ADMIN_ROLE, _admin);
-        _setupRole(REQUEST_BURN_SHARES_ROLE, _stETH);
-
         LOCATOR = ILidoLocator(_locator);
         LIDO = ILido(_stETH);
-        isMigrationAllowed = _isMigrationAllowed;
+    }
+
+    /**
+     * @notice Initializes the contract by setting up roles and migration allowance.
+     * @dev This function should be called only once during the contract deployment.
+     * @param _admin The address to be granted the DEFAULT_ADMIN_ROLE.
+     * @param _isMigrationAllowed whether migration is allowed initially.
+     */
+    function initialize(address _admin, bool _isMigrationAllowed) external {
+        if (_admin == address(0)) revert ZeroAddress("_admin");
+
+        _initializeContractVersionTo(1);
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+
+        _storageV3Upgrade().isMigrationAllowed = _isMigrationAllowed;
     }
 
     /**
@@ -143,15 +174,25 @@ contract Burner is IBurner, AccessControlEnumerable {
     function migrate(address _oldBurner) external {
         if (msg.sender != address(LIDO)) revert OnlyLidoCanMigrate();
         if (_oldBurner == address(0)) revert ZeroAddress("_oldBurner");
-        if (!isMigrationAllowed) revert MigrationNotAllowedOrAlreadyMigrated();
-        isMigrationAllowed = false;
+        _checkContractVersion(1);
+        if (!_storageV3Upgrade().isMigrationAllowed) revert MigrationNotAllowedOrAlreadyMigrated();
+        _storageV3Upgrade().isMigrationAllowed = false;
 
         IBurner oldBurner = IBurner(_oldBurner);
-        totalCoverSharesBurnt = oldBurner.getCoverSharesBurnt();
-        totalNonCoverSharesBurnt = oldBurner.getNonCoverSharesBurnt();
+        Storage storage $ = _storage();
+        $.totalCoverSharesBurnt = oldBurner.getCoverSharesBurnt();
+        $.totalNonCoverSharesBurnt = oldBurner.getNonCoverSharesBurnt();
         (uint256 coverShares, uint256 nonCoverShares) = oldBurner.getSharesRequestedToBurn();
-        coverSharesBurnRequested = coverShares;
-        nonCoverSharesBurnRequested = nonCoverShares;
+        $.coverSharesBurnRequested = coverShares;
+        $.nonCoverSharesBurnRequested = nonCoverShares;
+    }
+
+    /**
+     * @notice Returns whether migration is allowed.
+     * @dev After V3 Upgrade finished is no longer needed and should be removed
+     */
+    function isMigrationAllowed() external view returns (bool) {
+        return _storageV3Upgrade().isMigrationAllowed;
     }
 
     /**
@@ -191,7 +232,23 @@ contract Burner is IBurner, AccessControlEnumerable {
     }
 
     /**
+     * @notice BE CAREFUL, the provided stETH shares will be burnt permanently.
+     *
+     * Transfers `_sharesAmountToBurn` stETH shares from the message sender and irreversibly locks these
+     * on the burner contract address. Marks the shares amount for burning
+     * by increasing the `nonCoverSharesBurnRequested` counter.
+     *
+     * @param _sharesAmountToBurn stETH shares to burn
+     *
+     */
+    function requestBurnMyShares(uint256 _sharesAmountToBurn) external onlyRole(REQUEST_BURN_MY_STETH_ROLE) {
+        uint256 stETHAmount = LIDO.transferSharesFrom(msg.sender, address(this), _sharesAmountToBurn);
+        _requestBurn(_sharesAmountToBurn, stETHAmount, false /* _isCover */);
+    }
+
+    /**
      * @notice BE CAREFUL, the provided stETH will be burnt permanently.
+     * @dev DEPRECATED, use `requestBurnMyShares` instead to prevent dust accumulation.
      *
      * Transfers `_stETHAmountToBurn` stETH tokens from the message sender and irreversibly locks these
      * on the burner contract address. Internally converts `_stETHAmountToBurn` amount into underlying
@@ -296,8 +353,9 @@ contract Burner is IBurner, AccessControlEnumerable {
             return;
         }
 
-        uint256 memCoverSharesBurnRequested = coverSharesBurnRequested;
-        uint256 memNonCoverSharesBurnRequested = nonCoverSharesBurnRequested;
+        Storage storage $ = _storage();
+        uint256 memCoverSharesBurnRequested = $.coverSharesBurnRequested;
+        uint256 memNonCoverSharesBurnRequested = $.nonCoverSharesBurnRequested;
 
         uint256 burnAmount = memCoverSharesBurnRequested + memNonCoverSharesBurnRequested;
 
@@ -309,11 +367,11 @@ contract Burner is IBurner, AccessControlEnumerable {
         if (memCoverSharesBurnRequested > 0) {
             uint256 sharesToBurnNowForCover = Math.min(_sharesToBurn, memCoverSharesBurnRequested);
 
-            totalCoverSharesBurnt += sharesToBurnNowForCover;
+            $.totalCoverSharesBurnt += sharesToBurnNowForCover;
             uint256 stETHToBurnNowForCover = LIDO.getPooledEthByShares(sharesToBurnNowForCover);
             emit StETHBurnt(true /* isCover */, stETHToBurnNowForCover, sharesToBurnNowForCover);
 
-            coverSharesBurnRequested -= sharesToBurnNowForCover;
+            $.coverSharesBurnRequested -= sharesToBurnNowForCover;
             sharesToBurnNow += sharesToBurnNowForCover;
         }
         if (memNonCoverSharesBurnRequested > 0 && sharesToBurnNow < _sharesToBurn) {
@@ -322,11 +380,11 @@ contract Burner is IBurner, AccessControlEnumerable {
                 memNonCoverSharesBurnRequested
             );
 
-            totalNonCoverSharesBurnt += sharesToBurnNowForNonCover;
+            $.totalNonCoverSharesBurnt += sharesToBurnNowForNonCover;
             uint256 stETHToBurnNowForNonCover = LIDO.getPooledEthByShares(sharesToBurnNowForNonCover);
             emit StETHBurnt(false /* isCover */, stETHToBurnNowForNonCover, sharesToBurnNowForNonCover);
 
-            nonCoverSharesBurnRequested -= sharesToBurnNowForNonCover;
+            $.nonCoverSharesBurnRequested -= sharesToBurnNowForNonCover;
             sharesToBurnNow += sharesToBurnNowForNonCover;
         }
 
@@ -344,22 +402,23 @@ contract Burner is IBurner, AccessControlEnumerable {
         override
         returns (uint256 coverShares, uint256 nonCoverShares)
     {
-        coverShares = coverSharesBurnRequested;
-        nonCoverShares = nonCoverSharesBurnRequested;
+        Storage storage $ = _storage();
+        coverShares = $.coverSharesBurnRequested;
+        nonCoverShares = $.nonCoverSharesBurnRequested;
     }
 
     /**
      * Returns the total cover shares ever burnt.
      */
     function getCoverSharesBurnt() external view virtual override returns (uint256) {
-        return totalCoverSharesBurnt;
+        return _storage().totalCoverSharesBurnt;
     }
 
     /**
      * Returns the total non-cover shares ever burnt.
      */
     function getNonCoverSharesBurnt() external view virtual override returns (uint256) {
-        return totalNonCoverSharesBurnt;
+        return _storage().totalNonCoverSharesBurnt;
     }
 
     /**
@@ -370,7 +429,8 @@ contract Burner is IBurner, AccessControlEnumerable {
     }
 
     function _getExcessStETHShares() internal view returns (uint256) {
-        uint256 sharesBurnRequested = (coverSharesBurnRequested + nonCoverSharesBurnRequested);
+        Storage storage $ = _storage();
+        uint256 sharesBurnRequested = ($.coverSharesBurnRequested + $.nonCoverSharesBurnRequested);
         uint256 totalShares = LIDO.sharesOf(address(this));
 
         // sanity check, don't revert
@@ -386,10 +446,23 @@ contract Burner is IBurner, AccessControlEnumerable {
 
         emit StETHBurnRequested(_isCover, msg.sender, _stETHAmount, _sharesAmount);
 
+        Storage storage $ = _storage();
         if (_isCover) {
-            coverSharesBurnRequested += _sharesAmount;
+            $.coverSharesBurnRequested += _sharesAmount;
         } else {
-            nonCoverSharesBurnRequested += _sharesAmount;
+            $.nonCoverSharesBurnRequested += _sharesAmount;
+        }
+    }
+
+    function _storage() internal pure returns (Storage storage $) {
+        assembly {
+            $.slot := STORAGE_LOCATION
+        }
+    }
+
+    function _storageV3Upgrade() internal pure returns (StorageV3Upgrade storage $) {
+        assembly {
+            $.slot := STORAGE_V3_UPGRADE_LOCATION
         }
     }
 }

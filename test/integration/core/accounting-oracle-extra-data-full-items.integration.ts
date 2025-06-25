@@ -62,6 +62,7 @@ class ListKeyMapHelper<ValueType> {
   }
 }
 
+// TODO: remove everything related to stuck validators?
 describe("Integration: AccountingOracle extra data full items", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
@@ -142,18 +143,12 @@ describe("Integration: AccountingOracle extra data full items", () => {
   }
 
   function testReportingModuleWithMaxExtraDataItems({
-    norStuckItems,
     norExitedItems,
-    sdvtStuckItems,
     sdvtExitedItems,
-    csmStuckItems,
     csmExitedItems,
   }: {
-    norStuckItems: number;
     norExitedItems: number;
-    sdvtStuckItems: number;
     sdvtExitedItems: number;
-    csmStuckItems: number;
     csmExitedItems: number;
   }) {
     return async () => {
@@ -198,34 +193,16 @@ describe("Integration: AccountingOracle extra data full items", () => {
       const idsStuck = new Map<bigint, bigint[]>();
 
       idsExited.set(NOR_MODULE_ID, norIds.slice(0, norExitedItems * maxNodeOperatorsPerExtraDataItem));
-      idsStuck.set(NOR_MODULE_ID, norIds.slice(0, norStuckItems * maxNodeOperatorsPerExtraDataItem));
 
       idsExited.set(SDVT_MODULE_ID, sdvtIds.slice(0, sdvtExitedItems * maxNodeOperatorsPerExtraDataItem));
-      idsStuck.set(SDVT_MODULE_ID, sdvtIds.slice(0, sdvtStuckItems * maxNodeOperatorsPerExtraDataItem));
 
       if (ctx.flags.withCSM) {
         idsExited.set(CSM_MODULE_ID, csmIds.slice(0, csmExitedItems * maxNodeOperatorsPerExtraDataItem));
-        idsStuck.set(CSM_MODULE_ID, csmIds.slice(0, csmStuckItems * maxNodeOperatorsPerExtraDataItem));
       }
 
       const numKeysReportedByNo = new ListKeyMapHelper<bigint>(); // [moduleId, nodeOpId, type] -> numKeys
 
       const reportExtraItems: ItemType[] = [];
-
-      for (const { moduleId, module } of modules) {
-        const ids = idsStuck.get(moduleId)!;
-        for (const id of ids) {
-          const summary = await module.getNodeOperatorSummary(id);
-          const numKeys = summary.stuckValidatorsCount + 1n;
-          numKeysReportedByNo.set([moduleId, id, EXTRA_DATA_TYPE_STUCK_VALIDATORS], numKeys);
-          reportExtraItems.push({
-            moduleId: Number(moduleId),
-            nodeOpIds: [Number(id)],
-            keysCounts: [Number(numKeys)],
-            type: EXTRA_DATA_TYPE_STUCK_VALIDATORS,
-          });
-        }
-      }
 
       for (const { moduleId, module } of modules) {
         const ids = idsExited.get(moduleId)!;
@@ -277,7 +254,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
       for (const { moduleId, module } of modules) {
         if (moduleId === CSM_MODULE_ID) continue;
 
-        const ids = idsStuck.get(moduleId)!;
+        const ids = idsStuck.get(moduleId) ?? [];
         for (const id of ids) {
           const nodeOperator = await (module as unknown as LoadedContract<NodeOperatorsRegistry>).getNodeOperator(
             id,
@@ -324,7 +301,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
         }
 
         // Check module stuck validators, penalties and rewards
-        const moduleIdsStuck = idsStuck.get(moduleId)!;
+        const moduleIdsStuck = idsStuck.get(moduleId) ?? [];
         for (const opId of moduleIdsStuck) {
           // Verify stuck validators count matches expected
           const operatorSummary = await module.getNodeOperatorSummary(opId);
@@ -391,32 +368,20 @@ describe("Integration: AccountingOracle extra data full items", () => {
     };
   }
 
-  for (const norStuckItems of [0, 1]) {
-    for (const norExitedItems of [0, 1]) {
-      for (const sdvtStuckItems of [0, 1]) {
-        for (const sdvtExitedItems of [0, 1]) {
-          for (const csmStuckItems of withCSM() ? [0, 1] : [0]) {
-            for (const csmExitedItems of withCSM() ? [0, 1] : [0]) {
-              if (
-                norStuckItems + norExitedItems + sdvtStuckItems + sdvtExitedItems + csmStuckItems + csmExitedItems ===
-                0
-              ) {
-                continue;
-              }
-              it(
-                `should process extra data with full items for all modules with norStuckItems=${norStuckItems}, norExitedItems=${norExitedItems}, sdvtStuckItems=${sdvtStuckItems}, sdvtExitedItems=${sdvtExitedItems}, csmStuckItems=${csmStuckItems}, csmExitedItems=${csmExitedItems}`,
-                testReportingModuleWithMaxExtraDataItems({
-                  norStuckItems,
-                  norExitedItems,
-                  sdvtStuckItems,
-                  sdvtExitedItems,
-                  csmStuckItems,
-                  csmExitedItems,
-                }),
-              );
-            }
-          }
+  for (const norExitedItems of [0, 1]) {
+    for (const sdvtExitedItems of [0, 1]) {
+      for (const csmExitedItems of withCSM() ? [0, 1] : [0]) {
+        if (norExitedItems + sdvtExitedItems + csmExitedItems === 0) {
+          continue;
         }
+        it(
+          `should process extra data with full items for all modules with norExitedItems=${norExitedItems}, sdvtExitedItems=${sdvtExitedItems}, csmExitedItems=${csmExitedItems}`,
+          testReportingModuleWithMaxExtraDataItems({
+            norExitedItems,
+            sdvtExitedItems,
+            csmExitedItems,
+          }),
+        );
       }
     }
   }

@@ -2,7 +2,7 @@
 
 // See contracts/COMPILERS.md
 // solhint-disable-next-line lido/fixed-compiler-version
-pragma solidity >=0.4.24 <0.9.0;
+pragma solidity >=0.4.24;
 
 interface IOssifiableProxy {
     function proxy__upgradeTo(address newImplementation) external;

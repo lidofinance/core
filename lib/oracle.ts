@@ -22,7 +22,7 @@ export type OracleReport = AccountingOracle.ReportDataStruct;
 export type ReportAsArray = ReturnType<typeof getReportDataItems>;
 
 export type KeyType = { moduleId: number; nodeOpIds: number[]; keysCounts: number[] };
-export type ExtraDataType = { stuckKeys: KeyType[]; exitedKeys: KeyType[] };
+export type ExtraDataType = { exitedKeys: KeyType[] };
 
 export type ItemType = KeyType & { type: bigint };
 
@@ -44,8 +44,6 @@ export const DEFAULT_REPORT_FIELDS: OracleReport = {
   sharesRequestedToBurn: 0n,
   withdrawalFinalizationBatches: [],
   isBunkerMode: false,
-  vaultsTotalTreasuryFeesShares: 0n,
-  vaultsTotalDeficit: 0n,
   vaultsDataTreeRoot: ethers.ZeroHash,
   vaultsDataTreeCid: "",
   extraDataFormat: 0n,
@@ -66,8 +64,6 @@ export function getReportDataItems(r: OracleReport) {
     r.sharesRequestedToBurn,
     r.withdrawalFinalizationBatches,
     r.isBunkerMode,
-    r.vaultsTotalTreasuryFeesShares,
-    r.vaultsTotalDeficit,
     r.vaultsDataTreeRoot,
     r.vaultsDataTreeCid,
     r.extraDataFormat,
@@ -79,7 +75,7 @@ export function getReportDataItems(r: OracleReport) {
 export function calcReportDataHash(reportItems: ReportAsArray) {
   const data = ethers.AbiCoder.defaultAbiCoder().encode(
     [
-      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], bool, uint256, uint256, bytes32, string, uint256, bytes32, uint256)",
+      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], bool, bytes32, string, uint256, bytes32, uint256)",
     ],
     [reportItems],
   );
@@ -129,7 +125,6 @@ export function encodeExtraDataItems(data: ExtraDataType) {
 
   const toItemWithType = (keys: KeyType[], type: bigint) => keys.map((item) => ({ ...item, type }));
 
-  itemsWithType.push(...toItemWithType(data.stuckKeys, EXTRA_DATA_TYPE_STUCK_VALIDATORS));
   itemsWithType.push(...toItemWithType(data.exitedKeys, EXTRA_DATA_TYPE_EXITED_VALIDATORS));
 
   return encodeExtraDataItemsArray(itemsWithType);
@@ -173,7 +168,7 @@ function isItemTypeArray(items: unknown[]): items is ItemType[] {
 }
 
 function isExtraDataType(data: unknown): data is ExtraDataType {
-  return isObjectType(data) && "stuckKeys" in data && "exitedKeys" in data;
+  return isObjectType(data) && "exitedKeys" in data;
 }
 
 function isStringArray(items: unknown[]): items is string[] {

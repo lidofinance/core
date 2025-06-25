@@ -74,7 +74,7 @@ const loadContract = async <Name extends ContractName>(name: Name, address: stri
 const getCoreContracts = async (
   locator: LoadedContract<LidoLocator>,
   config: ProtocolNetworkConfig,
-  skipV3Contracts: boolean,
+  skipV3AndTwContracts: boolean,
 ) => {
   return (await batch({
     accountingOracle: loadContract(
@@ -112,9 +112,17 @@ const getCoreContracts = async (
       "OracleDaemonConfig",
       config.get("oracleDaemonConfig") || (await locator.oracleDaemonConfig()),
     ),
-    ...(skipV3Contracts
+    ...(skipV3AndTwContracts
       ? {}
       : {
+          validatorExitDelayVerifier: loadContract(
+            "ValidatorExitDelayVerifier",
+            config.get("validatorExitDelayVerifier") || (await locator.validatorExitDelayVerifier()),
+          ),
+          triggerableWithdrawalsGateway: loadContract(
+            "TriggerableWithdrawalsGateway",
+            config.get("triggerableWithdrawalsGateway") || (await locator.triggerableWithdrawalsGateway()),
+          ),
           accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
         }),
   })) as CoreContracts;
@@ -191,6 +199,10 @@ const getVaultsContracts = async (config: ProtocolNetworkConfig, locator: Loaded
     ),
     operatorGrid: loadContract("OperatorGrid", config.get("operatorGrid") || (await locator.operatorGrid())),
     lazyOracle: loadContract("LazyOracle", config.get("lazyOracle") || (await locator.lazyOracle())),
+    validatorConsolidationRequests: loadContract(
+      "ValidatorConsolidationRequests",
+      config.get("validatorConsolidationRequests"),
+    ),
   })) as VaultsContracts;
 };
 
@@ -217,7 +229,8 @@ export async function discover(skipV3Contracts: boolean) {
     "Hash Consensus": contracts.hashConsensus.address,
     "Execution Layer Rewards Vault": foundationContracts.elRewardsVault.address,
     "Withdrawal Queue": foundationContracts.withdrawalQueue.address,
-    "Withdrawal Vault": foundationContracts.withdrawalVault?.address,
+    "Withdrawal Vault": foundationContracts.withdrawalVault.address,
+    "Validator Exit Delay Verifier": foundationContracts.validatorExitDelayVerifier?.address,
     "Validators Exit Bus Oracle": foundationContracts.validatorsExitBusOracle.address,
     "Oracle Daemon Config": foundationContracts.oracleDaemonConfig.address,
     "Oracle Report Sanity Checker": foundationContracts.oracleReportSanityChecker.address,
@@ -229,12 +242,15 @@ export async function discover(skipV3Contracts: boolean) {
     "ACL": contracts.acl.address,
     "Burner": foundationContracts.burner.address,
     "wstETH": contracts.wstETH.address,
+    "Triggered Withdrawal Gateway": contracts.triggerableWithdrawalsGateway?.address,
     // Vaults
     "Staking Vault Factory": contracts.stakingVaultFactory?.address,
     "Staking Vault Beacon": contracts.stakingVaultBeacon?.address,
     "Vault Hub": contracts.vaultHub?.address,
     "Predeposit Guarantee": contracts.predepositGuarantee?.address,
     "Operator Grid": contracts.operatorGrid?.address,
+    "Lazy Oracle": contracts.lazyOracle?.address,
+    "Validator Consolidation Requests": contracts.validatorConsolidationRequests?.address,
   });
 
   const signers = {

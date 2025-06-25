@@ -56,6 +56,7 @@ const defaultEnv = {
   oracleReportSanityChecker: "ORACLE_REPORT_SANITY_CHECKER_ADDRESS",
   burner: "BURNER_ADDRESS",
   stakingRouter: "STAKING_ROUTER_ADDRESS",
+  validatorExitDelayVerifier: "VALIDATOR_EXIT_DELAY_VERIFIER_ADDRESS",
   validatorsExitBusOracle: "VALIDATORS_EXIT_BUS_ORACLE_ADDRESS",
   withdrawalQueue: "WITHDRAWAL_QUEUE_ADDRESS",
   withdrawalVault: "WITHDRAWAL_VAULT_ADDRESS",
@@ -73,6 +74,7 @@ const defaultEnv = {
   // vaults
   stakingVaultFactory: "STAKING_VAULT_FACTORY_ADDRESS",
   stakingVaultBeacon: "STAKING_VAULT_BEACON_ADDRESS",
+  validatorConsolidationRequests: "VALIDATOR_CONSOLIDATION_REQUESTS_ADDRESS",
 } as ProtocolNetworkItems;
 
 const getPrefixedEnv = (prefix: string, obj: ProtocolNetworkItems) =>
@@ -92,6 +94,7 @@ async function getLocalNetworkConfig(network: string, source: "fork" | "scratch"
     stakingVaultFactory: config[Sk.stakingVaultFactory].address,
     stakingVaultBeacon: config[Sk.stakingVaultBeacon].address,
     operatorGrid: config[Sk.operatorGrid].proxy.address,
+    validatorConsolidationRequests: config[Sk.validatorConsolidationRequests].address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv(network.toUpperCase(), defaultEnv), defaults, `${network}-${source}`);
 }
@@ -107,6 +110,8 @@ async function getMainnetForkNetworkConfig(): Promise<ProtocolNetworkConfig> {
     easyTrackAddress: "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977",
     stakingVaultFactory: state[Sk.stakingVaultFactory].address,
     stakingVaultBeacon: state[Sk.stakingVaultBeacon].address,
+    operatorGrid: state[Sk.operatorGrid].proxy.address,
+    validatorConsolidationRequests: state[Sk.validatorConsolidationRequests].address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "mainnet-fork");
 }
@@ -120,8 +125,10 @@ async function getForkingNetworkConfig(): Promise<ProtocolNetworkConfig> {
     agentAddress: state[Sk.appAgent].proxy.address,
     votingAddress: state[Sk.appVoting].proxy.address,
     easyTrackAddress: state["easyTrackEVMScriptExecutor"].address,
-    stakingVaultFactory: state[Sk.stakingVaultFactory] && state[Sk.stakingVaultFactory].address,
-    stakingVaultBeacon: state[Sk.stakingVaultBeacon] && state[Sk.stakingVaultBeacon].address,
+    stakingVaultFactory: state[Sk.stakingVaultFactory]?.address,
+    stakingVaultBeacon: state[Sk.stakingVaultBeacon]?.address,
+    operatorGrid: state[Sk.operatorGrid]?.proxy.address,
+    validatorConsolidationRequests: state[Sk.validatorConsolidationRequests]?.address,
   };
   return new ProtocolNetworkConfig(getPrefixedEnv("MAINNET", defaultEnv), defaults, "state-network-config");
 }

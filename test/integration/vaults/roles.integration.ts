@@ -172,7 +172,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         },
         {
           account: tierChanger,
-          role: await testDashboard.REQUEST_TIER_CHANGE_ROLE(),
+          role: await testDashboard.CHANGE_TIER_ROLE(),
         },
       ]);
 
@@ -186,7 +186,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
     it("Allows anyone to read public metrics of the vault", async () => {
       expect(await testDashboard.connect(funder).nodeOperatorDisbursableFee()).to.equal(0);
-      expect(await testDashboard.connect(funder).withdrawableEther()).to.equal(0);
+      expect(await testDashboard.connect(funder).withdrawableValue()).to.equal(0);
     });
 
     it("Allows to retrieve roles addresses", async () => {
@@ -347,10 +347,23 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           );
         });
 
-        it("rebalanceVault", async () => {
+        it("rebalanceVaultWithShares", async () => {
           await testMethod(
             testDashboard,
-            "rebalanceVault",
+            "rebalanceVaultWithShares",
+            {
+              successUsers: [rebalancer, owner],
+              failingUsers: allRoles.filter((r) => r !== rebalancer && r !== owner),
+            },
+            [1n],
+            await testDashboard.REBALANCE_ROLE(),
+          );
+        });
+
+        it("rebalanceVaultWithEther", async () => {
+          await testMethod(
+            testDashboard,
+            "rebalanceVaultWithEther",
             {
               successUsers: [rebalancer, owner],
               failingUsers: allRoles.filter((r) => r !== rebalancer && r !== owner),
@@ -446,13 +459,13 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         it("requestTierChange", async () => {
           await testMethod(
             testDashboard,
-            "requestTierChange",
+            "changeTier",
             {
               successUsers: [tierChanger, owner],
               failingUsers: allRoles.filter((r) => r !== tierChanger && r !== owner),
             },
             [1n, 1n],
-            await testDashboard.REQUEST_TIER_CHANGE_ROLE(),
+            await testDashboard.CHANGE_TIER_ROLE(),
           );
         });
       });
@@ -504,7 +517,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
     it("Allows anyone to read public metrics of the vault", async () => {
       expect(await testDashboard.connect(funder).nodeOperatorDisbursableFee()).to.equal(0);
-      expect(await testDashboard.connect(funder).withdrawableEther()).to.equal(0);
+      expect(await testDashboard.connect(funder).withdrawableValue()).to.equal(0);
     });
 
     it("Allows to retrieve roles addresses", async () => {

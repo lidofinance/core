@@ -11,6 +11,7 @@ import {
   ICSModule__factory,
   Lido__HarnessForFinalizeUpgradeV3,
   LidoLocator,
+  OssifiableProxy__factory,
 } from "typechain-types";
 
 import { certainAddress, ether, impersonate, proxify } from "lib";
@@ -51,7 +52,18 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
     impl = await ethers.deployContract("Lido__HarnessForFinalizeUpgradeV3");
     [lido] = await proxify({ impl, admin: deployer });
 
-    burner = await ethers.deployContract("Burner", [deployer.address, dummyLocatorAddress, lido.target, true]);
+    burner = await ethers.deployContract("Burner", [dummyLocatorAddress, lido.target]);
+
+    const proxyFactory = new OssifiableProxy__factory(deployer);
+    const burnerProxy = await proxyFactory.deploy(
+      await burner.getAddress(),
+      await deployer.getAddress(),
+      new Uint8Array(),
+    );
+    burner = burner.attach(await burnerProxy.getAddress()) as Burner;
+
+    const isMigrationAllowed = true;
+    await burner.connect(deployer).initialize(deployer.address, isMigrationAllowed);
     const stakingRouter = await ethers.deployContract("StakingRouter__MockForLidoUpgrade");
 
     nodeOperatorsRegistryAddress = (await stakingRouter.getStakingModule(1)).stakingModuleAddress;
@@ -151,6 +163,7 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       await lido.harness_mintShares(oldBurner.target, sharesOnOldBurner);
       expect(await lido.sharesOf(oldBurner.target)).to.equal(sharesOnOldBurner);
 
+      await lido.harness_setContractVersion(initialVersion);
       await expect(
         lido.finalizeUpgrade_v3(oldBurner.target, [
           nodeOperatorsRegistryAddress,

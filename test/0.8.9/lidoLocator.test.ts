@@ -19,11 +19,17 @@ const services = [
   "withdrawalQueue",
   "withdrawalVault",
   "oracleDaemonConfig",
+  "validatorExitDelayVerifier",
+  "triggerableWithdrawalsGateway",
   "accounting",
+  "predepositGuarantee",
   "wstETH",
   "vaultHub",
-  "predepositGuarantee",
+  "vaultFactory",
+  "lazyOracle",
   "operatorGrid",
+  "vaultFactory",
+  "lazyOracle",
 ] as const;
 
 type ArrayToUnion<A extends readonly unknown[]> = A[number];

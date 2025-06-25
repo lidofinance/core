@@ -5,6 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  LazyOracle__MockForNodeOperatorFee,
   LidoLocator,
   NodeOperatorFee__Harness,
   StakingVault__MockForNodeOperatorFee,
@@ -12,7 +13,7 @@ import {
   UpgradeableBeacon,
   VaultFactory__MockForNodeOperatorFee,
   VaultHub__MockForNodeOperatorFee,
-  WstETH__HarnessForVault,
+  WstETH__Harness,
 } from "typechain-types";
 
 import { advanceChainTime, days, ether, findEvents, getCurrentBlockTimestamp, getNextBlockTimestamp } from "lib";
@@ -33,7 +34,7 @@ describe("NodeOperatorFee.sol", () => {
 
   let lidoLocator: LidoLocator;
   let steth: StETH__MockForNodeOperatorFee;
-  let wsteth: WstETH__HarnessForVault;
+  let wsteth: WstETH__Harness;
   let hub: VaultHub__MockForNodeOperatorFee;
   let vaultImpl: StakingVault__MockForNodeOperatorFee;
   let nodeOperatorFeeImpl: NodeOperatorFee__Harness;
@@ -41,6 +42,7 @@ describe("NodeOperatorFee.sol", () => {
   let vault: StakingVault__MockForNodeOperatorFee;
   let nodeOperatorFee: NodeOperatorFee__Harness;
   let beacon: UpgradeableBeacon;
+  let lazyOracle: LazyOracle__MockForNodeOperatorFee;
 
   let originalState: string;
 
@@ -52,9 +54,15 @@ describe("NodeOperatorFee.sol", () => {
       await ethers.getSigners();
 
     steth = await ethers.deployContract("StETH__MockForNodeOperatorFee");
-    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
+    wsteth = await ethers.deployContract("WstETH__Harness", [steth]);
+    lazyOracle = await ethers.deployContract("LazyOracle__MockForNodeOperatorFee");
 
-    lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth, predepositGuarantee: vaultDepositor });
+    lidoLocator = await deployLidoLocator({
+      lido: steth,
+      wstETH: wsteth,
+      predepositGuarantee: vaultDepositor,
+      lazyOracle,
+    });
     hub = await ethers.deployContract("VaultHub__MockForNodeOperatorFee", [lidoLocator, steth]);
 
     nodeOperatorFeeImpl = await ethers.deployContract("NodeOperatorFee__Harness", [hub, lidoLocator]);
@@ -133,7 +141,7 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.getConfirmExpiry()).to.equal(initialConfirmExpiry);
       expect(await nodeOperatorFee.nodeOperatorFeeRate()).to.equal(nodeOperatorFeeRate);
       expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
-      expect(await nodeOperatorFee.feePeriodStartReport()).to.deep.equal([0n, 0n]);
+      expect(await nodeOperatorFee.feePeriodStartReport()).to.deep.equal([0n, 0n, 0n]);
     });
   });
 
@@ -158,16 +166,24 @@ describe("NodeOperatorFee.sol", () => {
       const oldConfirmExpiry = await nodeOperatorFee.getConfirmExpiry();
       const newConfirmExpiry = days(10n);
       const msgData = nodeOperatorFee.interface.encodeFunctionData("setConfirmExpiry", [newConfirmExpiry]);
-      let confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
+      let confirmTimestamp = await getNextBlockTimestamp();
+      let expiryTimestamp = confirmTimestamp + (await nodeOperatorFee.getConfirmExpiry());
 
       await expect(nodeOperatorFee.connect(vaultOwner).setConfirmExpiry(newConfirmExpiry))
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
-        .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData);
+        .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, expiryTimestamp, msgData);
 
-      confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
+      confirmTimestamp = await getNextBlockTimestamp();
+      expiryTimestamp = confirmTimestamp + (await nodeOperatorFee.getConfirmExpiry());
       await expect(nodeOperatorFee.connect(nodeOperatorManager).setConfirmExpiry(newConfirmExpiry))
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
-        .withArgs(nodeOperatorManager, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, msgData)
+        .withArgs(
+          nodeOperatorManager,
+          await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
+          confirmTimestamp,
+          expiryTimestamp,
+          msgData,
+        )
         .and.to.emit(nodeOperatorFee, "ConfirmExpirySet")
         .withArgs(nodeOperatorManager, oldConfirmExpiry, newConfirmExpiry);
 
@@ -183,9 +199,9 @@ describe("NodeOperatorFee.sol", () => {
     });
 
     it("reverts if the new node operator fee recipient is the zero address", async () => {
-      await expect(nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeRecipient(ZeroAddress))
-        .to.be.revertedWithCustomError(nodeOperatorFee, "ZeroArgument")
-        .withArgs("nodeOperatorFeeRecipient");
+      await expect(
+        nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeRecipient(ZeroAddress),
+      ).to.be.revertedWithCustomError(nodeOperatorFee, "ZeroAddress");
     });
 
     it("sets the new node operator fee recipient", async () => {
@@ -203,9 +219,10 @@ describe("NodeOperatorFee.sol", () => {
       const report = {
         totalValue: ether("101"),
         inOutDelta: ether("100"),
+        timestamp: await getCurrentBlockTimestamp(),
       };
 
-      await hub.setReport(report, await getCurrentBlockTimestamp(), true);
+      await hub.setReport(report, true);
 
       // at 10%, the fee is 0.1 ETH
       const expectedNodeOperatorFee = ((report.totalValue - report.inOutDelta) * nodeOperatorFeeRate) / BP_BASE;
@@ -221,9 +238,10 @@ describe("NodeOperatorFee.sol", () => {
       const report = {
         totalValue: ether("100"),
         inOutDelta: ether("100"),
+        timestamp: await getCurrentBlockTimestamp(),
       };
 
-      await hub.setReport(report, await getCurrentBlockTimestamp(), true);
+      await hub.setReport(report, true);
 
       // totalValue-inOutDelta is 0, so no fee
       await expect(nodeOperatorFee.disburseNodeOperatorFee()).not.to.emit(hub, "Mock__Withdrawn");
@@ -240,9 +258,10 @@ describe("NodeOperatorFee.sol", () => {
       const report = {
         totalValue: inOutDelta + realRewards, // 12 now, but should be 13, but side deposit is not reflected in the report yet
         inOutDelta,
+        timestamp: await getCurrentBlockTimestamp(),
       };
 
-      await hub.setReport(report, await getCurrentBlockTimestamp(), true);
+      await hub.setReport(report, true);
 
       // totalValue-inOutDelta-adjustment is 1, at 10%, the fee is 0.1 ETH
       // so the fee for only 1 ETH is disbursed, the vault still owes the node operator the fee for the other 1 eth
@@ -260,9 +279,10 @@ describe("NodeOperatorFee.sol", () => {
       const report2 = {
         totalValue: ether("13"),
         inOutDelta: ether("10"),
+        timestamp: await getCurrentBlockTimestamp(),
       };
 
-      await hub.setReport(report2, await getCurrentBlockTimestamp(), true);
+      await hub.setReport(report2, true);
 
       // now the fee is disbursed
       const expectedNodeOperatorFee2 =
@@ -286,9 +306,10 @@ describe("NodeOperatorFee.sol", () => {
       const report = {
         totalValue: inOutDelta + realRewards, // 11 now, but should be 13, but side deposit is not reflected in the report yet
         inOutDelta,
+        timestamp: await getCurrentBlockTimestamp(),
       };
 
-      await hub.setReport(report, await getCurrentBlockTimestamp(), true);
+      await hub.setReport(report, true);
 
       // 11 - 10 - 2 = -1, NO Rewards
       expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
@@ -297,9 +318,10 @@ describe("NodeOperatorFee.sol", () => {
       const report2 = {
         totalValue: inOutDelta + realRewards + sideDeposit, // 13 now, it includes the side deposit
         inOutDelta,
+        timestamp: await getCurrentBlockTimestamp(),
       };
 
-      await hub.setReport(report2, await getCurrentBlockTimestamp(), true);
+      await hub.setReport(report2, true);
 
       // now the fee is disbursed
       // 13 - 12 - (10 - 10) = 1, at 10%, the fee is 0.1 ETH
@@ -322,10 +344,11 @@ describe("NodeOperatorFee.sol", () => {
         {
           totalValue: ether("100"),
           inOutDelta: ether("100"),
+          timestamp: await getCurrentBlockTimestamp(),
         },
-        await getCurrentBlockTimestamp(),
         true,
       );
+      await lazyOracle.mock__setLatestReportTimestamp(await getCurrentBlockTimestamp());
 
       const operatorFee = 10_00n; // 10%
       await nodeOperatorFee.connect(nodeOperatorManager).setNodeOperatorFeeRate(operatorFee);
@@ -396,8 +419,8 @@ describe("NodeOperatorFee.sol", () => {
         {
           totalValue: rewards,
           inOutDelta: 0n,
+          timestamp: await getCurrentBlockTimestamp(),
         },
-        await getCurrentBlockTimestamp(),
         true,
       );
 
@@ -420,8 +443,8 @@ describe("NodeOperatorFee.sol", () => {
         {
           totalValue: rewards,
           inOutDelta: 0n,
+          timestamp: await getCurrentBlockTimestamp(),
         },
-        await getCurrentBlockTimestamp(),
         true,
       );
 
@@ -465,8 +488,6 @@ describe("NodeOperatorFee.sol", () => {
       const { amount: current } = await nodeOperatorFee.rewardsAdjustment();
       const LIMIT = await nodeOperatorFee.MANUAL_REWARDS_ADJUSTMENT_LIMIT();
 
-      await nodeOperatorFee.connect(nodeOperatorManager).setRewardsAdjustment(LIMIT + 1n, current);
-
       await expect(
         nodeOperatorFee.connect(vaultOwner).setRewardsAdjustment(LIMIT + 1n, current),
       ).to.be.revertedWithCustomError(nodeOperatorFee, "IncreasedOverLimit");
@@ -508,7 +529,8 @@ describe("NodeOperatorFee.sol", () => {
         currentAdjustment,
       ]);
 
-      let confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
+      let confirmTimestamp = await getNextBlockTimestamp();
+      let expiryTimestamp = confirmTimestamp + (await nodeOperatorFee.getConfirmExpiry());
 
       const firstConfirmTx = await nodeOperatorFee
         .connect(nodeOperatorManager)
@@ -516,11 +538,18 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(firstConfirmTx)
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
-        .withArgs(nodeOperatorManager, await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), confirmTimestamp, msgData);
+        .withArgs(
+          nodeOperatorManager,
+          await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
+          confirmTimestamp,
+          expiryTimestamp,
+          msgData,
+        );
 
       expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([currentAdjustment, 0n]);
 
-      confirmTimestamp = (await getNextBlockTimestamp()) + (await nodeOperatorFee.getConfirmExpiry());
+      confirmTimestamp = await getNextBlockTimestamp();
+      expiryTimestamp = confirmTimestamp + (await nodeOperatorFee.getConfirmExpiry());
 
       const timestamp = await getNextBlockTimestamp();
       const secondConfirmTx = await nodeOperatorFee
@@ -529,7 +558,7 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(secondConfirmTx)
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
-        .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, msgData)
+        .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, expiryTimestamp, msgData)
         .to.emit(nodeOperatorFee, "RewardsAdjustmentSet")
         .withArgs(newAdjustment, currentAdjustment);
 
@@ -538,11 +567,9 @@ describe("NodeOperatorFee.sol", () => {
   });
 
   context("setNodeOperatorFeeRate", () => {
-    it("reverts if called by not CONFIRMING_ROLE", async () => {
-      await expect(nodeOperatorFee.connect(stranger).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
-        nodeOperatorFee,
-        "SenderNotMember",
-      );
+    beforeEach(async () => {
+      // set non-zero ts for the latest report
+      await lazyOracle.mock__setLatestReportTimestamp(1);
     });
 
     it("reverts if report is stale", async () => {
@@ -557,14 +584,30 @@ describe("NodeOperatorFee.sol", () => {
         {
           totalValue: ether("100"),
           inOutDelta: ether("100"),
+          timestamp: await getCurrentBlockTimestamp(),
         },
-        await getCurrentBlockTimestamp(),
         isReportFresh,
       );
 
       await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
         nodeOperatorFee,
         "ReportStale",
+      );
+    });
+
+    it("reverts if called by not CONFIRMING_ROLE", async () => {
+      await hub.setReport(
+        {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+          timestamp: await getNextBlockTimestamp(),
+        },
+        true,
+      );
+
+      await expect(nodeOperatorFee.connect(stranger).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
+        nodeOperatorFee,
+        "SenderNotMember",
       );
     });
 
@@ -581,8 +624,8 @@ describe("NodeOperatorFee.sol", () => {
         {
           totalValue: ether("100"),
           inOutDelta: ether("100"),
+          timestamp: await getNextBlockTimestamp(),
         },
-        await getNextBlockTimestamp(),
         true,
       );
 
@@ -615,10 +658,12 @@ describe("NodeOperatorFee.sol", () => {
         {
           totalValue: ether("100"),
           inOutDelta: ether("100"),
+          timestamp: await getNextBlockTimestamp(),
         },
-        await getNextBlockTimestamp(),
         true,
       );
+
+      await lazyOracle.mock__setLatestReportTimestamp(await getNextBlockTimestamp());
 
       await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
         nodeOperatorFee,
@@ -644,17 +689,53 @@ describe("NodeOperatorFee.sol", () => {
         {
           totalValue: ether("100"),
           inOutDelta: ether("100"),
+          timestamp: latestTimestamp,
         },
-        latestTimestamp,
         true,
       );
 
       expect(await nodeOperatorFee.rewardsAdjustment()).to.deep.equal([newAdjustment, latestTimestamp]);
-      expect(await hub.latestVaultReportTimestamp(vault)).to.equal(latestTimestamp);
 
       await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
         nodeOperatorFee,
         "AdjustmentNotReported",
+      );
+    });
+
+    it("reverts if the vault is quarantined", async () => {
+      // grant vaultOwner the NODE_OPERATOR_MANAGER_ROLE to set the fee rate
+      // to simplify the test
+      await nodeOperatorFee
+        .connect(nodeOperatorManager)
+        .grantRole(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(), vaultOwner);
+
+      const noFeeRate = await nodeOperatorFee.nodeOperatorFeeRate();
+
+      const rewards = ether("1");
+
+      await hub.setReport(
+        {
+          totalValue: rewards,
+          inOutDelta: 0n,
+          timestamp: await getCurrentBlockTimestamp(),
+        },
+        true,
+      );
+
+      const expectedFee = (rewards * noFeeRate) / BP_BASE;
+
+      expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(expectedFee);
+
+      await lazyOracle.mock__setQuarantineInfo({
+        isActive: true,
+        pendingTotalValueIncrease: 0,
+        startTimestamp: 0,
+        endTimestamp: 0,
+      });
+
+      await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
+        nodeOperatorFee,
+        "VaultQuarantined",
       );
     });
 
@@ -673,8 +754,8 @@ describe("NodeOperatorFee.sol", () => {
         {
           totalValue: rewards,
           inOutDelta: 0n,
+          timestamp: await getCurrentBlockTimestamp(),
         },
-        await getCurrentBlockTimestamp(),
         true,
       );
 

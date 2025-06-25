@@ -1,4 +1,9 @@
 import { log } from "lib";
+import {
+  ensureEIP4788BeaconBlockRootContractPresent,
+  ensureEIP7002WithdrawalRequestContractPresent,
+  ensureEIP7251MaxEffectiveBalanceRequestContractPresent,
+} from "lib/eips";
 
 import {
   ensureDsmGuardians,
@@ -19,9 +24,14 @@ let alreadyProvisioned = false;
  */
 export const provision = async (ctx: ProtocolContext) => {
   if (alreadyProvisioned) {
-    log.success("Already provisioned");
+    log.debug("Already provisioned");
     return;
   }
+
+  // Ensure necessary precompiled contracts are present
+  await ensureEIP7002WithdrawalRequestContractPresent();
+  await ensureEIP4788BeaconBlockRootContractPresent();
+  await ensureEIP7251MaxEffectiveBalanceRequestContractPresent();
 
   // Ensure protocol is fully operational
   await ensureHashConsensusInitialEpoch(ctx);

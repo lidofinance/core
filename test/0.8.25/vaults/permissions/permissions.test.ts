@@ -20,15 +20,7 @@ import {
   VaultHub__MockPermissions,
 } from "typechain-types";
 
-import {
-  certainAddress,
-  days,
-  deployEIP7002WithdrawalRequestContract,
-  EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
-  ether,
-  findEvents,
-  getRandomSigners,
-} from "lib";
+import { certainAddress, days, deployEIP7002WithdrawalRequestContract, ether, findEvents, getRandomSigners } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -108,7 +100,8 @@ describe("Permissions", () => {
       stranger,
     ] = await getRandomSigners(30);
 
-    await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
+    // TODO
+    await deployEIP7002WithdrawalRequestContract();
 
     pdg = await ethers.deployContract("PredepositGuarantee__MockPermissions");
 
@@ -207,21 +200,21 @@ describe("Permissions", () => {
       await checkSoleMember(validatorExitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
       await checkSoleMember(validatorWithdrawalTriggerer, await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await checkSoleMember(disconnecter, await permissions.VOLUNTARY_DISCONNECT_ROLE());
-      await checkSoleMember(tierChanger, await permissions.REQUEST_TIER_CHANGE_ROLE());
+      await checkSoleMember(tierChanger, await permissions.CHANGE_TIER_ROLE());
     });
   });
 
   context("constructor()", () => {
     it("reverts if the vault hub is the zero address", async () => {
-      await expect(ethers.deployContract("Permissions__Harness", [ZeroAddress, lidoLocator]))
-        .to.be.revertedWithCustomError(permissions, "ZeroArgument")
-        .withArgs("_vaultHub");
+      await expect(
+        ethers.deployContract("Permissions__Harness", [ZeroAddress, lidoLocator]),
+      ).to.be.revertedWithCustomError(permissions, "ZeroAddress");
     });
 
     it("reverts if the lido locator is the zero address", async () => {
-      await expect(ethers.deployContract("Permissions__Harness", [vaultHub, ZeroAddress]))
-        .to.be.revertedWithCustomError(permissions, "ZeroArgument")
-        .withArgs("_lidoLocator");
+      await expect(
+        ethers.deployContract("Permissions__Harness", [vaultHub, ZeroAddress]),
+      ).to.be.revertedWithCustomError(permissions, "ZeroAddress");
     });
   });
 
@@ -279,9 +272,7 @@ describe("Permissions", () => {
           disconnecter,
           tierChanger,
         } as PermissionsConfigStruct),
-      )
-        .to.be.revertedWithCustomError(permissions, "ZeroArgument")
-        .withArgs("_defaultAdmin");
+      ).to.be.revertedWithCustomError(permissions, "ZeroAddress");
     });
   });
 
@@ -395,9 +386,10 @@ describe("Permissions", () => {
     });
 
     it("reverts if there are no assignments", async () => {
-      await expect(permissions.connect(defaultAdmin).grantRoles([]))
-        .to.be.revertedWithCustomError(permissions, "ZeroArgument")
-        .withArgs("_assignments");
+      await expect(permissions.connect(defaultAdmin).grantRoles([])).to.be.revertedWithCustomError(
+        permissions,
+        "ZeroArgument",
+      );
     });
   });
 
@@ -481,9 +473,10 @@ describe("Permissions", () => {
     });
 
     it("reverts if there are no assignments", async () => {
-      await expect(permissions.connect(defaultAdmin).revokeRoles([]))
-        .to.be.revertedWithCustomError(permissions, "ZeroArgument")
-        .withArgs("_assignments");
+      await expect(permissions.connect(defaultAdmin).revokeRoles([])).to.be.revertedWithCustomError(
+        permissions,
+        "ZeroArgument",
+      );
     });
   });
 
@@ -618,7 +611,7 @@ describe("Permissions", () => {
       const fundAmount = ether("1");
       await permissions.connect(funder).fund(fundAmount, { value: fundAmount });
 
-      const rebalanceAmount = fundAmount;
+      const rebalanceAmount = fundAmount; // assumption: 1:1 => share : ether
       await expect(permissions.connect(rebalancer).rebalanceVault(rebalanceAmount))
         .to.emit(vaultHub, "Mock__Rebalanced")
         .withArgs(stakingVault, rebalanceAmount);
@@ -744,7 +737,7 @@ describe("Permissions", () => {
         permissions
           .connect(validatorWithdrawalTriggerer)
           .triggerValidatorWithdrawals(pubkeys, [withdrawalAmount], stranger, {
-            value: EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
+            value: 0n,
           }),
       )
         .to.emit(vaultHub, "Mock__ValidatorWithdrawalsTriggered")
@@ -963,29 +956,29 @@ describe("Permissions", () => {
 
   context("requestTierChange()", () => {
     it("requests a tier change", async () => {
-      await expect(permissions.connect(tierChanger).requestTierChange(1, ether("1")))
-        .to.emit(operatorGrid, "Mock__TierChangeRequested")
+      await expect(permissions.connect(tierChanger).changeTier(1, ether("1")))
+        .to.emit(operatorGrid, "Mock__TierChanged")
         .withArgs(stakingVault, 1, ether("1"));
     });
 
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
-      expect(await permissions.hasRole(await permissions.REQUEST_TIER_CHANGE_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.REQUEST_TIER_CHANGE_ROLE())).to.equal(
+      expect(await permissions.hasRole(await permissions.CHANGE_TIER_ROLE(), defaultAdmin)).to.be.false;
+      expect(await permissions.getRoleAdmin(await permissions.CHANGE_TIER_ROLE())).to.equal(
         await permissions.DEFAULT_ADMIN_ROLE(),
       );
 
-      await expect(permissions.connect(defaultAdmin).requestTierChange(1, ether("1")))
-        .to.emit(operatorGrid, "Mock__TierChangeRequested")
+      await expect(permissions.connect(defaultAdmin).changeTier(1, ether("1")))
+        .to.emit(operatorGrid, "Mock__TierChanged")
         .withArgs(stakingVault, 1, ether("1"));
     });
 
     it("reverts if the caller is not a member of the request tier change role", async () => {
-      expect(await permissions.hasRole(await permissions.REQUEST_TIER_CHANGE_ROLE(), stranger)).to.be.false;
+      expect(await permissions.hasRole(await permissions.CHANGE_TIER_ROLE(), stranger)).to.be.false;
 
-      await expect(permissions.connect(stranger).requestTierChange(1, ether("1")))
+      await expect(permissions.connect(stranger).changeTier(1, ether("1")))
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.REQUEST_TIER_CHANGE_ROLE());
+        .withArgs(stranger, await permissions.CHANGE_TIER_ROLE());
     });
   });
 

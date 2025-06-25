@@ -48,8 +48,6 @@ export type OracleReportParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
-  vaultsTotalTreasuryFeesShares?: bigint;
-  vaultsTotalDeficit?: bigint;
   vaultsDataTreeRoot?: string;
   vaultsDataTreeCid?: string;
   silent?: boolean;
@@ -86,8 +84,6 @@ export const report = async (
     numExitedValidatorsByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
-    vaultsTotalTreasuryFeesShares = 0n,
-    vaultsTotalDeficit = 0n,
     vaultsDataTreeRoot = ZERO_BYTES32,
     vaultsDataTreeCid = "",
   }: OracleReportParams = {},
@@ -148,8 +144,6 @@ export const report = async (
       clBalance: postCLBalance,
       withdrawalVaultBalance,
       elRewardsVaultBalance,
-      vaultsTotalTreasuryFeesShares,
-      vaultsTotalDeficit,
     });
 
     if (!simulatedReport) {
@@ -165,7 +159,8 @@ export const report = async (
       "El Rewards": formatEther(elRewards),
     });
 
-    const simulatedShareRate = (postTotalPooledEther * SHARE_RATE_PRECISION) / postTotalShares;
+    const simulatedShareRate =
+      postTotalShares === 0n ? 0n : (postTotalPooledEther * SHARE_RATE_PRECISION) / postTotalShares;
 
     if (withdrawalFinalizationBatches.length === 0) {
       withdrawalFinalizationBatches = await getFinalizationBatches(ctx, {
@@ -192,8 +187,6 @@ export const report = async (
     sharesRequestedToBurn,
     withdrawalFinalizationBatches,
     isBunkerMode,
-    vaultsTotalTreasuryFeesShares,
-    vaultsTotalDeficit,
     vaultsDataTreeRoot,
     vaultsDataTreeCid,
     extraDataFormat,
@@ -333,8 +326,6 @@ type SimulateReportParams = {
   clBalance: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
-  vaultsTotalTreasuryFeesShares: bigint;
-  vaultsTotalDeficit: bigint;
 };
 
 type SimulateReportResult = {
@@ -349,15 +340,7 @@ type SimulateReportResult = {
  */
 const simulateReport = async (
   ctx: ProtocolContext,
-  {
-    refSlot,
-    beaconValidators,
-    clBalance,
-    withdrawalVaultBalance,
-    elRewardsVaultBalance,
-    vaultsTotalTreasuryFeesShares,
-    vaultsTotalDeficit,
-  }: SimulateReportParams,
+  { refSlot, beaconValidators, clBalance, withdrawalVaultBalance, elRewardsVaultBalance }: SimulateReportParams,
 ): Promise<SimulateReportResult> => {
   const { hashConsensus, accounting } = ctx.contracts;
 
@@ -372,35 +355,32 @@ const simulateReport = async (
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
   });
 
-  const { timeElapsed } = await getReportTimeElapsed(ctx);
-  const update = await accounting.simulateOracleReport(
-    {
-      timestamp: reportTimestamp,
-      timeElapsed,
-      clValidators: beaconValidators,
-      clBalance,
-      withdrawalVaultBalance,
-      elRewardsVaultBalance,
-      sharesRequestedToBurn: 0n,
-      withdrawalFinalizationBatches: [],
-      vaultsTotalTreasuryFeesShares,
-      vaultsTotalDeficit,
-    },
-    0n,
-  );
+  const withdrawalShareRate = 0n;
+  const reportValues = {
+    timestamp: reportTimestamp,
+    timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
+    clValidators: beaconValidators,
+    clBalance,
+    withdrawalVaultBalance,
+    elRewardsVaultBalance,
+    sharesRequestedToBurn: 0n,
+    withdrawalFinalizationBatches: [],
+  };
+  const update = await accounting.simulateOracleReport(reportValues, withdrawalShareRate);
+  const { postTotalPooledEther, postTotalShares, withdrawals, elRewards } = update;
 
   log.debug("Simulation result", {
-    "Post Total Pooled Ether": formatEther(update.postTotalPooledEther),
-    "Post Total Shares": update.postTotalShares,
-    "Withdrawals": formatEther(update.withdrawals),
-    "El Rewards": formatEther(update.elRewards),
+    "Post Total Pooled Ether": formatEther(postTotalPooledEther),
+    "Post Total Shares": postTotalShares,
+    "Withdrawals": formatEther(withdrawals),
+    "El Rewards": formatEther(elRewards),
   });
 
   return {
-    postTotalPooledEther: update.postTotalPooledEther,
-    postTotalShares: update.postTotalShares,
-    withdrawals: update.withdrawals,
-    elRewards: update.elRewards,
+    postTotalPooledEther,
+    postTotalShares,
+    withdrawals,
+    elRewards,
   };
 };
 
@@ -410,8 +390,8 @@ type HandleOracleReportParams = {
   sharesRequestedToBurn: bigint;
   withdrawalVaultBalance: bigint;
   elRewardsVaultBalance: bigint;
-  vaultsTotalTreasuryFeesShares: bigint;
-  vaultsTotalDeficit: bigint;
+  vaultsDataTreeRoot: string;
+  vaultsDataTreeCid: string;
 };
 
 export const handleOracleReport = async (
@@ -422,11 +402,11 @@ export const handleOracleReport = async (
     sharesRequestedToBurn,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
-    vaultsTotalTreasuryFeesShares,
-    vaultsTotalDeficit,
+    vaultsDataTreeRoot,
+    vaultsDataTreeCid,
   }: HandleOracleReportParams,
 ): Promise<void> => {
-  const { hashConsensus, accountingOracle, accounting } = ctx.contracts;
+  const { hashConsensus, accountingOracle, accounting, lazyOracle } = ctx.contracts;
 
   const { refSlot } = await hashConsensus.getCurrentFrame();
   const { genesisTime, secondsPerSlot } = await hashConsensus.getChainConfig();
@@ -453,9 +433,11 @@ export const handleOracleReport = async (
       elRewardsVaultBalance,
       sharesRequestedToBurn,
       withdrawalFinalizationBatches: [],
-      vaultsTotalTreasuryFeesShares,
-      vaultsTotalDeficit,
     });
+
+    await lazyOracle
+      .connect(accountingOracleAccount)
+      .updateReportData(reportTimestamp, vaultsDataTreeRoot, vaultsDataTreeCid);
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
     expect(error).to.be.undefined;
@@ -490,7 +472,13 @@ const getFinalizationBatches = async (
   const MAX_REQUESTS_PER_CALL = 1000n;
 
   if (availableEth === 0n) {
-    log.warning("No available ether to request withdrawals");
+    log.debug("No available ether to request withdrawals", {
+      "Available Eth": formatEther(availableEth),
+      "Reserved Buffer": formatEther(reservedBuffer),
+      "Buffered Ether": formatEther(bufferedEther),
+      "Unfinalized Steth": formatEther(unfinalizedSteth),
+    });
+
     return [];
   }
 
@@ -556,8 +544,6 @@ export type OracleReportSubmitParams = {
   numExitedValidatorsByStakingModule?: bigint[];
   withdrawalFinalizationBatches?: bigint[];
   isBunkerMode?: boolean;
-  vaultsTotalTreasuryFeesShares?: bigint;
-  vaultsTotalDeficit?: bigint;
   vaultsDataTreeRoot?: string;
   vaultsDataTreeCid?: string;
   extraDataFormat?: bigint;
@@ -588,8 +574,6 @@ const submitReport = async (
     numExitedValidatorsByStakingModule = [],
     withdrawalFinalizationBatches = [],
     isBunkerMode = false,
-    vaultsTotalTreasuryFeesShares = 0n,
-    vaultsTotalDeficit = 0n,
     vaultsDataTreeRoot = ZERO_BYTES32,
     vaultsDataTreeCid = "",
     extraDataFormat = 0n,
@@ -611,8 +595,6 @@ const submitReport = async (
     "Num exited validators by staking module": numExitedValidatorsByStakingModule,
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
-    "Vaults total treasury fees": vaultsTotalTreasuryFeesShares,
-    "Vaults total deficit": vaultsTotalDeficit,
     "Vaults data tree root": vaultsDataTreeRoot,
     "Vaults data tree cid": vaultsDataTreeCid,
     "Extra data format": extraDataFormat,
@@ -636,8 +618,6 @@ const submitReport = async (
     numExitedValidatorsByStakingModule,
     withdrawalFinalizationBatches,
     isBunkerMode,
-    vaultsTotalTreasuryFeesShares,
-    vaultsTotalDeficit,
     vaultsDataTreeRoot,
     vaultsDataTreeCid,
     extraDataFormat,
@@ -763,8 +743,6 @@ export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.sharesRequestedToBurn,
   data.withdrawalFinalizationBatches,
   data.isBunkerMode,
-  data.vaultsTotalTreasuryFeesShares,
-  data.vaultsTotalDeficit,
   data.vaultsDataTreeRoot,
   data.vaultsDataTreeCid,
   data.extraDataFormat,
@@ -788,8 +766,6 @@ export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>)
     "uint256", // sharesRequestedToBurn
     "uint256[]", // withdrawalFinalizationBatches
     "bool", // isBunkerMode
-    "uint256", // vaultsTotalTreasuryFeesShares
-    "uint256", // vaultsTotalDeficit
     "bytes32", // vaultsDataTreeRoot
     "string", // vaultsDataTreeCid
     "uint256", // extraDataFormat
@@ -832,14 +808,15 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
 
   let count = addresses.length;
   while (addresses.length < minMembersCount) {
-    log.warning(`Adding oracle committee member ${count}`);
-
     const address = getOracleCommitteeMemberAddress(count);
+
+    log.debug(`Adding oracle committee member`, { Address: address });
+
     await hashConsensus.connect(agentSigner).addMember(address, quorum);
 
     addresses.push(address);
 
-    log.success(`Added oracle committee member ${count}`);
+    log.debug(`Added oracle committee member`, { Count: count });
 
     count++;
   }
@@ -863,7 +840,9 @@ export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
 
   const { initialEpoch } = await hashConsensus.getFrameConfig();
   if (initialEpoch === HASH_CONSENSUS_FAR_FUTURE_EPOCH) {
-    log.warning("Initializing hash consensus epoch...");
+    log.debug("Initializing hash consensus epoch...", {
+      "Initial epoch": initialEpoch,
+    });
 
     const latestBlockTimestamp = await getCurrentBlockTimestamp();
     const { genesisTime, secondsPerSlot, slotsPerEpoch } = await hashConsensus.getChainConfig();
@@ -871,7 +850,5 @@ export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
 
     const agentSigner = await ctx.getSigner("agent");
     await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
-
-    log.success("Hash consensus epoch initialized");
   }
 };

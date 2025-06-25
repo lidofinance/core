@@ -1,9 +1,9 @@
-// SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
 // solhint-disable-next-line lido/fixed-compiler-version
-pragma solidity ^0.8.9;
+pragma solidity >=0.5.0;
 
 struct ReportValues {
     /// @notice timestamp of the block the report is based on. All provided report values is actual on this timestamp
@@ -23,8 +23,4 @@ struct ReportValues {
     /// @notice the ascendingly-sorted array of withdrawal request IDs obtained by calling
     /// WithdrawalQueue.calculateFinalizationBatches. Can be empty array if no withdrawal to finalize
     uint256[] withdrawalFinalizationBatches;
-    /// @notice overall vaults treasury fees
-    uint256 vaultsTotalTreasuryFeesShares;
-    /// @notice overall vaults total deficit
-    uint256 vaultsTotalDeficit;
 }

@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
 
 contract IStETH {
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {}
@@ -22,6 +23,7 @@ contract VaultHub__MockForDashboard {
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
     uint64 public latestReportDataTimestamp;
+    bool public sendWithdraw = false;
 
     constructor(IStETH _steth, address _lidoLocator) {
         steth = _steth;
@@ -30,6 +32,9 @@ contract VaultHub__MockForDashboard {
 
     mapping(address => VaultHub.VaultConnection) public vaultConnections;
     mapping(address => VaultHub.VaultRecord) public vaultRecords;
+    mapping(address => VaultHub.VaultObligations) public _vaultObligations;
+
+    receive() external payable {}
 
     function mock__setVaultConnection(address vault, VaultHub.VaultConnection memory connection) external {
         vaultConnections[vault] = connection;
@@ -41,6 +46,14 @@ contract VaultHub__MockForDashboard {
 
     function mock__setVaultRecord(address vault, VaultHub.VaultRecord memory record) external {
         vaultRecords[vault] = record;
+    }
+
+    function mock__setVaultObligations(address vault, VaultHub.VaultObligations memory obligations) external {
+        _vaultObligations[vault] = obligations;
+    }
+
+    function vaultObligations(address vault) external view returns (VaultHub.VaultObligations memory) {
+        return _vaultObligations[vault];
     }
 
     function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {
@@ -63,6 +76,14 @@ contract VaultHub__MockForDashboard {
         return vaultRecords[_vault].report;
     }
 
+    function maxLockableValue(address _vault) external view returns (uint256) {
+        return vaultRecords[_vault].report.totalValue;
+    }
+
+    function withdrawableValue(address _vault) external view returns (uint256) {
+        return Math256.min(vaultRecords[_vault].report.totalValue - vaultRecords[_vault].locked, _vault.balance);
+    }
+
     function disconnect(address vault) external {
         emit Mock__VaultDisconnectInitiated(vault);
     }
@@ -73,6 +94,21 @@ contract VaultHub__MockForDashboard {
     }
 
     function connectVault(address vault) external {
+        vaultConnections[vault] = VaultHub.VaultConnection({
+            owner: IStakingVault(vault).owner(),
+            shareLimit: 1,
+            vaultIndex: 2,
+            pendingDisconnect: false,
+            reserveRatioBP: 500,
+            forcedRebalanceThresholdBP: 100,
+            infraFeeBP: 100,
+            liquidityFeeBP: 100,
+            reservationFeeBP: 100,
+            isBeaconDepositsManuallyPaused: false
+        });
+
+        IStakingVault(vault).acceptOwnership();
+
         emit Mock__VaultConnected(vault);
     }
 
@@ -126,7 +162,12 @@ contract VaultHub__MockForDashboard {
         emit Mock__Funded(_vault, msg.value);
     }
 
+    function mock__setSendWithdraw(bool _sendWithdraw) external {
+        sendWithdraw = _sendWithdraw;
+    }
+
     function withdraw(address _vault, address _recipient, uint256 _amount) external {
+        if (sendWithdraw) payable(_recipient).call{value: _amount}("");
         emit Mock__Withdrawn(_vault, _recipient, _amount);
     }
 
@@ -150,6 +191,31 @@ contract VaultHub__MockForDashboard {
         emit Mock__VaultOwnershipTransferred(_vault, _newOwner);
     }
 
+    function isVaultConnected(address _vault) public view returns (bool) {
+        return vaultConnections[_vault].vaultIndex != 0;
+    }
+
+    function updateConnection(
+        address _vault,
+        uint256 _shareLimit,
+        uint256 _reserveRatioBP,
+        uint256 _forcedRebalanceThresholdBP,
+        uint256 _infraFeeBP,
+        uint256 _liquidityFeeBP,
+        uint256 _reservationFeeBP
+    ) external {
+        if (!isVaultConnected(_vault)) revert NotConnectedToHub(_vault);
+        emit Mock__VaultConnectionUpdated(
+            _vault,
+            _shareLimit,
+            _reserveRatioBP,
+            _forcedRebalanceThresholdBP,
+            _infraFeeBP,
+            _liquidityFeeBP,
+            _reservationFeeBP
+        );
+    }
+
     event Mock__ValidatorExitRequested(address vault, bytes pubkeys);
     event Mock__ValidatorWithdrawalsTriggered(address vault, bytes pubkeys, uint64[] amounts, address refundRecipient);
     event Mock__BeaconChainDepositsPaused(address vault);
@@ -164,6 +230,16 @@ contract VaultHub__MockForDashboard {
     event Mock__VaultDisconnectInitiated(address vault);
     event Mock__Rebalanced(address vault, uint256 amount);
     event Mock__VaultConnected(address vault);
+    event Mock__VaultConnectionUpdated(
+        address vault,
+        uint256 shareLimit,
+        uint256 reserveRatioBP,
+        uint256 forcedRebalanceThresholdBP,
+        uint256 infraFeeBP,
+        uint256 liquidityFeeBP,
+        uint256 reservationFeeBP
+    );
 
     error ZeroArgument(string argument);
+    error NotConnectedToHub(address vault);
 }

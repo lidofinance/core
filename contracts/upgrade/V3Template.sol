@@ -10,9 +10,11 @@ import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/Upgra
 import {IBurner as IBurnerWithoutAccessControl} from "contracts/common/interfaces/IBurner.sol";
 import {IVersioned} from "contracts/common/interfaces/IVersioned.sol";
 import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
+
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
-import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
 
 import {V3Addresses} from "./V3Addresses.sol";
@@ -84,7 +86,7 @@ contract V3Template is V3Addresses {
 
     uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 3;
     uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
-    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 4;
+    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 5;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
@@ -109,11 +111,20 @@ contract V3Template is V3Addresses {
     uint256 public initialTotalPooledEther;
     address[] public contractsWithBurnerAllowances;
 
+    //
+    // Slots for transient storage
+    //
+
+    // Slot for the upgrade started flag
+    // keccak256("V3Template.upgradeStartedFlag")
+    bytes32 public constant UPGRADE_STARTED_SLOT =
+        0x058d69f67a3d86c424c516d23a070ff8bed34431617274caa2049bd702675e3f;
+
 
     /// @param _params Params required to initialize the addresses contract
     constructor(V3AddressesParams memory _params) V3Addresses(_params) {
         contractsWithBurnerAllowances.push(WITHDRAWAL_QUEUE);
-        contractsWithBurnerAllowances.push(NODE_OPERATORS_REGISTRY);
+        // NB: NOR allowance is set to 0 in TW upgrade
         contractsWithBurnerAllowances.push(SIMPLE_DVT);
         contractsWithBurnerAllowances.push(CSM_ACCOUNTING);
     }
@@ -122,8 +133,11 @@ contract V3Template is V3Addresses {
     function startUpgrade() external {
         if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
         if (block.timestamp >= EXPIRE_SINCE_INCLUSIVE) revert Expired();
+        if (isUpgradeFinished) revert UpgradeAlreadyFinished();
+        if (_isStartCalledInThisTx()) revert StartAlreadyCalledInThisTx();
         if (upgradeBlockNumber != UPGRADE_NOT_STARTED) revert UpgradeAlreadyStarted();
 
+        assembly { tstore(UPGRADE_STARTED_SLOT, 1) }
         upgradeBlockNumber = block.number;
 
         initialTotalShares = ILidoWithFinalizeUpgrade(LIDO).getTotalShares();
@@ -139,8 +153,8 @@ contract V3Template is V3Addresses {
 
     function finishUpgrade() external {
         if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
-        if (upgradeBlockNumber != block.number) revert StartAndFinishMustBeInSameBlock();
         if (isUpgradeFinished) revert UpgradeAlreadyFinished();
+        if (!_isStartCalledInThisTx()) revert StartAndFinishMustBeInSameTx();
 
         isUpgradeFinished = true;
 
@@ -166,6 +180,11 @@ contract V3Template is V3Addresses {
                 revert IncorrectBurnerAllowance(contractsWithBurnerAllowances_[i], OLD_BURNER);
             }
         }
+        if (ILidoWithFinalizeUpgrade(LIDO).allowance(NODE_OPERATORS_REGISTRY, OLD_BURNER) != 0) {
+            revert IncorrectBurnerAllowance(NODE_OPERATORS_REGISTRY, OLD_BURNER);
+        }
+
+        if (!IBurner(BURNER).isMigrationAllowed()) revert BurnerMigrationNotAllowed();
     }
 
     function _assertPostUpgradeState() internal view {
@@ -200,31 +219,36 @@ contract V3Template is V3Addresses {
     }
 
     function _assertFinalACL() internal view {
-        address agent = AGENT;
-
         // Burner
         bytes32 requestBurnSharesRole = IBurner(BURNER).REQUEST_BURN_SHARES_ROLE();
-        _assertSingleOZRoleHolder(IBurner(BURNER), DEFAULT_ADMIN_ROLE, agent);
-        {
-            address[] memory holders = new address[](4);
-            holders[0] = LIDO;
-            holders[1] = NODE_OPERATORS_REGISTRY;
-            holders[2] = SIMPLE_DVT;
-            holders[3] = ACCOUNTING;
-            _assertOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, holders);
-        }
         _assertZeroOZRoleHolders(IBurner(OLD_BURNER), requestBurnSharesRole);
 
+        _assertSingleOZRoleHolder(IBurner(BURNER), DEFAULT_ADMIN_ROLE, AGENT);
+        {
+            address[] memory holders = new address[](4);
+            holders[0] = ACCOUNTING;
+            holders[1] = NODE_OPERATORS_REGISTRY;
+            holders[2] = SIMPLE_DVT;
+            holders[3] = CSM_ACCOUNTING;
+            _assertOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, holders);
+        }
+        _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
+
         // VaultHub
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), DEFAULT_ADMIN_ROLE, agent);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), agent);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), agent);
-        _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), agent);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), AGENT);
+        _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
+
+        // LazyOracle
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), LazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE(), AGENT);
+        _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
 
         // TODO: add PausableUntilWithRoles checks when gate seal is added
 
         // AccountingOracle
-        _assertSingleOZRoleHolder(IAccountingOracle(ACCOUNTING_ORACLE), DEFAULT_ADMIN_ROLE, agent);
+        _assertSingleOZRoleHolder(IAccountingOracle(ACCOUNTING_ORACLE), DEFAULT_ADMIN_ROLE, AGENT);
 
         // OracleReportSanityChecker
         IOracleReportSanityChecker checker = IOracleReportSanityChecker(ORACLE_REPORT_SANITY_CHECKER);
@@ -249,23 +273,22 @@ contract V3Template is V3Addresses {
         }
 
         // Accounting
-        _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), agent);
+        _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), AGENT);
 
         // PredepositGuarantee
-        _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), agent);
+        _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);
 
         // StakingRouter
-        {
-            address[] memory holders = new address[](2);
-            holders[0] = LIDO;
-            holders[1] = ACCOUNTING;
-            _assertOZRoleHolders(IAccessControlEnumerable(STAKING_ROUTER), IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE(), holders);
-        }
+        bytes32 reportRewardsMintedRole = IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE();
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(STAKING_ROUTER),
+            reportRewardsMintedRole,
+            ACCOUNTING
+        );
 
         // OperatorGrid
-        _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), agent);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), DEFAULT_ADMIN_ROLE, agent);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), agent);
+        _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), AGENT);
     }
 
     function _checkBurnerMigratedCorrectly() internal view {
@@ -347,6 +370,12 @@ contract V3Template is V3Addresses {
         }
     }
 
+    function _isStartCalledInThisTx() internal view returns (bool isStartCalledInThisTx) {
+        assembly {
+            isStartCalledInThisTx := tload(UPGRADE_STARTED_SLOT)
+        }
+    }
+
     error OnlyAgentCanUpgrade();
     error UpgradeAlreadyStarted();
     error UpgradeAlreadyFinished();
@@ -357,9 +386,12 @@ contract V3Template is V3Addresses {
     error NonZeroRoleHolders(address contractAddress, bytes32 role);
     error IncorrectAragonAppImplementation(address repo, address implementation);
     error StartAndFinishMustBeInSameBlock();
+    error StartAndFinishMustBeInSameTx();
+    error StartAlreadyCalledInThisTx();
     error Expired();
     error IncorrectBurnerSharesMigration();
     error IncorrectBurnerAllowance(address contractAddress, address burner);
+    error BurnerMigrationNotAllowed();
     error IncorrectVaultFactoryBeacon(address factory, address beacon);
     error IncorrectVaultFactoryDashboardImplementation(address factory, address delegation);
     error IncorrectUpgradeableBeaconOwner(address beacon, address owner);

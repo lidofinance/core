@@ -18,7 +18,6 @@ import {
   certainAddress,
   computeDepositDataRoot,
   de0x,
-  deployEIP7002WithdrawalRequestContract,
   EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
   ether,
   generatePostDeposit,
@@ -29,6 +28,7 @@ import {
 } from "lib";
 import { getPubkeys } from "lib/protocol";
 
+import { deployEIP7002WithdrawalRequestContractMock } from "test/0.8.9/withdrawalVault/eip7002Mock";
 import { Snapshot } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
@@ -85,7 +85,8 @@ describe("StakingVault.sol", () => {
       toChecksumAddress("0x02" + "00".repeat(11) + de0x(await stakingVault.getAddress())),
     );
 
-    withdrawalRequestContract = await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
+    withdrawalRequestContract = await deployEIP7002WithdrawalRequestContractMock(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
+
     ethRejector = await ethers.deployContract("EthRejector");
   });
 

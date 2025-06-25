@@ -1,24 +1,32 @@
 {
+  "validatorExitDelayVerifier": {
+    "deployParameters": {
+      "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
+      "gIHistoricalSummariesPrev": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "gIHistoricalSummariesCurr": "0x0000000000000000000000000000000000000000000000000000000000005b00",
+      "firstSupportedSlot": 1,
+      "pivotSlot": 1,
+      "shardCommitteePeriodInSeconds": 98304,
+      "shardCommitteePeriodInSecondsComment": "98304 above is 2 ** 8 * 32 * 12"
+    }
+  },
+  "triggerableWithdrawalsGateway": {
+    "deployParameters": {
+      "maxExitRequestsLimit": 13000,
+      "exitsPerFrame": 1,
+      "frameDurationInSec": 48
+    }
+  },
   "vaultHub": {
     "deployParameters": {
       "relativeShareLimitBP": 1000
     }
   },
-  "oracleReportSanityChecker": {
+  "lazyOracle": {
     "deployParameters": {
-      "exitedValidatorsPerDayLimit": 1500,
-      "appearedValidatorsPerDayLimit": 1500,
-      "deprecatedOneOffCLBalanceDecreaseBPLimit": 500,
-      "annualBalanceIncreaseBPLimit": 1000,
-      "simulatedShareRateDeviationBPLimit": 250,
-      "maxValidatorExitRequestsPerReport": 2000,
-      "maxItemsPerExtraDataTransaction": 8,
-      "maxNodeOperatorsPerExtraDataItem": 24,
-      "requestTimestampMargin": 128,
-      "maxPositiveTokenRebase": 5000000,
-      "initialSlashingAmountPWei": 1000,
-      "inactivityPenaltiesAmountPWei": 101,
-      "clBalanceOraclesErrorUpperBPLimit": 50
+      "quarantinePeriod": 259200,
+      "maxRewardRatioBP": 350
     }
   },
   "predepositGuarantee": {
@@ -48,5 +56,10 @@
         "reservationFeeBP": 100
       }
     }
+  },
+  "chainSpec": {
+    "slotsPerEpoch": 32,
+    "secondsPerSlot": 12,
+    "depositContract": "0x00000000219ab540356cBB839Cbe05303d7705Fa"
   }
 }

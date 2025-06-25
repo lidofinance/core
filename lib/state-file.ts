@@ -39,6 +39,8 @@ export enum Sk {
   aragonKernel = "aragon-kernel",
   aragonRepoBase = "aragon-repo-base",
   aragonLidoAppRepo = "aragon-lido-app-repo",
+  aragonNodeOperatorsRegistryAppRepo = "aragon-node-operators-registry-app-repo",
+  aragonSimpleDvtAppRepo = "aragon-simple-dvt-app-repo",
   appAgent = "app:aragon-agent",
   appFinance = "app:aragon-finance",
   appTokenManager = "app:aragon-token-manager",
@@ -87,16 +89,21 @@ export enum Sk {
   accounting = "accounting",
   vaultHub = "vaultHub",
   tokenRebaseNotifier = "tokenRebaseNotifier",
+  // Triggerable withdrawals
+  validatorExitDelayVerifier = "validatorExitDelayVerifier",
+  triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
+  TWVoteScript = "TWVoteScript",
   // Vaults
   predepositGuarantee = "predepositGuarantee",
   stakingVaultImplementation = "stakingVaultImplementation",
   stakingVaultFactory = "stakingVaultFactory",
   dashboardImpl = "dashboardImpl",
   stakingVaultBeacon = "stakingVaultBeacon",
-  v3Template = "upgradeTemplateV3",
+  v3Template = "v3Template",
   v3Addresses = "v3Addresses",
   v3VoteScript = "v3VoteScript",
   operatorGrid = "operatorGrid",
+  validatorConsolidationRequests = "validatorConsolidationRequests",
   lazyOracle = "lazyOracle",
 }
 
@@ -119,9 +126,16 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.withdrawalQueueERC721:
     case Sk.withdrawalVault:
     case Sk.lazyOracle:
+    case Sk.operatorGrid:
+    case Sk.accounting:
+    case Sk.burner:
+    case Sk.appSimpleDvt:
+    case Sk.aragonNodeOperatorsRegistryAppRepo:
+    case Sk.aragonSimpleDvtAppRepo:
+    case Sk.predepositGuarantee:
+    case Sk.vaultHub:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
-    case Sk.burner:
     case Sk.callsScript:
     case Sk.daoFactory:
     case Sk.depositSecurityModule:
@@ -142,9 +156,12 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.oracleReportSanityChecker:
     case Sk.wstETH:
     case Sk.depositContract:
-    case Sk.accounting:
     case Sk.tokenRebaseNotifier:
-    case Sk.operatorGrid:
+    case Sk.validatorExitDelayVerifier:
+    case Sk.triggerableWithdrawalsGateway:
+    case Sk.stakingVaultFactory:
+    case Sk.minFirstAllocationStrategy:
+    case Sk.validatorConsolidationRequests:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
@@ -236,7 +253,6 @@ export function persistNetworkState(state: DeploymentState): void {
 function _getStateFileFileName(networkStateFile = "") {
   // Use the specified network state file or the one from the environment
   networkStateFile = networkStateFile || process.env.NETWORK_STATE_FILE || "";
-
   return networkStateFile
     ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
     : _getFileName(NETWORK_STATE_FILE_DIR, hardhatNetwork.name);

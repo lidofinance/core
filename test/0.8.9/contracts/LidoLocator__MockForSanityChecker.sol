@@ -21,12 +21,15 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address withdrawalVault;
         address postTokenRebaseReceiver;
         address oracleDaemonConfig;
+        address validatorExitDelayVerifier;
+        address triggerableWithdrawalsGateway;
         address accounting;
         address predepositGuarantee;
         address wstETH;
         address vaultHub;
-        address operatorGrid;
+        address vaultFactory;
         address lazyOracle;
+        address operatorGrid;
     }
 
     address public immutable lido;
@@ -42,12 +45,15 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable postTokenRebaseReceiver;
     address public immutable oracleDaemonConfig;
+    address public immutable validatorExitDelayVerifier;
+    address public immutable triggerableWithdrawalsGateway;
     address public immutable accounting;
     address public immutable predepositGuarantee;
     address public immutable wstETH;
     address public immutable vaultHub;
-    address public immutable operatorGrid;
+    address public immutable vaultFactory;
     address public immutable lazyOracle;
+    address public immutable operatorGrid;
 
     constructor(ContractAddresses memory addresses) {
         lido = addresses.lido;
@@ -63,12 +69,15 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         withdrawalVault = addresses.withdrawalVault;
         postTokenRebaseReceiver = addresses.postTokenRebaseReceiver;
         oracleDaemonConfig = addresses.oracleDaemonConfig;
+        validatorExitDelayVerifier = addresses.validatorExitDelayVerifier;
+        triggerableWithdrawalsGateway = addresses.triggerableWithdrawalsGateway;
         accounting = addresses.accounting;
         wstETH = addresses.wstETH;
         predepositGuarantee = addresses.predepositGuarantee;
         vaultHub = addresses.vaultHub;
-        operatorGrid = addresses.operatorGrid;
+        vaultFactory = addresses.vaultFactory;
         lazyOracle = addresses.lazyOracle;
+        operatorGrid = addresses.operatorGrid;
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {

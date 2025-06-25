@@ -5,6 +5,7 @@
 pragma solidity 0.8.25;
 
 import {VaultHub} from "../VaultHub.sol";
+import {LazyOracle} from "../LazyOracle.sol";
 import {Permissions} from "./Permissions.sol";
 
 /**
@@ -25,7 +26,7 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Maximum value that can be set via manual adjustment
      */
-    uint128 public constant MANUAL_REWARDS_ADJUSTMENT_LIMIT = 10_000_000 ether;
+    uint256 public constant MANUAL_REWARDS_ADJUSTMENT_LIMIT = 10_000_000 ether;
 
     /**
      * @notice Node operator manager role:
@@ -94,10 +95,11 @@ contract NodeOperatorFee is Permissions {
         uint256 _nodeOperatorFeeRate,
         uint256 _confirmExpiry
     ) internal {
-        if (_nodeOperatorManager == address(0)) revert ZeroArgument("_nodeOperatorManager");
+        _requireNotZero(_nodeOperatorManager);
 
         super._initialize(_defaultAdmin, _confirmExpiry);
 
+        _validateNodeOperatorFeeRate(_nodeOperatorFeeRate);
         _setNodeOperatorFeeRate(_nodeOperatorFeeRate);
         _setNodeOperatorFeeRecipient(_nodeOperatorManager);
 
@@ -152,16 +154,16 @@ contract NodeOperatorFee is Permissions {
     function nodeOperatorDisbursableFee() public view returns (uint256) {
         VaultHub.Report memory periodStart = feePeriodStartReport;
         VaultHub.Report memory periodEnd = latestReport();
-        int128 adjustment = _toSignedClamped(rewardsAdjustment.amount);
+        int256 adjustment = _toSignedClamped(rewardsAdjustment.amount);
 
         // the total increase/decrease of the vault value during the fee period
-        int128 growth = int128(periodEnd.totalValue) - int128(periodStart.totalValue) -
+        int256 growth = int112(periodEnd.totalValue) - int112(periodStart.totalValue) -
                         (periodEnd.inOutDelta - periodStart.inOutDelta);
 
         // the actual rewards that are subject to the fee
-        int128 rewards = growth - adjustment;
+        int256 rewards = growth - adjustment;
 
-        return rewards <= 0 ? 0 : (uint256(uint128(rewards)) * nodeOperatorFeeRate) / TOTAL_BASIS_POINTS;
+        return rewards <= 0 ? 0 : (uint256(rewards) * nodeOperatorFeeRate) / TOTAL_BASIS_POINTS;
     }
 
     /**
@@ -188,18 +190,28 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Updates the node-operator's fee rate (basis-points share).
      * @param _newNodeOperatorFeeRate The new node operator fee rate.
+     * @return bool Whether the node operator fee rate was set.
      */
-    function setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) external onlyConfirmed(confirmingRoles()) {
+    function setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) external returns (bool) {
         // The report must be fresh so that the total value of the vault is up to date
         // and all the node operator fees are paid out fairly up to the moment of the latest fresh report
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
 
         // Latest adjustment must be earlier than the latest fresh report timestamp
-        if (rewardsAdjustment.latestTimestamp >= VAULT_HUB.latestVaultReportTimestamp(address(_stakingVault())))
+        if (rewardsAdjustment.latestTimestamp >= _lazyOracle().latestReportTimestamp())
             revert AdjustmentNotReported();
 
         // Adjustment must be settled before the fee rate change
         if (rewardsAdjustment.amount != 0) revert AdjustmentNotSettled();
+
+        // If the vault is quarantined, the total value is reduced and may not reflect the adjustment
+        if (_lazyOracle().vaultQuarantine(address(_stakingVault())).isActive) revert VaultQuarantined();
+
+        // Validate fee rate before collecting confirmations
+        _validateNodeOperatorFeeRate(_newNodeOperatorFeeRate);
+
+        // store the caller's confirmation; only proceed if the required number of confirmations is met.
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
         // To follow the check-effects-interaction pattern, we need to remember the fee here
         // because the fee calculation variables will be reset in the following lines
@@ -214,6 +226,8 @@ contract NodeOperatorFee is Permissions {
             VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
             emit NodeOperatorFeeDisbursed(msg.sender, fee);
         }
+
+        return true;
     }
 
     /**
@@ -221,9 +235,16 @@ contract NodeOperatorFee is Permissions {
      * Confirm expiry is a period during which the confirm is counted. Once the period is over,
      * the confirm is considered expired, no longer counts and must be recasted.
      * @param _newConfirmExpiry The new confirm expiry in seconds.
+     * @return bool Whether the confirm expiry was set.
      */
-    function setConfirmExpiry(uint256 _newConfirmExpiry) external onlyConfirmed(confirmingRoles()) {
+    function setConfirmExpiry(uint256 _newConfirmExpiry) external returns (bool) {
+        _validateConfirmExpiry(_newConfirmExpiry);
+
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
+
         _setConfirmExpiry(_newConfirmExpiry);
+
+        return true;
     }
 
     /**
@@ -247,27 +268,30 @@ contract NodeOperatorFee is Permissions {
         uint256 newAdjustment = rewardsAdjustment.amount + _adjustmentIncrease;
         // sanity check, though value will be cast safely during fee calculation
         if (newAdjustment > MANUAL_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
-        _setRewardsAdjustment(uint128(newAdjustment));
+        _setRewardsAdjustment(newAdjustment);
     }
 
     /**
      * @notice set `rewardsAdjustment` to a new proposed value if `confirmingRoles()` agree
      * @param _proposedAdjustment new adjustment amount
      * @param _expectedAdjustment current adjustment value for invalidating old confirmations
+     * @return bool Whether the rewards adjustment was set.
      * @dev will revert if new adjustment is more than `MANUAL_REWARDS_ADJUSTMENT_LIMIT`
      */
     function setRewardsAdjustment(
         uint256 _proposedAdjustment,
         uint256 _expectedAdjustment
-    ) external onlyConfirmed(confirmingRoles()) {
+    ) external returns (bool) {
         if (rewardsAdjustment.amount != _expectedAdjustment)
             revert InvalidatedAdjustmentVote(rewardsAdjustment.amount, _expectedAdjustment);
         if (_proposedAdjustment > MANUAL_REWARDS_ADJUSTMENT_LIMIT) revert IncreasedOverLimit();
-        _setRewardsAdjustment(uint128(_proposedAdjustment));
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
+        _setRewardsAdjustment(_proposedAdjustment);
+        return true;
     }
 
     function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
-        if (_newNodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
+        _validateNodeOperatorFeeRate(_newNodeOperatorFeeRate);
 
         uint256 oldNodeOperatorFeeRate = nodeOperatorFeeRate;
         nodeOperatorFeeRate = _newNodeOperatorFeeRate;
@@ -276,7 +300,7 @@ contract NodeOperatorFee is Permissions {
     }
 
     function _setNodeOperatorFeeRecipient(address _newNodeOperatorFeeRecipient) internal {
-        if (_newNodeOperatorFeeRecipient == address(0)) revert ZeroArgument("nodeOperatorFeeRecipient");
+        _requireNotZero(_newNodeOperatorFeeRecipient);
         if (_newNodeOperatorFeeRecipient == nodeOperatorFeeRecipient) revert SameRecipient();
 
         address oldNodeOperatorFeeRecipient = nodeOperatorFeeRecipient;
@@ -288,12 +312,12 @@ contract NodeOperatorFee is Permissions {
      * @notice sets InOut adjustment for correct fee calculation
      * @param _newAdjustment new adjustment value
      */
-    function _setRewardsAdjustment(uint128 _newAdjustment) internal {
+    function _setRewardsAdjustment(uint256 _newAdjustment) internal {
         uint256 oldAdjustment = rewardsAdjustment.amount;
 
         if (_newAdjustment == oldAdjustment) revert SameAdjustment();
 
-        rewardsAdjustment.amount = _newAdjustment;
+        rewardsAdjustment.amount = uint128(_newAdjustment);
         rewardsAdjustment.latestTimestamp = uint64(block.timestamp);
 
         emit RewardsAdjustmentSet(_newAdjustment, oldAdjustment);
@@ -302,6 +326,18 @@ contract NodeOperatorFee is Permissions {
     function _toSignedClamped(uint128 _adjustment) internal pure returns (int128) {
         if (_adjustment > uint128(type(int128).max)) return type(int128).max;
         return int128(_adjustment);
+    }
+
+    /**
+     * @notice Validates that the node operator fee rate is within acceptable bounds
+     * @param _nodeOperatorFeeRate The fee rate to validate
+     */
+    function _validateNodeOperatorFeeRate(uint256 _nodeOperatorFeeRate) internal pure {
+        if (_nodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
+    }
+
+    function _lazyOracle() internal view returns (LazyOracle) {
+        return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
     // ==================== Events ====================
@@ -375,4 +411,9 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the adjustment is not settled.
      */
     error AdjustmentNotSettled();
+
+    /**
+     * @dev Error emitted when the vault is quarantined.
+     */
+    error VaultQuarantined();
 }

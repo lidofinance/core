@@ -75,8 +75,6 @@ describe("AccountingOracle.sol:accessControl", () => {
       sharesRequestedToBurn: ether("3"),
       withdrawalFinalizationBatches: [1],
       isBunkerMode: true,
-      vaultsTotalTreasuryFeesShares: ether("4"),
-      vaultsTotalDeficit: ether("5"),
       vaultsDataTreeRoot: ethers.ZeroHash,
       vaultsDataTreeCid: "",
       extraDataFormat: emptyExtraData ? EXTRA_DATA_FORMAT_EMPTY : EXTRA_DATA_FORMAT_LIST,

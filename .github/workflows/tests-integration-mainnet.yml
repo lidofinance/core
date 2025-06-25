@@ -11,7 +11,7 @@ jobs:
 
     services:
       hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.24.0
+        image: ghcr.io/lidofinance/hardhat-node:2.24.3
         ports:
           - 8555:8545
         env:
@@ -36,7 +36,7 @@ jobs:
           GAS_PRIORITY_FEE: 1
           GAS_MAX_FEE: 100
           NETWORK_STATE_FILE: deployed-mainnet-upgrade.json
-          UPGRADE_PARAMETERS_FILE: upgrade-parameters-mainnet.json
+          GENESIS_TIME: 1606824023 # needed only for TW upgrade
 
       - name: Mock Aragon voting
         run: yarn upgrade:mock-voting

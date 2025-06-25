@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.0;
 
 import {Permissions} from "contracts/0.8.25/vaults/dashboard/Permissions.sol";
 import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
@@ -40,8 +40,8 @@ contract Permissions__Harness is Permissions {
         _burnShares(_shares);
     }
 
-    function rebalanceVault(uint256 _ether) external {
-        _rebalanceVault(_ether);
+    function rebalanceVault(uint256 _shares) external {
+        _rebalanceVault(_shares);
     }
 
     function pauseBeaconChainDeposits() external {
@@ -95,8 +95,8 @@ contract Permissions__Harness is Permissions {
         _withdrawForUnguaranteedDepositToBeaconChain(_ether);
     }
 
-    function requestTierChange(uint256 _tierId, uint256 _requestedShareLimit) external {
-        _requestTierChange(_tierId, _requestedShareLimit);
+    function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external {
+        _changeTier(_tierId, _requestedShareLimit);
     }
 
     function transferVaultOwnership(address _newOwner) external {

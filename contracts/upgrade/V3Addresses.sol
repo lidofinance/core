@@ -46,9 +46,6 @@ contract V3Addresses {
         address newLidoImpl;
         address newAccountingOracleImpl;
 
-        // New non-proxy contracts
-        address vaultFactory;
-
         // New fancy proxy and blueprint contracts
         address upgradeableBeacon;
         address stakingVaultImpl;
@@ -65,7 +62,6 @@ contract V3Addresses {
     string public constant CURATED_MODULE_NAME = "curated-onchain-v1";
     string public constant SIMPLE_DVT_MODULE_NAME = "SimpleDVT";
     string public constant CSM_MODULE_NAME = "Community Staking";
-
 
     //
     // -------- Pre-upgrade old contracts --------
@@ -94,6 +90,7 @@ contract V3Addresses {
     address payable public immutable VAULT_HUB;
     address public immutable PREDEPOSIT_GUARANTEE;
     address public immutable OPERATOR_GRID;
+    address public immutable LAZY_ORACLE;
     address public immutable VAULT_FACTORY;
     address public immutable UPGRADEABLE_BEACON;
     address public immutable STAKING_VAULT_IMPL;
@@ -138,7 +135,6 @@ contract V3Addresses {
         AGENT = params.agent;
         ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
         VOTING = params.voting;
-        VAULT_FACTORY = params.vaultFactory;
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;
@@ -156,8 +152,10 @@ contract V3Addresses {
 
         ACCOUNTING = newLocatorImpl.accounting();
         VAULT_HUB = payable(newLocatorImpl.vaultHub());
+        VAULT_FACTORY = newLocatorImpl.vaultFactory();
         PREDEPOSIT_GUARANTEE = newLocatorImpl.predepositGuarantee();
         OPERATOR_GRID = newLocatorImpl.operatorGrid();
+        LAZY_ORACLE = newLocatorImpl.lazyOracle();
 
         EL_REWARDS_VAULT = newLocatorImpl.elRewardsVault();
         STAKING_ROUTER = newLocatorImpl.stakingRouter();

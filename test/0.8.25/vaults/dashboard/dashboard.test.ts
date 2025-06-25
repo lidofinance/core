@@ -10,6 +10,8 @@ import {
   DepositContract__MockForStakingVault,
   ERC721__MockForDashboard,
   LidoLocator,
+  OperatorGrid,
+  OssifiableProxy,
   Permissions,
   StakingVault,
   StETHPermit__HarnessForDashboard,
@@ -18,7 +20,7 @@ import {
   VaultHub,
   VaultHub__MockForDashboard,
   WETH9__MockForVault,
-  WstETH__HarnessForVault,
+  WstETH__Harness,
 } from "typechain-types";
 
 import {
@@ -46,7 +48,7 @@ describe("Dashboard.sol", () => {
   let steth: StETHPermit__HarnessForDashboard;
   let weth: WETH9__MockForVault;
   let erc721: ERC721__MockForDashboard;
-  let wsteth: WstETH__HarnessForVault;
+  let wsteth: WstETH__Harness;
   let hub: VaultHub__MockForDashboard;
   let depositContract: DepositContract__MockForStakingVault;
 
@@ -59,6 +61,9 @@ describe("Dashboard.sol", () => {
 
   let vault: StakingVault;
   let dashboard: Dashboard;
+  let operatorGrid: OperatorGrid;
+  let operatorGridImpl: OperatorGrid;
+  let proxy: OssifiableProxy;
 
   const nodeOperatorFeeBP = 0n;
   const confirmExpiry = days(7n);
@@ -67,28 +72,45 @@ describe("Dashboard.sol", () => {
 
   const BP_BASE = 10_000n;
 
+  const DEFAULT_TIER_SHARE_LIMIT = 1000;
+  const RESERVE_RATIO = 2000;
+  const FORCED_REBALANCE_THRESHOLD = 1800;
+  const INFRA_FEE = 500;
+  const LIQUIDITY_FEE = 400;
+  const RESERVATION_FEE = 100;
+
   const record: Readonly<VaultHub.VaultRecordStruct> = {
     report: {
       totalValue: 1000n,
       inOutDelta: 1000n,
+      timestamp: 2122n,
     },
     liabilityShares: 555n,
     locked: 1000n,
-    reportTimestamp: 2122n,
-    inOutDelta: 1000n,
-    feeSharesCharged: 1n,
+    inOutDelta: {
+      value: 1000n,
+      valueOnRefSlot: 1000n,
+      refSlot: 0n,
+    },
   };
 
   const connection: Readonly<VaultHub.VaultConnectionStruct> = {
     owner: ZeroAddress,
     shareLimit: 100000n,
-    vaultIndex: 0n,
+    vaultIndex: 1n,
     pendingDisconnect: false,
     reserveRatioBP: 1000n,
     forcedRebalanceThresholdBP: 800n,
     infraFeeBP: 1000n,
     liquidityFeeBP: 400n,
     reservationFeeBP: 100n,
+    isBeaconDepositsManuallyPaused: false,
+  };
+
+  const obligations: Readonly<VaultHub.VaultObligationsStruct> = {
+    unsettledLidoFees: 0n,
+    redemptions: 0n,
+    settledLidoFees: 0n,
   };
 
   const setup = async ({
@@ -97,11 +119,29 @@ describe("Dashboard.sol", () => {
     totalValue,
     liabilityShares,
     locked,
-  }: Partial<VaultHub.VaultRecordStruct & VaultHub.VaultConnectionStruct & VaultHub.ReportStruct> = {}) => {
+    unsettledLidoFees,
+    settledLidoFees,
+    redemptions,
+    vaultBalance = 0n,
+    pendingDisconnect = false,
+    isConnected = true,
+    owner = vaultOwner,
+  }: Partial<
+    VaultHub.VaultRecordStruct &
+      VaultHub.VaultConnectionStruct &
+      VaultHub.ReportStruct &
+      VaultHub.VaultObligationsStruct & {
+        vaultBalance?: bigint;
+        isConnected?: boolean;
+      }
+  > = {}) => {
     await hub.mock__setVaultConnection(vault, {
       ...connection,
       reserveRatioBP: reserveRatioBP ?? connection.reserveRatioBP,
       shareLimit: shareLimit ?? connection.shareLimit,
+      pendingDisconnect: pendingDisconnect ?? connection.pendingDisconnect,
+      vaultIndex: isConnected ? connection.vaultIndex : 0n,
+      owner: owner ?? connection.owner,
     });
 
     await hub.mock__setVaultRecord(vault, {
@@ -110,18 +150,29 @@ describe("Dashboard.sol", () => {
       liabilityShares: liabilityShares ?? record.liabilityShares,
       locked: locked ?? record.locked,
     });
+
+    await hub.mock__setVaultObligations(vault, {
+      ...obligations,
+      unsettledLidoFees: unsettledLidoFees ?? obligations.unsettledLidoFees,
+      settledLidoFees: settledLidoFees ?? obligations.settledLidoFees,
+      redemptions: redemptions ?? obligations.redemptions,
+    });
+
+    if (vaultBalance > 0n) {
+      await setBalance(await vault.getAddress(), vaultBalance);
+    }
   };
 
   before(async () => {
     [deployer, vaultOwner, nodeOperator, stranger] = await ethers.getSigners();
 
-    await deployEIP7002WithdrawalRequestContract(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
+    await deployEIP7002WithdrawalRequestContract();
 
     steth = await ethers.deployContract("StETHPermit__HarnessForDashboard");
     await steth.mock__setTotalShares(ether("1000000"));
     await steth.mock__setTotalPooledEther(ether("1400000"));
 
-    wsteth = await ethers.deployContract("WstETH__HarnessForVault", [steth]);
+    wsteth = await ethers.deployContract("WstETH__Harness", [steth]);
 
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
 
@@ -132,7 +183,40 @@ describe("Dashboard.sol", () => {
 
     hub = await ethers.deployContract("VaultHub__MockForDashboard", [steth, lidoLocator]);
 
-    await updateLidoLocatorImplementation(await lidoLocator.getAddress(), { vaultHub: hub.getAddress() });
+    // OperatorGrid
+    operatorGridImpl = await ethers.deployContract("OperatorGrid", [lidoLocator], { from: deployer });
+    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
+    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+
+    const defaultTierParams = {
+      shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+      reserveRatioBP: RESERVE_RATIO,
+      forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD,
+      infraFeeBP: INFRA_FEE,
+      liquidityFeeBP: LIQUIDITY_FEE,
+      reservationFeeBP: RESERVATION_FEE,
+    };
+    await operatorGrid.initialize(deployer, defaultTierParams);
+    await operatorGrid.grantRole(await operatorGrid.REGISTRY_ROLE(), deployer);
+
+    // Register group and tiers
+    const shareLimit = 1000;
+    await operatorGrid.connect(deployer).registerGroup(nodeOperator, shareLimit);
+    await operatorGrid.connect(deployer).registerTiers(nodeOperator, [
+      {
+        shareLimit: shareLimit,
+        reserveRatioBP: 2000,
+        forcedRebalanceThresholdBP: 1800,
+        infraFeeBP: 500,
+        liquidityFeeBP: 400,
+        reservationFeeBP: 100,
+      },
+    ]);
+
+    await updateLidoLocatorImplementation(await lidoLocator.getAddress(), {
+      vaultHub: hub.getAddress(),
+      operatorGrid: operatorGrid.getAddress(),
+    });
 
     dashboardImpl = await ethers.deployContract("Dashboard", [steth, wsteth, hub, lidoLocator]);
     vaultImpl = await ethers.deployContract("StakingVault", [depositContract]);
@@ -170,27 +254,27 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if steth is zero address", async () => {
-      await expect(ethers.deployContract("Dashboard", [ethers.ZeroAddress, wsteth, hub, lidoLocator]))
-        .to.be.revertedWithCustomError(dashboardImpl, "ZeroArgument")
-        .withArgs("_stETH");
+      await expect(
+        ethers.deployContract("Dashboard", [ethers.ZeroAddress, wsteth, hub, lidoLocator]),
+      ).to.be.revertedWithCustomError(dashboardImpl, "ZeroAddress");
     });
 
     it("reverts if wsteth is zero address", async () => {
-      await expect(ethers.deployContract("Dashboard", [steth, ethers.ZeroAddress, hub, lidoLocator]))
-        .to.be.revertedWithCustomError(dashboardImpl, "ZeroArgument")
-        .withArgs("_wstETH");
+      await expect(
+        ethers.deployContract("Dashboard", [steth, ethers.ZeroAddress, hub, lidoLocator]),
+      ).to.be.revertedWithCustomError(dashboardImpl, "ZeroAddress");
     });
 
     it("reverts if vaultHub is zero address", async () => {
-      await expect(ethers.deployContract("Dashboard", [steth, wsteth, ethers.ZeroAddress, lidoLocator]))
-        .to.be.revertedWithCustomError(dashboardImpl, "ZeroArgument")
-        .withArgs("_vaultHub");
+      await expect(
+        ethers.deployContract("Dashboard", [steth, wsteth, ethers.ZeroAddress, lidoLocator]),
+      ).to.be.revertedWithCustomError(dashboardImpl, "ZeroAddress");
     });
 
     it("reverts if lidoLocator is zero address", async () => {
-      await expect(ethers.deployContract("Dashboard", [steth, wsteth, hub, ethers.ZeroAddress]))
-        .to.be.revertedWithCustomError(dashboardImpl, "ZeroArgument")
-        .withArgs("_lidoLocator");
+      await expect(
+        ethers.deployContract("Dashboard", [steth, wsteth, hub, ethers.ZeroAddress]),
+      ).to.be.revertedWithCustomError(dashboardImpl, "ZeroAddress");
     });
   });
 
@@ -255,7 +339,7 @@ describe("Dashboard.sol", () => {
 
     it("latestReport", async () => {
       const latestReport = await dashboard.latestReport();
-      expect(latestReport).to.deep.equal([record.report.totalValue, record.report.inOutDelta]);
+      expect(latestReport).to.deep.equal([record.report.totalValue, record.report.inOutDelta, record.report.timestamp]);
     });
 
     it("locked", async () => {
@@ -359,6 +443,19 @@ describe("Dashboard.sol", () => {
       // todo: add node operator fee tests
     });
 
+    context("unsettledObligations", () => {
+      it("returns 0 if no unsettled obligations", async () => {
+        await setup({
+          totalValue: 0n,
+          liabilityShares: 0n,
+          unsettledLidoFees: 0n,
+          redemptions: 0n,
+          settledLidoFees: 0n,
+        });
+        expect(await dashboard.unsettledObligations()).to.equal(0n);
+      });
+    });
+
     context("remainingMintingCapacityShares", () => {
       it("0 remaining capacity if no total value and no liability shares", async () => {
         await setup({ totalValue: 0n, liabilityShares: 0n });
@@ -377,18 +474,15 @@ describe("Dashboard.sol", () => {
 
       it("remaining capacity with funding works as expected", async () => {
         await setup({ totalValue: 1000n, liabilityShares: 0n });
+        expect(await dashboard.totalMintingCapacityShares()).to.equal(
+          await steth.getSharesByPooledEth((1000n * (BP_BASE - getBigInt(connection.reserveRatioBP))) / BP_BASE),
+        );
 
-        const funding = 1000n;
+        await setup({ totalValue: 1500n, liabilityShares: 0n }); // fund 1000n
 
-        const preFundCanMint = await dashboard.remainingMintingCapacityShares(funding);
-        await setup({ totalValue: 2000n, liabilityShares: 0n }); // fund 1000n
-
-        const maxStETHMinted = (2000n * (BP_BASE - getBigInt(connection.reserveRatioBP))) / BP_BASE;
-        const maxSharesMinted = await steth.getSharesByPooledEth(maxStETHMinted);
-
-        const canMint = await dashboard.remainingMintingCapacityShares(0n);
-        expect(canMint).to.equal(preFundCanMint);
-        expect(canMint).to.equal(maxSharesMinted);
+        expect(await dashboard.totalMintingCapacityShares()).to.equal(
+          await steth.getSharesByPooledEth((1500n * (BP_BASE - getBigInt(connection.reserveRatioBP))) / BP_BASE),
+        );
       });
 
       it("remaining capacity is 0 if liability shares is maxxed out", async () => {
@@ -443,11 +537,23 @@ describe("Dashboard.sol", () => {
       });
     });
 
-    context("withdrawableEther", () => {
+    context("withdrawableValue", () => {
+      it("returns 0 if pending disconnect", async () => {
+        await setup({ totalValue: ether("10"), vaultBalance: ether("1") });
+        expect(await dashboard.withdrawableValue()).to.equal(ether("1"));
+        await setup({ pendingDisconnect: true });
+        expect(await dashboard.withdrawableValue()).to.equal(0n);
+      });
+
       it("returns the trivial amount can withdraw ether", async () => {
         await setup({ totalValue: 0n, locked: 0n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(0n);
+        expect(await dashboard.withdrawableValue()).to.equal(0n);
+      });
+
+      it("returns 0 if pending disconnect", async () => {
+        await setup({ pendingDisconnect: true });
+        expect(await dashboard.withdrawableValue()).to.equal(0n);
       });
 
       it("returns totalValue if balance > totalValue and locked = 0", async () => {
@@ -455,7 +561,7 @@ describe("Dashboard.sol", () => {
         const amount = ether("1");
         await setup({ totalValue: amount, locked: 0n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(amount);
+        expect(await dashboard.withdrawableValue()).to.equal(amount);
       });
 
       it("returns totalValue - locked if balance > totalValue and locked > 0", async () => {
@@ -463,21 +569,21 @@ describe("Dashboard.sol", () => {
         const amount = ether("1");
         await setup({ totalValue: amount, locked: amount / 2n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(amount / 2n);
+        expect(await dashboard.withdrawableValue()).to.equal(amount / 2n);
       });
 
       it("returns balance if balance < totalValue and locked = 0", async () => {
         const amount = ether("1");
         await setBalance(await vault.getAddress(), amount - 1n);
         await setup({ totalValue: amount, locked: 0n });
-        expect(await dashboard.withdrawableEther()).to.equal(amount - 1n);
+        expect(await dashboard.withdrawableValue()).to.equal(amount - 1n);
       });
 
       it("returns balance if balance < totalValue and locked <= (totalValue - balance)", async () => {
         const amount = ether("1");
         await setBalance(await vault.getAddress(), amount - 2n);
         await setup({ totalValue: amount, locked: 1n });
-        expect(await dashboard.withdrawableEther()).to.equal(amount - 2n);
+        expect(await dashboard.withdrawableValue()).to.equal(amount - 2n);
       });
 
       it("returns 0 if no balance, even if totalValue > locked", async () => {
@@ -485,7 +591,7 @@ describe("Dashboard.sol", () => {
         const amount = ether("1");
         await setup({ totalValue: amount, locked: amount / 2n });
 
-        expect(await dashboard.withdrawableEther()).to.equal(0n);
+        expect(await dashboard.withdrawableValue()).to.equal(0n);
       });
     });
   });
@@ -504,6 +610,69 @@ describe("Dashboard.sol", () => {
       await expect(dashboard.connect(nodeOperator).transferVaultOwnership(newOwner))
         .to.emit(hub, "Mock__VaultOwnershipTransferred")
         .withArgs(vault, newOwner);
+    });
+  });
+
+  context("connectAndAcceptTier", () => {
+    let newVault: StakingVault;
+    let newDashboard: Dashboard;
+
+    beforeEach(async () => {
+      const defaultAdminRoles = await Promise.all([
+        { role: await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), account: nodeOperator.address },
+      ]);
+
+      // Create a new vault without hub connection
+      const createVaultTx = await factory.createVaultWithDashboardWithoutConnectingToVaultHub(
+        vaultOwner.address,
+        nodeOperator.address,
+        nodeOperator.address,
+        nodeOperatorFeeBP,
+        confirmExpiry,
+        defaultAdminRoles,
+      );
+      const createVaultReceipt = await createVaultTx.wait();
+      if (!createVaultReceipt) throw new Error("Vault creation receipt not found");
+
+      const vaultCreatedEvents = findEvents(createVaultReceipt, "VaultCreated");
+      expect(vaultCreatedEvents.length).to.equal(1);
+
+      const newVaultAddress = vaultCreatedEvents[0].args.vault;
+      newVault = await ethers.getContractAt("StakingVault", newVaultAddress, vaultOwner);
+
+      const dashboardCreatedEvents = findEvents(createVaultReceipt, "DashboardCreated");
+      expect(dashboardCreatedEvents.length).to.equal(1);
+
+      const newDashboardAddress = dashboardCreatedEvents[0].args.dashboard;
+      newDashboard = await ethers.getContractAt("Dashboard", newDashboardAddress, vaultOwner);
+    });
+
+    it("reverts if called by a non-admin", async () => {
+      await expect(newDashboard.connect(stranger).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+        newDashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if change tier is not confirmed by node operator", async () => {
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+        newDashboard,
+        "TierChangeNotConfirmed",
+      );
+    });
+
+    it("works", async () => {
+      await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.emit(hub, "Mock__VaultConnected");
+    });
+
+    it("works with connection deposit", async () => {
+      const connectDeposit = await hub.CONNECT_DEPOSIT();
+
+      await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, { value: connectDeposit }))
+        .to.emit(hub, "Mock__VaultConnected")
+        .withArgs(newVault);
     });
   });
 
@@ -561,28 +730,32 @@ describe("Dashboard.sol", () => {
     it("reverts if the amount is greater than withdrawable ether", async () => {
       await expect(dashboard.connect(vaultOwner).withdraw(stranger, ether("2"))).to.be.revertedWithCustomError(
         dashboard,
-        "WithdrawalExceedsWithdrawable",
+        "ExceedsWithdrawable",
       );
     });
   });
 
   context("mintShares", () => {
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).mintShares(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
+      await setup({ totalValue: 1000n, liabilityShares: 0n });
+      const amountShares = 1n;
+      await expect(dashboard.connect(stranger).mintShares(vaultOwner, amountShares)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
     it("invokes the mintShares function on the vault hub", async () => {
-      const amountShares = ether("1");
+      await setup({ totalValue: 1000n, liabilityShares: 0n });
+      const amountShares = 100n;
       await expect(dashboard.mintShares(vaultOwner, amountShares))
         .to.emit(hub, "Mock__MintedShares")
         .withArgs(vault, vaultOwner, amountShares);
     });
 
     it("fundable", async () => {
-      const amountShares = ether("1");
+      await setup({ totalValue: 1000n, liabilityShares: 0n });
+      const amountShares = 100n;
       const amountFunded = ether("2");
       await expect(dashboard.mintShares(vaultOwner, amountShares, { value: amountFunded }))
         .to.emit(hub, "Mock__Funded")
@@ -615,22 +788,25 @@ describe("Dashboard.sol", () => {
 
   context("mintSteth", () => {
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).mintStETH(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
+      await setup({ totalValue: 1000n, liabilityShares: 0n });
+      await expect(dashboard.connect(stranger).mintStETH(vaultOwner, 100n)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
     it("invokes the mintStETH function on the vault hub", async () => {
-      const amountOfStETH = ether("1");
+      await setup({ totalValue: 1000n, liabilityShares: 0n });
+      const amountOfStETH = 100n;
       await expect(dashboard.mintStETH(vaultOwner, amountOfStETH))
         .to.emit(hub, "Mock__MintedShares")
         .withArgs(vault, vaultOwner, await steth.getSharesByPooledEth(amountOfStETH));
     });
 
     it("fundable", async () => {
-      const amountOfStETH = ether("1");
-      const amountFunded = ether("2");
+      await setup({ totalValue: 1000n, liabilityShares: 0n });
+      const amountOfStETH = 100n;
+      const amountFunded = 200n;
       await expect(dashboard.mintStETH(vaultOwner, amountOfStETH, { value: amountFunded }))
         .to.emit(hub, "Mock__Funded")
         .withArgs(vault, amountFunded)
@@ -645,15 +821,17 @@ describe("Dashboard.sol", () => {
 
   context("mintWstETH", () => {
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).mintWstETH(vaultOwner, ether("1"))).to.be.revertedWithCustomError(
+      await setup({ totalValue: 1000n, liabilityShares: 0n });
+      await expect(dashboard.connect(stranger).mintWstETH(vaultOwner, 100n)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
     it("invokes the mintShares function on the vault hub", async () => {
-      const amountOfwstETH = ether("1");
-      await expect(dashboard.mintWstETH(vaultOwner, ether("1")))
+      await setup({ totalValue: 1000n, liabilityShares: 0n });
+      const amountOfwstETH = 100n;
+      await expect(dashboard.mintWstETH(vaultOwner, amountOfwstETH))
         .to.emit(hub, "Mock__MintedShares")
         .withArgs(vault, dashboard, amountOfwstETH)
         .and.to.emit(steth, "Transfer")
@@ -665,8 +843,9 @@ describe("Dashboard.sol", () => {
     });
 
     it("fundable", async () => {
-      const amountOfwstETH = ether("1");
-      const amountFunded = ether("2");
+      await setup({ totalValue: 1000n, liabilityShares: 0n });
+      const amountOfwstETH = 100n;
+      const amountFunded = 200n;
       await expect(dashboard.mintWstETH(vaultOwner, amountOfwstETH, { value: amountFunded }))
         .to.emit(hub, "Mock__Funded")
         .withArgs(vault, amountFunded)
@@ -690,12 +869,12 @@ describe("Dashboard.sol", () => {
   });
 
   context("burnStETH", () => {
-    const amountShares = ether("1");
+    const amountShares = 100n;
     let amountSteth: bigint;
 
     beforeEach(async () => {
+      await setup({ totalValue: 1000n, liabilityShares: 0n });
       amountSteth = await steth.getPooledEthByShares(amountShares);
-      await dashboard.fund({ value: amountSteth });
       await dashboard.mintStETH(vaultOwner, amountSteth);
     });
 
@@ -710,13 +889,12 @@ describe("Dashboard.sol", () => {
     });
 
     it("burns steth backed by the vault", async () => {
-      expect(await steth.balanceOf(vaultOwner)).to.equal(amountSteth);
-
       await expect(steth.connect(vaultOwner).approve(dashboard, amountSteth))
         .to.emit(steth, "Approval")
         .withArgs(vaultOwner, dashboard, amountSteth);
       expect(await steth.allowance(vaultOwner, dashboard)).to.equal(amountSteth);
 
+      expect(await steth.balanceOf(vaultOwner)).to.equal(amountSteth);
       await expect(dashboard.burnStETH(amountSteth))
         .to.emit(steth, "Transfer") // transfer from owner to hub
         .withArgs(vaultOwner, hub, amountSteth)
@@ -733,18 +911,17 @@ describe("Dashboard.sol", () => {
   });
 
   context("burnWstETH", () => {
-    const amountWsteth = ether("1");
+    const amountWsteth = 100n;
 
     beforeEach(async () => {
       // mint shares to the vault owner for the burn
-      const amountSteth = await steth.getPooledEthByShares(amountWsteth);
-      await dashboard.fund({ value: amountSteth });
-      await dashboard.mintShares(vaultOwner, amountWsteth);
+      await setup({ totalValue: 1000n, liabilityShares: 0n });
+      await dashboard.mintWstETH(vaultOwner, amountWsteth);
     });
 
     it("reverts if called by a non-admin", async () => {
       // get steth
-      await steth.mintExternalShares(stranger, amountWsteth + 1000n);
+      await steth.mintExternalShares(stranger, amountWsteth * 2n);
       const amountSteth = await steth.getPooledEthByShares(amountWsteth);
       // get wsteth
       await steth.connect(stranger).approve(wsteth, amountSteth);
@@ -758,30 +935,18 @@ describe("Dashboard.sol", () => {
     });
 
     it("burns shares backed by the vault", async () => {
-      const amountSteth = await steth.getPooledEthBySharesRoundUp(amountWsteth);
-      // approve for wsteth wrap
-      await steth.connect(vaultOwner).approve(wsteth, amountSteth);
-      // wrap steth to wsteth to get the amount of wsteth for the burn
-      await wsteth.connect(vaultOwner).wrap(amountSteth);
-
       // user flow
 
       const wstethBalanceBefore = await wsteth.balanceOf(vaultOwner);
-      const stethBalanceBefore = await steth.balanceOf(vaultOwner);
       // approve wsteth to dashboard contract
       await wsteth.connect(vaultOwner).approve(dashboard, amountWsteth);
 
       const result = await dashboard.burnWstETH(amountWsteth);
 
       await expect(result).to.emit(wsteth, "Transfer").withArgs(vaultOwner, dashboard, amountWsteth); // transfer wsteth to dashboard
-      await expect(result).to.emit(steth, "Transfer").withArgs(wsteth, dashboard, amountSteth); // unwrap wsteth to steth
       await expect(result).to.emit(wsteth, "Transfer").withArgs(dashboard, ZeroAddress, amountWsteth); // burn wsteth
-
-      await expect(result).to.emit(steth, "Transfer").withArgs(dashboard, hub, amountSteth); // transfer steth to hub
       await expect(result).to.emit(steth, "TransferShares").withArgs(dashboard, hub, amountWsteth); // transfer shares to hub
-      await expect(result).to.emit(steth, "SharesBurnt").withArgs(hub, amountSteth, amountSteth, amountWsteth); // burn steth (mocked event data)
 
-      expect(await steth.balanceOf(vaultOwner)).to.equal(stethBalanceBefore);
       expect(await wsteth.balanceOf(vaultOwner)).to.equal(wstethBalanceBefore - amountWsteth);
     });
 
@@ -812,6 +977,11 @@ describe("Dashboard.sol", () => {
           const weiShareDown = await steth.getSharesByPooledEth(weiStethDown);
           // steth value occurring only in events when rounding down from weiShareDown
           const weiStethDownDown = await steth.getPooledEthByShares(weiShareDown);
+
+          // reset wsteth balance
+          await wsteth.harness__burn(vaultOwner, await wsteth.balanceOf(vaultOwner));
+          // mint shares to the vault owner for the burn
+          await steth.mintExternalShares(vaultOwner, weiShare);
 
           // approve for wsteth wrap
           await steth.connect(vaultOwner).approve(wsteth, weiStethUp);
@@ -857,26 +1027,49 @@ describe("Dashboard.sol", () => {
     });
   });
 
-  context("rebalanceVault", () => {
+  context("rebalanceVaultWithEther", () => {
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).rebalanceVault(ether("1"))).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).rebalanceVaultWithEther(ether("1"))).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
     it("invokes the rebalance function on the vault hub", async () => {
-      const amount = ether("1");
-      await expect(dashboard.rebalanceVault(amount)).to.emit(hub, "Mock__Rebalanced").withArgs(vault, amount);
+      const shares = 100n;
+      const sharesInEther = await steth.getPooledEthByShares(shares);
+      await expect(dashboard.rebalanceVaultWithEther(sharesInEther))
+        .to.emit(hub, "Mock__Rebalanced")
+        .withArgs(vault, shares);
     });
 
     it("fundable", async () => {
-      const amount = ether("1");
-      await expect(dashboard.rebalanceVault(amount, { value: amount }))
+      const shares = 100n;
+      const sharesInEther = await steth.getPooledEthByShares(shares);
+      await expect(dashboard.rebalanceVaultWithEther(sharesInEther, { value: sharesInEther }))
         .to.emit(hub, "Mock__Funded")
-        .withArgs(vault, amount)
+        .withArgs(vault, sharesInEther)
         .and.to.emit(hub, "Mock__Rebalanced")
-        .withArgs(vault, amount);
+        .withArgs(vault, shares);
+    });
+  });
+
+  context("rebalanceVaultWithShares", () => {
+    it("reverts if called by a non-admin", async () => {
+      await expect(dashboard.connect(stranger).rebalanceVaultWithShares(100n)).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("invokes the rebalance function on the vault hub", async () => {
+      const shares = 100n;
+      await expect(dashboard.rebalanceVaultWithShares(shares)).to.emit(hub, "Mock__Rebalanced").withArgs(vault, shares);
+    });
+
+    it("fundable", async () => {
+      const shares = 100n;
+      await expect(dashboard.rebalanceVaultWithShares(shares)).to.emit(hub, "Mock__Rebalanced").withArgs(vault, shares);
     });
   });
 
@@ -957,11 +1150,11 @@ describe("Dashboard.sol", () => {
     it("does not allow zero arguments for erc20 recovery", async () => {
       await expect(dashboard.recoverERC20(ZeroAddress, vaultOwner, 1n)).to.be.revertedWithCustomError(
         dashboard,
-        "ZeroArgument",
+        "ZeroAddress",
       );
       await expect(dashboard.recoverERC20(weth, ZeroAddress, 1n)).to.be.revertedWithCustomError(
         dashboard,
-        "ZeroArgument",
+        "ZeroAddress",
       );
       await expect(dashboard.recoverERC20(weth, vaultOwner, 0n)).to.be.revertedWithCustomError(
         dashboard,
@@ -970,13 +1163,29 @@ describe("Dashboard.sol", () => {
     });
 
     it("does not allow zero arguments for erc721 recovery", async () => {
-      await expect(dashboard.recoverERC721(ZeroAddress, 0n, ZeroAddress))
-        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("_token");
+      await expect(dashboard.recoverERC721(ZeroAddress, 0n, ZeroAddress)).to.be.revertedWithCustomError(
+        dashboard,
+        "ZeroAddress",
+      );
 
-      await expect(dashboard.recoverERC721(erc721.getAddress(), 0n, ZeroAddress))
-        .to.be.revertedWithCustomError(dashboard, "ZeroArgument")
-        .withArgs("_recipient");
+      await expect(dashboard.recoverERC721(erc721.getAddress(), 0n, ZeroAddress)).to.be.revertedWithCustomError(
+        dashboard,
+        "ZeroAddress",
+      );
+    });
+
+    it("recovers all eth", async () => {
+      const ethAmount = ether("1");
+      const ethTokenAddress = await dashboard.ETH();
+
+      await setBalance(await dashboard.getAddress(), ethAmount);
+      const preBalance = await ethers.provider.getBalance(stranger);
+
+      await expect(dashboard.recoverERC20(ethTokenAddress, stranger, ethAmount))
+        .to.emit(dashboard, "ERC20Recovered")
+        .withArgs(stranger, ethTokenAddress, ethAmount);
+
+      expect(await ethers.provider.getBalance(stranger)).to.equal(preBalance + ethAmount);
     });
 
     it("recovers all weth", async () => {
@@ -993,7 +1202,7 @@ describe("Dashboard.sol", () => {
     it("does not allow zero token address for erc721 recovery", async () => {
       await expect(dashboard.recoverERC721(ZeroAddress, 0, vaultOwner)).to.be.revertedWithCustomError(
         dashboard,
-        "ZeroArgument",
+        "ZeroAddress",
       );
     });
 
@@ -1131,6 +1340,128 @@ describe("Dashboard.sol", () => {
           expect(await dashboard.hasRole(assignment.role, assignment.account)).to.be.false;
         }
       });
+    });
+  });
+
+  context("unguaranteedDeposit", () => {
+    const deposits = [
+      {
+        pubkey: randomValidatorPubkey(),
+        amount: ether("1"),
+        signature: new Uint8Array(32),
+        depositDataRoot: new Uint8Array(32),
+      },
+    ];
+
+    it("reverts if the total amount exceeds the withdrawable value", async () => {
+      await setup({ totalValue: ether("10"), locked: 0n, vaultBalance: ether("0.9") });
+
+      await expect(dashboard.unguaranteedDepositToBeaconChain(deposits))
+        .to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable")
+        .withArgs(ether("1"), ether("0.9"));
+    });
+
+    it("reverts if the caller does not have the role", async () => {
+      await setup({ totalValue: ether("10"), locked: 0n, vaultBalance: ether("1") });
+
+      await expect(dashboard.connect(stranger).unguaranteedDepositToBeaconChain(deposits))
+        .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE());
+    });
+
+    it("performs unguaranteed deposit", async () => {
+      await setup({ totalValue: ether("10"), locked: 0n, vaultBalance: ether("1") });
+      await setBalance(await hub.getAddress(), ether("100"));
+      await hub.mock__setSendWithdraw(true);
+
+      await expect(dashboard.unguaranteedDepositToBeaconChain(deposits))
+        .to.emit(hub, "Mock__Withdrawn")
+        .withArgs(vault, dashboard, ether("1"))
+        .and.to.emit(dashboard, "UnguaranteedDeposits")
+        .withArgs(vault, deposits.length, ether("1"))
+        .and.to.emit(depositContract, "DepositEvent")
+        .withArgs(
+          deposits[0].pubkey,
+          await vault.withdrawalCredentials(),
+          deposits[0].signature,
+          deposits[0].depositDataRoot,
+        );
+    });
+  });
+
+  context("changeTier", () => {
+    it("reverts if called by a non-admin", async () => {
+      await expect(dashboard.connect(stranger).changeTier(1, 100n)).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("requests a tier change", async () => {
+      await setup({ owner: dashboard });
+      await expect(dashboard.changeTier(1, 100n)).to.emit(operatorGrid, "RoleMemberConfirmed");
+    });
+  });
+
+  context("abandonDashboard", () => {
+    it("reverts if called by a non-admin", async () => {
+      await setup({ isConnected: false });
+      await expect(dashboard.connect(stranger).abandonDashboard(stranger)).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if connected to the hub", async () => {
+      await setup({ isConnected: true });
+      await expect(dashboard.abandonDashboard(stranger)).to.be.revertedWithCustomError(
+        dashboard,
+        "ConnectedToVaultHub",
+      );
+    });
+
+    it("reverts if the new owner is the dashboard itself", async () => {
+      await setup({ isConnected: false });
+      await expect(dashboard.abandonDashboard(dashboard)).to.be.revertedWithCustomError(
+        dashboard,
+        "DashboardNotAllowed",
+      );
+    });
+
+    it("accepts the ownership and transfers it to the new owner", async () => {
+      await setup({ isConnected: false });
+      const hubSigner = await impersonate(await hub.getAddress(), ether("1"));
+      await vault.connect(hubSigner).transferOwnership(dashboard);
+      await expect(dashboard.connect(vaultOwner).abandonDashboard(vaultOwner))
+        .to.emit(vault, "OwnershipTransferred")
+        .withArgs(hub, dashboard)
+        .and.to.emit(vault, "OwnershipTransferStarted")
+        .withArgs(dashboard, vaultOwner);
+    });
+  });
+
+  context("reconnectToVaultHub", () => {
+    it("reverts if called by a non-admin", async () => {
+      await setup({ isConnected: false });
+      await expect(dashboard.connect(stranger).reconnectToVaultHub()).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reconnects the vault to the hub", async () => {
+      // disconnect
+      await setup({ isConnected: false });
+      const hubSigner = await impersonate(await hub.getAddress(), ether("1"));
+      await vault.connect(hubSigner).transferOwnership(dashboard);
+      await dashboard.abandonDashboard(vaultOwner);
+      await vault.connect(vaultOwner).acceptOwnership();
+      expect(await vault.owner()).to.equal(vaultOwner);
+
+      // reconnect
+      await vault.connect(vaultOwner).transferOwnership(dashboard);
+      await dashboard.reconnectToVaultHub();
+      expect(await vault.owner()).to.equal(hub);
     });
   });
 });

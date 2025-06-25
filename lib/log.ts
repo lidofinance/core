@@ -118,7 +118,7 @@ log.done = (message: string) => {
   log.emptyLine();
 };
 
-log.debug = (title: string, records: Record<string, ConvertibleToString>) => {
+log.debug = (title: string, records: Record<string, ConvertibleToString> = {}) => {
   if (LOG_LEVEL != "debug" && LOG_LEVEL != "all") return;
 
   _title(title);

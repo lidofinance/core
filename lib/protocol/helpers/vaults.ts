@@ -130,7 +130,7 @@ export async function createVaultWithDashboard(
     dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
     dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
     dashboard.VOLUNTARY_DISCONNECT_ROLE(),
-    dashboard.REQUEST_TIER_CHANGE_ROLE(),
+    dashboard.CHANGE_TIER_ROLE(),
     dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
   ]);
 
@@ -174,14 +174,14 @@ export async function createVaultWithDashboard(
 /**
  * Sets up the protocol with a maximum external ratio
  */
-export async function setupLido(ctx: ProtocolContext) {
+export async function setupLidoForVaults(ctx: ProtocolContext) {
   const { lido } = ctx.contracts;
   const votingSigner = await ctx.getSigner("voting");
 
   await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
 }
 
-// address, totalValue, inOutDelta, treasuryFees, liabilityShares
+// address, totalValue, treasuryFees, liabilityShares, slashingReserve
 export type VaultReportItem = [string, bigint, bigint, bigint, bigint];
 
 export function createVaultsReportTree(vaults: VaultReportItem[]) {
@@ -191,22 +191,23 @@ export function createVaultsReportTree(vaults: VaultReportItem[]) {
 export async function reportVaultDataWithProof(
   ctx: ProtocolContext,
   stakingVault: StakingVault,
-  totalValue?: bigint,
-  inOutDelta?: bigint,
-  liabilityShares?: bigint,
+  params: {
+    totalValue?: bigint;
+    accruedLidoFees?: bigint;
+    liabilityShares?: bigint;
+  } = {},
 ) {
   const { vaultHub, locator, lazyOracle } = ctx.contracts;
 
-  const totalValueArg = totalValue ?? (await vaultHub.totalValue(stakingVault));
-  const inOutDeltaArg = inOutDelta ?? (await vaultHub.vaultRecord(stakingVault)).inOutDelta;
-  const liabilitySharesArg = liabilityShares ?? (await vaultHub.liabilityShares(stakingVault));
+  const totalValueArg = params.totalValue ?? (await vaultHub.totalValue(stakingVault));
+  const liabilitySharesArg = params.liabilityShares ?? (await vaultHub.liabilityShares(stakingVault));
 
   const vaultReport: VaultReportItem = [
     await stakingVault.getAddress(),
     totalValueArg,
-    inOutDeltaArg,
-    0n,
+    params.accruedLidoFees ?? 0n,
     liabilitySharesArg,
+    0n,
   ];
   const reportTree = createVaultsReportTree([vaultReport]);
 
@@ -216,9 +217,9 @@ export async function reportVaultDataWithProof(
   return await lazyOracle.updateVaultData(
     await stakingVault.getAddress(),
     totalValueArg,
-    inOutDeltaArg,
-    0n,
+    params.accruedLidoFees ?? 0n,
     liabilitySharesArg,
+    0n,
     reportTree.getProof(0),
   );
 }
@@ -250,6 +251,54 @@ export async function createVaultProxy(
       confirmExpiry,
       roleAssignments,
       { value: VAULT_CONNECTION_DEPOSIT },
+    );
+
+  // Get the receipt manually
+  const receipt = (await tx.wait())!;
+  const events = findEventsWithInterfaces(receipt, "VaultCreated", [vaultFactory.interface]);
+
+  if (events.length === 0) throw new Error("Vault creation event not found");
+
+  const event = events[0];
+  const { vault } = event.args;
+
+  const dashboardEvents = findEventsWithInterfaces(receipt, "DashboardCreated", [vaultFactory.interface]);
+
+  if (dashboardEvents.length === 0) throw new Error("Dashboard creation event not found");
+
+  const { dashboard: dashboardAddress } = dashboardEvents[0].args;
+
+  const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vault, caller)) as PinnedBeaconProxy;
+  const stakingVault = (await ethers.getContractAt("StakingVault", vault, caller)) as StakingVault;
+  const dashboard = (await ethers.getContractAt("Dashboard", dashboardAddress, caller)) as Dashboard;
+
+  return {
+    tx,
+    proxy,
+    vault: stakingVault,
+    dashboard,
+  };
+}
+
+export async function createVaultProxyWithoutConnectingToVaultHub(
+  caller: HardhatEthersSigner,
+  vaultFactory: VaultFactory,
+  vaultOwner: HardhatEthersSigner,
+  nodeOperator: HardhatEthersSigner,
+  nodeOperatorManager: HardhatEthersSigner,
+  nodeOperatorFeeBP: bigint,
+  confirmExpiry: bigint,
+  roleAssignments: Permissions.RoleAssignmentStruct[],
+): Promise<CreateVaultResponse> {
+  const tx = await vaultFactory
+    .connect(caller)
+    .createVaultWithDashboardWithoutConnectingToVaultHub(
+      vaultOwner,
+      nodeOperator,
+      nodeOperatorManager,
+      nodeOperatorFeeBP,
+      confirmExpiry,
+      roleAssignments,
     );
 
   // Get the receipt manually
@@ -319,11 +368,13 @@ export const generatePredepositData = async (
 };
 
 export const getProofAndDepositData = async (
-  predepositGuarantee: LoadedContract<PredepositGuarantee>,
+  ctx: ProtocolContext,
   validator: Validator,
   withdrawalCredentials: string,
   amount: bigint = ether("31"),
 ) => {
+  const { predepositGuarantee } = ctx.contracts;
+
   // Step 3: Prove and deposit the validator
   const pivot_slot = await predepositGuarantee.PIVOT_SLOT();
 

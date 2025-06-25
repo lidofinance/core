@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.0;
+
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {ILido} from "contracts/common/interfaces/ILido.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
+import {VaultHub, IHashConsensus} from "contracts/0.8.25/vaults/VaultHub.sol";
+import {RefSlotCache} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
 
 contract VaultHub__HarnessForReporting is VaultHub {
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
@@ -15,8 +19,9 @@ contract VaultHub__HarnessForReporting is VaultHub {
     constructor(
         ILidoLocator _locator,
         ILido _lido,
+        IHashConsensus _consensusContract,
         uint256 _maxRelativeShareLimitBP
-    ) VaultHub(_locator, _lido, _maxRelativeShareLimitBP) {}
+    ) VaultHub(_locator, _lido, _consensusContract, _maxRelativeShareLimitBP) {}
 
     function harness_getVaultHubStorage() private pure returns (VaultHub.Storage storage $) {
         assembly {
@@ -53,18 +58,17 @@ contract VaultHub__HarnessForReporting is VaultHub {
             uint16(_forcedRebalanceThresholdBP),
             uint16(_infraFeeBP),
             uint16(_liquidityFeeBP),
-            uint16(_reservationFeeBP)
+            uint16(_reservationFeeBP),
+            false // manuallyPausedBeaconChainDeposits
         );
         $.connections[_vault] = connection;
 
-        VaultHub.VaultRecord memory record = VaultHub.VaultRecord(
-            VaultHub.Report(0, 0), // report
-            0, // locked
-            uint96(_shareLimit), // liabilityShares
-            uint64(block.timestamp), // reportTimestamp
-            0, // inOutDelta
-            0 // feeSharesCharged
-        );
+        VaultHub.VaultRecord memory record = VaultHub.VaultRecord({
+            report: VaultHub.Report(0, 0, 0),
+            locked: 0,
+            liabilityShares: uint96(_shareLimit),
+            inOutDelta: RefSlotCache.Int112WithRefSlotCache({value: 0, valueOnRefSlot: 0, refSlot: 0})
+        });
 
         $.records[_vault] = record;
         $.vaults.push(_vault);
