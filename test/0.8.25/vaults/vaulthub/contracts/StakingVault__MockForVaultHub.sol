@@ -46,7 +46,7 @@ contract StakingVault__MockForVaultHub {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) external payable {
-        emit ValidatorWithdrawalTriggered(_pubkeys, _amounts, _refundRecipient);
+        emit ValidatorWithdrawalsTriggered(_pubkeys, _amounts, _refundRecipient);
     }
 
     function depositToBeaconChain(IStakingVault.Deposit[] calldata _deposits) external {}
@@ -55,7 +55,7 @@ contract StakingVault__MockForVaultHub {
         return false;
     }
 
-    event ValidatorWithdrawalTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
+    event ValidatorWithdrawalsTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
 
     error Mock__HealthyVault();
 }

@@ -31,5 +31,7 @@ evm_version = "prague"
 # Fails the invariant fuzzing if a revert occurs
 # fail_on_revert = true
 
-# Style of uint/int256 types
 fmt = { int_types = 'long' }
+
+# Skip contracts that are not supported by the IR compiler
+skip = ["TWVoteScript.sol"]

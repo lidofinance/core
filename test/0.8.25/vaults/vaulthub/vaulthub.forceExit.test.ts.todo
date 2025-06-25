@@ -9,7 +9,7 @@ import {
   OperatorGrid,
   OperatorGrid__MockForVaultHub,
   OssifiableProxy,
-  PredepositGuarantee_HarnessForFactory,
+  PredepositGuarantee__HarnessForFactory,
   StakingVault__MockForVaultHub,
   StETH__HarnessForVaultHub,
   VaultFactory__MockForVaultHub,
@@ -44,7 +44,7 @@ describe("VaultHub.sol:forceExit", () => {
   let vaultFactory: VaultFactory__MockForVaultHub;
   let vault: StakingVault__MockForVaultHub;
   let steth: StETH__HarnessForVaultHub;
-  let predepositGuarantee: PredepositGuarantee_HarnessForFactory;
+  let predepositGuarantee: PredepositGuarantee__HarnessForFactory;
   let locator: LidoLocator;
   let operatorGrid: OperatorGrid;
   let operatorGridMock: OperatorGrid__MockForVaultHub;
@@ -61,7 +61,7 @@ describe("VaultHub.sol:forceExit", () => {
     [deployer, user, feeRecipient] = await ethers.getSigners();
     const depositContract = await ethers.deployContract("DepositContract__MockForVaultHub");
     steth = await ethers.deployContract("StETH__HarnessForVaultHub", [user], { value: ether("10000.0") });
-    predepositGuarantee = await ethers.deployContract("PredepositGuarantee_HarnessForFactory", [
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee__HarnessForFactory", [
       GENESIS_FORK_VERSION,
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       "0x0000000000000000000000000000000000000000000000000000000000000000",
