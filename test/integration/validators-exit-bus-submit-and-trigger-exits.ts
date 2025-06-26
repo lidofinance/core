@@ -93,9 +93,8 @@ describe("ValidatorsExitBus integration", () => {
   after(async () => await Snapshot.restore(snapshot));
 
   it("check contract version", async () => {});
-      // -EXECUTION REVERTED: REVERT: ACCESSCONTROL: ACCOUNT 0X70997970C51812DC3A010C7D01B50E0D17DC79C8 IS MISSING ROLE 0X22EBB4DBAFB72948800C1E1AFA1688772A1A4CFC54D5EBFCEC8163B1139C082E
-      // +VM EXCEPTION WHILE PROCESSING TRANSACTION: REVERTED WITH REASON STRING 'ACCESSCONTROL: ACCOUNT 0X70997970C51812DC3A010C7D01B50E0D17DC79C8 IS MISSING ROLE 0X22EBB4DBAFB72948800C1E1AFA1688772A1A4CFC54D5EBFCEC8163B1139C082E'
-  it.skip("should revert when non-authorized entity tries to submit hash", async () => {
+
+  it("should revert when non-authorized entity tries to submit hash", async () => {
     const SUBMIT_REPORT_HASH_ROLE = await veb.SUBMIT_REPORT_HASH_ROLE();
     const hasRole = await veb.hasRole(SUBMIT_REPORT_HASH_ROLE, stranger.address);
     expect(hasRole).to.be.false;
