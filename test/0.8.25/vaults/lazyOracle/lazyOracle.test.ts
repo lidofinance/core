@@ -141,4 +141,28 @@ describe("LazyOracle.sol", () => {
       expect(vaults6.length).to.equal(0);
     });
   });
+
+  context("getter functions", () => {
+    it("return latest report data", async () => {
+      const reportData = await lazyOracle.latestReportData();
+      expect(reportData.timestamp).to.equal(0n);
+      expect(reportData.treeRoot).to.equal(ZERO_BYTES32);
+      expect(reportData.reportCid).to.equal("");
+    });
+
+    it("return latest report timestamp", async () => {
+      const timestamp = await lazyOracle.latestReportTimestamp();
+      expect(timestamp).to.equal(0n);
+    });
+
+    it("return quarantine period", async () => {
+      const quarantinePeriod = await lazyOracle.quarantinePeriod();
+      expect(quarantinePeriod).to.equal(0n);
+    });
+
+    it("return max reward ratio", async () => {
+      const maxRewardRatio = await lazyOracle.maxRewardRatioBP();
+      expect(maxRewardRatio).to.equal(0);
+    });
+  });
 });
