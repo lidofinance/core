@@ -164,5 +164,12 @@ describe("LazyOracle.sol", () => {
       const maxRewardRatio = await lazyOracle.maxRewardRatioBP();
       expect(maxRewardRatio).to.equal(0);
     });
+
+    it("return quarantine info", async () => {
+      const quarantineInfo = await lazyOracle.vaultQuarantine(randomAddress());
+      expect(quarantineInfo.isActive).to.equal(false);
+      expect(quarantineInfo.pendingTotalValueIncrease).to.equal(0n);
+      expect(quarantineInfo.startTimestamp).to.equal(0n);
+    });
   });
 });
