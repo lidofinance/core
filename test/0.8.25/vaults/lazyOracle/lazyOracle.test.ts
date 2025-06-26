@@ -1,6 +1,8 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
+import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+
 import {
   LazyOracle,
   Lido__MockForLazyOracle,
@@ -15,6 +17,7 @@ import { deployLidoLocator } from "test/deploy";
 import { Snapshot, ZERO_BYTES32 } from "test/suite";
 
 describe("LazyOracle.sol", () => {
+  let deployer: SignerWithAddress;
   let locator: LidoLocator;
   let vaultHub: VaultHub__MockForLazyOracle;
   let operatorGrid: OperatorGrid__MockForLazyOracle;
@@ -24,6 +27,7 @@ describe("LazyOracle.sol", () => {
   let originalState: string;
 
   before(async () => {
+    [deployer] = await ethers.getSigners();
     vaultHub = await ethers.deployContract("VaultHub__MockForLazyOracle", []);
     operatorGrid = await ethers.deployContract("OperatorGrid__MockForLazyOracle", []);
     lido = await ethers.deployContract("Lido__MockForLazyOracle", []);
@@ -33,8 +37,16 @@ describe("LazyOracle.sol", () => {
       operatorGrid: operatorGrid,
       lido: lido,
     });
+    const lazyOracleImpl = await ethers.deployContract("LazyOracle", [locator]);
 
-    lazyOracle = await ethers.deployContract("LazyOracle", [locator]);
+    const proxy = await ethers.deployContract(
+      "OssifiableProxy",
+      [lazyOracleImpl, deployer, new Uint8Array()],
+      deployer,
+    );
+    lazyOracle = await ethers.getContractAt("LazyOracle", proxy);
+
+    await lazyOracle.initialize(deployer.address, 259200n, 350n);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -140,6 +152,13 @@ describe("LazyOracle.sol", () => {
       const vaults6 = await lazyOracle.batchVaultsInfo(3n, 1n);
       expect(vaults6.length).to.equal(0);
     });
+
+    it("returns the empty vault info for exceeding offset", async () => {
+      const vault = await createVault();
+      await vaultHub.mock__addVault(vault);
+      const vaults = await lazyOracle.batchVaultsInfo(1n, 1n);
+      expect(vaults.length).to.equal(0);
+    });
   });
 
   context("getter functions", () => {
@@ -157,12 +176,12 @@ describe("LazyOracle.sol", () => {
 
     it("return quarantine period", async () => {
       const quarantinePeriod = await lazyOracle.quarantinePeriod();
-      expect(quarantinePeriod).to.equal(0n);
+      expect(quarantinePeriod).to.equal(259200n);
     });
 
     it("return max reward ratio", async () => {
       const maxRewardRatio = await lazyOracle.maxRewardRatioBP();
-      expect(maxRewardRatio).to.equal(0);
+      expect(maxRewardRatio).to.equal(350n);
     });
 
     it("return quarantine info", async () => {
@@ -170,6 +189,15 @@ describe("LazyOracle.sol", () => {
       expect(quarantineInfo.isActive).to.equal(false);
       expect(quarantineInfo.pendingTotalValueIncrease).to.equal(0n);
       expect(quarantineInfo.startTimestamp).to.equal(0n);
+    });
+  });
+
+  context("sanity params", () => {
+    it("update quarantine period", async () => {
+      await lazyOracle.grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), deployer.address);
+      await lazyOracle.updateSanityParams(250000n, 1000n);
+      expect(await lazyOracle.quarantinePeriod()).to.equal(250000n);
+      expect(await lazyOracle.maxRewardRatioBP()).to.equal(1000n);
     });
   });
 });
