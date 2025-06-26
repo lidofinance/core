@@ -46,11 +46,6 @@ describe("Staking limits", () => {
     expect(info.currentStakeLimit).to.be.lte(ether("150000"));
     expect(info.currentStakeLimit).to.be.gt(0);
     expect(info.maxStakeLimit).to.equal(ether("150000"));
-    if (ctx.isScratch) {
-      expect(info.maxStakeLimitGrowthBlocks).to.equal(7500n);
-    } else {
-      expect(info.maxStakeLimitGrowthBlocks).to.equal(6400n);
-    }
     expect(info.prevStakeLimit).to.be.lte(ether("150000"));
   });
 

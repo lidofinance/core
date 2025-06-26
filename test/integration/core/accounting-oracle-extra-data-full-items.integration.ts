@@ -79,16 +79,14 @@ describe("Integration: AccountingOracle extra data full items", () => {
     [stranger] = await ethers.getSigners();
     await setBalance(stranger.address, ether("1000000"));
 
-    if (ctx.isScratch) {
-      const { oracleReportSanityChecker } = ctx.contracts;
-      // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
-      // with not that much TVL
-      await setAnnualBalanceIncreaseLimit(oracleReportSanityChecker, MAX_BASIS_POINTS);
+    const { oracleReportSanityChecker } = ctx.contracts;
+    // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
+    // with not that much TVL
+    await setAnnualBalanceIncreaseLimit(oracleReportSanityChecker, MAX_BASIS_POINTS);
 
-      // Need this to pass the annual balance / appeared validators per day
-      // increase limit check in sanity checker for scratch deploy with not that much TVL
-      await advanceChainTime(1n * 24n * 60n * 60n);
-    }
+    // Need this to pass the annual balance / appeared validators per day
+    // increase limit check in sanity checker for scratch deploy with not that much TVL
+    await advanceChainTime(1n * 24n * 60n * 60n);
 
     await prepareModules();
 

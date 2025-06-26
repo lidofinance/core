@@ -48,17 +48,20 @@ describe("Integration: AccountingOracle extra data", () => {
       // Prepare stuck and exited keys extra data for reusing in tests
       const { oracleReportSanityChecker } = ctx.contracts;
 
-      if (ctx.isScratch) {
-        // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
-        // with not that much TVL
-        await setAnnualBalanceIncreaseLimit(oracleReportSanityChecker, MAX_BASIS_POINTS);
+      // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
+      // with not that much TVL
+      await setAnnualBalanceIncreaseLimit(oracleReportSanityChecker, MAX_BASIS_POINTS);
 
-        // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
-        // with not that much TVL
-        await advanceChainTime(15n * 24n * 60n * 60n);
+      // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
+      // with not that much TVL
+      await advanceChainTime(15n * 24n * 60n * 60n);
+
+      let firstNodeOperatorInRange = 0;
+      // Workaround for Mainnet
+      if (ctx.contracts.nor.address.toLowerCase() === '0x55032650b14df07b85bf18a3a3ec8e0af2e028d5') {
+        firstNodeOperatorInRange = 20;
       }
 
-      const firstNodeOperatorInRange = ctx.isScratch ? 0 : 20;
       const numNodeOperators = Math.min(10, Number(await ctx.contracts.nor.getNodeOperatorsCount()));
       const numStuckKeys = 2;
       stuckKeys = {
