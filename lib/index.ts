@@ -6,7 +6,7 @@ export * from "./contract";
 export * from "./deploy";
 export * from "./dsm";
 export * from "./ec";
-export * from "./eip712";
+export * from "./eips";
 export * from "./ens";
 export * from "./event";
 export * from "./keccak";

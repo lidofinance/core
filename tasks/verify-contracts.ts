@@ -99,6 +99,8 @@ async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnv
 function getDeployedContract(contract: Contract): DeployedContract[] {
   if ("proxy" in contract && "implementation" in contract) {
     return [contract.proxy, contract.implementation];
+  } else if ("implementation" in contract) {
+    return [contract.implementation as DeployedContract];
   } else if ("contract" in contract && "address" in contract && "constructorArgs" in contract) {
     return [contract];
   }
