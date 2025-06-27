@@ -300,10 +300,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @param _totalValue the total value of the vault in refSlot
     /// @return totalValueWithoutQuarantine the smoothed total value of the vault after sanity checks
     /// @return inOutDeltaOnRefSlot the inOutDelta in the refSlot
-    function _handleSanityChecks(
-        address _vault,
-        uint256 _totalValue
-    ) public returns (uint256 totalValueWithoutQuarantine, int256 inOutDeltaOnRefSlot) {
+    function _handleSanityChecks(address _vault, uint256 _totalValue)
+        internal
+        returns (uint256 totalValueWithoutQuarantine, int256 inOutDeltaOnRefSlot)
+    {
         VaultHub vaultHub = _vaultHub();
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
@@ -404,6 +404,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     event QuarantinedDeposit(address indexed vault, uint128 delta);
     event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxRewardRatioBP);
     event QuarantineExpired(address indexed vault, uint128 delta);
+
     error AdminCannotBeZero();
     error NotAuthorized();
     error InvalidProof();
