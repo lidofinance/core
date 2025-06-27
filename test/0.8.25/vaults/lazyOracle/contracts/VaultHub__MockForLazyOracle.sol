@@ -17,6 +17,14 @@ contract VaultHub__MockForLazyOracle {
     mapping(address vault => VaultHub.VaultConnection connection) public mock__vaultConnections;
     mapping(address vault => VaultHub.VaultRecord record) public mock__vaultRecords;
 
+    address public mock__lastReportedVault;
+    uint256 public mock__lastReported_timestamp;
+    uint256 public mock__lastReported_totalValue;
+    int256 public mock__lastReported_inOutDelta;
+    uint256 public mock__lastReported_cumulativeLidoFees;
+    uint256 public mock__lastReported_liabilityShares;
+    uint256 public mock__lastReported_slashingReserve;
+
     constructor() {
         mock__vaults.push(address(0));
     }
@@ -69,6 +77,24 @@ contract VaultHub__MockForLazyOracle {
 
     function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {
         return mock__vaultRecords[vault];
+    }
+
+    function applyVaultReport(
+        address _vault,
+        uint256 _reportTimestamp,
+        uint256 _reportTotalValue,
+        int256 _reportInOutDelta,
+        uint256 _reportCumulativeLidoFees,
+        uint256 _reportLiabilityShares,
+        uint256 _reportSlashingReserve
+    ) external {
+        mock__lastReportedVault = _vault;
+        mock__lastReported_timestamp = _reportTimestamp;
+        mock__lastReported_totalValue = _reportTotalValue;
+        mock__lastReported_inOutDelta = _reportInOutDelta;
+        mock__lastReported_cumulativeLidoFees = _reportCumulativeLidoFees;
+        mock__lastReported_liabilityShares = _reportLiabilityShares;
+        mock__lastReported_slashingReserve = _reportSlashingReserve;
     }
 
     // function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {
