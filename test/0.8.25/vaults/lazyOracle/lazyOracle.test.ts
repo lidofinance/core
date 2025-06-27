@@ -332,4 +332,48 @@ describe("LazyOracle.sol", () => {
       expect(proof).to.deep.equal(TEST_PROOF);
     });
   });
+
+  context("handleSanityChecks", () => {
+    it("limit", async () => {
+      const vault = await createVault();
+      const vaultReport: VaultReportItem = [vault, ether("250"), 0n, 0n, 0n];
+
+      const tree = createVaultsReportTree([vaultReport]);
+      const accountingAddress = await impersonate(await locator.accountingOracle(), ether("100"));
+      const timestamp = await getCurrentBlockTimestamp();
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, tree.root, "");
+
+      await vaultHub.mock__addVault(vault);
+      await vaultHub.mock__setVaultRecord(vault, {
+        report: {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+          timestamp,
+        },
+        locked: 0n,
+        liabilityShares: 0n,
+        inOutDelta: {
+          value: ether("100"),
+          valueOnRefSlot: ether("100"),
+          refSlot: 0n,
+        },
+      });
+
+      await lazyOracle.updateVaultData(
+        vaultReport[0],
+        vaultReport[1],
+        vaultReport[2],
+        vaultReport[3],
+        vaultReport[4],
+        tree.getProof(0),
+      );
+      await expect(await vaultHub.mock__lastReported_totalValue()).to.equal(ether("100"));
+
+      const quarantineInfo = await lazyOracle.vaultQuarantine(vault);
+      expect(quarantineInfo.isActive).to.equal(true);
+      expect(quarantineInfo.pendingTotalValueIncrease).to.equal(ether("150"));
+      expect(quarantineInfo.startTimestamp).to.equal(timestamp);
+      expect(quarantineInfo.endTimestamp).to.equal(timestamp + 259200n);
+    });
+  });
 });
