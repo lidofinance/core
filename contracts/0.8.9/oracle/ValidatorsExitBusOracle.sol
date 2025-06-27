@@ -37,10 +37,6 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     /// @notice An ACL role granting the permission to submit the data for a committee report.
     bytes32 public constant SUBMIT_DATA_ROLE = keccak256("SUBMIT_DATA_ROLE");
 
-    /// @dev Storage slot: uint256 totalRequestsProcessed
-    bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
-        keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
-
     /// @dev [DEPRECATED] Storage slot: mapping(uint256 => RequestedValidator) lastRequestedValidatorIndices
     /// This mapping was previously used for storing last requested validator indexes per (moduleId, nodeOpId) key.
     /// This code was removed from the contract, but slots can still contain logic.
@@ -159,16 +155,9 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         bytes32 reportDataHash = keccak256(abi.encode(data));
         _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
-        _handleConsensusReportData(data);
         _storeOracleExitRequestHash(dataHash, contractVersion);
+        _handleConsensusReportData(data);
         emit ExitDataProcessing(dataHash);
-    }
-
-    /// @notice Returns the total number of validator exit requests ever processed
-    /// across all received reports.
-    ///
-    function getTotalRequestsProcessed() external view returns (uint256) {
-        return TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256();
     }
 
     struct ProcessingState {

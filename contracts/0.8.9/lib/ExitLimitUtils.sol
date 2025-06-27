@@ -74,12 +74,11 @@ library ExitLimitUtils {
     ) internal pure returns (ExitRequestLimitData memory) {
         if (_data.maxExitRequestsLimit < newExitRequestLimit) revert LimitExceeded();
 
-        uint256 secondsPassed = timestamp - _data.prevTimestamp;
-        uint256 framesPassed = secondsPassed / _data.frameDurationInSec;
-        uint32 passedTime = uint32(framesPassed) * _data.frameDurationInSec;
+        uint256 passedTime = timestamp - _data.prevTimestamp;
+        passedTime -= passedTime % _data.frameDurationInSec;
 
         _data.prevExitRequestsLimit = uint32(newExitRequestLimit);
-        _data.prevTimestamp += passedTime;
+        _data.prevTimestamp += uint32(passedTime);
 
         return _data;
     }
