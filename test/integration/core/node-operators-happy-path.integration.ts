@@ -158,7 +158,6 @@ describe("Scenario: Node operators happy path", () => {
 
   it("Should allow adding signing keys to a node operator", async () => {
     const { nor } = ctx.contracts;
-    const votingSigner = await ctx.getSigner("voting");
     const agentSigner = await ctx.getSigner("agent");
     const rewardAddress = certainAddress("rewardAddress");
     const operatorName = "new_node_operator";

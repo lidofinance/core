@@ -8,10 +8,9 @@ import { batch, ether, impersonate, log, updateBalance } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
 import {
   finalizeWithdrawalQueue,
+  norSdvtEnsureOperators,
   OracleReportOptions,
-  report,
-  norSdvtEnsureOperators
-} from "lib/protocol/helpers";
+  report} from "lib/protocol/helpers";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 
