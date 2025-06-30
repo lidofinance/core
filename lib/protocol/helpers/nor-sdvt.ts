@@ -171,10 +171,14 @@ export const norSdvtAddOperatorKeys = async (
   const totalKeysBefore = await module.getTotalSigningKeyCount(operatorId);
   const unusedKeysBefore = await module.getUnusedSigningKeyCount(operatorId);
 
-  const votingSigner = await ctx.getSigner("voting");
+  const agentSigner = await ctx.getSigner("agent");
+  const agentAddress = await agentSigner.getAddress();
+  const role = await module.MANAGE_SIGNING_KEYS();
+  await ctx.contracts.acl.connect(agentSigner).grantPermission(agentAddress, module.address, role);
   await module
-    .connect(votingSigner)
+    .connect(agentSigner)
     .addSigningKeys(operatorId, keysToAdd, randomPubkeys(Number(keysToAdd)), randomSignatures(Number(keysToAdd)));
+  await ctx.contracts.acl.connect(agentSigner).revokePermission(agentAddress, module.address, role);
 
   const totalKeysAfter = await module.getTotalSigningKeyCount(operatorId);
   const unusedKeysAfter = await module.getUnusedSigningKeyCount(operatorId);

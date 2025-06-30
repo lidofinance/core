@@ -17,15 +17,22 @@ describe("Staking limits", () => {
   let snapshot: string;
   let testSnapshot: string;
   let stranger: HardhatEthersSigner;
-  let voting: HardhatEthersSigner;
+  let agent: HardhatEthersSigner;
 
   before(async () => {
     ctx = await getProtocolContext();
     lido = ctx.contracts.lido;
     [stranger] = await ethers.getSigners();
-    voting = await ctx.getSigner("voting");
+    agent = await ctx.getSigner("agent");
 
     snapshot = await Snapshot.take();
+
+    const lidoAddress = await lido.getAddress();
+    const agentAddress = await agent.getAddress();
+    await ctx.contracts.acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.PAUSE_ROLE());
+    await ctx.contracts.acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.RESUME_ROLE());
+    await ctx.contracts.acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.STAKING_CONTROL_ROLE());
+    await ctx.contracts.acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.STAKING_PAUSE_ROLE());
   });
 
   beforeEach(async () => {
@@ -56,12 +63,12 @@ describe("Staking limits", () => {
   it("Should not allow stranger to pause staking", async () => {
     await expect(lido.connect(stranger).pauseStaking()).to.be.revertedWith("APP_AUTH_FAILED");
 
-    await lido.connect(voting).pauseStaking();
+    await lido.connect(agent).pauseStaking();
     expect(await lido.isStakingPaused()).to.be.true;
   });
 
   it("Should prevent staking when paused", async () => {
-    await lido.connect(voting).pauseStaking();
+    await lido.connect(agent).pauseStaking();
 
     await expect(lido.connect(stranger).submit(ethers.ZeroAddress, { value: ether("1") })).to.be.revertedWith(
       "STAKING_PAUSED",
@@ -69,17 +76,17 @@ describe("Staking limits", () => {
   });
 
   it("Should only allow authorized accounts to resume staking", async () => {
-    await lido.connect(voting).pauseStaking();
+    await lido.connect(agent).pauseStaking();
 
     await expect(lido.connect(stranger).resumeStaking()).to.be.revertedWith("APP_AUTH_FAILED");
 
-    await lido.connect(voting).resumeStaking();
+    await lido.connect(agent).resumeStaking();
     expect(await lido.isStakingPaused()).to.be.false;
   });
 
   it("Should allow staking after resumed", async () => {
-    await lido.connect(voting).pauseStaking();
-    await lido.connect(voting).resumeStaking();
+    await lido.connect(agent).pauseStaking();
+    await lido.connect(agent).resumeStaking();
 
     await lido.connect(stranger).submit(ethers.ZeroAddress, { value: ether("1") });
   });
@@ -89,30 +96,30 @@ describe("Staking limits", () => {
       "APP_AUTH_FAILED",
     );
 
-    await lido.connect(voting).setStakingLimit(ether("1"), ether("0.01"));
+    await lido.connect(agent).setStakingLimit(ether("1"), ether("0.01"));
   });
 
   it("Should return correct staking limit after setting", async () => {
     const limit = ether("1");
 
-    await lido.connect(voting).setStakingLimit(limit, ether("0.01"));
+    await lido.connect(agent).setStakingLimit(limit, ether("0.01"));
     expect(await lido.getCurrentStakeLimit()).to.equal(limit);
   });
 
   it("Should not allow zero max stake limit", async () => {
-    await expect(lido.connect(voting).setStakingLimit(0, 0)).to.be.revertedWith("ZERO_MAX_STAKE_LIMIT");
+    await expect(lido.connect(agent).setStakingLimit(0, 0)).to.be.revertedWith("ZERO_MAX_STAKE_LIMIT");
   });
 
   it("Should not allow max stake limit above uint256", async () => {
     const maxUint256 = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
-    await expect(lido.connect(voting).setStakingLimit(maxUint256, maxUint256)).to.be.revertedWith(
+    await expect(lido.connect(agent).setStakingLimit(maxUint256, maxUint256)).to.be.revertedWith(
       "TOO_LARGE_MAX_STAKE_LIMIT",
     );
   });
 
   it("Should prevent staking above limit", async () => {
-    await lido.connect(voting).setStakingLimit(ether("1"), ether("0.01"));
+    await lido.connect(agent).setStakingLimit(ether("1"), ether("0.01"));
 
     await expect(lido.connect(stranger).submit(ethers.ZeroAddress, { value: ether("10") })).to.be.revertedWith(
       "STAKE_LIMIT",
@@ -122,24 +129,24 @@ describe("Staking limits", () => {
   it("Should only allow authorized accounts to remove staking limit", async () => {
     await expect(lido.connect(stranger).removeStakingLimit()).to.be.revertedWith("APP_AUTH_FAILED");
 
-    await lido.connect(voting).removeStakingLimit();
+    await lido.connect(agent).removeStakingLimit();
   });
 
   it("Should allow staking above limit after removal", async () => {
-    await lido.connect(voting).setStakingLimit(ether("1"), ether("0.01"));
-    await lido.connect(voting).removeStakingLimit();
+    await lido.connect(agent).setStakingLimit(ether("1"), ether("0.01"));
+    await lido.connect(agent).removeStakingLimit();
 
     await lido.connect(stranger).submit(ethers.ZeroAddress, { value: ether("10") });
   });
 
   it("Should prevent staking when protocol is stopped", async () => {
-    await lido.connect(voting).stop();
+    await lido.connect(agent).stop();
 
     await expect(lido.connect(stranger).submit(ethers.ZeroAddress, { value: ether("1") })).to.be.revertedWith(
       "STAKING_PAUSED",
     );
 
-    await lido.connect(voting).resume();
+    await lido.connect(agent).resume();
   });
 
   it("Should mint correct stETH amount when staking", async () => {
@@ -163,7 +170,7 @@ describe("Staking limits", () => {
       const localSnapshot = await Snapshot.take();
 
       // Set staking limit
-      await lido.connect(voting).setStakingLimit(maxLimit, limitPerBlock);
+      await lido.connect(agent).setStakingLimit(maxLimit, limitPerBlock);
 
       // Get initial stake limit
       const stakingLimitBefore = await lido.getCurrentStakeLimit();
@@ -191,7 +198,7 @@ describe("Staking limits", () => {
       const maxLimit = ether("1000");
       const limitPerBlock = ether("100");
 
-      await expect(lido.connect(voting).setStakingLimit(maxLimit, limitPerBlock))
+      await expect(lido.connect(agent).setStakingLimit(maxLimit, limitPerBlock))
         .to.emit(lido, "StakingLimitSet")
         .withArgs(maxLimit, limitPerBlock);
 
@@ -202,11 +209,11 @@ describe("Staking limits", () => {
     it("Should emit correct event when changing staking limit", async () => {
       const initialMax = ether("1000");
       const initialPerBlock = ether("100");
-      await lido.connect(voting).setStakingLimit(initialMax, initialPerBlock);
+      await lido.connect(agent).setStakingLimit(initialMax, initialPerBlock);
 
       const newMax = ether("2000");
       const newPerBlock = ether("200");
-      await expect(lido.connect(voting).setStakingLimit(newMax, newPerBlock))
+      await expect(lido.connect(agent).setStakingLimit(newMax, newPerBlock))
         .to.emit(lido, "StakingLimitSet")
         .withArgs(newMax, newPerBlock);
 
@@ -217,9 +224,9 @@ describe("Staking limits", () => {
     it("Should emit correct event when removing staking limit", async () => {
       const maxLimit = ether("1000");
       const limitPerBlock = ether("100");
-      await lido.connect(voting).setStakingLimit(maxLimit, limitPerBlock);
+      await lido.connect(agent).setStakingLimit(maxLimit, limitPerBlock);
 
-      await expect(lido.connect(voting).removeStakingLimit()).to.emit(lido, "StakingLimitRemoved");
+      await expect(lido.connect(agent).removeStakingLimit()).to.emit(lido, "StakingLimitRemoved");
 
       const info = await lido.getStakeLimitFullInfo();
       expect(info.isStakingLimitSet).to.be.false;

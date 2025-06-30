@@ -32,7 +32,7 @@ describe("Integration: Staking module", () => {
   after(async () => await Snapshot.restore(snapshot));
 
   async function testUpdateTargetValidatorsLimits(module: LoadedContract, addNodeOperatorSigner: HardhatEthersSigner) {
-    const votingSigner = await ctx.getSigner("voting");
+    const agentSigner = await ctx.getSigner("agent");
     const rewardAddress = certainAddress("rewardAddress");
     const operatorName = "new_node_operator";
 
@@ -52,7 +52,7 @@ describe("Integration: Staking module", () => {
 
     // Grant STAKING_ROUTER_ROLE to stranger
     await ctx.contracts.acl
-      .connect(votingSigner)
+      .connect(agentSigner)
       .grantPermission(
         await stranger.getAddress(),
         module.getAddress(),
@@ -113,7 +113,7 @@ describe("Integration: Staking module", () => {
     module: LoadedContract,
     addNodeOperatorSigner: HardhatEthersSigner,
   ) {
-    const votingSigner = await ctx.getSigner("voting");
+    const agentSigner = await ctx.getSigner("agent");
     const rewardAddress = certainAddress("rewardAddress");
     const operatorName = "new_node_operator";
 
@@ -143,7 +143,7 @@ describe("Integration: Staking module", () => {
 
     // Set initial staking limit
     await ctx.contracts.acl
-      .connect(votingSigner)
+      .connect(agentSigner)
       .grantPermission(
         stranger.address,
         module.getAddress(),
@@ -167,7 +167,7 @@ describe("Integration: Staking module", () => {
 
     // Grant STAKING_ROUTER_ROLE to stranger
     await ctx.contracts.acl
-      .connect(votingSigner)
+      .connect(agentSigner)
       .grantPermission(
         stranger.address,
         module.getAddress(),

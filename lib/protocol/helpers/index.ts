@@ -17,7 +17,5 @@ export {
   ZERO_HASH,
 } from "./accounting";
 
-export { sdvtEnsureOperators } from "./sdvt";
-export { norEnsureOperators } from "./nor";
 export { norSdvtEnsureOperators } from "./nor-sdvt";
 export { ensureDsmGuardians } from "./dsm";

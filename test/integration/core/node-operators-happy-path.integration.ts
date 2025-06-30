@@ -78,14 +78,22 @@ describe("Scenario: Node operators happy path", () => {
     snapshot = await Snapshot.take();
 
     // Grant required roles
-    const votingSigner = await ctx.getSigner("voting");
+    const agentSigner = await ctx.getSigner("agent");
 
     await ctx.contracts.acl
-      .connect(votingSigner)
+      .connect(agentSigner)
       .grantPermission(
-        await votingSigner.getAddress(),
+        await agentSigner.getAddress(),
         ctx.contracts.nor.getAddress(),
         ethers.keccak256(ethers.toUtf8Bytes("MANAGE_NODE_OPERATOR_ROLE")),
+      );
+
+    await ctx.contracts.acl
+      .connect(agentSigner)
+      .grantPermission(
+        await agentSigner.getAddress(),
+        ctx.contracts.nor.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes("SET_NODE_OPERATOR_LIMIT_ROLE")),
       );
   });
 
@@ -95,7 +103,7 @@ describe("Scenario: Node operators happy path", () => {
 
   it("Should allow adding a node operator", async () => {
     const { nor } = ctx.contracts;
-    const votingSigner = await ctx.getSigner("voting");
+    const agentSigner = await ctx.getSigner("agent");
     const rewardAddress = certainAddress("rewardAddress");
     const operatorName = "new_node_operator";
 
@@ -104,7 +112,7 @@ describe("Scenario: Node operators happy path", () => {
     const activeNodeOperatorsCountBefore = await nor.getActiveNodeOperatorsCount();
 
     // Add node operator
-    const addTx = await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
+    const addTx = await nor.connect(agentSigner).addNodeOperator(operatorName, rewardAddress);
 
     // Get counts after adding operator
     const nodeOperatorsCountAfter = await nor.getNodeOperatorsCount();
@@ -151,11 +159,12 @@ describe("Scenario: Node operators happy path", () => {
   it("Should allow adding signing keys to a node operator", async () => {
     const { nor } = ctx.contracts;
     const votingSigner = await ctx.getSigner("voting");
+    const agentSigner = await ctx.getSigner("agent");
     const rewardAddress = certainAddress("rewardAddress");
     const operatorName = "new_node_operator";
 
     // Add node operator
-    await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
+    await nor.connect(agentSigner).addNodeOperator(operatorName, rewardAddress);
     const newOperatorId = (await nor.getNodeOperatorsCount()) - 1n;
 
     // Add signing keys to operator
@@ -213,12 +222,12 @@ describe("Scenario: Node operators happy path", () => {
 
   it("Should allow setting staking limit for a node operator", async () => {
     const { nor } = ctx.contracts;
-    const votingSigner = await ctx.getSigner("voting");
+    const agentSigner = await ctx.getSigner("agent");
     const rewardAddress = certainAddress("rewardAddress");
     const operatorName = "new_node_operator";
 
     // Add node operator
-    await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
+    await nor.connect(agentSigner).addNodeOperator(operatorName, rewardAddress);
     const newOperatorId = (await nor.getNodeOperatorsCount()) - 1n;
 
     // Add signing keys
@@ -238,7 +247,7 @@ describe("Scenario: Node operators happy path", () => {
     expect(newStakingLimit).to.not.equal(nodeOperatorBefore.totalVettedValidators, "invalid new staking limit");
 
     // Set staking limit
-    const stakingLimitTx = await nor.connect(votingSigner).setNodeOperatorStakingLimit(newOperatorId, newStakingLimit);
+    const stakingLimitTx = await nor.connect(agentSigner).setNodeOperatorStakingLimit(newOperatorId, newStakingLimit);
 
     // Get state after setting staking limit
     const nonceAfter = await nor.getKeysOpIndex();
@@ -259,12 +268,12 @@ describe("Scenario: Node operators happy path", () => {
 
   it("Should allow deactivating a node operator", async () => {
     const { nor } = ctx.contracts;
-    const votingSigner = await ctx.getSigner("voting");
+    const agentSigner = await ctx.getSigner("agent");
     const rewardAddress = certainAddress("rewardAddress");
     const operatorName = "new_node_operator";
 
     // Add node operator
-    await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
+    await nor.connect(agentSigner).addNodeOperator(operatorName, rewardAddress);
     const newOperatorId = (await nor.getNodeOperatorsCount()) - 1n;
 
     // Add signing keys and set staking limit
@@ -274,7 +283,7 @@ describe("Scenario: Node operators happy path", () => {
     const rewardAddressSigner = await impersonate(rewardAddress, ether("1"));
     await nor.connect(rewardAddressSigner).addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
 
-    await nor.connect(votingSigner).setNodeOperatorStakingLimit(newOperatorId, keysCount);
+    await nor.connect(agentSigner).setNodeOperatorStakingLimit(newOperatorId, keysCount);
 
     // Get state before deactivating operator
     const nodeOperatorsCountBefore = await nor.getNodeOperatorsCount();
@@ -283,7 +292,7 @@ describe("Scenario: Node operators happy path", () => {
     const nodeOperatorSummaryBefore = await nor.getNodeOperatorSummary(newOperatorId);
 
     // Deactivate node operator
-    const deactivateTx = await nor.connect(votingSigner).deactivateNodeOperator(newOperatorId);
+    const deactivateTx = await nor.connect(agentSigner).deactivateNodeOperator(newOperatorId);
 
     // Get state after deactivating operator
     const nodeOperatorsCountAfter = await nor.getNodeOperatorsCount();
@@ -317,16 +326,16 @@ describe("Scenario: Node operators happy path", () => {
 
   it("Should allow reactivating a node operator", async () => {
     const { nor } = ctx.contracts;
-    const votingSigner = await ctx.getSigner("voting");
+    const agentSigner = await ctx.getSigner("agent");
     const rewardAddress = certainAddress("rewardAddress");
     const operatorName = "new_node_operator";
 
     // Add node operator
-    await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
+    await nor.connect(agentSigner).addNodeOperator(operatorName, rewardAddress);
     const newOperatorId = (await nor.getNodeOperatorsCount()) - 1n;
 
     // Deactivate node operator
-    await nor.connect(votingSigner).deactivateNodeOperator(newOperatorId);
+    await nor.connect(agentSigner).deactivateNodeOperator(newOperatorId);
 
     // Get state before activating operator
     const nodeOperatorBefore = await nor.getNodeOperator(newOperatorId, true);
@@ -337,7 +346,7 @@ describe("Scenario: Node operators happy path", () => {
     const activeNodeOperatorsCountBefore = await nor.getActiveNodeOperatorsCount();
 
     // Activate node operator
-    const activateTx = await nor.connect(votingSigner).activateNodeOperator(newOperatorId);
+    const activateTx = await nor.connect(agentSigner).activateNodeOperator(newOperatorId);
 
     // Get state after activating operator
     const nodeOperatorsCountAfter = await nor.getNodeOperatorsCount();
@@ -365,12 +374,12 @@ describe("Scenario: Node operators happy path", () => {
 
   it("Should allow updating staking limit after reactivation", async () => {
     const { nor } = ctx.contracts;
-    const votingSigner = await ctx.getSigner("voting");
+    const agentSigner = await ctx.getSigner("agent");
     const rewardAddress = certainAddress("rewardAddress");
     const operatorName = "new_node_operator";
 
     // Add node operator
-    await nor.connect(votingSigner).addNodeOperator(operatorName, rewardAddress);
+    await nor.connect(agentSigner).addNodeOperator(operatorName, rewardAddress);
     const newOperatorId = (await nor.getNodeOperatorsCount()) - 1n;
 
     // Add signing keys
@@ -381,8 +390,8 @@ describe("Scenario: Node operators happy path", () => {
     await nor.connect(rewardAddressSigner).addSigningKeysOperatorBH(newOperatorId, keysCount, pubkeys, signatures);
 
     // Deactivate and reactivate node operator
-    await nor.connect(votingSigner).deactivateNodeOperator(newOperatorId);
-    await nor.connect(votingSigner).activateNodeOperator(newOperatorId);
+    await nor.connect(agentSigner).deactivateNodeOperator(newOperatorId);
+    await nor.connect(agentSigner).activateNodeOperator(newOperatorId);
 
     // Get state before setting staking limit
     const nonceBefore = await nor.getKeysOpIndex();
@@ -394,7 +403,7 @@ describe("Scenario: Node operators happy path", () => {
     expect(newStakingLimit).to.not.equal(nodeOperatorBefore.totalVettedValidators, "Invalid new staking limit");
 
     // Set staking limit
-    const setLimitTx = await nor.connect(votingSigner).setNodeOperatorStakingLimit(newOperatorId, newStakingLimit);
+    const setLimitTx = await nor.connect(agentSigner).setNodeOperatorStakingLimit(newOperatorId, newStakingLimit);
 
     // Get state after setting limit
     const nonceAfter = await nor.getKeysOpIndex();

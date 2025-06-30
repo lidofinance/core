@@ -23,7 +23,7 @@ import {
 import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
 import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
-import { setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
+import { removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
 import {
   calcNodeOperatorRewards,
   CSM_MODULE_ID,
@@ -104,7 +104,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
   async function prepareModules() {
     const { nor, sdvt } = ctx.contracts;
 
-    await ctx.contracts.lido.connect(await ctx.getSigner("voting")).removeStakingLimit();
+    await removeStakingLimit(ctx);
 
     await setModuleStakeShareLimit(ctx, SDVT_MODULE_ID, 50_00n);
 
