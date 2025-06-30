@@ -95,6 +95,13 @@ contract VaultHub__MockForLazyOracle {
         mock__lastReported_cumulativeLidoFees = _reportCumulativeLidoFees;
         mock__lastReported_liabilityShares = _reportLiabilityShares;
         mock__lastReported_slashingReserve = _reportSlashingReserve;
+
+        mock__vaultRecords[_vault].report.inOutDelta = int112(_reportInOutDelta);
+        mock__vaultRecords[_vault].inOutDelta.value = int112(_reportInOutDelta);
+        mock__vaultRecords[_vault].inOutDelta.valueOnRefSlot = int112(_reportInOutDelta);
+        mock__vaultRecords[_vault].inOutDelta.refSlot = uint32(_reportTimestamp);
+        mock__vaultRecords[_vault].report.timestamp = uint32(_reportTimestamp);
+        mock__vaultRecords[_vault].report.totalValue = uint112(_reportTotalValue);
     }
 
     // function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {

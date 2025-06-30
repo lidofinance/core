@@ -11,7 +11,7 @@ import {
   VaultHub__MockForLazyOracle,
 } from "typechain-types";
 
-import { ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
+import { advanceChainTime, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
 import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
 
 import { deployLidoLocator } from "test/deploy";
@@ -26,6 +26,8 @@ describe("LazyOracle.sol", () => {
   let lazyOracle: LazyOracle;
 
   let originalState: string;
+
+  const QUARANTINE_PERIOD = 259200n;
 
   before(async () => {
     [deployer] = await ethers.getSigners();
@@ -47,7 +49,7 @@ describe("LazyOracle.sol", () => {
     );
     lazyOracle = await ethers.getContractAt("LazyOracle", proxy);
 
-    await lazyOracle.initialize(deployer.address, 259200n, 350n);
+    await lazyOracle.initialize(deployer.address, QUARANTINE_PERIOD, 350n);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -348,7 +350,7 @@ describe("LazyOracle.sol", () => {
         report: {
           totalValue: ether("100"),
           inOutDelta: ether("100"),
-          timestamp,
+          timestamp: timestamp - 100n,
         },
         locked: 0n,
         liabilityShares: 0n,
@@ -359,21 +361,95 @@ describe("LazyOracle.sol", () => {
         },
       });
 
-      await lazyOracle.updateVaultData(
-        vaultReport[0],
-        vaultReport[1],
-        vaultReport[2],
-        vaultReport[3],
-        vaultReport[4],
-        tree.getProof(0),
-      );
+      await expect(
+        lazyOracle.updateVaultData(
+          vaultReport[0],
+          vaultReport[1],
+          vaultReport[2],
+          vaultReport[3],
+          vaultReport[4],
+          tree.getProof(0),
+        ),
+      )
+        .to.emit(lazyOracle, "QuarantinedDeposit")
+        .withArgs(vault, ether("150"));
       await expect(await vaultHub.mock__lastReported_totalValue()).to.equal(ether("100"));
 
       const quarantineInfo = await lazyOracle.vaultQuarantine(vault);
       expect(quarantineInfo.isActive).to.equal(true);
       expect(quarantineInfo.pendingTotalValueIncrease).to.equal(ether("150"));
       expect(quarantineInfo.startTimestamp).to.equal(timestamp);
-      expect(quarantineInfo.endTimestamp).to.equal(timestamp + 259200n);
+      expect(quarantineInfo.endTimestamp).to.equal(timestamp + QUARANTINE_PERIOD);
+
+      // Second report - in 24 hours we add more funds to the vault
+      const vaultReport2: VaultReportItem = [vault, ether("340"), 0n, 0n, 0n];
+
+      const tree2 = createVaultsReportTree([vaultReport2]);
+      await advanceChainTime(60n * 60n * 23n);
+      const timestamp2 = await getCurrentBlockTimestamp();
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp2, tree2.root, "");
+
+      await lazyOracle.updateVaultData(
+        vaultReport2[0],
+        vaultReport2[1],
+        vaultReport2[2],
+        vaultReport2[3],
+        vaultReport2[4],
+        tree2.getProof(0),
+      );
+      await expect(await vaultHub.mock__lastReported_totalValue()).to.equal(ether("100"));
+
+      const quarantineInfo2 = await lazyOracle.vaultQuarantine(vault);
+      expect(quarantineInfo2.isActive).to.equal(true);
+      expect(quarantineInfo2.pendingTotalValueIncrease).to.equal(ether("150"));
+      expect(quarantineInfo2.startTimestamp).to.equal(timestamp);
+      expect(quarantineInfo2.endTimestamp).to.equal(timestamp + QUARANTINE_PERIOD);
+
+      // Third report - in 3 days -  we keep the vault at the same level
+      const vaultReport3: VaultReportItem = [vault, ether("340"), 0n, 0n, 0n];
+
+      const tree3 = createVaultsReportTree([vaultReport3]);
+      await advanceChainTime(60n * 60n * 23n * 5n);
+      const timestamp3 = await getCurrentBlockTimestamp();
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp3, tree3.root, "");
+
+      await lazyOracle.updateVaultData(
+        vaultReport3[0],
+        vaultReport3[1],
+        vaultReport3[2],
+        vaultReport3[3],
+        vaultReport3[4],
+        tree3.getProof(0),
+      );
+
+      const quarantineInfo3 = await lazyOracle.vaultQuarantine(vault);
+      expect(quarantineInfo3.isActive).to.equal(true);
+      expect(quarantineInfo3.pendingTotalValueIncrease).to.equal(ether("90"));
+      expect(quarantineInfo3.startTimestamp).to.equal(timestamp3);
+      expect(quarantineInfo3.endTimestamp).to.equal(timestamp3 + QUARANTINE_PERIOD);
+
+      // Fourth report - in 4 days -  we keep the vault at the same level
+      const vaultReport4: VaultReportItem = [vault, ether("340"), 0n, 0n, 0n];
+
+      const tree4 = createVaultsReportTree([vaultReport4]);
+      await advanceChainTime(60n * 60n * 23n * 4n);
+      const timestamp4 = await getCurrentBlockTimestamp();
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp4, tree4.root, "");
+
+      await lazyOracle.updateVaultData(
+        vaultReport4[0],
+        vaultReport4[1],
+        vaultReport4[2],
+        vaultReport4[3],
+        vaultReport4[4],
+        tree4.getProof(0),
+      );
+
+      const quarantineInfo4 = await lazyOracle.vaultQuarantine(vault);
+      expect(quarantineInfo4.isActive).to.equal(false);
+      expect(quarantineInfo4.pendingTotalValueIncrease).to.equal(0n);
+      expect(quarantineInfo4.startTimestamp).to.equal(0n);
+      expect(quarantineInfo4.endTimestamp).to.equal(0n);
     });
   });
 });
