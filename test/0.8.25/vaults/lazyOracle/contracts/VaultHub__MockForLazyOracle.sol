@@ -8,7 +8,6 @@ import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {RefSlotCache} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
-import "hardhat/console.sol";
 
 contract VaultHub__MockForLazyOracle {
     using RefSlotCache for RefSlotCache.Int112WithRefSlotCache;
@@ -55,20 +54,6 @@ contract VaultHub__MockForLazyOracle {
 
     function vaultConnection(address vault) external view returns (VaultHub.VaultConnection memory) {
         return mock__vaultConnections[vault];
-        // console.log("vaultConnection", vault);
-        // VaultHub.VaultConnection memory connection = VaultHub.VaultConnection({
-        //     owner: address(1),
-        //     shareLimit: 1000000000000000000,
-        //     vaultIndex: 1,
-        //     pendingDisconnect: false,
-        //     reserveRatioBP: 10000,
-        //     forcedRebalanceThresholdBP: 10000,
-        //     infraFeeBP: 10000,
-        //     liquidityFeeBP: 10000,
-        //     reservationFeeBP: 10000,
-        //     isBeaconDepositsManuallyPaused: false
-        // });
-        // return connection;
     }
 
     function maxLockableValue(address vault) external view returns (uint256) {
@@ -103,15 +88,4 @@ contract VaultHub__MockForLazyOracle {
         mock__vaultRecords[_vault].report.timestamp = uint32(_reportTimestamp);
         mock__vaultRecords[_vault].report.totalValue = uint112(_reportTotalValue);
     }
-
-    // function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {
-    //     VaultHub.VaultRecord memory record = VaultHub.VaultRecord({
-    //         report: VaultHub.Report({totalValue: uint112(1), inOutDelta: int112(int256(2)), timestamp: uint32(3)}),
-    //         locked: uint128(4),
-    //         liabilityShares: 5,
-    //         inOutDelta: RefSlotCache.Int112WithRefSlotCache({value: int112(int256(6)), valueOnRefSlot: 7, refSlot: 8})
-    //     });
-
-    //     return record;
-    // }
 }
