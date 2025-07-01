@@ -14,8 +14,8 @@ const DEPOSIT_SIZE = ether("32");
 export const unpauseStaking = async (ctx: ProtocolContext) => {
   const { lido } = ctx.contracts;
   if (await lido.isStakingPaused()) {
-    const votingSigner = await ctx.getSigner("voting");
-    await lido.connect(votingSigner).resume();
+    const agentSigner = await ctx.getSigner("agent");
+    await lido.connect(agentSigner).resume();
 
     log.success("Staking contract unpaused");
   }
@@ -89,8 +89,8 @@ export const ensureStakeLimit = async (ctx: ProtocolContext) => {
       "Stake limit increase per block": ethers.formatEther(stakeLimitIncreasePerBlock),
     });
 
-    const votingSigner = await ctx.getSigner("voting");
-    await lido.connect(votingSigner).setStakingLimit(maxStakeLimit, stakeLimitIncreasePerBlock);
+    const agentSigner = await ctx.getSigner("agent");
+    await lido.connect(agentSigner).setStakingLimit(maxStakeLimit, stakeLimitIncreasePerBlock);
 
     log.success("Staking limit set");
   }

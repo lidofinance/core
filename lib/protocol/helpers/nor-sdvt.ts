@@ -138,7 +138,7 @@ export const norSdvtAddNodeOperator = async (
 
   const operatorId = await module.getNodeOperatorsCount();
 
-  const managerSigner = (await isNor(module, ctx)) ? await ctx.getSigner("agent") : await ctx.getSigner("voting");
+  const managerSigner = await ctx.getSigner("agent");
   await module.connect(managerSigner).addNodeOperator(name, rewardAddress);
 
   log.debug("Added NOR fake operator", {
@@ -216,8 +216,8 @@ export const norSdvtSetOperatorStakingLimit = async (
 
   try {
     // For SDVT scratch deployment and for NOR
-    const votingSigner = await ctx.getSigner("voting");
-    await module.connect(votingSigner).setNodeOperatorStakingLimit(operatorId, limit);
+    const agentSigner = await ctx.getSigner("agent");
+    await module.connect(agentSigner).setNodeOperatorStakingLimit(operatorId, limit);
   } catch (error: unknown) {
     if ((error as CallExceptionError).message.includes("APP_AUTH_FAILED")) {
       const easyTrackSigner = await ctx.getSigner("easyTrack");

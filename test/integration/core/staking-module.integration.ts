@@ -31,6 +31,10 @@ describe("Integration: Staking module", () => {
 
   after(async () => await Snapshot.restore(snapshot));
 
+  async function getSdvtNoManagerSigner(ctx: ProtocolContext) {
+    return ctx.isScratch ? await ctx.getSigner("agent") : await ctx.getSigner("easyTrack");
+  }
+
   async function testUpdateTargetValidatorsLimits(module: LoadedContract, addNodeOperatorSigner: HardhatEthersSigner) {
     const agentSigner = await ctx.getSigner("agent");
     const rewardAddress = certainAddress("rewardAddress");
@@ -234,14 +238,14 @@ describe("Integration: Staking module", () => {
   it("should test SDVT update target validators limits", async () => {
     await testUpdateTargetValidatorsLimits(
       ctx.contracts.sdvt as unknown as LoadedContract,
-      await ctx.getSigner("easyTrack"),
+      await getSdvtNoManagerSigner(ctx),
     );
   });
 
   it("should test SDVT decrease vetted signing keys count", async () => {
     await testDecreaseVettedSigningKeysCount(
       ctx.contracts.sdvt as unknown as LoadedContract,
-      await ctx.getSigner("easyTrack"),
+      await getSdvtNoManagerSigner(ctx),
     );
   });
 });
