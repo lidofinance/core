@@ -243,14 +243,14 @@ describe("Integration: Staking module", () => {
   it("should test SDVT update target validators limits", async () => {
     await testUpdateTargetValidatorsLimits(
       ctx.contracts.sdvt as unknown as LoadedContract,
-      await getSdvtNoManagerSigner(ctx),
+      await getSdvtNoManagerSigner(),
     );
   });
 
   it("should test SDVT decrease vetted signing keys count", async () => {
     await testDecreaseVettedSigningKeysCount(
       ctx.contracts.sdvt as unknown as LoadedContract,
-      await getSdvtNoManagerSigner(ctx),
+      await getSdvtNoManagerSigner(),
     );
   });
 });
