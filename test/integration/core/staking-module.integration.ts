@@ -10,6 +10,8 @@ import { randomPubkeys, randomSignatures } from "lib/protocol/helpers/staking-mo
 
 import { Snapshot } from "test/suite";
 
+const MAINNET_SDVT_ADDRESS = "0xaE7B191A31f627b4eB1d4DaC64eaB9976995b433".toLowerCase();
+
 describe("Integration: Staking module", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
@@ -31,8 +33,11 @@ describe("Integration: Staking module", () => {
 
   after(async () => await Snapshot.restore(snapshot));
 
-  async function getSdvtNoManagerSigner(ctx: ProtocolContext) {
-    return ctx.isScratch ? await ctx.getSigner("agent") : await ctx.getSigner("easyTrack");
+  async function getSdvtNoManagerSigner() {
+    if (ctx.contracts.sdvt.address.toLowerCase() === MAINNET_SDVT_ADDRESS) {
+      return await ctx.getSigner("easyTrack");
+    }
+    return await ctx.getSigner("agent");
   }
 
   async function testUpdateTargetValidatorsLimits(module: LoadedContract, addNodeOperatorSigner: HardhatEthersSigner) {
