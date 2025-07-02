@@ -1,7 +1,6 @@
 import { ContractTransactionReceipt } from "ethers";
-import hre from "hardhat";
 
-import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
+import { ether, findEventsWithInterfaces, impersonate, log } from "lib";
 
 import { discover } from "./discover";
 import { provision } from "./provision";
