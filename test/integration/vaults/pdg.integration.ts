@@ -7,14 +7,16 @@ import { Dashboard, PinnedBeaconProxy, StakingVault } from "typechain-types";
 
 import { ether, generatePredeposit, generateValidator } from "lib";
 import {
+  autofillRoles,
   createVaultWithDashboard,
+  generatePredepositData,
+  getProofAndDepositData,
   getProtocolContext,
   ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
   VaultRoles,
 } from "lib/protocol";
-import { generatePredepositData, getProofAndDepositData } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
 
@@ -44,7 +46,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     [owner, nodeOperator, stranger, guarantor] = await ethers.getSigners();
 
     // Owner can create a vault with operator as a node operator
-    ({ stakingVault, dashboard, roles, proxy } = await createVaultWithDashboard(
+    ({ stakingVault, dashboard, proxy } = await createVaultWithDashboard(
       ctx,
       ctx.contracts.stakingVaultFactory,
       owner,
@@ -52,6 +54,8 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       nodeOperator,
       [],
     ));
+
+    roles = await autofillRoles(dashboard, nodeOperator);
 
     agent = await ctx.getSigner("agent");
   });

@@ -7,6 +7,7 @@ import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
 import { advanceChainTime, days, ether, impersonate, randomAddress, TOTAL_BASIS_POINTS } from "lib";
 import {
+  autofillRoles,
   createVaultWithDashboard,
   getProtocolContext,
   getPubkeys,
@@ -54,14 +55,15 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     [owner, nodeOperator, stranger, pauser] = await ethers.getSigners();
 
     // Owner can create a vault with an operator as a node operator
-    ({ stakingVault, dashboard, roles } = await createVaultWithDashboard(
+    ({ stakingVault, dashboard } = await createVaultWithDashboard(
       ctx,
       ctx.contracts.stakingVaultFactory,
       owner,
       nodeOperator,
       nodeOperator,
-      [],
     ));
+
+    roles = await autofillRoles(dashboard, nodeOperator);
 
     agent = await ctx.getSigner("agent");
 
