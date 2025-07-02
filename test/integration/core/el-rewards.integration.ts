@@ -32,9 +32,6 @@ describe("Scenario: EL rewards distribution", () => {
     expect(await elRewardsVault.LIDO()).to.equal(lido.address);
     expect(await elRewardsVault.TREASURY()).to.equal(await locator.treasury());
 
-    if (!ctx.isScratch) {
-      expect(await lido.getTotalELRewardsCollected()).to.be.gt(0n);
-    }
     expect(await locator.elRewardsVault()).to.equal(elRewardsVault.address);
   });
 

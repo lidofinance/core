@@ -138,7 +138,7 @@ export const norSdvtAddNodeOperator = async (
 
   const operatorId = await module.getNodeOperatorsCount();
 
-  const managerSigner = (await isNor(module, ctx)) ? await ctx.getSigner("agent") : await ctx.getSigner("voting");
+  const managerSigner = await ctx.getSigner("agent");
   await module.connect(managerSigner).addNodeOperator(name, rewardAddress);
 
   log.debug("Added NOR fake operator", {
@@ -171,10 +171,14 @@ export const norSdvtAddOperatorKeys = async (
   const totalKeysBefore = await module.getTotalSigningKeyCount(operatorId);
   const unusedKeysBefore = await module.getUnusedSigningKeyCount(operatorId);
 
-  const votingSigner = await ctx.getSigner("voting");
+  const agentSigner = await ctx.getSigner("agent");
+  const agentAddress = await agentSigner.getAddress();
+  const role = await module.MANAGE_SIGNING_KEYS();
+  await ctx.contracts.acl.connect(agentSigner).grantPermission(agentAddress, module.address, role);
   await module
-    .connect(votingSigner)
+    .connect(agentSigner)
     .addSigningKeys(operatorId, keysToAdd, randomPubkeys(Number(keysToAdd)), randomSignatures(Number(keysToAdd)));
+  await ctx.contracts.acl.connect(agentSigner).revokePermission(agentAddress, module.address, role);
 
   const totalKeysAfter = await module.getTotalSigningKeyCount(operatorId);
   const unusedKeysAfter = await module.getUnusedSigningKeyCount(operatorId);
@@ -212,8 +216,8 @@ export const norSdvtSetOperatorStakingLimit = async (
 
   try {
     // For SDVT scratch deployment and for NOR
-    const votingSigner = await ctx.getSigner("voting");
-    await module.connect(votingSigner).setNodeOperatorStakingLimit(operatorId, limit);
+    const agentSigner = await ctx.getSigner("agent");
+    await module.connect(agentSigner).setNodeOperatorStakingLimit(operatorId, limit);
   } catch (error: unknown) {
     if ((error as CallExceptionError).message.includes("APP_AUTH_FAILED")) {
       const easyTrackSigner = await ctx.getSigner("easyTrack");

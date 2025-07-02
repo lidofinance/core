@@ -206,6 +206,56 @@ export const report = async (
   });
 };
 
+// export async function reportWithoutExtraData(
+//   ctx: ProtocolContext,
+//   numExitedValidatorsByStakingModule: bigint[],
+//   stakingModuleIdsWithNewlyExitedValidators: bigint[],
+//   extraData: ReturnType<typeof prepareExtraData>,
+// ) {
+//   const { accountingOracle } = ctx.contracts;
+
+//   const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = extraData;
+
+//   const reportData: OracleReportParams = {
+//     excludeVaultsBalances: true,
+//     extraDataFormat: EXTRA_DATA_FORMAT_LIST,
+//     extraDataHash: extraDataChunkHashes[0],
+//     extraDataItemsCount: BigInt(extraDataItemsCount),
+//     numExitedValidatorsByStakingModule,
+//     stakingModuleIdsWithNewlyExitedValidators,
+//     skipWithdrawals: true,
+//   };
+
+//   const { data } = await report(ctx, { ...reportData, dryRun: true });
+
+//   const items = getReportDataItems(data);
+//   const hash = calcReportDataHash(items);
+//   const oracleVersion = await accountingOracle.getContractVersion();
+
+//   const submitter = await reachConsensus(ctx, {
+//     refSlot: BigInt(data.refSlot),
+//     reportHash: hash,
+//     consensusVersion: BigInt(data.consensusVersion),
+//   });
+
+//   const reportTx = await accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
+//   log.debug("Pushed oracle report main data", {
+//     "Ref slot": data.refSlot,
+//     "Consensus version": data.consensusVersion,
+//     "Report hash": hash,
+//   });
+
+//   // Get processing state after main report is submitted
+//   const processingStateAfterMainReport = await accountingOracle.getProcessingState();
+
+//   // Verify that extra data is not yet submitted
+//   expect(processingStateAfterMainReport.extraDataSubmitted).to.be.false;
+//   expect(processingStateAfterMainReport.extraDataItemsCount).to.equal(extraDataItemsCount);
+//   expect(processingStateAfterMainReport.extraDataItemsSubmitted).to.equal(0n);
+
+//   return { reportTx, data, submitter, extraDataChunks, extraDataChunkHashes };
+// }
+
 export async function reportWithoutExtraData(
   ctx: ProtocolContext,
   numExitedValidatorsByStakingModule: bigint[],
@@ -216,7 +266,7 @@ export async function reportWithoutExtraData(
 
   const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = extraData;
 
-  const reportData: OracleReportParams = {
+  const reportData: Partial<OracleReportParams> = {
     excludeVaultsBalances: true,
     extraDataFormat: EXTRA_DATA_FORMAT_LIST,
     extraDataHash: extraDataChunkHashes[0],
@@ -808,10 +858,9 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
 
   let count = addresses.length;
   while (addresses.length < minMembersCount) {
+    log.warning(`Adding oracle committee member ${count}`);
+
     const address = getOracleCommitteeMemberAddress(count);
-
-    log.debug(`Adding oracle committee member`, { Address: address });
-
     await hashConsensus.connect(agentSigner).addMember(address, quorum);
 
     addresses.push(address);
@@ -852,3 +901,96 @@ export const ensureHashConsensusInitialEpoch = async (ctx: ProtocolContext) => {
     await hashConsensus.connect(agentSigner).updateInitialEpoch(updatedInitialEpoch);
   }
 };
+
+// /**
+//  * Submit reports from all fast lane members to reach consensus on the report.
+//  */
+// const reachConsensus = async (
+//   ctx: ProtocolContext,
+//   params: {
+//     refSlot: bigint;
+//     reportHash: string;
+//     consensusVersion: bigint;
+//   },
+// ) => {
+//   const { hashConsensus } = ctx.contracts;
+//   const { refSlot, reportHash, consensusVersion } = params;
+
+//   const { addresses } = await hashConsensus.getFastLaneMembers();
+
+//   let submitter: HardhatEthersSigner | null = null;
+
+//   log.debug("Reaching consensus", {
+//     "Ref slot": refSlot,
+//     "Report hash": reportHash,
+//     "Consensus version": consensusVersion,
+//     "Addresses": addresses.join(", "),
+//   });
+
+//   for (const address of addresses) {
+//     const member = await impersonate(address, ether("1"));
+//     if (!submitter) {
+//       submitter = member;
+//     }
+
+//     await hashConsensus.connect(member).submitReport(refSlot, reportHash, consensusVersion);
+//   }
+
+//   const { consensusReport } = await hashConsensus.getConsensusState();
+
+//   expect(consensusReport).to.equal(reportHash, "Consensus report hash is incorrect");
+
+//   return submitter as HardhatEthersSigner;
+// };
+
+// /**
+//  * Helper function to get report data items in the required order.
+//  */
+// export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
+//   data.consensusVersion,
+//   data.refSlot,
+//   data.numValidators,
+//   data.clBalanceGwei,
+//   data.stakingModuleIdsWithNewlyExitedValidators,
+//   data.numExitedValidatorsByStakingModule,
+//   data.withdrawalVaultBalance,
+//   data.elRewardsVaultBalance,
+//   data.sharesRequestedToBurn,
+//   data.withdrawalFinalizationBatches,
+//   data.simulatedShareRate,
+//   data.isBunkerMode,
+//   data.extraDataFormat,
+//   data.extraDataHash,
+//   data.extraDataItemsCount,
+// ];
+
+// /**
+//  * Helper function to calculate hash of the report data.
+//  */
+// export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
+//   const types = [
+//     "uint256", // consensusVersion
+//     "uint256", // refSlot
+//     "uint256", // numValidators
+//     "uint256", // clBalanceGwei
+//     "uint256[]", // stakingModuleIdsWithNewlyExitedValidators
+//     "uint256[]", // numExitedValidatorsByStakingModule
+//     "uint256", // withdrawalVaultBalance
+//     "uint256", // elRewardsVaultBalance
+//     "uint256", // sharesRequestedToBurn
+//     "uint256[]", // withdrawalFinalizationBatches
+//     "uint256", // simulatedShareRate
+//     "bool", // isBunkerMode
+//     "uint256", // extraDataFormat
+//     "bytes32", // extraDataHash
+//     "uint256", // extraDataItemsCount
+//   ];
+
+//   const data = ethers.AbiCoder.defaultAbiCoder().encode([`(${types.join(",")})`], [items]);
+//   return ethers.keccak256(data);
+// };
+
+// /**
+//  * Helper function to get oracle committee member address by id.
+//  */
+// const getOracleCommitteeMemberAddress = (id: number) => certainAddress(`AO:HC:OC:${id}`);

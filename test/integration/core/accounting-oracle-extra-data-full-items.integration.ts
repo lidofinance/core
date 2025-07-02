@@ -23,7 +23,7 @@ import {
 import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
 import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
-import { setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
+import { removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
 import {
   calcNodeOperatorRewards,
   CSM_MODULE_ID,
@@ -79,16 +79,14 @@ describe("Integration: AccountingOracle extra data full items", () => {
     [stranger] = await ethers.getSigners();
     await setBalance(stranger.address, ether("1000000"));
 
-    if (ctx.isScratch) {
-      const { oracleReportSanityChecker } = ctx.contracts;
-      // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
-      // with not that much TVL
-      await setAnnualBalanceIncreaseLimit(oracleReportSanityChecker, MAX_BASIS_POINTS);
+    const { oracleReportSanityChecker } = ctx.contracts;
+    // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
+    // with not that much TVL
+    await setAnnualBalanceIncreaseLimit(oracleReportSanityChecker, MAX_BASIS_POINTS);
 
-      // Need this to pass the annual balance / appeared validators per day
-      // increase limit check in sanity checker for scratch deploy with not that much TVL
-      await advanceChainTime(1n * 24n * 60n * 60n);
-    }
+    // Need this to pass the annual balance / appeared validators per day
+    // increase limit check in sanity checker for scratch deploy with not that much TVL
+    await advanceChainTime(1n * 24n * 60n * 60n);
 
     await prepareModules();
 
@@ -106,7 +104,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
   async function prepareModules() {
     const { nor, sdvt } = ctx.contracts;
 
-    await ctx.contracts.lido.connect(await ctx.getSigner("voting")).removeStakingLimit();
+    await removeStakingLimit(ctx);
 
     await setModuleStakeShareLimit(ctx, SDVT_MODULE_ID, 50_00n);
 

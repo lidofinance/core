@@ -74,7 +74,10 @@ contract V3VoteScript is OmnibusBase {
         // Update Lido version in Lido App Repo
         voteItems[index++] = VoteItem({
             description: "3. Update Lido version in Lido App Repo",
-            call: _votingCall(TEMPLATE.ARAGON_APP_LIDO_REPO(), abi.encodeCall(IRepo.newVersion, (
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ARAGON_APP_LIDO_REPO(),
+                abi.encodeCall(IRepo.newVersion, (
                     params.lidoAppNewVersion,
                     TEMPLATE.NEW_LIDO_IMPL(),
                     "0x"
@@ -84,7 +87,8 @@ contract V3VoteScript is OmnibusBase {
         // Set Lido implementation in Kernel
         voteItems[index++] = VoteItem({
             description: "4. Set Lido implementation in Kernel",
-            call: _votingCall(
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
                 TEMPLATE.KERNEL(),
                 abi.encodeCall(IKernel.setApp, (IKernel(TEMPLATE.KERNEL()).APP_BASES_NAMESPACE(), params.lidoAppId, TEMPLATE.NEW_LIDO_IMPL()))
             )
