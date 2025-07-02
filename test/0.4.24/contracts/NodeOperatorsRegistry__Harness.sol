@@ -15,6 +15,15 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
         initialized();
     }
 
+    function harness__initializeWithLocator(
+        uint256 _initialVersion,
+        address _locator
+    ) external {
+        _setContractVersion(_initialVersion);
+        LIDO_LOCATOR_POSITION.setStorageAddress(_locator);
+        initialized();
+    }
+
     function harness__setDepositedSigningKeysCount(uint256 _nodeOperatorId, uint256 _depositedSigningKeysCount) public {
         _onlyExistedNodeOperator(_nodeOperatorId);
         // NodeOperator storage nodeOperator = _nodeOperators[_nodeOperatorId];
@@ -85,15 +94,10 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
 
     function harness__setNodeOperatorLimits(
         uint256 _nodeOperatorId,
-        uint64 stuckValidatorsCount,
-        uint64 refundedValidatorsCount,
-        uint64 stuckPenaltyEndAt
+        uint64,
+        uint64,
+        uint64
     ) external {
-        Packed64x4.Packed memory stuckPenaltyStats = _nodeOperators[_nodeOperatorId].stuckPenaltyStats;
-        stuckPenaltyStats.set(STUCK_VALIDATORS_COUNT_OFFSET, stuckValidatorsCount);
-        stuckPenaltyStats.set(REFUNDED_VALIDATORS_COUNT_OFFSET, refundedValidatorsCount);
-        stuckPenaltyStats.set(STUCK_PENALTY_END_TIMESTAMP_OFFSET, stuckPenaltyEndAt);
-        _nodeOperators[_nodeOperatorId].stuckPenaltyStats = stuckPenaltyStats;
         _updateSummaryMaxValidatorsCount(_nodeOperatorId);
     }
 
@@ -143,10 +147,6 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
 
     function harness__setLocator(address _mockedLocator) external {
         LIDO_LOCATOR_POSITION.setStorageAddress(_mockedLocator);
-    }
-
-    function harness__setStuckPenaltyDelay(uint256 _stuckPenaltyDelay) external {
-        STUCK_PENALTY_DELAY_POSITION.setStorageUint256(_stuckPenaltyDelay);
     }
 
     function harness__setNonce(uint256 _nonce) external {

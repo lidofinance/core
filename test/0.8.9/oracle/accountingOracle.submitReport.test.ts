@@ -86,11 +86,6 @@ describe("AccountingOracle.sol:submitReport", () => {
     const { refSlot } = await deployed.consensus.getCurrentFrame();
 
     extraData = {
-      stuckKeys: [
-        { moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
-        { moduleId: 2, nodeOpIds: [0], keysCounts: [2] },
-        { moduleId: 3, nodeOpIds: [2], keysCounts: [3] },
-      ],
       exitedKeys: [
         { moduleId: 2, nodeOpIds: [1, 2], keysCounts: [1, 3] },
         { moduleId: 3, nodeOpIds: [1], keysCounts: [2] },

@@ -25,7 +25,7 @@ export type OracleReport = AccountingOracle.ReportDataStruct;
 export type ReportAsArray = ReturnType<typeof getReportDataItems>;
 
 export type KeyType = { moduleId: number; nodeOpIds: number[]; keysCounts: number[] };
-export type ExtraDataType = { stuckKeys: KeyType[]; exitedKeys: KeyType[] };
+export type ExtraDataType = { exitedKeys: KeyType[] };
 
 export type ItemType = KeyType & { type: bigint };
 
@@ -164,7 +164,6 @@ export function encodeExtraDataItems(data: ExtraDataType) {
 
   const toItemWithType = (keys: KeyType[], type: bigint) => keys.map((item) => ({ ...item, type }));
 
-  itemsWithType.push(...toItemWithType(data.stuckKeys, EXTRA_DATA_TYPE_STUCK_VALIDATORS));
   itemsWithType.push(...toItemWithType(data.exitedKeys, EXTRA_DATA_TYPE_EXITED_VALIDATORS));
 
   return encodeExtraDataItemsArray(itemsWithType);
@@ -229,7 +228,7 @@ function isItemTypeArray(items: unknown[]): items is ItemType[] {
 }
 
 function isExtraDataType(data: unknown): data is ExtraDataType {
-  return isObjectType(data) && "stuckKeys" in data && "exitedKeys" in data;
+  return isObjectType(data) && "exitedKeys" in data;
 }
 
 function isStringArray(items: unknown[]): items is string[] {

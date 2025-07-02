@@ -53,6 +53,7 @@ const defaultEnv = {
   oracleReportSanityChecker: "ORACLE_REPORT_SANITY_CHECKER_ADDRESS",
   burner: "BURNER_ADDRESS",
   stakingRouter: "STAKING_ROUTER_ADDRESS",
+  validatorExitDelayVerifier: "VALIDATOR_EXIT_DELAY_VERIFIER_ADDRESS",
   validatorsExitBusOracle: "VALIDATORS_EXIT_BUS_ORACLE_ADDRESS",
   withdrawalQueue: "WITHDRAWAL_QUEUE_ADDRESS",
   withdrawalVault: "WITHDRAWAL_VAULT_ADDRESS",
