@@ -87,7 +87,9 @@ contract TWVoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 22;
+    uint256 public constant VOTE_ITEMS_COUNT = 23;
+    address public constant MAINNET_ACL = 0x9895F0F17cc1d1891b6f18ee0b483B6f221b37Bb;
+    address public constant MAINNET_KERNEL = 0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc;
 
     //
     // Structured storage
@@ -170,7 +172,8 @@ contract TWVoteScript is OmnibusBase {
         // 7. Update WithdrawalVault implementation
         voteItems[index++] = VoteItem({
             description: "7. Update WithdrawalVault implementation",
-            call: _votingCall(
+            call: _forwardCall(
+                params.agent,
                 params.withdrawal_vault,
                 abi.encodeCall(IWithdrawalVaultProxy.proxy_upgradeTo, (params.withdrawal_vault_impl, ""))
             )
@@ -265,12 +268,28 @@ contract TWVoteScript is OmnibusBase {
 
         // 16. Update NodeOperatorsRegistry implementation
         voteItems[index++] = VoteItem({
+            description: "16. Add APP_MANAGER_ROLE to the AGENT",
+            call: _forwardCall(
+                params.agent,
+                MAINNET_ACL,
+                abi.encodeWithSignature(
+                    "grantPermission(address,address,bytes32)",
+                    params.agent,
+                    MAINNET_KERNEL,
+                    keccak256("APP_MANAGER_ROLE")
+                )
+            )
+        });
+
+        // 16. Update NodeOperatorsRegistry implementation
+        voteItems[index++] = VoteItem({
             description: "16. Update NodeOperatorsRegistry implementation",
-            call: _votingCall(
-                0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc,
+            call: _forwardCall(
+                params.agent,
+                MAINNET_KERNEL,
                 abi.encodeWithSignature(
                     "setApp(bytes32,bytes32,address)",
-                    IKernel(0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc).APP_BASES_NAMESPACE(),
+                    IKernel(MAINNET_KERNEL).APP_BASES_NAMESPACE(),
                     params.node_operators_registry_app_id,
                     params.node_operators_registry_impl
                 )
@@ -355,11 +374,12 @@ contract TWVoteScript is OmnibusBase {
         // 24. Update SimpleDVT implementation
         voteItems[index++] = VoteItem({
             description: "24. Update SimpleDVT implementation",
-            call: _votingCall(
-                0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc,
+            call: _forwardCall(
+                params.agent,
+                MAINNET_KERNEL,
                 abi.encodeWithSignature(
                     "setApp(bytes32,bytes32,address)",
-                    IKernel(0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc).APP_BASES_NAMESPACE(),
+                    IKernel(MAINNET_KERNEL).APP_BASES_NAMESPACE(),
                     params.sdvt_app_id,
                     params.node_operators_registry_impl
                 )

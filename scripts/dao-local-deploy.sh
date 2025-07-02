@@ -6,8 +6,8 @@ export NETWORK=local
 export RPC_URL=${RPC_URL:="http://127.0.0.1:8555"}  # if defined use the value set to default otherwise
 
 export GENESIS_TIME=1639659600  # just some time
-# export WITHDRAWAL_QUEUE_BASE_URI="<< SET IF REQUIED >>"
-# export DSM_PREDEFINED_ADDRESS="<< SET IF REQUIED >>"
+# export WITHDRAWAL_QUEUE_BASE_URI="<< SET IF REQUIRED >>"
+# export DSM_PREDEFINED_ADDRESS="<< SET IF REQUIRED >>"
 
 export DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266  # first acc of default mnemonic "test test ..."
 export GAS_PRIORITY_FEE=1
