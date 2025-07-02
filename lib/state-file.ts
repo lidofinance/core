@@ -94,7 +94,7 @@ export enum Sk {
   TWVoteScript = "TWVoteScript",
 }
 
-export function getAddress(contractKey: Sk, state: DeploymentState): string {
+export function getAddress(contractKey: Sk): string {
   switch (contractKey) {
     case Sk.accountingOracle:
     case Sk.appAgent:
