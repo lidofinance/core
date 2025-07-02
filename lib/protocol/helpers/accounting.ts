@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionResponse, formatEther, hexlify, Result } from "ethers";
+import { ContractTransactionResponse, formatEther, Result } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
