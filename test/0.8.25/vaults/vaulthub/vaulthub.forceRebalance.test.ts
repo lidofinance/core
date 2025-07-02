@@ -181,9 +181,10 @@ describe("VaultHub.sol:forceRebalance", () => {
 
     beforeEach(async () => {
       timestamp = await getCurrentBlockTimestamp();
+      const [refSlot] = await hashConsensus.getCurrentFrame();
       const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100"));
       const reportTree = createVaultsReportTree([[vaultAddress, ether("1"), ether("1"), 0n, 0n]]);
-      await lazyOracle.connect(accountingOracleSigner).updateReportData(timestamp, reportTree.root, "");
+      await lazyOracle.connect(accountingOracleSigner).updateReportData(timestamp, refSlot, reportTree.root, "");
 
       await vaultHub
         .connect(lazyOracleSigner)

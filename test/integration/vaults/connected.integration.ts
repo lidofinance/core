@@ -5,7 +5,15 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
-import { advanceChainTime, days, ether, impersonate, randomAddress, TOTAL_BASIS_POINTS } from "lib";
+import {
+  advanceChainTime,
+  days,
+  ether,
+  getCurrentBlockTimestamp,
+  impersonate,
+  randomAddress,
+  TOTAL_BASIS_POINTS,
+} from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -743,6 +751,126 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta.valueOnRefSlot).to.equal(value + ether("1"));
       expect(record.inOutDelta.refSlot).to.equal(refSlot);
+    });
+
+    it("Reporting for previous frame", async () => {
+      // FRAME 0 -----------------------------------------------
+      // check starting values
+      const [refSlot0] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      let record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.inOutDelta.value).to.equal(ether("1"));
+      expect(record.inOutDelta.valueOnRefSlot).to.equal(0);
+      expect(record.inOutDelta.refSlot).to.equal(0);
+      expect(record.report.totalValue).to.equal(ether("1"));
+      expect(record.report.inOutDelta).to.equal(ether("1"));
+
+      // wait for next frame
+      let refSlot1 = refSlot0;
+      while (refSlot1 === refSlot0) {
+        await advanceChainTime(60n * 60n);
+        [refSlot1] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      }
+      expect(refSlot1).to.be.greaterThan(refSlot0);
+      const reportTimestamp1 = await getCurrentBlockTimestamp();
+
+      // FRAME 1 -----------------------------------------------
+      // fund in frame 1 - init cache
+      await dashboard.connect(roles.funder).fund({ value: ether("10") });
+
+      record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.inOutDelta.value).to.equal(ether("11"));
+      expect(record.inOutDelta.valueOnRefSlot).to.equal(ether("1")); // TODO - check where initialized
+      expect(record.inOutDelta.refSlot).to.equal(refSlot1);
+
+      // wait for next frame
+      let refSlot2 = refSlot1;
+      while (refSlot2 === refSlot1) {
+        await advanceChainTime(60n * 60n);
+        [refSlot2] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      }
+      expect(refSlot2).to.be.greaterThan(refSlot1);
+
+      // FRAME 2 -----------------------------------------------
+      // report for refSlot 1
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: ether("1"),
+        reportTimestamp: reportTimestamp1,
+        reportRefSlot: refSlot1,
+      });
+
+      // check that report inOutDelta is correct on chain
+      record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.report.totalValue).to.equal(ether("1"));
+      expect(record.report.inOutDelta).to.equal(ether("1"));
+    });
+
+    it("Should revert if reporting for previous frame with changed inOutDelta cache (fund after next refSlot)", async () => {
+      // FRAME 0 -----------------------------------------------
+      // check starting values
+      const [refSlot0] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      let record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.inOutDelta.value).to.equal(ether("1"));
+      expect(record.inOutDelta.valueOnRefSlot).to.equal(0);
+      expect(record.inOutDelta.refSlot).to.equal(0);
+      expect(record.report.totalValue).to.equal(ether("1"));
+      expect(record.report.inOutDelta).to.equal(ether("1"));
+
+      // wait for next frame
+      let refSlot1 = refSlot0;
+      while (refSlot1 === refSlot0) {
+        await advanceChainTime(60n * 60n);
+        [refSlot1] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      }
+      expect(refSlot1).to.be.greaterThan(refSlot0);
+      const reportTimestamp1 = await getCurrentBlockTimestamp();
+
+      // FRAME 1 -----------------------------------------------
+      // fund in frame 1 - init cache
+      await dashboard.connect(roles.funder).fund({ value: ether("10") });
+
+      record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.inOutDelta.value).to.equal(ether("11"));
+      expect(record.inOutDelta.valueOnRefSlot).to.equal(ether("1")); // TODO - check where initialized
+      expect(record.inOutDelta.refSlot).to.equal(refSlot1);
+
+      // wait for next frame
+      let refSlot2 = refSlot1;
+      while (refSlot2 === refSlot1) {
+        await advanceChainTime(60n * 60n);
+        [refSlot2] = await ctx.contracts.hashConsensus.getCurrentFrame();
+      }
+      expect(refSlot2).to.be.greaterThan(refSlot1);
+      const reportTimestamp2 = await getCurrentBlockTimestamp();
+
+      // FRAME 2 -----------------------------------------------
+      // fund in frame 2
+      await dashboard.connect(roles.funder).fund({ value: ether("10") });
+
+      record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.inOutDelta.value).to.equal(ether("21"));
+      expect(record.inOutDelta.valueOnRefSlot).to.equal(ether("11"));
+      expect(record.inOutDelta.refSlot).to.equal(refSlot2);
+
+      // report for refSlot 1 with changed inOutDelta cache
+      await expect(
+        reportVaultDataWithProof(ctx, stakingVault, {
+          totalValue: ether("1"),
+          reportTimestamp: reportTimestamp1,
+          reportRefSlot: refSlot1,
+        }),
+      ).to.be.revertedWithCustomError(vaultHub, "InOutDeltaCacheIsOverwritten");
+
+      // report for refSlot 2
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: ether("11"),
+        reportTimestamp: reportTimestamp2,
+        reportRefSlot: refSlot2,
+      });
+
+      // check that report inOutDelta is correct on chain
+      record = await vaultHub.vaultRecord(stakingVault);
+      expect(record.report.totalValue).to.equal(ether("11"));
+      expect(record.report.inOutDelta).to.equal(ether("11"));
     });
   });
 

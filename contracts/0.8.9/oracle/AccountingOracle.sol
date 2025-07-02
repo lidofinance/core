@@ -490,6 +490,7 @@ contract AccountingOracle is BaseOracle {
 
         ILazyOracle(LOCATOR.lazyOracle()).updateReportData(
             GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
+            data.refSlot,
             data.vaultsDataTreeRoot,
             data.vaultsDataTreeCid
         );
