@@ -92,7 +92,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     struct VaultInfo {
         address vault;
-        uint96 vaultIndex;
         uint256 balance;
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
@@ -205,7 +204,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             VaultHub.VaultRecord memory record = vaultHub.vaultRecord(vaultAddress);
             batch[i] = VaultInfo(
                 vaultAddress,
-                connection.vaultIndex,
                 address(vault).balance,
                 vaultHub.inOutDeltaAsOfLastRefSlot(vaultAddress),
                 vault.withdrawalCredentials(),

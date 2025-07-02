@@ -107,7 +107,6 @@ describe("LazyOracle.sol", () => {
 
       const vaultInfo = vaults[0];
       expect(vaultInfo.vault).to.equal(vault1);
-      expect(vaultInfo.vaultIndex).to.equal(1n);
       expect(vaultInfo.balance).to.equal(0n);
       expect(vaultInfo.inOutDelta).to.equal(5n);
       expect(vaultInfo.withdrawalCredentials).to.equal(ZERO_BYTES32);
