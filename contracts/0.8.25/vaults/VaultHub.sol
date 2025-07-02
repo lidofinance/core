@@ -1193,16 +1193,15 @@ contract VaultHub is PausableUntilWithRoles {
             return block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
         }
 
-        // if vault's report is newer than the latest report ts we also consider it fresh
-        // but checking the diff to exclude overflow
-        if (vaultReportTimestamp > latestReportTimestamp32) {
-            return Math256.max(
-                Math256.absDiff(latestReportTimestamp32, vaultReportTimestamp),
-                block.timestamp - latestReportTimestamp
-            ) < REPORT_FRESHNESS_DELTA;
-        }
+        // if false, we need to check if vault's report is slightly newer than the latest AO report
+        // but as we are using uint32, we need to find the counterclockwise distance
+        // between vaultReportTimestamp and latestReportTimestamp32
+        // and check if it's less than REPORT_FRESHNESS_DELTA
 
-        return false;
+        uint256 modulo = type(uint32).max;
+        uint256 ccwDistance = (modulo + vaultReportTimestamp - latestReportTimestamp32) % modulo;
+
+        return ccwDistance < REPORT_FRESHNESS_DELTA && block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }
 
     function _isVaultHealthy(
