@@ -161,14 +161,18 @@ export async function autofillRoles(
 
   const nodeOperatorManagerRole = await dashboard.NODE_OPERATOR_MANAGER_ROLE();
 
-  const NORoleAssignments = await Promise.all(
-    roleAssignments.filter(async ({ role }) => (await dashboard.getRoleAdmin(role)) === nodeOperatorManagerRole),
-  );
-  await dashboard.connect(nodeOperatorManager).grantRoles(NORoleAssignments);
+  const NORoleAssignments: Permissions.RoleAssignmentStruct[] = [];
+  const otherRoleAssignments: Permissions.RoleAssignmentStruct[] = [];
 
-  const otherRoleAssignments = await Promise.all(
-    roleAssignments.filter(async ({ role }) => (await dashboard.getRoleAdmin(role)) !== nodeOperatorManagerRole),
-  );
+  for (const roleAssignment of roleAssignments) {
+    if ((await dashboard.getRoleAdmin(roleAssignment.role)) !== nodeOperatorManagerRole) {
+      otherRoleAssignments.push(roleAssignment);
+    } else {
+      NORoleAssignments.push(roleAssignment);
+    }
+  }
+
+  await dashboard.connect(nodeOperatorManager).grantRoles(NORoleAssignments);
   await dashboard.grantRoles(otherRoleAssignments);
 
   // Build the result using the keys
