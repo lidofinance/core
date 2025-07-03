@@ -8,6 +8,7 @@ import {
   Burner,
   DepositSecurityModule,
   HashConsensus,
+  ICSModule,
   Kernel,
   LegacyOracle,
   Lido,
@@ -24,6 +25,10 @@ import {
   WithdrawalVault,
   WstETH,
 } from "typechain-types";
+
+export type LogDescriptionExtended = LogDescription & {
+  address?: string;
+};
 
 export type ProtocolNetworkItems = {
   locator: string;
@@ -53,6 +58,7 @@ export type ProtocolNetworkItems = {
   // stacking modules
   nor: string;
   sdvt: string;
+  csm: string;
   // hash consensus
   hashConsensus: string;
 };
@@ -76,6 +82,7 @@ export interface ContractTypes {
   ACL: ACL;
   HashConsensus: HashConsensus;
   NodeOperatorsRegistry: NodeOperatorsRegistry;
+  ICSModule: ICSModule;
   WstETH: WstETH;
   TriggerableWithdrawalsGateway: TriggerableWithdrawalsGateway;
 }
@@ -115,9 +122,10 @@ export type AragonContracts = {
 export type StakingModuleContracts = {
   nor: LoadedContract<NodeOperatorsRegistry>;
   sdvt: LoadedContract<NodeOperatorsRegistry>;
+  csm?: LoadedContract<ICSModule>;
 };
 
-export type StakingModuleName = "nor" | "sdvt";
+export type StakingModuleName = "nor" | "sdvt" | "csm";
 
 export type HashConsensusContracts = {
   hashConsensus: LoadedContract<HashConsensus>;
@@ -150,6 +158,7 @@ export type ProtocolContext = {
   signers: ProtocolSigners;
   interfaces: Array<BaseContract["interface"]>;
   flags: ProtocolContextFlags;
+  isScratch: boolean;
   getSigner: (signer: Signer, balance?: bigint) => Promise<HardhatEthersSigner>;
   getEvents: (receipt: ContractTransactionReceipt, eventName: string) => LogDescription[];
 };
