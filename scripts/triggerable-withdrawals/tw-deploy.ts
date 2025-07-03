@@ -240,11 +240,14 @@ async function main(): Promise<void> {
   const newLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
   log.success(`LidoLocator: ${newLocator.address}`);
 
+  const updatedState = readNetworkState();
+  persistNetworkState(updatedState);
+
   // 8. GateSeal for withdrawalQueueERC721
   const WQ_GATE_SEAL = await deployGateSeal(
-    state,
+    updatedState,
     deployer,
-    [state[Sk.withdrawalQueueERC721].proxy.address],
+    [updatedState[Sk.withdrawalQueueERC721].proxy.address],
     GATE_SEAL_DURATION_SECONDS,
     GATE_SEAL_EXPIRY_TIMESTAMP,
     Sk.gateSeal,
@@ -252,9 +255,9 @@ async function main(): Promise<void> {
 
   // 9. GateSeal for Triggerable Withdrawals
   const TW_GATE_SEAL = await deployGateSeal(
-    state,
+    updatedState,
     deployer,
-    [state[Sk.triggerableWithdrawalsGateway].implementation.address, await locator.validatorsExitBusOracle()],
+    [updatedState[Sk.triggerableWithdrawalsGateway].implementation.address, await locator.validatorsExitBusOracle()],
     GATE_SEAL_DURATION_SECONDS,
     GATE_SEAL_EXPIRY_TIMESTAMP,
     Sk.gateSealTW,
