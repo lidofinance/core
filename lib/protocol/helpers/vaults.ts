@@ -36,29 +36,33 @@ const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
 export const VAULT_CONNECTION_DEPOSIT = ether("1");
 
+// 1. Define the role keys as a const array
+export const vaultRoleKeys = [
+  "funder",
+  "withdrawer",
+  "minter",
+  "burner",
+  "rebalancer",
+  "depositPauser",
+  "depositResumer",
+  "validatorExitRequester",
+  "validatorWithdrawalTriggerer",
+  "disconnecter",
+  "pdgCompensator",
+  "unknownValidatorProver",
+  "unguaranteedBeaconChainDepositor",
+  "tierChanger",
+  "nodeOperatorRewardAdjuster",
+  "assetRecoverer",
+] as const;
+
 export type VaultRoles = {
-  assetRecoverer: HardhatEthersSigner;
-  funder: HardhatEthersSigner;
-  withdrawer: HardhatEthersSigner;
-  minter: HardhatEthersSigner;
-  burner: HardhatEthersSigner;
-  rebalancer: HardhatEthersSigner;
-  depositPauser: HardhatEthersSigner;
-  depositResumer: HardhatEthersSigner;
-  pdgCompensator: HardhatEthersSigner;
-  unguaranteedBeaconChainDepositor: HardhatEthersSigner;
-  unknownValidatorProver: HardhatEthersSigner;
-  validatorExitRequester: HardhatEthersSigner;
-  validatorWithdrawalTriggerer: HardhatEthersSigner;
-  disconnecter: HardhatEthersSigner;
-  tierChanger: HardhatEthersSigner;
-  nodeOperatorRewardAdjuster: HardhatEthersSigner;
+  [K in (typeof vaultRoleKeys)[number]]: HardhatEthersSigner;
 };
 
 export interface VaultWithDashboard {
   stakingVault: StakingVault;
   dashboard: Dashboard;
-  roles: VaultRoles;
   proxy: PinnedBeaconProxy;
 }
 
@@ -84,7 +88,7 @@ export async function createVaultWithDashboard(
   owner: HardhatEthersSigner,
   nodeOperator: HardhatEthersSigner,
   nodeOperatorManager: HardhatEthersSigner,
-  roleAssignments: Permissions.RoleAssignmentStruct[],
+  roleAssignments: Permissions.RoleAssignmentStruct[] = [],
   fee = VAULT_NODE_OPERATOR_FEE,
   confirmExpiry = DEFAULT_CONFIRM_EXPIRY,
 ): Promise<VaultWithDashboard> {
@@ -115,60 +119,69 @@ export async function createVaultWithDashboard(
   const dashboard = await ethers.getContractAt("Dashboard", dashboardAddress);
   const proxy = (await ethers.getContractAt("PinnedBeaconProxy", vaultAddress)) as PinnedBeaconProxy;
 
-  const roleIds = await Promise.all([
-    dashboard.RECOVER_ASSETS_ROLE(),
-    dashboard.FUND_ROLE(),
-    dashboard.WITHDRAW_ROLE(),
-    dashboard.MINT_ROLE(),
-    dashboard.BURN_ROLE(),
-    dashboard.REBALANCE_ROLE(),
-    dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
-    dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
-    dashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
-    dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
-    dashboard.PDG_PROVE_VALIDATOR_ROLE(),
-    dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
-    dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
-    dashboard.VOLUNTARY_DISCONNECT_ROLE(),
-    dashboard.CHANGE_TIER_ROLE(),
-    dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
-  ]);
-
-  const signers = await ethers.getSigners();
-  const roles: VaultRoles = {
-    assetRecoverer: signers[0],
-    funder: signers[1],
-    withdrawer: signers[2],
-    minter: signers[3],
-    burner: signers[4],
-    rebalancer: signers[5],
-    depositPauser: signers[6],
-    depositResumer: signers[7],
-    pdgCompensator: signers[8],
-    unguaranteedBeaconChainDepositor: signers[9],
-    unknownValidatorProver: signers[10],
-    validatorExitRequester: signers[11],
-    validatorWithdrawalTriggerer: signers[12],
-    disconnecter: signers[13],
-    tierChanger: signers[14],
-    nodeOperatorRewardAdjuster: signers[15],
-  };
-
-  for (let i = 0; i < roleIds.length; i++) {
-    const roleAdmin = await dashboard.getRoleAdmin(roleIds[i]);
-    if (roleAdmin === (await dashboard.NODE_OPERATOR_MANAGER_ROLE())) {
-      await dashboard.connect(nodeOperatorManager).grantRole(roleIds[i], signers[i]);
-    } else {
-      await dashboard.grantRole(roleIds[i], signers[i]);
-    }
-  }
-
   return {
     stakingVault,
     dashboard,
     proxy,
-    roles,
   };
+}
+
+export async function autofillRoles(
+  dashboard: Dashboard,
+  nodeOperatorManager: HardhatEthersSigner,
+): Promise<VaultRoles> {
+  const roleMethodMap: { [K in (typeof vaultRoleKeys)[number]]: Promise<string> } = {
+    funder: dashboard.FUND_ROLE(),
+    withdrawer: dashboard.WITHDRAW_ROLE(),
+    minter: dashboard.MINT_ROLE(),
+    burner: dashboard.BURN_ROLE(),
+    rebalancer: dashboard.REBALANCE_ROLE(),
+    depositPauser: dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
+    depositResumer: dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
+    validatorExitRequester: dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
+    validatorWithdrawalTriggerer: dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+    disconnecter: dashboard.VOLUNTARY_DISCONNECT_ROLE(),
+    pdgCompensator: dashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
+    unknownValidatorProver: dashboard.PDG_PROVE_VALIDATOR_ROLE(),
+    unguaranteedBeaconChainDepositor: dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
+    tierChanger: dashboard.CHANGE_TIER_ROLE(),
+    nodeOperatorRewardAdjuster: dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+    assetRecoverer: dashboard.RECOVER_ASSETS_ROLE(),
+  };
+
+  const roleIds = await Promise.all(Object.values(roleMethodMap));
+  const signers = await ethers.getSigners();
+
+  const roleAssignments: Permissions.RoleAssignmentStruct[] = roleIds.map((roleId, i) => {
+    return {
+      role: roleId,
+      account: signers[i],
+    };
+  });
+
+  const nodeOperatorManagerRole = await dashboard.NODE_OPERATOR_MANAGER_ROLE();
+
+  const NORoleAssignments: Permissions.RoleAssignmentStruct[] = [];
+  const otherRoleAssignments: Permissions.RoleAssignmentStruct[] = [];
+
+  for (const roleAssignment of roleAssignments) {
+    if ((await dashboard.getRoleAdmin(roleAssignment.role)) !== nodeOperatorManagerRole) {
+      otherRoleAssignments.push(roleAssignment);
+    } else {
+      NORoleAssignments.push(roleAssignment);
+    }
+  }
+
+  await dashboard.connect(nodeOperatorManager).grantRoles(NORoleAssignments);
+  await dashboard.grantRoles(otherRoleAssignments);
+
+  // Build the result using the keys
+  const result = {} as VaultRoles;
+  vaultRoleKeys.forEach((key, i) => {
+    result[key] = signers[i];
+  });
+
+  return result;
 }
 
 /**

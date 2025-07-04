@@ -13,8 +13,17 @@ import {
   generateValidator,
   getNextBlockTimestamp,
 } from "lib";
-import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
-import { getProofAndDepositData, getPubkeys, reportVaultDataWithProof, VaultRoles } from "lib/protocol/helpers/vaults";
+import {
+  autofillRoles,
+  createVaultWithDashboard,
+  getProofAndDepositData,
+  getProtocolContext,
+  getPubkeys,
+  ProtocolContext,
+  reportVaultDataWithProof,
+  setupLidoForVaults,
+  VaultRoles,
+} from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
@@ -42,7 +51,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     [owner, nodeOperator, stranger] = await ethers.getSigners();
 
     // Owner can create a vault with operator as a node operator
-    ({ stakingVault, dashboard, roles } = await createVaultWithDashboard(
+    ({ stakingVault, dashboard } = await createVaultWithDashboard(
       ctx,
       ctx.contracts.stakingVaultFactory,
       owner,
@@ -50,6 +59,8 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       nodeOperator,
       [],
     ));
+
+    roles = await autofillRoles(dashboard, nodeOperator);
 
     await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
     await reportVaultDataWithProof(ctx, stakingVault);

@@ -3,6 +3,9 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.9;
 
+// These rules are disabled because the contract is taken mostly as it is deployed (and unchangeable) on the Mainnet
+// solhint-disable one-contract-per-file
+// solhint-disable gas-custom-errors
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// PART: WithdrawalsManagerStub.sol ///////////////////////////////////////////////////////////////
