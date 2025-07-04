@@ -205,7 +205,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             batch[i] = VaultInfo(
                 vaultAddress,
                 address(vault).balance,
-                vaultHub.inOutDeltaAsOfLastRefSlot(vaultAddress),
+                record.inOutDelta.value,
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
                 _mintableStETH(vaultAddress),
