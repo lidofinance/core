@@ -978,7 +978,7 @@ contract VaultHub is PausableUntilWithRoles {
             report: Report({
                 totalValue: uint112(vaultBalance),
                 inOutDelta: int112(int256(vaultBalance)),
-                timestamp: uint32(_lazyOracle().latestReportTimestamp())
+                timestamp: uint32(block.timestamp)
             }),
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
@@ -1184,11 +1184,24 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
         uint256 latestReportTimestamp = _lazyOracle().latestReportTimestamp();
-        return
-            // check if AccountingOracle brought fresh report
-            uint32(latestReportTimestamp) == _record.report.timestamp &&
-            // if Accounting Oracle stop bringing the report, last report is fresh for 2 days
-            block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
+        uint32 latestReportTimestamp32 = uint32(latestReportTimestamp);
+        uint32 vaultReportTimestamp = _record.report.timestamp;
+
+        // happy path. vault's report ts is the same as the latest AO report ts
+        if (latestReportTimestamp32 == vaultReportTimestamp) {
+            // check if AO has not stopped bringing the report
+            return block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
+        }
+
+        // if false, we need to check if vault's report is slightly newer than the latest AO report
+        // but as we are using uint32, we need to find the counterclockwise distance
+        // between vaultReportTimestamp and latestReportTimestamp32
+        // and check if it's less than REPORT_FRESHNESS_DELTA
+
+        uint256 modulo = type(uint32).max;
+        uint256 ccwDistance = (modulo + vaultReportTimestamp - latestReportTimestamp32) % modulo;
+
+        return ccwDistance < REPORT_FRESHNESS_DELTA && block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }
 
     function _isVaultHealthy(
