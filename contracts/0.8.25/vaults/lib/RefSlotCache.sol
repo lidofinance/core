@@ -6,6 +6,8 @@ pragma solidity 0.8.25;
 
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
+error InOutDeltaCacheIsOverwritten();
+
 library RefSlotCache {
     struct Int112WithRefSlotCache {
         int112 value;
@@ -95,6 +97,24 @@ library RefSlotCache {
             return _storage.value;
         } else {
             return _storage.valueOnRefSlot;
+        }
+    }
+
+    /// @notice Returns the value for the refSlot
+    /// @param _storage the storage pointer for the cached value
+    /// @param _refSlot the refSlot to get the value for
+    /// @return the cached value if it's changed since the last refSlot, the current value otherwise
+    /// @dev reverts if the cache was overwritten after target refSlot
+    function getValueForRefSlot(
+        Int112WithRefSlotCache storage _storage,
+        uint32 _refSlot
+    ) internal view returns (int112) {
+        if (_refSlot > _storage.refSlot) {
+            return _storage.value;
+        } else if (_refSlot == _storage.refSlot) {
+            return _storage.valueOnRefSlot;
+        } else {
+            revert InOutDeltaCacheIsOverwritten();
         }
     }
 }

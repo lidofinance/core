@@ -321,12 +321,14 @@ contract VaultHub is PausableUntilWithRoles {
         return _storage().badDebtToInternalize.getValueForLastRefSlot(CONSENSUS_CONTRACT);
     }
 
-    /// @notice inOutDelta of the vault as of the last refSlot
+    /// @notice inOutDelta of the vault as of the refSlot
     /// @param _vault vault address
-    /// @return inOutDelta of the vault as of the last refSlot
+    /// @param _refSlot refSlot to get the inOutDelta for
+    /// @return inOutDelta of the vault as of the refSlot
     /// @dev returns 0 if the vault is not connected
-    function inOutDeltaAsOfLastRefSlot(address _vault) external view returns (int256) {
-        return _vaultRecord(_vault).inOutDelta.getValueForLastRefSlot(CONSENSUS_CONTRACT);
+    /// @dev reverts if the cache was overwritten after target refSlot
+    function inOutDeltaForRefSlot(address _vault, uint32 _refSlot) external view returns (int256) {
+        return _vaultRecord(_vault).inOutDelta.getValueForRefSlot(_refSlot);
     }
 
     /// @notice Set if a vault proxy codehash is allowed to be connected to the hub
