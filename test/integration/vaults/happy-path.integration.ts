@@ -163,63 +163,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(createDashboardEvents.length).to.equal(1n);
     dashboard = await ethers.getContractAt("Dashboard", createDashboardEvents[0].args?.dashboard);
 
-    await dashboard.connect(owner).grantRoles([
-      {
-        role: await dashboard.FUND_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.WITHDRAW_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.MINT_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.BURN_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.REBALANCE_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.VOLUNTARY_DISCONNECT_ROLE(),
-        account: owner,
-      },
-    ]);
-
     expect(await isSoleRoleMember(owner, await dashboard.DEFAULT_ADMIN_ROLE())).to.be.true;
 
     expect(await isSoleRoleMember(nodeOperator, await dashboard.NODE_OPERATOR_MANAGER_ROLE())).to.be.true;
-
-    expect(await isSoleRoleMember(owner, await dashboard.FUND_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.WITHDRAW_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.MINT_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.BURN_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.REBALANCE_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.REQUEST_VALIDATOR_EXIT_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.VOLUNTARY_DISCONNECT_ROLE())).to.be.true;
   });
 
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
@@ -437,7 +383,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(lockedOnVault).to.be.gt(0);
   });
 
-  it("Should allow Manager to rebalance the vault to reduce the debt", async () => {
+  it("Should allow Owner to rebalance the vault to reduce the debt", async () => {
     const { vaultHub } = ctx.contracts;
 
     await dashboard.connect(owner).mintShares(owner, 10n);
@@ -450,7 +396,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_CONNECTION_DEPOSIT); // 1 ETH locked as a connection fee
   });
 
-  it("Should allow Manager to disconnect vaults from the hub", async () => {
+  it("Should allow Owner to disconnect vaults from the hub", async () => {
     const { vaultHub } = ctx.contracts;
 
     const disconnectTx = await dashboard.connect(owner).voluntaryDisconnect();

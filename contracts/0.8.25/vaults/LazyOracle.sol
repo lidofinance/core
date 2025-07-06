@@ -12,7 +12,6 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
-import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
 import {VaultHub} from "./VaultHub.sol";
 import {OperatorGrid} from "./OperatorGrid.sol";
@@ -95,6 +94,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         address vault;
         uint96 vaultIndex;
         uint256 balance;
+        int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
         uint256 mintableStETH;
@@ -177,6 +177,12 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         });
     }
 
+    /// @notice returns the number of vaults connected to the VaultHub
+    /// @return the number of vaults connected to the VaultHub
+    function vaultsCount() external view returns (uint256) {
+        return _vaultHub().vaultsCount();
+    }
+
     /// @notice returns batch of vaults info
     /// @param _offset in the vaults list [0, vaultsCount)
     /// @param _limit maximum number of vaults to return
@@ -201,6 +207,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 vaultAddress,
                 connection.vaultIndex,
                 address(vault).balance,
+                vaultHub.inOutDeltaAsOfLastRefSlot(vaultAddress),
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
                 _mintableStETH(vaultAddress),

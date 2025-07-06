@@ -6,19 +6,6 @@
 pragma solidity >=0.5.0;
 
 interface IStakingRouter {
-    function getStakingRewardsDistribution()
-        external
-        view
-        returns (
-            address[] memory recipients,
-            uint256[] memory stakingModuleIds,
-            uint96[] memory stakingModuleFees,
-            uint96 totalFee,
-            uint256 precisionPoints
-        );
-
-    function reportRewardsMinted(uint256[] calldata _stakingModuleIds, uint256[] calldata _totalShares) external;
-
     function reportValidatorExitDelay(
         uint256 _moduleId,
         uint256 _nodeOperatorId,

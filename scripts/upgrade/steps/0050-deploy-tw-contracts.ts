@@ -148,13 +148,6 @@ export async function main() {
       triggerableWithdrawalsGatewayParams.frameDurationInSec,
     ],
   );
-  // TODO: move to voting script
-  // await makeTx(
-  //   stakingRouter,
-  //   "grantRole",
-  //   [await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(), triggerableWithdrawalsGateway_.address],
-  //   { from: deployer },
-  // );
   const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
     "TriggerableWithdrawalsGateway",
     triggerableWithdrawalsGateway_.address,

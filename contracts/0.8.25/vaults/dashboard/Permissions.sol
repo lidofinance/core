@@ -200,11 +200,10 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _role The role to check.
      */
     modifier onlyRoleMemberOrAdmin(bytes32 _role) {
-        if (hasRole(_role, msg.sender) || hasRole(getRoleAdmin(_role), msg.sender)) {
-            _;
-        } else {
+        if (!(hasRole(_role, msg.sender) || hasRole(getRoleAdmin(_role), msg.sender))) {
             revert AccessControlUnauthorizedAccount(msg.sender, _role);
         }
+        _;
     }
 
     /**
@@ -271,7 +270,9 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the REQUEST_VALIDATOR_EXIT_ROLE and requests validator exit on the StakingVault.
      * @dev The zero check for _pubkeys is performed in the StakingVault contract.
      */
-    function _requestValidatorExit(bytes calldata _pubkeys) internal onlyRoleMemberOrAdmin(REQUEST_VALIDATOR_EXIT_ROLE) {
+    function _requestValidatorExit(
+        bytes calldata _pubkeys
+    ) internal onlyRoleMemberOrAdmin(REQUEST_VALIDATOR_EXIT_ROLE) {
         VAULT_HUB.requestValidatorExit(address(_stakingVault()), _pubkeys);
     }
 
@@ -284,7 +285,12 @@ abstract contract Permissions is AccessControlConfirmable {
         uint64[] calldata _amounts,
         address _refundRecipient
     ) internal onlyRoleMemberOrAdmin(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
-        VAULT_HUB.triggerValidatorWithdrawals{value: msg.value}(address(_stakingVault()), _pubkeys, _amounts, _refundRecipient);
+        VAULT_HUB.triggerValidatorWithdrawals{value: msg.value}(
+            address(_stakingVault()),
+            _pubkeys,
+            _amounts,
+            _refundRecipient
+        );
     }
 
     /**
@@ -357,7 +363,10 @@ abstract contract Permissions is AccessControlConfirmable {
      * @param _requestedShareLimit The requested share limit.
      * @return bool Whether the tier change was confirmed.
      */
-    function _changeTier(uint256 _tierId, uint256 _requestedShareLimit) internal onlyRoleMemberOrAdmin(CHANGE_TIER_ROLE) returns (bool) {
+    function _changeTier(
+        uint256 _tierId,
+        uint256 _requestedShareLimit
+    ) internal onlyRoleMemberOrAdmin(CHANGE_TIER_ROLE) returns (bool) {
         return _operatorGrid().changeTier(address(_stakingVault()), _tierId, _requestedShareLimit);
     }
 

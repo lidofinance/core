@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
-import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "./lib/ExitLimitUtils.sol";
 import {PausableUntil} from "./utils/PausableUntil.sol";
 
