@@ -227,8 +227,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("1")); // has locked value cause of connection deposit
 
-    const votingSigner = await ctx.getSigner("voting");
-    await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
+    const agentSigner = await ctx.getSigner("agent");
+    await lido.connect(agentSigner).setMaxExternalRatioBP(20_00n);
 
     expect(await vaultHub.vaultsCount()).to.equal(1n);
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_CONNECTION_DEPOSIT);

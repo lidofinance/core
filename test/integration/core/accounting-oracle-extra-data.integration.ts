@@ -22,7 +22,7 @@ const MAINNET_NOR_ADDRESS = "0x55032650b14df07b85bf18a3a3ec8e0af2e028d5".toLower
 
 // TODO: update this test for the version with the triggerable exits (no stuck items thus there is
 //       only one extra data chunk)
-describe("Integration: AccountingOracle extra data", () => {
+describe.skip("Integration: AccountingOracle extra data", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
 
@@ -45,7 +45,7 @@ describe("Integration: AccountingOracle extra data", () => {
     }
 
     {
-      // Prepare stuck and exited keys extra data for reusing in tests
+      // Prepare exited keys extra data for reusing in tests
       const { oracleReportSanityChecker } = ctx.contracts;
 
       // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy

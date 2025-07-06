@@ -176,9 +176,9 @@ export async function createVaultWithDashboard(
  */
 export async function setupLidoForVaults(ctx: ProtocolContext) {
   const { lido } = ctx.contracts;
-  const votingSigner = await ctx.getSigner("voting");
+  const agentSigner = await ctx.getSigner("agent");
 
-  await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
+  await lido.connect(agentSigner).setMaxExternalRatioBP(20_00n);
 }
 
 // address, totalValue, treasuryFees, liabilityShares, slashingReserve
