@@ -18,7 +18,11 @@ import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
+import {RefSlotCache, CACHE_LENGTH} from "./lib/RefSlotCache.sol";
+
 contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
+    using RefSlotCache for RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH];
+
     /// @custom:storage-location erc7201:LazyOracle
     struct Storage {
         /// @notice root of the vaults data tree
@@ -210,7 +214,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 vaultAddress,
                 connection.vaultIndex,
                 address(vault).balance,
-                record.inOutDelta.value,
+                record.inOutDelta.currentValue(),
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
                 _mintableStETH(vaultAddress),
@@ -315,8 +319,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
         // 1. Calculate inOutDelta in the refSlot
-        int256 currentInOutDelta = record.inOutDelta.value;
-        inOutDeltaOnRefSlot = vaultHub.inOutDeltaForRefSlot(_vault, _reportRefSlot);
+        int256 currentInOutDelta = record.inOutDelta.currentValue();
+        inOutDeltaOnRefSlot = record.inOutDelta.getValueForRefSlot(_reportRefSlot);
 
         // 2. Sanity check for total value increase
         totalValueWithoutQuarantine = _processTotalValue(_vault, _totalValue, inOutDeltaOnRefSlot, record);

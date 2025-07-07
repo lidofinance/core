@@ -16,7 +16,7 @@ import {OperatorGrid} from "./OperatorGrid.sol";
 import {LazyOracle} from "./LazyOracle.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
-import {RefSlotCache} from "./lib/RefSlotCache.sol";
+import {RefSlotCache, CACHE_LENGTH} from "./lib/RefSlotCache.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
@@ -24,7 +24,7 @@ import {RefSlotCache} from "./lib/RefSlotCache.sol";
 /// @author folkyatina
 contract VaultHub is PausableUntilWithRoles {
     using RefSlotCache for RefSlotCache.Uint112WithRefSlotCache;
-    using RefSlotCache for RefSlotCache.Int112WithRefSlotCache;
+    using RefSlotCache for RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH];
 
     // -----------------------------
     //           STORAGE STRUCTS
@@ -84,7 +84,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint96 liabilityShares;
         // ### 3rd slot
         /// @notice inOutDelta of the vault (all deposits - all withdrawals)
-        RefSlotCache.Int112WithRefSlotCache inOutDelta;
+        RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH] inOutDelta;
     }
 
     struct Report {
@@ -155,7 +155,8 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
 
     /// @notice The time delta for report freshness check
-    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
+    /// @dev 2 frame minus 1 hour on mainnet (2 days - 1 hour)
+    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days + 23 hours;
 
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
@@ -319,16 +320,6 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice amount of bad debt to be internalized to become the protocol loss
     function badDebtToInternalizeAsOfLastRefSlot() external view returns (uint256) {
         return _storage().badDebtToInternalize.getValueForLastRefSlot(CONSENSUS_CONTRACT);
-    }
-
-    /// @notice inOutDelta of the vault as of the refSlot
-    /// @param _vault vault address
-    /// @param _refSlot refSlot to get the inOutDelta for
-    /// @return inOutDelta of the vault as of the refSlot
-    /// @dev returns 0 if the vault is not connected
-    /// @dev reverts if the cache was overwritten after target refSlot
-    function inOutDeltaForRefSlot(address _vault, uint32 _refSlot) external view returns (int256) {
-        return _vaultRecord(_vault).inOutDelta.getValueForRefSlot(_refSlot);
     }
 
     /// @notice Set if a vault proxy codehash is allowed to be connected to the hub
@@ -746,7 +737,6 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _amountOfShares amount of shares to burn
     /// @dev msg.sender should be vault's owner
-    /// @dev this function is designed to be used by the smart contract, for EOA see `transferAndBurnShares`
     function burnShares(address _vault, uint256 _amountOfShares) public whenResumed {
         _requireNotZero(_amountOfShares);
         _checkConnectionAndOwner(_vault);
@@ -758,16 +748,6 @@ contract VaultHub is PausableUntilWithRoles {
         LIDO.burnExternalShares(_amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
-    }
-
-    /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
-    /// @param _vault vault address
-    /// @param _amountOfShares amount of shares to transfer and burn
-    /// @dev msg.sender should be vault's owner
-    function transferAndBurnShares(address _vault, uint256 _amountOfShares) external {
-        LIDO.transferSharesFrom(msg.sender, address(this), _amountOfShares);
-
-        burnShares(_vault, _amountOfShares);
     }
 
     /// @notice pauses beacon chain deposits for the vault
@@ -984,11 +964,14 @@ contract VaultHub is PausableUntilWithRoles {
             }),
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
-            inOutDelta: RefSlotCache.Int112WithRefSlotCache({
-                value: int112(int256(vaultBalance)),
-                valueOnRefSlot: 0,
-                refSlot: 0
-            })
+            inOutDelta: [
+                RefSlotCache.Int112WithRefSlotCache({
+                    value: int112(int256(vaultBalance)),
+                    valueOnRefSlot: 0,
+                    refSlot: 1 // dummy value to show which cache slot is latest
+                }),
+                RefSlotCache.Int112WithRefSlotCache(0, 0, 0)
+            ]
         });
 
         connection = VaultConnection({
@@ -1177,7 +1160,8 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
         Report memory report = _record.report;
-        return uint256(int256(uint256(report.totalValue)) + _record.inOutDelta.value - report.inOutDelta);
+        RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH] memory inOutDelta = _record.inOutDelta;
+        return uint256(int256(uint256(report.totalValue)) + inOutDelta.currentValue() - report.inOutDelta);
     }
 
     function _maxLockableValue(VaultRecord storage _record, VaultObligations storage _obligations) internal view returns (uint256) {
@@ -1189,7 +1173,7 @@ contract VaultHub is PausableUntilWithRoles {
         return
             // check if AccountingOracle brought fresh report
             uint32(latestReportTimestamp) == _record.report.timestamp &&
-            // if Accounting Oracle stop bringing the report, last report is fresh for 2 days
+            // if Accounting Oracle stop bringing the report, last report is fresh during this time
             block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }
 
@@ -1253,12 +1237,12 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @dev Caches the inOutDelta of the latest refSlot and updates the value
     function _updateInOutDelta(address _vault, VaultRecord storage _record, int112 _increment) internal {
-        _record.inOutDelta = _record.inOutDelta.withValueIncrease({
+        RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH] memory inOutDelta = _record.inOutDelta.withValueIncrease({
             _consensus: CONSENSUS_CONTRACT,
             _increment: _increment
         });
-
-        emit VaultInOutDeltaUpdated(_vault, _record.inOutDelta.value);
+        _record.inOutDelta = inOutDelta;
+        emit VaultInOutDeltaUpdated(_vault, inOutDelta.currentValue());
     }
 
     /**

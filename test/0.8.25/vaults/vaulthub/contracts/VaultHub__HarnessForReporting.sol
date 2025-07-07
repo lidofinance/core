@@ -67,7 +67,10 @@ contract VaultHub__HarnessForReporting is VaultHub {
             report: VaultHub.Report(0, 0, 0),
             locked: 0,
             liabilityShares: uint96(_shareLimit),
-            inOutDelta: RefSlotCache.Int112WithRefSlotCache({value: 0, valueOnRefSlot: 0, refSlot: 0})
+            inOutDelta: [
+                RefSlotCache.Int112WithRefSlotCache({value: 0, valueOnRefSlot: 0, refSlot: 0}),
+                RefSlotCache.Int112WithRefSlotCache({value: 0, valueOnRefSlot: 0, refSlot: 0})
+            ]
         });
 
         $.records[_vault] = record;
