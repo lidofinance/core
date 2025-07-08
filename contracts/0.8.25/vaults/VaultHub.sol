@@ -1526,10 +1526,6 @@ contract VaultHub is PausableUntilWithRoles {
         return LIDO.getSharesByPooledEth(_ether);
     }
 
-    function _getPooledEthByShares(uint256 _ether) internal view returns (uint256) {
-        return LIDO.getPooledEthByShares(_ether);
-    }
-
     function _getPooledEthBySharesRoundUp(uint256 _shares) internal view returns (uint256) {
         return LIDO.getPooledEthBySharesRoundUp(_shares);
     }
