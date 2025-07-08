@@ -142,15 +142,15 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 private constant STORAGE_LOCATION = 0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
 
     /// @notice role that allows to connect vaults to the hub
-    bytes32 public constant VAULT_MASTER_ROLE = keccak256("vaults.VaultHub.VaultMasterRole");
+    bytes32 public immutable VAULT_MASTER_ROLE = 0x479bc4a51d27fbdc8e51b5b1ebd3dcd58bd229090980bff226f8930587e69ce3;
     /// @notice role that allows to set allowed codehashes
-    bytes32 public constant VAULT_CODEHASH_SET_ROLE = keccak256("vaults.VaultHub.VaultCodehashSetRole");
+    bytes32 public immutable VAULT_CODEHASH_SET_ROLE = 0x712bc47e8f21e3271b5614025535450b46e67d6db1aeb3b0b1a9b76e7eaa7568;
     /// @notice role that allows to accrue Lido Core redemptions on the vault
-    bytes32 public constant REDEMPTION_MASTER_ROLE = keccak256("vaults.VaultHub.RedemptionMasterRole");
+    bytes32 public immutable REDEMPTION_MASTER_ROLE = 0x44f007e8cc2a08047a03d8d9c295057454942eb49ee3ced9c87e9b9406f21174;
     /// @notice role that allows to trigger validator exits under extreme conditions
-    bytes32 public constant VALIDATOR_EXIT_ROLE = keccak256("vaults.VaultHub.ValidatorExitRole");
+    bytes32 public immutable VALIDATOR_EXIT_ROLE = 0x2159c5943234d9f3a7225b9a743ea06e4a0d0ba5ed82889e867759a8a9eb7883;
     /// @notice role that allows to bail out vaults with bad debt
-    bytes32 public constant BAD_DEBT_MASTER_ROLE = keccak256("vaults.VaultHub.BadDebtMasterRole");
+    bytes32 public immutable BAD_DEBT_MASTER_ROLE = 0xa85bab4b576ca359fa6ae02ab8744b5c85c7e7ed4d7e0bca7b5b64580ac5d17d;
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
 
@@ -158,21 +158,21 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
 
     /// @dev basis points base
-    uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
+    uint256 internal immutable TOTAL_BASIS_POINTS = 100_00;
     /// @notice length of the validator pubkey in bytes
-    uint256 internal constant PUBLIC_KEY_LENGTH = 48;
+    uint256 internal immutable PUBLIC_KEY_LENGTH = 48;
     /// @dev max value for fees in basis points - it's about 650%
-    uint256 internal constant MAX_FEE_BP = type(uint16).max;
+    uint256 internal immutable MAX_FEE_BP = type(uint16).max;
 
     /// @notice codehash of the account with no code
-    bytes32 private constant EMPTY_CODEHASH = keccak256("");
+    bytes32 private immutable EMPTY_CODEHASH = keccak256("");
 
     /// @notice no limit for the unsettled obligations on settlement
-    uint256 internal constant MAX_UNSETTLED_ALLOWED = type(uint256).max;
+    uint256 internal immutable MAX_UNSETTLED_ALLOWED = type(uint256).max;
     /// @notice threshold for the unsettled obligations that will activate the beacon chain deposits pause
-    uint256 internal constant UNSETTLED_THRESHOLD = 1 ether;
+    uint256 internal immutable UNSETTLED_THRESHOLD = 1 ether;
     /// @notice no unsettled obligations allowed on settlement
-    uint256 internal constant NO_UNSETTLED_ALLOWED = 0;
+    uint256 internal immutable NO_UNSETTLED_ALLOWED = 0;
 
     // -----------------------------
     //           IMMUTABLES
@@ -676,7 +676,7 @@ contract VaultHub is PausableUntilWithRoles {
     function fund(address _vault) external payable whenResumed {
         _requireNotZero(_vault);
         VaultConnection storage connection = _vaultConnection(_vault);
-        if (connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
+        _requireConnected(connection, _vault);
         if (msg.sender != connection.owner) revert NotAuthorized();
 
         _updateInOutDelta(_vault, _vaultRecord(_vault), int112(int256(msg.value)));
@@ -964,7 +964,7 @@ contract VaultHub is PausableUntilWithRoles {
         _requireLessThanBP(_reservationFeeBP, MAX_FEE_BP);
 
         VaultConnection memory connection = _vaultConnection(_vault);
-        if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
+        _requireNotDisconnecting(connection.pendingDisconnect, _vault);
         if (connection.vaultIndex != 0) revert AlreadyConnected(_vault, connection.vaultIndex);
 
         bytes32 codehash = address(_vault).codehash;
@@ -1244,7 +1244,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultConnection storage connection = _vaultConnection(_vault);
         _requireConnected(connection, _vault);
-        if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
+        _requireNotDisconnecting(connection.pendingDisconnect, _vault);
 
         return connection;
     }
@@ -1552,6 +1552,10 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _requireConnected(VaultConnection storage _connection, address _vault) internal view {
         if (_connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
+    }
+
+    function _requireNotDisconnecting(bool _pendingDisconnect, address _vault) internal pure {
+        if (_pendingDisconnect) revert VaultIsDisconnecting(_vault);
     }
 
     function _requireFreshReport(address _vault, VaultRecord storage _record) internal view {

@@ -178,6 +178,19 @@ const config: HardhatUserConfig = {
         },
       },
     ],
+    overrides: {
+      "contracts/0.8.25/vaults/VaultHub.sol": {
+        version: "0.8.25",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 100,
+          },
+          viaIR: true,
+          evmVersion: "cancun",
+        },
+      },
+    },
   },
   tracer: {
     tasks: ["watch"],
