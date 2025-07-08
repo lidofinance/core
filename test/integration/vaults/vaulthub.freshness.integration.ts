@@ -47,8 +47,7 @@ describe("Scenario: Vault Report Freshness Check", () => {
     expect(await vaultHub.isReportFresh(stakingVault)).to.be.true;
   });
 
-  it.skip("Vault is created with fresh report after refSlot but before report", async () => {
-    // TODO: fix this
+  it("Vault is created with fresh report after refSlot but before report", async () => {
     const { stakingVaultFactory, vaultHub } = ctx.contracts;
 
     await waitNextAvailableReportTime(ctx);
