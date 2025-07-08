@@ -20,6 +20,20 @@ library RefSlotCache {
         uint32 refSlot;
     }
 
+    /// @notice Initializes the cache with the given value
+    /// @param _value the value to initialize the cache with
+    /// @return the initialized cache
+    function InitializeInt112DoubleCache(int112 _value) internal pure returns (Int112WithRefSlotCache[CACHE_LENGTH] memory) {
+        return [
+            RefSlotCache.Int112WithRefSlotCache({
+                value: _value,
+                valueOnRefSlot: 0,
+                refSlot: 0 // first cache slot is active by default (as >= used in _activeCacheIndex)
+            }),
+            RefSlotCache.Int112WithRefSlotCache(0, 0, 0)
+        ];
+    }
+
     /// @notice Increases the value and caches the previous value for the current refSlot
     /// @param _storage The storage slot to update
     /// @param _consensus The consensus contract to get the current refSlot
@@ -56,19 +70,20 @@ library RefSlotCache {
     ) internal view returns (Int112WithRefSlotCache[CACHE_LENGTH] memory) {
         (uint256 refSlot, ) = _consensus.getCurrentFrame();
 
-        Int112WithRefSlotCache[CACHE_LENGTH] memory newStorage = _storage;
-        uint256 activeCacheIndex = _activeCacheIndex(newStorage);
+        Int112WithRefSlotCache[CACHE_LENGTH] memory newCache = _storage;
+        uint256 activeCacheIndex = _activeCacheIndex(newCache);
 
-        if (newStorage[activeCacheIndex].refSlot != uint32(refSlot)) { // 32 bits is enough precision for this kind of comparison
-            activeCacheIndex = _nextCacheIndex(activeCacheIndex);
-            newStorage[activeCacheIndex].value = newStorage[_previousCacheIndex(activeCacheIndex)].value;
-            newStorage[activeCacheIndex].valueOnRefSlot = newStorage[_previousCacheIndex(activeCacheIndex)].value;
-            newStorage[activeCacheIndex].refSlot = uint32(refSlot);
+        if (newCache[activeCacheIndex].refSlot != uint32(refSlot)) { // 32 bits is enough precision for this kind of comparison
+            uint256 previousCacheIndex = activeCacheIndex;
+            activeCacheIndex = 1 - activeCacheIndex;
+            newCache[activeCacheIndex].value = newCache[previousCacheIndex].value;
+            newCache[activeCacheIndex].valueOnRefSlot = newCache[previousCacheIndex].value;
+            newCache[activeCacheIndex].refSlot = uint32(refSlot);
         }
 
-        newStorage[activeCacheIndex].value += _increment;
+        newCache[activeCacheIndex].value += _increment;
 
-        return newStorage;
+        return newCache;
     }
 
     /// @notice Returns the value for the current refSlot
@@ -88,44 +103,45 @@ library RefSlotCache {
     }
 
     /// @notice Returns the current value of the cache
-    /// @param _storage the storage pointer for the array of cached values
+    /// @param _cache the storage pointer for the array of cached values
     /// @return the current value of the cache
-    function currentValue(Int112WithRefSlotCache[CACHE_LENGTH] memory _storage) internal view returns (int112) {
-        return _storage[_activeCacheIndex(_storage)].value;
+    function currentValue(Int112WithRefSlotCache[CACHE_LENGTH] memory _cache) internal view returns (int112) {
+        return _cache[_activeCacheIndex(_cache)].value;
     }
 
     /// @notice Returns the value for the refSlot
-    /// @param _storage the storage pointer for the cached value
+    /// @param _cache the storage pointer for the cached value
     /// @param _refSlot the refSlot to get the value for
     /// @return the cached value if it's changed since the last refSlot, the current value otherwise
     /// @dev reverts if the cache was overwritten after target refSlot
     function getValueForRefSlot(
-        Int112WithRefSlotCache[CACHE_LENGTH] memory _storage,
+        Int112WithRefSlotCache[CACHE_LENGTH] memory _cache,
         uint32 _refSlot
     ) internal view returns (int112) {
-        uint256 activeCacheIndex = _activeCacheIndex(_storage);
+        uint256 activeCacheIndex = _activeCacheIndex(_cache);
 
-        if (_refSlot > _storage[activeCacheIndex].refSlot) {
-            return _storage[activeCacheIndex].value;
-        } else if (_refSlot > _storage[_previousCacheIndex(activeCacheIndex)].refSlot) {
-            return _storage[activeCacheIndex].valueOnRefSlot;
-        } else if (_refSlot == _storage[_previousCacheIndex(activeCacheIndex)].refSlot) {
-            return _storage[_previousCacheIndex(activeCacheIndex)].valueOnRefSlot;
-        } else {
-            revert InOutDeltaCacheIsOverwritten();
+        // 1. refSlot is more than activeRefSlot
+        if (_refSlot > _cache[activeCacheIndex].refSlot) {
+            return _cache[activeCacheIndex].value;
         }
+
+        uint256 previousCacheIndex = 1 - activeCacheIndex;
+        // 2. refSlot is in (prevRefSlot, activeRefSlot]
+        if (_refSlot > _cache[previousCacheIndex].refSlot) {
+            return _cache[activeCacheIndex].valueOnRefSlot;
+        }
+
+        // 3. refSlot is equal to prevRefSlot
+        if (_refSlot == _cache[previousCacheIndex].refSlot) {
+            return _cache[previousCacheIndex].valueOnRefSlot;
+        }
+
+        // 4. refSlot is less than prevRefSlot
+        revert InOutDeltaCacheIsOverwritten();
     }
 
-    function _activeCacheIndex(Int112WithRefSlotCache[CACHE_LENGTH] memory _storage) private pure returns (uint256) {
-        return _storage[0].refSlot >= _storage[1].refSlot ? 0 : 1;
-    }
-
-    function _previousCacheIndex(uint256 _cacheIndex) private pure returns (uint256) {
-        return 1 - _cacheIndex;
-    }
-
-    function _nextCacheIndex(uint256 _cacheIndex) private pure returns (uint256) {
-        return 1 - _cacheIndex;
+    function _activeCacheIndex(Int112WithRefSlotCache[CACHE_LENGTH] memory _cache) private pure returns (uint256) {
+        return _cache[0].refSlot >= _cache[1].refSlot ? 0 : 1;
     }
 
     error InOutDeltaCacheIsOverwritten();

@@ -82,7 +82,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint128 locked;
         /// @notice liability shares of the vault
         uint96 liabilityShares;
-        // ### 3rd slot
+        // ### 3rd and 4th slots
         /// @notice inOutDelta of the vault (all deposits - all withdrawals)
         RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH] inOutDelta;
     }
@@ -964,14 +964,7 @@ contract VaultHub is PausableUntilWithRoles {
             }),
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
-            inOutDelta: [
-                RefSlotCache.Int112WithRefSlotCache({
-                    value: int112(int256(vaultBalance)),
-                    valueOnRefSlot: 0,
-                    refSlot: 1 // dummy value to show which cache slot is latest
-                }),
-                RefSlotCache.Int112WithRefSlotCache(0, 0, 0)
-            ]
+            inOutDelta: RefSlotCache.InitializeInt112DoubleCache(int112(int256(vaultBalance)))
         });
 
         connection = VaultConnection({

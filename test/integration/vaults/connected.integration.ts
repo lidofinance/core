@@ -707,7 +707,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // first deposit in frame
       let record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].valueOnRefSlot).to.equal(0);
-      expect(record.inOutDelta[0].refSlot).to.equal(1n);
+      expect(record.inOutDelta[0].refSlot).to.equal(0n);
       expect(record.inOutDelta[1].valueOnRefSlot).to.equal(0);
       expect(record.inOutDelta[1].refSlot).to.equal(0);
 
@@ -715,7 +715,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].valueOnRefSlot).to.equal(0);
-      expect(record.inOutDelta[0].refSlot).to.equal(1n);
+      expect(record.inOutDelta[0].refSlot).to.equal(0n);
       expect(record.inOutDelta[1].valueOnRefSlot).to.equal(ether("1"));
       const [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
       expect(record.inOutDelta[1].refSlot).to.equal(refSlot);
@@ -764,7 +764,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       let record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].value).to.equal(ether("1"));
       expect(record.inOutDelta[0].valueOnRefSlot).to.equal(0);
-      expect(record.inOutDelta[0].refSlot).to.equal(1);
+      expect(record.inOutDelta[0].refSlot).to.equal(0);
       expect(record.inOutDelta[1].value).to.equal(0);
       expect(record.inOutDelta[1].valueOnRefSlot).to.equal(0);
       expect(record.inOutDelta[1].refSlot).to.equal(0);
@@ -818,7 +818,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       let record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].value).to.equal(ether("1"));
       expect(record.inOutDelta[0].valueOnRefSlot).to.equal(0);
-      expect(record.inOutDelta[0].refSlot).to.equal(1);
+      expect(record.inOutDelta[0].refSlot).to.equal(0);
       expect(record.inOutDelta[1].value).to.equal(0);
       expect(record.inOutDelta[1].valueOnRefSlot).to.equal(0);
       expect(record.inOutDelta[1].refSlot).to.equal(0);
