@@ -35,3 +35,11 @@ fmt = { int_types = 'long' }
 
 # Skip contracts that are not supported by the IR compiler
 skip = ["TWVoteScript.sol"]
+
+# add via_ir profile
+additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
+ 
+# enforce compiling 0.8.25 contract with via_ir
+compilation_restrictions = [
+    { paths = "contracts/0.8.25/**", via_ir = true },
+]
