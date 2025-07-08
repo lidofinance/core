@@ -46,16 +46,16 @@ library RefSlotCache {
     ) internal view returns (Uint112WithRefSlotCache memory) {
         (uint256 refSlot, ) = _consensus.getCurrentFrame();
 
-        Uint112WithRefSlotCache memory newStorage = _storage;
+        Uint112WithRefSlotCache memory newCache = _storage;
 
-        if (newStorage.refSlot != uint32(refSlot)) { // 32 bits is enough precision for this kind of comparison
-            newStorage.valueOnRefSlot = _storage.value;
-            newStorage.refSlot = uint32(refSlot);
+        if (newCache.refSlot != uint32(refSlot)) { // 32 bits is enough precision for this kind of comparison
+            newCache.valueOnRefSlot = _storage.value;
+            newCache.refSlot = uint32(refSlot);
         }
 
-        newStorage.value += _increment;
+        newCache.value += _increment;
 
-        return newStorage;
+        return newCache;
     }
 
     /// @notice Increases the value and caches the previous value for the current refSlot

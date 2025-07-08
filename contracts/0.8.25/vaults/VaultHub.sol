@@ -155,8 +155,7 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
 
     /// @notice The time delta for report freshness check
-    /// @dev 2 frame minus 1 hour on mainnet (2 days - 1 hour)
-    uint256 public constant REPORT_FRESHNESS_DELTA = 1 days + 23 hours;
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
 
     /// @dev basis points base
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
