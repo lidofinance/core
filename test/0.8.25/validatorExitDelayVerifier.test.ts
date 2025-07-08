@@ -40,12 +40,16 @@ describe("ValidatorExitDelayVerifier.sol", () => {
   const GENESIS_TIME = 1606824000;
   const SHARD_COMMITTEE_PERIOD_IN_SECONDS = 8192;
   const LIDO_LOCATOR = "0x0000000000000000000000000000000000000001";
+  const CAPELLA_SLOT = 1; // Setting this to be <= FIRST_SUPPORTED_SLOT as required
+  const SLOTS_PER_HISTORICAL_ROOT = 8192; // Added this parameter
 
   describe("ValidatorExitDelayVerifier Constructor", () => {
     const GI_FIRST_VALIDATOR_PREV = `0x${"1".repeat(64)}`;
     const GI_FIRST_VALIDATOR_CURR = `0x${"2".repeat(64)}`;
-    const GI_HISTORICAL_SUMMARIES_PREV = `0x${"3".repeat(64)}`;
-    const GI_HISTORICAL_SUMMARIES_CURR = `0x${"4".repeat(64)}`;
+    const GI_FIRST_HISTORICAL_SUMMARY_PREV = `0x${"3".repeat(64)}`;
+    const GI_FIRST_HISTORICAL_SUMMARY_CURR = `0x${"4".repeat(64)}`;
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = `0x${"5".repeat(64)}`;
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = `0x${"6".repeat(64)}`;
 
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
@@ -54,10 +58,14 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         LIDO_LOCATOR,
         GI_FIRST_VALIDATOR_PREV,
         GI_FIRST_VALIDATOR_CURR,
-        GI_HISTORICAL_SUMMARIES_PREV,
-        GI_HISTORICAL_SUMMARIES_CURR,
+        GI_FIRST_HISTORICAL_SUMMARY_PREV,
+        GI_FIRST_HISTORICAL_SUMMARY_CURR,
+        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
         FIRST_SUPPORTED_SLOT,
         PIVOT_SLOT,
+        CAPELLA_SLOT,
+        SLOTS_PER_HISTORICAL_ROOT,
         SLOTS_PER_EPOCH,
         SECONDS_PER_SLOT,
         GENESIS_TIME,
@@ -68,10 +76,11 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     it("sets all parameters correctly", async () => {
       expect(await validatorExitDelayVerifier.LOCATOR()).to.equal(LIDO_LOCATOR);
       expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_PREV()).to.equal(GI_FIRST_VALIDATOR_PREV);
-      expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_PREV()).to.equal(GI_FIRST_VALIDATOR_PREV);
       expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_CURR()).to.equal(GI_FIRST_VALIDATOR_CURR);
-      expect(await validatorExitDelayVerifier.GI_HISTORICAL_SUMMARIES_PREV()).to.equal(GI_HISTORICAL_SUMMARIES_PREV);
-      expect(await validatorExitDelayVerifier.GI_HISTORICAL_SUMMARIES_CURR()).to.equal(GI_HISTORICAL_SUMMARIES_CURR);
+      expect(await validatorExitDelayVerifier.GI_FIRST_HISTORICAL_SUMMARY_PREV()).to.equal(GI_FIRST_HISTORICAL_SUMMARY_PREV);
+      expect(await validatorExitDelayVerifier.GI_FIRST_HISTORICAL_SUMMARY_CURR()).to.equal(GI_FIRST_HISTORICAL_SUMMARY_CURR);
+      expect(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV()).to.equal(GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV);
+      expect(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR()).to.equal(GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR);
       expect(await validatorExitDelayVerifier.FIRST_SUPPORTED_SLOT()).to.equal(FIRST_SUPPORTED_SLOT);
       expect(await validatorExitDelayVerifier.PIVOT_SLOT()).to.equal(PIVOT_SLOT);
       expect(await validatorExitDelayVerifier.SLOTS_PER_EPOCH()).to.equal(SLOTS_PER_EPOCH);
@@ -80,6 +89,8 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       expect(await validatorExitDelayVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS()).to.equal(
         SHARD_COMMITTEE_PERIOD_IN_SECONDS,
       );
+      expect(await validatorExitDelayVerifier.CAPELLA_SLOT()).to.equal(CAPELLA_SLOT);
+      expect(await validatorExitDelayVerifier.SLOTS_PER_HISTORICAL_ROOT()).to.equal(SLOTS_PER_HISTORICAL_ROOT);
     });
 
     it("reverts with 'InvalidPivotSlot' if firstSupportedSlot > pivotSlot", async () => {
@@ -88,10 +99,14 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           LIDO_LOCATOR,
           GI_FIRST_VALIDATOR_PREV,
           GI_FIRST_VALIDATOR_CURR,
-          GI_HISTORICAL_SUMMARIES_PREV,
-          GI_HISTORICAL_SUMMARIES_CURR,
+          GI_FIRST_HISTORICAL_SUMMARY_PREV,
+          GI_FIRST_HISTORICAL_SUMMARY_CURR,
+          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
           200_000, // firstSupportedSlot
           100_000, // pivotSlot < firstSupportedSlot
+          CAPELLA_SLOT,
+          SLOTS_PER_HISTORICAL_ROOT,
           SLOTS_PER_EPOCH,
           SECONDS_PER_SLOT,
           GENESIS_TIME,
@@ -106,10 +121,14 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           ethers.ZeroAddress, // Zero address for locator
           GI_FIRST_VALIDATOR_PREV,
           GI_FIRST_VALIDATOR_CURR,
-          GI_HISTORICAL_SUMMARIES_PREV,
-          GI_HISTORICAL_SUMMARIES_CURR,
+          GI_FIRST_HISTORICAL_SUMMARY_PREV,
+          GI_FIRST_HISTORICAL_SUMMARY_CURR,
+          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
           FIRST_SUPPORTED_SLOT,
           PIVOT_SLOT,
+          CAPELLA_SLOT,
+          SLOTS_PER_HISTORICAL_ROOT,
           SLOTS_PER_EPOCH,
           SECONDS_PER_SLOT,
           GENESIS_TIME,
@@ -119,6 +138,28 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         await ethers.getContractFactory("ValidatorExitDelayVerifier"),
         "ZeroLidoLocatorAddress",
       );
+    });
+
+    it("reverts with 'InvalidCapellaSlot' if capellaSlot > firstSupportedSlot", async () => {
+      await expect(
+        ethers.deployContract("ValidatorExitDelayVerifier", [
+          LIDO_LOCATOR,
+          GI_FIRST_VALIDATOR_PREV,
+          GI_FIRST_VALIDATOR_CURR,
+          GI_FIRST_HISTORICAL_SUMMARY_PREV,
+          GI_FIRST_HISTORICAL_SUMMARY_CURR,
+          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          FIRST_SUPPORTED_SLOT,
+          PIVOT_SLOT,
+          FIRST_SUPPORTED_SLOT + 1, // Invalid Capella slot
+          SLOTS_PER_HISTORICAL_ROOT,
+          SLOTS_PER_EPOCH,
+          SECONDS_PER_SLOT,
+          GENESIS_TIME,
+          SHARD_COMMITTEE_PERIOD_IN_SECONDS,
+        ]),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidCapellaSlot");
     });
   });
 
@@ -153,8 +194,12 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         GI_FIRST_VALIDATOR_INDEX,
         GI_HISTORICAL_SUMMARIES_INDEX,
         GI_HISTORICAL_SUMMARIES_INDEX,
+        GI_HISTORICAL_SUMMARIES_INDEX,
+        GI_HISTORICAL_SUMMARIES_INDEX,
         FIRST_SUPPORTED_SLOT,
         PIVOT_SLOT,
+        CAPELLA_SLOT,
+        SLOTS_PER_HISTORICAL_ROOT,
         SLOTS_PER_EPOCH,
         SECONDS_PER_SLOT,
         GENESIS_TIME,

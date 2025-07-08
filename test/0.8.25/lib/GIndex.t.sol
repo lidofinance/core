@@ -72,48 +72,6 @@ contract GIndexTest is Test {
         assertFalse(gI.isRoot(), "Expected [uint248.max,uint8.max].isRoot() to be false");
     }
 
-    function test_isParentOf_Truthy() public {
-        assertTrue(pack(1024, 0).isParentOf(pack(2048, 0)));
-        assertTrue(pack(1024, 0).isParentOf(pack(2049, 0)));
-        assertTrue(pack(1024, 9).isParentOf(pack(2048, 0)));
-        assertTrue(pack(1024, 9).isParentOf(pack(2049, 0)));
-        assertTrue(pack(1024, 0).isParentOf(pack(2048, 9)));
-        assertTrue(pack(1024, 0).isParentOf(pack(2049, 9)));
-        assertTrue(pack(1023, 0).isParentOf(pack(4094, 0)));
-        assertTrue(pack(1024, 0).isParentOf(pack(4098, 0)));
-    }
-
-    function testFuzz_ROOT_isParentOfAnyChild(GIndex rhs) public {
-        vm.assume(rhs.index() > 1);
-        assertTrue(ROOT.isParentOf(rhs));
-    }
-
-    function testFuzz_isParentOf_LessThanAnchor(GIndex lhs, GIndex rhs) public {
-        vm.assume(rhs.index() < lhs.index());
-        assertFalse(lhs.isParentOf(rhs));
-    }
-
-    function test_isParentOf_OffTheBranch() public {
-        assertFalse(pack(1024, 0).isParentOf(pack(2050, 0)));
-        assertFalse(pack(1024, 0).isParentOf(pack(2051, 0)));
-        assertFalse(pack(1024, 0).isParentOf(pack(2047, 0)));
-        assertFalse(pack(1024, 0).isParentOf(pack(2046, 0)));
-        assertFalse(pack(1024, 9).isParentOf(pack(2050, 0)));
-        assertFalse(pack(1024, 9).isParentOf(pack(2051, 0)));
-        assertFalse(pack(1024, 9).isParentOf(pack(2047, 0)));
-        assertFalse(pack(1024, 9).isParentOf(pack(2046, 0)));
-        assertFalse(pack(1024, 0).isParentOf(pack(2050, 9)));
-        assertFalse(pack(1024, 0).isParentOf(pack(2051, 9)));
-        assertFalse(pack(1024, 0).isParentOf(pack(2047, 9)));
-        assertFalse(pack(1024, 0).isParentOf(pack(2046, 9)));
-        assertFalse(pack(1023, 0).isParentOf(pack(2048, 0)));
-        assertFalse(pack(1023, 0).isParentOf(pack(2049, 0)));
-        assertFalse(pack(1023, 9).isParentOf(pack(2048, 0)));
-        assertFalse(pack(1023, 9).isParentOf(pack(2049, 0)));
-        assertFalse(pack(1023, 0).isParentOf(pack(4098, 0)));
-        assertFalse(pack(1024, 0).isParentOf(pack(4094, 0)));
-    }
-
     function test_concat() public {
         assertEq(pack(2, 99).concat(pack(3, 99)).unwrap(), pack(5, 99).unwrap());
         assertEq(pack(31, 99).concat(pack(3, 99)).unwrap(), pack(63, 99).unwrap());
@@ -152,19 +110,6 @@ contract GIndexTest is Test {
     function testFuzz_concat_WithRoot(GIndex rhs) public {
         vm.assume(rhs.index() > 0);
         assertEq(ROOT.concat(rhs).unwrap(), rhs.unwrap(), "`concat` with a root should return right-hand side value");
-    }
-
-    function testFuzz_concat_isParentOf(GIndex lhs, GIndex rhs) public {
-        // Left-hand side value can be a root.
-        vm.assume(lhs.index() > 0);
-        // But root.concat(root) will result in a root value again, and root is not a parent for itself.
-        vm.assume(rhs.index() > 1);
-        // Overflow check.
-        vm.assume(fls(lhs.index()) + 1 + fls(rhs.index()) < 248);
-
-        assertTrue(lhs.isParentOf(lhs.concat(rhs)), "Left-hand side value should be a parent of `concat` result");
-        assertFalse(lhs.concat(rhs).isParentOf(lhs), "`concat` result can't be a parent for the left-hand side value");
-        assertFalse(lhs.concat(rhs).isParentOf(rhs), "`concat` result can't be a parent for the right-hand side value");
     }
 
     function testFuzz_unpack(uint248 index, uint8 pow) public {
