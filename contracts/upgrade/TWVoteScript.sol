@@ -87,7 +87,7 @@ contract TWVoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 23;
+    uint256 public constant VOTE_ITEMS_COUNT = 21;
     address public constant MAINNET_ACL = 0x9895F0F17cc1d1891b6f18ee0b483B6f221b37Bb;
     address public constant MAINNET_KERNEL = 0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc;
 
@@ -96,8 +96,42 @@ contract TWVoteScript is OmnibusBase {
     //
     ScriptParams public params;
 
-    constructor(address _voting, ScriptParams memory _params) OmnibusBase(_voting) {
+    constructor(address _voting, address _dualGovernance, ScriptParams memory _params) OmnibusBase(_voting, _dualGovernance) {
         params = _params;
+    }
+
+    function getVotingVoteItems() public view override returns (VoteItem[] memory voteItems) {
+        uint256 numVotingVoteItems = 2;
+        voteItems = new VoteItem[](numVotingVoteItems);
+        uint256 index = 0;
+
+        // TODO: remove these two items as Repo contract are deprecated and no update is needed
+
+        // Publish new NodeOperatorsRegistry implementation in NodeOperatorsRegistry app APM repo
+        voteItems[index++] = VoteItem({
+            description: "Publish new NodeOperatorsRegistry implementation in NodeOperatorsRegistry app APM repo",
+            call: _votingCall(
+                params.nor_app_repo,
+                abi.encodeCall(
+                    IRepo.newVersion,
+                    (params.nor_version, params.node_operators_registry_impl, params.nor_content_uri)
+                )
+            )
+        });
+
+        // Publish new NodeOperatorsRegistry implementation in SimpleDVT app APM repo
+        voteItems[index++] = VoteItem({
+            description: "Publish new NodeOperatorsRegistry implementation in SimpleDVT app APM repo",
+            call: _votingCall(
+                params.sdvt_app_repo,
+                abi.encodeCall(
+                    IRepo.newVersion,
+                    (params.sdvt_version, params.node_operators_registry_impl, params.nor_content_uri)
+                )
+            )
+        });
+
+        assert(index == numVotingVoteItems);
     }
 
     function getVoteItems() public view override returns (VoteItem[] memory voteItems) {
@@ -128,7 +162,8 @@ contract TWVoteScript is OmnibusBase {
         // 3. Call finalizeUpgrade_v2 on VEBO
         voteItems[index++] = VoteItem({
             description: "3. Call finalizeUpgrade_v2 on VEBO",
-            call: _votingCall(
+            call: _forwardCall(
+                params.agent,
                 params.validators_exit_bus_oracle,
                 abi.encodeCall(IOracleContract.finalizeUpgrade_v2, (600, 13000, 1, 48))
             )
@@ -254,18 +289,6 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 15. Publish new NodeOperatorsRegistry implementation in NodeOperatorsRegistry app APM repo
-        voteItems[index++] = VoteItem({
-            description: "15. Publish new NodeOperatorsRegistry implementation in NodeOperatorsRegistry app APM repo",
-            call: _votingCall(
-                params.nor_app_repo,
-                abi.encodeCall(
-                    IRepo.newVersion,
-                    (params.nor_version, params.node_operators_registry_impl, params.nor_content_uri)
-                )
-            )
-        });
-
         // 16. Update NodeOperatorsRegistry implementation
         voteItems[index++] = VoteItem({
             description: "16. Add APP_MANAGER_ROLE to the AGENT",
@@ -299,7 +322,8 @@ contract TWVoteScript is OmnibusBase {
         // 17. Call finalizeUpgrade_v4 on NOR
         voteItems[index++] = VoteItem({
             description: "17. Call finalizeUpgrade_v4 on NOR",
-            call: _votingCall(
+            call: _forwardCall(
+                params.agent,
                 params.node_operators_registry,
                 abi.encodeCall(INodeOperatorsRegistry.finalizeUpgrade_v4, (params.nor_exit_deadline_in_sec))
             )
@@ -355,18 +379,6 @@ contract TWVoteScript is OmnibusBase {
                 abi.encodeCall(
                     IOracleDaemonConfig.set,
                     ("EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS", abi.encode(params.exit_events_lookback_window_in_slots))
-                )
-            )
-        });
-
-        // 23. Publish new NodeOperatorsRegistry implementation in SimpleDVT app APM repo
-        voteItems[index++] = VoteItem({
-            description: "23. Publish new NodeOperatorsRegistry implementation in SimpleDVT app APM repo",
-            call: _votingCall(
-                params.sdvt_app_repo,
-                abi.encodeCall(
-                    IRepo.newVersion,
-                    (params.sdvt_version, params.node_operators_registry_impl, params.nor_content_uri)
                 )
             )
         });

@@ -1,5 +1,7 @@
 import { ethers } from "hardhat";
 
+import { cy, log } from "lib";
+
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   if (deployer !== process.env.DEPLOYER) {
@@ -21,4 +23,7 @@ export async function main() {
   if (!process.env.GENESIS_TIME) {
     throw new Error("Env variable GENESIS_TIME is not set");
   }
+
+  const latestBlockNumber = await ethers.provider.getBlockNumber();
+  log(cy(`Latest block number: ${latestBlockNumber}`));
 }

@@ -92,7 +92,7 @@ export enum Sk {
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
-  TWVoteScript = "TWVoteScript",
+  twVoteScript = "twVoteScript",
   // Vaults
   predepositGuarantee = "predepositGuarantee",
   stakingVaultImplementation = "stakingVaultImplementation",
@@ -105,6 +105,9 @@ export enum Sk {
   operatorGrid = "operatorGrid",
   validatorConsolidationRequests = "validatorConsolidationRequests",
   lazyOracle = "lazyOracle",
+  // Dual Governance
+  dgDualGovernance = "dg:dualGovernance",
+  dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -120,6 +123,9 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.aragonApmRegistry:
     case Sk.aragonEvmScriptRegistry:
     case Sk.aragonKernel:
+    case Sk.aragonLidoAppRepo:
+    case Sk.aragonNodeOperatorsRegistryAppRepo:
+    case Sk.aragonSimpleDvtAppRepo:
     case Sk.lidoLocator:
     case Sk.stakingRouter:
     case Sk.validatorsExitBusOracle:
@@ -130,10 +136,10 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.accounting:
     case Sk.burner:
     case Sk.appSimpleDvt:
-    case Sk.aragonNodeOperatorsRegistryAppRepo:
-    case Sk.aragonSimpleDvtAppRepo:
     case Sk.predepositGuarantee:
     case Sk.vaultHub:
+    case Sk.dgDualGovernance:
+    case Sk.dgEmergencyProtectedTimelock:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:
@@ -162,6 +168,8 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.stakingVaultFactory:
     case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:
+    case Sk.twVoteScript:
+    case Sk.v3VoteScript:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);

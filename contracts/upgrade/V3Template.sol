@@ -294,16 +294,26 @@ contract V3Template is V3Addresses {
     function _checkBurnerMigratedCorrectly() internal view {
         (uint256 oldCoverShares, uint256 oldNonCoverShares) = IBurner(OLD_BURNER).getSharesRequestedToBurn();
         (uint256 newCoverShares, uint256 newNonCoverShares) = IBurner(BURNER).getSharesRequestedToBurn();
-        if (
-            IBurner(OLD_BURNER).getCoverSharesBurnt() != IBurner(BURNER).getCoverSharesBurnt() ||
-            IBurner(OLD_BURNER).getNonCoverSharesBurnt() != IBurner(BURNER).getNonCoverSharesBurnt() ||
-            oldCoverShares != newCoverShares ||
-            oldNonCoverShares != newNonCoverShares ||
-            ILidoWithFinalizeUpgrade(LIDO).balanceOf(OLD_BURNER) != 0 ||
-            ILidoWithFinalizeUpgrade(LIDO).balanceOf(BURNER) != initialOldBurnerStethSharesBalance ||
-            IBurner(BURNER).isMigrationAllowed()
-        ) {
-            revert IncorrectBurnerSharesMigration();
+        if (IBurner(OLD_BURNER).getCoverSharesBurnt() != IBurner(BURNER).getCoverSharesBurnt()) {
+            revert IncorrectBurnerSharesMigration(1);
+        }
+        if (IBurner(OLD_BURNER).getNonCoverSharesBurnt() != IBurner(BURNER).getNonCoverSharesBurnt()) {
+            revert IncorrectBurnerSharesMigration(2);
+        }
+        if (oldCoverShares != newCoverShares) {
+            revert IncorrectBurnerSharesMigration(3);
+        }
+        if (oldNonCoverShares != newNonCoverShares) {
+            revert IncorrectBurnerSharesMigration(4);
+        }
+        if (ILidoWithFinalizeUpgrade(LIDO).balanceOf(OLD_BURNER) != 0) {
+            revert IncorrectBurnerSharesMigration(5);
+        }
+        if (ILidoWithFinalizeUpgrade(LIDO).sharesOf(BURNER) != initialOldBurnerStethSharesBalance) {
+            revert IncorrectBurnerSharesMigration(6);
+        }
+        if (IBurner(BURNER).isMigrationAllowed()) {
+            revert IncorrectBurnerSharesMigration(7);
         }
 
         address[] memory contractsWithBurnerAllowances_ = contractsWithBurnerAllowances;
@@ -389,7 +399,7 @@ contract V3Template is V3Addresses {
     error StartAndFinishMustBeInSameTx();
     error StartAlreadyCalledInThisTx();
     error Expired();
-    error IncorrectBurnerSharesMigration();
+    error IncorrectBurnerSharesMigration(uint256 reason);
     error IncorrectBurnerAllowance(address contractAddress, address burner);
     error BurnerMigrationNotAllowed();
     error IncorrectVaultFactoryBeacon(address factory, address beacon);

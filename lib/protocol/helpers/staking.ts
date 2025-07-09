@@ -103,6 +103,7 @@ export const removeStakingLimit = async (ctx: ProtocolContext) => {
   const agentAddress = await agentSigner.getAddress();
   await acl.connect(agentSigner).grantPermission(agentAddress, lido.address, role);
   await lido.connect(agentSigner).removeStakingLimit();
+  await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
 };
 
 export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
