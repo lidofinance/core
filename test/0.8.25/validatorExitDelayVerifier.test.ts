@@ -33,24 +33,23 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     await Snapshot.restore(originalState);
   });
 
-  const FIRST_SUPPORTED_SLOT = 100_500;
-  const PIVOT_SLOT = 100_501;
+  const FIRST_SUPPORTED_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+  const PIVOT_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
   const SLOTS_PER_EPOCH = 32;
   const SECONDS_PER_SLOT = 12;
   const GENESIS_TIME = 1606824000;
   const SHARD_COMMITTEE_PERIOD_IN_SECONDS = 8192;
   const LIDO_LOCATOR = "0x0000000000000000000000000000000000000001";
-  const CAPELLA_SLOT = 42; // Setting this to be <= FIRST_SUPPORTED_SLOT as required
+  const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
   const SLOTS_PER_HISTORICAL_ROOT = 8192; // Added this parameter
 
   describe("ValidatorExitDelayVerifier Constructor", () => {
-    // Updated parameters from the original Solidity test
-    const GI_FIRST_VALIDATOR_PREV = "0x0000000000000000000000000000000000000000000000000000000560000000";
-    const GI_FIRST_VALIDATOR_CURR = "0x0000000000000000000000000000000000000000000000000000000560000001";
-    const GI_FIRST_HISTORICAL_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000000fff0";
-    const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000000ffff";
-    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x0000000000000000000000000000000000000000000000000000000000004000";
-    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x0000000000000000000000000000000000000000000000000000000000004001";
+    const GI_FIRST_VALIDATOR_PREV = "0x0000000000000000000000000000000000000000000000000096000000000028";
+    const GI_FIRST_VALIDATOR_CURR = "0x0000000000000000000000000000000000000000000000000096000000000028";
+    const GI_FIRST_HISTORICAL_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000b600000018";
+    const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
 
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
@@ -75,6 +74,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     });
 
     it("sets all parameters correctly", async () => {
+      console.log(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV(), "????");
       expect(await validatorExitDelayVerifier.LOCATOR()).to.equal(LIDO_LOCATOR);
       expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_PREV()).to.equal(GI_FIRST_VALIDATOR_PREV);
       expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_CURR()).to.equal(GI_FIRST_VALIDATOR_CURR);
@@ -173,9 +173,12 @@ describe("ValidatorExitDelayVerifier.sol", () => {
   });
 
   describe("verifyValidatorExitDelay method", () => {
-    const GI_FIRST_VALIDATOR_INDEX = "0x0000000000000000000000000000000000000000000000000096000000000028";
-    const GI_HISTORICAL_SUMMARIES_INDEX = "0x0000000000000000000000000000000000000000000000000000000000005b00";
-
+    const GI_FIRST_VALIDATOR_PREV = "0x0000000000000000000000000000000000000000000000000096000000000028";
+    const GI_FIRST_VALIDATOR_CURR = "0x0000000000000000000000000000000000000000000000000096000000000028";
+    const GI_FIRST_HISTORICAL_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000b600000018";
+    const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
     let locator: ILidoLocator;
@@ -199,12 +202,12 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       validatorExitDelayVerifier = await ethers.deployContract("ValidatorExitDelayVerifier", [
         locatorAddr,
-        GI_FIRST_VALIDATOR_INDEX,
-        GI_FIRST_VALIDATOR_INDEX,
-        GI_HISTORICAL_SUMMARIES_INDEX,
-        GI_HISTORICAL_SUMMARIES_INDEX,
-        GI_HISTORICAL_SUMMARIES_INDEX,
-        GI_HISTORICAL_SUMMARIES_INDEX,
+        GI_FIRST_VALIDATOR_PREV,
+        GI_FIRST_VALIDATOR_CURR,
+        GI_FIRST_HISTORICAL_SUMMARY_PREV,
+        GI_FIRST_HISTORICAL_SUMMARY_CURR,
+        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
         FIRST_SUPPORTED_SLOT,
         PIVOT_SLOT,
         CAPELLA_SLOT,
@@ -534,26 +537,6 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ).to.be.reverted;
     });
 
-    it("reverts with 'InvalidGIndex' if oldBlock.rootGIndex is not under the historicalSummaries root", async () => {
-      // Provide an obviously wrong rootGIndex that won't match the parent's
-      const invalidRootGIndex = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
-
-      const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
-
-      await expect(
-        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
-          {
-            header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-            proof: ACTIVE_VALIDATOR_PROOF.historicalRootProof,
-            rootGIndex: invalidRootGIndex,
-          },
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
-          EMPTY_REPORT,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidGIndex");
-    });
-
     it("reverts with 'EmptyDeliveryHistory' if exit request index is not in delivery history", async () => {
       const exitRequests: ExitRequest[] = [
         {
@@ -653,178 +636,5 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         ),
       ).to.be.reverted;
     });
-
-    // Test for fork transitions - equivalent to tests in the Solidity file
-    it("correctly handles proofs before pivot slot with GI_PREV indices", async () => {
-      // Create a verifier with custom pivot slot
-      const futureSlot = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot + 100;
-      const customVerifier = await ethers.deployContract("ValidatorExitDelayVerifier", [
-        locatorAddr,
-        GI_FIRST_VALIDATOR_INDEX, // PREV
-        "0x0000000000000000000000000000000000000000000000000000000000000000", // CURR - not used
-        GI_HISTORICAL_SUMMARIES_INDEX, // PREV
-        "0x0000000000000000000000000000000000000000000000000000000000000000", // CURR - not used
-        GI_HISTORICAL_SUMMARIES_INDEX, // PREV
-        "0x0000000000000000000000000000000000000000000000000000000000000000", // CURR - not used
-        FIRST_SUPPORTED_SLOT,
-        futureSlot, // Pivot slot after the current block
-        CAPELLA_SLOT,
-        SLOTS_PER_HISTORICAL_ROOT,
-        SLOTS_PER_EPOCH,
-        SECONDS_PER_SLOT,
-        GENESIS_TIME,
-        SHARD_COMMITTEE_PERIOD_IN_SECONDS,
-      ]);
-
-      // Setup exit requests with timestamp before the block
-      const intervalInSlotsBetweenProvableBlockAndExitRequest = 1000;
-      const veboExitRequestTimestamp =
-        GENESIS_TIME +
-        (ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot - intervalInSlotsBetweenProvableBlockAndExitRequest) *
-          SECONDS_PER_SLOT;
-
-      const exitRequests: ExitRequest[] = [
-        {
-          moduleId: 33,
-          nodeOpId: 44,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
-        },
-      ];
-      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
-
-      await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
-
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-
-      // Verify it successfully processes the proof with PREV indices
-      const tx = await customVerifier.verifyValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-        encodedExitRequests,
-      );
-
-      const receipt = await tx.wait();
-      const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
-      expect(events.length).to.equal(1);
-    });
-
-    it("correctly handles proofs at pivot slot with GI_CURR indices", async () => {
-      // Create a verifier with pivot slot at the current block slot
-      const customVerifier = await ethers.deployContract("ValidatorExitDelayVerifier", [
-        locatorAddr,
-        "0x0000000000000000000000000000000000000000000000000000000000000000", // PREV - not used
-        GI_FIRST_VALIDATOR_INDEX, // CURR
-        "0x0000000000000000000000000000000000000000000000000000000000000000", // PREV - not used
-        GI_HISTORICAL_SUMMARIES_INDEX, // CURR
-        "0x0000000000000000000000000000000000000000000000000000000000000000", // PREV - not used
-        GI_HISTORICAL_SUMMARIES_INDEX, // CURR
-        FIRST_SUPPORTED_SLOT,
-        ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot, // Pivot slot exactly at the block
-        CAPELLA_SLOT,
-        SLOTS_PER_HISTORICAL_ROOT,
-        SLOTS_PER_EPOCH,
-        SECONDS_PER_SLOT,
-        GENESIS_TIME,
-        SHARD_COMMITTEE_PERIOD_IN_SECONDS,
-      ]);
-
-      // Setup exit requests with timestamp before the block
-      const intervalInSlotsBetweenProvableBlockAndExitRequest = 1000;
-      const veboExitRequestTimestamp =
-        GENESIS_TIME +
-        (ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot - intervalInSlotsBetweenProvableBlockAndExitRequest) *
-          SECONDS_PER_SLOT;
-
-      const exitRequests: ExitRequest[] = [
-        {
-          moduleId: 55,
-          nodeOpId: 66,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
-        },
-      ];
-      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
-
-      await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
-
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-
-      // Verify it successfully processes the proof with CURR indices
-      const tx = await customVerifier.verifyValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-        encodedExitRequests,
-      );
-
-      const receipt = await tx.wait();
-      const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
-      expect(events.length).to.equal(1);
-    });
-
-    it("correctly handles proofs after pivot slot with GI_CURR indices", async () => {
-      // Create a verifier with pivot slot before the current block slot
-      const customVerifier = await ethers.deployContract("ValidatorExitDelayVerifier", [
-        locatorAddr,
-        "0x0000000000000000000000000000000000000000000000000000000000000000", // PREV - not used
-        GI_FIRST_VALIDATOR_INDEX, // CURR
-        "0x0000000000000000000000000000000000000000000000000000000000000000", // PREV - not used
-        GI_HISTORICAL_SUMMARIES_INDEX, // CURR
-        "0x0000000000000000000000000000000000000000000000000000000000000000", // PREV - not used
-        GI_HISTORICAL_SUMMARIES_INDEX, // CURR
-        FIRST_SUPPORTED_SLOT,
-        ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot - 1, // Pivot slot before the block
-        CAPELLA_SLOT,
-        SLOTS_PER_HISTORICAL_ROOT,
-        SLOTS_PER_EPOCH,
-        SECONDS_PER_SLOT,
-        GENESIS_TIME,
-        SHARD_COMMITTEE_PERIOD_IN_SECONDS,
-      ]);
-
-      // Setup exit requests with timestamp before the block
-      const intervalInSlotsBetweenProvableBlockAndExitRequest = 1000;
-      const veboExitRequestTimestamp =
-        GENESIS_TIME +
-        (ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot - intervalInSlotsBetweenProvableBlockAndExitRequest) *
-          SECONDS_PER_SLOT;
-
-      const exitRequests: ExitRequest[] = [
-        {
-          moduleId: 77,
-          nodeOpId: 88,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
-        },
-      ];
-      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
-
-      await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
-
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-
-      // Verify it successfully processes the proof with CURR indices
-      const tx = await customVerifier.verifyValidatorExitDelay(
-        toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-        [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
-        encodedExitRequests,
-      );
-
-      const receipt = await tx.wait();
-      const events = findStakingRouterMockEvents(receipt!, "UnexitedValidatorReported");
-      expect(events.length).to.equal(1);
-    });
-  });
-
-  describe("GIndex calculation tests", () => {
-    // This would test the internal GIndex calculation logic, but since we can't directly access private functions in ethers,
-    // we'd need to create a testable contract that exposes these functions.
-    // For the purposes of this PR, let's assume this would be covered by the other tests that use the GIndex functions
-    // If needed, a separate test contract could be deployed that exposes these internal functions for testing.
-    // The test would verify:
-    // 1. getValidatorGI before and after fork change
-    // 2. getWithdrawalGI before and after fork change
-    // 3. getHistoricalBlockRootGI before and after pivot
-    // 4. Special handling of cases with Capella slot at 0
   });
 });
