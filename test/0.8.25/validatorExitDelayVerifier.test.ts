@@ -41,7 +41,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
   const SHARD_COMMITTEE_PERIOD_IN_SECONDS = 8192;
   const LIDO_LOCATOR = "0x0000000000000000000000000000000000000001";
   const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
-  const SLOTS_PER_HISTORICAL_ROOT = 8192; // Added this parameter
+  const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
   describe("ValidatorExitDelayVerifier Constructor", () => {
     const GI_FIRST_VALIDATOR_PREV = "0x0000000000000000000000000000000000000000000000000096000000000028";
