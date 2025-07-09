@@ -736,6 +736,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _amountOfShares amount of shares to burn
     /// @dev msg.sender should be vault's owner
+    /// @dev this function is designed to be used by the smart contract, for EOA see `transferAndBurnShares`
     function burnShares(address _vault, uint256 _amountOfShares) public whenResumed {
         _requireNotZero(_amountOfShares);
         _checkConnectionAndOwner(_vault);
@@ -747,6 +748,16 @@ contract VaultHub is PausableUntilWithRoles {
         LIDO.burnExternalShares(_amountOfShares);
 
         emit BurnedSharesOnVault(_vault, _amountOfShares);
+    }
+
+    /// @notice separate burn function for EOA vault owners; requires vaultHub to be approved to transfer stETH
+    /// @param _vault vault address
+    /// @param _amountOfShares amount of shares to transfer and burn
+    /// @dev msg.sender should be vault's owner
+    function transferAndBurnShares(address _vault, uint256 _amountOfShares) external {
+        LIDO.transferSharesFrom(msg.sender, address(this), _amountOfShares);
+
+        burnShares(_vault, _amountOfShares);
     }
 
     /// @notice pauses beacon chain deposits for the vault

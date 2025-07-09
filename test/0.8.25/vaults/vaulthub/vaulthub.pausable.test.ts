@@ -199,5 +199,14 @@ describe("VaultHub.sol:pausableUntil", () => {
     it("reverts rebalance() if paused", async () => {
       await expect(vaultHub.rebalance(ZeroAddress, 0n)).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
     });
+
+    it("reverts transferAndBurnShares() if paused", async () => {
+      await steth.connect(user).approve(vaultHub, 1000n);
+
+      await expect(vaultHub.transferAndBurnShares(stranger, 1000n)).to.be.revertedWithCustomError(
+        vaultHub,
+        "ResumedExpected",
+      );
+    });
   });
 });
