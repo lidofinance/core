@@ -12,6 +12,8 @@ import {
 import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
+import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
+
 function getEnvVariable(name: string, defaultValue?: string): string {
   const value = process.env[name] ?? defaultValue;
   if (value === undefined) {
@@ -219,6 +221,11 @@ export async function main() {
   const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
   const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
 
+  const FIRST_SUPPORTED_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+  const PIVOT_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+  const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+  const SLOTS_PER_HISTORICAL_ROOT = 8192;
+
   // Deploy ValidatorExitDelayVerifier
   const validatorExitDelayVerifier = await deployWithoutProxy(
     Sk.validatorExitDelayVerifier,
@@ -232,10 +239,10 @@ export async function main() {
       GI_FIRST_HISTORICAL_SUMMARY_CURR,
       GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
       GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
-      1, // uint64 firstSupportedSlot,
-      1, // uint64 pivotSlot,
-      1, // uint64 capellaSlot,
-      8192, // uint64 slotsPerHistoricalRoot,
+      FIRST_SUPPORTED_SLOT, // uint64 firstSupportedSlot,
+      PIVOT_SLOT, // uint64 pivotSlot,
+      CAPELLA_SLOT, // uint64 capellaSlot,
+      SLOTS_PER_HISTORICAL_ROOT, // uint64 slotsPerHistoricalRoot,
       chainSpec.slotsPerEpoch, // uint32 slotsPerEpoch,
       chainSpec.secondsPerSlot, // uint32 secondsPerSlot,
       parseInt(getEnvVariable("GENESIS_TIME")), // uint64 genesisTime,
