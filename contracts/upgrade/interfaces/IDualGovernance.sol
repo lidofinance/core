@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.4.24 <0.9.0;
+
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
 
 /// @notice Represents an external call to a specific address with an optional ETH transfer.
 /// @param target The address to call.
