@@ -142,15 +142,25 @@ contract VaultHub is PausableUntilWithRoles {
     bytes32 private constant STORAGE_LOCATION = 0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
 
     /// @notice role that allows to connect vaults to the hub
+    /// @dev keccak256("vaults.VaultHub.VaultMasterRole")
     bytes32 public immutable VAULT_MASTER_ROLE = 0x479bc4a51d27fbdc8e51b5b1ebd3dcd58bd229090980bff226f8930587e69ce3;
+
     /// @notice role that allows to set allowed codehashes
+    /// @dev keccak256("vaults.VaultHub.VaultCodehashSetRole")
     bytes32 public immutable VAULT_CODEHASH_SET_ROLE = 0x712bc47e8f21e3271b5614025535450b46e67d6db1aeb3b0b1a9b76e7eaa7568;
+
     /// @notice role that allows to accrue Lido Core redemptions on the vault
+    /// @dev keccak256("vaults.VaultHub.RedemptionMasterRole")
     bytes32 public immutable REDEMPTION_MASTER_ROLE = 0x44f007e8cc2a08047a03d8d9c295057454942eb49ee3ced9c87e9b9406f21174;
+
     /// @notice role that allows to trigger validator exits under extreme conditions
+    /// @dev keccak256("vaults.VaultHub.ValidatorExitRole")
     bytes32 public immutable VALIDATOR_EXIT_ROLE = 0x2159c5943234d9f3a7225b9a743ea06e4a0d0ba5ed82889e867759a8a9eb7883;
+
     /// @notice role that allows to bail out vaults with bad debt
+    /// @dev keccak256("vaults.VaultHub.BadDebtMasterRole")
     bytes32 public immutable BAD_DEBT_MASTER_ROLE = 0xa85bab4b576ca359fa6ae02ab8744b5c85c7e7ed4d7e0bca7b5b64580ac5d17d;
+
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
 
