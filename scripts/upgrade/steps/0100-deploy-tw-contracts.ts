@@ -174,6 +174,7 @@ TRIGGERABLE_WITHDRAWALS_GATEWAY = "${triggerableWithdrawalsGateway.address}"
 `);
   await deployWithoutProxy(Sk.TWVoteScript, "TWVoteScript", deployer, [
     state[Sk.appVoting].proxy.address,
+    state[Sk.dgDualGovernance].proxy.address,
     {
       // Contract addresses
       agent: agent,
