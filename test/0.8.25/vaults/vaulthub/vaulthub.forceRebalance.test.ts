@@ -19,7 +19,7 @@ import {
 
 import { getCurrentBlockTimestamp, impersonate } from "lib";
 import { findEvents } from "lib/event";
-import { createVaultsReportTree } from "lib/protocol/helpers/vaults";
+import { createVaultsReportTree } from "lib/protocol";
 import { ether } from "lib/units";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
@@ -182,7 +182,15 @@ describe("VaultHub.sol:forceRebalance", () => {
     beforeEach(async () => {
       timestamp = await getCurrentBlockTimestamp();
       const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100"));
-      const reportTree = createVaultsReportTree([[vaultAddress, ether("1"), ether("1"), 0n, 0n]]);
+      const reportTree = createVaultsReportTree([
+        {
+          vault: vaultAddress,
+          totalValue: ether("1"),
+          accruedLidoFees: ether("1"),
+          liabilityShares: 0n,
+          slashingReserve: 0n,
+        },
+      ]);
       await lazyOracle.connect(accountingOracleSigner).updateReportData(timestamp, reportTree.root, "");
 
       await vaultHub

@@ -312,9 +312,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     });
 
     it("Should not allow huge CL/EL rewards totalValue increase without quarantine", async () => {
-      const value = ether("1000");
+      const value: bigint = ether("1000");
 
-      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: value + ether("1") });
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1")); // 1 ether is locked in the vault
