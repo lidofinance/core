@@ -163,7 +163,7 @@ const config: HardhatUserConfig = {
       },
     ],
     overrides: {
-      "test/0.8.25/upgrade/TWVoteScript.sol": {
+      "contracts/upgrade/TWVoteScript.sol": {
         version: "0.8.25",
         settings: {
           viaIR: true,

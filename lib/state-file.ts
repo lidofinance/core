@@ -93,6 +93,9 @@ export enum Sk {
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
   TWVoteScript = "TWVoteScript",
+  // Dual Governance
+  dgDualGovernance = "dg:dualGovernance",
+  dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
 }
 
 export function getAddress(contractKey: Sk): string {
@@ -141,6 +144,9 @@ export function getAddress(contractKey: Sk): string {
     case Sk.depositContract:
     case Sk.validatorExitDelayVerifier:
     case Sk.triggerableWithdrawalsGateway:
+    case Sk.dgDualGovernance:
+    case Sk.dgEmergencyProtectedTimelock:
+    case Sk.TWVoteScript:
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
   }

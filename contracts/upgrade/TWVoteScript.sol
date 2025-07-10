@@ -46,6 +46,8 @@ interface IOracleDaemonConfig {
 /// @title TWVoteScript
 /// @notice Script for implementing Triggerable Withdrawals voting items
 contract TWVoteScript is OmnibusBase {
+    address public constant MAINNET_ACL = 0x9895F0F17cc1d1891b6f18ee0b483B6f221b37Bb;
+    address public constant MAINNET_KERNEL = 0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc;
 
     struct ScriptParams {
         // Contract addresses
@@ -81,17 +83,14 @@ contract TWVoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 23;
+    uint256 public constant VOTE_ITEMS_COUNT = 24;
 
     //
     // Structured storage
     //
     ScriptParams public params;
 
-    constructor(
-        address _voting,
-        ScriptParams memory _params
-    ) OmnibusBase(_voting) {
+    constructor(address _voting, address _dualGovernance, ScriptParams memory _params) OmnibusBase(_voting, _dualGovernance) {
         params = _params;
     }
 
@@ -122,7 +121,8 @@ contract TWVoteScript is OmnibusBase {
         // 3. Call finalizeUpgrade_v2 on VEBO
         voteItems[index++] = VoteItem({
             description: "3. Call finalizeUpgrade_v2 on VEBO",
-            call: _votingCall(
+            call: _forwardCall(
+                params.agent,
                 params.validators_exit_bus_oracle,
                 abi.encodeCall(IOracleContract.finalizeUpgrade_v2, (600, 13000, 1, 48))
             )
@@ -163,7 +163,8 @@ contract TWVoteScript is OmnibusBase {
         // 7. Update WithdrawalVault implementation
         voteItems[index++] = VoteItem({
             description: "7. Update WithdrawalVault implementation",
-            call: _votingCall(
+            call: _forwardCall(
+                params.agent,
                 params.withdrawal_vault,
                 abi.encodeCall(IWithdrawalVaultProxy.proxy_upgradeTo, (params.withdrawal_vault_impl, ""))
             )
@@ -172,7 +173,8 @@ contract TWVoteScript is OmnibusBase {
         // 8. Call finalizeUpgrade_v2 on WithdrawalVault
         voteItems[index++] = VoteItem({
             description: "8. Call finalizeUpgrade_v2 on WithdrawalVault",
-            call: _votingCall(
+            call: _forwardCall(
+                params.agent,
                 params.withdrawal_vault,
                 abi.encodeCall(IWithdrawalVault.finalizeUpgrade_v2, ())
             )
@@ -240,51 +242,70 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 15. Update NodeOperatorsRegistry implementation
+        // 15. Add APP_MANAGER_ROLE to the AGENT
         voteItems[index++] = VoteItem({
-            description: "17. Update NodeOperatorsRegistry implementation",
-            call: _votingCall(
-                0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc,
+            description: "15. Add APP_MANAGER_ROLE to the AGENT",
+            call: _forwardCall(
+                params.agent,
+                MAINNET_ACL,
+                abi.encodeWithSignature(
+                    "grantPermission(address,address,bytes32)",
+                    params.agent,
+                    MAINNET_KERNEL,
+                    keccak256("APP_MANAGER_ROLE")
+                )
+            )
+        });
+
+        // 16. Update NodeOperatorsRegistry implementation
+        voteItems[index++] = VoteItem({
+            description: "16. Update NodeOperatorsRegistry implementation",
+            call: _forwardCall(
+                params.agent,
+                MAINNET_KERNEL,
                 abi.encodeWithSignature("setApp(bytes32,bytes32,address)",
-                    IKernel(0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc).APP_BASES_NAMESPACE(),
+                    IKernel(MAINNET_KERNEL).APP_BASES_NAMESPACE(),
                     params.node_operators_registry_app_id,
                     params.node_operators_registry_impl
                 )
             )
         });
 
-        // 16. Call finalizeUpgrade_v4 on NOR
+        // 17. Call finalizeUpgrade_v4 on NOR
         voteItems[index++] = VoteItem({
             description: "19. Call finalizeUpgrade_v4 on NOR",
-            call: _votingCall(
+            call: _forwardCall(
+                params.agent,
                 params.node_operators_registry,
                 abi.encodeCall(INodeOperatorsRegistry.finalizeUpgrade_v4, (params.nor_exit_deadline_in_sec))
             )
         });
 
-        // 17. Update SimpleDVT implementation
+        // 18. Update SimpleDVT implementation
         voteItems[index++] = VoteItem({
             description: "18. Update SimpleDVT implementation",
-            call: _votingCall(
-                0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc,
+            call: _forwardCall(
+                params.agent,
+                MAINNET_KERNEL,
                 abi.encodeWithSignature("setApp(bytes32,bytes32,address)",
-                    IKernel(0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc).APP_BASES_NAMESPACE(),
+                    IKernel(MAINNET_KERNEL).APP_BASES_NAMESPACE(),
                     params.simple_dvt_app_id,
                     params.node_operators_registry_impl
                 )
             )
         });
 
-        // 18. Call finalizeUpgrade_v4 on SimpleDVT
+        // 19. Call finalizeUpgrade_v4 on SimpleDVT
         voteItems[index++] = VoteItem({
             description: "20. Call finalizeUpgrade_v4 on SimpleDVT",
-            call: _votingCall(
+            call: _forwardCall(
+                params.agent,
                 params.simple_dvt,
                 abi.encodeCall(INodeOperatorsRegistry.finalizeUpgrade_v4, (params.nor_exit_deadline_in_sec))
             )
         });
 
-        // 19. Grant CONFIG_MANAGER_ROLE role to the AGENT
+        // 20. Grant CONFIG_MANAGER_ROLE role to the AGENT
         bytes32 configManagerRole = keccak256("CONFIG_MANAGER_ROLE");
         voteItems[index++] = VoteItem({
             description: "21. Grant CONFIG_MANAGER_ROLE role to the AGENT",
@@ -295,7 +316,7 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 20. Remove NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP variable from OracleDaemonConfig
+        // 21. Remove NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP variable from OracleDaemonConfig
         voteItems[index++] = VoteItem({
             description: "22. Remove NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP variable from OracleDaemonConfig",
             call: _forwardCall(
@@ -305,7 +326,7 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 21. Remove VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig
+        // 22. Remove VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig
         voteItems[index++] = VoteItem({
             description: "23. Remove VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig",
             call: _forwardCall(
@@ -315,7 +336,7 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 22. Remove VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig
+        // 23. Remove VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig
         voteItems[index++] = VoteItem({
             description: "24. Remove VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS variable from OracleDaemonConfig",
             call: _forwardCall(
@@ -325,7 +346,7 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 23. Add EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS variable to OracleDaemonConfig
+        // 24. Add EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS variable to OracleDaemonConfig
         voteItems[index++] = VoteItem({
             description: "25. Add EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS variable to OracleDaemonConfig",
             call: _forwardCall(
