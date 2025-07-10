@@ -41,4 +41,9 @@ library Math256 {
     function absDiff(uint256 a, uint256 b) internal pure returns (uint256) {
         return a > b ? a - b : b - a;
     }
+
+    /// @dev Returns the distance between two numbers by modulo in counterclockwise direction
+    function ccwDistanceByModulo(uint256 a, uint256 b, uint256 modulo) internal pure returns (uint256) {
+        return (modulo + (a % modulo) - (b % modulo)) % modulo;
+    }
 }

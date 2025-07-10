@@ -1195,11 +1195,11 @@ contract VaultHub is PausableUntilWithRoles {
 
         // if false, we need to check if vault's report is slightly newer than the latest AO report
         // but as we are using uint32, we need to find the counterclockwise distance
-        // between vaultReportTimestamp and latestReportTimestamp32
+        // between vaultReportTimestamp and latestReportTimestamp32 in modulo 2**32
         // and check if it's less than REPORT_FRESHNESS_DELTA
 
-        uint256 modulo = type(uint32).max;
-        uint256 ccwDistance = (modulo + vaultReportTimestamp - latestReportTimestamp32) % modulo;
+        uint256 ccwDistance =
+            Math256.ccwDistanceByModulo(vaultReportTimestamp, latestReportTimestamp32, type(uint32).max);
 
         return ccwDistance < REPORT_FRESHNESS_DELTA && block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }

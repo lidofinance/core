@@ -307,6 +307,17 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         VaultHub vaultHub = _vaultHub();
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
+        // 0. Check if the report is already applied
+        uint256 ccwDistance = Math256.ccwDistanceByModulo(
+            record.report.timestamp,
+            _storage().vaultsDataTimestamp,
+            type(uint32).max
+        );
+
+        if (ccwDistance < vaultHub.REPORT_FRESHNESS_DELTA()) {
+            revert VaultReportIsAlreadyApplied();
+        }
+
         // 1. Calculate inOutDelta in the refSlot
         int256 currentInOutDelta = record.inOutDelta.value;
         inOutDeltaOnRefSlot = vaultHub.inOutDeltaAsOfLastRefSlot(_vault);
@@ -409,4 +420,5 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     error InvalidProof();
     error UnderflowInTotalValueCalculation();
     error TotalValueTooLarge();
+    error VaultReportIsAlreadyApplied();
 }
