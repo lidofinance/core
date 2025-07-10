@@ -34,7 +34,7 @@ contract ValidatorConsolidationRequests {
 
     /**
      * @notice Send EIP-7251 consolidation requests for the specified public keys.
-     *      Each request instructs a validator to consolidate its stake to the target validator. 
+     *      Each request instructs a validator to consolidate its stake to the target validator.
      *
      * Requirements:
      *  - The caller must have the `NODE_OPERATOR_REWARDS_ADJUST_ROLE` to perform reward adjustment.
@@ -62,10 +62,10 @@ contract ValidatorConsolidationRequests {
      *    b. Sign the transaction with the minimum number of owners required to meet the Safe's threshold, then execute it.
      *
      * Notes:
-     *  Consolidation requests are asynchronous and handled on the Consensus Layer. The function optimistically 
+     *  Consolidation requests are asynchronous and handled on the Consensus Layer. The function optimistically
      *  assumes that the consolidation will succeed and immediately increases the node operator's reward adjustment
      *  via the Dashboard contract. However, if the consolidation fails, the function does not take
-     *  responsibility for rolling back the adjustment. It is the responsibility of the Node Operator and Vault Owner to call 
+     *  responsibility for rolling back the adjustment. It is the responsibility of the Node Operator and Vault Owner to call
      *  `setRewardsAdjustment` on the Dashboard contract to correct the adjustment value in such cases.
      *
      *  Additionally, this function assumes that the provided source and target pubkeys are valid, and that the reward
