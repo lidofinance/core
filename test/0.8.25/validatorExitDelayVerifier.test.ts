@@ -56,12 +56,14 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     before(async () => {
       validatorExitDelayVerifier = await ethers.deployContract("ValidatorExitDelayVerifier", [
         LIDO_LOCATOR,
-        GI_FIRST_VALIDATOR_PREV,
-        GI_FIRST_VALIDATOR_CURR,
-        GI_FIRST_HISTORICAL_SUMMARY_PREV,
-        GI_FIRST_HISTORICAL_SUMMARY_CURR,
-        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+        {
+          gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+          gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+          gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+          gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+          gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+          gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+        },
         FIRST_SUPPORTED_SLOT,
         PIVOT_SLOT,
         CAPELLA_SLOT,
@@ -106,12 +108,14 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       await expect(
         ethers.deployContract("ValidatorExitDelayVerifier", [
           LIDO_LOCATOR,
-          GI_FIRST_VALIDATOR_PREV,
-          GI_FIRST_VALIDATOR_CURR,
-          GI_FIRST_HISTORICAL_SUMMARY_PREV,
-          GI_FIRST_HISTORICAL_SUMMARY_CURR,
-          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          {
+            gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+            gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          },
           200_000, // firstSupportedSlot
           100_000, // pivotSlot < firstSupportedSlot
           CAPELLA_SLOT,
@@ -128,12 +132,14 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       await expect(
         ethers.deployContract("ValidatorExitDelayVerifier", [
           ethers.ZeroAddress, // Zero address for locator
-          GI_FIRST_VALIDATOR_PREV,
-          GI_FIRST_VALIDATOR_CURR,
-          GI_FIRST_HISTORICAL_SUMMARY_PREV,
-          GI_FIRST_HISTORICAL_SUMMARY_CURR,
-          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          {
+            gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+            gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          },
           FIRST_SUPPORTED_SLOT,
           PIVOT_SLOT,
           CAPELLA_SLOT,
@@ -153,12 +159,14 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       await expect(
         ethers.deployContract("ValidatorExitDelayVerifier", [
           LIDO_LOCATOR,
-          GI_FIRST_VALIDATOR_PREV,
-          GI_FIRST_VALIDATOR_CURR,
-          GI_FIRST_HISTORICAL_SUMMARY_PREV,
-          GI_FIRST_HISTORICAL_SUMMARY_CURR,
-          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-          GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          {
+            gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+            gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          },
           FIRST_SUPPORTED_SLOT,
           PIVOT_SLOT,
           FIRST_SUPPORTED_SLOT + 1, // Invalid Capella slot
@@ -202,12 +210,14 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       validatorExitDelayVerifier = await ethers.deployContract("ValidatorExitDelayVerifier", [
         locatorAddr,
-        GI_FIRST_VALIDATOR_PREV,
-        GI_FIRST_VALIDATOR_CURR,
-        GI_FIRST_HISTORICAL_SUMMARY_PREV,
-        GI_FIRST_HISTORICAL_SUMMARY_CURR,
-        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
-        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+        {
+          gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+          gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+          gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+          gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+          gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+          gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+        },
         FIRST_SUPPORTED_SLOT,
         PIVOT_SLOT,
         CAPELLA_SLOT,

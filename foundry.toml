@@ -21,7 +21,7 @@ cache_path = 'foundry/cache'
 match_path = '**/test/**/*.t.sol'
 
 # Enable latest EVM features
-evm_version = "prague"
+evm_version = "cancun"
 
 # https://book.getfoundry.sh/reference/config/testing#fuzz
 # fuzz = { runs = 256 }

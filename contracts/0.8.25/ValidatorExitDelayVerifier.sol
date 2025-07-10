@@ -41,6 +41,15 @@ struct HistoricalHeaderWitness {
     bytes32[] proof; // The Merkle proof for the old block header against the state's historical_summaries root.
 }
 
+struct GIndices {
+    GIndex gIFirstValidatorPrev;
+    GIndex gIFirstValidatorCurr;
+    GIndex gIFirstHistoricalSummaryPrev;
+    GIndex gIFirstHistoricalSummaryCurr;
+    GIndex gIFirstBlockRootInSummaryPrev;
+    GIndex gIFirstBlockRootInSummaryCurr;
+}
+
 /**
  * @title ValidatorExitDelayVerifier
  * @notice Allows permissionless reporting of exit delays for validators that have been requested to exit
@@ -118,12 +127,7 @@ contract ValidatorExitDelayVerifier {
     /**
      * @dev The previous and current forks can be essentially the same.
      * @param lidoLocator The address of the LidoLocator contract.
-     * @param gIFirstValidatorPrev GIndex pointing to validators[0] on the previous fork.
-     * @param gIFirstValidatorCurr GIndex pointing to validators[0] on the current fork.
-     * @param gIFirstHistoricalSummaryPrev GIndex pointing to historical summary for the previous fork.
-     * @param gIFirstHistoricalSummaryCurr GIndex pointing to historical summary for the current fork.
-     * @param gIFirstBlockRootInSummaryPrev GIndex pointing to the first block root in a historical summary for the previous fork.
-     * @param gIFirstBlockRootInSummaryCurr GIndex pointing to the first block root in a historical summary for the current fork.
+     * @param gIndices Struct containing all GIndices for the contract.
      * @param firstSupportedSlot The earliest slot number that proofs can be submitted for verification.
      * @param pivotSlot The pivot slot number used to differentiate "previous" vs "current" fork indexing.
      * @param capellaSlot The slot where Capella fork started.
@@ -135,12 +139,7 @@ contract ValidatorExitDelayVerifier {
      */
     constructor(
         address lidoLocator,
-        GIndex gIFirstValidatorPrev,
-        GIndex gIFirstValidatorCurr,
-        GIndex gIFirstHistoricalSummaryPrev,
-        GIndex gIFirstHistoricalSummaryCurr,
-        GIndex gIFirstBlockRootInSummaryPrev,
-        GIndex gIFirstBlockRootInSummaryCurr,
+        GIndices memory gIndices,
         uint64 firstSupportedSlot,
         uint64 pivotSlot,
         uint64 capellaSlot,
@@ -157,14 +156,13 @@ contract ValidatorExitDelayVerifier {
 
         LOCATOR = ILidoLocator(lidoLocator);
 
-        GI_FIRST_VALIDATOR_PREV = gIFirstValidatorPrev;
-        GI_FIRST_VALIDATOR_CURR = gIFirstValidatorCurr;
-
-        GI_FIRST_HISTORICAL_SUMMARY_PREV = gIFirstHistoricalSummaryPrev;
-        GI_FIRST_HISTORICAL_SUMMARY_CURR = gIFirstHistoricalSummaryCurr;
-
-        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = gIFirstBlockRootInSummaryPrev;
-        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = gIFirstBlockRootInSummaryCurr;
+        // Assign individual GIndex values from the struct
+        GI_FIRST_VALIDATOR_PREV = gIndices.gIFirstValidatorPrev;
+        GI_FIRST_VALIDATOR_CURR = gIndices.gIFirstValidatorCurr;
+        GI_FIRST_HISTORICAL_SUMMARY_PREV = gIndices.gIFirstHistoricalSummaryPrev;
+        GI_FIRST_HISTORICAL_SUMMARY_CURR = gIndices.gIFirstHistoricalSummaryCurr;
+        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = gIndices.gIFirstBlockRootInSummaryPrev;
+        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = gIndices.gIFirstBlockRootInSummaryCurr;
 
         FIRST_SUPPORTED_SLOT = firstSupportedSlot;
         PIVOT_SLOT = pivotSlot;
