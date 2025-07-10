@@ -22,7 +22,6 @@ struct Proposer {
     address executor;
 }
 
-
 interface IDualGovernance {
     function submitProposal(
         ExternalCall[] calldata calls,

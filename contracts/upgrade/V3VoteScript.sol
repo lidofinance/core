@@ -50,6 +50,10 @@ contract V3VoteScript is OmnibusBase {
         params = _params;
     }
 
+    function getVotingVoteItems() public view override returns (VoteItem[] memory votingVoteItems) {
+        votingVoteItems = new VoteItem[](0);
+    }
+
     function getVoteItems() public view override returns (VoteItem[] memory voteItems) {
         voteItems = new VoteItem[](VOTE_ITEMS_COUNT);
         uint256 index = 0;
