@@ -109,6 +109,8 @@ async function main(): Promise<void> {
   const VALIDATOR_CURR_GINDEX = VALIDATOR_PREV_GINDEX;
   const HISTORICAL_SUMMARIES_PREV_GINDEX = "0x0000000000000000000000000000000000000000000000000000000000005b00";
   const HISTORICAL_SUMMARIES_CURR_GINDEX = HISTORICAL_SUMMARIES_PREV_GINDEX;
+  const BLOCK_ROOT_IN_SUMMARY_PREV_GINDEX = "0x000000000000000000000000000000000000000000000000000000000040000d";
+  const BLOCK_ROOT_IN_SUMMARY_CURR_GINDEX = BLOCK_ROOT_IN_SUMMARY_PREV_GINDEX;
 
   // TriggerableWithdrawalsGateway params
   const TRIGGERABLE_WITHDRAWALS_MAX_LIMIT = 11_200;
@@ -183,7 +185,14 @@ async function main(): Promise<void> {
     libraries,
   });
   log.success(`NodeOperatorsRegistry: ${nor.address}`);
-
+  const gIndexes = {
+    gIFirstValidatorPrev: VALIDATOR_PREV_GINDEX,
+    gIFirstValidatorCurr: VALIDATOR_CURR_GINDEX,
+    gIFirstHistoricalSummaryPrev: HISTORICAL_SUMMARIES_PREV_GINDEX,
+    gIFirstHistoricalSummaryCurr: HISTORICAL_SUMMARIES_CURR_GINDEX,
+    gIFirstBlockRootInSummaryPrev: BLOCK_ROOT_IN_SUMMARY_PREV_GINDEX,
+    gIFirstBlockRootInSummaryCurr: BLOCK_ROOT_IN_SUMMARY_CURR_GINDEX,
+  };
   // 6. ValidatorExitDelayVerifier
   const validatorExitDelayVerifier = await deployImplementation(
     Sk.validatorExitDelayVerifier,
@@ -191,16 +200,15 @@ async function main(): Promise<void> {
     deployer,
     [
       locator.address,
-      VALIDATOR_PREV_GINDEX,
-      VALIDATOR_CURR_GINDEX,
-      HISTORICAL_SUMMARIES_PREV_GINDEX,
-      HISTORICAL_SUMMARIES_CURR_GINDEX,
+      gIndexes,
       1, // firstSupportedSlot
       1, // pivotSlot
+      0, // capellaSlot @see https://github.com/eth-clients/hoodi/blob/main/metadata/config.yaml#L33
+      (SLOTS_PER_EPOCH * 8192) / SLOTS_PER_EPOCH, // slotsPerHistoricalRoot
       SLOTS_PER_EPOCH,
       SECONDS_PER_SLOT,
       GENESIS_TIME,
-      SHARD_COMMITTEE_PERIOD_SLOTS * SECONDS_PER_SLOT, // seconds
+      (SHARD_COMMITTEE_PERIOD_SLOTS * SECONDS_PER_SLOT) / (SLOTS_PER_EPOCH * SECONDS_PER_SLOT), // shardCommitteePeriodInSeconds
     ],
   );
   log.success(`ValidatorExitDelayVerifier: ${validatorExitDelayVerifier.address}`);
