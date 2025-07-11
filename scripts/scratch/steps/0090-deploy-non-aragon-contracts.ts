@@ -243,6 +243,7 @@ export async function main() {
       },
       FIRST_SUPPORTED_SLOT, // uint64 firstSupportedSlot,
       PIVOT_SLOT, // uint64 pivotSlot,
+      // TODO: update this to the actual Capella slot for e2e testing in mainnet-fork
       CAPELLA_SLOT, // uint64 capellaSlot,
       SLOTS_PER_HISTORICAL_ROOT, // uint64 slotsPerHistoricalRoot,
       chainSpec.slotsPerEpoch, // uint32 slotsPerEpoch,
