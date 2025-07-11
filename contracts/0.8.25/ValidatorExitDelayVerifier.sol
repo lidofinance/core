@@ -71,16 +71,10 @@ contract ValidatorExitDelayVerifier {
     uint32 public immutable SECONDS_PER_SLOT;
     uint32 public immutable SHARD_COMMITTEE_PERIOD_IN_SECONDS;
 
-    /**
-     * @notice The GIndex pointing to BeaconState.validators[0] for the "previous" fork.
-     * @dev Used to derive the correct GIndex when verifying proofs for a block prior to pivot.
-     */
+    /// @dev This index is relative to a state like: `BeaconState.validators[0]`.
     GIndex public immutable GI_FIRST_VALIDATOR_PREV;
 
-    /**
-     * @notice The GIndex pointing to BeaconState.validators[0] for the "current" fork.
-     * @dev Used to derive the correct GIndex when verifying proofs for a block after the pivot slot.
-     */
+    /// @dev This index is relative to a state like: `BeaconState.validators[0]`.
     GIndex public immutable GI_FIRST_VALIDATOR_CURR;
 
     /// @dev This index is relative to a state like: `BeaconState.historical_summaries[0]`.
