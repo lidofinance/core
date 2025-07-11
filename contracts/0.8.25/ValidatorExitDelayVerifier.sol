@@ -394,10 +394,6 @@ contract ValidatorExitDelayVerifier {
     ) internal view returns (uint256 deliveryTimestamp) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
         deliveryTimestamp = veb.getDeliveryTimestamp(exitRequestsHash);
-
-        if (deliveryTimestamp == 0) {
-            revert EmptyDeliveryHistory();
-        }
     }
 
     function _slotToTimestamp(uint64 slot) internal view returns (uint256) {
