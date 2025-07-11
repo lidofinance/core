@@ -1,37 +1,10 @@
-import { TokenManager, V3VoteScript, Voting } from "typechain-types";
+import { mockDGAragonVoting } from "scripts/utils/upgrade";
 
-import { advanceChainTime, ether, log } from "lib";
-import { impersonate } from "lib/account";
-import { loadContract } from "lib/contract";
-import { readNetworkState, Sk } from "lib/state-file";
+import { getAddress, readNetworkState, Sk } from "lib/state-file";
 
-export async function createVoteAndGetExecuteTxPromise() {
+export async function main(): Promise<ReturnType<typeof mockDGAragonVoting>> {
   const state = readNetworkState();
-  const agentAddress = state[Sk.appAgent].proxy.address;
-  const votingAddress = state[Sk.appVoting].proxy.address;
-  const tokenManagerAddress = state[Sk.appTokenManager].proxy.address;
-
-  const deployer = await impersonate(agentAddress, ether("100"));
-
-  const voteScript = await loadContract<V3VoteScript>("V3VoteScript", state[Sk.v3VoteScript].address);
-  const tokenManager = await loadContract<TokenManager>("TokenManager", tokenManagerAddress);
-  const voting = await loadContract<Voting>("Voting", votingAddress);
-
-  const voteId = await voting.votesLength();
-
-  const newVoteBytecode = await voteScript.getNewVoteCallBytecode("V3 Lido Upgrade description placeholder");
-  await tokenManager.connect(deployer).forward(newVoteBytecode);
-  if (!(await voteScript.isValidVoteScript(voteId))) throw new Error("Vote script is not valid");
-  await voting.connect(deployer).vote(voteId, true, false);
-  await advanceChainTime(await voting.voteTime());
-  return voting.executeVote(voteId);
-}
-
-export async function main() {
-  const executeTx = await createVoteAndGetExecuteTxPromise();
-
-  const executeReceipt = await executeTx.wait();
-  log.success("Voting executed: gas used", executeReceipt!.gasUsed);
-
-  return { executeReceipt };
+  const votingDescription = "V3 Lido Upgrade description placeholder";
+  const proposalMetadata = "V3 Lido Upgrade proposal metadata placeholder";
+  return mockDGAragonVoting(getAddress(Sk.v3VoteScript, state), votingDescription, proposalMetadata, state);
 }

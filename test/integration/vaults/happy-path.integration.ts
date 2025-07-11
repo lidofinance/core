@@ -19,7 +19,14 @@ import {
   updateBalance,
 } from "lib";
 import { TOTAL_BASIS_POINTS } from "lib/constants";
-import { getProtocolContext, getReportTimeElapsed, OracleReportParams, ProtocolContext, report } from "lib/protocol";
+import {
+  getProtocolContext,
+  getReportTimeElapsed,
+  OracleReportParams,
+  ProtocolContext,
+  report,
+  setupLidoForVaults,
+} from "lib/protocol";
 import { reportVaultDataWithProof } from "lib/protocol/helpers/vaults";
 
 import { bailOnFailure, Snapshot } from "test/suite";
@@ -67,6 +74,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
+
+    await setupLidoForVaults(ctx);
 
     // add ETH to NO for PDG deposit + gas
     await setBalance(nodeOperator.address, ether((VALIDATORS_PER_VAULT + 1n).toString()));
@@ -169,12 +178,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   });
 
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
-    const { lido, vaultHub } = ctx.contracts;
+    const { vaultHub } = ctx.contracts;
 
     expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("1")); // has locked value cause of connection deposit
-
-    const votingSigner = await ctx.getSigner("voting");
-    await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
 
     expect(await vaultHub.vaultsCount()).to.equal(1n);
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_CONNECTION_DEPOSIT);

@@ -275,6 +275,16 @@
       "pauseIntentValidityPeriodBlocks": 6646
     }
   },
+  "dg:dualGovernance": {
+    "proxy": {
+      "address": "0xcdF49b058D606AD34c5789FD8c3BF8B3E54bA2db"
+    }
+  },
+  "dg:emergencyProtectedTimelock": {
+    "proxy": {
+      "address": "0xCE0425301C85c5Ea2A0873A2dEe44d78E02D2316"
+    }
+  },
   "dummyEmptyContract": {
     "address": "0x6F6541C2203196fEeDd14CD2C09550dA1CbEDa31",
     "contract": "contracts/0.8.9/utils/DummyEmptyContract.sol",

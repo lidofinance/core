@@ -2,7 +2,7 @@ import { expect } from "chai";
 import hre from "hardhat";
 import { beforeEach } from "mocha";
 import { main as mockTWAragonVoting } from "scripts/upgrade/steps/0400-mock-tw-aragon-voting";
-import { createVoteAndGetExecuteTxPromise } from "scripts/upgrade/steps/0500-mock-v3-aragon-voting";
+import { main as mockV3AragonVoting } from "scripts/upgrade/steps/0500-mock-v3-aragon-voting";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
@@ -69,7 +69,7 @@ describe("Integration: Upgrade Template V3 tests", () => {
   }
 
   it_("happy path", async function () {
-    await expect(createVoteAndGetExecuteTxPromise())
+    await expect((async () => (await mockV3AragonVoting()).proposalExecutedReceipt)())
       .to.emit(template, "UpgradeStarted")
       .and.to.emit(template, "UpgradeFinished");
     expect(await template.upgradeBlockNumber()).to.not.equal(0);
@@ -124,7 +124,7 @@ describe("Integration: Upgrade Template V3 tests", () => {
     });
 
     it_("should revert when startUpgrade is called after upgrade is already finished", async function () {
-      await createVoteAndGetExecuteTxPromise();
+      await mockV3AragonVoting();
       await expect(template.connect(agentSigner).startUpgrade()).to.be.revertedWithCustomError(
         template,
         "UpgradeAlreadyFinished",
@@ -158,7 +158,7 @@ describe("Integration: Upgrade Template V3 tests", () => {
     });
 
     it_("should revert when finishUpgrade is called after upgrade is already finished", async function () {
-      await createVoteAndGetExecuteTxPromise();
+      await mockV3AragonVoting();
       await expect(template.connect(agentSigner).finishUpgrade()).to.be.revertedWithCustomError(
         template,
         "UpgradeAlreadyFinished",

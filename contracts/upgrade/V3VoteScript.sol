@@ -44,10 +44,14 @@ contract V3VoteScript is OmnibusBase {
 
     constructor(
         ScriptParams memory _params
-    ) OmnibusBase(V3Template(_params.upgradeTemplate).VOTING()) {
+    ) OmnibusBase(V3Template(_params.upgradeTemplate).VOTING(), V3Template(_params.upgradeTemplate).DUAL_GOVERNANCE()) {
         TEMPLATE = V3Template(_params.upgradeTemplate);
 
         params = _params;
+    }
+
+    function getVotingVoteItems() public view override returns (VoteItem[] memory votingVoteItems) {
+        votingVoteItems = new VoteItem[](0);
     }
 
     function getVoteItems() public view override returns (VoteItem[] memory voteItems) {
@@ -69,7 +73,8 @@ contract V3VoteScript is OmnibusBase {
         // Set Lido implementation in Kernel
         voteItems[index++] = VoteItem({
             description: "3. Set Lido implementation in Kernel",
-            call: _votingCall(
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
                 TEMPLATE.KERNEL(),
                 abi.encodeCall(IKernel.setApp, (IKernel(TEMPLATE.KERNEL()).APP_BASES_NAMESPACE(), params.lidoAppId, TEMPLATE.NEW_LIDO_IMPL()))
             )
