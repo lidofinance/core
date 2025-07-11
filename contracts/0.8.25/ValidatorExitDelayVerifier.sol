@@ -115,7 +115,6 @@ contract ValidatorExitDelayVerifier {
         uint256 provableBeaconBlockTimestamp,
         uint256 eligibleExitRequestTimestamp
     );
-    error EmptyDeliveryHistory();
     error InvalidCapellaSlot();
 
     /**
