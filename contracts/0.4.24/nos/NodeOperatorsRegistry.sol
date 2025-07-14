@@ -1074,6 +1074,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     function _setExitDeadlineThreshold(uint256 _threshold, uint256 _lateReportingWindow) internal {
         require(_threshold > 0, "INVALID_EXIT_DELAY_THRESHOLD");
 
+        // Check for underflow protection before computing currentCutoffTimestamp
+        require(block.timestamp >= _threshold + _lateReportingWindow, "CUTOFF_TIMESTAMP_UNDERFLOW");
+
         // Set the cutoff timestamp to the current time minus the threshold and reportingWindow period
         uint256 currentCutoffTimestamp = block.timestamp - _threshold - _lateReportingWindow;
         require(exitPenaltyCutoffTimestamp() <= currentCutoffTimestamp, "INVALID_EXIT_PENALTY_CUTOFF_TIMESTAMP");
