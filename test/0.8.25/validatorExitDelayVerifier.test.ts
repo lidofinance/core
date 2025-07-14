@@ -547,7 +547,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ).to.be.reverted;
     });
 
-    it("reverts with 'EmptyDeliveryHistory' if exit request index is not in delivery history", async () => {
+    it("reverts with 'RequestsNotDelivered' if exit request index is not in delivery history", async () => {
       const exitRequests: ExitRequest[] = [
         {
           moduleId: 1,
@@ -565,7 +565,6 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       // Report not unpacked, deliveryTimestamp == 0
       await vebo.setExitRequests(encodedExitRequestsHash, 0, exitRequests);
-      expect(await vebo.getDeliveryTimestamp(encodedExitRequestsHash)).to.equal(0);
 
       await expect(
         validatorExitDelayVerifier.verifyValidatorExitDelay(
@@ -573,7 +572,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
           encodedExitRequests,
         ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "EmptyDeliveryHistory");
+      ).to.be.revertedWithCustomError(vebo, "RequestsNotDelivered");
 
       await expect(
         validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
@@ -582,7 +581,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
           encodedExitRequests,
         ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "EmptyDeliveryHistory");
+      ).to.be.revertedWithCustomError(vebo, "RequestsNotDelivered");
     });
 
     it("reverts if the oldBlock proof is corrupted", async () => {
