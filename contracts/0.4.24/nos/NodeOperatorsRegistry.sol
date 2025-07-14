@@ -590,7 +590,8 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @param _nodeOperatorId Id of the node operator
     /// @param _isTargetLimitActive Flag indicating if the soft target limit is active
     /// @param _targetLimit Target limit of the node operator
-    /// @dev This function is deprecated, use updateTargetValidatorsLimits instead
+    /// @dev DEPRECATED: This function updateTargetValidatorsLimits(uint256, bool, uint256) is deprecated
+    /// @dev Use updateTargetValidatorsLimits(uint256, uint256, uint256) instead
     function updateTargetValidatorsLimits(uint256 _nodeOperatorId, bool _isTargetLimitActive, uint256 _targetLimit) public {
         updateTargetValidatorsLimits(_nodeOperatorId, _isTargetLimitActive ? 1 : 0, _targetLimit);
     }
