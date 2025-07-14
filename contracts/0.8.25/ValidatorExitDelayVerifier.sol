@@ -206,7 +206,7 @@ contract ValidatorExitDelayVerifier {
                 proofSlotTimestamp
             );
 
-            _verifyValidatorExitUnset(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
+            _verifyValidatorExitUnset(beaconBlock.header, witness, pubkey, valIndex);
 
             stakingRouter.reportValidatorExitDelay(moduleId, nodeOpId, proofSlotTimestamp, pubkey, eligibleToExitInSec);
         }
