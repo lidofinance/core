@@ -444,7 +444,8 @@ describe("ValidatorsExitBusOracle.sol:submitExitRequestsData", () => {
 
       const maxRequestsPerReport = 4;
 
-      await oracle.connect(authorizedEntity).setMaxValidatorsPerReport(maxRequestsPerReport);
+      const tx = await oracle.connect(authorizedEntity).setMaxValidatorsPerReport(maxRequestsPerReport);
+      await expect(tx).to.emit(oracle, "SetMaxValidatorsPerReport").withArgs(maxRequestsPerReport);
       expect(await oracle.connect(authorizedEntity).getMaxValidatorsPerReport()).to.equal(maxRequestsPerReport);
 
       const exitRequestsRandom = [
