@@ -23,7 +23,6 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     error AdminCannotBeZero();
     error SenderNotAllowed();
     error UnexpectedRequestsDataLength();
-    error ArgumentOutOfBounds();
 
     event WarnDataIncompleteProcessing(uint256 indexed refSlot, uint256 requestsProcessed, uint256 requestsCount);
 
