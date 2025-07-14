@@ -141,6 +141,12 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      */
     event ExitDataProcessing(bytes32 exitRequestsHash);
 
+    /**
+     * @notice Emitted when max validators per report value is set.
+     * @param maxValidatorsPerReport The number of valdiators allowed per report.
+     */
+    event SetMaxValidatorsPerReport(uint256 maxValidatorsPerReport);
+
     struct ExitRequestsData {
         bytes data;
         uint256 dataFormat;
@@ -535,6 +541,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         if (maxValidatorsPerReport == 0) revert ZeroArgument("maxValidatorsPerReport");
 
         MAX_VALIDATORS_PER_REPORT_POSITION.setStorageUint256(maxValidatorsPerReport);
+
+        emit SetMaxValidatorsPerReport(maxValidatorsPerReport);
     }
 
     function _getMaxValidatorsPerReport() internal view returns (uint256) {
