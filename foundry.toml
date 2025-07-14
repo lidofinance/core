@@ -33,13 +33,13 @@ evm_version = "prague"
 
 fmt = { int_types = 'long' }
 
-# Skip contracts that are not supported by the IR compiler
-skip = ["TWVoteScript.sol"]
-
 # add via_ir profile
-additional_compiler_profiles = [ { name = "via-ir", via_ir = true } ]
- 
+additional_compiler_profiles = [ 
+    { name = "v3", version = "0.8.25", optimizer = true, optimizer_runs = 200, via_ir = true, evm_version = "cancun" },
+]
+
 # enforce compiling 0.8.25 contract with via_ir
 compilation_restrictions = [
     { paths = "contracts/0.8.25/**", via_ir = true },
+    { paths = "contracts/upgrade/**", via_ir = true },
 ]
