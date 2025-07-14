@@ -322,7 +322,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         _checkExitSubmitted(requestStatus);
         _checkDelivered(requestStatus);
         _checkExitRequestData(exitsData.data, exitsData.dataFormat);
-        _checkContractVersion(requestStatus.contractVersion);
 
         ITriggerableWithdrawalsGateway.ValidatorData[]
             memory triggerableExitData = new ITriggerableWithdrawalsGateway.ValidatorData[](exitDataIndexes.length);
