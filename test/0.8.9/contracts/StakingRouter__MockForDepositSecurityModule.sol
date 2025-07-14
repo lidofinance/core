@@ -3,8 +3,7 @@
 
 pragma solidity 0.8.9;
 
-import {IStakingRouter} from "contracts/0.8.9/DepositSecurityModule.sol";
-import {StakingRouter} from "contracts/0.8.9/StakingRouter.sol";
+import {StakingRouter, IStakingRouter} from "contracts/0.8.9/StakingRouter.sol";
 
 contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     error StakingModuleUnregistered();
@@ -32,9 +31,9 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         uint256 maxDepositsCount,
         uint256 stakingModuleId,
         bytes calldata depositCalldata
-    ) external payable whenModuleIsRegistered(stakingModuleId) returns (uint256 keysCount) {
+    ) external payable whenModuleIsRegistered(stakingModuleId) {
         emit StakingModuleDeposited(maxDepositsCount, uint24(stakingModuleId), depositCalldata);
-        return maxDepositsCount;
+        // return maxDepositsCount;
     }
 
     function decreaseStakingModuleVettedKeysCountByNodeOperator(
@@ -66,19 +65,19 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     function getStakingModuleIsStopped(
         uint256 stakingModuleId
     ) external view whenModuleIsRegistered(stakingModuleId) returns (bool) {
-        return status == StakingRouter.StakingModuleStatus.Stopped;
+        return status == IStakingRouter.StakingModuleStatus.Stopped;
     }
 
     function getStakingModuleIsDepositsPaused(
         uint256 stakingModuleId
     ) external view whenModuleIsRegistered(stakingModuleId) returns (bool) {
-        return status == StakingRouter.StakingModuleStatus.DepositsPaused;
+        return status == IStakingRouter.StakingModuleStatus.DepositsPaused;
     }
 
     function getStakingModuleIsActive(
         uint256 stakingModuleId
     ) external view whenModuleIsRegistered(stakingModuleId) returns (bool) {
-        return status == StakingRouter.StakingModuleStatus.Active;
+        return status == IStakingRouter.StakingModuleStatus.Active;
     }
 
     function getStakingModuleNonce(

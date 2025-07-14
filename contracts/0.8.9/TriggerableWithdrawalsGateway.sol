@@ -3,30 +3,12 @@
 pragma solidity 0.8.9;
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IStakingRouter} from "contracts/common/interfaces/IStakingRouter.sol";
+import {IWithdrawalVault} from "contracts/common/interfaces/IWithdrawalVault.sol";
 
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "./lib/ExitLimitUtils.sol";
 import {PausableUntil} from "./utils/PausableUntil.sol";
-
-struct ValidatorData {
-    uint256 stakingModuleId;
-    uint256 nodeOperatorId;
-    bytes pubkey;
-}
-
-interface IWithdrawalVault {
-    function addWithdrawalRequests(bytes[] calldata pubkeys, uint64[] calldata amounts) external payable;
-
-    function getWithdrawalRequestFee() external view returns (uint256);
-}
-
-interface IStakingRouter {
-    function onValidatorExitTriggered(
-        ValidatorData[] calldata validatorData,
-        uint256 _withdrawalRequestPaidFee,
-        uint256 _exitType
-    ) external;
-}
 
 /**
  * @title TriggerableWithdrawalsGateway
@@ -145,7 +127,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      * @dev Submits Triggerable Withdrawal Requests to the Withdrawal Vault as full withdrawal requests
      *      for the specified validator public keys.
      *
-     * @param validatorsData An array of `ValidatorData` structs, each representing a validator
+     * @param validatorsData An array of `ValidatorExitData` structs, each representing a validator
      * for which a withdrawal request will be submitted. Each entry includes:
      *   - `stakingModuleId`: ID of the staking module.
      *   - `nodeOperatorId`: ID of the node operator.
@@ -159,7 +141,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      *     - There is not enough limit quota left in the current frame to process all requests.
      */
     function triggerFullWithdrawals(
-        ValidatorData[] calldata validatorsData,
+        IStakingRouter.ValidatorExitData[] calldata validatorsData,
         address refundRecipient,
         uint256 exitType
     ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance whenResumed {
@@ -241,7 +223,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
     }
 
     function _notifyStakingModules(
-        ValidatorData[] calldata validatorsData,
+        IStakingRouter.ValidatorExitData[] calldata validatorsData,
         uint256 withdrawalRequestPaidFee,
         uint256 exitType
     ) internal {
