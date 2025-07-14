@@ -385,8 +385,10 @@ describe("ExitLimitUtils.sol", () => {
           timestamp,
         );
 
+        const newPrevExitRequestsLimit = 30; // 50  - (100 - 80)
+
         expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
-        expect(result.prevExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+        expect(result.prevExitRequestsLimit).to.equal(newPrevExitRequestsLimit);
         expect(result.prevTimestamp).to.equal(timestamp);
       });
 
@@ -414,8 +416,10 @@ describe("ExitLimitUtils.sol", () => {
           timestamp,
         );
 
+        const newPrevExitRequestsLimit = 130; // 150 - ( 100 - 80);
+
         expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
-        expect(result.prevExitRequestsLimit).to.equal(prevExitRequestsLimit);
+        expect(result.prevExitRequestsLimit).to.equal(newPrevExitRequestsLimit);
         expect(result.prevTimestamp).to.equal(timestamp);
       });
 
