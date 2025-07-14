@@ -107,8 +107,10 @@ async function main(): Promise<void> {
   // G‑indices (phase0 spec)
   const VALIDATOR_PREV_GINDEX = "0x0000000000000000000000000000000000000000000000000096000000000028";
   const VALIDATOR_CURR_GINDEX = VALIDATOR_PREV_GINDEX;
-  const HISTORICAL_SUMMARIES_PREV_GINDEX = "0x0000000000000000000000000000000000000000000000000000000000005b00";
-  const HISTORICAL_SUMMARIES_CURR_GINDEX = HISTORICAL_SUMMARIES_PREV_GINDEX;
+  const FIRST_HISTORICAL_SUMMARY_PREV_GINDEX = "0x000000000000000000000000000000000000000000000000000000b600000018";
+  const FIRST_HISTORICAL_SUMMARY_CURR_GINDEX = FIRST_HISTORICAL_SUMMARY_PREV_GINDEX;
+  const BLOCK_ROOT_IN_SUMMARY_PREV_GINDEX = "0x000000000000000000000000000000000000000000000000000000000040000d";
+  const BLOCK_ROOT_IN_SUMMARY_CURR_GINDEX = BLOCK_ROOT_IN_SUMMARY_PREV_GINDEX;
 
   // TriggerableWithdrawalsGateway params
   const TRIGGERABLE_WITHDRAWALS_MAX_LIMIT = 11_200;
@@ -183,7 +185,14 @@ async function main(): Promise<void> {
     libraries,
   });
   log.success(`NodeOperatorsRegistry: ${nor.address}`);
-
+  const gIndexes = {
+    gIFirstValidatorPrev: VALIDATOR_PREV_GINDEX,
+    gIFirstValidatorCurr: VALIDATOR_CURR_GINDEX,
+    gIFirstHistoricalSummaryPrev: FIRST_HISTORICAL_SUMMARY_PREV_GINDEX,
+    gIFirstHistoricalSummaryCurr: FIRST_HISTORICAL_SUMMARY_CURR_GINDEX,
+    gIFirstBlockRootInSummaryPrev: BLOCK_ROOT_IN_SUMMARY_PREV_GINDEX,
+    gIFirstBlockRootInSummaryCurr: BLOCK_ROOT_IN_SUMMARY_CURR_GINDEX,
+  };
   // 6. ValidatorExitDelayVerifier
   const validatorExitDelayVerifier = await deployImplementation(
     Sk.validatorExitDelayVerifier,
@@ -191,16 +200,15 @@ async function main(): Promise<void> {
     deployer,
     [
       locator.address,
-      VALIDATOR_PREV_GINDEX,
-      VALIDATOR_CURR_GINDEX,
-      HISTORICAL_SUMMARIES_PREV_GINDEX,
-      HISTORICAL_SUMMARIES_CURR_GINDEX,
+      gIndexes,
       1, // firstSupportedSlot
       1, // pivotSlot
+      0, // capellaSlot @see https://github.com/eth-clients/hoodi/blob/main/metadata/config.yaml#L33
+      (SLOTS_PER_EPOCH * 8192) / SLOTS_PER_EPOCH, // slotsPerHistoricalRoot
       SLOTS_PER_EPOCH,
       SECONDS_PER_SLOT,
       GENESIS_TIME,
-      SHARD_COMMITTEE_PERIOD_SLOTS * SECONDS_PER_SLOT, // seconds
+      (SHARD_COMMITTEE_PERIOD_SLOTS * SECONDS_PER_SLOT) / (SLOTS_PER_EPOCH * SECONDS_PER_SLOT), // shardCommitteePeriodInSeconds
     ],
   );
   log.success(`ValidatorExitDelayVerifier: ${validatorExitDelayVerifier.address}`);
@@ -240,11 +248,14 @@ async function main(): Promise<void> {
   const newLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
   log.success(`LidoLocator: ${newLocator.address}`);
 
+  const updatedState = readNetworkState();
+  persistNetworkState(updatedState);
+
   // 8. GateSeal for withdrawalQueueERC721
   const WQ_GATE_SEAL = await deployGateSeal(
-    state,
+    updatedState,
     deployer,
-    [state[Sk.withdrawalQueueERC721].proxy.address],
+    [updatedState[Sk.withdrawalQueueERC721].proxy.address],
     GATE_SEAL_DURATION_SECONDS,
     GATE_SEAL_EXPIRY_TIMESTAMP,
     Sk.gateSeal,
@@ -252,9 +263,9 @@ async function main(): Promise<void> {
 
   // 9. GateSeal for Triggerable Withdrawals
   const TW_GATE_SEAL = await deployGateSeal(
-    state,
+    updatedState,
     deployer,
-    [state[Sk.triggerableWithdrawalsGateway].implementation.address, await locator.validatorsExitBusOracle()],
+    [updatedState[Sk.triggerableWithdrawalsGateway].implementation.address, await locator.validatorsExitBusOracle()],
     GATE_SEAL_DURATION_SECONDS,
     GATE_SEAL_EXPIRY_TIMESTAMP,
     Sk.gateSealTW,

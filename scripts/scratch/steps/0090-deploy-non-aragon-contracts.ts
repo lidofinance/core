@@ -12,6 +12,8 @@ import {
 import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
+import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
+
 function getEnvVariable(name: string, defaultValue?: string): string {
   const value = process.env[name] ?? defaultValue;
   if (value === undefined) {
@@ -212,6 +214,17 @@ export async function main() {
     burnerParams.totalCoverSharesBurnt,
     burnerParams.totalNonCoverSharesBurnt,
   ]);
+  const GI_FIRST_VALIDATOR_PREV = "0x0000000000000000000000000000000000000000000000000096000000000028";
+  const GI_FIRST_VALIDATOR_CURR = "0x0000000000000000000000000000000000000000000000000096000000000028";
+  const GI_FIRST_HISTORICAL_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000b600000018";
+  const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
+  const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
+  const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
+
+  const FIRST_SUPPORTED_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+  const PIVOT_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+  const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+  const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
   // Deploy ValidatorExitDelayVerifier
   const validatorExitDelayVerifier = await deployWithoutProxy(
@@ -220,12 +233,19 @@ export async function main() {
     deployer,
     [
       locator.address,
-      "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorPrev,
-      "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorCurr,
-      "0x0000000000000000000000000000000000000000000000000000000000005b00", // GIndex gIHistoricalSummariesPrev,
-      "0x0000000000000000000000000000000000000000000000000000000000005b00", // GIndex gIHistoricalSummariesCurr,
-      1, // uint64 firstSupportedSlot,
-      1, // uint64 pivotSlot,
+      {
+        gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+        gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+        gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+        gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+        gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+        gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+      },
+      FIRST_SUPPORTED_SLOT, // uint64 firstSupportedSlot,
+      PIVOT_SLOT, // uint64 pivotSlot,
+      // TODO: update this to the actual Capella slot for e2e testing in mainnet-fork
+      CAPELLA_SLOT, // uint64 capellaSlot,
+      SLOTS_PER_HISTORICAL_ROOT, // uint64 slotsPerHistoricalRoot,
       chainSpec.slotsPerEpoch, // uint32 slotsPerEpoch,
       chainSpec.secondsPerSlot, // uint32 secondsPerSlot,
       parseInt(getEnvVariable("GENESIS_TIME")), // uint64 genesisTime,

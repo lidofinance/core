@@ -25,10 +25,6 @@ contract GIndex__Harness {
         return gIndex.isRoot();
     }
 
-    function isParentOf(GIndex lhs, GIndex rhs) external pure returns (bool) {
-        return lhs.isParentOf(rhs);
-    }
-
     function index(GIndex gIndex) external pure returns (uint256) {
         return gIndex.index();
     }

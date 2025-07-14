@@ -3,6 +3,8 @@ pragma solidity ^0.8.0;
 
 import {IValidatorsExitBus} from "contracts/common/interfaces/IValidatorsExitBus.sol";
 
+error RequestsNotDelivered();
+
 struct MockExitRequestData {
     bytes pubkey;
     uint256 nodeOpId;
@@ -32,6 +34,9 @@ contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
 
     function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 timestamp) {
         require(exitRequestsHash == _hash, "Mock error, Invalid exitRequestsHash");
+        if (_deliveryTimestamp == 0) {
+            revert RequestsNotDelivered();
+        }
         return _deliveryTimestamp;
     }
 

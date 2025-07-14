@@ -8,7 +8,6 @@ import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 
 import {BaseOracle} from "./BaseOracle.sol";
 import {ValidatorsExitBus} from "./ValidatorsExitBus.sol";
-import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
 
 interface IOracleReportSanityChecker {
     function checkExitBusOracleReport(uint256 _exitRequestsCount) external view;
@@ -17,13 +16,10 @@ interface IOracleReportSanityChecker {
 contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
-    using ExitLimitUtilsStorage for bytes32;
-    using ExitLimitUtils for ExitRequestLimitData;
 
     error AdminCannotBeZero();
     error SenderNotAllowed();
     error UnexpectedRequestsDataLength();
-    error ArgumentOutOfBounds();
 
     event WarnDataIncompleteProcessing(uint256 indexed refSlot, uint256 requestsProcessed, uint256 requestsCount);
 
