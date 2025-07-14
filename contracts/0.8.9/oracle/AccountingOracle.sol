@@ -514,8 +514,7 @@ contract AccountingOracle is BaseOracle {
     )
         internal view returns (uint256)
     {
-        (uint256 initialEpoch,
-            uint256 epochsPerFrame) = IConsensusContract(consensusContract).getFrameConfig();
+        (uint256 initialEpoch, uint256 epochsPerFrame, /* uint256 _fastLaneLengthSlots */) = IConsensusContract(consensusContract).getFrameConfig();
 
         (uint256 slotsPerEpoch,
             uint256 secondsPerSlot,

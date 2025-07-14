@@ -84,8 +84,8 @@ contract ConsensusContract__Mock is IConsensusContract {
         return (SLOTS_PER_EPOCH, SECONDS_PER_SLOT, GENESIS_TIME);
     }
 
-    function getFrameConfig() external view returns (uint256 initialEpoch, uint256 epochsPerFrame) {
-        return (_frameConfig.initialEpoch, _frameConfig.epochsPerFrame);
+    function getFrameConfig() external view returns (uint256 initialEpoch, uint256 epochsPerFrame, uint256 fastLaneLengthSlots) {
+        return (_frameConfig.initialEpoch, _frameConfig.epochsPerFrame, _frameConfig.fastLaneLengthSlots);
     }
 
     function getInitialRefSlot() external view returns (uint256) {
