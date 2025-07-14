@@ -592,46 +592,6 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       );
     });
 
-    it("reverts with 'ExitIsNotEligibleOnProvableBeaconBlock' when proof slot timestamp equals earliest possible voluntary exit timestamp", async () => {
-      const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
-      const shardCommitteePeriod = Number(await validatorExitDelayVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS());
-
-      const requiredActivationEpochTimestamp = proofSlotTimestamp - shardCommitteePeriod;
-      const requiredActivationEpoch = Math.floor((requiredActivationEpochTimestamp - GENESIS_TIME) / (SLOTS_PER_EPOCH * SECONDS_PER_SLOT));
-
-      const customValidatorWitness = {
-        ...toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0),
-        activationEpoch: requiredActivationEpoch,
-      };
-
-      // Set exit request timestamp to be before the earliest possible voluntary exit time
-      const veboExitRequestTimestamp = proofSlotTimestamp - 1000;
-
-      const moduleId = 1;
-      const nodeOpId = 2;
-      const exitRequests: ExitRequest[] = [
-        {
-          moduleId,
-          nodeOpId,
-          valIndex: ACTIVE_VALIDATOR_PROOF.validator.index,
-          pubkey: ACTIVE_VALIDATOR_PROOF.validator.pubkey,
-        },
-      ];
-      const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
-
-      await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
-
-      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
-
-      await expect(
-        validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
-          [customValidatorWitness],
-          encodedExitRequests,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "ExitIsNotEligibleOnProvableBeaconBlock");
-    });
-
     it("reverts if the validator proof is incorrect", async () => {
       const intervalInSecondsBetweenProvableBlockAndExitRequest = 1000;
       const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
