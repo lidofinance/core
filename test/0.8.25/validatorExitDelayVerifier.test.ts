@@ -593,14 +593,19 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     });
 
     it("reverts with 'ExitIsNotEligibleOnProvableBeaconBlock' when proof slot timestamp equals earliest possible voluntary exit timestamp", async () => {
-      // Calculate the earliest possible voluntary exit timestamp for this validator
-      const earliestPossibleVoluntaryExitTimestamp = GENESIS_TIME +
-        (Number(ACTIVE_VALIDATOR_PROOF.validator.activationEpoch) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT) +
-        Number(await validatorExitDelayVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS());
+      const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
+      const shardCommitteePeriod = Number(await validatorExitDelayVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS());
+
+      const requiredActivationEpochTimestamp = proofSlotTimestamp - shardCommitteePeriod;
+      const requiredActivationEpoch = Math.floor((requiredActivationEpochTimestamp - GENESIS_TIME) / (SLOTS_PER_EPOCH * SECONDS_PER_SLOT));
+
+      const customValidatorWitness = {
+        ...toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0),
+        activationEpoch: requiredActivationEpoch,
+      };
 
       // Set exit request timestamp to be before the earliest possible voluntary exit time
-      // so that earliestPossibleVoluntaryExitTimestamp is used as eligibleExitRequestTimestamp
-      const veboExitRequestTimestamp = earliestPossibleVoluntaryExitTimestamp - 1000;
+      const veboExitRequestTimestamp = proofSlotTimestamp - 1000;
 
       const moduleId = 1;
       const nodeOpId = 2;
@@ -615,19 +620,13 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       const { encodedExitRequests, encodedExitRequestsHash } = encodeExitRequestsDataListWithFormat(exitRequests);
 
       await vebo.setExitRequests(encodedExitRequestsHash, veboExitRequestTimestamp, exitRequests);
-      const targetSlot = Math.floor((earliestPossibleVoluntaryExitTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT);
-      const customBeaconBlockHeader = {
-        ...ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-        slot: targetSlot,
-      };
 
-      const customBeaconBlockHeaderRoot = customBeaconBlockHeader.slot.toString(); // Mock root
-      const blockRootTimestamp = await updateBeaconBlockRoot(customBeaconBlockHeaderRoot);
+      const blockRootTimestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.beaconBlockHeaderRoot);
 
       await expect(
         validatorExitDelayVerifier.verifyValidatorExitDelay(
-          toProvableBeaconBlockHeader(customBeaconBlockHeader, blockRootTimestamp),
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
+          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
+          [customValidatorWitness],
           encodedExitRequests,
         ),
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "ExitIsNotEligibleOnProvableBeaconBlock");
