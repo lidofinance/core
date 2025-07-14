@@ -3,6 +3,8 @@
 pragma solidity 0.8.9;
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IValidatorsExitBus} from "contracts/common/interfaces/IValidatorsExitBus.sol";
+
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 import {Versioned} from "../utils/Versioned.sol";
@@ -25,10 +27,10 @@ interface ITriggerableWithdrawalsGateway {
 
 /**
  * @title ValidatorsExitBus
- * @notice Сontract that serves as the central infrastructure for managing validator exit requests.
+ * @notice Contract that serves as the central infrastructure for managing validator exit requests.
  * It stores report hashes, emits exit events, and maintains data and tools that enables anyone to prove a validator was requested to exit.
  */
-abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
+abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerable, PausableUntil, Versioned {
     using UnstructuredStorage for bytes32;
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;

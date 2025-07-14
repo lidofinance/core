@@ -214,6 +214,12 @@ const config: HardhatUserConfig = {
       clearOnStart: true,
       start: "echo Running tests...",
     },
+    compile: {
+      tasks: [{ command: "compile", params: { quiet: true } }],
+      files: ["./contracts/**/*"],
+      clearOnStart: true,
+      start: "echo Compiling contracts...",
+    },
   },
   mocha: {
     fullTrace: true,

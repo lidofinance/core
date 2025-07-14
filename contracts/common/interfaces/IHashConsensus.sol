@@ -20,7 +20,11 @@ interface IHashConsensus {
         uint256 genesisTime
     );
 
-    function getFrameConfig() external view returns (uint256 initialEpoch, uint256 epochsPerFrame);
+    function getFrameConfig() external view returns (
+        uint256 initialEpoch,
+        uint256 epochsPerFrame,
+        uint256 fastLaneLengthSlots
+    );
 
     function getInitialRefSlot() external view returns (uint256);
 }

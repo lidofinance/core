@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.8.9;
+pragma solidity 0.4.24;
 
 /// @title Lido's Staking Module interface
 interface IStakingModule {
@@ -26,7 +26,7 @@ interface IStakingModule {
     function reportValidatorExitDelay(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
-        bytes calldata _publicKey,
+        bytes _publicKey,
         uint256 _eligibleToExitInSec
     ) external;
 
@@ -40,7 +40,7 @@ interface IStakingModule {
     ///        This parameter may be interpreted differently across various staking modules, depending on their specific implementation.
     function onValidatorExitTriggered(
         uint256 _nodeOperatorId,
-        bytes calldata _publicKey,
+        bytes _publicKey,
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     ) external;
@@ -54,7 +54,7 @@ interface IStakingModule {
     function isValidatorExitDelayPenaltyApplicable(
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
-        bytes calldata _publicKey,
+        bytes _publicKey,
         uint256 _eligibleToExitInSec
     ) external view returns (bool);
 
@@ -148,16 +148,16 @@ interface IStakingModule {
     /// @param _nodeOperatorIds bytes packed array of the node operators id
     /// @param _vettedSigningKeysCounts bytes packed array of the new number of vetted keys for the node operators
     function decreaseVettedSigningKeysCount(
-        bytes calldata _nodeOperatorIds,
-        bytes calldata _vettedSigningKeysCounts
+        bytes _nodeOperatorIds,
+        bytes _vettedSigningKeysCounts
     ) external;
 
     /// @notice Updates the number of the validators in the EXITED state for node operator with given id
     /// @param _nodeOperatorIds bytes packed array of the node operators id
     /// @param _exitedValidatorsCounts bytes packed array of the new number of EXITED validators for the node operators
     function updateExitedValidatorsCount(
-        bytes calldata _nodeOperatorIds,
-        bytes calldata _exitedValidatorsCounts
+        bytes _nodeOperatorIds,
+        bytes _exitedValidatorsCounts
     ) external;
 
     /// @notice Updates the limit of the validators that can be used for deposit
@@ -187,7 +187,7 @@ interface IStakingModule {
     ///        IMPORTANT: _depositCalldata MUST NOT modify the deposit data set of the staking module
     /// @return publicKeys Batch of the concatenated public validators keys
     /// @return signatures Batch of the concatenated deposit signatures for returned public keys
-    function obtainDepositData(uint256 _depositsCount, bytes calldata _depositCalldata)
+    function obtainDepositData(uint256 _depositsCount, bytes _depositCalldata)
         external
         returns (bytes memory publicKeys, bytes memory signatures);
 
