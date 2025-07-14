@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import { ILidoLocator } from "../../common/interfaces/ILidoLocator.sol";
-import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
-import { BaseOracle, IConsensusContract } from "./BaseOracle.sol";
+import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
+import {BaseOracle} from "./BaseOracle.sol";
 
 
 interface ILido {
@@ -514,11 +515,11 @@ contract AccountingOracle is BaseOracle {
     )
         internal view returns (uint256)
     {
-        (uint256 initialEpoch, uint256 epochsPerFrame, /* uint256 _fastLaneLengthSlots */) = IConsensusContract(consensusContract).getFrameConfig();
+        (uint256 initialEpoch, uint256 epochsPerFrame, /* uint256 _fastLaneLengthSlots */) = IHashConsensus(consensusContract).getFrameConfig();
 
         (uint256 slotsPerEpoch,
             uint256 secondsPerSlot,
-            uint256 genesisTime) = IConsensusContract(consensusContract).getChainConfig();
+            uint256 genesisTime) = IHashConsensus(consensusContract).getChainConfig();
 
         {
             // check chain spec to match the prev. one (a block is used to reduce stack allocation)

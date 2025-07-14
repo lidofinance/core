@@ -8,7 +8,9 @@
   },
   "packageManager": "yarn@4.9.1",
   "scripts": {
-    "compile": "hardhat compile",
+    "compile": "hardhat compile && yarn check:interfaces",
+    "compile:watch": "SKIP_GAS_REPORT=true SKIP_CONTRACT_SIZE=true hardhat watch compile",
+    "cleanup": "hardhat clean",
     "lint:sol": "solhint 'contracts/**/*.sol'",
     "lint:sol:fix": "yarn lint:sol --fix",
     "lint:ts": "eslint . --max-warnings=0",
@@ -33,6 +35,7 @@
     "test:integration:fork:mainnet:custom": "MODE=forking hardhat test --network mainnet-fork",
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
+    "check:interfaces": "bash -c 'forge inspect contracts/common/interfaces/IStakingModule.sol abi | diff -u - <(forge inspect contracts/0.4.24/interfaces/IStakingModule.sol abi)'",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed"
   },

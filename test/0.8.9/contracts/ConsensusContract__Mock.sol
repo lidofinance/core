@@ -5,10 +5,10 @@ pragma solidity 0.8.9;
 
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import {IConsensusContract} from "contracts/0.8.9/oracle/BaseOracle.sol";
+import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 import {IReportAsyncProcessor} from "contracts/0.8.9/oracle/HashConsensus.sol";
 
-contract ConsensusContract__Mock is IConsensusContract {
+contract ConsensusContract__Mock is IHashConsensus {
     using SafeCast for uint256;
 
     uint64 internal immutable SLOTS_PER_EPOCH;
@@ -84,7 +84,11 @@ contract ConsensusContract__Mock is IConsensusContract {
         return (SLOTS_PER_EPOCH, SECONDS_PER_SLOT, GENESIS_TIME);
     }
 
-    function getFrameConfig() external view returns (uint256 initialEpoch, uint256 epochsPerFrame, uint256 fastLaneLengthSlots) {
+    function getFrameConfig()
+        external
+        view
+        returns (uint256 initialEpoch, uint256 epochsPerFrame, uint256 fastLaneLengthSlots)
+    {
         return (_frameConfig.initialEpoch, _frameConfig.epochsPerFrame, _frameConfig.fastLaneLengthSlots);
     }
 
@@ -97,7 +101,7 @@ contract ConsensusContract__Mock is IConsensusContract {
     }
 
     //
-    // IReportAsyncProcessor relevant mocks&handels
+    // IReportAsyncProcessor relevant mocks&handles
     //
 
     function setAsyncProcessor(address reportProcessor) external {

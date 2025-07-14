@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-import {IStakingModule} from "contracts/0.8.9/interfaces/IStakingModule.sol";
+import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 
 contract StakingModule__MockForTriggerableWithdrawals is IStakingModule {
     uint256 private _nonce;
@@ -44,7 +44,10 @@ contract StakingModule__MockForTriggerableWithdrawals is IStakingModule {
     }
 
     // IStakingModule implementations
-    function obtainDepositData(uint256 count, bytes calldata) external pure override returns (bytes memory publicKeys, bytes memory signatures) {
+    function obtainDepositData(
+        uint256 count,
+        bytes calldata
+    ) external pure override returns (bytes memory publicKeys, bytes memory signatures) {
         publicKeys = new bytes(count * 48);
         signatures = new bytes(count * 96);
         return (publicKeys, signatures);
@@ -62,20 +65,32 @@ contract StakingModule__MockForTriggerableWithdrawals is IStakingModule {
         return _nonce;
     }
 
-    function getStakingModuleSummary() external pure override returns (uint256 totalExitedValidators, uint256 totalDepositedValidators, uint256 depositableValidatorsCount) {
+    function getStakingModuleSummary()
+        external
+        pure
+        override
+        returns (uint256 totalExitedValidators, uint256 totalDepositedValidators, uint256 depositableValidatorsCount)
+    {
         return (0, 0, 0);
     }
 
-    function getNodeOperatorSummary(uint256) external pure override returns (
-        uint256 targetLimitMode,
-        uint256 targetValidatorsCount,
-        uint256 stuckValidatorsCount,
-        uint256 refundedValidatorsCount,
-        uint256 stuckPenaltyEndTimestamp,
-        uint256 totalExitedValidators,
-        uint256 totalDepositedValidators,
-        uint256 depositableValidatorsCount
-    ) {
+    function getNodeOperatorSummary(
+        uint256
+    )
+        external
+        pure
+        override
+        returns (
+            uint256 targetLimitMode,
+            uint256 targetValidatorsCount,
+            uint256 stuckValidatorsCount,
+            uint256 refundedValidatorsCount,
+            uint256 stuckPenaltyEndTimestamp,
+            uint256 totalExitedValidators,
+            uint256 totalDepositedValidators,
+            uint256 depositableValidatorsCount
+        )
+    {
         return (0, 0, 0, 0, 0, 0, 0, 0);
     }
 
@@ -116,21 +131,11 @@ contract StakingModule__MockForTriggerableWithdrawals is IStakingModule {
     }
 
     // The functions we are testing
-    function reportValidatorExitDelay(
-        uint256,
-        uint256,
-        bytes calldata,
-        uint256
-    ) external pure override {
+    function reportValidatorExitDelay(uint256, uint256, bytes calldata, uint256) external pure override {
         return;
     }
 
-    function onValidatorExitTriggered(
-        uint256,
-        bytes calldata,
-        uint256,
-        uint256
-    ) external view override {
+    function onValidatorExitTriggered(uint256, bytes calldata, uint256, uint256) external view override {
         if (!_onValidatorExitTriggeredResponse) {
             if (_revertWithEmptyReason) {
                 assembly {
