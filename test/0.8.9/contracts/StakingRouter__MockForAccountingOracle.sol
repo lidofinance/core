@@ -3,9 +3,7 @@
 
 pragma solidity 0.8.9;
 
-import {IStakingRouter} from "contracts/0.8.9/oracle/AccountingOracle.sol";
-
-contract StakingRouter__MockForAccountingOracle is IStakingRouter {
+contract StakingRouter__MockForAccountingOracle {
     struct UpdateExitedKeysByModuleCallData {
         uint256[] moduleIds;
         uint256[] exitedKeysCounts;

@@ -6,6 +6,7 @@ import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
+import {IStakingRouter} from "contracts/common/interfaces/IStakingRouter.sol";
 
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 import {BaseOracle} from "./BaseOracle.sol";
@@ -56,22 +57,6 @@ interface IOracleReportSanityChecker {
     function checkExtraDataItemsCountPerTransaction(uint256 _extraDataListItemsCount) external view;
     function checkNodeOperatorsPerExtraDataItemCount(uint256 _itemIndex, uint256 _nodeOperatorsCount) external view;
 }
-
-interface IStakingRouter {
-    function updateExitedValidatorsCountByStakingModule(
-        uint256[] calldata moduleIds,
-        uint256[] calldata exitedValidatorsCounts
-    ) external returns (uint256);
-
-    function reportStakingModuleExitedValidatorsCountByNodeOperator(
-        uint256 stakingModuleId,
-        bytes calldata nodeOperatorIds,
-        bytes calldata exitedValidatorsCounts
-    ) external;
-
-    function onValidatorsCountsByNodeOperatorReportingFinished() external;
-}
-
 
 interface IWithdrawalQueue {
     function onOracleReport(bool isBunkerMode, uint256 prevReportTimestamp, uint256 currentReportTimestamp) external;
