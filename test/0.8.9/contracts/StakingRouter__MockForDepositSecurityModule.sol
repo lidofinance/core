@@ -3,12 +3,17 @@
 
 pragma solidity 0.8.9;
 
-import {StakingRouter, IStakingRouter} from "contracts/0.8.9/StakingRouter.sol";
+import {IStakingRouter} from "contracts/common/interfaces/IStakingRouter.sol";
+import {StakingRouter} from "contracts/0.8.9/StakingRouter.sol";
 
-contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
+contract StakingRouter__MockForDepositSecurityModule {
     error StakingModuleUnregistered();
 
-    event StakingModuleVettedKeysDecreased(uint24 stakingModuleId, bytes nodeOperatorIds, bytes vettedSigningKeysCounts);
+    event StakingModuleVettedKeysDecreased(
+        uint24 stakingModuleId,
+        bytes nodeOperatorIds,
+        bytes vettedSigningKeysCounts
+    );
     event StakingModuleDeposited(uint256 maxDepositsCount, uint24 stakingModuleId, bytes depositCalldata);
     event StakingModuleStatusSet(
         uint24 indexed stakingModuleId,

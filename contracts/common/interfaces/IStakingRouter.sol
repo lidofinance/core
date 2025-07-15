@@ -157,12 +157,6 @@ interface IStakingRouter {
         uint256 newNodeOperatorExitedValidatorsCount;
     }
 
-    struct ValidatorExitData {
-        uint256 stakingModuleId;
-        uint256 nodeOperatorId;
-        bytes pubkey;
-    }
-
     function initialize(address _admin, address _lido, bytes32 _withdrawalCredentials) external;
     function finalizeUpgrade_v3() external;
     function getLido() external view returns (address);
