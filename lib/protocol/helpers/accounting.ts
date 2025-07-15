@@ -216,7 +216,7 @@ export async function reportWithoutExtraData(
 
   const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = extraData;
 
-  const reportData: OracleReportParams = {
+  const reportData: Partial<OracleReportParams> = {
     excludeVaultsBalances: true,
     extraDataFormat: EXTRA_DATA_FORMAT_LIST,
     extraDataHash: extraDataChunkHashes[0],
@@ -808,10 +808,9 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
 
   let count = addresses.length;
   while (addresses.length < minMembersCount) {
+    log.warning(`Adding oracle committee member ${count}`);
+
     const address = getOracleCommitteeMemberAddress(count);
-
-    log.debug(`Adding oracle committee member`, { Address: address });
-
     await hashConsensus.connect(agentSigner).addMember(address, quorum);
 
     addresses.push(address);

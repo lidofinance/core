@@ -19,7 +19,14 @@ import {
   updateBalance,
 } from "lib";
 import { TOTAL_BASIS_POINTS } from "lib/constants";
-import { getProtocolContext, getReportTimeElapsed, OracleReportParams, ProtocolContext, report } from "lib/protocol";
+import {
+  getProtocolContext,
+  getReportTimeElapsed,
+  OracleReportParams,
+  ProtocolContext,
+  report,
+  setupLidoForVaults,
+} from "lib/protocol";
 import { reportVaultDataWithProof } from "lib/protocol/helpers/vaults";
 
 import { bailOnFailure, Snapshot } from "test/suite";
@@ -67,6 +74,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
+
+    await setupLidoForVaults(ctx);
 
     // add ETH to NO for PDG deposit + gas
     await setBalance(nodeOperator.address, ether((VALIDATORS_PER_VAULT + 1n).toString()));
@@ -163,72 +172,15 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(createDashboardEvents.length).to.equal(1n);
     dashboard = await ethers.getContractAt("Dashboard", createDashboardEvents[0].args?.dashboard);
 
-    await dashboard.connect(owner).grantRoles([
-      {
-        role: await dashboard.FUND_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.WITHDRAW_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.MINT_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.BURN_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.REBALANCE_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
-        account: owner,
-      },
-      {
-        role: await dashboard.VOLUNTARY_DISCONNECT_ROLE(),
-        account: owner,
-      },
-    ]);
-
     expect(await isSoleRoleMember(owner, await dashboard.DEFAULT_ADMIN_ROLE())).to.be.true;
 
     expect(await isSoleRoleMember(nodeOperator, await dashboard.NODE_OPERATOR_MANAGER_ROLE())).to.be.true;
-
-    expect(await isSoleRoleMember(owner, await dashboard.FUND_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.WITHDRAW_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.MINT_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.BURN_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.REBALANCE_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.REQUEST_VALIDATOR_EXIT_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE())).to.be.true;
-    expect(await isSoleRoleMember(owner, await dashboard.VOLUNTARY_DISCONNECT_ROLE())).to.be.true;
   });
 
   it("Should allow Lido to recognize vaults and connect them to accounting", async () => {
-    const { lido, vaultHub } = ctx.contracts;
+    const { vaultHub } = ctx.contracts;
 
     expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(ether("1")); // has locked value cause of connection deposit
-
-    const votingSigner = await ctx.getSigner("voting");
-    await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
 
     expect(await vaultHub.vaultsCount()).to.equal(1n);
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_CONNECTION_DEPOSIT);
@@ -437,7 +389,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(lockedOnVault).to.be.gt(0);
   });
 
-  it("Should allow Manager to rebalance the vault to reduce the debt", async () => {
+  it("Should allow Owner to rebalance the vault to reduce the debt", async () => {
     const { vaultHub } = ctx.contracts;
 
     await dashboard.connect(owner).mintShares(owner, 10n);
@@ -450,7 +402,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_CONNECTION_DEPOSIT); // 1 ETH locked as a connection fee
   });
 
-  it("Should allow Manager to disconnect vaults from the hub", async () => {
+  it("Should allow Owner to disconnect vaults from the hub", async () => {
     const { vaultHub } = ctx.contracts;
 
     const disconnectTx = await dashboard.connect(owner).voluntaryDisconnect();

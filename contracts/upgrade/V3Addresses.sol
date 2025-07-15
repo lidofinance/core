@@ -57,6 +57,7 @@ contract V3Addresses {
         address aragonAppLidoRepo;
         address locator;
         address voting;
+        address dualGovernance;
     }
 
     string public constant CURATED_MODULE_NAME = "curated-onchain-v1";
@@ -103,6 +104,7 @@ contract V3Addresses {
     address public immutable AGENT;
     address public immutable ARAGON_APP_LIDO_REPO;
     address public immutable VOTING;
+    address public immutable DUAL_GOVERNANCE;
     address public immutable EL_REWARDS_VAULT;
     address public immutable STAKING_ROUTER;
     address public immutable VALIDATORS_EXIT_BUS_ORACLE;
@@ -135,6 +137,7 @@ contract V3Addresses {
         AGENT = params.agent;
         ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
         VOTING = params.voting;
+        DUAL_GOVERNANCE = params.dualGovernance;
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;

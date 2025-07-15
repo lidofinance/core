@@ -178,6 +178,21 @@ const config: HardhatUserConfig = {
         },
       },
     ],
+    overrides: {
+      // NB: Decreasing optimizer "runs" parameter to reduce VaultHub contract size.
+      // TODO: Reconsider this override after VaultHub's source code is settled.
+      "contracts/0.8.25/vaults/VaultHub.sol": {
+        version: "0.8.25",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 100,
+          },
+          viaIR: true,
+          evmVersion: "cancun",
+        },
+      },
+    },
   },
   tracer: {
     tasks: ["watch"],

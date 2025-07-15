@@ -546,6 +546,7 @@ contract LidoTemplate is IsContract {
     function _setupPermissions(DeployState memory _state, APMRepos memory _repos) private {
         ACL acl = _state.acl;
         Voting voting = _state.voting;
+        Agent agent = _state.agent;
 
         _createAgentPermissions(acl, _state.agent, voting);
         _createVaultPermissions(acl, _state.agent, _state.finance, voting);
@@ -562,8 +563,8 @@ contract LidoTemplate is IsContract {
         ENSSubdomainRegistrar apmRegistrar = _state.lidoRegistry.registrar();
 
         _transferPermissionFromTemplate(apmACL, _state.lidoRegistry, voting, _state.lidoRegistry.CREATE_REPO_ROLE());
-        apmACL.setPermissionManager(voting, apmDAO, apmDAO.APP_MANAGER_ROLE());
-        _transferPermissionFromTemplate(apmACL, apmACL, voting, apmACL.CREATE_PERMISSIONS_ROLE());
+        apmACL.setPermissionManager(agent, apmDAO, apmDAO.APP_MANAGER_ROLE());
+        _transferPermissionFromTemplate(apmACL, apmACL, agent, apmACL.CREATE_PERMISSIONS_ROLE());
         apmACL.setPermissionManager(voting, apmRegistrar, apmRegistrar.CREATE_NAME_ROLE());
         apmACL.setPermissionManager(voting, apmRegistrar, apmRegistrar.POINT_ROOTNODE_ROLE());
 
@@ -581,7 +582,7 @@ contract LidoTemplate is IsContract {
         repoAddresses[7] = _resolveRepo(_getAppId(APM_REPO_APP_NAME, _state.lidoRegistryEnsNode));
         repoAddresses[8] = _resolveRepo(_getAppId(APM_ENSSUB_APP_NAME, _state.lidoRegistryEnsNode));
         for (uint256 i = 0; i < repoAddresses.length; ++i) {
-            _transferPermissionFromTemplate(apmACL, repoAddresses[i], voting, REPO_CREATE_VERSION_ROLE);
+            _transferPermissionFromTemplate(apmACL, repoAddresses[i], agent, REPO_CREATE_VERSION_ROLE);
         }
 
         // using loops to save contract size
@@ -591,22 +592,22 @@ contract LidoTemplate is IsContract {
         perms[0] = _state.operators.MANAGE_SIGNING_KEYS();
         perms[1] = _state.operators.SET_NODE_OPERATOR_LIMIT_ROLE();
         for (i = 0; i < 2; ++i) {
-            _createPermissionForVoting(acl, _state.operators, perms[i], voting);
+            _createPermissionForAgent(acl, _state.operators, perms[i], agent);
         }
-        acl.createPermission(_state.stakingRouter, _state.operators, _state.operators.STAKING_ROUTER_ROLE(), voting);
-        acl.createPermission(_state.agent, _state.operators, _state.operators.MANAGE_NODE_OPERATOR_ROLE(), voting);
+        acl.createPermission(_state.stakingRouter, _state.operators, _state.operators.STAKING_ROUTER_ROLE(), agent);
+        acl.createPermission(agent, _state.operators, _state.operators.MANAGE_NODE_OPERATOR_ROLE(), agent);
 
         // SimpleDVT
         perms[0] = _state.operators.MANAGE_SIGNING_KEYS();
         perms[1] = _state.operators.SET_NODE_OPERATOR_LIMIT_ROLE();
         perms[2] = _state.operators.MANAGE_NODE_OPERATOR_ROLE();
         for (i = 0; i < 3; ++i) {
-            _createPermissionForVoting(acl, _state.sdvt, perms[i], voting);
+            _createPermissionForAgent(acl, _state.sdvt, perms[i], agent);
         }
         acl.createPermission(_state.stakingRouter, _state.sdvt, _state.sdvt.STAKING_ROUTER_ROLE(), this);
-        acl.grantPermission(_state.agent, _state.sdvt, _state.sdvt.STAKING_ROUTER_ROLE());
+        acl.grantPermission(agent, _state.sdvt, _state.sdvt.STAKING_ROUTER_ROLE());
 
-        _transferPermissionFromTemplate(acl, _state.sdvt, voting, _state.sdvt.STAKING_ROUTER_ROLE());
+        _transferPermissionFromTemplate(acl, _state.sdvt, agent, _state.sdvt.STAKING_ROUTER_ROLE());
 
         // Lido
         perms[0] = _state.lido.PAUSE_ROLE();
@@ -615,7 +616,7 @@ contract LidoTemplate is IsContract {
         perms[3] = _state.lido.STAKING_CONTROL_ROLE();
         perms[4] = _state.lido.UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE();
         for (i = 0; i < 5; ++i) {
-            _createPermissionForVoting(acl, _state.lido, perms[i], voting);
+            _createPermissionForAgent(acl, _state.lido, perms[i], agent);
         }
     }
 
@@ -626,6 +627,10 @@ contract LidoTemplate is IsContract {
 
     function _createPermissionForVoting(ACL _acl, address _app, bytes32 perm, address _voting) internal {
         _acl.createPermission(_voting, _app, perm, _voting);
+    }
+
+    function _createPermissionForAgent(ACL _acl, address _app, bytes32 perm, address _agent) internal {
+        _acl.createPermission(_agent, _app, perm, _agent);
     }
 
     function _createAgentPermissions(ACL _acl, Agent _agent, address _voting) internal {

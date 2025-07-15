@@ -13,7 +13,7 @@ import {Confirmations} from "./Confirmations.sol";
  * @dev In this implementation, roles are treated as addresses.
  */
 abstract contract Confirmable2Addresses is Confirmations {
-    
+
     function _collectAndCheckConfirmations(bytes calldata _calldata, address _role1, address _role2) internal returns (bool) {
         bytes32[] memory roles = new bytes32[](2);
         roles[0] = bytes32(uint256(uint160(_role1)));
