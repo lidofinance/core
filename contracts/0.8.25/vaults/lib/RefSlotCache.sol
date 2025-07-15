@@ -48,7 +48,7 @@ library RefSlotCache {
         IHashConsensus _consensus
     ) internal view returns (uint112) {
         (uint256 refSlot, ) = _consensus.getCurrentFrame();
-        if (uint32(refSlot) > _storage.refSlot) {
+        if (uint32(refSlot) != _storage.refSlot) {
             return _storage.value;
         } else {
             return _storage.valueOnRefSlot;
@@ -60,6 +60,9 @@ library DoubleRefSlotCache {
     struct Int112WithCache {
         int112 value;
         int112 valueOnRefSlot;
+        /// @dev There is limitation on the refSlot value: it must be less than 2^32.
+        /// If it will be greater, the refSlot will be truncated to 32 bits.
+        /// _activeCacheIndex will work incorrectly in case when one refSlot is truncated and another is not.
         uint32 refSlot;
     }
 
