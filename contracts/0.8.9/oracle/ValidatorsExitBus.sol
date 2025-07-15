@@ -4,6 +4,7 @@ pragma solidity 0.8.9;
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {IValidatorsExitBus} from "contracts/common/interfaces/IValidatorsExitBus.sol";
+import {IPausableUntil} from "contracts/common/interfaces/IPausableUntil.sol";
 
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
@@ -34,138 +35,6 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
     using UnstructuredStorage for bytes32;
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;
-
-    /**
-     * @notice Thrown when an invalid zero value is passed
-     * @param name Name of the argument that was zero
-     */
-    error ZeroArgument(string name);
-
-    /**
-     * @notice Thrown when exit request passed to method contain wrong DATA_FORMAT
-     * @param format code of format, currently only DATA_FORMAT=1 is supported in the contract
-     */
-    error UnsupportedRequestsDataFormat(uint256 format);
-
-    /**
-     * @notice Thrown when exit request has wrong length
-     */
-    error InvalidRequestsDataLength();
-
-    /**
-     * @notice Thrown when module id equal to zero
-     */
-    error InvalidModuleId();
-
-    /**
-     * @notice Thrown when data submitted for exit requests was not sorted in ascending order or contains duplicates
-     */
-    error InvalidRequestsDataSortOrder();
-
-    /**
-     * Thrown when there are attempt to send exit events for request that was not submitted earlier by trusted entities
-     */
-    error ExitHashNotSubmitted();
-
-    /**
-     * Thrown when there are attempt to store exit hash that was already submitted
-     */
-    error ExitHashAlreadySubmitted();
-
-    /**
-     * @notice Throw when in submitExitRequestsData all requests were already delivered
-     */
-    error RequestsAlreadyDelivered();
-
-    /**
-     * @notice Thrown when index of request in submitted data for triggerable withdrawal is out of range
-     * @param exitDataIndex Index of request
-     * @param requestsCount Amount of requests that were sent for processing
-     */
-    error ExitDataIndexOutOfRange(uint256 exitDataIndex, uint256 requestsCount);
-
-    /**
-     * @notice Thrown when array of indexes of requests in submitted data for triggerable withdrawal is not is not strictly increasing array
-     */
-    error InvalidExitDataIndexSortOrder();
-
-    /**
-     * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
-     * @param requestsCount Amount of requests that were sent for processing
-     * @param remainingLimit Amount of requests that still can be processed at current day
-     */
-    error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
-
-    /**
-     * @notice Thrown when submitting was not started for request
-     */
-    error RequestsNotDelivered();
-
-    /**
-     * @notice Thrown when exit requests in report exceed the maximum allowed number of requests per report.
-     * @param requestsCount  Amount of requests that were sent for processing
-     */
-    error TooManyExitRequestsInReport(uint256 requestsCount, uint256 maxRequestsPerReport);
-
-    /**
-     * @notice Emitted when an entity with the SUBMIT_REPORT_HASH_ROLE role submits a hash of the exit requests data.
-     * @param exitRequestsHash keccak256 hash of the encoded validators list
-     */
-    event RequestsHashSubmitted(bytes32 exitRequestsHash);
-
-    /**
-     * @notice Emitted when validator exit requested.
-     * @param stakingModuleId Id of staking module.
-     * @param nodeOperatorId Id of node operator.
-     * @param validatorIndex Validator index.
-     * @param validatorPubkey Public key of validator.
-     * @param timestamp Block timestamp
-     */
-    event ValidatorExitRequest(
-        uint256 indexed stakingModuleId,
-        uint256 indexed nodeOperatorId,
-        uint256 indexed validatorIndex,
-        bytes validatorPubkey,
-        uint256 timestamp
-    );
-
-    /**
-     * @notice Emitted when limits configs are set.
-     * @param maxExitRequestsLimit The maximum number of exit requests.
-     * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
-     */
-    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
-
-    /**
-     * @notice Emitted when exit requests were delivered
-     * @param exitRequestsHash keccak256 hash of the encoded validators list
-     */
-    event ExitDataProcessing(bytes32 exitRequestsHash);
-
-    /**
-     * @notice Emitted when max validators per report value is set.
-     * @param maxValidatorsPerReport The number of valdiators allowed per report.
-     */
-    event SetMaxValidatorsPerReport(uint256 maxValidatorsPerReport);
-
-    struct ExitRequestsData {
-        bytes data;
-        uint256 dataFormat;
-    }
-
-    struct ValidatorData {
-        uint256 nodeOpId;
-        uint256 moduleId;
-        uint256 valIndex;
-        bytes pubkey;
-    }
-
-    // RequestStatus stores timestamp of delivery, and contract version.
-    struct RequestStatus {
-        uint32 contractVersion;
-        uint32 deliveredExitDataTimestamp;
-    }
 
     /// @notice An ACL role granting the permission to submit a hash of the exit requests data
     bytes32 public constant SUBMIT_REPORT_HASH_ROLE = keccak256("SUBMIT_REPORT_HASH_ROLE");
@@ -199,6 +68,8 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
     ///
     uint256 public constant DATA_FORMAT_LIST = 1;
 
+    uint256 public constant EXIT_TYPE = 2;
+
     ILidoLocator internal immutable LOCATOR;
 
     /// @dev Storage slot: uint256 totalRequestsProcessed
@@ -212,8 +83,6 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
 
     // Storage slot for mapping(bytes32 => RequestStatus), keyed by exitRequestsHash
     bytes32 internal constant REQUEST_STATUS_POSITION = keccak256("lido.ValidatorsExitBus.requestStatus");
-
-    uint256 public constant EXIT_TYPE = 2;
 
     /// @dev Ensures the contract’s ETH balance is unchanged.
     modifier preservesEthBalance() {
@@ -260,9 +129,9 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
      *
      * @param request - The exit requests structure.
      */
-    function submitExitRequestsData(ExitRequestsData calldata request) external whenResumed {
+    function submitExitRequestsData(IValidatorsExitBus.ExitRequestsData calldata request) external whenResumed {
         bytes32 exitRequestsHash = keccak256(abi.encode(request.data, request.dataFormat));
-        RequestStatus storage requestStatus = _storageRequestStatus()[exitRequestsHash];
+        IValidatorsExitBus.RequestStatus storage requestStatus = _storageRequestStatus()[exitRequestsHash];
 
         _checkExitSubmitted(requestStatus);
         _checkNotDelivered(requestStatus);
@@ -305,7 +174,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
      *     - `exitDataIndexes` is not strictly increasing array
      */
     function triggerExits(
-        ExitRequestsData calldata exitsData,
+        IValidatorsExitBus.ExitRequestsData calldata exitsData,
         uint256[] calldata exitDataIndexes,
         address refundRecipient
     ) external payable whenResumed preservesEthBalance {
@@ -342,7 +211,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
 
             lastExitDataIndex = exitDataIndexes[i];
 
-            ValidatorData memory validatorData = _getValidatorData(exitsData.data, exitDataIndexes[i]);
+            IValidatorsExitBus.ValidatorData memory validatorData = _getValidatorData(exitsData.data, exitDataIndexes[i]);
 
             if (validatorData.moduleId == 0) revert InvalidModuleId();
 
@@ -458,7 +327,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
             revert ExitDataIndexOutOfRange(index, exitRequests.length / PACKED_REQUEST_LENGTH);
         }
 
-        ValidatorData memory validatorData = _getValidatorData(exitRequests, index);
+        IValidatorsExitBus.ValidatorData memory validatorData = _getValidatorData(exitRequests, index);
 
         valIndex = validatorData.valIndex;
         nodeOpId = validatorData.nodeOpId;
@@ -516,19 +385,19 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
         }
     }
 
-    function _checkExitSubmitted(RequestStatus storage requestStatus) internal view {
+    function _checkExitSubmitted(IValidatorsExitBus.RequestStatus storage requestStatus) internal view {
         if (requestStatus.contractVersion == 0) {
             revert ExitHashNotSubmitted();
         }
     }
 
-    function _checkNotDelivered(RequestStatus storage status) internal view {
+    function _checkNotDelivered(IValidatorsExitBus.RequestStatus storage status) internal view {
         if (status.deliveredExitDataTimestamp != 0) {
             revert RequestsAlreadyDelivered();
         }
     }
 
-    function _checkDelivered(RequestStatus storage status) internal view {
+    function _checkDelivered(IValidatorsExitBus.RequestStatus storage status) internal view {
         if (status.deliveredExitDataTimestamp == 0) {
             revert RequestsNotDelivered();
         }
@@ -591,7 +460,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
         uint32 contractVersion,
         uint32 deliveredExitDataTimestamp
     ) internal {
-        mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
+        mapping(bytes32 => IValidatorsExitBus.RequestStatus) storage requestStatusMap = _storageRequestStatus();
 
         if (requestStatusMap[exitRequestsHash].deliveredExitDataTimestamp != 0) {
             return;
@@ -610,7 +479,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
         uint32 contractVersion,
         uint32 deliveredExitDataTimestamp
     ) internal {
-        mapping(bytes32 => RequestStatus) storage requestStatusMap = _storageRequestStatus();
+        mapping(bytes32 => IValidatorsExitBus.RequestStatus) storage requestStatusMap = _storageRequestStatus();
 
         if (requestStatusMap[exitRequestsHash].contractVersion != 0) {
             revert ExitHashAlreadySubmitted();
@@ -624,7 +493,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
         emit RequestsHashSubmitted(exitRequestsHash);
     }
 
-    function _updateRequestStatus(RequestStatus storage requestStatus) internal {
+    function _updateRequestStatus(IValidatorsExitBus.RequestStatus storage requestStatus) internal {
         requestStatus.deliveredExitDataTimestamp = _getTimestamp();
     }
 
@@ -640,7 +509,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
     function _getValidatorData(
         bytes calldata exitRequestData,
         uint256 index
-    ) internal pure returns (ValidatorData memory validatorData) {
+    ) internal pure returns (IValidatorsExitBus.ValidatorData memory validatorData) {
         uint256 itemOffset;
         uint256 dataWithoutPubkey;
 
@@ -730,7 +599,7 @@ abstract contract ValidatorsExitBus is IValidatorsExitBus, AccessControlEnumerab
 
     /// Storage helpers
 
-    function _storageRequestStatus() internal pure returns (mapping(bytes32 => RequestStatus) storage r) {
+    function _storageRequestStatus() internal pure returns (mapping(bytes32 => IValidatorsExitBus.RequestStatus) storage r) {
         bytes32 position = REQUEST_STATUS_POSITION;
         assembly {
             r.slot := position

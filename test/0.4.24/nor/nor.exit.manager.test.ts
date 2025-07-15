@@ -14,7 +14,7 @@ import {
   NodeOperatorsRegistry__Harness,
   NodeOperatorsRegistry__Harness__factory,
 } from "typechain-types";
-import { NodeOperatorsRegistryLibraryAddresses } from "typechain-types/factories/contracts/0.4.24/nos/NodeOperatorsRegistry.sol/NodeOperatorsRegistry__factory";
+import { NodeOperatorsRegistryLibraryAddresses } from "typechain-types/factories/contracts/0.4.24/nos/NodeOperatorsRegistry__factory";
 
 import { addNodeOperator, certainAddress, NodeOperatorConfig, RewardDistributionState } from "lib";
 
@@ -347,13 +347,13 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         .to.emit(nor, "ValidatorExitStatusUpdated")
         .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, cutoff + exitDeadlineThreshold);
 
-        const result = await nor.isValidatorExitDelayPenaltyApplicable(
-          firstNodeOperatorId,
-            cutoff + exitDeadlineThreshold,
-            testPublicKey,
-            eligibleToExitInSec,
-        );
-        expect(result).to.be.false;
+      const result = await nor.isValidatorExitDelayPenaltyApplicable(
+        firstNodeOperatorId,
+        cutoff + exitDeadlineThreshold,
+        testPublicKey,
+        eligibleToExitInSec,
+      );
+      expect(result).to.be.false;
     });
   });
 

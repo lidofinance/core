@@ -157,6 +157,20 @@ interface IStakingRouter {
         uint256 newNodeOperatorExitedValidatorsCount;
     }
 
+    function MANAGE_WITHDRAWAL_CREDENTIALS_ROLE() external view returns (bytes32);
+    function STAKING_MODULE_MANAGE_ROLE() external view returns (bytes32);
+    function STAKING_MODULE_UNVETTING_ROLE() external view returns (bytes32);
+    function REPORT_EXITED_VALIDATORS_ROLE() external view returns (bytes32);
+    function REPORT_VALIDATOR_EXITING_STATUS_ROLE() external view returns (bytes32);
+    function REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE() external view returns (bytes32);
+    function UNSAFE_SET_EXITED_VALIDATORS_ROLE() external view returns (bytes32);
+    function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
+
+    function FEE_PRECISION_POINTS() external view returns (uint256);
+    function TOTAL_BASIS_POINTS() external view returns (uint256);
+    function MAX_STAKING_MODULES_COUNT() external view returns (uint256);
+    function MAX_STAKING_MODULE_NAME_LENGTH() external view returns (uint256);
+
     function initialize(address _admin, address _lido, bytes32 _withdrawalCredentials) external;
     function finalizeUpgrade_v3() external;
     function getLido() external view returns (address);
