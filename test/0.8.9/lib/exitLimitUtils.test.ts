@@ -473,6 +473,256 @@ describe("ExitLimitUtils.sol", () => {
           "TooLargeFrameDuration",
         );
       });
+
+      context("proportional limit adjustments", () => {
+        it("should proportionally increase limits: 100→200 max with 30 remaining should become 130 remaining", async () => {
+          const timestamp = 1000;
+          const oldMaxExitRequestsLimit = 100;
+          const prevExitRequestsLimit = 30; // 70 exits were used (100 - 30 = 70)
+          const exitsPerFrame = 2;
+          const frameDurationInSec = 10;
+
+          await exitLimit.harness_setState(
+            oldMaxExitRequestsLimit,
+            prevExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            timestamp,
+          );
+
+          const newMaxExitRequestsLimit = 200;
+          const result = await exitLimit.setExitLimits(
+            newMaxExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            timestamp,
+          );
+
+          // exitsUsed = 100 - 30 = 70
+          // newPrevLimit = 200 - 70 = 130
+          expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+          expect(result.prevExitRequestsLimit).to.equal(130);
+          expect(result.prevTimestamp).to.equal(timestamp);
+        });
+
+        it("should proportionally decrease limits: 100→80 max with 60 remaining should become 40 remaining", async () => {
+          const timestamp = 1000;
+          const oldMaxExitRequestsLimit = 100;
+          const prevExitRequestsLimit = 60; // 40 exits were used (100 - 60 = 40)
+          const exitsPerFrame = 2;
+          const frameDurationInSec = 10;
+
+          await exitLimit.harness_setState(
+            oldMaxExitRequestsLimit,
+            prevExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            timestamp,
+          );
+
+          const newMaxExitRequestsLimit = 80;
+          const result = await exitLimit.setExitLimits(
+            newMaxExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            timestamp,
+          );
+
+          // exitsUsed = 100 - 60 = 40
+          // newPrevLimit = 80 - 40 = 40
+          expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+          expect(result.prevExitRequestsLimit).to.equal(40);
+          expect(result.prevTimestamp).to.equal(timestamp);
+        });
+
+        it("should set to 0 when usage exceeds new limit: 100→50 max with 20 remaining (80 used) should become 0", async () => {
+          const timestamp = 1000;
+          const oldMaxExitRequestsLimit = 100;
+          const prevExitRequestsLimit = 20; // 80 exits were used (100 - 20 = 80)
+          const exitsPerFrame = 2;
+          const frameDurationInSec = 10;
+
+          await exitLimit.harness_setState(
+            oldMaxExitRequestsLimit,
+            prevExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            timestamp,
+          );
+
+          const newMaxExitRequestsLimit = 50;
+          const result = await exitLimit.setExitLimits(
+            newMaxExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            timestamp,
+          );
+
+          // exitsUsed = 100 - 20 = 80
+          // newPrevLimit = max(0, 50 - 80) = 0
+          expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+          expect(result.prevExitRequestsLimit).to.equal(0);
+          expect(result.prevTimestamp).to.equal(timestamp);
+        });
+
+        it("should handle time-based restoration with proportional adjustment", async () => {
+          const oldTimestamp = 1000;
+          const newTimestamp = 1030; // 3 frames passed (30 seconds / 10 per frame)
+          const oldMaxExitRequestsLimit = 100;
+          const prevExitRequestsLimit = 40; // 60 exits were used initially
+          const exitsPerFrame = 5; // 5 exits restored per frame
+          const frameDurationInSec = 10;
+
+          await exitLimit.harness_setState(
+            oldMaxExitRequestsLimit,
+            prevExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            oldTimestamp,
+          );
+
+          const newMaxExitRequestsLimit = 150;
+          const result = await exitLimit.setExitLimits(
+            newMaxExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            newTimestamp,
+          );
+
+          // currentLimit at newTimestamp = min(100, 40 + 3*5) = min(100, 55) = 55
+          // exitsUsed = 100 - 55 = 45
+          // newPrevLimit = 150 - 45 = 105
+          expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+          expect(result.prevExitRequestsLimit).to.equal(105);
+          expect(result.prevTimestamp).to.equal(newTimestamp);
+        });
+
+        it("should handle full restoration edge case", async () => {
+          const oldTimestamp = 1000;
+          const newTimestamp = 1100; // 10 frames passed (100 seconds / 10 per frame)
+          const oldMaxExitRequestsLimit = 100;
+          const prevExitRequestsLimit = 20; // 80 exits were used initially
+          const exitsPerFrame = 10; // 10 exits restored per frame
+          const frameDurationInSec = 10;
+
+          await exitLimit.harness_setState(
+            oldMaxExitRequestsLimit,
+            prevExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            oldTimestamp,
+          );
+
+          const newMaxExitRequestsLimit = 200;
+          const result = await exitLimit.setExitLimits(
+            newMaxExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            newTimestamp,
+          );
+
+          // currentLimit at newTimestamp = min(100, 20 + 10*10) = min(100, 120) = 100 (fully restored)
+          // exitsUsed = 100 - 100 = 0
+          // newPrevLimit = 200 - 0 = 200
+          expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+          expect(result.prevExitRequestsLimit).to.equal(200);
+          expect(result.prevTimestamp).to.equal(newTimestamp);
+        });
+
+        it("should handle exact equality boundary: exits used equals new max", async () => {
+          const timestamp = 1000;
+          const oldMaxExitRequestsLimit = 100;
+          const prevExitRequestsLimit = 25; // 75 exits were used
+          const exitsPerFrame = 2;
+          const frameDurationInSec = 10;
+
+          await exitLimit.harness_setState(
+            oldMaxExitRequestsLimit,
+            prevExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            timestamp,
+          );
+
+          const newMaxExitRequestsLimit = 75; // exactly equal to exits used
+          const result = await exitLimit.setExitLimits(
+            newMaxExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            timestamp,
+          );
+
+          // exitsUsed = 100 - 25 = 75
+          // newPrevLimit = 75 - 75 = 0
+          expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+          expect(result.prevExitRequestsLimit).to.equal(0);
+          expect(result.prevTimestamp).to.equal(timestamp);
+        });
+
+        it("should handle fractional frame restoration (truncating partial frames)", async () => {
+          const oldTimestamp = 1000;
+          const newTimestamp = 1027; // 2.7 frames passed (27 seconds / 10 per frame) - should truncate to 2 frames
+          const oldMaxExitRequestsLimit = 100;
+          const prevExitRequestsLimit = 50; // 50 exits were used initially
+          const exitsPerFrame = 3; // 3 exits restored per frame
+          const frameDurationInSec = 10;
+
+          await exitLimit.harness_setState(
+            oldMaxExitRequestsLimit,
+            prevExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            oldTimestamp,
+          );
+
+          const newMaxExitRequestsLimit = 120;
+          const result = await exitLimit.setExitLimits(
+            newMaxExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            newTimestamp,
+          );
+
+          // currentLimit at newTimestamp = min(100, 50 + 2*3) = min(100, 56) = 56 (2 full frames only)
+          // exitsUsed = 100 - 56 = 44
+          // newPrevLimit = 120 - 44 = 76
+          expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+          expect(result.prevExitRequestsLimit).to.equal(76);
+          expect(result.prevTimestamp).to.equal(newTimestamp);
+        });
+
+        it("should preserve proportionality with zero exits per frame (no restoration)", async () => {
+          const oldTimestamp = 1000;
+          const newTimestamp = 1050; // 5 frames passed but no restoration due to exitsPerFrame = 0
+          const oldMaxExitRequestsLimit = 100;
+          const prevExitRequestsLimit = 30; // 70 exits were used
+          const exitsPerFrame = 0; // no restoration
+          const frameDurationInSec = 10;
+
+          await exitLimit.harness_setState(
+            oldMaxExitRequestsLimit,
+            prevExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            oldTimestamp,
+          );
+
+          const newMaxExitRequestsLimit = 150;
+          const result = await exitLimit.setExitLimits(
+            newMaxExitRequestsLimit,
+            exitsPerFrame,
+            frameDurationInSec,
+            newTimestamp,
+          );
+
+          // currentLimit = 30 (no restoration with exitsPerFrame = 0)
+          // exitsUsed = 100 - 30 = 70
+          // newPrevLimit = 150 - 70 = 80
+          expect(result.maxExitRequestsLimit).to.equal(newMaxExitRequestsLimit);
+          expect(result.prevExitRequestsLimit).to.equal(80);
+          expect(result.prevTimestamp).to.equal(newTimestamp);
+        });
+      });
     });
 
     context("isExitLimitSet", () => {
