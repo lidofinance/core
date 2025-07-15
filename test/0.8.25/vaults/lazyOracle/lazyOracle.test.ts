@@ -95,11 +95,18 @@ describe("LazyOracle.sol", () => {
         },
         locked: 3n,
         liabilityShares: 4n,
-        inOutDelta: {
-          value: 5n,
-          valueOnRefSlot: 6n,
-          refSlot: 7n,
-        },
+        inOutDelta: [
+          {
+            value: 5n,
+            valueOnRefSlot: 6n,
+            refSlot: 7n,
+          },
+          {
+            value: 0n,
+            valueOnRefSlot: 0n,
+            refSlot: 0n,
+          },
+        ],
       });
       const vaults = await lazyOracle.batchVaultsInfo(0n, 2n);
 
@@ -209,7 +216,7 @@ describe("LazyOracle.sol", () => {
 
   context("updateReportData", () => {
     it("reverts report update data call from non-Accounting contract", async () => {
-      await expect(lazyOracle.updateReportData(0, ethers.ZeroHash, "")).to.be.revertedWithCustomError(
+      await expect(lazyOracle.updateReportData(0, 0n, ethers.ZeroHash, "")).to.be.revertedWithCustomError(
         lazyOracle,
         "NotAuthorized",
       );
@@ -217,17 +224,20 @@ describe("LazyOracle.sol", () => {
 
     it("accepts report data from Accounting contract", async () => {
       const accountingAddress = await impersonate(await locator.accountingOracle(), ether("1"));
-      await expect(lazyOracle.connect(accountingAddress).updateReportData(0, ethers.ZeroHash, "")).to.not.reverted;
+      await expect(lazyOracle.connect(accountingAddress).updateReportData(0, 0n, ethers.ZeroHash, "")).to.not.reverted;
     });
 
     it("returns lastest report data correctly", async () => {
       const accountingAddress = await impersonate(await locator.accountingOracle(), ether("1"));
       const reportTimestamp = await getCurrentBlockTimestamp();
-      await expect(lazyOracle.connect(accountingAddress).updateReportData(reportTimestamp, ethers.ZeroHash, "test_cid"))
-        .to.not.reverted;
+      const refSlot = 42n;
+      await expect(
+        lazyOracle.connect(accountingAddress).updateReportData(reportTimestamp, refSlot, ethers.ZeroHash, "test_cid"),
+      ).to.not.reverted;
 
       const lastReportData = await lazyOracle.latestReportData();
       expect(lastReportData.timestamp).to.equal(reportTimestamp);
+      expect(lastReportData.refSlot).to.equal(refSlot);
       expect(lastReportData.treeRoot).to.equal(ethers.ZeroHash);
       expect(lastReportData.reportCid).to.equal("test_cid");
     });
@@ -239,7 +249,7 @@ describe("LazyOracle.sol", () => {
 
     it("reverts on invalid proof", async () => {
       const accountingAddress = await impersonate(await locator.accountingOracle(), ether("1"));
-      await expect(lazyOracle.connect(accountingAddress).updateReportData(0, ethers.ZeroHash, "")).to.not.reverted;
+      await expect(lazyOracle.connect(accountingAddress).updateReportData(0, 0n, ethers.ZeroHash, "")).to.not.reverted;
       await vaultHub.mock__addVault("0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60");
 
       await expect(
@@ -295,7 +305,8 @@ describe("LazyOracle.sol", () => {
       const tree = createVaultsReportTree(vaultsReport);
       const accountingAddress = await impersonate(await locator.accountingOracle(), ether("100"));
       const timestamp = await getCurrentBlockTimestamp();
-      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, tree.root, "");
+      const refSlot = 42n;
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
 
       for (let index = 0; index < vaultsReport.length; index++) {
         const vaultReport = vaultsReport[index];
@@ -349,7 +360,8 @@ describe("LazyOracle.sol", () => {
       const tree = createVaultsReportTree([vaultReport]);
       const accountingAddress = await impersonate(await locator.accountingOracle(), ether("100"));
       const timestamp = await getCurrentBlockTimestamp();
-      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, tree.root, "");
+      const refSlot = 42n;
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
 
       await vaultHub.mock__addVault(vault);
       await vaultHub.mock__setVaultRecord(vault, {
@@ -360,11 +372,18 @@ describe("LazyOracle.sol", () => {
         },
         locked: 0n,
         liabilityShares: 0n,
-        inOutDelta: {
-          value: VAULT_TOTAL_VALUE,
-          valueOnRefSlot: VAULT_TOTAL_VALUE,
-          refSlot: 0n,
-        },
+        inOutDelta: [
+          {
+            value: VAULT_TOTAL_VALUE,
+            valueOnRefSlot: VAULT_TOTAL_VALUE,
+            refSlot: 0n,
+          },
+          {
+            value: 0n,
+            valueOnRefSlot: 0n,
+            refSlot: 0n,
+          },
+        ],
       });
 
       await lazyOracle.updateVaultData(
@@ -384,7 +403,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport2: VaultReportItem = [vault, VAULT_TOTAL_VALUE + maxRewardValue + 1n, 0n, 0n, 0n];
 
       const tree2 = createVaultsReportTree([vaultReport2]);
-      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, tree2.root, "");
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree2.root, "");
 
       await vaultHub.mock__setVaultRecord(vault, {
         report: {
@@ -394,11 +413,18 @@ describe("LazyOracle.sol", () => {
         },
         locked: 0n,
         liabilityShares: 0n,
-        inOutDelta: {
-          value: VAULT_TOTAL_VALUE,
-          valueOnRefSlot: VAULT_TOTAL_VALUE,
-          refSlot: 0n,
-        },
+        inOutDelta: [
+          {
+            value: VAULT_TOTAL_VALUE,
+            valueOnRefSlot: VAULT_TOTAL_VALUE,
+            refSlot: 0n,
+          },
+          {
+            value: 0n,
+            valueOnRefSlot: 0n,
+            refSlot: 0n,
+          },
+        ],
       });
 
       await lazyOracle.updateVaultData(
@@ -423,7 +449,8 @@ describe("LazyOracle.sol", () => {
       const tree = createVaultsReportTree([vaultReport]);
       const accountingAddress = await impersonate(await locator.accountingOracle(), ether("100"));
       const timestamp = await getCurrentBlockTimestamp();
-      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, tree.root, "");
+      const refSlot = 42n;
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
 
       await vaultHub.mock__addVault(vault);
       await vaultHub.mock__setVaultRecord(vault, {
@@ -434,11 +461,18 @@ describe("LazyOracle.sol", () => {
         },
         locked: 0n,
         liabilityShares: 0n,
-        inOutDelta: {
-          value: ether("100"),
-          valueOnRefSlot: ether("100"),
-          refSlot: 0n,
-        },
+        inOutDelta: [
+          {
+            value: ether("100"),
+            valueOnRefSlot: ether("100"),
+            refSlot: 0n,
+          },
+          {
+            value: 0n,
+            valueOnRefSlot: 0n,
+            refSlot: 0n,
+          },
+        ],
       });
 
       await expect(
@@ -467,7 +501,8 @@ describe("LazyOracle.sol", () => {
       const tree2 = createVaultsReportTree([vaultReport2]);
       await advanceChainTime(60n * 60n * 23n);
       const timestamp2 = await getCurrentBlockTimestamp();
-      await lazyOracle.connect(accountingAddress).updateReportData(timestamp2, tree2.root, "");
+      const refSlot2 = 43n;
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp2, refSlot2, tree2.root, "");
 
       await lazyOracle.updateVaultData(
         vaultReport2[0],
@@ -491,7 +526,8 @@ describe("LazyOracle.sol", () => {
       const tree3 = createVaultsReportTree([vaultReport3]);
       await advanceChainTime(60n * 60n * 23n * 5n);
       const timestamp3 = await getCurrentBlockTimestamp();
-      await lazyOracle.connect(accountingAddress).updateReportData(timestamp3, tree3.root, "");
+      const refSlot3 = 44n;
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp3, refSlot3, tree3.root, "");
 
       await expect(
         lazyOracle.updateVaultData(
@@ -518,7 +554,8 @@ describe("LazyOracle.sol", () => {
       const tree4 = createVaultsReportTree([vaultReport4]);
       await advanceChainTime(60n * 60n * 23n * 4n);
       const timestamp4 = await getCurrentBlockTimestamp();
-      await lazyOracle.connect(accountingAddress).updateReportData(timestamp4, tree4.root, "");
+      const refSlot4 = 45n;
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp4, refSlot4, tree4.root, "");
 
       await expect(
         lazyOracle.updateVaultData(

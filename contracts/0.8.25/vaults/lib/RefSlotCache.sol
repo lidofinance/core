@@ -105,7 +105,7 @@ library RefSlotCache {
     /// @notice Returns the current value of the cache
     /// @param _cache the storage pointer for the array of cached values
     /// @return the current value of the cache
-    function currentValue(Int112WithRefSlotCache[CACHE_LENGTH] memory _cache) internal view returns (int112) {
+    function currentValue(Int112WithRefSlotCache[CACHE_LENGTH] memory _cache) internal pure returns (int112) {
         return _cache[_activeCacheIndex(_cache)].value;
     }
 
@@ -117,7 +117,7 @@ library RefSlotCache {
     function getValueForRefSlot(
         Int112WithRefSlotCache[CACHE_LENGTH] memory _cache,
         uint32 _refSlot
-    ) internal view returns (int112) {
+    ) internal pure returns (int112) {
         uint256 activeCacheIndex = _activeCacheIndex(_cache);
 
         // 1. refSlot is more than activeRefSlot
