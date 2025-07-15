@@ -7,10 +7,10 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
-import {RefSlotCache, CACHE_LENGTH} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
+import {DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
 
 contract VaultHub__MockForLazyOracle {
-    using RefSlotCache for RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH];
+    using DoubleRefSlotCache for DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH];
 
     address[] public mock__vaults;
     mapping(address vault => VaultHub.VaultConnection connection) public mock__vaultConnections;

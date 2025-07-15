@@ -16,15 +16,15 @@ import {OperatorGrid} from "./OperatorGrid.sol";
 import {LazyOracle} from "./LazyOracle.sol";
 
 import {PausableUntilWithRoles} from "../utils/PausableUntilWithRoles.sol";
-import {RefSlotCache, CACHE_LENGTH} from "./lib/RefSlotCache.sol";
+import {RefSlotCache, DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "./lib/RefSlotCache.sol";
 
 /// @notice VaultHub is a contract that manages StakingVaults connected to the Lido protocol
 /// It allows to connect and disconnect vaults, mint and burn stETH using vaults as collateral
 /// Also, it facilitates the individual per-vault reports from the lazy oracle to the vaults and charges Lido fees
 /// @author folkyatina
 contract VaultHub is PausableUntilWithRoles {
-    using RefSlotCache for RefSlotCache.Uint112WithRefSlotCache;
-    using RefSlotCache for RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH];
+    using RefSlotCache for RefSlotCache.Uint112WithCache;
+    using DoubleRefSlotCache for DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH];
 
     // -----------------------------
     //           STORAGE STRUCTS
@@ -42,7 +42,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice 1-based array of vaults connected to the hub. index 0 is reserved for not connected vaults
         address[] vaults;
         /// @notice amount of bad debt that was internalized from the vault to become the protocol loss
-        RefSlotCache.Uint112WithRefSlotCache badDebtToInternalize;
+        RefSlotCache.Uint112WithCache badDebtToInternalize;
     }
 
     struct VaultConnection {
@@ -84,7 +84,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint96 liabilityShares;
         // ### 3rd and 4th slots
         /// @notice inOutDelta of the vault (all deposits - all withdrawals)
-        RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH] inOutDelta;
+        DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] inOutDelta;
     }
 
     struct Report {
@@ -979,7 +979,7 @@ contract VaultHub is PausableUntilWithRoles {
             }),
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
-            inOutDelta: RefSlotCache.InitializeInt112DoubleCache(int112(int256(vaultBalance)))
+            inOutDelta: DoubleRefSlotCache.InitializeInt112DoubleCache(int112(int256(vaultBalance)))
         });
 
         connection = VaultConnection({
@@ -1167,7 +1167,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
         Report memory report = _record.report;
-        RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH] memory inOutDelta = _record.inOutDelta;
+        DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] memory inOutDelta = _record.inOutDelta;
         return uint256(int256(uint256(report.totalValue)) + inOutDelta.currentValue() - report.inOutDelta);
     }
 
@@ -1244,7 +1244,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @dev Caches the inOutDelta of the latest refSlot and updates the value
     function _updateInOutDelta(address _vault, VaultRecord storage _record, int112 _increment) internal {
-        RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH] memory inOutDelta = _record.inOutDelta.withValueIncrease({
+        DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] memory inOutDelta = _record.inOutDelta.withValueIncrease({
             _consensus: CONSENSUS_CONTRACT,
             _increment: _increment
         });

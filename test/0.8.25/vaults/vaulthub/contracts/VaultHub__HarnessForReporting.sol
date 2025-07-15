@@ -9,7 +9,7 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {VaultHub, IHashConsensus} from "contracts/0.8.25/vaults/VaultHub.sol";
-import {RefSlotCache} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
+import {DoubleRefSlotCache} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
 
 contract VaultHub__HarnessForReporting is VaultHub {
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
@@ -68,8 +68,8 @@ contract VaultHub__HarnessForReporting is VaultHub {
             locked: 0,
             liabilityShares: uint96(_shareLimit),
             inOutDelta: [
-                RefSlotCache.Int112WithRefSlotCache({value: 0, valueOnRefSlot: 0, refSlot: 0}),
-                RefSlotCache.Int112WithRefSlotCache({value: 0, valueOnRefSlot: 0, refSlot: 0})
+                DoubleRefSlotCache.Int112WithCache({value: 0, valueOnRefSlot: 0, refSlot: 0}),
+                DoubleRefSlotCache.Int112WithCache({value: 0, valueOnRefSlot: 0, refSlot: 0})
             ]
         });
 

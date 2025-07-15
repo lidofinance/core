@@ -18,10 +18,10 @@ import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
-import {RefSlotCache, CACHE_LENGTH} from "./lib/RefSlotCache.sol";
+import {DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "./lib/RefSlotCache.sol";
 
 contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
-    using RefSlotCache for RefSlotCache.Int112WithRefSlotCache[CACHE_LENGTH];
+    using DoubleRefSlotCache for DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH];
 
     /// @custom:storage-location erc7201:LazyOracle
     struct Storage {
