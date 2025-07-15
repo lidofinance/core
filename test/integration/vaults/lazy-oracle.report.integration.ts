@@ -47,7 +47,7 @@ describe("Scenario: Lazy Oracle update vault data", () => {
 
     await expect(reportVaultDataWithProof(ctx, stakingVault, {}, false)).to.be.revertedWithCustomError(
       lazyOracle,
-      "VaultReportIsAlreadyApplied",
+      "VaultReportIsFreshEnough",
     );
   });
 });

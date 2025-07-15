@@ -1198,8 +1198,7 @@ contract VaultHub is PausableUntilWithRoles {
         // between vaultReportTimestamp and latestReportTimestamp32 in modulo 2**32
         // and check if it's less than REPORT_FRESHNESS_DELTA
 
-        uint256 ccwDistance =
-            Math256.ccwDistanceByModulo(vaultReportTimestamp, latestReportTimestamp32, type(uint32).max);
+        uint256 ccwDistance = Math256.ccwDistance32(vaultReportTimestamp, latestReportTimestamp32);
 
         return ccwDistance < REPORT_FRESHNESS_DELTA && block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }
