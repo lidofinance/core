@@ -229,7 +229,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ]);
     });
 
-    it.skip("accepts a valid proof and does not revert", async () => {
+    it("accepts a valid proof and does not revert", async () => {
       const intervalInSlotsBetweenProvableBlockAndExitRequest = 1000;
       const veboExitRequestTimestamp =
         GENESIS_TIME +
@@ -296,7 +296,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       );
     });
 
-    it.skip("report exit delay with uses earliest possible voluntary exit time when it's greater than exit request timestamp", async () => {
+    it("report exit delay with uses earliest possible voluntary exit time when it's greater than exit request timestamp", async () => {
       const activationEpochTimestamp =
         GENESIS_TIME + Number(ACTIVE_VALIDATOR_PROOF.validator.activationEpoch) * SLOTS_PER_EPOCH * SECONDS_PER_SLOT;
       const earliestPossibleVoluntaryExitTimestamp =
@@ -456,7 +456,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidBlockHeader");
     });
 
-    it.skip("reverts with 'ExitIsNotEligibleOnProvableBeaconBlock' when the when proof slot is early then exit request time", async () => {
+    it("reverts with 'ExitIsNotEligibleOnProvableBeaconBlock' when the when proof slot is early then exit request time", async () => {
       const intervalInSecondsAfterProofSlot = 1;
 
       const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
