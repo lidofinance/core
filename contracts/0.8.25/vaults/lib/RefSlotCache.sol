@@ -60,9 +60,6 @@ library DoubleRefSlotCache {
     struct Int112WithCache {
         int112 value;
         int112 valueOnRefSlot;
-        /// @dev There is limitation on the refSlot value: it must be less than 2^32.
-        /// If it will be greater, the refSlot will be truncated to 32 bits.
-        /// _activeCacheIndex will work incorrectly in case when one refSlot is truncated and another is not.
         uint32 refSlot;
     }
 
@@ -146,6 +143,11 @@ library DoubleRefSlotCache {
         revert InOutDeltaCacheIsOverwritten();
     }
 
+    /// @dev There is a limitation on the refSlot value: it must be less than 2^32.
+    /// If it exceeds this limit, the refSlot will be truncated to 32 bits.
+    /// _activeCacheIndex may work incorrectly if one refSlot value is truncated and the other is not,
+    /// because the non-truncated value will always be greater than the truncated one,
+    /// causing incorrect activeIndex determination.
     function _activeCacheIndex(Int112WithCache[DOUBLE_CACHE_LENGTH] memory _cache) private pure returns (uint256) {
         return _cache[0].refSlot >= _cache[1].refSlot ? 0 : 1;
     }
