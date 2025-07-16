@@ -6,16 +6,64 @@ pragma solidity 0.8.9;
 
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 
-import {UnstructuredStorage} from "contracts/0.8.9/lib/UnstructuredStorage.sol";
+import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 
-import {BaseOracle} from "./BaseOracle.sol";
+import {BaseOracle, IHashConsensus} from "./BaseOracle.sol";
+
 
 interface IReportReceiver {
     function handleOracleReport(ReportValues memory values) external;
+}
+
+interface ILido {
+    function handleOracleReport(
+        // Oracle timings
+        uint256 _reportTimestamp,
+        uint256 _timeElapsed,
+        // CL values
+        uint256 _clValidators,
+        uint256 _clBalance,
+        // EL values
+        uint256 _withdrawalVaultBalance,
+        uint256 _elRewardsVaultBalance,
+        uint256 _sharesRequestedToBurn,
+        // Decision about withdrawals processing
+        uint256[] calldata _withdrawalFinalizationBatches,
+        uint256 _simulatedShareRate
+    ) external returns (uint256[4] memory postRebaseAmounts);
+}
+
+interface ILidoLocator {
+    function accounting() external view returns(address);
+    function lazyOracle() external view returns(address);
+    function oracleReportSanityChecker() external view returns(address);
+    function stakingRouter() external view returns(address);
+    function withdrawalQueue() external view returns(address); // TODO: remove
+}
+
+
+interface ILegacyOracle {
+    // only called before the migration
+
+    function getBeaconSpec() external view returns (
+        uint64 epochsPerFrame,
+        uint64 slotsPerEpoch,
+        uint64 secondsPerSlot,
+        uint64 genesisTime
+    );
+
+    function getLastCompletedEpochId() external view returns (uint256);
+
+    // only called after the migration
+
+    function handleConsensusLayerReport(
+        uint256 _refSlot,
+        uint256 _clBalance,
+        uint256 _clValidators
+    ) external;
 }
 
 interface IOracleReportSanityChecker {
@@ -27,21 +75,21 @@ interface IOracleReportSanityChecker {
 
 interface IStakingRouter {
     function updateExitedValidatorsCountByStakingModule(
-        uint256[] calldata moduleIds,
-        uint256[] calldata exitedValidatorsCounts
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _exitedValidatorsCounts
     ) external returns (uint256);
 
     function reportStakingModuleExitedValidatorsCountByNodeOperator(
-        uint256 stakingModuleId,
-        bytes calldata nodeOperatorIds,
-        bytes calldata exitedValidatorsCounts
+        uint256 _stakingModuleId,
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _exitedValidatorsCounts
     ) external;
 
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
 }
 
 interface IWithdrawalQueue {
-    function onOracleReport(bool isBunkerMode, uint256 prevReportTimestamp, uint256 currentReportTimestamp) external;
+    function onOracleReport(bool _isBunkerModeNow, uint256 _bunkerStartTimestamp, uint256 _currentReportTimestamp) external;
 }
 
 contract AccountingOracle is BaseOracle {

@@ -6,9 +6,9 @@ pragma solidity 0.8.9;
 
 import {MinFirstAllocationStrategy} from "contracts/common/lib/MinFirstAllocationStrategy.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
+import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
-import {IStakingModule} from "./interfaces/IStakingModule.sol";
 import {UnstructuredStorage} from "./lib/UnstructuredStorage.sol";
 import {Versioned} from "./utils/Versioned.sol";
 import {BeaconChainDepositor} from "./BeaconChainDepositor.sol";
