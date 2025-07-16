@@ -1,73 +1,20 @@
-// SPDX-FileCopyrightText: 2023 Lido <info@lido.fi>
+// SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
 import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
+import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
+import {IBaseOracle} from "contracts/common/interfaces/IBaseOracle.sol";
+
 import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 import { Versioned } from "../utils/Versioned.sol";
 import { AccessControlEnumerable } from "../utils/access/AccessControlEnumerable.sol";
 
-import { IReportAsyncProcessor } from "./HashConsensus.sol";
 
-
-interface IConsensusContract {
-    function getIsMember(address addr) external view returns (bool);
-
-    function getCurrentFrame() external view returns (
-        uint256 refSlot,
-        uint256 reportProcessingDeadlineSlot
-    );
-
-    function getChainConfig() external view returns (
-        uint256 slotsPerEpoch,
-        uint256 secondsPerSlot,
-        uint256 genesisTime
-    );
-
-    function getFrameConfig() external view returns (
-        uint256 initialEpoch,
-        uint256 epochsPerFrame,
-        uint256 fastLaneLengthSlots
-    );
-
-    function getInitialRefSlot() external view returns (uint256);
-}
-
-
-abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, Versioned {
+abstract contract BaseOracle is IBaseOracle, AccessControlEnumerable, Versioned {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
-
-    error AddressCannotBeZero();
-    error AddressCannotBeSame();
-    error VersionCannotBeSame();
-    error UnexpectedChainConfig();
-    error SenderIsNotTheConsensusContract();
-    error InitialRefSlotCannotBeLessThanProcessingOne(uint256 initialRefSlot, uint256 processingRefSlot);
-    error RefSlotMustBeGreaterThanProcessingOne(uint256 refSlot, uint256 processingRefSlot);
-    error RefSlotCannotDecrease(uint256 refSlot, uint256 prevRefSlot);
-    error NoConsensusReportToProcess();
-    error ProcessingDeadlineMissed(uint256 deadline);
-    error RefSlotAlreadyProcessing();
-    error UnexpectedRefSlot(uint256 consensusRefSlot, uint256 dataRefSlot);
-    error UnexpectedConsensusVersion(uint256 expectedVersion, uint256 receivedVersion);
-    error HashCannotBeZero();
-    error UnexpectedDataHash(bytes32 consensusHash, bytes32 receivedHash);
-    error SecondsPerSlotCannotBeZero();
-
-    event ConsensusHashContractSet(address indexed addr, address indexed prevAddr);
-    event ConsensusVersionSet(uint256 indexed version, uint256 indexed prevVersion);
-    event ReportSubmitted(uint256 indexed refSlot, bytes32 hash, uint256 processingDeadlineTime);
-    event ReportDiscarded(uint256 indexed refSlot, bytes32 hash);
-    event ProcessingStarted(uint256 indexed refSlot, bytes32 hash);
-    event WarnProcessingMissed(uint256 indexed refSlot);
-
-    struct ConsensusReport {
-        bytes32 hash;
-        uint64 refSlot;
-        uint64 processingDeadlineTime;
-    }
 
     /// @notice An ACL role granting the permission to set the consensus
     /// contract address by calling setConsensusContract.
@@ -171,7 +118,7 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
     /// submit it using this same function, or to lose the consensus on the submitted report,
     /// notifying the processor via `discardConsensusReport`.
     ///
-    function submitConsensusReport(bytes32 reportHash, uint256 refSlot, uint256 deadline) external {
+    function submitConsensusReport(bytes32 report, uint256 refSlot, uint256 deadline) external {
         _checkSenderIsConsensusContract();
 
         uint256 prevSubmittedRefSlot = _storageConsensusReport().value.refSlot;
@@ -192,14 +139,14 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
             emit WarnProcessingMissed(prevSubmittedRefSlot);
         }
 
-        if (reportHash == bytes32(0)) {
+        if (report == bytes32(0)) {
             revert HashCannotBeZero();
         }
 
-        emit ReportSubmitted(refSlot, reportHash, deadline);
+        emit ReportSubmitted(refSlot, report, deadline);
 
         ConsensusReport memory report = ConsensusReport({
-            hash: reportHash,
+            hash: report,
             refSlot: refSlot.toUint64(),
             processingDeadlineTime: deadline.toUint64()
         });
@@ -209,7 +156,7 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
     }
 
     /// @notice Called by HashConsensus contract to notify that the report for the given ref. slot
-    /// is not a conensus report anymore and should be discarded. This can happen when a member
+    /// is not a consensus report anymore and should be discarded. This can happen when a member
     /// changes their report, is removed from the set, or when the quorum value gets increased.
     ///
     /// Only called when, for the given reference slot:
@@ -272,7 +219,7 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
     ///
     function _isConsensusMember(address addr) internal view returns (bool) {
         address consensus = CONSENSUS_CONTRACT_POSITION.getStorageAddress();
-        return IConsensusContract(consensus).getIsMember(addr);
+        return IHashConsensus(consensus).getIsMember(addr);
     }
 
     /// @notice Called when the oracle gets a new consensus report from the HashConsensus contract.
@@ -356,7 +303,7 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
     ///
     function _getCurrentRefSlot() internal view returns (uint256) {
         address consensusContract = CONSENSUS_CONTRACT_POSITION.getStorageAddress();
-        (uint256 refSlot, ) = IConsensusContract(consensusContract).getCurrentFrame();
+        (uint256 refSlot, ) = IHashConsensus(consensusContract).getCurrentFrame();
         return refSlot;
     }
 
@@ -377,12 +324,12 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
         address prevAddr = CONSENSUS_CONTRACT_POSITION.getStorageAddress();
         if (addr == prevAddr) revert AddressCannotBeSame();
 
-        (, uint256 secondsPerSlot, uint256 genesisTime) = IConsensusContract(addr).getChainConfig();
+        (, uint256 secondsPerSlot, uint256 genesisTime) = IHashConsensus(addr).getChainConfig();
         if (secondsPerSlot != SECONDS_PER_SLOT || genesisTime != GENESIS_TIME) {
             revert UnexpectedChainConfig();
         }
 
-        uint256 initialRefSlot = IConsensusContract(addr).getInitialRefSlot();
+        uint256 initialRefSlot = IHashConsensus(addr).getInitialRefSlot();
         if (initialRefSlot < lastProcessingRefSlot) {
             revert InitialRefSlotCannotBeLessThanProcessingOne(initialRefSlot, lastProcessingRefSlot);
         }

@@ -3,77 +3,22 @@
 pragma solidity 0.8.9;
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IStakingRouter} from "contracts/common/interfaces/IStakingRouter.sol";
+import {IWithdrawalVault} from "contracts/common/interfaces/IWithdrawalVault.sol";
+import {ITriggerableWithdrawalsGateway} from "contracts/common/interfaces/ITriggerableWithdrawalsGateway.sol";
 
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "./lib/ExitLimitUtils.sol";
 import {PausableUntil} from "./utils/PausableUntil.sol";
-
-struct ValidatorData {
-    uint256 stakingModuleId;
-    uint256 nodeOperatorId;
-    bytes pubkey;
-}
-
-interface IWithdrawalVault {
-    function addWithdrawalRequests(bytes[] calldata pubkeys, uint64[] calldata amounts) external payable;
-
-    function getWithdrawalRequestFee() external view returns (uint256);
-}
-
-interface IStakingRouter {
-    function onValidatorExitTriggered(
-        ValidatorData[] calldata validatorData,
-        uint256 _withdrawalRequestPaidFee,
-        uint256 _exitType
-    ) external;
-}
 
 /**
  * @title TriggerableWithdrawalsGateway
  * @notice TriggerableWithdrawalsGateway contract is one entrypoint for all triggerable withdrawal requests (TWRs) in protocol.
  * This contract is responsible for limiting TWRs, checking ADD_FULL_WITHDRAWAL_REQUEST_ROLE role before it gets to Withdrawal Vault.
  */
-contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil {
+contract TriggerableWithdrawalsGateway is ITriggerableWithdrawalsGateway, AccessControlEnumerable, PausableUntil {
     using ExitLimitUtilsStorage for bytes32;
     using ExitLimitUtils for ExitRequestLimitData;
-
-    /**
-     * @notice Thrown when an invalid zero value is passed
-     * @param name Name of the argument that was zero
-     */
-    error ZeroArgument(string name);
-
-    /**
-     * @notice Thrown when attempting to set the admin address to zero
-     */
-    error AdminCannotBeZero();
-
-    /**
-     * @notice Thrown when a withdrawal fee insufficient
-     * @param feeRequired Amount of fee required to cover withdrawal request
-     * @param passedValue Amount of fee sent to cover withdrawal request
-     */
-    error InsufficientFee(uint256 feeRequired, uint256 passedValue);
-
-    /**
-     * @notice Thrown when a withdrawal fee refund failed
-     */
-    error FeeRefundFailed();
-
-    /**
-     * @notice Thrown when remaining exit requests limit is not enough to cover sender requests
-     * @param requestsCount Amount of requests that were sent for processing
-     * @param remainingLimit Amount of requests that still can be processed at current day
-     */
-    error ExitRequestsLimitExceeded(uint256 requestsCount, uint256 remainingLimit);
-
-    /**
-     * @notice Emitted when limits configs are set.
-     * @param maxExitRequestsLimit The maximum number of exit requests.
-     * @param exitsPerFrame The number of exits that can be restored per frame.
-     * @param frameDurationInSec The duration of each frame, in seconds, after which `exitsPerFrame` exits can be restored.
-     */
-    event ExitRequestsLimitSet(uint256 maxExitRequestsLimit, uint256 exitsPerFrame, uint256 frameDurationInSec);
 
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant RESUME_ROLE = keccak256("RESUME_ROLE");
@@ -86,7 +31,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
 
     ILidoLocator internal immutable LOCATOR;
 
-    /// @dev Ensures the contract’s ETH balance is unchanged.
+    /// @dev Ensures the contract's ETH balance is unchanged.
     modifier preservesEthBalance() {
         uint256 balanceBeforeCall = address(this).balance - msg.value;
         _;
@@ -100,7 +45,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
         uint256 exitsPerFrame,
         uint256 frameDurationInSec
     ) {
-        if (admin == address(0)) revert AdminCannotBeZero();
+        if (admin == address(0)) revert ITriggerableWithdrawalsGateway.AdminCannotBeZero();
         LOCATOR = ILidoLocator(lidoLocator);
 
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
@@ -145,7 +90,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      * @dev Submits Triggerable Withdrawal Requests to the Withdrawal Vault as full withdrawal requests
      *      for the specified validator public keys.
      *
-     * @param validatorsData An array of `ValidatorData` structs, each representing a validator
+     * @param validatorsData An array of `ValidatorExitData` structs, each representing a validator
      * for which a withdrawal request will be submitted. Each entry includes:
      *   - `stakingModuleId`: ID of the staking module.
      *   - `nodeOperatorId`: ID of the node operator.
@@ -159,13 +104,13 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      *     - There is not enough limit quota left in the current frame to process all requests.
      */
     function triggerFullWithdrawals(
-        ValidatorData[] calldata validatorsData,
+        IStakingRouter.ValidatorExitData[] calldata validatorsData,
         address refundRecipient,
         uint256 exitType
     ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance whenResumed {
-        if (msg.value == 0) revert ZeroArgument("msg.value");
+        if (msg.value == 0) revert ITriggerableWithdrawalsGateway.ZeroArgument("msg.value");
         uint256 requestsCount = validatorsData.length;
-        if (requestsCount == 0) revert ZeroArgument("validatorsData");
+        if (requestsCount == 0) revert ITriggerableWithdrawalsGateway.ZeroArgument("validatorsData");
 
         _consumeExitRequestLimit(requestsCount);
 
@@ -233,7 +178,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
 
     function _checkFee(uint256 fee) internal returns (uint256 refund) {
         if (msg.value < fee) {
-            revert InsufficientFee(fee, msg.value);
+            revert ITriggerableWithdrawalsGateway.InsufficientFee(fee, msg.value);
         }
         unchecked {
             refund = msg.value - fee;
@@ -241,7 +186,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
     }
 
     function _notifyStakingModules(
-        ValidatorData[] calldata validatorsData,
+        IStakingRouter.ValidatorExitData[] calldata validatorsData,
         uint256 withdrawalRequestPaidFee,
         uint256 exitType
     ) internal {
@@ -258,7 +203,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
 
             (bool success, ) = recipient.call{value: refund}("");
             if (!success) {
-                revert FeeRefundFailed();
+                revert ITriggerableWithdrawalsGateway.FeeRefundFailed();
             }
         }
     }
@@ -283,7 +228,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
             )
         );
 
-        emit ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
+        emit ITriggerableWithdrawalsGateway.ExitRequestsLimitSet(maxExitRequestsLimit, exitsPerFrame, frameDurationInSec);
     }
 
     function _consumeExitRequestLimit(uint256 requestsCount) internal {
@@ -295,7 +240,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
         uint256 limit = twrLimitData.calculateCurrentExitLimit(_getTimestamp());
 
         if (limit < requestsCount) {
-            revert ExitRequestsLimitExceeded(requestsCount, limit);
+            revert ITriggerableWithdrawalsGateway.ExitRequestsLimitExceeded(requestsCount, limit);
         }
 
         TWR_LIMIT_POSITION.setStorageExitRequestLimit(

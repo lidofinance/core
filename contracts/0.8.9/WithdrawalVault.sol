@@ -4,9 +4,10 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.9;
 
-import {IERC20}  from "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v4.4/token/ERC721/IERC721.sol";
 import {SafeERC20} from "@openzeppelin/contracts-v4.4/token/ERC20/utils/SafeERC20.sol";
+import {IWithdrawalVault} from "contracts/common/interfaces/IWithdrawalVault.sol";
 import {Versioned} from "./utils/Versioned.sol";
 import {WithdrawalVaultEIP7002} from "./WithdrawalVaultEIP7002.sol";
 
@@ -22,7 +23,7 @@ interface ILido {
 /**
  * @title A vault for temporary storage of withdrawals
  */
-contract WithdrawalVault is Versioned, WithdrawalVaultEIP7002 {
+contract WithdrawalVault is IWithdrawalVault, Versioned, WithdrawalVaultEIP7002 {
     using SafeERC20 for IERC20;
 
     ILido public immutable LIDO;

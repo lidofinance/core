@@ -10,6 +10,7 @@ import {
   StakingModule__MockForStakingRouter,
   StakingRouter,
 } from "typechain-types";
+import type { IStakingRouter } from "typechain-types/contracts/0.8.9/StakingRouter";
 
 import { ether, getNextBlock, proxify } from "lib";
 
@@ -629,7 +630,7 @@ describe("StakingRouter.sol:module-sync", () => {
       depositableValidatorsCount: 1n,
     };
 
-    const correction: StakingRouter.ValidatorsCountsCorrectionStruct = {
+    const correction: IStakingRouter.ValidatorsCountsCorrectionStruct = {
       currentModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,
       currentNodeOperatorExitedValidatorsCount: operatorSummary.totalExitedValidators,
       newModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,

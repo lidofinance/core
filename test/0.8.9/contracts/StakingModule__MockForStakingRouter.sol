@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-import {IStakingModule} from "contracts/0.8.9/interfaces/IStakingModule.sol";
+import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 
 contract StakingModule__MockForStakingRouter is IStakingModule {
     event Mock__TargetValidatorsLimitsUpdated(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit);
@@ -202,15 +202,9 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         emit Mock__TargetValidatorsLimitsUpdated(_nodeOperatorId, _targetLimitMode, _targetLimit);
     }
 
-    event Mock__ValidatorsCountUnsafelyUpdated(
-        uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount
-    );
+    event Mock__ValidatorsCountUnsafelyUpdated(uint256 _nodeOperatorId, uint256 _exitedValidatorsCount);
 
-    function unsafeUpdateValidatorsCount(
-        uint256 _nodeOperatorId,
-        uint256 _exitedValidatorsCount
-    ) external {
+    function unsafeUpdateValidatorsCount(uint256 _nodeOperatorId, uint256 _exitedValidatorsCount) external {
         emit Mock__ValidatorsCountUnsafelyUpdated(_nodeOperatorId, _exitedValidatorsCount);
     }
 
@@ -270,12 +264,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         bytes calldata _publicKeys,
         uint256 _eligibleToExitInSec
     ) external {
-        emit Mock__reportValidatorExitDelay(
-            _nodeOperatorId,
-            _proofSlotTimestamp,
-            _publicKeys,
-            _eligibleToExitInSec
-        );
+        emit Mock__reportValidatorExitDelay(_nodeOperatorId, _proofSlotTimestamp, _publicKeys, _eligibleToExitInSec);
     }
 
     function onValidatorExitTriggered(
@@ -284,12 +273,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     ) external {
-        emit Mock__onValidatorExitTriggered(
-            _nodeOperatorId,
-            _publicKeys,
-            _withdrawalRequestPaidFee,
-            _exitType
-        );
+        emit Mock__onValidatorExitTriggered(_nodeOperatorId, _publicKeys, _withdrawalRequestPaidFee, _exitType);
     }
 
     function isValidatorExitDelayPenaltyApplicable(

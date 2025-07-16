@@ -11,6 +11,19 @@ For the `wstETH` contract, we use `solc 0.6.12`, as it is non-upgradeable and bo
 
 For the other contracts, newer compiler versions are used.
 
+## Interfaces
+
+Compiler versions for common interfaces are not pinned and follow `pragma solidity >=0.5.0;`.
+If the interface is to be imported by older 0.4.24 contract it is stored in contracts/0.4.24/interfaces.
+
+Each compiler `pragma solidity` with not pinned version must follow after:
+```
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
+```
+
+Common interfaces must not include interfaces for the contract's predecessor. TODO: or must?
+
 # Compilation Instructions
 
 ```bash

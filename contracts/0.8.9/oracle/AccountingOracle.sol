@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import { ILidoLocator } from "../../common/interfaces/ILidoLocator.sol";
-import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
+import {IStakingRouter} from "contracts/common/interfaces/IStakingRouter.sol";
 
-import { BaseOracle, IConsensusContract } from "./BaseOracle.sol";
+import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
+import {BaseOracle} from "./BaseOracle.sol";
 
 
 interface ILido {
@@ -55,22 +57,6 @@ interface IOracleReportSanityChecker {
     function checkExtraDataItemsCountPerTransaction(uint256 _extraDataListItemsCount) external view;
     function checkNodeOperatorsPerExtraDataItemCount(uint256 _itemIndex, uint256 _nodeOperatorsCount) external view;
 }
-
-interface IStakingRouter {
-    function updateExitedValidatorsCountByStakingModule(
-        uint256[] calldata moduleIds,
-        uint256[] calldata exitedValidatorsCounts
-    ) external returns (uint256);
-
-    function reportStakingModuleExitedValidatorsCountByNodeOperator(
-        uint256 stakingModuleId,
-        bytes calldata nodeOperatorIds,
-        bytes calldata exitedValidatorsCounts
-    ) external;
-
-    function onValidatorsCountsByNodeOperatorReportingFinished() external;
-}
-
 
 interface IWithdrawalQueue {
     function onOracleReport(bool isBunkerMode, uint256 prevReportTimestamp, uint256 currentReportTimestamp) external;
@@ -514,11 +500,11 @@ contract AccountingOracle is BaseOracle {
     )
         internal view returns (uint256)
     {
-        (uint256 initialEpoch, uint256 epochsPerFrame, /* uint256 _fastLaneLengthSlots */) = IConsensusContract(consensusContract).getFrameConfig();
+        (uint256 initialEpoch, uint256 epochsPerFrame, /* uint256 _fastLaneLengthSlots */) = IHashConsensus(consensusContract).getFrameConfig();
 
         (uint256 slotsPerEpoch,
             uint256 secondsPerSlot,
-            uint256 genesisTime) = IConsensusContract(consensusContract).getChainConfig();
+            uint256 genesisTime) = IHashConsensus(consensusContract).getChainConfig();
 
         {
             // check chain spec to match the prev. one (a block is used to reduce stack allocation)

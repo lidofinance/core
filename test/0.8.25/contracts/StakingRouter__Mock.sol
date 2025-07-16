@@ -1,43 +1,17 @@
-// SPDX-License-Identifier: UNLICENSED
-// for testing purposes only
-
-pragma solidity 0.8.9;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.25;
 
 import {IStakingRouter} from "contracts/common/interfaces/IStakingRouter.sol";
 
-contract StakingRouter__MockForAccountingOracle is IStakingRouter {
-    struct UpdateExitedKeysByModuleCallData {
-        uint256[] moduleIds;
-        uint256[] exitedKeysCounts;
-        uint256 callCount;
-    }
-
-    struct ReportKeysByNodeOperatorCallData {
-        uint256 stakingModuleId;
-        bytes nodeOperatorIds;
-        bytes keysCounts;
-    }
-
-    mapping(uint256 => uint256) internal _exitedKeysCountsByModuleId;
-
-    UpdateExitedKeysByModuleCallData internal _lastCall_updateExitedKeysByModule;
-
-    ReportKeysByNodeOperatorCallData[] public calls_reportExitedKeysByNodeOperator;
-    ReportKeysByNodeOperatorCallData[] public calls_reportStuckKeysByNodeOperator;
-
-    uint256 public totalCalls_onValidatorsCountsByNodeOperatorReportingFinished;
-
-    function lastCall_updateExitedKeysByModule() external view returns (UpdateExitedKeysByModuleCallData memory) {
-        return _lastCall_updateExitedKeysByModule;
-    }
-
-    function totalCalls_reportExitedKeysByNodeOperator() external view returns (uint256) {
-        return calls_reportExitedKeysByNodeOperator.length;
-    }
-
-    function totalCalls_reportStuckKeysByNodeOperator() external view returns (uint256) {
-        return calls_reportStuckKeysByNodeOperator.length;
-    }
+contract StakingRouter__Mock is IStakingRouter {
+    // An event to track when reportValidatorExitDelay is called
+    event UnexitedValidatorReported(
+        uint256 moduleId,
+        uint256 nodeOperatorId,
+        uint256 proofSlotTimestamp,
+        bytes publicKey,
+        uint256 secondsSinceEligibleExitRequest
+    );
 
     // Empty implementations for all interface functions
     function MANAGE_WITHDRAWAL_CREDENTIALS_ROLE() external pure returns (bytes32) {
@@ -114,12 +88,27 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
 
     function reportRewardsMinted(uint256[] calldata _stakingModuleIds, uint256[] calldata _totalShares) external {}
 
+    function updateExitedValidatorsCountByStakingModule(
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _exitedValidatorsCounts
+    ) external returns (uint256) {
+        return 0;
+    }
+
+    function reportStakingModuleExitedValidatorsCountByNodeOperator(
+        uint256 _stakingModuleId,
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _exitedValidatorsCounts
+    ) external {}
+
     function unsafeSetExitedValidatorsCount(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
         bool _triggerUpdateFinish,
         ValidatorsCountsCorrection memory _correction
     ) external {}
+
+    function onValidatorsCountsByNodeOperatorReportingFinished() external {}
 
     function decreaseStakingModuleVettedKeysCountByNodeOperator(
         uint256 _stakingModuleId,
@@ -257,53 +246,27 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
     function getWithdrawalCredentials() external pure returns (bytes32) {
         return bytes32(0);
     }
+
     function reportValidatorExitDelay(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
         bytes calldata _publicKey,
         uint256 _eligibleToExitInSec
-    ) external {}
+    ) external {
+        // Emit an event so that testing frameworks can detect this call
+        emit UnexitedValidatorReported(
+            _stakingModuleId,
+            _nodeOperatorId,
+            _proofSlotTimestamp,
+            _publicKey,
+            _eligibleToExitInSec
+        );
+    }
+
     function onValidatorExitTriggered(
         ValidatorExitData[] calldata validatorExitData,
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     ) external {}
-
-    ///
-    /// IStakingRouter
-    ///
-
-    function updateExitedValidatorsCountByStakingModule(
-        uint256[] calldata moduleIds,
-        uint256[] calldata exitedKeysCounts
-    ) external returns (uint256) {
-        _lastCall_updateExitedKeysByModule.moduleIds = moduleIds;
-        _lastCall_updateExitedKeysByModule.exitedKeysCounts = exitedKeysCounts;
-        ++_lastCall_updateExitedKeysByModule.callCount;
-
-        uint256 newlyExitedValidatorsCount;
-
-        for (uint256 i = 0; i < moduleIds.length; ++i) {
-            uint256 moduleId = moduleIds[i];
-            newlyExitedValidatorsCount += exitedKeysCounts[i] - _exitedKeysCountsByModuleId[moduleId];
-            _exitedKeysCountsByModuleId[moduleId] = exitedKeysCounts[i];
-        }
-
-        return newlyExitedValidatorsCount;
-    }
-
-    function reportStakingModuleExitedValidatorsCountByNodeOperator(
-        uint256 stakingModuleId,
-        bytes calldata nodeOperatorIds,
-        bytes calldata exitedKeysCounts
-    ) external {
-        calls_reportExitedKeysByNodeOperator.push(
-            ReportKeysByNodeOperatorCallData(stakingModuleId, nodeOperatorIds, exitedKeysCounts)
-        );
-    }
-
-    function onValidatorsCountsByNodeOperatorReportingFinished() external {
-        ++totalCalls_onValidatorsCountsByNodeOperatorReportingFinished;
-    }
 }

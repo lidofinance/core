@@ -11,23 +11,17 @@ import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStora
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {MinFirstAllocationStrategy} from "contracts/common/lib/MinFirstAllocationStrategy.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IStETH} from "contracts/common/interfaces/IStETH.sol";
 
 import {SigningKeys} from "../lib/SigningKeys.sol";
 import {Packed64x4} from "../lib/Packed64x4.sol";
 import {Versioned} from "../utils/Versioned.sol";
-
-interface IStETH {
-    function sharesOf(address _account) external view returns (uint256);
-    function transferShares(address _recipient, uint256 _sharesAmount) external returns (uint256);
-    function approve(address _spender, uint256 _amount) external returns (bool);
-}
+import {IStakingModule} from "../interfaces/IStakingModule.sol";
 
 /// @title Node Operator registry
 /// @notice Node Operator registry manages signing keys and other node operator data.
-/// @dev Must implement the full version of IStakingModule interface, not only the one declared locally.
-///      It's also responsible for distributing rewards to node operators.
 /// NOTE: the code below assumes moderate amount of node operators, i.e. up to `MAX_NODE_OPERATORS_COUNT`.
-contract NodeOperatorsRegistry is AragonApp, Versioned {
+contract NodeOperatorsRegistry is IStakingModule, AragonApp, Versioned {
     using SafeMath for uint256;
     using UnstructuredStorage for bytes32;
     using SigningKeys for bytes32;

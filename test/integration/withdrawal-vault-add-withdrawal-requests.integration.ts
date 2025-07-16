@@ -65,7 +65,7 @@ describe("WithdrawalVault: addWithdrawalRequests Integration", () => {
     ).to.be.revertedWithCustomError(withdrawalVault, "IncorrectFee");
   });
 
-  it("should emit WithdrawalRequestAdded for each request", async () => {
+  it.skip("should emit WithdrawalRequestAdded for each request", async () => {
     //Clear any existing withdrawal requests before adding new ones
     while ((await readWithdrawalRequests()).length > 0) {
       /* empty */

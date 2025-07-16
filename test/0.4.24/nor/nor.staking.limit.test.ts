@@ -14,7 +14,7 @@ import {
   NodeOperatorsRegistry__Harness,
   NodeOperatorsRegistry__Harness__factory,
 } from "typechain-types";
-import { NodeOperatorsRegistryLibraryAddresses } from "typechain-types/factories/contracts/0.4.24/nos/NodeOperatorsRegistry.sol/NodeOperatorsRegistry__factory";
+import { NodeOperatorsRegistryLibraryAddresses } from "typechain-types/factories/contracts/0.4.24/nos/NodeOperatorsRegistry__factory";
 
 import { addNodeOperator, certainAddress, NodeOperatorConfig, prepIdsCountsPayload } from "lib";
 
