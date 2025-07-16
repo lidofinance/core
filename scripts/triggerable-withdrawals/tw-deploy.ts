@@ -187,6 +187,8 @@ async function main(): Promise<void> {
     libraries,
   });
   log.success(`NodeOperatorsRegistry: ${nor.address}`);
+
+  // 6. ValidatorExitDelayVerifier
   const gIndexes = {
     gIFirstValidatorPrev: VALIDATOR_PREV_GINDEX,
     gIFirstValidatorCurr: VALIDATOR_CURR_GINDEX,
@@ -195,7 +197,7 @@ async function main(): Promise<void> {
     gIFirstBlockRootInSummaryPrev: BLOCK_ROOT_IN_SUMMARY_PREV_GINDEX,
     gIFirstBlockRootInSummaryCurr: BLOCK_ROOT_IN_SUMMARY_CURR_GINDEX,
   };
-  // 6. ValidatorExitDelayVerifier
+
   const validatorExitDelayVerifier = await deployImplementation(
     Sk.validatorExitDelayVerifier,
     "ValidatorExitDelayVerifier",
@@ -210,7 +212,7 @@ async function main(): Promise<void> {
       SLOTS_PER_EPOCH,
       SECONDS_PER_SLOT,
       GENESIS_TIME,
-      (SHARD_COMMITTEE_PERIOD_SLOTS * SECONDS_PER_SLOT) / (SLOTS_PER_EPOCH * SECONDS_PER_SLOT), // shardCommitteePeriodInSeconds
+      SHARD_COMMITTEE_PERIOD_SLOTS * SECONDS_PER_SLOT, // shardCommitteePeriodInSeconds
     ],
   );
   log.success(`ValidatorExitDelayVerifier: ${validatorExitDelayVerifier.address}`);
@@ -247,13 +249,14 @@ async function main(): Promise<void> {
     triggerableWithdrawalsGateway.address,
   ];
 
+  // 8. Deploy new LidoLocator
   const newLocator = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
   log.success(`LidoLocator: ${newLocator.address}`);
 
   const updatedState = readNetworkState();
   persistNetworkState(updatedState);
 
-  // 8. GateSeal for withdrawalQueueERC721
+  // 9. GateSeal for withdrawalQueueERC721
   const WQ_GATE_SEAL = await deployGateSeal(
     updatedState,
     deployer,
@@ -263,7 +266,7 @@ async function main(): Promise<void> {
     Sk.gateSeal,
   );
 
-  // 9. GateSeal for Triggerable Withdrawals
+  // 10. GateSeal for Triggerable Withdrawals
   const TW_GATE_SEAL = await deployGateSeal(
     updatedState,
     deployer,
