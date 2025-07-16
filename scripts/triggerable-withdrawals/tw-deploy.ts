@@ -112,6 +112,8 @@ async function main(): Promise<void> {
   const BLOCK_ROOT_IN_SUMMARY_PREV_GINDEX = "0x000000000000000000000000000000000000000000000000000000000040000d";
   const BLOCK_ROOT_IN_SUMMARY_CURR_GINDEX = BLOCK_ROOT_IN_SUMMARY_PREV_GINDEX;
 
+  const SLOTS_PER_HISTORICAL_ROOT = 8192;
+
   // TriggerableWithdrawalsGateway params
   const TRIGGERABLE_WITHDRAWALS_MAX_LIMIT = 11_200;
   const TRIGGERABLE_WITHDRAWALS_LIMIT_PER_FRAME = 1;
@@ -204,7 +206,7 @@ async function main(): Promise<void> {
       1, // firstSupportedSlot
       1, // pivotSlot
       0, // capellaSlot @see https://github.com/eth-clients/hoodi/blob/main/metadata/config.yaml#L33
-      (SLOTS_PER_EPOCH * 8192) / SLOTS_PER_EPOCH, // slotsPerHistoricalRoot
+      SLOTS_PER_HISTORICAL_ROOT, // slotsPerHistoricalRoot
       SLOTS_PER_EPOCH,
       SECONDS_PER_SLOT,
       GENESIS_TIME,
