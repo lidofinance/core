@@ -12,6 +12,8 @@ import {RefSlotCache} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
 contract VaultHub__MockForLazyOracle {
     using RefSlotCache for RefSlotCache.Int112WithRefSlotCache;
 
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
+
     address[] public mock__vaults;
     mapping(address vault => VaultHub.VaultConnection connection) public mock__vaultConnections;
     mapping(address vault => VaultHub.VaultRecord record) public mock__vaultRecords;
@@ -56,7 +58,7 @@ contract VaultHub__MockForLazyOracle {
         return mock__vaultConnections[vault];
     }
 
-    function maxLockableValue(address vault) external view returns (uint256) {
+    function maxLockableValue(address) external pure returns (uint256) {
         return 1000000000000000000;
     }
 
