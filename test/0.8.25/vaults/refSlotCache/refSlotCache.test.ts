@@ -327,25 +327,46 @@ describe("RefSlotCache.sol", () => {
     });
 
     describe("getValueForRefSlot", () => {
-      it("should return current value when current refSlot is greater than cached refSlot", async () => {
-        const increment = -100;
+      it("should return current values when current refSlot is greater than cached refSlot", async () => {
+        const increment = 100n;
         const oldRefSlot = 200n;
         const newRefSlot = 300n;
 
         // Set up cache at oldRefSlot
         await consensus.setRefSlot(oldRefSlot);
+        expect(await refSlotCacheTest.getIntCurrentValue()).to.equal(0n);
         await refSlotCacheTest.increaseIntValue(increment);
+        expect(await refSlotCacheTest.getIntCurrentValue()).to.equal(increment);
+        await refSlotCacheTest.increaseIntValue(increment);
+        expect(await refSlotCacheTest.getIntCurrentValue()).to.equal(increment * 2n);
 
         // Move to newRefSlot
         await consensus.setRefSlot(newRefSlot);
+        await refSlotCacheTest.increaseIntValue(increment);
 
-        let result = await refSlotCacheTest.getIntValueForRefSlot(oldRefSlot);
-        expect(result).to.equal(0n);
+        // 1. refSlot is more than activeRefSlot
+        let result = await refSlotCacheTest.getIntValueForRefSlot(newRefSlot + 1n);
+        expect(result).to.equal(increment * 3n);
+        expect(await refSlotCacheTest.getIntCurrentValue()).to.equal(increment * 3n);
+
+        // 2. refSlot is in (prevRefSlot, activeRefSlot]
+        result = await refSlotCacheTest.getIntValueForRefSlot(oldRefSlot + 1n);
+        expect(result).to.equal(increment * 2n);
         result = await refSlotCacheTest.getIntValueForRefSlot(newRefSlot);
-        expect(result).to.equal(increment);
+        expect(result).to.equal(increment * 2n);
+
+        // 3. refSlot is equal to prevRefSlot
+        result = await refSlotCacheTest.getIntValueForRefSlot(oldRefSlot);
+        expect(result).to.equal(0n);
+
+        // 4. refSlot is less than prevRefSlot
+        await expect(refSlotCacheTest.getIntValueForRefSlot(oldRefSlot - 1n)).to.be.revertedWithCustomError(
+          refSlotCacheTest,
+          "InOutDeltaCacheIsOverwritten",
+        );
       });
 
-      it("should return cached value when current refSlot equals cached refSlot", async () => {
+      it("should return cached values when current refSlot equals cached refSlot", async () => {
         const increment = 50;
         const refSlot = 200n;
 
@@ -355,6 +376,7 @@ describe("RefSlotCache.sol", () => {
 
         const result = await refSlotCacheTest.getIntValueForRefSlot(refSlot);
         expect(result).to.equal(0n);
+        expect(await refSlotCacheTest.getIntCurrentValue()).to.equal(increment);
       });
 
       it("should handle refSlot truncation to uint32", async () => {
