@@ -2,10 +2,6 @@ import { BaseContract as EthersBaseContract, ContractTransactionReceipt, Interfa
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-export type LogDescriptionExtended = LogDescription & {
-  address?: string;
-};
-
 import {
   Accounting,
   AccountingOracle,
@@ -13,7 +9,6 @@ import {
   Burner,
   DepositSecurityModule,
   HashConsensus,
-  ICSModule,
   IStakingModule,
   Kernel,
   LazyOracle,
@@ -37,6 +32,10 @@ import {
   WithdrawalVault,
   WstETH,
 } from "typechain-types";
+
+export type LogDescriptionExtended = LogDescription & {
+  address?: string;
+};
 
 export type ProtocolNetworkItems = {
   locator: string;
@@ -106,7 +105,6 @@ export interface ContractTypes {
   VaultHub: VaultHub;
   OperatorGrid: OperatorGrid;
   IStakingModule: IStakingModule;
-  ICSModule: ICSModule;
   ValidatorConsolidationRequests: ValidatorConsolidationRequests;
   LazyOracle: LazyOracle;
 }
@@ -149,7 +147,7 @@ export type StakingModuleContracts = {
   csm?: LoadedContract<IStakingModule>;
 };
 
-export type StakingModuleName = "nor" | "sdvt";
+export type StakingModuleName = "nor" | "sdvt" | "csm";
 
 export type HashConsensusContracts = {
   hashConsensus: LoadedContract<HashConsensus>;

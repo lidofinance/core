@@ -130,6 +130,27 @@ export function encodeExtraDataItems(data: ExtraDataType) {
   return encodeExtraDataItemsArray(itemsWithType);
 }
 
+export function prepareExtraData(extraData: ExtraData, config?: ExtraDataConfig) {
+  const extraDataItems: string[] = [];
+
+  if (Array.isArray(extraData)) {
+    if (isStringArray(extraData)) {
+      extraDataItems.push(...extraData);
+    } else if (isItemTypeArray(extraData)) {
+      extraDataItems.push(...encodeExtraDataItemsArray(extraData));
+    }
+  } else if (isExtraDataType(extraData)) {
+    extraDataItems.push(...encodeExtraDataItems(extraData));
+  }
+
+  const extraDataItemsCount = extraDataItems.length;
+  const maxItemsPerChunk = config?.maxItemsPerChunk || extraDataItemsCount;
+  const extraDataChunks = packExtraDataItemsToChunksLinkedByHash(extraDataItems, maxItemsPerChunk);
+  const extraDataChunkHashes = extraDataChunks.map((chunk) => calcExtraDataListHash(chunk));
+
+  return { extraDataItemsCount, extraDataChunks, extraDataChunkHashes };
+}
+
 function packChunk(extraDataItems: string[], nextHash: string) {
   const extraDataItemsBytes = extraDataItems.map((s) => s.substring(2)).join("");
   return `${nextHash}${extraDataItemsBytes}`;
@@ -190,27 +211,6 @@ export type OracleReportProps = {
   extraData: ExtraData;
   config?: ExtraDataConfig;
 };
-
-export function prepareExtraData(extraData: ExtraData, config?: ExtraDataConfig) {
-  const extraDataItems: string[] = [];
-
-  if (Array.isArray(extraData)) {
-    if (isStringArray(extraData)) {
-      extraDataItems.push(...extraData);
-    } else if (isItemTypeArray(extraData)) {
-      extraDataItems.push(...encodeExtraDataItemsArray(extraData));
-    }
-  } else if (isExtraDataType(extraData)) {
-    extraDataItems.push(...encodeExtraDataItems(extraData));
-  }
-
-  const extraDataItemsCount = extraDataItems.length;
-  const maxItemsPerChunk = config?.maxItemsPerChunk || extraDataItemsCount;
-  const extraDataChunks = packExtraDataItemsToChunksLinkedByHash(extraDataItems, maxItemsPerChunk);
-  const extraDataChunkHashes = extraDataChunks.map((chunk) => calcExtraDataListHash(chunk));
-
-  return { extraDataItemsCount, extraDataChunks, extraDataChunkHashes };
-}
 
 export function constructOracleReport({ reportFieldsWithoutExtraData, extraData, config }: OracleReportProps) {
   const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = prepareExtraData(extraData, config);

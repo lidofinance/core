@@ -12,8 +12,9 @@ export async function main() {
 
   const locator = LidoLocator__factory.connect(getAddress(Sk.lidoLocator, state), deployerSigner);
 
-  await deployWithoutProxy(Sk.TWVoteScript, "TWVoteScript", deployer, [
+  await deployWithoutProxy(Sk.twVoteScript, "TWVoteScript", deployer, [
     state[Sk.appVoting].proxy.address,
+    state[Sk.dgDualGovernance].proxy.address,
     {
       // Contract addresses
       agent: getAddress(Sk.appAgent, state),

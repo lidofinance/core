@@ -18,6 +18,7 @@ import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
 const MODULE_ID = NOR_MODULE_ID;
 const NUM_NEWLY_EXITED_VALIDATORS = 1n;
+const MAINNET_NOR_ADDRESS = "0x55032650b14df07b85bf18a3a3ec8e0af2e028d5".toLowerCase();
 
 // TODO: update this test for the version with the triggerable exits (no stuck items thus there is
 //       only one extra data chunk)
@@ -44,20 +45,23 @@ describe.skip("Integration: AccountingOracle extra data", () => {
     }
 
     {
-      // Prepare stuck and exited keys extra data for reusing in tests
+      // Prepare exited keys extra data for reusing in tests
       const { oracleReportSanityChecker } = ctx.contracts;
 
-      if (ctx.isScratch) {
-        // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
-        // with not that much TVL
-        await setAnnualBalanceIncreaseLimit(oracleReportSanityChecker, MAX_BASIS_POINTS);
+      // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
+      // with not that much TVL
+      await setAnnualBalanceIncreaseLimit(oracleReportSanityChecker, MAX_BASIS_POINTS);
 
-        // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
-        // with not that much TVL
-        await advanceChainTime(15n * 24n * 60n * 60n);
+      // Need this to pass the annual balance increase limit check in sanity checker for scratch deploy
+      // with not that much TVL
+      await advanceChainTime(15n * 24n * 60n * 60n);
+
+      let firstNodeOperatorInRange = 0;
+      // Workaround for Mainnet
+      if (ctx.contracts.nor.address.toLowerCase() === MAINNET_NOR_ADDRESS) {
+        firstNodeOperatorInRange = 20;
       }
 
-      const firstNodeOperatorInRange = ctx.isScratch ? 0 : 20;
       const numNodeOperators = Math.min(10, Number(await ctx.contracts.nor.getNodeOperatorsCount()));
 
       exitedKeys = {
@@ -123,7 +127,8 @@ describe.skip("Integration: AccountingOracle extra data", () => {
     expect(extraDataChunks.length).to.equal(1);
     expect(extraDataChunkHashes.length).to.equal(1);
 
-    const reportData: OracleReportParams = {
+    const reportData: Partial<OracleReportParams> = {
+      clDiff: 0n,
       excludeVaultsBalances: true,
       extraDataFormat: EXTRA_DATA_FORMAT_LIST,
       extraDataHash: extraDataChunkHashes[0],

@@ -188,10 +188,14 @@ export async function autofillRoles(
  * Sets up the protocol with a maximum external ratio
  */
 export async function setupLidoForVaults(ctx: ProtocolContext) {
-  const { lido } = ctx.contracts;
-  const votingSigner = await ctx.getSigner("voting");
+  const { lido, acl } = ctx.contracts;
+  const agentSigner = await ctx.getSigner("agent");
+  const role = await lido.STAKING_CONTROL_ROLE();
+  const agentAddress = await agentSigner.getAddress();
 
-  await lido.connect(votingSigner).setMaxExternalRatioBP(20_00n);
+  await acl.connect(agentSigner).grantPermission(agentAddress, lido.address, role);
+  await lido.connect(agentSigner).setMaxExternalRatioBP(20_00n);
+  await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
 }
 
 export type VaultReportItem = {
