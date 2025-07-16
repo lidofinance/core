@@ -63,7 +63,7 @@ const config: HardhatUserConfig = {
       accounts: loadAccounts("holesky"),
     },
     "hoodi": {
-      url: process.env.HOLESKY_RPC_URL || RPC_URL,
+      url: RPC_URL,
       chainId: 560048,
       accounts: loadAccounts("hoodi"),
     },
