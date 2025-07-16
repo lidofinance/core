@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "./lib/ExitLimitUtils.sol";
@@ -26,6 +25,11 @@ interface IStakingRouter {
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     ) external;
+}
+
+interface ILidoLocator {
+    function stakingRouter() external view returns(address);
+    function withdrawalVault() external view returns(address);
 }
 
 /**

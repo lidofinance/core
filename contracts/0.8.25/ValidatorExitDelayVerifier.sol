@@ -3,12 +3,35 @@
 
 pragma solidity 0.8.25;
 
-import {IStakingRouter} from "contracts/common/interfaces/IStakingRouter.sol";
 import {BeaconBlockHeader, Validator} from "contracts/common/lib/BeaconTypes.sol";
 import {GIndex} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {IValidatorsExitBus} from "contracts/common/interfaces/IValidatorsExitBus.sol";
+
+interface ILidoLocator {
+    function stakingRouter() external view returns(address);
+    function validatorsExitBusOracle() external view returns(address);
+}
+
+interface IStakingRouter {
+    function reportValidatorExitDelay(
+        uint256 _moduleId,
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKey,
+        uint256 _eligibleToExitInSec
+    ) external;
+}
+
+interface IValidatorsExitBus {
+    function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 timestamp);
+
+    function unpackExitRequest(
+        bytes calldata exitRequests,
+        uint256 dataFormat,
+        uint256 index
+    ) external view returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex);
+}
+
 
 struct ExitRequestData {
     bytes data;

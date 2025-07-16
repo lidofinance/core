@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.9;
 
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 import {Versioned} from "../utils/Versioned.sol";
@@ -23,9 +22,15 @@ interface ITriggerableWithdrawalsGateway {
     ) external payable;
 }
 
+interface ILidoLocator {
+    function validatorExitDelayVerifier() external view returns (address);
+    function triggerableWithdrawalsGateway() external view returns (address);
+    function oracleReportSanityChecker() external view returns(address);
+}
+
 /**
  * @title ValidatorsExitBus
- * @notice Сontract that serves as the central infrastructure for managing validator exit requests.
+ * @notice Contract that serves as the central infrastructure for managing validator exit requests.
  * It stores report hashes, emits exit events, and maintains data and tools that enables anyone to prove a validator was requested to exit.
  */
 abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
