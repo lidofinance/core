@@ -292,18 +292,34 @@ contract V3Template is V3Addresses {
     }
 
     function _checkBurnerMigratedCorrectly() internal view {
+        if (IBurner(OLD_BURNER).getCoverSharesBurnt() != IBurner(BURNER).getCoverSharesBurnt()) {
+            revert IncorrectBurnerSharesMigration("Cover shares burnt mismatch");
+        }
+
+        if (IBurner(OLD_BURNER).getNonCoverSharesBurnt() != IBurner(BURNER).getNonCoverSharesBurnt()) {
+            revert IncorrectBurnerSharesMigration("Non-cover shares burnt mismatch");
+        }
+
         (uint256 oldCoverShares, uint256 oldNonCoverShares) = IBurner(OLD_BURNER).getSharesRequestedToBurn();
         (uint256 newCoverShares, uint256 newNonCoverShares) = IBurner(BURNER).getSharesRequestedToBurn();
-        if (
-            IBurner(OLD_BURNER).getCoverSharesBurnt() != IBurner(BURNER).getCoverSharesBurnt() ||
-            IBurner(OLD_BURNER).getNonCoverSharesBurnt() != IBurner(BURNER).getNonCoverSharesBurnt() ||
-            oldCoverShares != newCoverShares ||
-            oldNonCoverShares != newNonCoverShares ||
-            ILidoWithFinalizeUpgrade(LIDO).balanceOf(OLD_BURNER) != 0 ||
-            ILidoWithFinalizeUpgrade(LIDO).balanceOf(BURNER) != initialOldBurnerStethSharesBalance ||
-            IBurner(BURNER).isMigrationAllowed()
-        ) {
-            revert IncorrectBurnerSharesMigration();
+        if (oldCoverShares != newCoverShares) {
+            revert IncorrectBurnerSharesMigration("Cover shares requested to burn mismatch");
+        }
+
+        if (oldNonCoverShares != newNonCoverShares) {
+            revert IncorrectBurnerSharesMigration("Non-cover shares requested to burn mismatch");
+        }
+
+        if (ILidoWithFinalizeUpgrade(LIDO).balanceOf(OLD_BURNER) != 0) {
+            revert IncorrectBurnerSharesMigration("Old burner stETH balance is not zero");
+        }
+
+        if (ILidoWithFinalizeUpgrade(LIDO).sharesOf(BURNER) != initialOldBurnerStethSharesBalance) {
+            revert IncorrectBurnerSharesMigration("New burner stETH balance mismatch");
+        }
+
+        if (IBurner(BURNER).isMigrationAllowed()) {
+            revert IncorrectBurnerSharesMigration("Burner migration is still allowed");
         }
 
         address[] memory contractsWithBurnerAllowances_ = contractsWithBurnerAllowances;
@@ -389,7 +405,7 @@ contract V3Template is V3Addresses {
     error StartAndFinishMustBeInSameTx();
     error StartAlreadyCalledInThisTx();
     error Expired();
-    error IncorrectBurnerSharesMigration();
+    error IncorrectBurnerSharesMigration(string reason);
     error IncorrectBurnerAllowance(address contractAddress, address burner);
     error BurnerMigrationNotAllowed();
     error IncorrectVaultFactoryBeacon(address factory, address beacon);

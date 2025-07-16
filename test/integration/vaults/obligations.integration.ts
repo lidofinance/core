@@ -9,6 +9,7 @@ import { Dashboard, StakingVault, VaultHub } from "typechain-types";
 
 import { ether, impersonate } from "lib";
 import {
+  autofillRoles,
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
@@ -56,7 +57,7 @@ describe("Integration: Vault obligations", () => {
     [owner, nodeOperator, redemptionMaster, validatorExit, stranger, whale] = await ethers.getSigners();
 
     // Owner can create a vault with operator as a node operator
-    ({ stakingVault, dashboard, roles } = await createVaultWithDashboard(
+    ({ stakingVault, dashboard } = await createVaultWithDashboard(
       ctx,
       ctx.contracts.stakingVaultFactory,
       owner,
@@ -64,6 +65,8 @@ describe("Integration: Vault obligations", () => {
       nodeOperator,
       [],
     ));
+
+    roles = await autofillRoles(dashboard, nodeOperator);
 
     stakingVaultAddress = await stakingVault.getAddress();
     treasuryAddress = await ctx.contracts.locator.treasury();

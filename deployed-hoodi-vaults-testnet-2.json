@@ -11,7 +11,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/Accounting.sol",
-      "address": "0xa833E5Bc6c38Ab06dfe2ef27947Abb26323538dD",
+      "address": "0xA125e823C724Ea94F5935554DA3e76b65631682F",
       "constructorArgs": ["0xD7c1B80fA86965B48cCA3aDcCB08E1DAEa291980", "0x2C220A2a91602dd93bEAC7b3A1773cdADE369ba1"]
     }
   },
@@ -474,7 +474,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/LazyOracle.sol",
-      "address": "0xf8886BEB7DA44Ba43bc1bA2AD8216a1901BcEeA6",
+      "address": "0x65c513a2EE3aadDb5F765bC6e16F33C12C5B8613",
       "constructorArgs": ["0xD7c1B80fA86965B48cCA3aDcCB08E1DAEa291980"]
     }
   },
@@ -670,7 +670,7 @@
       ]
     }
   },
-  "scratchDeployGasUsed": "157280773",
+  "scratchDeployGasUsed": "161372708",
   "simpleDvt": {
     "deployParameters": {
       "stakingModuleName": "SimpleDVT",

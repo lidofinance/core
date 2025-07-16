@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.25;
+
+// See contracts/COMPILERS.md
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity ^0.8.25;
 
 import {IForwarder} from "../interfaces/IForwarder.sol";
 import {IVoting} from "../interfaces/IVoting.sol";
+import {IDualGovernance, ExternalCall} from "../interfaces/IDualGovernance.sol";
 
 import {CallsScriptBuilder} from "./CallScriptBuilder.sol";
 
@@ -41,24 +45,41 @@ abstract contract OmnibusBase {
         ScriptCall call;
     }
 
-    IVoting private immutable VOTING_CONTRACT;
+    IVoting internal immutable VOTING_CONTRACT;
+    IDualGovernance internal immutable DUAL_GOVERNANCE;
 
-    constructor(address voting) {
+    constructor(address voting, address dualGovernance) {
         VOTING_CONTRACT = IVoting(voting);
+        DUAL_GOVERNANCE = IDualGovernance(dualGovernance);
     }
 
-    /// @return VoteItem[] The list of voting items to be executed by Aragon Voting.
+    /// @return VoteItem[] The list of items to be executed by Dual Governance.
     function getVoteItems() public view virtual returns (VoteItem[] memory);
 
-    /// @notice Converts all vote items to the Aragon-compatible EVMCallScript to validate against.
-    /// @return script A bytes containing encoded EVMCallScript.
-    function getEVMScript() public view returns (bytes memory) {
-        CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
-        VoteItem[] memory voteItems = this.getVoteItems();
+    /// @return VoteItem[] The list of voting items to be executed by Aragon Voting.
+    function getVotingVoteItems() public view virtual returns (VoteItem[] memory);
 
-        uint256 voteItemsCount = voteItems.length;
-        for (uint256 i = 0; i < voteItemsCount; i++) {
-            scriptBuilder.addCall(voteItems[i].call.to, voteItems[i].call.data);
+    /// @notice Converts all vote items to the Aragon-compatible EVMCallScript to validate against.
+    /// @param proposalMetadata The metadata of the proposal.
+    /// @return script A bytes containing encoded EVMCallScript.
+    function getEVMScript(string memory proposalMetadata) public view returns (bytes memory) {
+        VoteItem[] memory dgVoteItems = this.getVoteItems();
+        ExternalCall[] memory dgCalls = new ExternalCall[](dgVoteItems.length);
+        for (uint256 i = 0; i < dgVoteItems.length; i++) {
+            dgCalls[i] = ExternalCall({
+                target: dgVoteItems[i].call.to,
+                value: 0,
+                payload: dgVoteItems[i].call.data
+            });
+        }
+
+        CallsScriptBuilder.Context memory scriptBuilder = CallsScriptBuilder.create();
+
+        scriptBuilder.addCall(address(DUAL_GOVERNANCE), abi.encodeCall(IDualGovernance.submitProposal, (dgCalls, proposalMetadata)));
+
+        VoteItem[] memory votingVoteItems = this.getVotingVoteItems();
+        for (uint256 i = 0; i < votingVoteItems.length; i++) {
+            scriptBuilder.addCall(votingVoteItems[i].call.to, votingVoteItems[i].call.data);
         }
 
         return scriptBuilder.getResult();
@@ -66,16 +87,19 @@ abstract contract OmnibusBase {
 
     /// @notice Returns the bytecode for creating a new vote on the Aragon Voting contract.
     /// @param description The description of the vote.
+    /// @param proposalMetadata The metadata of the proposal.
     /// @return newVoteBytecode The bytecode for creating a new vote.
-    function getNewVoteCallBytecode(string memory description) external view returns (bytes memory newVoteBytecode) {
+    function getNewVoteCallBytecode(string memory description, string memory proposalMetadata) external view returns (bytes memory newVoteBytecode) {
         newVoteBytecode = CallsScriptBuilder.create(
-            address(VOTING_CONTRACT), abi.encodeCall(VOTING_CONTRACT.newVote, (getEVMScript(), description, false, false))
+            address(VOTING_CONTRACT), abi.encodeCall(VOTING_CONTRACT.newVote, (getEVMScript(proposalMetadata), description, false, false))
         )._result;
     }
 
     /// @notice Validates the specific vote on Aragon Voting contract.
+    /// @param voteId The ID of the vote.
+    /// @param proposalMetadata The metadata of the proposal.
     /// @return A boolean value indicating whether the vote is valid.
-    function isValidVoteScript(uint256 voteId) external view returns (bool) {
+    function isValidVoteScript(uint256 voteId, string memory proposalMetadata) external view returns (bool) {
         ( /*open*/
             , /*executed*/
             , /*startDate*/
@@ -89,7 +113,7 @@ abstract contract OmnibusBase {
             bytes memory script,
             /*phase*/
         ) = VOTING_CONTRACT.getVote(voteId);
-        return keccak256(script) == keccak256(getEVMScript());
+        return keccak256(script) == keccak256(getEVMScript(proposalMetadata));
     }
 
     function _votingCall(address target, bytes memory data) internal pure returns (ScriptCall memory) {

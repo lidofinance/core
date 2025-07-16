@@ -1,5 +1,4 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import { IAragonAppRepo, IOssifiableProxy, OssifiableProxy__factory } from "typechain-types";
 
@@ -11,7 +10,6 @@ export async function main() {
   const deployerSigner = await ethers.provider.getSigner();
   const deployer = deployerSigner.address;
   const state = readNetworkState();
-  const parameters = readUpgradeParameters();
 
   const locatorProxy = OssifiableProxy__factory.connect(getAddress(Sk.lidoLocator, state), deployerSigner);
   const oldLocatorImplementation = await locatorProxy.proxy__getImplementation();
@@ -39,16 +37,17 @@ export async function main() {
     state[Sk.dashboardImpl].address,
 
     // Existing proxies and contracts
-    state[Sk.aragonKernel].proxy.address,
-    state[Sk.appAgent].proxy.address,
-    state[Sk.aragonLidoAppRepo].proxy.address,
-    state[Sk.lidoLocator].proxy.address,
-    state[Sk.appVoting].proxy.address,
+    getAddress(Sk.aragonKernel, state),
+    getAddress(Sk.appAgent, state),
+    getAddress(Sk.aragonLidoAppRepo, state),
+    getAddress(Sk.lidoLocator, state),
+    getAddress(Sk.appVoting, state),
+    getAddress(Sk.dgDualGovernance, state),
   ];
 
   const template = await deployWithoutProxy(Sk.v3Template, "V3Template", deployer, [addressesParams]);
 
   await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [
-    [template.address, parameters[Sk.appLido].newVersion, state[Sk.appLido].aragonApp.id],
+    [template.address, state[Sk.appLido].aragonApp.id],
   ]);
 }
