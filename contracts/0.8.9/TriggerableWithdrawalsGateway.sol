@@ -7,12 +7,6 @@ import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.so
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "./lib/ExitLimitUtils.sol";
 import {PausableUntil} from "./utils/PausableUntil.sol";
 
-struct ValidatorData {
-    uint256 stakingModuleId;
-    uint256 nodeOperatorId;
-    bytes pubkey;
-}
-
 interface IWithdrawalVault {
     function addWithdrawalRequests(bytes[] calldata pubkeys, uint64[] calldata amounts) external payable;
 
@@ -20,8 +14,14 @@ interface IWithdrawalVault {
 }
 
 interface IStakingRouter {
+    struct ValidatorExitData {
+        uint256 stakingModuleId;
+        uint256 nodeOperatorId;
+        bytes pubkey;
+    }
+
     function onValidatorExitTriggered(
-        ValidatorData[] calldata validatorData,
+        ValidatorExitData[] calldata validatorExitData,
         uint256 _withdrawalRequestPaidFee,
         uint256 _exitType
     ) external;
@@ -163,7 +163,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
      *     - There is not enough limit quota left in the current frame to process all requests.
      */
     function triggerFullWithdrawals(
-        ValidatorData[] calldata validatorsData,
+        IStakingRouter.ValidatorExitData[] calldata validatorsData,
         address refundRecipient,
         uint256 exitType
     ) external payable onlyRole(ADD_FULL_WITHDRAWAL_REQUEST_ROLE) preservesEthBalance whenResumed {
@@ -245,7 +245,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
     }
 
     function _notifyStakingModules(
-        ValidatorData[] calldata validatorsData,
+        IStakingRouter.ValidatorExitData[] calldata validatorsData,
         uint256 withdrawalRequestPaidFee,
         uint256 exitType
     ) internal {

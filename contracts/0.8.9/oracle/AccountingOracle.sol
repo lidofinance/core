@@ -12,8 +12,8 @@ import { BaseOracle, IHashConsensus } from "./BaseOracle.sol";
 interface ILido {
     function handleOracleReport(
         // Oracle timings
-        uint256 _currentReportTimestamp,
-        uint256 _timeElapsedSeconds,
+        uint256 _reportTimestamp,
+        uint256 _timeElapsed,
         // CL values
         uint256 _clValidators,
         uint256 _clBalance,
@@ -24,7 +24,7 @@ interface ILido {
         // Decision about withdrawals processing
         uint256[] calldata _withdrawalFinalizationBatches,
         uint256 _simulatedShareRate
-    ) external;
+    ) external returns (uint256[4] memory postRebaseAmounts);
 }
 
 interface ILidoLocator {
@@ -49,9 +49,9 @@ interface ILegacyOracle {
     // only called after the migration
 
     function handleConsensusLayerReport(
-        uint256 refSlot,
-        uint256 clBalance,
-        uint256 clValidators
+        uint256 _refSlot,
+        uint256 _clBalance,
+        uint256 _clValidators
     ) external;
 }
 
@@ -63,14 +63,14 @@ interface IOracleReportSanityChecker {
 
 interface IStakingRouter {
     function updateExitedValidatorsCountByStakingModule(
-        uint256[] calldata moduleIds,
-        uint256[] calldata exitedValidatorsCounts
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _exitedValidatorsCounts
     ) external returns (uint256);
 
     function reportStakingModuleExitedValidatorsCountByNodeOperator(
-        uint256 stakingModuleId,
-        bytes calldata nodeOperatorIds,
-        bytes calldata exitedValidatorsCounts
+        uint256 _stakingModuleId,
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _exitedValidatorsCounts
     ) external;
 
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
@@ -78,7 +78,7 @@ interface IStakingRouter {
 
 
 interface IWithdrawalQueue {
-    function onOracleReport(bool isBunkerMode, uint256 prevReportTimestamp, uint256 currentReportTimestamp) external;
+    function onOracleReport(bool _isBunkerModeNow, uint256 _bunkerStartTimestamp, uint256 _currentReportTimestamp) external;
 }
 
 

@@ -14,7 +14,7 @@ interface ILidoLocator {
 
 interface IStakingRouter {
     function reportValidatorExitDelay(
-        uint256 _moduleId,
+        uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
         uint256 _proofSlotTimestamp,
         bytes calldata _publicKey,
@@ -23,13 +23,13 @@ interface IStakingRouter {
 }
 
 interface IValidatorsExitBus {
-    function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 timestamp);
+    function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 deliveryDateTimestamp);
 
     function unpackExitRequest(
         bytes calldata exitRequests,
         uint256 dataFormat,
         uint256 index
-    ) external view returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex);
+    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex);
 }
 
 
