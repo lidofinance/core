@@ -1,6 +1,7 @@
 .idea/
 .yarn/
 .vscode/
+.cursor/
 
 node_modules/
 coverage/
