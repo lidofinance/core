@@ -4,13 +4,15 @@
 pragma solidity >=0.8.0;
 
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
+import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
+import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
 
-contract StakingVault__MockForVaultHub {
+contract StakingVault__MockForVaultHub is Ownable2StepUpgradeable {
     address public depositContract;
 
-    address public owner;
     address public nodeOperator;
-    address public depositor_;
+    address public depositor;
+    bool public beaconChainDepositsPaused;
 
     bytes32 public withdrawalCredentials;
 
@@ -19,10 +21,11 @@ contract StakingVault__MockForVaultHub {
         withdrawalCredentials = bytes32((0x02 << 248) | uint160(address(this)));
     }
 
-    function initialize(address _owner, address _nodeOperator, address _depositor) external {
-        owner = _owner;
+    function initialize(address _owner, address _nodeOperator, address _depositor) external initializer {
+        __Ownable_init(_owner);
+        __Ownable2Step_init();
         nodeOperator = _nodeOperator;
-        depositor_ = _depositor;
+        depositor = _depositor;
     }
 
     function mock__setWithdrawalCredentials(bytes32 _wc) external {
@@ -37,8 +40,8 @@ contract StakingVault__MockForVaultHub {
 
     function withdraw(address, uint256 amount) external {}
 
-    function depositor() external view returns (address) {
-        return depositor_;
+    function isOssified() external pure returns (bool) {
+        return false;
     }
 
     function triggerValidatorWithdrawals(
@@ -53,6 +56,14 @@ contract StakingVault__MockForVaultHub {
 
     function ossified() external pure returns (bool) {
         return false;
+    }
+
+    function pauseBeaconChainDeposits() external {
+        beaconChainDepositsPaused = true;
+    }
+
+    function resumeBeaconChainDeposits() external {
+        beaconChainDepositsPaused = false;
     }
 
     event ValidatorWithdrawalsTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
