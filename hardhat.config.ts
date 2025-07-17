@@ -46,6 +46,10 @@ const config: HardhatUserConfig = {
       },
       forking: getHardhatForkingConfig(),
     },
+    "custom": {
+      url: RPC_URL,
+      timeout: 120_000
+    },
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
     },
@@ -158,6 +162,19 @@ const config: HardhatUserConfig = {
         },
       },
     ],
+    overrides: {
+      "test/0.8.25/upgrade/TWVoteScript.sol": {
+        version: "0.8.25",
+        settings: {
+          viaIR: true,
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+          evmVersion: "cancun",
+        },
+      },
+    },
   },
   tracer: {
     tasks: ["watch"],
