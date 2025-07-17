@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4597"  lines-covered="4419"  line-rate="0.9612999999999999"  branches-valid="2152"  branches-covered="2024"  branch-rate="0.9405"  timestamp="1752736528147" complexity="0" version="0.1">
+<coverage lines-valid="4597"  lines-covered="4419"  line-rate="0.9612999999999999"  branches-valid="2152"  branches-covered="2024"  branch-rate="0.9405"  timestamp="1752776530208" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -3936,7 +3936,7 @@
 			<method name="getValueForLastRefSlot"  hits="5"  signature="()V" >
 				<lines><line number="46"  hits="5" /></lines>
 			</method>
-			<method name="InitializeInt112DoubleCache"  hits="34"  signature="()V" >
+			<method name="InitializeInt104DoubleCache"  hits="34"  signature="()V" >
 				<lines><line number="69"  hits="34" /></lines>
 			</method>
 			<method name="withValueIncrease"  hits="24"  signature="()V" >
@@ -3949,7 +3949,7 @@
 				<lines><line number="120"  hits="25" /></lines>
 			</method>
 			<method name="_activeCacheIndex"  hits="235"  signature="()V" >
-				<lines><line number="151"  hits="235" /></lines>
+				<lines><line number="152"  hits="235" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -3986,7 +3986,7 @@
 			<line number="138"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="139"  hits="2"  branch="false" />
 			<line number="143"  hits="1"  branch="false" />
-			<line number="152"  hits="235"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="153"  hits="235"  branch="true"  condition-coverage="100% (2/2)" />
 		</lines>
 		</class>
 	</classes>
