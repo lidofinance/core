@@ -7,11 +7,11 @@ import {RefSlotCache, DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "contracts/0
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
 contract RefSlotCacheTest {
-    using RefSlotCache for RefSlotCache.Uint112WithCache;
-    using DoubleRefSlotCache for DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH];
+    using RefSlotCache for RefSlotCache.Uint104WithCache;
+    using DoubleRefSlotCache for DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH];
 
-    RefSlotCache.Uint112WithCache public uintCacheStorage;
-    DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] public intCacheStorage;
+    RefSlotCache.Uint104WithCache public uintCacheStorage;
+    DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] public intCacheStorage;
 
     IHashConsensus public consensus;
 
@@ -23,36 +23,36 @@ contract RefSlotCacheTest {
         consensus = _consensus;
     }
 
-    // Uint112 functions ------------------------------------------------------------
+    // Uint104 functions ------------------------------------------------------------
     // ------------------------------------------------------------------------------
 
-    function increaseUintValue(uint112 increment) external returns (RefSlotCache.Uint112WithCache memory) {
-        RefSlotCache.Uint112WithCache memory newStorage = uintCacheStorage.withValueIncrease(consensus, increment);
+    function increaseUintValue(uint104 increment) external returns (RefSlotCache.Uint104WithCache memory) {
+        RefSlotCache.Uint104WithCache memory newStorage = uintCacheStorage.withValueIncrease(consensus, increment);
         uintCacheStorage = newStorage;
         return newStorage;
     }
 
-    function getUintValueForLastRefSlot() external view returns (uint112) {
+    function getUintValueForLastRefSlot() external view returns (uint104) {
         return uintCacheStorage.getValueForLastRefSlot(consensus);
     }
 
-    function getUintCacheStorage() external view returns (RefSlotCache.Uint112WithCache memory) {
+    function getUintCacheStorage() external view returns (RefSlotCache.Uint104WithCache memory) {
         return uintCacheStorage;
     }
 
-    function setUintCacheStorage(uint112 value, uint112 valueOnRefSlot, uint32 refSlot) external {
+    function setUintCacheStorage(uint104 value, uint104 valueOnRefSlot, uint48 refSlot) external {
         uintCacheStorage.value = value;
         uintCacheStorage.valueOnRefSlot = valueOnRefSlot;
         uintCacheStorage.refSlot = refSlot;
     }
 
-    // Int112 functions ------------------------------------------------------------
+    // Int104 functions ------------------------------------------------------------
     // -----------------------------------------------------------------------------
 
     function increaseIntValue(
-        int112 increment
-    ) external returns (DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] memory) {
-        DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] memory newStorage = intCacheStorage.withValueIncrease(
+        int104 increment
+    ) external returns (DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory) {
+        DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory newStorage = intCacheStorage.withValueIncrease(
             consensus,
             increment
         );
@@ -60,23 +60,23 @@ contract RefSlotCacheTest {
         return newStorage;
     }
 
-    function getIntCurrentValue() external view returns (int112) {
+    function getIntCurrentValue() external view returns (int104) {
         return intCacheStorage.currentValue();
     }
 
-    function getIntValueForRefSlot(uint256 refSlot) external view returns (int112) {
-        return intCacheStorage.getValueForRefSlot(uint32(refSlot));
+    function getIntValueForRefSlot(uint256 refSlot) external view returns (int104) {
+        return intCacheStorage.getValueForRefSlot(uint48(refSlot));
     }
 
     function getIntCacheStorage()
         external
         view
-        returns (DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] memory)
+        returns (DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory)
     {
         return intCacheStorage;
     }
 
-    function setIntCacheStorage(int112 value, int112 valueOnRefSlot, uint32 refSlot) external {
+    function setIntCacheStorage(int104 value, int104 valueOnRefSlot, uint48 refSlot) external {
         intCacheStorage[0].value = value;
         intCacheStorage[0].valueOnRefSlot = valueOnRefSlot;
         intCacheStorage[0].refSlot = refSlot;

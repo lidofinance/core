@@ -9,16 +9,16 @@ import {DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "contracts/0.8.25/vaults/l
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
 contract DoubleRefSlotCacheExample {
-    using DoubleRefSlotCache for DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH];
+    using DoubleRefSlotCache for DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH];
 
-    DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] public intCacheStorage;
+    DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] public intCacheStorage;
 
     uint256 public refSlot;
 
     function increaseIntValue(
-        int112 increment
-    ) external returns (DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] memory) {
-        DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] memory newStorage = intCacheStorage.withValueIncrease(
+        int104 increment
+    ) external returns (DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory) {
+        DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory newStorage = intCacheStorage.withValueIncrease(
             IHashConsensus(address(this)),
             increment
         );
@@ -30,18 +30,18 @@ contract DoubleRefSlotCacheExample {
         refSlot++;
     }
 
-    function getIntCurrentValue() external view returns (int112) {
+    function getIntCurrentValue() external view returns (int104) {
         return intCacheStorage.currentValue();
     }
 
-    function getIntValueForRefSlot(uint256 _refSlot) external view returns (int112) {
-        return intCacheStorage.getValueForRefSlot(uint32(_refSlot));
+    function getIntValueForRefSlot(uint256 _refSlot) external view returns (int104) {
+        return intCacheStorage.getValueForRefSlot(uint48(_refSlot));
     }
 
     function getIntCacheStorage()
         external
         view
-        returns (DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] memory)
+        returns (DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory)
     {
         return intCacheStorage;
     }
@@ -89,7 +89,7 @@ contract DoubleRefSlotCacheTest is Test {
      * forge-config: default.invariant.fail-on-revert = false
      */
     function invariant_valueOnRefSlot() external {
-        DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] memory cache = example.getIntCacheStorage();
+        DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory cache = example.getIntCacheStorage();
         uint256 activeIndex = cache[0].refSlot >= cache[1].refSlot ? 0 : 1;
         uint256 previousIndex = 1 - activeIndex;
         assertEq(cache[activeIndex].valueOnRefSlot, cache[previousIndex].value);

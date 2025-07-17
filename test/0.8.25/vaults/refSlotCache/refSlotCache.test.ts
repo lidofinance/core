@@ -105,21 +105,21 @@ describe("RefSlotCache.sol", () => {
         expect(finalStorage.refSlot).to.equal(refSlots[2]);
       });
 
-      it("should handle refSlot truncation to uint32", async () => {
+      it("should handle refSlot truncation to uint48", async () => {
         const increment = 100n;
-        const maxUint32 = 2n ** 32n - 1n;
-        const largeRefSlot = maxUint32 + 100n; // Larger than uint32 max
-        const expectedTruncatedRefSlot = largeRefSlot & (2n ** 32n - 1n); // Truncate to uint32
+        const maxUint48 = 2n ** 48n - 1n;
+        const largeRefSlot = maxUint48 + 100n; // Larger than uint48 max
+        const expectedTruncatedRefSlot = largeRefSlot & (2n ** 48n - 1n); // Truncate to uint48
 
-        await consensus.setRefSlot(maxUint32);
+        await consensus.setRefSlot(maxUint48);
         await refSlotCacheTest.increaseUintValue(increment);
 
         let storage = await refSlotCacheTest.getUintCacheStorage();
-        expect(storage.refSlot).to.equal(maxUint32);
+        expect(storage.refSlot).to.equal(maxUint48);
         expect(storage.value).to.equal(increment);
         expect(storage.valueOnRefSlot).to.equal(0n);
 
-        // next refSlot is larger than uint32 max and truncated version is smaller than previous refSlot
+        // next refSlot is larger than uint48 max and truncated version is smaller than previous refSlot
         await consensus.setRefSlot(largeRefSlot);
         await refSlotCacheTest.increaseUintValue(increment);
 
@@ -348,63 +348,65 @@ describe("RefSlotCache.sol", () => {
         expect(await refSlotCacheTest.getIntCurrentValue()).to.equal(increment);
       });
 
-      it("should handle refSlot truncation to uint32", async () => {
+      it("should handle refSlot truncation to uint48", async () => {
         const increment = 10n;
-        const maxUint32 = 2n ** 32n - 1n;
-        const largeRefSlot = maxUint32 + 100n; // Larger than uint32 max
+        const maxUint48 = 2n ** 48n - 1n;
+        const largeRefSlot = maxUint48 + 100n; // Larger than uint48 max
 
-        await consensus.setRefSlot(maxUint32);
+        // prepare initial cache
+        await consensus.setRefSlot(maxUint48);
         await refSlotCacheTest.increaseIntValue(increment);
 
         expect(await refSlotCacheTest.getIntCurrentValue()).to.equal(increment);
-        expect(await refSlotCacheTest.getIntValueForRefSlot(maxUint32)).to.equal(0n);
+        expect(await refSlotCacheTest.getIntValueForRefSlot(maxUint48)).to.equal(0n);
+        // this logic is broken, if refSlot is truncated
+        // expect(await refSlotCacheTest.getIntValueForRefSlot(largeRefSlot)).to.equal(increment);
 
-        // next refSlot is larger than uint32 max and truncated version is smaller than previous refSlot
+        // next refSlot is larger than uint48 max and truncated version is smaller than previous refSlot
         await consensus.setRefSlot(largeRefSlot);
         await refSlotCacheTest.increaseIntValue(increment);
 
-        expect(await refSlotCacheTest.getIntValueForRefSlot(maxUint32)).to.equal(0n);
+        expect(await refSlotCacheTest.getIntValueForRefSlot(maxUint48)).to.equal(0n);
         expect(await refSlotCacheTest.getIntValueForRefSlot(largeRefSlot)).to.equal(increment);
-
-        // next line is not worked as expected - because of refSlot truncation to uint32
-        // and _activeCacheIndex work incorrectly - see DoubleRefSlotCache library
+        // this logic is broken, if refSlot is truncated
         // expect(await refSlotCacheTest.getIntCurrentValue()).to.equal(increment * 2n);
+        // expect(await refSlotCacheTest.getIntValueForRefSlot(largeRefSlot + 1n)).to.equal(increment * 2n);
       });
     });
   });
 
   context("Edge cases", () => {
-    it("should handle maximum uint112 values", async () => {
-      const maxUint112 = 2n ** 112n - 1n;
+    it("should handle maximum uint104 values", async () => {
+      const maxUint104 = 2n ** 104n - 1n;
       const refSlot = 200n;
 
       await consensus.setRefSlot(refSlot);
-      await refSlotCacheTest.increaseUintValue(maxUint112);
+      await refSlotCacheTest.increaseUintValue(maxUint104);
 
       const storage = await refSlotCacheTest.getUintCacheStorage();
-      expect(storage.value).to.equal(maxUint112);
+      expect(storage.value).to.equal(maxUint104);
     });
 
-    it("should handle maximum int112 values", async () => {
-      const maxInt112 = 2n ** 111n - 1n;
+    it("should handle maximum int104 values", async () => {
+      const maxInt104 = 2n ** 103n - 1n;
       const refSlot = 200n;
 
       await consensus.setRefSlot(refSlot);
-      await refSlotCacheTest.increaseIntValue(maxInt112);
+      await refSlotCacheTest.increaseIntValue(maxInt104);
 
       const storage = await refSlotCacheTest.getIntCacheStorage();
-      expect(storage[1].value).to.equal(maxInt112);
+      expect(storage[1].value).to.equal(maxInt104);
     });
 
-    it("should handle minimum int112 values", async () => {
-      const minInt112 = -(2n ** 111n);
+    it("should handle minimum int104 values", async () => {
+      const minInt104 = -(2n ** 103n);
       const refSlot = 200n;
 
       await consensus.setRefSlot(refSlot);
-      await refSlotCacheTest.increaseIntValue(minInt112);
+      await refSlotCacheTest.increaseIntValue(minInt104);
 
       const storage = await refSlotCacheTest.getIntCacheStorage();
-      expect(storage[1].value).to.equal(minInt112);
+      expect(storage[1].value).to.equal(minInt104);
     });
 
     it("should handle consensus contract change", async () => {

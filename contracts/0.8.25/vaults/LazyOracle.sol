@@ -21,7 +21,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "./lib/RefSlotCache.sol";
 
 contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
-    using DoubleRefSlotCache for DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH];
+    using DoubleRefSlotCache for DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH];
 
     /// @custom:storage-location erc7201:LazyOracle
     struct Storage {
@@ -32,7 +32,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         /// @notice timestamp of the vaults data
         uint64 vaultsDataTimestamp;
         /// @notice refSlot of the vaults data
-        uint32 vaultsDataRefSlot;
+        uint48 vaultsDataRefSlot;
         /// @notice total value increase quarantine period
         uint64 quarantinePeriod;
         /// @notice max reward ratio for refSlot-observed total value, basis points
@@ -146,7 +146,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @return refSlot of the report
     /// @return treeRoot merkle root of the report
     /// @return reportCid IPFS CID for the report JSON file
-    function latestReportData() external view returns (uint64 timestamp, uint32 refSlot, bytes32 treeRoot, string memory reportCid) {
+    function latestReportData() external view returns (uint64 timestamp, uint48 refSlot, bytes32 treeRoot, string memory reportCid) {
         Storage storage $ = _storage();
         return ($.vaultsDataTimestamp, $.vaultsDataRefSlot, $.vaultsDataTreeRoot, $.vaultsDataReportCid);
     }
@@ -253,7 +253,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
         Storage storage $ = _storage();
         $.vaultsDataTimestamp = uint64(_vaultsDataTimestamp);
-        $.vaultsDataRefSlot = uint32(_vaultsDataRefSlot);
+        $.vaultsDataRefSlot = uint48(_vaultsDataRefSlot);
         $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
         $.vaultsDataReportCid = _vaultsDataReportCid;
 
@@ -309,7 +309,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @param _reportRefSlot the refSlot of the report
     /// @return totalValueWithoutQuarantine the smoothed total value of the vault after sanity checks
     /// @return inOutDeltaOnRefSlot the inOutDelta in the refSlot
-    function _handleSanityChecks(address _vault, uint256 _totalValue, uint32 _reportRefSlot)
+    function _handleSanityChecks(address _vault, uint256 _totalValue, uint48 _reportRefSlot)
         internal
         returns (uint256 totalValueWithoutQuarantine, int256 inOutDeltaOnRefSlot)
     {

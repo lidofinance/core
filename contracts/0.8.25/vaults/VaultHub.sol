@@ -23,8 +23,8 @@ import {RefSlotCache, DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "./lib/RefSl
 /// Also, it facilitates the individual per-vault reports from the lazy oracle to the vaults and charges Lido fees
 /// @author folkyatina
 contract VaultHub is PausableUntilWithRoles {
-    using RefSlotCache for RefSlotCache.Uint112WithCache;
-    using DoubleRefSlotCache for DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH];
+    using RefSlotCache for RefSlotCache.Uint104WithCache;
+    using DoubleRefSlotCache for DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH];
 
     // -----------------------------
     //           STORAGE STRUCTS
@@ -42,7 +42,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice 1-based array of vaults connected to the hub. index 0 is reserved for not connected vaults
         address[] vaults;
         /// @notice amount of bad debt that was internalized from the vault to become the protocol loss
-        RefSlotCache.Uint112WithCache badDebtToInternalize;
+        RefSlotCache.Uint104WithCache badDebtToInternalize;
     }
 
     struct VaultConnection {
@@ -84,7 +84,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint96 liabilityShares;
         // ### 3rd and 4th slots
         /// @notice inOutDelta of the vault (all deposits - all withdrawals)
-        DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] inOutDelta;
+        DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] inOutDelta;
     }
 
     struct Report {
@@ -620,7 +620,7 @@ contract VaultHub is PausableUntilWithRoles {
         // internalize the bad debt to the protocol
         _storage().badDebtToInternalize = _storage().badDebtToInternalize.withValueIncrease({
             _consensus: CONSENSUS_CONTRACT,
-            _increment: uint112(badDebtToInternalize)
+            _increment: uint104(badDebtToInternalize)
         });
 
         emit BadDebtWrittenOffToBeInternalized(_badDebtVault, badDebtToInternalize);
@@ -632,7 +632,7 @@ contract VaultHub is PausableUntilWithRoles {
         _requireSender(LIDO_LOCATOR.accounting());
 
         // don't cache previous value, we don't need it for sure
-        _storage().badDebtToInternalize.value -= uint112(_amountOfShares);
+        _storage().badDebtToInternalize.value -= uint104(_amountOfShares);
     }
 
     /// @notice transfer the ownership of the vault to a new owner without disconnecting it from the hub
@@ -676,7 +676,7 @@ contract VaultHub is PausableUntilWithRoles {
         _requireConnected(connection, _vault);
         _requireSender(connection.owner);
 
-        _updateInOutDelta(_vault, _vaultRecord(_vault), int112(int256(msg.value)));
+        _updateInOutDelta(_vault, _vaultRecord(_vault), int104(int256(msg.value)));
 
         IStakingVault(_vault).fund{value: msg.value}();
     }
@@ -979,7 +979,7 @@ contract VaultHub is PausableUntilWithRoles {
             }),
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
-            inOutDelta: DoubleRefSlotCache.InitializeInt112DoubleCache(int112(int256(vaultBalance)))
+            inOutDelta: DoubleRefSlotCache.InitializeInt104DoubleCache(int104(int256(vaultBalance)))
         });
 
         connection = VaultConnection({
@@ -1059,7 +1059,7 @@ contract VaultHub is PausableUntilWithRoles {
         address _recipient,
         uint256 _amount
     ) internal {
-        _updateInOutDelta(_vault, _record, -int112(int256(_amount)));
+        _updateInOutDelta(_vault, _record, -int104(int256(_amount)));
 
         IStakingVault(_vault).withdraw(_recipient, _amount);
     }
@@ -1167,7 +1167,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
         Report memory report = _record.report;
-        DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] memory inOutDelta = _record.inOutDelta;
+        DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory inOutDelta = _record.inOutDelta;
         return uint256(int256(uint256(report.totalValue)) + inOutDelta.currentValue() - report.inOutDelta);
     }
 
@@ -1243,8 +1243,8 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @dev Caches the inOutDelta of the latest refSlot and updates the value
-    function _updateInOutDelta(address _vault, VaultRecord storage _record, int112 _increment) internal {
-        DoubleRefSlotCache.Int112WithCache[DOUBLE_CACHE_LENGTH] memory inOutDelta = _record.inOutDelta.withValueIncrease({
+    function _updateInOutDelta(address _vault, VaultRecord storage _record, int104 _increment) internal {
+        DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory inOutDelta = _record.inOutDelta.withValueIncrease({
             _consensus: CONSENSUS_CONTRACT,
             _increment: _increment
         });
@@ -1606,7 +1606,7 @@ contract VaultHub is PausableUntilWithRoles {
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares, uint256 lockedAmount);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned, uint256 etherWithdrawn);
-    event VaultInOutDeltaUpdated(address indexed vault, int112 inOutDelta);
+    event VaultInOutDeltaUpdated(address indexed vault, int104 inOutDelta);
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     /**
