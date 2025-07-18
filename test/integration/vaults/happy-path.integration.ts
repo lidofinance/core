@@ -275,11 +275,17 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
   it("Should allow Owner to mint max stETH", async () => {
     const { lido, vaultHub } = ctx.contracts;
+    const MAX_STETH_ROUNDING_ERROR = 2n;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
-    stakingVaultMaxMintingShares = await lido.getSharesByPooledEth(
-      (VAULT_DEPOSIT * mintableRatio) / TOTAL_BASIS_POINTS,
-    );
+    const maxMintableEth = (VAULT_DEPOSIT * mintableRatio) / TOTAL_BASIS_POINTS;
+    const collateralEth = VAULT_DEPOSIT - maxMintableEth;
+    stakingVaultMaxMintingShares = await lido.getSharesByPooledEth(maxMintableEth);
+    const expectedLockedEth = (await lido.getPooledEthByShares(stakingVaultMaxMintingShares)) + collateralEth;
+    // NB: due to rounding down the error might lead only to decrease of the eth amount
+    expect(expectedLockedEth)
+      .to.be.gte(VAULT_DEPOSIT - MAX_STETH_ROUNDING_ERROR)
+      .and.lte(VAULT_DEPOSIT);
 
     log.debug("Staking Vault", {
       "Staking Vault Address": stakingVaultAddress,
@@ -287,10 +293,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       "Max shares": stakingVaultMaxMintingShares,
     });
 
-    //report
     await reportVaultDataWithProof(ctx, stakingVault);
 
-    // mint
     const mintTx = await dashboard.connect(owner).mintShares(owner, stakingVaultMaxMintingShares);
     const mintTxReceipt = (await mintTx.wait()) as ContractTransactionReceipt;
 
@@ -298,13 +302,13 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(mintEvents.length).to.equal(1n);
     expect(mintEvents[0].args.vault).to.equal(stakingVaultAddress);
     expect(mintEvents[0].args.amountOfShares).to.equal(stakingVaultMaxMintingShares);
-    expect(mintEvents[0].args.lockedAmount).to.equal(VAULT_DEPOSIT);
+    expect(mintEvents[0].args.lockedAmount).to.equal(expectedLockedEth);
 
-    expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_DEPOSIT);
+    expect(await vaultHub.locked(stakingVaultAddress)).to.equal(expectedLockedEth);
 
     log.debug("Staking Vault", {
       "Staking Vault Minted Shares": stakingVaultMaxMintingShares,
-      "Staking Vault Locked": VAULT_DEPOSIT,
+      "Staking Vault Locked": expectedLockedEth,
     });
   });
 
