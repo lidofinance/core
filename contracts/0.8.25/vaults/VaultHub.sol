@@ -89,11 +89,11 @@ contract VaultHub is PausableUntilWithRoles {
 
     struct Report {
         /// @notice total value of the vault
-        uint112 totalValue;
+        uint104 totalValue;
         /// @notice inOutDelta of the report
-        int112 inOutDelta;
-        /// @notice last 32 bits of the timestamp (in seconds)
-        uint32 timestamp;
+        int104 inOutDelta;
+        /// @notice timestamp (in seconds)
+        uint48 timestamp;
     }
 
     /**
@@ -973,9 +973,9 @@ contract VaultHub is PausableUntilWithRoles {
         // Connecting a new vault with totalValue == balance
         VaultRecord memory record = VaultRecord({
             report: Report({
-                totalValue: uint112(vaultBalance),
-                inOutDelta: int112(int256(vaultBalance)),
-                timestamp: uint32(_lazyOracle().latestReportTimestamp())
+                totalValue: uint104(vaultBalance),
+                inOutDelta: int104(int256(vaultBalance)),
+                timestamp: uint48(_lazyOracle().latestReportTimestamp())
             }),
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
@@ -1034,9 +1034,9 @@ contract VaultHub is PausableUntilWithRoles {
 
         _record.locked = uint128(lockedEther);
         _record.report = Report({
-            totalValue: uint112(_reportTotalValue),
-            inOutDelta: int112(_reportInOutDelta),
-            timestamp: uint32(_reportTimestamp)
+            totalValue: uint104(_reportTotalValue),
+            inOutDelta: int104(_reportInOutDelta),
+            timestamp: uint48(_reportTimestamp)
         });
     }
 
@@ -1606,7 +1606,7 @@ contract VaultHub is PausableUntilWithRoles {
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares, uint256 lockedAmount);
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
     event VaultRebalanced(address indexed vault, uint256 sharesBurned, uint256 etherWithdrawn);
-    event VaultInOutDeltaUpdated(address indexed vault, int104 inOutDelta);
+    event VaultInOutDeltaUpdated(address indexed vault, int256 inOutDelta);
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     /**

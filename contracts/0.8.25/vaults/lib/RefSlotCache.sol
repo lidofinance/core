@@ -143,12 +143,12 @@ library DoubleRefSlotCache {
         revert InOutDeltaCacheIsOverwritten();
     }
 
-    /// @dev There is a limitation on the refSlot value: it must be less than 2^40.
-    /// If it exceeds this limit, the refSlot will be truncated to 40 bits.
+    /// @dev There is a limitation on the refSlot value: it must be less than 2^48.
+    /// If it exceeds this limit, the refSlot will be truncated to 48 bits.
     /// _activeCacheIndex may work incorrectly if one refSlot value is truncated and the other is not,
     /// because the non-truncated value will always be greater than the truncated one,
-    /// causing incorrect activeIndex determination. However, 2^40 is a very large number,
-    /// so if block time will be 1 second, it will take 34_864 years to reach this limit.
+    /// causing incorrect activeIndex determination. However, 2^48 is a very large number,
+    /// so if block time will be 1 second, it will take 8_925_512 years to reach this limit.
     function _activeCacheIndex(Int104WithCache[DOUBLE_CACHE_LENGTH] memory _cache) private pure returns (uint256) {
         return _cache[0].refSlot >= _cache[1].refSlot ? 0 : 1;
     }

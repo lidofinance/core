@@ -157,7 +157,7 @@ contract NodeOperatorFee is Permissions {
         int256 adjustment = _toSignedClamped(rewardsAdjustment.amount);
 
         // the total increase/decrease of the vault value during the fee period
-        int256 growth = int112(periodEnd.totalValue) - int112(periodStart.totalValue) -
+        int256 growth = int104(periodEnd.totalValue) - int104(periodStart.totalValue) -
                         (periodEnd.inOutDelta - periodStart.inOutDelta);
 
         // the actual rewards that are subject to the fee

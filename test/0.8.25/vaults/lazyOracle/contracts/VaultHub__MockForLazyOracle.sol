@@ -81,8 +81,8 @@ contract VaultHub__MockForLazyOracle {
         mock__lastReported_liabilityShares = _reportLiabilityShares;
         mock__lastReported_slashingReserve = _reportSlashingReserve;
 
-        mock__vaultRecords[_vault].report.inOutDelta = int112(_reportInOutDelta);
-        mock__vaultRecords[_vault].report.timestamp = uint32(_reportTimestamp);
-        mock__vaultRecords[_vault].report.totalValue = uint112(_reportTotalValue);
+        mock__vaultRecords[_vault].report.inOutDelta = int104(_reportInOutDelta);
+        mock__vaultRecords[_vault].report.timestamp = uint48(_reportTimestamp);
+        mock__vaultRecords[_vault].report.totalValue = uint104(_reportTotalValue);
     }
 }
