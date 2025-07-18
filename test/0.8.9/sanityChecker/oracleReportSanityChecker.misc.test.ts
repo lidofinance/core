@@ -690,7 +690,7 @@ describe("OracleReportSanityChecker.sol:misc", () => {
       expect(elRewards).to.equal(0);
       expect(simulatedSharesToBurn).to.equal(0);
       expect(sharesToBurn).to.equal(0);
-      // // shares requested to burn
+      // shares requested to burn
       ({ withdrawals, elRewards, simulatedSharesToBurn, sharesToBurn } =
         await oracleReportSanityChecker.smoothenTokenRebase(
           ...(Object.values({

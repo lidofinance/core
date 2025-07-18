@@ -138,7 +138,7 @@ library SigningKeys {
         return _totalKeysCount;
     }
 
-    /// @dev laod opeartor keys from storage
+    /// @dev load opeartor keys from storage
     /// @param _position storage slot
     /// @param _nodeOperatorId operator id
     /// @param _startIndex start index

@@ -323,7 +323,7 @@ describe("Lido.sol:misc", () => {
       expect(afterDeposit.stakingRouterBalance).to.equal(beforeDeposit.stakingRouterBalance + oneDepositWorthOfEther);
     });
 
-    it("Does not emit `Unbuffered` and `DepositedValidatorsChanged` events if the staking module cannot accomodate new deposit", async () => {
+    it("Does not emit `Unbuffered` and `DepositedValidatorsChanged` events if the staking module cannot accommodate new deposit", async () => {
       const oneDepositWorthOfEther = ether("32.0");
       // top up Lido buffer enough for 1 deposit of 32 ether
       await lido.submit(ZeroAddress, { value: oneDepositWorthOfEther });

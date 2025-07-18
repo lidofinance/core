@@ -370,7 +370,7 @@ describe("ValidatorsExitBusOracle.sol:submitReportData", () => {
       currentCount += requestsStep2.length;
       expect(countStep2).to.equal(currentCount);
 
-      // // Step 3 — process no items
+      // Step 3 — process no items
       await consensus.advanceTimeToNextFrameStart();
       const requestsStep3: ExitRequest[] = [];
       const { reportData: reportStep3 } = await prepareReportAndSubmitHash(requestsStep3);

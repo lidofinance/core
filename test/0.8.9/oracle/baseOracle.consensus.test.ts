@@ -214,7 +214,7 @@ describe("BaseOracle.sol:consensus", () => {
   });
 
   context("getCurrentRefSlot ", () => {
-    it("Gets refSlot trough consensus contract", async () => {
+    it("Gets refSlot through consensus contract", async () => {
       const oracleSlot = await baseOracle.getCurrentRefSlot();
       const { refSlot } = await consensus.getCurrentFrame();
 
