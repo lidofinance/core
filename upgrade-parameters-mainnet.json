@@ -3,12 +3,10 @@
     "deployParameters": {
       "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
       "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
-      "gIHistoricalSummariesPrev": "0x0000000000000000000000000000000000000000000000000000000000005b00",
-      "gIHistoricalSummariesCurr": "0x0000000000000000000000000000000000000000000000000000000000005b00",
-      "firstSupportedSlot": 1,
-      "pivotSlot": 1,
-      "shardCommitteePeriodInSeconds": 98304,
-      "shardCommitteePeriodInSecondsComment": "98304 above is 2 ** 8 * 32 * 12"
+      "gIFirstHistoricalSummaryPrev": "0x000000000000000000000000000000000000000000000000000000b600000018",
+      "gIFirstHistoricalSummaryCurr": "0x000000000000000000000000000000000000000000000000000000b600000018",
+      "gIFirstBlockRootInSummaryPrev": "0x000000000000000000000000000000000000000000000000000000000040000d",
+      "gIFirstBlockRootInSummaryCurr": "0x000000000000000000000000000000000000000000000000000000000040000d"
     }
   },
   "triggerableWithdrawalsGateway": {
@@ -57,6 +55,7 @@
   "chainSpec": {
     "slotsPerEpoch": 32,
     "secondsPerSlot": 12,
+    "genesisTime": 1606824023,
     "depositContract": "0x00000000219ab540356cBB839Cbe05303d7705Fa"
   }
 }
