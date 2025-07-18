@@ -212,12 +212,16 @@ export async function reportVaultDataWithProof(
     totalValue?: bigint;
     accruedLidoFees?: bigint;
     liabilityShares?: bigint;
+    reportTimestamp?: bigint;
+    reportRefSlot?: bigint;
   } = {},
 ) {
-  const { vaultHub, locator, lazyOracle } = ctx.contracts;
+  const { vaultHub, locator, lazyOracle, hashConsensus } = ctx.contracts;
 
   const totalValueArg = params.totalValue ?? (await vaultHub.totalValue(stakingVault));
   const liabilitySharesArg = params.liabilityShares ?? (await vaultHub.liabilityShares(stakingVault));
+  const reportTimestampArg = params.reportTimestamp ?? (await getCurrentBlockTimestamp());
+  const reportRefSlotArg = params.reportRefSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
 
   const vaultReport: VaultReportItem = [
     await stakingVault.getAddress(),
@@ -229,7 +233,9 @@ export async function reportVaultDataWithProof(
   const reportTree = createVaultsReportTree([vaultReport]);
 
   const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
-  await lazyOracle.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
+  await lazyOracle
+    .connect(accountingSigner)
+    .updateReportData(reportTimestampArg, reportRefSlotArg, reportTree.root, "");
 
   return await lazyOracle.updateVaultData(
     await stakingVault.getAddress(),

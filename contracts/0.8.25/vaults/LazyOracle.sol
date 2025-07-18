@@ -18,7 +18,11 @@ import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
+import {DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "./lib/RefSlotCache.sol";
+
 contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
+    using DoubleRefSlotCache for DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH];
+
     /// @custom:storage-location erc7201:LazyOracle
     struct Storage {
         /// @notice root of the vaults data tree
@@ -27,6 +31,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         string vaultsDataReportCid;
         /// @notice timestamp of the vaults data
         uint64 vaultsDataTimestamp;
+        /// @notice refSlot of the vaults data
+        uint48 vaultsDataRefSlot;
         /// @notice total value increase quarantine period
         uint64 quarantinePeriod;
         /// @notice max reward ratio for refSlot-observed total value, basis points
@@ -137,11 +143,12 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     /// @notice returns the latest report data
     /// @return timestamp of the report
+    /// @return refSlot of the report
     /// @return treeRoot merkle root of the report
     /// @return reportCid IPFS CID for the report JSON file
-    function latestReportData() external view returns (uint64 timestamp, bytes32 treeRoot, string memory reportCid) {
+    function latestReportData() external view returns (uint64 timestamp, uint48 refSlot, bytes32 treeRoot, string memory reportCid) {
         Storage storage $ = _storage();
-        return ($.vaultsDataTimestamp, $.vaultsDataTreeRoot, $.vaultsDataReportCid);
+        return ($.vaultsDataTimestamp, $.vaultsDataRefSlot, $.vaultsDataTreeRoot, $.vaultsDataReportCid);
     }
 
     /// @notice returns the latest report timestamp
@@ -205,7 +212,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             batch[i] = VaultInfo(
                 vaultAddress,
                 address(vault).balance,
-                record.inOutDelta.value,
+                record.inOutDelta.currentValue(),
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
                 _mintableStETH(vaultAddress),
@@ -233,10 +240,12 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     /// @notice Store the report root and its meta information
     /// @param _vaultsDataTimestamp the timestamp of the report
+    /// @param _vaultsDataRefSlot the refSlot of the report
     /// @param _vaultsDataTreeRoot the root of the report
     /// @param _vaultsDataReportCid the CID of the report
     function updateReportData(
         uint256 _vaultsDataTimestamp,
+        uint256 _vaultsDataRefSlot,
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataReportCid
     ) external override(ILazyOracle) {
@@ -244,10 +253,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
         Storage storage $ = _storage();
         $.vaultsDataTimestamp = uint64(_vaultsDataTimestamp);
+        $.vaultsDataRefSlot = uint48(_vaultsDataRefSlot);
         $.vaultsDataTreeRoot = _vaultsDataTreeRoot;
         $.vaultsDataReportCid = _vaultsDataReportCid;
 
-        emit VaultsReportDataUpdated(_vaultsDataTimestamp, _vaultsDataTreeRoot, _vaultsDataReportCid);
+        emit VaultsReportDataUpdated(_vaultsDataTimestamp, _vaultsDataRefSlot, _vaultsDataTreeRoot, _vaultsDataReportCid);
     }
 
     /// @notice Permissionless update of the vault data
@@ -280,7 +290,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
         int256 inOutDelta;
-        (_totalValue, inOutDelta) = _handleSanityChecks(_vault, _totalValue);
+        (_totalValue, inOutDelta) = _handleSanityChecks(_vault, _totalValue, _storage().vaultsDataRefSlot);
 
         _vaultHub().applyVaultReport(
             _vault,
@@ -296,9 +306,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @notice handle sanity checks for the vault lazy report data
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault in refSlot
+    /// @param _reportRefSlot the refSlot of the report
     /// @return totalValueWithoutQuarantine the smoothed total value of the vault after sanity checks
     /// @return inOutDeltaOnRefSlot the inOutDelta in the refSlot
-    function _handleSanityChecks(address _vault, uint256 _totalValue)
+    function _handleSanityChecks(address _vault, uint256 _totalValue, uint48 _reportRefSlot)
         internal
         returns (uint256 totalValueWithoutQuarantine, int256 inOutDeltaOnRefSlot)
     {
@@ -306,8 +317,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
         // 1. Calculate inOutDelta in the refSlot
-        int256 currentInOutDelta = record.inOutDelta.value;
-        inOutDeltaOnRefSlot = vaultHub.inOutDeltaAsOfLastRefSlot(_vault);
+        int256 currentInOutDelta = record.inOutDelta.currentValue();
+        inOutDeltaOnRefSlot = record.inOutDelta.getValueForRefSlot(_reportRefSlot);
 
         // 2. Sanity check for total value increase
         totalValueWithoutQuarantine = _processTotalValue(_vault, _totalValue, inOutDeltaOnRefSlot, record);
@@ -398,7 +409,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         return OperatorGrid(LIDO_LOCATOR.operatorGrid());
     }
 
-    event VaultsReportDataUpdated(uint256 indexed timestamp, bytes32 indexed root, string cid);
+    event VaultsReportDataUpdated(uint256 indexed timestamp, uint256 indexed refSlot, bytes32 indexed root, string cid);
     event QuarantinedDeposit(address indexed vault, uint128 delta);
     event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxRewardRatioBP);
     event QuarantineExpired(address indexed vault, uint128 delta);

@@ -437,7 +437,7 @@ export const handleOracleReport = async (
 
     await lazyOracle
       .connect(accountingOracleAccount)
-      .updateReportData(reportTimestamp, vaultsDataTreeRoot, vaultsDataTreeCid);
+      .updateReportData(reportTimestamp, refSlot, vaultsDataTreeRoot, vaultsDataTreeCid);
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
     expect(error).to.be.undefined;
