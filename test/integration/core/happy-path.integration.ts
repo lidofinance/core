@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { advanceChainTime, batch, ether, impersonate, log, updateBalance } from "lib";
 import {
-  finalizeWithdrawalQueue,
+  finalizeWQViaElVault,
   getProtocolContext,
   norSdvtEnsureOperators,
   OracleReportParams,
@@ -64,7 +64,7 @@ describe("Scenario: Protocol Happy Path", () => {
     const stEthHolderBalance = await lido.balanceOf(stEthHolder.address);
     expect(stEthHolderBalance).to.approximately(stEthHolderAmount, 10n, "stETH balance increased");
 
-    await finalizeWithdrawalQueue(ctx);
+    await finalizeWQViaElVault(ctx);
 
     const lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
     const lastRequestId = await withdrawalQueue.getLastRequestId();
