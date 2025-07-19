@@ -50,7 +50,7 @@ export const provision = async (ctx: ProtocolContext) => {
 
   // Ensure some initial TVL required for current tests
   const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000000"));
-  await ethHolder.sendTransaction({ to: ctx.contracts.lido.address, value: ether("100000") });
+  await ethHolder.sendTransaction({ to: ctx.contracts.lido.address, value: ether("10000") });
 
   await ensureStakeLimit(ctx);
 
