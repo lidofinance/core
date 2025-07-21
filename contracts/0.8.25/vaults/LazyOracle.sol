@@ -183,6 +183,13 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         });
     }
 
+    /// @notice returns true if the vault is quarantined
+    /// @param _vault the address of the vault
+    /// @return true if the vault is quarantined
+    function isVaultQuarantined(address _vault) external view returns (bool) {
+        return _storage().vaultQuarantines[_vault].pendingTotalValueIncrease > 0;
+    }
+
     /// @notice returns the number of vaults connected to the VaultHub
     /// @return the number of vaults connected to the VaultHub
     function vaultsCount() external view returns (uint256) {
@@ -349,10 +356,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint256 maxSaneTotalValue = onchainTotalValueOnRefSlot *
             (TOTAL_BASIS_POINTS + $.maxRewardRatioBP) / TOTAL_BASIS_POINTS;
 
-        if (_reportedTotalValue > maxSaneTotalValue) {
-            Quarantine storage q = $.vaultQuarantines[_vault];
+        Quarantine storage q = $.vaultQuarantines[_vault];
+        uint128 quarDelta = q.pendingTotalValueIncrease;
+        if (_reportedTotalValue > maxSaneTotalValue || quarDelta > 0) {
             uint64 reportTs = $.vaultsDataTimestamp;
-            uint128 quarDelta = q.pendingTotalValueIncrease;
             uint128 delta = uint128(_reportedTotalValue - onchainTotalValueOnRefSlot);
 
             if (quarDelta == 0) { // first overlimit report

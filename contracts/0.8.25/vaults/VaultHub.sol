@@ -519,7 +519,8 @@ contract VaultHub is PausableUntilWithRoles {
         _checkAndUpdateLidoFeesObligations(_vault, obligations, _reportCumulativeLidoFees);
 
         if (connection.pendingDisconnect) {
-            if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
+            bool isQuarantined = _lazyOracle().isVaultQuarantined(_vault);
+            if (_reportSlashingReserve == 0 && record.liabilityShares == 0 && !isQuarantined) {
                 _settleObligations(_vault, record, obligations, NO_UNSETTLED_ALLOWED);
 
                 IStakingVault(_vault).transferOwnership(connection.owner);
@@ -528,9 +529,9 @@ contract VaultHub is PausableUntilWithRoles {
                 emit VaultDisconnectCompleted(_vault);
                 return;
             } else {
-                // we abort the disconnect process as there is a slashing conflict yet to be resolved
+                // we abort the disconnect process as there is a slashing conflict or quarantine yet to be resolved
                 connection.pendingDisconnect = false;
-                emit VaultDisconnectAborted(_vault, _reportSlashingReserve);
+                emit VaultDisconnectAborted(_vault, _reportSlashingReserve, isQuarantined);
             }
         }
 
@@ -1006,6 +1007,10 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 liabilityShares_ = _record.liabilityShares;
         if (liabilityShares_ > 0) {
             revert NoLiabilitySharesShouldBeLeft(_vault, liabilityShares_);
+        }
+
+        if (_lazyOracle().isVaultQuarantined(_vault)) {
+            revert QuarantineShouldNotBeActive(_vault);
         }
 
         _record.locked = 0; // unlock the connection deposit to allow fees settlement
@@ -1592,7 +1597,7 @@ contract VaultHub is PausableUntilWithRoles {
     );
     event VaultDisconnectInitiated(address indexed vault);
     event VaultDisconnectCompleted(address indexed vault);
-    event VaultDisconnectAborted(address indexed vault, uint256 slashingReserve);
+    event VaultDisconnectAborted(address indexed vault, uint256 slashingReserve, bool isQuarantined);
     event VaultReportApplied(
         address indexed vault,
         uint256 reportTimestamp,
@@ -1671,6 +1676,7 @@ contract VaultHub is PausableUntilWithRoles {
     error ShareLimitTooHigh(uint256 shareLimit, uint256 maxShareLimit);
     error InsufficientValueToMint(address vault, uint256 maxLockableValue);
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
+    error QuarantineShouldNotBeActive(address vault);
     error CodehashNotAllowed(address vault, bytes32 codehash);
     error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
     error VaultOssified(address vault);

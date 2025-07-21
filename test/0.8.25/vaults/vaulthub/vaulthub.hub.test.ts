@@ -1152,6 +1152,15 @@ describe("VaultHub.sol:hub", () => {
       );
     });
 
+    it("reverts if vault is quarantined", async () => {
+      await lazyOracle.mock__setIsVaultQuarantined(vault, true);
+
+      await expect(vaultHub.connect(user).disconnect(vault)).to.be.revertedWithCustomError(
+        vaultHub,
+        "QuarantineShouldNotBeActive",
+      );
+    });
+
     it("initiates the disconnect process", async () => {
       await expect(vaultHub.connect(user).disconnect(vault))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
@@ -1159,6 +1168,24 @@ describe("VaultHub.sol:hub", () => {
 
       const vaultSocket = await vaultHub.vaultConnection(vault);
       expect(vaultSocket.pendingDisconnect).to.be.true;
+    });
+
+    it("reverts the disconnect process if vault is quarantined", async () => {
+      await expect(vaultHub.connect(user).disconnect(vault))
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
+        .withArgs(vault);
+
+      let vaultSocket = await vaultHub.vaultConnection(vault);
+      expect(vaultSocket.pendingDisconnect).to.be.true;
+
+      await lazyOracle.mock__setIsVaultQuarantined(vault, true);
+
+      await expect(lazyOracle.mock__report(vaultHub, vault, 0n, 0n, 0n, 0n, 0n, 0n))
+        .to.emit(vaultHub, "VaultDisconnectAborted")
+        .withArgs(vault, 0n, true);
+
+      vaultSocket = await vaultHub.vaultConnection(vault);
+      expect(vaultSocket.pendingDisconnect).to.be.false;
     });
   });
 
@@ -1211,6 +1238,15 @@ describe("VaultHub.sol:hub", () => {
       await expect(vaultHub.connect(user).disconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "NoLiabilitySharesShouldBeLeft",
+      );
+    });
+
+    it("reverts if vault is quarantined", async () => {
+      await lazyOracle.mock__setIsVaultQuarantined(vaultAddress, true);
+
+      await expect(vaultHub.connect(user).disconnect(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "QuarantineShouldNotBeActive",
       );
     });
 
