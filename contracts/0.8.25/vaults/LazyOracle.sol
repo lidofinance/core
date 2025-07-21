@@ -183,13 +183,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         });
     }
 
-    /// @notice returns true if the vault is quarantined
-    /// @param _vault the address of the vault
-    /// @return true if the vault is quarantined
-    function isVaultQuarantined(address _vault) external view returns (bool) {
-        return _storage().vaultQuarantines[_vault].pendingTotalValueIncrease > 0;
-    }
-
     /// @notice returns the number of vaults connected to the VaultHub
     /// @return the number of vaults connected to the VaultHub
     function vaultsCount() external view returns (uint256) {
@@ -310,6 +303,18 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         );
     }
 
+    /// @notice removes the quarantine for the vault
+    /// @param _vault the address of the vault
+    function removeVaultQuarantine(address _vault) external {
+        if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized();
+
+        Storage storage $ = _storage();
+        if ($.vaultQuarantines[_vault].pendingTotalValueIncrease > 0) {
+            delete $.vaultQuarantines[_vault];
+            emit QuarantineRemoved(_vault);
+        }
+    }
+
     /// @notice handle sanity checks for the vault lazy report data
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault in refSlot
@@ -420,6 +425,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     event QuarantinedDeposit(address indexed vault, uint128 delta);
     event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxRewardRatioBP);
     event QuarantineExpired(address indexed vault, uint128 delta);
+    event QuarantineRemoved(address indexed vault);
 
     error AdminCannotBeZero();
     error NotAuthorized();

@@ -519,8 +519,7 @@ contract VaultHub is PausableUntilWithRoles {
         _checkAndUpdateLidoFeesObligations(_vault, obligations, _reportCumulativeLidoFees);
 
         if (connection.pendingDisconnect) {
-            bool isQuarantined = _lazyOracle().isVaultQuarantined(_vault);
-            if (_reportSlashingReserve == 0 && record.liabilityShares == 0 && !isQuarantined) {
+            if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
                 _settleObligations(_vault, record, obligations, NO_UNSETTLED_ALLOWED);
 
                 IStakingVault(_vault).transferOwnership(connection.owner);
@@ -529,9 +528,9 @@ contract VaultHub is PausableUntilWithRoles {
                 emit VaultDisconnectCompleted(_vault);
                 return;
             } else {
-                // we abort the disconnect process as there is a slashing conflict or quarantine yet to be resolved
+                // we abort the disconnect process as there is a slashing conflict yet to be resolved
                 connection.pendingDisconnect = false;
-                emit VaultDisconnectAborted(_vault, _reportSlashingReserve, isQuarantined);
+                emit VaultDisconnectAborted(_vault, _reportSlashingReserve);
             }
         }
 
@@ -1009,10 +1008,6 @@ contract VaultHub is PausableUntilWithRoles {
             revert NoLiabilitySharesShouldBeLeft(_vault, liabilityShares_);
         }
 
-        if (_lazyOracle().isVaultQuarantined(_vault)) {
-            revert QuarantineShouldNotBeActive(_vault);
-        }
-
         _record.locked = 0; // unlock the connection deposit to allow fees settlement
         _settleObligations(_vault, _record, _vaultObligations(_vault), NO_UNSETTLED_ALLOWED);
 
@@ -1230,6 +1225,8 @@ contract VaultHub is PausableUntilWithRoles {
         delete $.connections[_vault];
         delete $.records[_vault];
         delete $.obligations[_vault];
+
+        _lazyOracle().removeVaultQuarantine(_vault);
     }
 
     function _checkConnectionAndOwner(address _vault) internal view returns (VaultConnection storage connection) {
@@ -1597,7 +1594,7 @@ contract VaultHub is PausableUntilWithRoles {
     );
     event VaultDisconnectInitiated(address indexed vault);
     event VaultDisconnectCompleted(address indexed vault);
-    event VaultDisconnectAborted(address indexed vault, uint256 slashingReserve, bool isQuarantined);
+    event VaultDisconnectAborted(address indexed vault, uint256 slashingReserve);
     event VaultReportApplied(
         address indexed vault,
         uint256 reportTimestamp,
@@ -1676,7 +1673,6 @@ contract VaultHub is PausableUntilWithRoles {
     error ShareLimitTooHigh(uint256 shareLimit, uint256 maxShareLimit);
     error InsufficientValueToMint(address vault, uint256 maxLockableValue);
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
-    error QuarantineShouldNotBeActive(address vault);
     error CodehashNotAllowed(address vault, bytes32 codehash);
     error InvalidFees(address vault, uint256 newFees, uint256 oldFees);
     error VaultOssified(address vault);

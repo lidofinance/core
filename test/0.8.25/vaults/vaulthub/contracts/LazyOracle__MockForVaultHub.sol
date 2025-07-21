@@ -16,6 +16,10 @@ contract LazyOracle__MockForVaultHub {
         isVaultQuarantined[_vault] = _isQuarantined;
     }
 
+    function removeVaultQuarantine(address _vault) external {
+        delete isVaultQuarantined[_vault];
+    }
+
     function setLatestReportTimestamp(uint256 _timestamp) external {
         latestReportTimestamp = _timestamp;
     }

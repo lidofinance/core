@@ -577,4 +577,72 @@ describe("LazyOracle.sol", () => {
       expect(quarantineInfo4.endTimestamp).to.equal(0n);
     });
   });
+
+  context("removeVaultQuarantine", () => {
+    it("only vaultHub can remove quarantine", async () => {
+      await expect(lazyOracle.removeVaultQuarantine(randomAddress())).to.be.revertedWithCustomError(
+        lazyOracle,
+        "NotAuthorized",
+      );
+    });
+
+    it("remove quarantine", async () => {
+      const vault = await createVault();
+      const vaultReport: VaultReportItem = [vault, ether("250"), 0n, 0n, 0n];
+
+      const tree = createVaultsReportTree([vaultReport]);
+      const accountingAddress = await impersonate(await locator.accountingOracle(), ether("100"));
+      const timestamp = await getCurrentBlockTimestamp();
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, 42n, tree.root, "");
+
+      await vaultHub.mock__addVault(vault);
+      await vaultHub.mock__setVaultRecord(vault, {
+        report: {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+          timestamp: timestamp - 100n,
+        },
+        locked: 0n,
+        liabilityShares: 0n,
+        inOutDelta: [
+          {
+            value: ether("100"),
+            valueOnRefSlot: ether("100"),
+            refSlot: 0n,
+          },
+          {
+            value: 0n,
+            valueOnRefSlot: 0n,
+            refSlot: 0n,
+          },
+        ],
+      });
+
+      await lazyOracle.updateVaultData(
+        vaultReport[0],
+        vaultReport[1],
+        vaultReport[2],
+        vaultReport[3],
+        vaultReport[4],
+        tree.getProof(0),
+      );
+
+      let quarantineInfo = await lazyOracle.vaultQuarantine(vault);
+      expect(quarantineInfo.isActive).to.equal(true);
+      expect(quarantineInfo.pendingTotalValueIncrease).to.equal(ether("150"));
+      expect(quarantineInfo.startTimestamp).to.equal(timestamp);
+      expect(quarantineInfo.endTimestamp).to.equal(timestamp + QUARANTINE_PERIOD);
+
+      const vaultHubAddress = await impersonate(await vaultHub.getAddress(), ether("100"));
+      await expect(lazyOracle.connect(vaultHubAddress).removeVaultQuarantine(vault))
+        .to.emit(lazyOracle, "QuarantineRemoved")
+        .withArgs(vault);
+
+      quarantineInfo = await lazyOracle.vaultQuarantine(vault);
+      expect(quarantineInfo.isActive).to.equal(false);
+      expect(quarantineInfo.pendingTotalValueIncrease).to.equal(0n);
+      expect(quarantineInfo.startTimestamp).to.equal(0n);
+      expect(quarantineInfo.endTimestamp).to.equal(0n);
+    });
+  });
 });
