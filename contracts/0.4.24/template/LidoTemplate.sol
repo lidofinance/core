@@ -611,25 +611,13 @@ contract LidoTemplate is IsContract {
 
         // Lido
         perms[0] = _state.lido.PAUSE_ROLE();
-        perms[1] = _state.lido.STAKING_PAUSE_ROLE();
-        perms[2] = _state.lido.UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE();
-        // perms[3] = _state.lido.STAKING_CONTROL_ROLE();
-        // perms[4] = _state.lido.RESUME_ROLE();
-        for (i = 0; i < 3; ++i) {
+        perms[1] = _state.lido.RESUME_ROLE();
+        perms[2] = _state.lido.STAKING_PAUSE_ROLE();
+        perms[3] = _state.lido.STAKING_CONTROL_ROLE();
+        perms[4] = _state.lido.UNSAFE_CHANGE_DEPOSITED_VALIDATORS_ROLE();
+        for (i = 0; i < 5; ++i) {
             _createPermissionForAgent(acl, _state.lido, perms[i], agent);
         }
-
-        _state.acl.createPermission(this, _state.lido, _state.lido.RESUME_ROLE(), this);
-        _state.acl.grantPermission(this, _state.lido, _state.lido.RESUME_ROLE());
-        _state.lido.resume();
-        _state.acl.revokePermission(this, _state.lido, _state.lido.RESUME_ROLE());
-        _state.acl.setPermissionManager(agent, _state.lido, _state.lido.RESUME_ROLE());
-
-        _state.acl.createPermission(this, _state.lido, _state.lido.STAKING_CONTROL_ROLE(), this);
-        _state.acl.grantPermission(this, _state.lido, _state.lido.STAKING_CONTROL_ROLE());
-        _state.lido.setMaxExternalRatioBP(10000);
-        _state.acl.revokePermission(this, _state.lido, _state.lido.STAKING_CONTROL_ROLE());
-        _state.acl.setPermissionManager(agent, _state.lido, _state.lido.STAKING_CONTROL_ROLE());
     }
 
     function _createTokenManagerPermissionsForTemplate(ACL _acl, TokenManager _tokenManager) internal {
