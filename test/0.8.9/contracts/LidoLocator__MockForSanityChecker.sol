@@ -22,6 +22,8 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         address withdrawalVault;
         address postTokenRebaseReceiver;
         address oracleDaemonConfig;
+        address validatorExitDelayVerifier;
+        address triggerableWithdrawalsGateway;
     }
 
     address public immutable lido;
@@ -38,10 +40,10 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
     address public immutable withdrawalVault;
     address public immutable postTokenRebaseReceiver;
     address public immutable oracleDaemonConfig;
+    address public immutable validatorExitDelayVerifier;
+    address public immutable triggerableWithdrawalsGateway;
 
-    constructor (
-        ContractAddresses memory addresses
-    ) {
+    constructor(ContractAddresses memory addresses) {
         lido = addresses.lido;
         depositSecurityModule = addresses.depositSecurityModule;
         elRewardsVault = addresses.elRewardsVault;
@@ -56,28 +58,19 @@ contract LidoLocator__MockForSanityChecker is ILidoLocator {
         withdrawalVault = addresses.withdrawalVault;
         postTokenRebaseReceiver = addresses.postTokenRebaseReceiver;
         oracleDaemonConfig = addresses.oracleDaemonConfig;
+        validatorExitDelayVerifier = addresses.validatorExitDelayVerifier;
+        triggerableWithdrawalsGateway = addresses.triggerableWithdrawalsGateway;
     }
 
     function coreComponents() external view returns (address, address, address, address, address, address) {
-        return (
-            elRewardsVault,
-            oracleReportSanityChecker,
-            stakingRouter,
-            treasury,
-            withdrawalQueue,
-            withdrawalVault
-        );
+        return (elRewardsVault, oracleReportSanityChecker, stakingRouter, treasury, withdrawalQueue, withdrawalVault);
     }
 
-    function oracleReportComponentsForLido() external view returns (
-        address,
-        address,
-        address,
-        address,
-        address,
-        address,
-        address
-    ) {
+    function oracleReportComponentsForLido()
+        external
+        view
+        returns (address, address, address, address, address, address, address)
+    {
         return (
             accountingOracle,
             elRewardsVault,
