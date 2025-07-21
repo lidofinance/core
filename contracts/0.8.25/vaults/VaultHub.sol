@@ -180,6 +180,16 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 internal immutable NO_UNSETTLED_ALLOWED = 0;
 
     // -----------------------------
+    //           MOCKING FOR WRAPPER
+    // -----------------------------
+    address public reportIsAlwaysFreshFor;
+
+    function setReportIsAlwaysFreshFor(address _vault) external {
+        _checkConnectionAndOwner(_vault);
+        reportIsAlwaysFreshFor = _vault;
+    }
+
+    // -----------------------------
     //           IMMUTABLES
     // -----------------------------
 
@@ -1176,6 +1186,10 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
+        if (reportIsAlwaysFreshFor != address(0)) {
+            return true;
+        }
+
         uint256 latestReportTimestamp = _lazyOracle().latestReportTimestamp();
         return
             // check if AccountingOracle brought fresh report
