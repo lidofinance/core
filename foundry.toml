@@ -32,3 +32,11 @@ evm_version = "cancun"
 # fail_on_revert = true
 
 fmt = { int_types = 'long' }
+
+additional_compiler_profiles = [
+    { name = "via-ir", via_ir = true, optimizer = true, optimizer_runs = 200 }
+]
+
+compilation_restrictions = [
+    { paths = "contracts/upgrade/*", via_ir = true, optimizer = true, optimizer_runs = 200 }
+]
