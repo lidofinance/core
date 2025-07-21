@@ -780,7 +780,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
 
         connection.isBeaconDepositsManuallyPaused = true;
-        IStakingVault(_vault).pauseBeaconChainDeposits();
+        _pauseBeaconChainDepositsIfNotAlready(_vault);
     }
 
     /// @notice resumes beacon chain deposits for the vault
@@ -789,12 +789,13 @@ contract VaultHub is PausableUntilWithRoles {
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
+
         if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
 
         _settleObligations(_vault, record, _vaultObligations(_vault), UNSETTLED_THRESHOLD);
 
         connection.isBeaconDepositsManuallyPaused = false;
-        IStakingVault(_vault).resumeBeaconChainDeposits();
+        _resumeBeaconChainDepositsIfAlreadyPaused(_vault);
     }
 
     /// @notice Emits a request event for the node operator to perform validator exit
@@ -1457,14 +1458,12 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal {
-        IStakingVault vault_ = IStakingVault(_vault);
         bool isHealthy = _isVaultHealthy(_connection, _record);
-        bool isBeaconDepositsPaused = vault_.beaconChainDepositsPaused();
 
         if (_totalUnsettledObligations(_vaultObligations(_vault)) >= UNSETTLED_THRESHOLD || !isHealthy) {
-            if (!isBeaconDepositsPaused) vault_.pauseBeaconChainDeposits();
+            _pauseBeaconChainDepositsIfNotAlready(_vault);
         } else if (!_connection.isBeaconDepositsManuallyPaused) {
-            if (isBeaconDepositsPaused) vault_.resumeBeaconChainDeposits();
+            _resumeBeaconChainDepositsIfAlreadyPaused(_vault);
         }
     }
 
@@ -1564,6 +1563,20 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _requireFreshReport(address _vault, VaultRecord storage _record) internal view {
         if (!_isReportFresh(_record)) revert VaultReportStale(_vault);
+    }
+
+    function _pauseBeaconChainDepositsIfNotAlready(address _vault) internal {
+        IStakingVault vault = IStakingVault(_vault);
+        if (!vault.beaconChainDepositsPaused()) {
+            IStakingVault(_vault).pauseBeaconChainDeposits();
+        }
+    }
+
+    function _resumeBeaconChainDepositsIfAlreadyPaused(address _vault) internal {
+        IStakingVault vault = IStakingVault(_vault);
+        if (vault.beaconChainDepositsPaused()) {
+            IStakingVault(_vault).resumeBeaconChainDeposits();
+        }
     }
 
     // -----------------------------
