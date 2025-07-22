@@ -99,7 +99,6 @@ contract NodeOperatorFee is Permissions {
 
         super._initialize(_defaultAdmin, _confirmExpiry);
 
-        _validateNodeOperatorFeeRate(_nodeOperatorFeeRate);
         _setNodeOperatorFeeRate(_nodeOperatorFeeRate);
         _setNodeOperatorFeeRecipient(_nodeOperatorManager);
 
@@ -207,9 +206,6 @@ contract NodeOperatorFee is Permissions {
         // If the vault is quarantined, the total value is reduced and may not reflect the adjustment
         if (_lazyOracle().vaultQuarantine(address(_stakingVault())).isActive) revert VaultQuarantined();
 
-        // Validate fee rate before collecting confirmations
-        _validateNodeOperatorFeeRate(_newNodeOperatorFeeRate);
-
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
@@ -291,7 +287,7 @@ contract NodeOperatorFee is Permissions {
     }
 
     function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
-        _validateNodeOperatorFeeRate(_newNodeOperatorFeeRate);
+        if (_newNodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
 
         uint256 oldNodeOperatorFeeRate = nodeOperatorFeeRate;
         nodeOperatorFeeRate = _newNodeOperatorFeeRate;
@@ -326,14 +322,6 @@ contract NodeOperatorFee is Permissions {
     function _toSignedClamped(uint128 _adjustment) internal pure returns (int128) {
         if (_adjustment > uint128(type(int128).max)) return type(int128).max;
         return int128(_adjustment);
-    }
-
-    /**
-     * @notice Validates that the node operator fee rate is within acceptable bounds
-     * @param _nodeOperatorFeeRate The fee rate to validate
-     */
-    function _validateNodeOperatorFeeRate(uint256 _nodeOperatorFeeRate) internal pure {
-        if (_nodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
     }
 
     function _lazyOracle() internal view returns (LazyOracle) {
