@@ -101,7 +101,7 @@ contract VaultFactory {
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry,
         Permissions.RoleAssignment[] calldata _roleAssignments
-    ) external payable returns (IStakingVault vault, Dashboard dashboard) {
+    ) external returns (IStakingVault vault, Dashboard dashboard) {
         ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
 
         // create the vault proxy
@@ -119,6 +119,7 @@ contract VaultFactory {
 
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
+        dashboard.setNodeOperatorFeeRecipient(_nodeOperatorManager);
         dashboard.grantRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), _nodeOperatorManager);
         dashboard.revokeRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), address(this));
 
