@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4615"  lines-covered="4444"  line-rate="0.9629000000000001"  branches-valid="2154"  branches-covered="2029"  branch-rate="0.9420000000000001"  timestamp="1753180025966" complexity="0" version="0.1">
+<coverage lines-valid="4615"  lines-covered="4444"  line-rate="0.9629000000000001"  branches-valid="2154"  branches-covered="2029"  branch-rate="0.9420000000000001"  timestamp="1753180581710" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2952,7 +2952,7 @@
 			<method name="_pauseBeaconChainDepositsIfNotAlready"  hits="14"  signature="()V" >
 				<lines><line number="1562"  hits="14" /></lines>
 			</method>
-			<method name="_resumeBeaconChainDepositsIfAlreadyPaused"  hits="30"  signature="()V" >
+			<method name="_resumeBeaconChainDepositsIfNotAlready"  hits="30"  signature="()V" >
 				<lines><line number="1568"  hits="30" /></lines>
 			</method>
 		</methods>
