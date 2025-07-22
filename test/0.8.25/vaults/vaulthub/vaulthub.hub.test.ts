@@ -1170,10 +1170,13 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket.pendingDisconnect).to.be.true;
 
       await lazyOracle.mock__setIsVaultQuarantined(vault, true);
+      expect(await lazyOracle.isVaultQuarantined(vault)).to.equal(true);
 
       await expect(lazyOracle.mock__report(vaultHub, vault, 0n, 0n, 0n, 0n, 0n, 0n))
         .to.emit(vaultHub, "VaultDisconnectCompleted")
         .withArgs(vault);
+
+      expect(await lazyOracle.isVaultQuarantined(vault)).to.equal(false);
 
       vaultSocket = await vaultHub.vaultConnection(vault);
       expect(vaultSocket.vaultIndex).to.equal(0); // vault is disconnected

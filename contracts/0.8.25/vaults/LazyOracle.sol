@@ -363,8 +363,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
         Quarantine storage q = $.vaultQuarantines[_vault];
         uint128 quarDelta = q.pendingTotalValueIncrease;
-        if (_reportedTotalValue > maxSaneTotalValue || quarDelta > 0) {
-            uint64 reportTs = $.vaultsDataTimestamp;
+        uint64 reportTs = $.vaultsDataTimestamp;
+        if (_reportedTotalValue > maxSaneTotalValue) {
             uint128 delta = uint128(_reportedTotalValue - onchainTotalValueOnRefSlot);
 
             if (quarDelta == 0) { // first overlimit report
@@ -374,15 +374,19 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 emit QuarantinedDeposit(_vault, delta);
             } else if (reportTs - q.startTimestamp < $.quarantinePeriod) { // quarantine not expired
                 _reportedTotalValue = onchainTotalValueOnRefSlot;
-            } else if (delta <= quarDelta + onchainTotalValueOnRefSlot * $.maxRewardRatioBP / TOTAL_BASIS_POINTS) { // quarantine expired
+            } else if (delta <= quarDelta + (onchainTotalValueOnRefSlot + quarDelta) * $.maxRewardRatioBP / TOTAL_BASIS_POINTS) { // quarantine expired
                 q.pendingTotalValueIncrease = 0;
                 emit QuarantineExpired(_vault, delta);
             } else { // start new quarantine
                 _reportedTotalValue = onchainTotalValueOnRefSlot + quarDelta;
                 q.pendingTotalValueIncrease = delta - quarDelta;
                 q.startTimestamp = reportTs;
+                emit QuarantineExpired(_vault, quarDelta);
                 emit QuarantinedDeposit(_vault, delta - quarDelta);
             }
+        } else if (quarDelta > 0 && reportTs - q.startTimestamp >= $.quarantinePeriod) { // quarantine expired
+            q.pendingTotalValueIncrease = 0;
+            emit QuarantineExpired(_vault, 0);
         }
 
         return _reportedTotalValue;

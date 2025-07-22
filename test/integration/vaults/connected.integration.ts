@@ -688,6 +688,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
     it("Sanity check for dynamic total value underflow", async () => {
       await dashboard.connect(roles.funder).fund({ value: ether("1") });
+
+      await advanceChainTime(days(1n));
+
       await reportVaultDataWithProof(ctx, stakingVault);
 
       await advanceChainTime(days(1n));
