@@ -780,7 +780,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
 
         connection.isBeaconDepositsManuallyPaused = true;
-        _pauseBeaconChainDepositsIfNotAlready(_vault);
+        _pauseBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
     }
 
     /// @notice resumes beacon chain deposits for the vault
@@ -795,7 +795,7 @@ contract VaultHub is PausableUntilWithRoles {
         _settleObligations(_vault, record, _vaultObligations(_vault), UNSETTLED_THRESHOLD);
 
         connection.isBeaconDepositsManuallyPaused = false;
-        _resumeBeaconChainDepositsIfAlreadyPaused(_vault);
+        _resumeBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
     }
 
     /// @notice Emits a request event for the node operator to perform validator exit
@@ -1460,10 +1460,11 @@ contract VaultHub is PausableUntilWithRoles {
     ) internal {
         bool isHealthy = _isVaultHealthy(_connection, _record);
 
+        IStakingVault vault_ = IStakingVault(_vault);
         if (_totalUnsettledObligations(_vaultObligations(_vault)) >= UNSETTLED_THRESHOLD || !isHealthy) {
-            _pauseBeaconChainDepositsIfNotAlready(_vault);
+            _pauseBeaconChainDepositsIfNotAlready(vault_);
         } else if (!_connection.isBeaconDepositsManuallyPaused) {
-            _resumeBeaconChainDepositsIfAlreadyPaused(_vault);
+            _resumeBeaconChainDepositsIfNotAlready(vault_);
         }
     }
 
@@ -1565,17 +1566,19 @@ contract VaultHub is PausableUntilWithRoles {
         if (!_isReportFresh(_record)) revert VaultReportStale(_vault);
     }
 
-    function _pauseBeaconChainDepositsIfNotAlready(address _vault) internal {
-        IStakingVault vault = IStakingVault(_vault);
-        if (!vault.beaconChainDepositsPaused()) {
-            IStakingVault(_vault).pauseBeaconChainDeposits();
+    function _isBeaconChainDepositsPaused(IStakingVault _vault) internal view returns (bool) {
+        return _vault.beaconChainDepositsPaused();
+    }
+
+    function _pauseBeaconChainDepositsIfNotAlready(IStakingVault _vault) internal {
+        if (!_isBeaconChainDepositsPaused(_vault)) {
+            _vault.pauseBeaconChainDeposits();
         }
     }
 
-    function _resumeBeaconChainDepositsIfAlreadyPaused(address _vault) internal {
-        IStakingVault vault = IStakingVault(_vault);
-        if (vault.beaconChainDepositsPaused()) {
-            IStakingVault(_vault).resumeBeaconChainDeposits();
+    function _resumeBeaconChainDepositsIfNotAlready(IStakingVault _vault) internal {
+        if (_isBeaconChainDepositsPaused(_vault)) {
+            _vault.resumeBeaconChainDeposits();
         }
     }
 
