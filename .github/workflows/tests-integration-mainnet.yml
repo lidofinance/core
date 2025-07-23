@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      NODE_OPTIONS: --max_old_space_size=6400
+      NODE_OPTIONS: --max_old_space_size=7200
 
     services:
       hardhat-node:
