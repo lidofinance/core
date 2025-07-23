@@ -1,6 +1,8 @@
 export { unpauseStaking, ensureStakeLimit, depositAndReportValidators } from "./staking";
 
-export { unpauseWithdrawalQueue, finalizeWithdrawalQueue } from "./withdrawal";
+export { finalizeWQViaElVault, finalizeWQViaSubmit, unpauseWithdrawalQueue } from "./withdrawal";
+
+export { setMaxPositiveTokenRebase } from "./sanity-checker";
 
 export {
   OracleReportOptions,

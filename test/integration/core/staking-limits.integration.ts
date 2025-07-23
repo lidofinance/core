@@ -31,7 +31,9 @@ describe("Staking limits", () => {
     const agentAddress = await agent.getAddress();
     await ctx.contracts.acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.PAUSE_ROLE());
     await ctx.contracts.acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.RESUME_ROLE());
-    await ctx.contracts.acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.STAKING_CONTROL_ROLE());
+    await ctx.contracts.acl
+      .connect(agent)
+      .grantPermission(agentAddress, lidoAddress, await lido.STAKING_CONTROL_ROLE());
     await ctx.contracts.acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.STAKING_PAUSE_ROLE());
   });
 

@@ -1,11 +1,10 @@
-import { log } from "lib";
+import { certainAddress, ether, impersonate, log } from "lib";
 
 import {
   ensureDsmGuardians,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
   ensureStakeLimit,
-  finalizeWithdrawalQueue,
   norSdvtEnsureOperators,
   unpauseStaking,
   unpauseWithdrawalQueue,
@@ -38,7 +37,9 @@ export const provision = async (ctx: ProtocolContext) => {
   // (see SDVT_STAKING_MODULE_TARGET_SHARE_BP)
   await norSdvtEnsureOperators(ctx, ctx.contracts.sdvt, 2n, 3n, 1n);
 
-  await finalizeWithdrawalQueue(ctx);
+  // Ensure some initial TVL required for current tests
+  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000000"));
+  await ethHolder.sendTransaction({ to: ctx.contracts.lido.address, value: ether("100000") });
 
   await ensureStakeLimit(ctx);
 

@@ -128,13 +128,13 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
     function harness__getSigningKeysAllocationData(
         uint256 _keysCount
     )
-    external
-    view
-    returns (
-        uint256 allocatedKeysCount,
-        uint256[] memory nodeOperatorIds,
-        uint256[] memory activeKeyCountsAfterAllocation
-    )
+        external
+        view
+        returns (
+            uint256 allocatedKeysCount,
+            uint256[] memory nodeOperatorIds,
+            uint256[] memory activeKeyCountsAfterAllocation
+        )
     {
         return _getSigningKeysAllocationData(_keysCount);
     }

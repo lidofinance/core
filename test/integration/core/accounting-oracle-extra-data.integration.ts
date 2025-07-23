@@ -58,7 +58,7 @@ describe("Integration: AccountingOracle extra data", () => {
 
       let firstNodeOperatorInRange = 0;
       // Workaround for Mainnet
-      if (ctx.contracts.nor.address.toLowerCase() === '0x55032650b14df07b85bf18a3a3ec8e0af2e028d5') {
+      if (ctx.contracts.nor.address.toLowerCase() === "0x55032650b14df07b85bf18a3a3ec8e0af2e028d5") {
         firstNodeOperatorInRange = 20;
       }
 
