@@ -87,11 +87,18 @@ describe("Dashboard.sol", () => {
     },
     liabilityShares: 555n,
     locked: 1000n,
-    inOutDelta: {
-      value: 1000n,
-      valueOnRefSlot: 1000n,
-      refSlot: 0n,
-    },
+    inOutDelta: [
+      {
+        value: 1000n,
+        valueOnRefSlot: 1000n,
+        refSlot: 1n,
+      },
+      {
+        value: 0n,
+        valueOnRefSlot: 0n,
+        refSlot: 0n,
+      },
+    ],
   };
 
   const connection: Readonly<VaultHub.VaultConnectionStruct> = {
@@ -288,13 +295,13 @@ describe("Dashboard.sol", () => {
 
     it("reverts if already initialized", async () => {
       await expect(
-        dashboard.initialize(vaultOwner, nodeOperator, nodeOperatorFeeBP, confirmExpiry),
+        dashboard.initialize(vaultOwner, nodeOperator, nodeOperator, nodeOperatorFeeBP, confirmExpiry),
       ).to.be.revertedWithCustomError(dashboard, "AlreadyInitialized");
     });
 
     it("reverts if called on the implementation", async () => {
       await expect(
-        dashboardImpl.initialize(vaultOwner, nodeOperator, nodeOperatorFeeBP, confirmExpiry),
+        dashboardImpl.initialize(vaultOwner, nodeOperator, nodeOperator, nodeOperatorFeeBP, confirmExpiry),
       ).to.be.revertedWithCustomError(dashboardImpl, "NonProxyCallsForbidden");
     });
   });

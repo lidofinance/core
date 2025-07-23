@@ -92,6 +92,7 @@ contract NodeOperatorFee is Permissions {
     function _initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
+        address _nodeOperatorFeeRecipient,
         uint256 _nodeOperatorFeeRate,
         uint256 _confirmExpiry
     ) internal {
@@ -101,7 +102,7 @@ contract NodeOperatorFee is Permissions {
 
         _validateNodeOperatorFeeRate(_nodeOperatorFeeRate);
         _setNodeOperatorFeeRate(_nodeOperatorFeeRate);
-        _setNodeOperatorFeeRecipient(_nodeOperatorManager);
+        _setNodeOperatorFeeRecipient(_nodeOperatorFeeRecipient);
 
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
@@ -157,7 +158,7 @@ contract NodeOperatorFee is Permissions {
         int256 adjustment = _toSignedClamped(rewardsAdjustment.amount);
 
         // the total increase/decrease of the vault value during the fee period
-        int256 growth = int112(periodEnd.totalValue) - int112(periodStart.totalValue) -
+        int256 growth = int104(periodEnd.totalValue) - int104(periodStart.totalValue) -
                         (periodEnd.inOutDelta - periodStart.inOutDelta);
 
         // the actual rewards that are subject to the fee

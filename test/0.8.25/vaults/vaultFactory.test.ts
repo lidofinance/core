@@ -403,7 +403,7 @@ describe("VaultFactory.sol", () => {
 
   context("createVaultWithDashboardWithoutConnectingToVaultHub", () => {
     it("works with roles assigned to node operator", async () => {
-      const { vault } = await createVaultProxyWithoutConnectingToVaultHub(
+      const { vault, dashboard: _dashboard } = await createVaultProxyWithoutConnectingToVaultHub(
         vaultOwner1,
         vaultFactory,
         vaultOwner1,
@@ -419,14 +419,16 @@ describe("VaultFactory.sol", () => {
         ],
       );
 
-      const vaultConnection = await vaultHub.vaultConnection(vault);
+      // new instance of dashboard
+      const newDashboard = await ethers.getContractAt("Dashboard", await _dashboard.getAddress());
+      expect(await newDashboard.nodeOperatorFeeRecipient()).to.eq(operator.address);
 
-      expect(await dashboard.getAddress()).to.not.eq(vaultConnection.owner);
-      expect(vaultConnection.vaultIndex).to.eq(0);
+      const vaultConnection = await vaultHub.vaultConnection(vault);
+      expect(vaultConnection.vaultIndex).to.eq(0); // vault is not connected to the vaultHub
     });
 
     it("works with empty roles", async () => {
-      const { vault } = await createVaultProxyWithoutConnectingToVaultHub(
+      const { vault, dashboard: _dashboard } = await createVaultProxyWithoutConnectingToVaultHub(
         vaultOwner1,
         vaultFactory,
         vaultOwner1,
@@ -437,9 +439,11 @@ describe("VaultFactory.sol", () => {
         [],
       );
 
-      const vaultConnection = await vaultHub.vaultConnection(vault);
+      // new instance of dashboard
+      const newDashboard = await ethers.getContractAt("Dashboard", await _dashboard.getAddress());
+      expect(await newDashboard.nodeOperatorFeeRecipient()).to.eq(operator.address);
 
-      expect(await dashboard.getAddress()).to.not.eq(vaultConnection.owner);
+      const vaultConnection = await vaultHub.vaultConnection(vault);
       expect(vaultConnection.vaultIndex).to.eq(0);
     });
 

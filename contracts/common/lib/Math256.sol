@@ -41,14 +41,4 @@ library Math256 {
     function absDiff(uint256 a, uint256 b) internal pure returns (uint256) {
         return a > b ? a - b : b - a;
     }
-
-    /// @dev Returns the distance between two 32-bit numbers in counterclockwise direction
-    /// @param a the first number that's suppose to be larger than b
-    /// @param b the second number that's suppose to be smaller than a
-    /// @return the distance between a and b in counterclockwise direction modulo 2**32 + 1
-    /// @dev this function is used to check if a is larger than b taking into account the overflow of uint32
-    function ccwDistance32(uint32 a, uint32 b) internal pure returns (uint256) {
-        uint256 modulo = uint256(~uint32(0)) + 1;
-        return (modulo + a - b) % modulo;
-    }
 }

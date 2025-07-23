@@ -5,6 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  LazyOracle__MockForVaultHub,
   LidoLocator,
   OperatorGrid,
   OperatorGrid__MockForVaultHub,
@@ -16,7 +17,7 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { GENESIS_FORK_VERSION, impersonate } from "lib";
+import { GENESIS_FORK_VERSION } from "lib";
 import { TOTAL_BASIS_POINTS } from "lib/constants";
 import { findEvents } from "lib/event";
 import { ether } from "lib/units";
@@ -49,13 +50,22 @@ describe("VaultHub.sol:forceExit", () => {
   let operatorGrid: OperatorGrid;
   let operatorGridMock: OperatorGrid__MockForVaultHub;
   let proxy: OssifiableProxy;
+  let lazyOracle: LazyOracle__MockForVaultHub;
 
   let vaultAddress: string;
-  let vaultHubAddress: string;
-
-  let vaultHubSigner: HardhatEthersSigner;
 
   let originalState: string;
+
+  async function createVault(factory: VaultFactory__MockForVaultHub) {
+    const vaultCreationTx = (await factory
+      .createVault(user, user, predepositGuarantee)
+      .then((tx) => tx.wait())) as ContractTransactionReceipt;
+
+    const events = findEvents(vaultCreationTx, "VaultCreated");
+    const vaultCreatedEvent = events[0];
+
+    return ethers.getContractAt("StakingVault__MockForVaultHub", vaultCreatedEvent.args.vault, user);
+  }
 
   before(async () => {
     [deployer, user, feeRecipient] = await ethers.getSigners();
@@ -67,9 +77,11 @@ describe("VaultHub.sol:forceExit", () => {
       "0x0000000000000000000000000000000000000000000000000000000000000000",
       0,
     ]);
+    lazyOracle = await ethers.deployContract("LazyOracle__MockForVaultHub");
     locator = await deployLidoLocator({
       lido: steth,
       predepositGuarantee: predepositGuarantee,
+      lazyOracle,
     });
 
     // OperatorGrid
@@ -77,7 +89,15 @@ describe("VaultHub.sol:forceExit", () => {
     operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
     await operatorGridMock.initialize(ether("1"));
 
-    const vaultHubImpl = await ethers.deployContract("VaultHub", [locator, steth, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP]);
+    // HashConsensus
+    const hashConsensus = await ethers.deployContract("HashConsensus__MockForVaultHub");
+
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [
+      locator,
+      steth,
+      hashConsensus,
+      VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP,
+    ]);
 
     proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, deployer, new Uint8Array()]);
 
@@ -85,28 +105,19 @@ describe("VaultHub.sol:forceExit", () => {
     await vaultHubAdmin.initialize(deployer);
 
     vaultHub = await ethers.getContractAt("VaultHub", proxy, user);
-    vaultHubAddress = await vaultHub.getAddress();
 
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), user);
+    await vaultHubAdmin.grantRole(await vaultHub.VALIDATOR_EXIT_ROLE(), user);
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 
-    const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [
-      await vaultHub.getAddress(),
-      depositContract,
-    ]);
+    const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [depositContract]);
+    const beacon = await ethers.deployContract("UpgradeableBeacon", [stakingVaultImpl, deployer]);
 
-    vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [await stakingVaultImpl.getAddress()]);
+    vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [beacon]);
 
-    const vaultCreationTx = (await vaultFactory
-      .createVault(user, user, predepositGuarantee)
-      .then((tx) => tx.wait())) as ContractTransactionReceipt;
-
-    const events = findEvents(vaultCreationTx, "VaultCreated");
-    const vaultCreatedEvent = events[0];
-
-    vault = await ethers.getContractAt("StakingVault__MockForVaultHub", vaultCreatedEvent.args.vault, user);
+    vault = await createVault(vaultFactory);
     vaultAddress = await vault.getAddress();
 
     const codehash = keccak256(await ethers.provider.getCode(vaultAddress));
@@ -125,80 +136,89 @@ describe("VaultHub.sol:forceExit", () => {
     });
 
     await vault.fund({ value: ether("1") });
+    await vault.transferOwnership(vaultHub);
     await vaultHub.connect(user).connectVault(vaultAddress);
-
-    vaultHubSigner = await impersonate(vaultHubAddress, ether("100"));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
 
   afterEach(async () => await Snapshot.restore(originalState));
 
+  async function reportVault({
+    targetVault,
+    totalValue,
+    inOutDelta,
+    lidoFees,
+    liabilityShares,
+    slashingReserve,
+  }: {
+    targetVault?: StakingVault__MockForVaultHub;
+    reportTimestamp?: bigint;
+    totalValue?: bigint;
+    inOutDelta?: bigint;
+    liabilityShares?: bigint;
+    lidoFees?: bigint;
+    slashingReserve?: bigint;
+  }) {
+    targetVault = targetVault ?? vault;
+    await lazyOracle.refreshReportTimestamp();
+    const timestamp = await lazyOracle.latestReportTimestamp();
+
+    totalValue = totalValue ?? (await vaultHub.totalValue(targetVault));
+    const record = await vaultHub.vaultRecord(targetVault);
+    const activeIndex = record.inOutDelta[0].refSlot >= record.inOutDelta[1].refSlot ? 0 : 1;
+    inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
+    liabilityShares = liabilityShares ?? (await vaultHub.vaultRecord(targetVault)).liabilityShares;
+    lidoFees = lidoFees ?? (await vaultHub.vaultObligations(targetVault)).unsettledLidoFees;
+    slashingReserve = slashingReserve ?? 0n;
+
+    await lazyOracle.mock__report(
+      vaultHub,
+      targetVault,
+      timestamp,
+      totalValue,
+      inOutDelta,
+      lidoFees,
+      liabilityShares,
+      slashingReserve,
+    );
+  }
+
   // Simulate getting in the unhealthy state
   const makeVaultUnhealthy = async () => {
     await vault.fund({ value: ether("1") });
+    await reportVault({});
     await vaultHub.mintShares(vaultAddress, user, ether("0.9"));
-    await vault.connect(vaultHubSigner).report(0n, ether("0.9"), ether("1"), ether("1.1")); // slashing
+    await reportVault({ totalValue: ether("0.9") });
   };
 
   context("forceValidatorExit", () => {
-    it("reverts if msg.value is 0", async () => {
-      await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 0n }))
-        .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
-        .withArgs("msg.value");
-    });
-
     it("reverts if the vault is zero address", async () => {
-      await expect(vaultHub.forceValidatorExit(ZeroAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
-        .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
-        .withArgs("_vault");
-    });
-
-    it("reverts if zero pubkeys", async () => {
-      await expect(vaultHub.forceValidatorExit(vaultAddress, "0x", feeRecipient, { value: 1n }))
-        .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
-        .withArgs("_pubkeys");
-    });
-
-    it("reverts if zero refund recipient", async () => {
-      await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, ZeroAddress, { value: 1n }))
-        .to.be.revertedWithCustomError(vaultHub, "ZeroArgument")
-        .withArgs("_refundRecipient");
-    });
-
-    it("reverts if pubkeys are not valid", async () => {
       await expect(
-        vaultHub.forceValidatorExit(vaultAddress, "0x" + "01".repeat(47), feeRecipient, { value: 1n }),
-      ).to.be.revertedWithCustomError(vaultHub, "InvalidPubkeysLength");
+        vaultHub.forceValidatorExit(ZeroAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }),
+      ).to.be.revertedWithCustomError(vaultHub, "ZeroAddress");
     });
 
     it("reverts if vault is not connected to the hub", async () => {
-      const vaultCreationTx = (await vaultFactory
-        .createVault(user, user, predepositGuarantee)
-        .then((tx) => tx.wait())) as ContractTransactionReceipt;
+      const vault_ = await createVault(vaultFactory);
 
-      const events = findEvents(vaultCreationTx, "VaultCreated");
-      const vaultCreatedEvent = events[0];
-
-      await expect(
-        vaultHub.forceValidatorExit(vaultCreatedEvent.args.vault, SAMPLE_PUBKEY, feeRecipient, { value: 1n }),
-      )
+      await expect(vaultHub.forceValidatorExit(vault_, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
-        .withArgs(vaultCreatedEvent.args.vault);
+        .withArgs(vault_);
     });
 
     it("reverts if called for a disconnected vault", async () => {
       await vaultHub.connect(user).disconnect(vaultAddress);
 
       await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
-        .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
+        .to.be.revertedWithCustomError(vaultHub, "VaultIsDisconnecting")
         .withArgs(vaultAddress);
     });
 
     it("reverts if called for a healthy vault", async () => {
-      await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
-        .to.be.revertedWithCustomError(vaultHub, "AlreadyHealthy")
-        .withArgs(vaultAddress);
+      await expect(
+        vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }),
+      ).to.be.revertedWithCustomError(vaultHub, "ForcedValidatorExitNotAllowed");
     });
 
     context("unhealthy vault", () => {
@@ -246,14 +266,16 @@ describe("VaultHub.sol:forceExit", () => {
         reservationFeeBP: 1_00n,
       });
 
+      await demoVault.transferOwnership(vaultHub);
       await vaultHub.connectVault(demoVaultAddress);
+      await reportVault({ targetVault: demoVault });
       await vaultHub.mintShares(demoVaultAddress, user, cap);
 
       expect((await vaultHub.vaultRecord(demoVaultAddress)).liabilityShares).to.equal(cap);
 
       // decrease totalValue to trigger rebase
       const penalty = ether("1");
-      await demoVault.mock__decreaseTotalValue(penalty);
+      await reportVault({ targetVault: demoVault, totalValue: penalty });
 
       expect(await vaultHub.isVaultHealthy(demoVaultAddress)).to.be.false;
 

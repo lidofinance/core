@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -69,6 +70,33 @@ describe("PinnedBeaconProxy.sol", () => {
 
       expect(await proxy.getAddress()).to.be.properAddress;
       expect(await proxy.implementation()).to.equal(await beacon.implementation());
+    });
+
+    it("should return different codehash for different beacon", async () => {
+      const beacon2 = await ethers.deployContract("UpgradeableBeacon", [implNew, admin]);
+      const proxy2 = await ethers.deployContract("PinnedBeaconProxy", [beacon2, "0x"]);
+      await proxy2.waitForDeployment();
+
+      const proxyCode = await ethers.provider.getCode(await pinnedBeaconProxy.getAddress());
+      const proxyCodeHash = keccak256(proxyCode);
+
+      const proxy2Code = await ethers.provider.getCode(await proxy2.getAddress());
+      const proxy2CodeHash = keccak256(proxy2Code);
+
+      expect(proxy2CodeHash).to.not.equal(proxyCodeHash);
+    });
+
+    it("should return same codehash for same beacon", async () => {
+      const proxy2 = await ethers.deployContract("PinnedBeaconProxy", [beacon, "0x"]);
+      await proxy2.waitForDeployment();
+
+      const proxyCode = await ethers.provider.getCode(await pinnedBeaconProxy.getAddress());
+      const proxyCodeHash = keccak256(proxyCode);
+
+      const proxy2Code = await ethers.provider.getCode(await proxy2.getAddress());
+      const proxy2CodeHash = keccak256(proxy2Code);
+
+      expect(proxy2CodeHash).to.equal(proxyCodeHash);
     });
   });
 

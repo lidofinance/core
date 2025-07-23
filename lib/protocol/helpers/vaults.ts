@@ -228,10 +228,13 @@ export function createVaultsReportTree(vaultReports: VaultReportItem[]): Standar
 export async function reportVaultDataWithProof(
   ctx: ProtocolContext,
   stakingVault: StakingVault,
-  params: Partial<Omit<VaultReportItem, "vault">> = {},
+  params: Partial<Omit<VaultReportItem, "vault">> & {
+    reportTimestamp?: bigint;
+    reportRefSlot?: bigint;
+  } = {},
   updateReportData = true,
 ) {
-  const { vaultHub, locator, lazyOracle } = ctx.contracts;
+  const { vaultHub, locator, lazyOracle, hashConsensus } = ctx.contracts;
 
   const vaultReport: VaultReportItem = {
     vault: await stakingVault.getAddress(),
@@ -244,8 +247,12 @@ export async function reportVaultDataWithProof(
   const reportTree = createVaultsReportTree([vaultReport]);
 
   if (updateReportData) {
+    const reportTimestampArg = params.reportTimestamp ?? (await getCurrentBlockTimestamp());
+    const reportRefSlotArg = params.reportRefSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
     const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
-    await lazyOracle.connect(accountingSigner).updateReportData(await getCurrentBlockTimestamp(), reportTree.root, "");
+    await lazyOracle
+      .connect(accountingSigner)
+      .updateReportData(reportTimestampArg, reportRefSlotArg, reportTree.root, "");
   }
 
   return await lazyOracle.updateVaultData(

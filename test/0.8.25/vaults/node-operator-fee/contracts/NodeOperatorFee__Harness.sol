@@ -15,6 +15,12 @@ contract NodeOperatorFee__Harness is NodeOperatorFee {
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry
     ) external {
-        super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        super._initialize(
+            _defaultAdmin,
+            _nodeOperatorManager,
+            _nodeOperatorManager,
+            _nodeOperatorFeeBP,
+            _confirmExpiry
+        );
     }
 }
