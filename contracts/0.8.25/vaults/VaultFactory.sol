@@ -71,7 +71,7 @@ contract VaultFactory {
         vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
-        dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
@@ -115,11 +115,10 @@ contract VaultFactory {
         vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the _defaultAdmin as the default admin, grant optional node operator managed roles
-        dashboard.initialize(_defaultAdmin, address(this), _nodeOperatorFeeBP, _confirmExpiry);
+        dashboard.initialize(_defaultAdmin, address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
-        dashboard.setNodeOperatorFeeRecipient(_nodeOperatorManager);
         dashboard.grantRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), _nodeOperatorManager);
         dashboard.revokeRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), address(this));
 
