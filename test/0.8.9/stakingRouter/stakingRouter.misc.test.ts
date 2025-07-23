@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { DepositContract__MockForBeaconChainDepositor, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, MAX_UINT256, proxify, randomString } from "lib";
+import { certainAddress, ether, proxify, randomString } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -109,16 +109,11 @@ describe("StakingRouter.sol:misc", () => {
       expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount);
     });
 
-    it("fails with UnexpectedContractVersion error when called on implementation", async () => {
-      await expect(impl.finalizeUpgrade_v3())
-        .to.be.revertedWithCustomError(impl, "UnexpectedContractVersion")
-        .withArgs(MAX_UINT256, 2);
-    });
-
-    it("fails with UnexpectedContractVersion error when called on deployed from scratch SRv2", async () => {
-      await expect(stakingRouter.finalizeUpgrade_v3())
-        .to.be.revertedWithCustomError(impl, "UnexpectedContractVersion")
-        .withArgs(3, 2);
+    it("fails with InvalidContractVersionIncrement error when called on deployed from scratch SRv2", async () => {
+      await expect(stakingRouter.finalizeUpgrade_v3()).to.be.revertedWithCustomError(
+        impl,
+        "InvalidContractVersionIncrement",
+      );
     });
 
     context("simulate upgrade from v2", () => {
@@ -129,8 +124,7 @@ describe("StakingRouter.sol:misc", () => {
 
       it("sets correct contract version", async () => {
         expect(await stakingRouter.getContractVersion()).to.equal(2);
-        await stakingRouter.finalizeUpgrade_v3(
-        );
+        await stakingRouter.finalizeUpgrade_v3();
         expect(await stakingRouter.getContractVersion()).to.be.equal(3);
       });
     });

@@ -204,7 +204,6 @@ contract StakingRouter is AccessControlEnumerable, BeaconChainDepositor, Version
 
     /// @notice Finalizes upgrade to v3 (from v2). Can be called only once.
     function finalizeUpgrade_v3() external {
-        _checkContractVersion(2);
         _updateContractVersion(3);
     }
 
