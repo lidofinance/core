@@ -92,6 +92,7 @@ contract NodeOperatorFee is Permissions {
     function _initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
+        address _nodeOperatorFeeRecipient,
         uint256 _nodeOperatorFeeRate,
         uint256 _confirmExpiry
     ) internal {
@@ -101,7 +102,7 @@ contract NodeOperatorFee is Permissions {
 
         _validateNodeOperatorFeeRate(_nodeOperatorFeeRate);
         _setNodeOperatorFeeRate(_nodeOperatorFeeRate);
-        _setNodeOperatorFeeRecipient(_nodeOperatorManager);
+        _setNodeOperatorFeeRecipient(_nodeOperatorFeeRecipient);
 
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
