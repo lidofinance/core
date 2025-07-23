@@ -66,8 +66,7 @@ export const finalizeWQViaSubmit = async (ctx: ProtocolContext) => {
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
       if (errMsg.includes("STAKE_LIMIT")) {
-        console.debug("STAKE_LIMIT");
-        await advanceChainTime(70n * 24n * 60n * 60n);
+        await advanceChainTime(2n * 24n * 60n * 60n);
         continue;
       }
       throw e;
