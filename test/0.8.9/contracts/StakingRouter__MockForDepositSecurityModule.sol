@@ -9,7 +9,11 @@ import {StakingRouter} from "contracts/0.8.9/StakingRouter.sol";
 contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     error StakingModuleUnregistered();
 
-    event StakingModuleVettedKeysDecreased(uint24 stakingModuleId, bytes nodeOperatorIds, bytes vettedSigningKeysCounts);
+    event StakingModuleVettedKeysDecreased(
+        uint24 stakingModuleId,
+        bytes nodeOperatorIds,
+        bytes vettedSigningKeysCounts
+    );
     event StakingModuleDeposited(uint256 maxDepositsCount, uint24 stakingModuleId, bytes depositCalldata);
     event StakingModuleStatusSet(
         uint24 indexed stakingModuleId,

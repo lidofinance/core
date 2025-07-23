@@ -19,7 +19,7 @@ import {
   ONE_GWEI,
   streccak,
 } from "lib";
-import { EXTRA_DATA_FORMAT_LIST,prepareExtraData } from "lib/oracle";
+import { EXTRA_DATA_FORMAT_LIST, prepareExtraData } from "lib/oracle";
 
 import { ProtocolContext } from "../types";
 
