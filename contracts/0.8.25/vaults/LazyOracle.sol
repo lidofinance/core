@@ -310,9 +310,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
         Storage storage $ = _storage();
         if ($.vaultQuarantines[_vault].pendingTotalValueIncrease > 0) {
-            delete $.vaultQuarantines[_vault];
             emit QuarantineRemoved(_vault);
         }
+        delete $.vaultQuarantines[_vault];
     }
 
     /// @notice handle sanity checks for the vault lazy report data
@@ -358,13 +358,13 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint256 onchainTotalValueOnRefSlot =
             uint256(int256(uint256(record.report.totalValue)) + _inOutDeltaOnRefSlot - record.report.inOutDelta);
         // some percentage of funds hasn't passed through the vault's balance is allowed for the EL and CL rewards handling
-        uint256 maxSaneTotalValue = onchainTotalValueOnRefSlot *
-            (TOTAL_BASIS_POINTS + $.maxRewardRatioBP) / TOTAL_BASIS_POINTS;
+        uint256 maxSaneTotalValue = 
+            onchainTotalValueOnRefSlot * (TOTAL_BASIS_POINTS + $.maxRewardRatioBP) / TOTAL_BASIS_POINTS;
 
         Quarantine storage q = $.vaultQuarantines[_vault];
         uint128 quarDelta = q.pendingTotalValueIncrease;
-        uint64 reportTs = $.vaultsDataTimestamp;
         if (_reportedTotalValue > maxSaneTotalValue) {
+            uint64 reportTs = $.vaultsDataTimestamp;
             uint128 delta = uint128(_reportedTotalValue - onchainTotalValueOnRefSlot);
 
             if (quarDelta == 0) { // first overlimit report
@@ -384,7 +384,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 emit QuarantineExpired(_vault, quarDelta);
                 emit QuarantinedDeposit(_vault, delta - quarDelta);
             }
-        } else if (quarDelta > 0 && reportTs - q.startTimestamp >= $.quarantinePeriod) { // quarantine expired
+        } else if (quarDelta > 0) { // quarantine is no longer needed
             q.pendingTotalValueIncrease = 0;
             emit QuarantineExpired(_vault, 0);
         }
