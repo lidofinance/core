@@ -27,9 +27,7 @@ contract WithdrawalQueueStub is IWithdrawalQueue {
 
     function getWithdrawalStatus(
         uint256[] calldata _requestIds
-    ) external view returns (
-        WithdrawalRequestStatus[] memory statuses
-    ) {
+    ) external view returns (WithdrawalRequestStatus[] memory statuses) {
         statuses = new WithdrawalRequestStatus[](_requestIds.length);
         for (uint256 i; i < _requestIds.length; ++i) {
             statuses[i].timestamp = _timestamps[_requestIds[i]];
@@ -41,9 +39,7 @@ contract BurnerStub {
     uint256 private nonCover;
     uint256 private cover;
 
-    function getSharesRequestedToBurn() external view returns (
-        uint256 coverShares, uint256 nonCoverShares
-    ) {
+    function getSharesRequestedToBurn() external view returns (uint256 coverShares, uint256 nonCoverShares) {
         coverShares = cover;
         nonCoverShares = nonCover;
     }
@@ -109,7 +105,9 @@ contract LidoLocatorStub is ILidoLocator {
 contract OracleReportSanityCheckerStub {
     error SelectorNotFound(bytes4 sig, uint256 value, bytes data);
 
-    fallback() external payable {revert SelectorNotFound(msg.sig, msg.value, msg.data);}
+    fallback() external payable {
+        revert SelectorNotFound(msg.sig, msg.value, msg.data);
+    }
 
     function checkAccountingOracleReport(
         uint256 _timeElapsed,
@@ -145,12 +143,11 @@ contract OracleReportSanityCheckerStub {
         uint256,
         uint256 _etherToLockForWithdrawals,
         uint256
-    ) external view returns (
-        uint256 withdrawals,
-        uint256 elRewards,
-        uint256 simulatedSharesToBurn,
-        uint256 sharesToBurn
-    ) {
+    )
+        external
+        view
+        returns (uint256 withdrawals, uint256 elRewards, uint256 simulatedSharesToBurn, uint256 sharesToBurn)
+    {
         withdrawals = _withdrawalVaultBalance;
         elRewards = _elRewardsVaultBalance;
 

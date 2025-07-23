@@ -6,7 +6,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, findEvents, findEventsWithInterfaces } from "lib";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { report } from "lib/protocol/helpers";
+import { finalizeWQViaElVault, report } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
 
@@ -34,16 +34,13 @@ describe("Integration: Withdrawal happy path", () => {
 
     const { withdrawalQueue: wq, lido, acl } = ctx.contracts;
 
-    // Finalize any pending requests first
-    while ((await wq.getLastRequestId()) !== (await wq.getLastFinalizedRequestId())) {
-      await report(ctx, { clDiff: ether("1") });
-      // Submit more ETH to increase buffer
-      await lido.connect(holder).submit(ethers.ZeroAddress, { value: ether("10000") });
-    }
+    await finalizeWQViaElVault(ctx);
 
     // Get initial stETH holder balance
     const agentSigner = await ctx.getSigner("agent");
-    await acl.connect(agentSigner).grantPermission(agentSigner.address, lido.address, await lido.STAKING_CONTROL_ROLE());
+    await acl
+      .connect(agentSigner)
+      .grantPermission(agentSigner.address, lido.address, await lido.STAKING_CONTROL_ROLE());
     await lido.connect(agentSigner).removeStakingLimit();
     await lido.connect(holder).submit(ethers.ZeroAddress, { value: ether("10000") });
     expect(await lido.balanceOf(holder.address)).to.be.gte(REQUESTS_SUM);
