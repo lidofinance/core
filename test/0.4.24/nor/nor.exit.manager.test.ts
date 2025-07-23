@@ -158,14 +158,6 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, proofSlotTimestamp);
     });
 
-    it("reverts when public key is empty", async () => {
-      await expect(
-        nor
-          .connect(stakingRouter)
-          .reportValidatorExitDelay(firstNodeOperatorId, proofSlotTimestamp, "0x", eligibleToExitInSec),
-      ).to.be.revertedWith("INVALID_PUBLIC_KEY");
-    });
-
     it("reverts when reporting the same validator key twice", async () => {
       await nor
         .connect(stakingRouter)
@@ -347,13 +339,13 @@ describe("NodeOperatorsRegistry.sol:ExitManager", () => {
         .to.emit(nor, "ValidatorExitStatusUpdated")
         .withArgs(firstNodeOperatorId, testPublicKey, eligibleToExitInSec, cutoff + exitDeadlineThreshold);
 
-        const result = await nor.isValidatorExitDelayPenaltyApplicable(
-          firstNodeOperatorId,
-            cutoff + exitDeadlineThreshold,
-            testPublicKey,
-            eligibleToExitInSec,
-        );
-        expect(result).to.be.false;
+      const result = await nor.isValidatorExitDelayPenaltyApplicable(
+        firstNodeOperatorId,
+        cutoff + exitDeadlineThreshold,
+        testPublicKey,
+        eligibleToExitInSec,
+      );
+      expect(result).to.be.false;
     });
   });
 
