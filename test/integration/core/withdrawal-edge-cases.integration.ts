@@ -7,7 +7,7 @@ import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
 import { Lido, WithdrawalQueueERC721 } from "typechain-types";
 
 import { ether, findEventsWithInterfaces } from "lib";
-import { finalizeWQViaElVault,getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { finalizeWQViaSubmit, getProtocolContext, ProtocolContext, report } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
@@ -29,6 +29,8 @@ describe("Integration: Withdrawal edge cases", () => {
 
     [, holder] = await ethers.getSigners();
     await setBalance(holder.address, ether("1000000"));
+
+    await finalizeWQViaSubmit(ctx);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -38,8 +40,6 @@ describe("Integration: Withdrawal edge cases", () => {
   after(async () => await Snapshot.restore(snapshot));
 
   it("Should handle bunker mode with multiple batches", async () => {
-    await finalizeWQViaElVault(ctx);
-
     const amount = ether("100");
     const withdrawalAmount = ether("10");
 
@@ -54,8 +54,8 @@ describe("Integration: Withdrawal edge cases", () => {
 
     const stethFirstNegativeReportBalance = await lido.balanceOf(holder.address);
 
-    expect(stethInitialBalance).to.be.gt(stethFirstNegativeReportBalance);
     expect(await wq.isBunkerModeActive()).to.be.true;
+    expect(stethInitialBalance).to.be.gt(stethFirstNegativeReportBalance);
 
     // First withdrawal request
     const firstRequestTx = await wq.connect(holder).requestWithdrawals([withdrawalAmount], holder.address);
@@ -106,8 +106,6 @@ describe("Integration: Withdrawal edge cases", () => {
   });
 
   it("should handle missed oracle report", async () => {
-    await finalizeWQViaElVault(ctx);
-
     const amount = ether("100");
 
     expect(await lido.balanceOf(holder.address)).to.equal(0);
@@ -154,8 +152,6 @@ describe("Integration: Withdrawal edge cases", () => {
   });
 
   it("should handle several rebases correctly", async () => {
-    await finalizeWQViaElVault(ctx);
-
     const amount = ether("100");
     const withdrawalAmount = ether("10");
 
