@@ -316,6 +316,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         VaultHub vaultHub = _vaultHub();
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
+        // 0. Check if the report is already fresh enough
+        if (vaultHub.isReportFresh(_vault)) {
+            revert VaultReportIsFreshEnough();
+        }
+
         // 1. Calculate inOutDelta in the refSlot
         int256 currentInOutDelta = record.inOutDelta.currentValue();
         inOutDeltaOnRefSlot = record.inOutDelta.getValueForRefSlot(_reportRefSlot);
@@ -419,4 +424,5 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     error InvalidProof();
     error UnderflowInTotalValueCalculation();
     error TotalValueTooLarge();
+    error VaultReportIsFreshEnough();
 }
