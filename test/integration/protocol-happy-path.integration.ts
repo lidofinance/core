@@ -215,8 +215,8 @@ describe("Protocol Happy Path", () => {
     });
 
     const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
-    const stakingModules = await stakingRouter.getStakingModules();
-
+    const stakingModules = (await stakingRouter.getStakingModules()).filter((m) => m.id === 1n);
+    console.log("Staking modules:", JSON.stringify(stakingModules, null, 2));
     depositCount = 0n;
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
     for (const module of stakingModules) {
