@@ -312,8 +312,13 @@ describe("Scenario: Protocol Happy Path", () => {
     expect(tokenRebasedEvent).not.to.be.undefined;
 
     const transferEvents = ctx.getEvents(reportTxReceipt, "Transfer");
+    const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
 
-    let toBurnerTransfer, toNorTransfer, toSdvtTransfer, toTreasuryTransfer: LogDescriptionExtended | undefined;
+    let toBurnerTransfer,
+      toNorTransfer,
+      toSdvtTransfer,
+      toTreasuryTransfer,
+      toTreasuryTransferShares: LogDescriptionExtended | undefined;
     let numExpectedTransferEvents = 3;
     if (wereWithdrawalsFinalized) {
       numExpectedTransferEvents += 1;
@@ -323,9 +328,11 @@ describe("Scenario: Protocol Happy Path", () => {
     }
     if (ctx.flags.withCSM) {
       toTreasuryTransfer = transferEvents[numExpectedTransferEvents];
+      toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents];
       numExpectedTransferEvents += 2;
     } else {
       toTreasuryTransfer = transferEvents[numExpectedTransferEvents - 1];
+      toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents - 1];
     }
 
     expect(transferEvents.length).to.equal(numExpectedTransferEvents, "Transfer events count");
@@ -363,11 +370,16 @@ describe("Scenario: Protocol Happy Path", () => {
       },
       "Transfer to Treasury",
     );
-
-    const treasurySharesMinted = await lido.getSharesByPooledEth(toTreasuryTransfer.args.value);
+    expect(toTreasuryTransferShares?.args.toObject()).to.include(
+      {
+        from: ZeroAddress,
+        to: treasuryAddress,
+      },
+      "Transfer shares to Treasury",
+    );
 
     expect(treasuryBalanceAfterRebase).to.be.approximately(
-      treasuryBalanceBeforeRebase + treasurySharesMinted,
+      treasuryBalanceBeforeRebase + toTreasuryTransferShares.args.sharesValue,
       10n,
       "Treasury balance after rebase",
     );
