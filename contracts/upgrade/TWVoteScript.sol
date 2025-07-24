@@ -5,8 +5,8 @@ import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
 
 interface IOssifiableProxy {
-    function proxy__upgradeTo(address newImplementation) external;
-    function proxy__changeAdmin(address newAdmin) external;
+    function proxy__upgradeTo(address newImplementation_) external;
+    function proxy__changeAdmin(address newAdmin_) external;
     function proxy__getAdmin() external view returns (address);
     function proxy__getImplementation() external view returns (address);
 }
@@ -35,7 +35,7 @@ interface IWithdrawalVault {
 }
 
 interface INodeOperatorsRegistry {
-    function finalizeUpgrade_v4(uint256 _exitDeadlineInSec) external;
+    function finalizeUpgrade_v4(uint256 _exitDeadlineThresholdInSeconds) external;
 }
 
 interface IOracleDaemonConfig {
