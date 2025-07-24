@@ -188,7 +188,7 @@
   "operatorGrid": {
     "deployParameters": {
       "defaultTierParams": {
-        "shareLimitInEther": "100",
+        "shareLimitInEther": "1000",
         "reserveRatioBP": 2000,
         "forcedRebalanceThresholdBP": 1800,
         "infraFeeBP": 500,

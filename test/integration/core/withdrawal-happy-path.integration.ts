@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, findEvents, findEventsWithInterfaces } from "lib";
-import { finalizeWQViaElVault,getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { finalizeWQViaElVault, getProtocolContext, ProtocolContext, report } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
