@@ -73,7 +73,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   });
 
   describe("Reporting", () => {
-    it("updates report data and keep in fresh state for 1 day", async () => {
+    it("bringing no report for 2 days makes vault report unfresh", async () => {
       await advanceChainTime(days(1n));
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
       await advanceChainTime(days(1n));
