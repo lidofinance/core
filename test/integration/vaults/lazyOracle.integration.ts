@@ -80,7 +80,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
     });
 
-    it("updates report data and keep in fresh state for 1 day", async () => {
+    it("updates report data and check for all the parameters and events", async () => {
       await advanceChainTime(days(2n));
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
@@ -189,9 +189,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(stranger, ether("0.3"));
     });
-
-    // TODO: add later
-    it.skip("Can't triggerValidatorWithdrawal", () => {});
   });
 
   describe("Lazy reporting sanity checker", () => {
