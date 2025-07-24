@@ -110,12 +110,18 @@ export async function main() {
 
   const validatorExitDelayVerifierArgs = [
     locator.address,
-    "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorPrev,
-    "0x0000000000000000000000000000000000000000000000000096000000000028", // GIndex gIFirstValidatorCurr,
-    "0x0000000000000000000000000000000000000000000000000000000000005b00", // GIndex gIHistoricalSummariesPrev,
-    "0x0000000000000000000000000000000000000000000000000000000000005b00", // GIndex gIHistoricalSummariesCurr,
-    1, // uint64 firstSupportedSlot,
-    1, // uint64 pivotSlot,
+    {
+      gIFirstValidatorPrev: "0x0000000000000000000000000000000000000000000000000096000000000028",
+      gIFirstValidatorCurr: "0x0000000000000000000000000000000000000000000000000096000000000028", 
+      gIFirstHistoricalSummaryPrev: "0x000000000000000000000000000000000000000000000000000000b600000018",
+      gIFirstHistoricalSummaryCurr: "0x000000000000000000000000000000000000000000000000000000b600000018",
+      gIFirstBlockRootInSummaryPrev: "0x000000000000000000000000000000000000000000000000000000000040000d",
+      gIFirstBlockRootInSummaryCurr: "0x000000000000000000000000000000000000000000000000000000000040000d"
+    }, // GIndices struct
+    22140000, // uint64 firstSupportedSlot, same as test data
+    22140000, // uint64 pivotSlot, same as test data  
+    22140000, // uint64 capellaSlot, same as test data
+    8192, // uint64 slotsPerHistoricalRoot,
     32, // uint32 slotsPerEpoch,
     12, // uint32 secondsPerSlot,
     genesisTime, // uint64 genesisTime,
