@@ -106,6 +106,7 @@ export enum Sk {
   operatorGrid = "operatorGrid",
   validatorConsolidationRequests = "validatorConsolidationRequests",
   lazyOracle = "lazyOracle",
+  v3TemporaryAdmin = "v3TemporaryAdmin",
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",

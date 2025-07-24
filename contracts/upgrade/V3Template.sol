@@ -16,6 +16,7 @@ import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {LazyOracle} from "contracts/0.8.25/vaults/LazyOracle.sol";
 import {VaultFactory} from "contracts/0.8.25/vaults/VaultFactory.sol";
 import {OperatorGrid} from "contracts/0.8.25/vaults/OperatorGrid.sol";
+import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRoles.sol";
 
 import {V3Addresses} from "./V3Addresses.sol";
 
@@ -225,11 +226,9 @@ contract V3Template is V3Addresses {
 
         _assertSingleOZRoleHolder(IBurner(BURNER), DEFAULT_ADMIN_ROLE, AGENT);
         {
-            address[] memory holders = new address[](4);
+            address[] memory holders = new address[](2);
             holders[0] = ACCOUNTING;
-            holders[1] = NODE_OPERATORS_REGISTRY;
-            holders[2] = SIMPLE_DVT;
-            holders[3] = CSM_ACCOUNTING;
+            holders[1] = CSM_ACCOUNTING;
             _assertOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, holders);
         }
         _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
@@ -245,7 +244,11 @@ contract V3Template is V3Addresses {
         _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), LazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE(), AGENT);
         _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
 
-        // TODO: add PausableUntilWithRoles checks when gate seal is added
+        // VaultHub PAUSE_ROLE check
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL);
+
+        // PredepositGuarantee PAUSE_ROLE check
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(PREDEPOSIT_GUARANTEE), PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).PAUSE_ROLE(), GATE_SEAL);
 
         // AccountingOracle
         _assertSingleOZRoleHolder(IAccountingOracle(ACCOUNTING_ORACLE), DEFAULT_ADMIN_ROLE, AGENT);
@@ -276,6 +279,7 @@ contract V3Template is V3Addresses {
         _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), AGENT);
 
         // PredepositGuarantee
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(PREDEPOSIT_GUARANTEE), DEFAULT_ADMIN_ROLE, AGENT);
         _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);
 
         // StakingRouter

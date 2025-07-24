@@ -49,16 +49,16 @@ export async function mockDGAragonVoting(
 
   const voteId = await voting.votesLength();
 
-  const voteScriptTw = await loadContract<OmnibusBase>("OmnibusBase", omnibusScriptAddress);
-  const voteBytecodeTw = await voteScriptTw.getNewVoteCallBytecode(description, proposalMetadata);
+  const voteScript = await loadContract<OmnibusBase>("OmnibusBase", omnibusScriptAddress);
+  const voteBytecode = await voteScript.getNewVoteCallBytecode(description, proposalMetadata);
 
-  await tokenManager.connect(deployer).forward(voteBytecodeTw);
-  if (!(await voteScriptTw.isValidVoteScript(voteId, proposalMetadata))) throw new Error("Vote script is not valid");
+  await tokenManager.connect(deployer).forward(voteBytecode);
+  if (!(await voteScript.isValidVoteScript(voteId, proposalMetadata))) throw new Error("Vote script is not valid");
   await voting.connect(deployer).vote(voteId, true, false);
   await advanceChainTime(await voting.voteTime());
   const executeTx = await voting.executeVote(voteId);
   const executeReceipt = (await executeTx.wait())!;
-  log.success("TW voting executed: gas used", executeReceipt.gasUsed);
+  log.success("Voting executed: gas used", executeReceipt.gasUsed);
 
   const dualGovernance = await loadContract<IDualGovernance>(
     "IDualGovernance",

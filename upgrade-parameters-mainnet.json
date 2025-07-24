@@ -57,5 +57,8 @@
     "secondsPerSlot": 12,
     "genesisTime": 1606824023,
     "depositContract": "0x00000000219ab540356cBB839Cbe05303d7705Fa"
+  },
+  "gateSealForVaults": {
+    "address": "0x0000000000000000000000000000000f00f00F00"
   }
 }

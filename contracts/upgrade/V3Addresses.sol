@@ -50,6 +50,7 @@ contract V3Addresses {
         address upgradeableBeacon;
         address stakingVaultImpl;
         address dashboardImpl;
+        address gateSealForVaults;
 
         // Existing proxies and contracts
         address kernel;
@@ -96,6 +97,7 @@ contract V3Addresses {
     address public immutable UPGRADEABLE_BEACON;
     address public immutable STAKING_VAULT_IMPL;
     address public immutable DASHBOARD_IMPL;
+    address public immutable GATE_SEAL;
 
     //
     // -------- Unchanged contracts --------
@@ -141,6 +143,7 @@ contract V3Addresses {
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;
+        GATE_SEAL = params.gateSealForVaults;
 
         //
         // Discovered via other contracts
