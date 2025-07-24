@@ -8,7 +8,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Dashboard } from "typechain-types";
 
 import { days, ether } from "lib";
-import { getProtocolContext, ProtocolContext, reportVaultDataWithProof } from "lib/protocol";
+import { getProtocolContext, ProtocolContext } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
@@ -109,13 +109,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
       const createDashboardEvent = ctx.getEvents(createVaultTxReceipt, "DashboardCreated")[0];
       testDashboard = await ethers.getContractAt("Dashboard", createDashboardEvent.args?.dashboard);
-
-      {
-        // To prevent ReportStale errors
-        const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
-        const stakingVault = await ethers.getContractAt("StakingVault", createVaultEvents[0].args!.vault);
-        await reportVaultDataWithProof(ctx, stakingVault);
-      }
 
       await testDashboard.connect(owner).grantRoles([
         {

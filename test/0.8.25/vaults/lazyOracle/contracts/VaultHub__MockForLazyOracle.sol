@@ -12,6 +12,8 @@ import {DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "contracts/0.8.25/vaults/l
 contract VaultHub__MockForLazyOracle {
     using DoubleRefSlotCache for DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH];
 
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
+
     address[] public mock__vaults;
     mapping(address vault => VaultHub.VaultConnection connection) public mock__vaultConnections;
     mapping(address vault => VaultHub.VaultRecord record) public mock__vaultRecords;
@@ -56,12 +58,16 @@ contract VaultHub__MockForLazyOracle {
         return mock__vaultConnections[vault];
     }
 
-    function maxLockableValue(address vault) external view returns (uint256) {
+    function maxLockableValue(address) external pure returns (uint256) {
         return 1000000000000000000;
     }
 
     function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {
         return mock__vaultRecords[vault];
+    }
+
+    function isReportFresh(address _vault) external returns (bool) {
+        return false;
     }
 
     function applyVaultReport(

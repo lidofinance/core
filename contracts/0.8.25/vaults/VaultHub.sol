@@ -975,7 +975,7 @@ contract VaultHub is PausableUntilWithRoles {
             report: Report({
                 totalValue: uint104(vaultBalance),
                 inOutDelta: int104(int256(vaultBalance)),
-                timestamp: uint48(_lazyOracle().latestReportTimestamp())
+                timestamp: uint48(block.timestamp)
             }),
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
@@ -1179,7 +1179,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 latestReportTimestamp = _lazyOracle().latestReportTimestamp();
         return
             // check if AccountingOracle brought fresh report
-            uint32(latestReportTimestamp) == _record.report.timestamp &&
+            uint48(latestReportTimestamp) <= _record.report.timestamp &&
             // if Accounting Oracle stop bringing the report, last report is fresh during this time
             block.timestamp - latestReportTimestamp < REPORT_FRESHNESS_DELTA;
     }
@@ -1506,10 +1506,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _getSharesByPooledEth(uint256 _ether) internal view returns (uint256) {
         return LIDO.getSharesByPooledEth(_ether);
-    }
-
-    function _getPooledEthByShares(uint256 _ether) internal view returns (uint256) {
-        return LIDO.getPooledEthByShares(_ether);
     }
 
     function _getPooledEthBySharesRoundUp(uint256 _shares) internal view returns (uint256) {

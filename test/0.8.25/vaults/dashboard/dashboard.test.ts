@@ -295,13 +295,13 @@ describe("Dashboard.sol", () => {
 
     it("reverts if already initialized", async () => {
       await expect(
-        dashboard.initialize(vaultOwner, nodeOperator, nodeOperatorFeeBP, confirmExpiry),
+        dashboard.initialize(vaultOwner, nodeOperator, nodeOperator, nodeOperatorFeeBP, confirmExpiry),
       ).to.be.revertedWithCustomError(dashboard, "AlreadyInitialized");
     });
 
     it("reverts if called on the implementation", async () => {
       await expect(
-        dashboardImpl.initialize(vaultOwner, nodeOperator, nodeOperatorFeeBP, confirmExpiry),
+        dashboardImpl.initialize(vaultOwner, nodeOperator, nodeOperator, nodeOperatorFeeBP, confirmExpiry),
       ).to.be.revertedWithCustomError(dashboardImpl, "NonProxyCallsForbidden");
     });
   });

@@ -20,7 +20,15 @@ import {
 } from "typechain-types";
 import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 
-import { BigIntMath, certainAddress, ether, findEvents, GENESIS_FORK_VERSION, impersonate } from "lib";
+import {
+  BigIntMath,
+  certainAddress,
+  ether,
+  findEvents,
+  GENESIS_FORK_VERSION,
+  getCurrentBlockTimestamp,
+  impersonate,
+} from "lib";
 import { MAX_FEE_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
@@ -342,7 +350,8 @@ describe("VaultHub.sol:hub", () => {
       const { vault } = await createAndConnectVault(vaultFactory);
       const record = await vaultHub.vaultRecord(vault);
 
-      expect(record.report).to.deep.equal([ether("1"), ether("1"), 0n]);
+      const timestamp = await getCurrentBlockTimestamp();
+      expect(record.report).to.deep.equal([ether("1"), ether("1"), timestamp]);
       expect(record.locked).to.equal(ether("1"));
       expect(record.liabilityShares).to.equal(0n);
       expect(record.inOutDelta).to.deep.equal([
