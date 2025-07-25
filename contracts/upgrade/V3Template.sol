@@ -224,6 +224,7 @@ contract V3Template is V3Addresses {
         bytes32 requestBurnSharesRole = IBurner(BURNER).REQUEST_BURN_SHARES_ROLE();
         _assertZeroOZRoleHolders(IBurner(OLD_BURNER), requestBurnSharesRole);
 
+        _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
         _assertSingleOZRoleHolder(IBurner(BURNER), DEFAULT_ADMIN_ROLE, AGENT);
         {
             address[] memory holders = new address[](2);
@@ -231,24 +232,18 @@ contract V3Template is V3Addresses {
             holders[1] = CSM_ACCOUNTING;
             _assertOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, holders);
         }
-        _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
 
         // VaultHub
+        _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
         _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), DEFAULT_ADMIN_ROLE, AGENT);
         _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);
         _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), AGENT);
-        _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
-
-        // LazyOracle
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), LazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE(), AGENT);
-        _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
-
-        // VaultHub PAUSE_ROLE check
         _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL);
 
-        // PredepositGuarantee PAUSE_ROLE check
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(PREDEPOSIT_GUARANTEE), PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).PAUSE_ROLE(), GATE_SEAL);
+        // LazyOracle
+        _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), LazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE(), AGENT);
 
         // AccountingOracle
         _assertSingleOZRoleHolder(IAccountingOracle(ACCOUNTING_ORACLE), DEFAULT_ADMIN_ROLE, AGENT);
@@ -256,7 +251,6 @@ contract V3Template is V3Addresses {
         // OracleReportSanityChecker
         IOracleReportSanityChecker checker = IOracleReportSanityChecker(ORACLE_REPORT_SANITY_CHECKER);
         _assertSingleOZRoleHolder(checker, DEFAULT_ADMIN_ROLE, AGENT);
-
         bytes32[12] memory roles = [
             checker.ALL_LIMITS_MANAGER_ROLE(),
             checker.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
@@ -279,8 +273,9 @@ contract V3Template is V3Addresses {
         _assertProxyAdmin(IOssifiableProxy(ACCOUNTING), AGENT);
 
         // PredepositGuarantee
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(PREDEPOSIT_GUARANTEE), DEFAULT_ADMIN_ROLE, AGENT);
         _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(PREDEPOSIT_GUARANTEE), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(IAccessControlEnumerable(PREDEPOSIT_GUARANTEE), PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).PAUSE_ROLE(), GATE_SEAL);
 
         // StakingRouter
         bytes32 reportRewardsMintedRole = IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE();
