@@ -37,7 +37,7 @@ export async function main() {
     state[Sk.stakingVaultBeacon].address,
     state[Sk.stakingVaultImplementation].address,
     state[Sk.dashboardImpl].address,
-    parameters["gateSealForVaults"].address,
+    parameters.gateSealForVaults.address,
 
     // Existing proxies and contracts
     getAddress(Sk.aragonKernel, state),

@@ -28,11 +28,11 @@ export async function main() {
   const agentAddress = state[Sk.appAgent].proxy.address;
   const treasuryAddress = state[Sk.appAgent].proxy.address;
   const chainSpec = state[Sk.chainSpec];
-  const vaultHubParams = parameters[Sk.vaultHub].deployParameters;
-  const lazyOracleParams = parameters[Sk.lazyOracle].deployParameters;
+  const vaultHubParams = parameters.vaultHub;
+  const lazyOracleParams = parameters.lazyOracle;
   const depositContract = state.chainSpec.depositContractAddress;
   const hashConsensusAddress = state[Sk.hashConsensusForAccountingOracle].address;
-  const pdgDeployParams = parameters[Sk.predepositGuarantee].deployParameters;
+  const pdgDeployParams = parameters.predepositGuarantee;
 
   const proxyContractsOwner = agentAddress;
 
@@ -79,7 +79,7 @@ export async function main() {
   //
 
   // Prepare initialization data for Burner.initialize(address admin, bool isMigrationAllowed)
-  const isMigrationAllowed = true;
+  const isMigrationAllowed = parameters.burner?.isMigrationAllowed ?? true;
   const burnerInterface = await ethers.getContractFactory("Burner");
   const burnerInitData = burnerInterface.interface.encodeFunctionData("initialize", [
     v3TemporaryAdmin.address,
@@ -243,7 +243,7 @@ export async function main() {
   // Deploy OperatorGrid
   //
 
-  const gridParams = parameters[Sk.operatorGrid].deployParameters;
+  const gridParams = parameters.operatorGrid;
   const defaultTierParams = {
     shareLimit: ether(gridParams.defaultTierParams.shareLimitInEther),
     reserveRatioBP: gridParams.defaultTierParams.reserveRatioBP,
