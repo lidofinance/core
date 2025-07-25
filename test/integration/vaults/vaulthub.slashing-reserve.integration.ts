@@ -6,7 +6,13 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Dashboard, StakingVault } from "typechain-types";
 
 import { ether } from "lib";
-import { createVaultWithDashboard, getProtocolContext, ProtocolContext, reportVaultDataWithProof } from "lib/protocol";
+import {
+  createVaultWithDashboard,
+  getProtocolContext,
+  ProtocolContext,
+  reportVaultDataWithProof,
+  setupLidoForVaults,
+} from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
@@ -23,10 +29,11 @@ describe("Scenario: Vault Report Slashing Reserve", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
+    await setupLidoForVaults(ctx);
 
     [, owner, nodeOperator] = await ethers.getSigners();
 
-    const { stakingVaultFactory } = ctx.contracts;
+    const { stakingVaultFactory, vaultHub } = ctx.contracts;
 
     ({ stakingVault, dashboard } = await createVaultWithDashboard(
       ctx,
@@ -37,6 +44,9 @@ describe("Scenario: Vault Report Slashing Reserve", () => {
     ));
 
     dashboard = dashboard.connect(owner);
+    await dashboard.fund({ value: ether("1") });
+    expect(await vaultHub.totalValue(stakingVault)).to.be.equal(ether("2"));
+    expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
   });
 
   beforeEach(async () => {
@@ -48,15 +58,20 @@ describe("Scenario: Vault Report Slashing Reserve", () => {
   it("You cannot withdraw reported slashing reserve", async () => {
     const { vaultHub } = ctx.contracts;
 
-    await dashboard.fund({ value: ether("1") });
-    expect(await vaultHub.totalValue(stakingVault)).to.be.equal(ether("2"));
-    expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
-
     await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: ether("2") });
 
     expect(await vaultHub.withdrawableValue(stakingVault)).to.be.equal(0);
 
-    await expect(dashboard.withdraw(owner, ether("1"))).to.be.revertedWithCustomError(vaultHub, "ExceedsWithdrawable");
+    await expect(dashboard.withdraw(owner, ether("1"))).to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable");
+  });
+
+  it("You cannot mint StETH over slashing reserve", async () => {
+    await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: ether("2") });
+
+    await expect(dashboard.mintStETH(owner, ether("0.1"))).to.be.revertedWithCustomError(
+      dashboard,
+      "ExceedsMintingCapacity",
+    );
   });
 
   it("You cannot disconnect if slashing reserve is not zero", async () => {});

@@ -181,6 +181,14 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Returns tha amount of ether that is locked on the vault only as a reserve.
+     * @dev There is no way to mint stETH for it (it includes connection deposit and slashing reserve)
+     */
+    function minimalReserve() public view returns (uint256) {
+        return VAULT_HUB.vaultRecord(address(_stakingVault())).minimalReserve;
+    }
+
+    /**
      * @notice Returns the max total lockable amount of ether for the vault (excluding the Lido and node operator fees)
      */
     function maxLockableValue() public view returns (uint256) {
@@ -192,7 +200,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
-    function totalMintingCapacityShares() public view returns (uint256) {
+    function totalMintingCapacityShares() external view returns (uint256) {
         uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
 
         return Math256.min(effectiveShareLimit, _mintableShares(maxLockableValue()));
@@ -618,10 +626,16 @@ contract Dashboard is NodeOperatorFee {
         _burnShares(unwrappedShares);
     }
 
-    /// @notice Calculates the total number of shares that can be minted by the vault
-    /// @param _ether The amount of ether to consider for minting
-    function _mintableShares(uint256 _ether) internal view returns (uint256) {
-        uint256 mintableStETH = (_ether * (TOTAL_BASIS_POINTS - reserveRatioBP())) / TOTAL_BASIS_POINTS;
+    /// @notice Calculates the total number of shares that that is possible to mint on the vault
+    /// @param _maxLockableValue The amount of ether that is possible to lock on the vault
+    function _mintableShares(uint256 _maxLockableValue) internal view returns (uint256) {
+        uint256 mintableStETH = (_maxLockableValue * (TOTAL_BASIS_POINTS - reserveRatioBP())) / TOTAL_BASIS_POINTS;
+        uint256 minimalReserve_ = minimalReserve();
+
+        if (_maxLockableValue - mintableStETH < minimalReserve_) {
+            mintableStETH = _maxLockableValue - minimalReserve_;
+        }
+
         return _getSharesByPooledEth(mintableStETH);
     }
 

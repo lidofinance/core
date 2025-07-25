@@ -107,6 +107,7 @@ describe("LazyOracle.sol", () => {
             refSlot: 0n,
           },
         ],
+        minimalReserve: 0n,
       });
       const vaults = await lazyOracle.batchVaultsInfo(0n, 2n);
 
@@ -439,6 +440,7 @@ describe("LazyOracle.sol", () => {
             refSlot: 0n,
           },
         ],
+        minimalReserve: 0n,
       });
 
       await lazyOracle.updateVaultData(
@@ -486,6 +488,7 @@ describe("LazyOracle.sol", () => {
             refSlot: 0n,
           },
         ],
+        minimalReserve: 0n,
       });
 
       await lazyOracle.updateVaultData(
@@ -541,6 +544,7 @@ describe("LazyOracle.sol", () => {
             refSlot: 0n,
           },
         ],
+        minimalReserve: 0n,
       });
 
       await expect(
