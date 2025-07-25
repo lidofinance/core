@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, StakingVault, VaultHub } from "typechain-types";
 
-import { ether, impersonate, randomAddress, TOTAL_BASIS_POINTS } from "lib";
+import { advanceChainTime, days, ether, impersonate, randomAddress, TOTAL_BASIS_POINTS } from "lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
@@ -242,6 +242,29 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "MintedSharesOnVault")
         .withArgs(stakingVault, testSharesAmountWei, lock);
+    });
+  });
+
+  describe("If vault wants to disconnect", () => {
+    it("Can't disconnect if report is not fresh", async () => {
+      await advanceChainTime(days(2n));
+      await expect(dashboard.voluntaryDisconnect())
+        .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")
+        .withArgs(stakingVault);
+    });
+
+    it("Can disconnect if report is fresh", async () => {
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: TEST_STETH_AMOUNT_WEI });
+      await expect(dashboard.voluntaryDisconnect())
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
+        .withArgs(stakingVault);
+      const connection = await vaultHub.vaultConnection(stakingVault);
+      expect(connection.pendingDisconnect).to.be.true;
+      await advanceChainTime(days(1n));
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: TEST_STETH_AMOUNT_WEI }))
+        .to.emit(vaultHub, "VaultDisconnectCompleted")
+        .withArgs(stakingVault);
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
     });
   });
 });

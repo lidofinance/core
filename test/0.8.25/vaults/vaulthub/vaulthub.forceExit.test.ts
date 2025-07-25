@@ -208,6 +208,7 @@ describe("VaultHub.sol:forceExit", () => {
     });
 
     it("reverts if called for a disconnected vault", async () => {
+      await reportVault({ totalValue: ether("1") });
       await vaultHub.connect(user).disconnect(vaultAddress);
 
       await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))

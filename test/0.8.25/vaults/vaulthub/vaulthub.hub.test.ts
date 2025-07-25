@@ -1162,6 +1162,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("initiates the disconnect process", async () => {
+      await reportVault({ vault, totalValue: ether("1") });
       await expect(vaultHub.connect(user).disconnect(vault))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vault);
@@ -1224,6 +1225,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("disconnects the vault", async () => {
+      await reportVault({ vault, totalValue: ether("1") });
       await expect(vaultHub.connect(user).disconnect(vaultAddress))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vaultAddress);
