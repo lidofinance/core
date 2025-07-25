@@ -4,13 +4,11 @@ import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import {
   Burner,
-  ICSModule,
   IOracleReportSanityChecker_preV3,
   LazyOracle,
   LidoLocator,
   OperatorGrid,
   PredepositGuarantee,
-  StakingRouter,
   V3TemporaryAdmin,
   VaultHub,
 } from "typechain-types";
@@ -35,7 +33,6 @@ export async function main() {
   const depositContract = state.chainSpec.depositContractAddress;
   const hashConsensusAddress = state[Sk.hashConsensusForAccountingOracle].address;
   const pdgDeployParams = parameters[Sk.predepositGuarantee].deployParameters;
-  const stakingRouterAddress = state[Sk.stakingRouter].proxy.address;
 
   const proxyContractsOwner = agentAddress;
 
@@ -102,14 +99,7 @@ export async function main() {
   );
   const burner = await loadContract<Burner>("Burner", burner_.address);
 
-  const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
-  const stakingModules = await stakingRouter.getStakingModules();
-  const csm = stakingModules[2];
-  if (csm.name !== "Community Staking") {
-    throw new Error("Community Staking module not found");
-  }
-  const csmModule = await loadContract<ICSModule>("ICSModule", csm.stakingModuleAddress);
-  const csmAccountingAddress = await csmModule.accounting();
+  // CSM accounting address will be retrieved by V3TemporaryAdmin from the staking router
 
   //
   // Deploy LazyOracle
@@ -333,7 +323,7 @@ export async function main() {
     lazyOracle: lazyOracle.address,
     operatorGrid: operatorGrid.address,
   };
-  await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
+  const lidoLocatorImpl = await deployImplementation(Sk.lidoLocator, "LidoLocator", deployer, [locatorConfig]);
 
   //
   // Deploy ValidatorConsolidationRequests
@@ -351,21 +341,9 @@ export async function main() {
   // Complete setup: set allowed codehash, grant all roles to agent, transfer admin
   //
   const v3TemporaryAdminContract = await loadContract<V3TemporaryAdmin>("V3TemporaryAdmin", v3TemporaryAdmin.address);
-  await makeTx(
-    v3TemporaryAdminContract,
-    "completeSetup",
-    [
-      vaultHub_.address,
-      predepositGuarantee_.address,
-      lazyOracle_.address,
-      operatorGrid_.address,
-      burner_.address,
-      accounting.address,
-      csmAccountingAddress,
-      beacon.address,
-    ],
-    { from: deployer },
-  );
+  await makeTx(v3TemporaryAdminContract, "completeSetup", [lidoLocatorImpl.address, beacon.address], {
+    from: deployer,
+  });
 
   //
   // Verify codehash computation: compare onchain vs offchain

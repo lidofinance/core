@@ -36,6 +36,38 @@ interface IUpgradeableBeacon {
     function implementation() external view returns (address);
 }
 
+interface IStakingRouter {
+    struct StakingModule {
+        uint24 id;
+        address stakingModuleAddress;
+        uint16 stakingModuleFee;
+        uint16 treasuryFee;
+        uint16 targetShare;
+        uint8 status;
+        string name;
+        uint64 lastDepositAt;
+        uint256 lastDepositBlock;
+        uint256 exitedValidatorsCount;
+    }
+    
+    function getStakingModules() external view returns (StakingModule[] memory);
+}
+
+interface ICSModule {
+    function accounting() external view returns (address);
+}
+
+interface ILidoLocator {
+    function vaultHub() external view returns (address);
+    function predepositGuarantee() external view returns (address);
+    function lazyOracle() external view returns (address);
+    function operatorGrid() external view returns (address);
+    function burner() external view returns (address);
+    function accounting() external view returns (address);
+    function stakingRouter() external view returns (address);
+    function vaultFactory() external view returns (address);
+}
+
 
 /**
  * @title V3TemporaryAdmin
@@ -58,46 +90,59 @@ contract V3TemporaryAdmin {
         GATE_SEAL = _gateSeal;
     }
 
+    /**
+     * @notice Get the CSM accounting address from the staking router
+     * @param _stakingRouter The StakingRouter contract address
+     * @return The address of the CSM accounting contract
+     */
+    function getCsmAccountingAddress(address _stakingRouter) public view returns (address) {
+        if (_stakingRouter == address(0)) revert ZeroStakingRouter();
+        
+        IStakingRouter.StakingModule[] memory stakingModules = IStakingRouter(_stakingRouter).getStakingModules();
+        
+        // Find the Community Staking module (index 2)
+        if (stakingModules.length <= 2) revert CsmModuleNotFound();
+        
+        IStakingRouter.StakingModule memory csm = stakingModules[2];
+        if (keccak256(bytes(csm.name)) != keccak256(bytes("Community Staking"))) {
+            revert CsmModuleNotFound();
+        }
+        
+        return ICSModule(csm.stakingModuleAddress).accounting();
+    }
 
     /**
      * @notice Complete setup for all contracts - grants all roles and transfers admin to agent
      * @dev This is the main external function that should be called after deployment
-     * @param _vaultHub The VaultHub contract address
-     * @param _predepositGuarantee The PredepositGuarantee contract address
-     * @param _lazyOracle The LazyOracle contract address
-     * @param _operatorGrid The OperatorGrid contract address
-     * @param _burner The Burner contract address
-     * @param _csmAccounting The CSM Accounting contract address
+     * @param _lidoLocator The new LidoLocator implementation address
      * @param _beacon The UpgradeableBeacon address for computing codehash
      */
-    function completeSetup(
-        address _vaultHub,
-        address _predepositGuarantee,
-        address _lazyOracle,
-        address _operatorGrid,
-        address _burner,
-        address _accounting,
-        address _csmAccounting,
-        address _beacon
-    ) external {
+    function completeSetup(address _lidoLocator, address _beacon) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
-        if (_vaultHub == address(0)) revert ZeroVaultHub();
-        if (_predepositGuarantee == address(0)) revert ZeroPredepositGuarantee();
-        if (_lazyOracle == address(0)) revert ZeroLazyOracle();
-        if (_operatorGrid == address(0)) revert ZeroOperatorGrid();
-        if (_burner == address(0)) revert ZeroBurner();
-        if (_accounting == address(0)) revert ZeroAccounting();
-        if (_csmAccounting == address(0)) revert ZeroCsmAccounting();
+        if (_lidoLocator == address(0)) revert ZeroLidoLocator();
         if (_beacon == address(0)) revert ZeroBeacon();
 
         isSetupComplete = true;
 
+        // Get all contract addresses from the LidoLocator
+        ILidoLocator locator = ILidoLocator(_lidoLocator);
+        address vaultHub = locator.vaultHub();
+        address predepositGuarantee = locator.predepositGuarantee();
+        address lazyOracle = locator.lazyOracle();
+        address operatorGrid = locator.operatorGrid();
+        address burner = locator.burner();
+        address accounting = locator.accounting();
+        address stakingRouter = locator.stakingRouter();
+
+        // Get CSM accounting address from staking router
+        address csmAccounting = getCsmAccountingAddress(stakingRouter);
+
         bytes32 codehash = _computeCodehash(_beacon);
-        _setupVaultHub(_vaultHub, codehash);
-        _setupPredepositGuarantee(_predepositGuarantee);
-        _setupLazyOracle(_lazyOracle);
-        _setupOperatorGrid(_operatorGrid);
-        _setupBurner(_burner, _accounting, _csmAccounting);
+        _setupVaultHub(vaultHub, codehash);
+        _setupPredepositGuarantee(predepositGuarantee);
+        _setupLazyOracle(lazyOracle);
+        _setupOperatorGrid(operatorGrid);
+        _setupBurner(burner, accounting, csmAccounting);
     }
 
 
@@ -197,6 +242,7 @@ contract V3TemporaryAdmin {
         return _computeCodehash(_beacon);
     }
 
+
     /**
      * @notice Compute the codehash of PinnedBeaconProxy using the beacon implementation
      * @param _beacon The UpgradeableBeacon address
@@ -226,15 +272,9 @@ contract V3TemporaryAdmin {
     }
 
     error ZeroAddress();
-    error ZeroVaultHub();
-    error ZeroPredepositGuarantee();
-    error ZeroLazyOracle();
-    error ZeroOperatorGrid();
-    error ZeroBurner();
-    error ZeroAccounting();
-    error ZeroNodeOperatorsRegistry();
-    error ZeroSimpleDvt();
-    error ZeroCsmAccounting();
+    error ZeroLidoLocator();
     error ZeroBeacon();
+    error ZeroStakingRouter();
+    error CsmModuleNotFound();
     error SetupAlreadyCompleted();
 }
