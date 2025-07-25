@@ -3,6 +3,7 @@ import { access, constants as fsPromisesConstants } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { network as hardhatNetwork } from "hardhat";
+import { readScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch";
 
 const NETWORK_STATE_FILE_PREFIX = "deployed-";
 const NETWORK_STATE_FILE_DIR = ".";
@@ -240,11 +241,12 @@ export async function resetStateFile(networkName: string = hardhatNetwork.name):
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       throw new Error(`No network state file ${fileName}: ${(error as Error).message}`);
     }
-    // If file does not exist, create it with default values
+    // If file does not exist, create it with default values from TOML config
   } finally {
-    const templateFileName = _getFileName("scripts/defaults", "testnet-defaults", "");
-    const templateData = readFileSync(templateFileName, "utf8");
-    writeFileSync(fileName, templateData, { encoding: "utf8", flag: "w" });
+    const scratchParams = readScratchParameters();
+    const initialState = scratchParametersToDeploymentState(scratchParams);
+    const data = JSON.stringify(initialState, null, 2);
+    writeFileSync(fileName, `${data}\n`, { encoding: "utf8", flag: "w" });
   }
 }
 

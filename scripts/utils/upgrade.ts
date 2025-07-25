@@ -11,7 +11,7 @@ import { loadContract } from "lib/contract";
 import { findEventsWithInterfaces } from "lib/event";
 import { DeploymentState, getAddress, Sk } from "lib/state-file";
 
-const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
+const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE || "scripts/upgrade/upgrade-params-mainnet.toml";
 
 export interface UpgradeParameters {
   chainSpec: {
