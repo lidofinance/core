@@ -67,6 +67,7 @@ export enum Sk {
   vestingParams = "vestingParams",
   withdrawalVault = "withdrawalVault",
   gateSeal = "gateSeal",
+  gateSealTW = "gateSealTW",
   stakingRouter = "stakingRouter",
   burner = "burner",
   executionLayerRewardsVault = "executionLayerRewardsVault",

@@ -20,7 +20,15 @@ import {
 } from "typechain-types";
 import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 
-import { BigIntMath, certainAddress, ether, findEvents, GENESIS_FORK_VERSION, impersonate } from "lib";
+import {
+  BigIntMath,
+  certainAddress,
+  ether,
+  findEvents,
+  GENESIS_FORK_VERSION,
+  getCurrentBlockTimestamp,
+  impersonate,
+} from "lib";
 import { MAX_FEE_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
@@ -112,7 +120,9 @@ describe("VaultHub.sol:hub", () => {
     const timestamp = await lazyOracle.latestReportTimestamp();
 
     totalValue = totalValue ?? (await vaultHub.totalValue(vault));
-    inOutDelta = inOutDelta ?? (await vaultHub.vaultRecord(vault)).inOutDelta.value;
+    const record = await vaultHub.vaultRecord(vault);
+    const activeIndex = record.inOutDelta[0].refSlot >= record.inOutDelta[1].refSlot ? 0 : 1;
+    inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
     liabilityShares = liabilityShares ?? (await vaultHub.vaultRecord(vault)).liabilityShares;
     lidoFees = lidoFees ?? (await vaultHub.vaultObligations(vault)).unsettledLidoFees;
     slashingReserve = slashingReserve ?? 0n;
@@ -140,9 +150,12 @@ describe("VaultHub.sol:hub", () => {
       locked: formatEther(record.locked),
       shares: formatEther(record.liabilityShares),
       inOutDelta: {
-        value: formatEther(record.inOutDelta.value),
-        valueOnRefSlot: formatEther(record.inOutDelta.valueOnRefSlot),
-        refSlot: record.inOutDelta.refSlot,
+        value: formatEther(record.inOutDelta[0].value),
+        valueOnRefSlot: formatEther(record.inOutDelta[0].valueOnRefSlot),
+        refSlot: record.inOutDelta[0].refSlot,
+        value2: formatEther(record.inOutDelta[1].value),
+        valueOnRefSlot2: formatEther(record.inOutDelta[1].valueOnRefSlot),
+        refSlot2: record.inOutDelta[1].refSlot,
       },
     });
   }
@@ -327,17 +340,24 @@ describe("VaultHub.sol:hub", () => {
       expect(record.report).to.deep.equal([0n, 0n, 0n]);
       expect(record.locked).to.equal(0n);
       expect(record.liabilityShares).to.equal(0n);
-      expect(record.inOutDelta).to.deep.equal([0n, 0n, 0n]);
+      expect(record.inOutDelta).to.deep.equal([
+        [0n, 0n, 0n],
+        [0n, 0n, 0n],
+      ]);
     });
 
     it("returns the record values if the vault is connected", async () => {
       const { vault } = await createAndConnectVault(vaultFactory);
       const record = await vaultHub.vaultRecord(vault);
 
-      expect(record.report).to.deep.equal([ether("1"), ether("1"), 0n]);
+      const timestamp = await getCurrentBlockTimestamp();
+      expect(record.report).to.deep.equal([ether("1"), ether("1"), timestamp]);
       expect(record.locked).to.equal(ether("1"));
       expect(record.liabilityShares).to.equal(0n);
-      expect(record.inOutDelta).to.deep.equal([ether("1"), 0n, 0n]);
+      expect(record.inOutDelta).to.deep.equal([
+        [ether("1"), 0n, 0n],
+        [0n, 0n, 0n],
+      ]);
     });
   });
 
@@ -1142,6 +1162,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("initiates the disconnect process", async () => {
+      await reportVault({ vault, totalValue: ether("1") });
       await expect(vaultHub.connect(user).disconnect(vault))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vault);
@@ -1204,6 +1225,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("disconnects the vault", async () => {
+      await reportVault({ vault, totalValue: ether("1") });
       await expect(vaultHub.connect(user).disconnect(vaultAddress))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vaultAddress);

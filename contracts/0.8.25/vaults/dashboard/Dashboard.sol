@@ -87,10 +87,11 @@ contract Dashboard is NodeOperatorFee {
     function initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
+        address _nodeOperatorFeeRecipient,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry
     ) external {
-        super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeRecipient, _nodeOperatorFeeBP, _confirmExpiry);
 
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance

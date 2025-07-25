@@ -2,7 +2,7 @@
 set -e +u
 set -o pipefail
 
-export NETWORK=holesky
+export NETWORK=${NETWORK:="holesky"}  # if defined use the value set to default otherwise
 export RPC_URL=${RPC_URL:="http://127.0.0.1:8545"}  # if defined use the value set to default otherwise
 # export WITHDRAWAL_QUEUE_BASE_URI="<< SET IF REQUIED >>"
 # export DSM_PREDEFINED_ADDRESS="<< SET IF REQUIED >>"
