@@ -39,6 +39,10 @@ export async function main() {
     state[Sk.dashboardImpl].address,
     parameters.gateSealForVaults.address,
 
+    // EasyTrack addresses
+    parameters.easyTrack.evmScriptExecutor,
+    parameters.easyTrack.vaultHubAdapter,
+
     // Existing proxies and contracts
     getAddress(Sk.aragonKernel, state),
     getAddress(Sk.appAgent, state),

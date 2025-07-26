@@ -222,35 +222,45 @@ contract V3Template is V3Addresses {
     function _assertFinalACL() internal view {
         // Burner
         bytes32 requestBurnSharesRole = IBurner(BURNER).REQUEST_BURN_SHARES_ROLE();
-        _assertZeroOZRoleHolders(IBurner(OLD_BURNER), requestBurnSharesRole);
+        _assertZeroOZRoleHolders(OLD_BURNER, requestBurnSharesRole);
 
         _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
-        _assertSingleOZRoleHolder(IBurner(BURNER), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(BURNER, DEFAULT_ADMIN_ROLE, AGENT);
         {
             address[] memory holders = new address[](2);
             holders[0] = ACCOUNTING;
             holders[1] = CSM_ACCOUNTING;
-            _assertOZRoleHolders(IBurner(BURNER), requestBurnSharesRole, holders);
+            _assertOZRoleHolders(BURNER, requestBurnSharesRole, holders);
         }
 
         // VaultHub
         _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), AGENT);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(VAULT_HUB), PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL);
+        _assertSingleOZRoleHolder(VAULT_HUB, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), AGENT);
+
+        _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT, VAULT_HUB_ADAPTER);
+
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULT_HUB_ADAPTER);
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULT_HUB_ADAPTER);
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE(), EVM_SCRIPT_EXECUTOR);
+        _assertSingleOZRoleHolder(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL);
+
+        // OperatorGrid
+        _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), AGENT);
+        _assertSingleOZRoleHolder(OPERATOR_GRID, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(OPERATOR_GRID, OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), EVM_SCRIPT_EXECUTOR);
 
         // LazyOracle
         _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(LAZY_ORACLE), LazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE(), AGENT);
+        _assertSingleOZRoleHolder(LAZY_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(LAZY_ORACLE, LazyOracle(LAZY_ORACLE).UPDATE_SANITY_PARAMS_ROLE(), AGENT);
 
         // AccountingOracle
-        _assertSingleOZRoleHolder(IAccountingOracle(ACCOUNTING_ORACLE), DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(ACCOUNTING_ORACLE, DEFAULT_ADMIN_ROLE, AGENT);
 
         // OracleReportSanityChecker
         IOracleReportSanityChecker checker = IOracleReportSanityChecker(ORACLE_REPORT_SANITY_CHECKER);
-        _assertSingleOZRoleHolder(checker, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(ORACLE_REPORT_SANITY_CHECKER, DEFAULT_ADMIN_ROLE, AGENT);
         bytes32[12] memory roles = [
             checker.ALL_LIMITS_MANAGER_ROLE(),
             checker.EXITED_VALIDATORS_PER_DAY_LIMIT_MANAGER_ROLE(),
@@ -266,7 +276,7 @@ contract V3Template is V3Addresses {
             checker.INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE()
         ];
         for (uint256 i = 0; i < roles.length; ++i) {
-            _assertZeroOZRoleHolders(checker, roles[i]);
+            _assertZeroOZRoleHolders(ORACLE_REPORT_SANITY_CHECKER, roles[i]);
         }
 
         // Accounting
@@ -274,20 +284,12 @@ contract V3Template is V3Addresses {
 
         // PredepositGuarantee
         _assertProxyAdmin(IOssifiableProxy(PREDEPOSIT_GUARANTEE), AGENT);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(PREDEPOSIT_GUARANTEE), DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(PREDEPOSIT_GUARANTEE), PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).PAUSE_ROLE(), GATE_SEAL);
+        _assertSingleOZRoleHolder(PREDEPOSIT_GUARANTEE, DEFAULT_ADMIN_ROLE, AGENT);
+        _assertSingleOZRoleHolder(PREDEPOSIT_GUARANTEE, PausableUntilWithRoles(PREDEPOSIT_GUARANTEE).PAUSE_ROLE(), GATE_SEAL);
 
         // StakingRouter
         bytes32 reportRewardsMintedRole = IStakingRouter(STAKING_ROUTER).REPORT_REWARDS_MINTED_ROLE();
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(STAKING_ROUTER),
-            reportRewardsMintedRole,
-            ACCOUNTING
-        );
-
-        // OperatorGrid
-        _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), AGENT);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(IAccessControlEnumerable(OPERATOR_GRID), OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), AGENT);
+        _assertSingleOZRoleHolder(STAKING_ROUTER, reportRewardsMintedRole, ACCOUNTING);
     }
 
     function _checkBurnerMigratedCorrectly() internal view {
@@ -332,56 +334,68 @@ contract V3Template is V3Addresses {
         }
     }
 
-    function _assertProxyAdmin(IOssifiableProxy proxy, address admin) internal view {
-        if (proxy.proxy__getAdmin() != admin) revert IncorrectProxyAdmin(address(proxy));
+    function _assertProxyAdmin(IOssifiableProxy _proxy, address _admin) internal view {
+        if (_proxy.proxy__getAdmin() != _admin) revert IncorrectProxyAdmin(address(_proxy));
     }
 
-    function _assertProxyImplementation(IOssifiableProxy proxy, address implementation) internal view {
-        address actualImplementation = proxy.proxy__getImplementation();
-        if (actualImplementation != implementation) {
-            revert IncorrectProxyImplementation(address(proxy), actualImplementation);
+    function _assertProxyImplementation(IOssifiableProxy _proxy, address _implementation) internal view {
+        address actualImplementation = _proxy.proxy__getImplementation();
+        if (actualImplementation != _implementation) {
+            revert IncorrectProxyImplementation(address(_proxy), actualImplementation);
         }
     }
 
-    function _assertZeroOZRoleHolders(IAccessControlEnumerable accessControlled, bytes32 role) internal view {
-        if (accessControlled.getRoleMemberCount(role) != 0) {
-            revert NonZeroRoleHolders(address(accessControlled), role);
+    function _assertZeroOZRoleHolders(address _accessControlled, bytes32 _role) internal view {
+        IAccessControlEnumerable accessControlled = IAccessControlEnumerable(_accessControlled);
+        if (accessControlled.getRoleMemberCount(_role) != 0) {
+            revert NonZeroRoleHolders(address(accessControlled), _role);
         }
     }
 
     function _assertSingleOZRoleHolder(
-        IAccessControlEnumerable accessControlled, bytes32 role, address holder
+        address _accessControlled, bytes32 _role, address _holder
     ) internal view {
-        if (accessControlled.getRoleMemberCount(role) != 1
-         || accessControlled.getRoleMember(role, 0) != holder
+        IAccessControlEnumerable accessControlled = IAccessControlEnumerable(_accessControlled);
+        if (accessControlled.getRoleMemberCount(_role) != 1
+         || accessControlled.getRoleMember(_role, 0) != _holder
         ) {
-            revert IncorrectOZAccessControlRoleHolders(address(accessControlled), role);
+            revert IncorrectOZAccessControlRoleHolders(address(accessControlled), _role);
         }
     }
 
-    function _assertOZRoleHolders(
-        IAccessControlEnumerable accessControlled, bytes32 role, address[] memory holders
+    function _assertTwoOZRoleHolders(
+        address _accessControlled, bytes32 _role, address _holder1, address _holder2
     ) internal view {
-        if (accessControlled.getRoleMemberCount(role) != holders.length) {
-            revert IncorrectOZAccessControlRoleHolders(address(accessControlled), role);
+        address[] memory holders = new address[](2);
+        holders[0] = _holder1;
+        holders[1] = _holder2;
+        _assertOZRoleHolders(_accessControlled, _role, holders);
+    }
+
+    function _assertOZRoleHolders(
+        address _accessControlled, bytes32 _role, address[] memory _holders
+    ) internal view {
+        IAccessControlEnumerable accessControlled = IAccessControlEnumerable(_accessControlled);
+        if (accessControlled.getRoleMemberCount(_role) != _holders.length) {
+            revert IncorrectOZAccessControlRoleHolders(address(accessControlled), _role);
         }
-        for (uint256 i = 0; i < holders.length; i++) {
-            if (accessControlled.getRoleMember(role, i) != holders[i]) {
-                revert IncorrectOZAccessControlRoleHolders(address(accessControlled), role);
+        for (uint256 i = 0; i < _holders.length; i++) {
+            if (accessControlled.getRoleMember(_role, i) != _holders[i]) {
+                revert IncorrectOZAccessControlRoleHolders(address(accessControlled), _role);
             }
         }
     }
 
-    function _assertAragonAppImplementation(IAragonAppRepo repo, address implementation) internal view {
-        (, address actualImplementation, ) = repo.getLatest();
-        if (actualImplementation != implementation) {
-            revert IncorrectAragonAppImplementation(address(repo), implementation);
+    function _assertAragonAppImplementation(IAragonAppRepo _repo, address _implementation) internal view {
+        (, address actualImplementation, ) = _repo.getLatest();
+        if (actualImplementation != _implementation) {
+            revert IncorrectAragonAppImplementation(address(_repo), _implementation);
         }
     }
 
-    function _assertContractVersion(IVersioned versioned, uint256 expectedVersion) internal view {
-        if (versioned.getContractVersion() != expectedVersion) {
-            revert InvalidContractVersion(address(versioned), expectedVersion);
+    function _assertContractVersion(IVersioned _versioned, uint256 _expectedVersion) internal view {
+        if (_versioned.getContractVersion() != _expectedVersion) {
+            revert InvalidContractVersion(address(_versioned), _expectedVersion);
         }
     }
 

@@ -12,6 +12,7 @@ interface IVaultHub {
     function VAULT_MASTER_ROLE() external view returns (bytes32);
     function REDEMPTION_MASTER_ROLE() external view returns (bytes32);
     function VALIDATOR_EXIT_ROLE() external view returns (bytes32);
+    function BAD_DEBT_MASTER_ROLE() external view returns (bytes32);
 
     function setAllowedCodehash(bytes32 _codehash, bool _allowed) external;
 }
@@ -49,7 +50,7 @@ interface IStakingRouter {
         uint256 lastDepositBlock;
         uint256 exitedValidatorsCount;
     }
-    
+
     function getStakingModules() external view returns (StakingModule[] memory);
 }
 
@@ -97,17 +98,17 @@ contract V3TemporaryAdmin {
      */
     function getCsmAccountingAddress(address _stakingRouter) public view returns (address) {
         if (_stakingRouter == address(0)) revert ZeroStakingRouter();
-        
+
         IStakingRouter.StakingModule[] memory stakingModules = IStakingRouter(_stakingRouter).getStakingModules();
-        
+
         // Find the Community Staking module (index 2)
         if (stakingModules.length <= 2) revert CsmModuleNotFound();
-        
+
         IStakingRouter.StakingModule memory csm = stakingModules[2];
         if (keccak256(bytes(csm.name)) != keccak256(bytes("Community Staking"))) {
             revert CsmModuleNotFound();
         }
-        
+
         return ICSModule(csm.stakingModuleAddress).accounting();
     }
 
@@ -116,11 +117,15 @@ contract V3TemporaryAdmin {
      * @dev This is the main external function that should be called after deployment
      * @param _lidoLocator The new LidoLocator implementation address
      * @param _beacon The UpgradeableBeacon address for computing codehash
+     * @param _evmScriptExecutor The EVM script executor address from easyTrack
+     * @param _vaultHubAdapter The vault hub adapter address from easyTrack
      */
-    function completeSetup(address _lidoLocator, address _beacon) external {
+    function completeSetup(address _lidoLocator, address _beacon, address _evmScriptExecutor, address _vaultHubAdapter) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
         if (_lidoLocator == address(0)) revert ZeroLidoLocator();
         if (_beacon == address(0)) revert ZeroBeacon();
+        if (_evmScriptExecutor == address(0)) revert ZeroEvmScriptExecutor();
+        if (_vaultHubAdapter == address(0)) revert ZeroVaultHubAdapter();
 
         isSetupComplete = true;
 
@@ -138,10 +143,10 @@ contract V3TemporaryAdmin {
         address csmAccounting = getCsmAccountingAddress(stakingRouter);
 
         bytes32 codehash = _computeCodehash(_beacon);
-        _setupVaultHub(vaultHub, codehash);
+        _setupVaultHub(vaultHub, codehash, _evmScriptExecutor, _vaultHubAdapter);
         _setupPredepositGuarantee(predepositGuarantee);
         _setupLazyOracle(lazyOracle);
-        _setupOperatorGrid(operatorGrid);
+        _setupOperatorGrid(operatorGrid, _evmScriptExecutor);
         _setupBurner(burner, accounting, csmAccounting);
     }
 
@@ -149,28 +154,33 @@ contract V3TemporaryAdmin {
     /**
      * @notice Setup VaultHub with all required roles and transfer admin to agent
      * @param _vaultHub The VaultHub contract address
+     * @param _codehash The computed codehash for PinnedBeaconProxy
+     * @param _evmScriptExecutor The EVM script executor address
+     * @param _vaultHubAdapter The vault hub adapter address
      */
-    function _setupVaultHub(address _vaultHub, bytes32 _codehash) private {
+    function _setupVaultHub(address _vaultHub, bytes32 _codehash, address _evmScriptExecutor, address _vaultHubAdapter) private {
         // Get roles from the contract
         bytes32 pauseRole = IPausableUntil(_vaultHub).PAUSE_ROLE();
         bytes32 vaultMasterRole = IVaultHub(_vaultHub).VAULT_MASTER_ROLE();
         bytes32 vaultCodehashSetRole = IVaultHub(_vaultHub).VAULT_CODEHASH_SET_ROLE();
         bytes32 redemptionMasterRole = IVaultHub(_vaultHub).REDEMPTION_MASTER_ROLE();
         bytes32 validatorExitRole = IVaultHub(_vaultHub).VALIDATOR_EXIT_ROLE();
+        bytes32 badDebtMasterRole = IVaultHub(_vaultHub).BAD_DEBT_MASTER_ROLE();
 
         IAccessControl(_vaultHub).grantRole(vaultCodehashSetRole, address(this));
-        IVaultHub(_vaultHub).setAllowedCodehash(_codehash, true);
+        IVaultHub(_vaultHub).setAllowedCodehash(_codehash, true /* _allowed */);
         IAccessControl(_vaultHub).revokeRole(vaultCodehashSetRole, address(this));
 
-        // Grant PAUSE_ROLE to gateSeal
         IAccessControl(_vaultHub).grantRole(pauseRole, GATE_SEAL);
 
-        // Grant other roles to agent
-        // TODO: does agent need all these roles?
-        IAccessControl(_vaultHub).grantRole(vaultMasterRole, AGENT);
         IAccessControl(_vaultHub).grantRole(vaultCodehashSetRole, AGENT);
-        IAccessControl(_vaultHub).grantRole(redemptionMasterRole, AGENT);
-        IAccessControl(_vaultHub).grantRole(validatorExitRole, AGENT);
+        IAccessControl(_vaultHub).grantRole(vaultMasterRole, AGENT);
+
+        IAccessControl(_vaultHub).grantRole(vaultMasterRole, _vaultHubAdapter);
+        IAccessControl(_vaultHub).grantRole(validatorExitRole, _vaultHubAdapter);
+        IAccessControl(_vaultHub).grantRole(badDebtMasterRole, _vaultHubAdapter);
+
+        IAccessControl(_vaultHub).grantRole(redemptionMasterRole, _evmScriptExecutor);
 
         _transferAdminToAgent(_vaultHub);
     }
@@ -206,10 +216,11 @@ contract V3TemporaryAdmin {
     /**
      * @notice Setup OperatorGrid with required roles and transfer admin to agent
      * @param _operatorGrid The OperatorGrid contract address
+     * @param _evmScriptExecutor The EVM script executor address
      */
-    function _setupOperatorGrid(address _operatorGrid) private {
+    function _setupOperatorGrid(address _operatorGrid, address _evmScriptExecutor) private {
         bytes32 registryRole = IOperatorGrid(_operatorGrid).REGISTRY_ROLE();
-        IAccessControl(_operatorGrid).grantRole(registryRole, AGENT);
+        IAccessControl(_operatorGrid).grantRole(registryRole, _evmScriptExecutor);
         _transferAdminToAgent(_operatorGrid);
     }
 
@@ -233,7 +244,7 @@ contract V3TemporaryAdmin {
     }
 
     /**
-     * @notice Public function to compute the codehash of PinnedBeaconProxy using the beacon implementation  
+     * @notice Public function to compute the codehash of PinnedBeaconProxy using the beacon implementation
      * @dev This function deploys a temporary proxy to get its runtime bytecode hash
      * @param _beacon The UpgradeableBeacon address
      * @return The keccak256 hash of the PinnedBeaconProxy bytecode
@@ -275,6 +286,8 @@ contract V3TemporaryAdmin {
     error ZeroLidoLocator();
     error ZeroBeacon();
     error ZeroStakingRouter();
+    error ZeroEvmScriptExecutor();
+    error ZeroVaultHubAdapter();
     error CsmModuleNotFound();
     error SetupAlreadyCompleted();
 }

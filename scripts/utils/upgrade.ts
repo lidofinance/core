@@ -23,6 +23,10 @@ export interface UpgradeParameters {
   gateSealForVaults: {
     address: string;
   };
+  easyTrack: {
+    evmScriptExecutor: string;
+    vaultHubAdapter: string;
+  };
   validatorExitDelayVerifier: {
     gIFirstValidatorPrev: string;
     gIFirstValidatorCurr: string;

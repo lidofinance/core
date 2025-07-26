@@ -17,4 +17,3 @@ export NETWORK_STATE_FILE="deployed-holesky.json"
 
 # Need this to get sure the last transactions are mined
 npx hardhat --network $NETWORK run scripts/triggerable-withdrawals/tw-deploy.ts
-

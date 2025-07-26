@@ -41,8 +41,6 @@ export async function main() {
       // Other parameters
       node_operators_registry_app_id: state[Sk.appNodeOperatorsRegistry].aragonApp.id,
       sdvt_app_id: state[Sk.appSimpleDvt].aragonApp.id,
-      nor_version: parameters.aragonAppVersions?.nor_version ?? [6, 0, 0],
-      sdvt_version: parameters.aragonAppVersions?.sdvt_version ?? [3, 0, 0],
       vebo_consensus_version: parameters.oracleVersions?.vebo_consensus_version ?? 4,
       ao_consensus_version: parameters.oracleVersions?.ao_consensus_version ?? 4,
       nor_exit_deadline_in_sec: parameters.triggerableWithdrawals?.nor_exit_deadline_in_sec ?? 30 * 60, // 30 minutes
