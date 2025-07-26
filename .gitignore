@@ -2,6 +2,7 @@
 .yarn/
 .vscode/
 .cursor/
+.claude/
 
 node_modules/
 coverage/

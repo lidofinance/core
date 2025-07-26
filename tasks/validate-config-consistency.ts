@@ -5,7 +5,7 @@ import * as toml from "@iarna/toml";
 
 // Re-implement parameter reading without hardhat dependencies
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE || "scripts/upgrade/upgrade-params-mainnet.toml";
-const SCRATCH_PARAMETERS_FILE = process.env.SCRATCH_PARAMETERS_FILE || "scripts/scratch/deploy-params-testnet.toml";
+const SCRATCH_DEPLOY_CONFIG = process.env.SCRATCH_DEPLOY_CONFIG || "scripts/scratch/deploy-params-testnet.toml";
 
 interface UpgradeParameters {
   chainSpec: {
@@ -98,11 +98,11 @@ function readUpgradeParameters(): UpgradeParameters {
 }
 
 function readScratchParameters(): ScratchParameters {
-  if (!fs.existsSync(SCRATCH_PARAMETERS_FILE)) {
-    throw new Error(`Scratch parameters file not found: ${SCRATCH_PARAMETERS_FILE}`);
+  if (!fs.existsSync(SCRATCH_DEPLOY_CONFIG)) {
+    throw new Error(`Scratch parameters file not found: ${SCRATCH_DEPLOY_CONFIG}`);
   }
 
-  const content = fs.readFileSync(SCRATCH_PARAMETERS_FILE, "utf8");
+  const content = fs.readFileSync(SCRATCH_DEPLOY_CONFIG, "utf8");
   return toml.parse(content) as unknown as ScratchParameters;
 }
 

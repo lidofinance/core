@@ -2,7 +2,7 @@ import fs from "fs";
 
 import * as toml from "@iarna/toml";
 
-const SCRATCH_PARAMETERS_FILE = process.env.SCRATCH_PARAMETERS_FILE || "scripts/scratch/deploy-params-testnet.toml";
+const SCRATCH_DEPLOY_CONFIG = process.env.SCRATCH_DEPLOY_CONFIG || "scripts/scratch/deploy-params-testnet.toml";
 
 export interface ScratchParameters {
   chainSpec: {
@@ -153,7 +153,7 @@ export interface ScratchParameters {
 }
 
 export function readScratchParameters(): ScratchParameters {
-  const rawData = fs.readFileSync(SCRATCH_PARAMETERS_FILE, "utf8");
+  const rawData = fs.readFileSync(SCRATCH_DEPLOY_CONFIG, "utf8");
   return toml.parse(rawData) as unknown as ScratchParameters;
 }
 
