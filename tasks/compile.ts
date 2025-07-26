@@ -10,5 +10,8 @@ task(TASK_COMPILE, "Compile contracts").setAction(
     } else {
       await hre.run("check-interfaces");
     }
+
+    // Run config validation in silent mode
+    await hre.run("validate-config-consistency", { silent: true });
   },
 );

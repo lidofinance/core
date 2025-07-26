@@ -1,6 +1,8 @@
 import { TransactionReceipt } from "ethers";
 import fs from "fs";
 
+import * as toml from "@iarna/toml";
+
 import { IDualGovernance, IEmergencyProtectedTimelock, OmnibusBase, TokenManager, Voting } from "typechain-types";
 
 import { advanceChainTime, ether, log } from "lib";
@@ -9,15 +11,81 @@ import { loadContract } from "lib/contract";
 import { findEventsWithInterfaces } from "lib/event";
 import { DeploymentState, getAddress, Sk } from "lib/state-file";
 
-const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
+const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE || "scripts/upgrade/upgrade-params-mainnet.toml";
 
-export function readUpgradeParameters() {
+export interface UpgradeParameters {
+  chainSpec: {
+    slotsPerEpoch: number;
+    secondsPerSlot: number;
+    genesisTime: number;
+    depositContract: string;
+  };
+  gateSealForVaults: {
+    address: string;
+  };
+  validatorExitDelayVerifier: {
+    gIFirstValidatorPrev: string;
+    gIFirstValidatorCurr: string;
+    gIFirstHistoricalSummaryPrev: string;
+    gIFirstHistoricalSummaryCurr: string;
+    gIFirstBlockRootInSummaryPrev: string;
+    gIFirstBlockRootInSummaryCurr: string;
+  };
+  vaultHub: {
+    relativeShareLimitBP: number;
+  };
+  lazyOracle: {
+    quarantinePeriod: number;
+    maxRewardRatioBP: number;
+  };
+  predepositGuarantee: {
+    genesisForkVersion: string;
+    gIndex: string;
+    gIndexAfterChange: string;
+    changeSlot: number;
+  };
+  delegation: {
+    wethContract: string;
+  };
+  operatorGrid: {
+    defaultTierParams: {
+      shareLimitInEther: string;
+      reserveRatioBP: number;
+      forcedRebalanceThresholdBP: number;
+      infraFeeBP: number;
+      liquidityFeeBP: number;
+      reservationFeeBP: number;
+    };
+  };
+  burner: {
+    isMigrationAllowed: boolean;
+  };
+  oracleVersions: {
+    vebo_consensus_version: number;
+    ao_consensus_version: number;
+  };
+  aragonAppVersions: {
+    nor_version: number[];
+    sdvt_version: number[];
+  };
+  triggerableWithdrawalsGateway: {
+    maxExitRequestsLimit: number;
+    exitsPerFrame: number;
+    frameDurationInSec: number;
+  };
+  triggerableWithdrawals: {
+    exit_events_lookback_window_in_slots: number;
+    nor_exit_deadline_in_sec: number;
+  };
+}
+
+export function readUpgradeParameters(): UpgradeParameters {
   if (!UPGRADE_PARAMETERS_FILE) {
     throw new Error("UPGRADE_PARAMETERS_FILE is not set");
   }
 
-  const rawData = fs.readFileSync(UPGRADE_PARAMETERS_FILE);
-  return JSON.parse(rawData.toString());
+  const rawData = fs.readFileSync(UPGRADE_PARAMETERS_FILE, "utf8");
+  return toml.parse(rawData) as unknown as UpgradeParameters;
 }
 
 export async function mockDGAragonVoting(
@@ -49,16 +117,16 @@ export async function mockDGAragonVoting(
 
   const voteId = await voting.votesLength();
 
-  const voteScriptTw = await loadContract<OmnibusBase>("OmnibusBase", omnibusScriptAddress);
-  const voteBytecodeTw = await voteScriptTw.getNewVoteCallBytecode(description, proposalMetadata);
+  const voteScript = await loadContract<OmnibusBase>("OmnibusBase", omnibusScriptAddress);
+  const voteBytecode = await voteScript.getNewVoteCallBytecode(description, proposalMetadata);
 
-  await tokenManager.connect(deployer).forward(voteBytecodeTw);
-  if (!(await voteScriptTw.isValidVoteScript(voteId, proposalMetadata))) throw new Error("Vote script is not valid");
+  await tokenManager.connect(deployer).forward(voteBytecode);
+  if (!(await voteScript.isValidVoteScript(voteId, proposalMetadata))) throw new Error("Vote script is not valid");
   await voting.connect(deployer).vote(voteId, true, false);
   await advanceChainTime(await voting.voteTime());
   const executeTx = await voting.executeVote(voteId);
   const executeReceipt = (await executeTx.wait())!;
-  log.success("TW voting executed: gas used", executeReceipt.gasUsed);
+  log.success("Voting executed: gas used", executeReceipt.gasUsed);
 
   const dualGovernance = await loadContract<IDualGovernance>(
     "IDualGovernance",

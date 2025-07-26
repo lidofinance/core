@@ -14,7 +14,7 @@ export GAS_PRIORITY_FEE=1
 export GAS_MAX_FEE=100
 
 export NETWORK_STATE_FILE="deployed-${NETWORK}.json"
-export NETWORK_STATE_DEFAULTS_FILE="scripts/defaults/testnet-defaults.json"
+export SCRATCH_DEPLOY_CONFIG="scripts/scratch/deploy-params-testnet.toml"
 
 bash scripts/dao-deploy.sh
 
