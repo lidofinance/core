@@ -78,6 +78,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         └──────────────────────────────────────────────────────┘
      */
 
+    /// @dev 0xa495a3428837724c7f7648cda02eb83c9c4c778c8688d6f254c7f3f80c154d55
     bytes32 public constant REGISTRY_ROLE = keccak256("vaults.OperatorsGrid.Registry");
 
     /// @notice Lido Locator contract
