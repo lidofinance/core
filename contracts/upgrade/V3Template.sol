@@ -239,16 +239,16 @@ contract V3Template is V3Addresses {
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), AGENT);
 
         _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT, VAULT_HUB_ADAPTER);
+        _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE(), AGENT, EVM_SCRIPT_EXECUTOR);
 
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULT_HUB_ADAPTER);
         _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULT_HUB_ADAPTER);
-        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE(), EVM_SCRIPT_EXECUTOR);
         _assertSingleOZRoleHolder(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL);
 
         // OperatorGrid
         _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), AGENT);
         _assertSingleOZRoleHolder(OPERATOR_GRID, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(OPERATOR_GRID, OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), EVM_SCRIPT_EXECUTOR);
+        _assertTwoOZRoleHolders(OPERATOR_GRID, OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), AGENT, EVM_SCRIPT_EXECUTOR);
 
         // LazyOracle
         _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);

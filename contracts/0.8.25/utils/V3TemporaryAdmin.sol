@@ -115,14 +115,14 @@ contract V3TemporaryAdmin {
     /**
      * @notice Complete setup for all contracts - grants all roles and transfers admin to agent
      * @dev This is the main external function that should be called after deployment
-     * @param _lidoLocator The new LidoLocator implementation address
+     * @param _lidoLocatorImpl The new LidoLocator implementation address
      * @param _beacon The UpgradeableBeacon address for computing codehash
      * @param _evmScriptExecutor The EVM script executor address from easyTrack
      * @param _vaultHubAdapter The vault hub adapter address from easyTrack
      */
-    function completeSetup(address _lidoLocator, address _beacon, address _evmScriptExecutor, address _vaultHubAdapter) external {
+    function completeSetup(address _lidoLocatorImpl, address _beacon, address _evmScriptExecutor, address _vaultHubAdapter) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
-        if (_lidoLocator == address(0)) revert ZeroLidoLocator();
+        if (_lidoLocatorImpl == address(0)) revert ZeroLidoLocator();
         if (_beacon == address(0)) revert ZeroBeacon();
         if (_evmScriptExecutor == address(0)) revert ZeroEvmScriptExecutor();
         if (_vaultHubAdapter == address(0)) revert ZeroVaultHubAdapter();
@@ -130,7 +130,7 @@ contract V3TemporaryAdmin {
         isSetupComplete = true;
 
         // Get all contract addresses from the LidoLocator
-        ILidoLocator locator = ILidoLocator(_lidoLocator);
+        ILidoLocator locator = ILidoLocator(_lidoLocatorImpl);
         address vaultHub = locator.vaultHub();
         address predepositGuarantee = locator.predepositGuarantee();
         address lazyOracle = locator.lazyOracle();
@@ -175,6 +175,7 @@ contract V3TemporaryAdmin {
 
         IAccessControl(_vaultHub).grantRole(vaultCodehashSetRole, AGENT);
         IAccessControl(_vaultHub).grantRole(vaultMasterRole, AGENT);
+        IAccessControl(_vaultHub).grantRole(redemptionMasterRole, AGENT);
 
         IAccessControl(_vaultHub).grantRole(vaultMasterRole, _vaultHubAdapter);
         IAccessControl(_vaultHub).grantRole(validatorExitRole, _vaultHubAdapter);
@@ -220,6 +221,7 @@ contract V3TemporaryAdmin {
      */
     function _setupOperatorGrid(address _operatorGrid, address _evmScriptExecutor) private {
         bytes32 registryRole = IOperatorGrid(_operatorGrid).REGISTRY_ROLE();
+        IAccessControl(_operatorGrid).grantRole(registryRole, AGENT);
         IAccessControl(_operatorGrid).grantRole(registryRole, _evmScriptExecutor);
         _transferAdminToAgent(_operatorGrid);
     }
