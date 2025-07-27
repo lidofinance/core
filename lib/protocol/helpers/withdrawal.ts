@@ -1,10 +1,20 @@
 import { ZeroAddress } from "ethers";
+import { ethers } from "hardhat";
 
 import { certainAddress, ether, impersonate, log } from "lib";
 
 import { ProtocolContext } from "../types";
 
 import { report } from "./accounting";
+
+/**
+ * Mines a specified number of blocks to allow stake limit to increase.
+ * With stake limit increase of 20 ETH per block and submission of 1,000 ETH,
+ * we need at least 50 blocks to fully replenish the stake limit.
+ */
+const mineBlocks = async (blocks: number = 60) => {
+  await ethers.provider.send("hardhat_mine", [`0x${blocks.toString(16)}`]);
+};
 
 /**
  * Unpauses the withdrawal queue contract.
@@ -27,7 +37,7 @@ export const unpauseWithdrawalQueue = async (ctx: ProtocolContext) => {
 export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
   const { lido, withdrawalQueue } = ctx.contracts;
 
-  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000"));
+  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("150000"));
   const stEthHolder = await impersonate(certainAddress("withdrawalQueue:stEth:whale"), ether("100000"));
   const stEthHolderAmount = ether("10000");
 
@@ -48,10 +58,14 @@ export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
       "Last request ID": lastRequestId,
     });
 
-    await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
+    // Mine blocks to increase stake limit before submission
+    await mineBlocks();
+    await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("1000") });
   }
 
-  await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
+  // Mine blocks to increase stake limit before final submission
+  await mineBlocks();
+  await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("1000") });
 
   log.success("Finalized withdrawal queue");
 };
