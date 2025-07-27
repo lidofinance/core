@@ -1,28 +1,30 @@
 {
   "TWVoteScript": {
-    "contract": "test/0.8.25/upgrade/TWVoteScript.sol",
-    "address": "0xbdD488B78ac2b27052249e60E635B2533575a6Eb",
+    "contract": "contracts/upgrade/TWVoteScript.sol",
+    "address": "0x408888871A2Ffa9C7b73a07Aec0de0542b9ed43b",
     "constructorArgs": [
       "0x2e59A20f205bB85a89C53f1936454680651E618e",
+      "0xcdF49b058D606AD34c5789FD8c3BF8B3E54bA2db",
       {
         "agent": "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
         "lido_locator": "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
-        "lido_locator_impl": "0x16932B0c1eA503E4a40C7a75AC7200b4304C8De2",
+        "lido_locator_impl": "0x4fe0e1B3883141E59dddD86D6E18FC9c87EbBFf2",
         "validators_exit_bus_oracle": "0x0De4Ea0184c2ad0BacA7183356Aea5B8d5Bf5c6e",
-        "validators_exit_bus_oracle_impl": "0x2fcc261bB32262a150E4905F6d550D4FF05bC582",
-        "triggerable_withdrawals_gateway": "0x5E50A3d48982Ba8CCAfE398FB0f8881A31C4f67a",
+        "validators_exit_bus_oracle_impl": "0xd3873FDF150b3fFFb447d3701DFD234DF452F367",
+        "triggerable_withdrawals_gateway": "0xbdB493827007eE26c16F10F6EABad6E97D9ead7D",
         "withdrawal_vault": "0xB9D7934878B5FB9610B3fE8A5e441e8fad7E293f",
-        "withdrawal_vault_impl": "0x63eE8865A8B25919B5103d02586AaaF078Ee9102",
+        "withdrawal_vault_impl": "0xfde41A17EBfA662867DA7324C0Bf5810623Cb3F8",
         "accounting_oracle": "0x852deD011285fe67063a08005c71a85690503Cee",
-        "accounting_oracle_impl": "0x4f0Ab9214649A6539586FbeB575b370Ba52Bd794",
+        "accounting_oracle_impl": "0x407154421a86338306c1e5abFFA6fF42d2cFeEdC",
         "staking_router": "0xFdDf38947aFB03C621C71b06C9C70bce73f12999",
-        "staking_router_impl": "0x90CA02Cb47113c75EB8E102c91B40181616cc9e9",
-        "validator_exit_verifier": "0xd15cF95D0DC31C7a01Ac5F73ccca6B572ADc8C05",
+        "staking_router_impl": "0x1Ae0817d98a8A222235A2383422e1A1c03d73e3a",
+        "validator_exit_verifier": "0x3B071F9a25B9Da0193E81F0a68b165d67Adb0714",
         "node_operators_registry": "0x55032650b14df07b85bF18A3a3eC8E0Af2e028d5",
-        "node_operators_registry_impl": "0x4B651dcC3C2e4d2Fa6feF95D73eaEC48432b5d6a",
+        "node_operators_registry_impl": "0xB167Cb0b51983858EEc1E1716dF18a59A1fe35B4",
         "oracle_daemon_config": "0xbf05A929c3D7885a6aeAd833a992dA6E5ac23b09",
-        "nor_app_repo": "0x0D97E876ad14DB2b183CFeEB8aa1A5C788eB1831",
+        "simple_dvt": "0xaE7B191A31f627b4eB1d4DaC64eaB9976995b433",
         "node_operators_registry_app_id": "0x7071f283424072341f856ac9e947e7ec0eb68719f757a7e785979b6b8717579d",
+        "simple_dvt_app_id": "0xe1635b63b5f7b5e545f2a637558a4029dea7905361a2f0fc28c66e9136cf86a4",
         "nor_version": [
           6,
           0,
@@ -52,7 +54,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/oracle/AccountingOracle.sol",
-      "address": "0x4f0Ab9214649A6539586FbeB575b370Ba52Bd794",
+      "address": "0x407154421a86338306c1e5abFFA6fF42d2cFeEdC",
       "constructorArgs": [
         "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
         "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
@@ -151,7 +153,7 @@
     },
     "implementation": {
       "contract": "contracts/0.4.24/nos/NodeOperatorsRegistry.sol",
-      "address": "0x4B651dcC3C2e4d2Fa6feF95D73eaEC48432b5d6a",
+      "address": "0xB167Cb0b51983858EEc1E1716dF18a59A1fe35B4",
       "constructorArgs": []
     },
     "aragonApp": {
@@ -299,6 +301,16 @@
       "pauseIntentValidityPeriodBlocks": 6646
     }
   },
+  "dg:dualGovernance": {
+    "proxy": {
+      "address": "0xcdF49b058D606AD34c5789FD8c3BF8B3E54bA2db"
+    }
+  },
+  "dg:emergencyProtectedTimelock": {
+    "proxy": {
+      "address": "0xCE0425301C85c5Ea2A0873A2dEe44d78E02D2316"
+    }
+  },
   "dummyEmptyContract": {
     "address": "0x6F6541C2203196fEeDd14CD2C09550dA1CbEDa31",
     "contract": "contracts/0.8.9/utils/DummyEmptyContract.sol",
@@ -375,7 +387,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/LidoLocator.sol",
-      "address": "0x16932B0c1eA503E4a40C7a75AC7200b4304C8De2",
+      "address": "0x4fe0e1B3883141E59dddD86D6E18FC9c87EbBFf2",
       "constructorArgs": [
         [
           "0x852deD011285fe67063a08005c71a85690503Cee",
@@ -392,8 +404,8 @@
           "0x889edC2eDab5f40e902b864aD4d7AdE8E412F9B1",
           "0xB9D7934878B5FB9610B3fE8A5e441e8fad7E293f",
           "0xbf05A929c3D7885a6aeAd833a992dA6E5ac23b09",
-          "0xd15cF95D0DC31C7a01Ac5F73ccca6B572ADc8C05",
-          "0x5E50A3d48982Ba8CCAfE398FB0f8881A31C4f67a"
+          "0x3B071F9a25B9Da0193E81F0a68b165d67Adb0714",
+          "0xbdB493827007eE26c16F10F6EABad6E97D9ead7D"
         ]
       ]
     }
@@ -473,7 +485,7 @@
       "maxPositiveTokenRebase": 750000
     }
   },
-  "scratchDeployGasUsed": "24965663",
+  "scratchDeployGasUsed": "25571349",
   "stakingRouter": {
     "proxy": {
       "address": "0xFdDf38947aFB03C621C71b06C9C70bce73f12999",
@@ -487,7 +499,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/StakingRouter.sol",
-      "address": "0x90CA02Cb47113c75EB8E102c91B40181616cc9e9",
+      "address": "0x1Ae0817d98a8A222235A2383422e1A1c03d73e3a",
       "constructorArgs": [
         "0x00000000219ab540356cBB839Cbe05303d7705Fa"
       ]
@@ -496,7 +508,7 @@
   "triggerableWithdrawalsGateway": {
     "implementation": {
       "contract": "contracts/0.8.9/TriggerableWithdrawalsGateway.sol",
-      "address": "0x5E50A3d48982Ba8CCAfE398FB0f8881A31C4f67a",
+      "address": "0xbdB493827007eE26c16F10F6EABad6E97D9ead7D",
       "constructorArgs": [
         "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
         "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
@@ -509,18 +521,24 @@
   "validatorExitDelayVerifier": {
     "implementation": {
       "contract": "contracts/0.8.25/ValidatorExitDelayVerifier.sol",
-      "address": "0xd15cF95D0DC31C7a01Ac5F73ccca6B572ADc8C05",
+      "address": "0x3B071F9a25B9Da0193E81F0a68b165d67Adb0714",
       "constructorArgs": [
         "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
-        "0x0000000000000000000000000000000000000000000000000096000000000028",
-        "0x0000000000000000000000000000000000000000000000000096000000000028",
-        "0x0000000000000000000000000000000000000000000000000000000000005b00",
-        "0x0000000000000000000000000000000000000000000000000000000000005b00",
-        1,
-        1,
+        {
+          "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
+          "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
+          "gIFirstHistoricalSummaryPrev": "0x000000000000000000000000000000000000000000000000000000b600000018",
+          "gIFirstHistoricalSummaryCurr": "0x000000000000000000000000000000000000000000000000000000b600000018",
+          "gIFirstBlockRootInSummaryPrev": "0x000000000000000000000000000000000000000000000000000000000040000d",
+          "gIFirstBlockRootInSummaryCurr": "0x000000000000000000000000000000000000000000000000000000000040000d"
+        },
+        22140000,
+        22140000,
+        22140000,
+        8192,
         32,
         12,
-        1639659600,
+        1606824023,
         98304
       ]
     }
@@ -538,10 +556,10 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol",
-      "address": "0x2fcc261bB32262a150E4905F6d550D4FF05bC582",
+      "address": "0xd3873FDF150b3fFFb447d3701DFD234DF452F367",
       "constructorArgs": [
         12,
-        1639659600,
+        1606824023,
         "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"
       ]
     }
@@ -647,11 +665,11 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/WithdrawalVault.sol",
-      "address": "0x63eE8865A8B25919B5103d02586AaaF078Ee9102",
+      "address": "0xfde41A17EBfA662867DA7324C0Bf5810623Cb3F8",
       "constructorArgs": [
         "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
         "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
-        "0x5E50A3d48982Ba8CCAfE398FB0f8881A31C4f67a"
+        "0xbdB493827007eE26c16F10F6EABad6E97D9ead7D"
       ]
     }
   },
