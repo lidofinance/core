@@ -1,4 +1,5 @@
 import { ZeroAddress } from "ethers";
+import { ethers } from "hardhat";
 
 import { certainAddress, ether, impersonate, log } from "lib";
 
@@ -27,12 +28,17 @@ export const unpauseWithdrawalQueue = async (ctx: ProtocolContext) => {
 export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
   const { lido, withdrawalQueue } = ctx.contracts;
 
-  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000"));
+  const unfinalizedAmount = await withdrawalQueue.unfinalizedStETH();
+  const depositAmount = ether("10000");
+
+  const ethHolder = await impersonate(
+    certainAddress("withdrawalQueue:eth:whale"),
+    unfinalizedAmount + depositAmount + ether("10"),
+  );
   const stEthHolder = await impersonate(certainAddress("withdrawalQueue:stEth:whale"), ether("100000"));
-  const stEthHolderAmount = ether("10000");
 
   // Here sendTransaction is used to validate native way of submitting ETH for stETH
-  await stEthHolder.sendTransaction({ to: lido.address, value: stEthHolderAmount });
+  await stEthHolder.sendTransaction({ to: lido.address, value: depositAmount });
 
   let lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
   let lastRequestId = await withdrawalQueue.getLastRequestId();
@@ -48,10 +54,12 @@ export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
       "Last request ID": lastRequestId,
     });
 
-    await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
-  }
+    await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: depositAmount });
 
-  await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
+    // Mine N blocks to restore all staking limits
+    const limits = await ctx.contracts.lido.getStakeLimitFullInfo();
+    await ethers.provider.send("hardhat_mine", [`0x${limits.maxStakeLimitGrowthBlocks.toString(16)}`]);
+  }
 
   log.success("Finalized withdrawal queue");
 };

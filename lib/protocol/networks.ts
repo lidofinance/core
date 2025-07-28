@@ -103,6 +103,9 @@ export async function getNetworkConfig(network: string): Promise<ProtocolNetwork
       return getLocalNetworkConfig(network, "fork");
     case "mainnet-fork":
       return getMainnetForkNetworkConfig();
+    case "custom":
+      console.log("Using custom network configuration");
+      return getMainnetForkNetworkConfig();
     case "hardhat":
       if (isNonForkingHardhatNetwork()) {
         return getLocalNetworkConfig(network, "scratch");
