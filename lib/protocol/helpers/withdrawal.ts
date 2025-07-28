@@ -29,12 +29,13 @@ export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
 
   const unfinalizedAmount = await withdrawalQueue.unfinalizedStETH();
 
-  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000"));
-  const stEthHolder = await impersonate(certainAddress("withdrawalQueue:stEth:whale"), unfinalizedAmount + ether("10"));
-  const stEthHolderAmount = ether("10000");
+  console.log("Unfinalized amount", unfinalizedAmount.toString());
+
+  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), unfinalizedAmount + ether("10"));
+  const stEthHolder = await impersonate(certainAddress("withdrawalQueue:stEth:whale"), ether("100000"));
 
   // Here sendTransaction is used to validate native way of submitting ETH for stETH
-  await stEthHolder.sendTransaction({ to: lido.address, value: stEthHolderAmount });
+  await stEthHolder.sendTransaction({ to: lido.address, value: ether("10000") });
 
   let lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
   let lastRequestId = await withdrawalQueue.getLastRequestId();
