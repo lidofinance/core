@@ -33,6 +33,59 @@ contract ValidatorConsolidationRequests {
     }
 
     /**
+     * @notice Should be called by a multisig contract.
+     */
+    function addConsolidationRequestsMultisig(
+        bytes[] calldata _sourcePubkeys,
+        bytes[] calldata _targetPubkeys,
+        address _refundRecipient,
+        address _stakingVault,
+        uint256 _adjustmentIncrease
+    ) external payable onlyDelegateCall {
+        _addConsolidationRequests(_sourcePubkeys, _targetPubkeys, _refundRecipient, _stakingVault, _adjustmentIncrease);
+    }
+
+    /**
+     * @notice Should be called by an EOA.
+     */
+    function addConsolidationRequestsEOA(
+        bytes[] calldata _sourcePubkeys,
+        bytes[] calldata _targetPubkeys,
+        address _refundRecipient,
+        address _stakingVault,
+        uint256 _adjustmentIncrease
+    ) external payable {
+        _addConsolidationRequests(_sourcePubkeys, _targetPubkeys, _refundRecipient, _stakingVault, _adjustmentIncrease);
+    }
+
+    /**
+     * @dev Retrieves the current EIP-7251 consolidation fee. This fee is valid only for the current block and may change in subsequent blocks.
+     * @return The minimum fee required per consolidation request.
+     */
+    function getConsolidationRequestFee() external view returns (uint256) {
+        return _getConsolidationRequestFee();
+    }
+
+    modifier onlyDelegateCall() {
+        if(address(this) == THIS) revert NotDelegateCall();
+        _;
+    }
+
+    function _getConsolidationRequestFee() private view returns (uint256) {
+        (bool success, bytes memory feeData) = CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS.staticcall("");
+
+        if (!success) {
+            revert ConsolidationFeeReadFailed();
+        }
+
+        if (feeData.length != 32) {
+            revert ConsolidationFeeInvalidData();
+        }
+
+        return abi.decode(feeData, (uint256));
+    }
+
+    /**
      * @notice Send EIP-7251 consolidation requests for the specified public keys.
      *      Each request instructs a validator to consolidate its stake to the target validator.
      *
@@ -83,13 +136,13 @@ contract ValidatorConsolidationRequests {
      * @param _stakingVault The address of the staking vault contract.
      * @param _adjustmentIncrease The sum of the balances of the source validators to increase the rewards adjustment by.
      */
-    function addConsolidationRequests(
+    function _addConsolidationRequests(
         bytes[] calldata _sourcePubkeys,
         bytes[] calldata _targetPubkeys,
         address _refundRecipient,
         address _stakingVault,
         uint256 _adjustmentIncrease
-    ) external payable onlyDelegateCall {
+    ) internal {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
         if (_targetPubkeys.length == 0) revert ZeroArgument("targetPubkeys");
@@ -142,33 +195,6 @@ contract ValidatorConsolidationRequests {
         }
 
         emit ConsolidationRequestsAdded(msg.sender, _sourcePubkeys, _targetPubkeys, _refundRecipient, excess, _adjustmentIncrease);
-    }
-
-    /**
-     * @dev Retrieves the current EIP-7251 consolidation fee. This fee is valid only for the current block and may change in subsequent blocks.
-     * @return The minimum fee required per consolidation request.
-     */
-    function getConsolidationRequestFee() external view returns (uint256) {
-        return _getConsolidationRequestFee();
-    }
-
-    modifier onlyDelegateCall() {
-        if(address(this) == THIS) revert NotDelegateCall();
-        _;
-    }
-
-    function _getConsolidationRequestFee() private view returns (uint256) {
-        (bool success, bytes memory feeData) = CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS.staticcall("");
-
-        if (!success) {
-            revert ConsolidationFeeReadFailed();
-        }
-
-        if (feeData.length != 32) {
-            revert ConsolidationFeeInvalidData();
-        }
-
-        return abi.decode(feeData, (uint256));
     }
 
     function _copyPubkeysToMemory(bytes memory _target, uint256 _targetIndex, bytes calldata _source, uint256 _sourceIndex) private pure {
