@@ -12,15 +12,6 @@ const getSigner = async (signer: Signer, balance = ether("100"), signers: Protoc
 };
 
 export const getProtocolContext = async (): Promise<ProtocolContext> => {
-  // if (hre.network.name === "hardhat") {
-  //   const networkConfig = hre.config.networks[hre.network.name];
-  //   if (!networkConfig.forking?.enabled) {
-  //     await deployScratchProtocol(hre.network.name);
-  //   }
-  // } else {
-  //   await deployUpgrade(hre.network.name);
-  // }
-
   const { contracts, signers } = await discover();
   const interfaces = Object.values(contracts).map((contract) => contract.interface);
 
