@@ -200,8 +200,11 @@ describe("Protocol Happy Path", () => {
 
     const { depositSecurityModule } = ctx.contracts;
 
+    await lido.connect(stEthHolder).submit(ZeroAddress, { value: ether("3200") });
+
     const withdrawalsUninitializedStETH = await withdrawalQueue.unfinalizedStETH();
     const depositableEther = await lido.getDepositableEther();
+
     const bufferedEtherBeforeDeposit = await lido.getBufferedEther();
 
     const expectedDepositableEther = bufferedEtherBeforeDeposit - withdrawalsUninitializedStETH;
