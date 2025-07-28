@@ -202,24 +202,26 @@ describe("Protocol Happy Path", () => {
 
     await lido.connect(stEthHolder).submit(ZeroAddress, { value: ether("3200") });
 
-    const withdrawalsUninitializedStETH = await withdrawalQueue.unfinalizedStETH();
+    const withdrawalsUnfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
     const depositableEther = await lido.getDepositableEther();
 
     const bufferedEtherBeforeDeposit = await lido.getBufferedEther();
 
-    const expectedDepositableEther = bufferedEtherBeforeDeposit - withdrawalsUninitializedStETH;
+    const expectedDepositableEther = bufferedEtherBeforeDeposit - withdrawalsUnfinalizedStETH;
 
     expect(depositableEther).to.equal(expectedDepositableEther, "Depositable ether");
 
     log.debug("Depositable ether", {
       "Buffered ether": ethers.formatEther(bufferedEtherBeforeDeposit),
-      "Withdrawals uninitialized stETH": ethers.formatEther(withdrawalsUninitializedStETH),
+      "Withdrawals unfinalized stETH": ethers.formatEther(withdrawalsUnfinalizedStETH),
       "Depositable ether": ethers.formatEther(depositableEther),
     });
 
     const dsmSigner = await impersonate(depositSecurityModule.address, ether("100"));
-    const stakingModules = (await stakingRouter.getStakingModules()).filter((m) => m.id === 1n);
-    console.log("Staking modules:", JSON.stringify(stakingModules, null, 2));
+    const stakingModules = await stakingRouter.getStakingModules();
+
+    log.debug("Staking modules", { stakingModules });
+
     depositCount = 0n;
     let expectedBufferedEtherAfterDeposit = bufferedEtherBeforeDeposit;
     for (const module of stakingModules) {
@@ -239,7 +241,7 @@ describe("Protocol Happy Path", () => {
       expectedBufferedEtherAfterDeposit -= unbufferedAmount;
     }
 
-    expect(depositCount).to.be.gt(0n, "Deposits");
+    expect(depositCount).to.be.gt(0n, "No deposits applied");
 
     const bufferedEtherAfterDeposit = await lido.getBufferedEther();
     expect(bufferedEtherAfterDeposit).to.equal(expectedBufferedEtherAfterDeposit, "Buffered ether after deposit");
