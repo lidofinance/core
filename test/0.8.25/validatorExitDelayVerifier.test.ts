@@ -399,7 +399,6 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, blockRootTimestamp),
           {
             header: invalidHeader,
-            rootGIndex: ACTIVE_VALIDATOR_PROOF.historicalSummariesGI,
             proof: ACTIVE_VALIDATOR_PROOF.historicalRootProof,
           },
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
@@ -592,7 +591,6 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
           {
             header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-            rootGIndex: ACTIVE_VALIDATOR_PROOF.historicalSummariesGI,
             // Mutate one proof entry to break the historical block proof
             proof: [
               ...ACTIVE_VALIDATOR_PROOF.historicalRootProof.slice(0, -1),
