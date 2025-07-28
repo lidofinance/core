@@ -28,10 +28,12 @@ export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
   const { lido, withdrawalQueue } = ctx.contracts;
 
   const unfinalizedAmount = await withdrawalQueue.unfinalizedStETH();
+  const depositAmount = ether("10000");
 
-  console.log("Unfinalized amount", unfinalizedAmount.toString());
-
-  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), unfinalizedAmount + ether("10"));
+  const ethHolder = await impersonate(
+    certainAddress("withdrawalQueue:eth:whale"),
+    unfinalizedAmount + depositAmount + ether("10"),
+  );
   const stEthHolder = await impersonate(certainAddress("withdrawalQueue:stEth:whale"), ether("100000"));
 
   // Here sendTransaction is used to validate native way of submitting ETH for stETH
@@ -51,10 +53,8 @@ export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
       "Last request ID": lastRequestId,
     });
 
-    await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
+    await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: depositAmount });
   }
-
-  await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
 
   log.success("Finalized withdrawal queue");
 };
