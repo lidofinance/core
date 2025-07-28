@@ -27,9 +27,9 @@ export const unpauseWithdrawalQueue = async (ctx: ProtocolContext) => {
 export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
   const { lido, withdrawalQueue } = ctx.contracts;
 
-  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("150000"));
+  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000"));
   const stEthHolder = await impersonate(certainAddress("withdrawalQueue:stEth:whale"), ether("100000"));
-  const stEthHolderAmount = ether("100000");
+  const stEthHolderAmount = ether("10000");
 
   // Here sendTransaction is used to validate native way of submitting ETH for stETH
   await stEthHolder.sendTransaction({ to: lido.address, value: stEthHolderAmount });
