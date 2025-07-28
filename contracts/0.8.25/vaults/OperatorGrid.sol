@@ -157,6 +157,15 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         __Confirmations_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
+        _validateParams(
+            DEFAULT_TIER_ID,
+            _defaultTierParams.reserveRatioBP,
+            _defaultTierParams.forcedRebalanceThresholdBP,
+            _defaultTierParams.infraFeeBP,
+            _defaultTierParams.liquidityFeeBP,
+            _defaultTierParams.reservationFeeBP
+        );
+
         ERC7201Storage storage $ = _getStorage();
 
         //create default tier with default share limit
@@ -423,7 +432,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
         uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
 
-        //check if tier limit is exceeded
+        // check if tier limit is exceeded
         if (requestedTier.liabilityShares + vaultLiabilityShares > requestedTier.shareLimit) revert TierLimitExceeded();
 
         // if the vault was in the default tier:
