@@ -11,7 +11,7 @@ import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 
-import {BaseOracle, IHashConsensus} from "./BaseOracle.sol";
+import {BaseOracle} from "./BaseOracle.sol";
 
 
 interface IReportReceiver {

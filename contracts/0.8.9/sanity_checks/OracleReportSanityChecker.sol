@@ -4,6 +4,8 @@
 /* See contracts/COMPILERS.md */
 pragma solidity 0.8.9;
 
+// solhint-disable one-contract-per-file
+
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
 import {Math256} from "contracts/common/lib/Math256.sol";

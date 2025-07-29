@@ -4,6 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+// solhint-disable one-contract-per-file
+
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
 uint256 constant DOUBLE_CACHE_LENGTH = 2;

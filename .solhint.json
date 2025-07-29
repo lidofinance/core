@@ -18,5 +18,49 @@
         "ignoreConstructors": true
       }
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["contracts/0.8.9/utils/Versioned.sol"],
+      "rules": {
+        "no-global-import": "off"
+      }
+    },
+    {
+      "files": ["contracts/0.4.24/utils/Versioned.sol"],
+      "rules": {
+        "no-global-import": "off"
+      }
+    },
+    {
+      "files": ["contracts/0.8.9/utils/PausableUntil.sol"],
+      "rules": {
+        "no-global-import": "off"
+      }
+    },
+    {
+      "files": ["contracts/0.8.9/proxy/WithdrawalsManagerProxy.sol"],
+      "rules": {
+        "one-contract-per-file": "off"
+      }
+    },
+    {
+      "files": ["contracts/0.8.9/lib/ExitLimitUtils.sol"],
+      "rules": {
+        "one-contract-per-file": "off"
+      }
+    },
+    {
+      "files": ["contracts/0.4.24/lib/StakeLimitUtils.sol"],
+      "rules": {
+        "one-contract-per-file": "off"
+      }
+    },
+    {
+      "files": ["contracts/0.8.9/proxy/OssifiableProxy.sol"],
+      "rules": {
+        "no-unused-imports": "off"
+      }
+    }
+  ]
 }
