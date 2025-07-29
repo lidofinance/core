@@ -1168,7 +1168,7 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, vaultShareLimit);
       await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, vaultShareLimit))
         .to.emit(vaultHub, "VaultConnectionUpdated")
-        .withArgs(vault_NO1_V1, vaultShareLimit, 2000, 1800, 500, 400, 100);
+        .withArgs(vault_NO1_V1, vaultShareLimit, 2000, 1800);
     });
   });
 
