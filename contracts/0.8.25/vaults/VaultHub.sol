@@ -1008,6 +1008,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal {
+        _requireFreshReport(_vault, _record);
         uint256 liabilityShares_ = _record.liabilityShares;
         if (liabilityShares_ > 0) {
             revert NoLiabilitySharesShouldBeLeft(_vault, liabilityShares_);
