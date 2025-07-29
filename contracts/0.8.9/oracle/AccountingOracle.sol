@@ -11,7 +11,7 @@ import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 
 import {UnstructuredStorage} from "contracts/0.8.9/lib/UnstructuredStorage.sol";
-
+import {DepositedEtherStateLib, DepositedEtherState} from "contracts/0.8.9/lib/DepositedEtherStateLib.sol";
 import {BaseOracle} from "./BaseOracle.sol";
 
 interface IReportReceiver {
@@ -47,6 +47,8 @@ interface IWithdrawalQueue {
 contract AccountingOracle is BaseOracle {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
+    using DepositedEtherStateLib for bytes32;
+    using DepositedEtherStateLib for DepositedEtherState;
 
     error LidoLocatorCannotBeZero();
     error AdminCannotBeZero();
@@ -88,6 +90,8 @@ contract AccountingOracle is BaseOracle {
     /// @dev Storage slot: ExtraDataProcessingState state
     bytes32 internal constant EXTRA_DATA_PROCESSING_STATE_POSITION =
         keccak256("lido.AccountingOracle.extraDataProcessingState");
+
+    bytes32 internal constant DEPOSITED_ETHER_STATE_POSITION = keccak256("lido.AccountingOracle.depositedEtherState");
 
     bytes32 internal constant ZERO_BYTES32 = bytes32(0);
 
@@ -404,6 +408,19 @@ contract AccountingOracle is BaseOracle {
         result.extraDataItemsSubmitted = extraState.itemsProcessed;
     }
 
+    function insertDepositedEther(uint128 amount) external {
+        _checkMsgSenderIsLido();
+        uint64 slot = _getCurrentRefSlot().toUint64();
+        _depositedEtherState().insertDepositedEther(slot, amount);
+        // todo event?
+    }
+
+    /// @notice Returns the total amount of ether inserted into the deposited ether state.
+    /// @dev during the extraction process at refSlot, all data for the previous slots is deleted,
+    ///     so the total amount is also decreased.
+    function getDepositedEther() internal returns (uint128) {
+        return _depositedEtherState().getDepositedEther();
+    }
     ///
     /// Implementation & helpers
     ///
@@ -435,6 +452,22 @@ contract AccountingOracle is BaseOracle {
         if (!hasRole(SUBMIT_DATA_ROLE, sender) && !_isConsensusMember(sender)) {
             revert SenderNotAllowed();
         }
+    }
+
+    function _checkMsgSenderIsLido() internal view {
+        address sender = _msgSender();
+        if (sender != LOCATOR.lido()) {
+            revert SenderNotAllowed();
+        }
+    }
+
+    function _depositedEtherState() internal returns (DepositedEtherState storage) {
+        return DEPOSITED_ETHER_STATE_POSITION.getDepositedEtherState();
+    }
+
+    function _extractDepositedEther(uint64 slot) internal returns (uint128) {
+        return _depositedEtherState().extractDepositedEther(slot);
+        // todo event?
     }
 
     function _handleConsensusReportData(ReportData calldata data, uint256 prevRefSlot) internal {

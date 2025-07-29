@@ -53,6 +53,11 @@ interface IWithdrawalVault {
     function withdrawWithdrawals(uint256 _amount) external;
 }
 
+interface IAccountingOracle {
+    function getDepositedEther() internal returns (uint128);
+    function insertDepositedEther(uint128 amount) external;
+}
+
 /**
  * @title Liquid staking pool implementation
  *
@@ -1085,6 +1090,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// @dev simple address-based auth
     function _auth(address _address) internal view {
         require(msg.sender == _address, "APP_AUTH_FAILED");
+    }
+
+    function _accountingOracle() internal view returns (IAccountingOracle) {
+        return IAccountingOracle(_getLidoLocator().accountingOracle());
     }
 
     function _stakingRouter() internal view returns (IStakingRouter) {
