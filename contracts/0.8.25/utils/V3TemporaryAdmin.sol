@@ -69,7 +69,6 @@ interface ILidoLocator {
     function vaultFactory() external view returns (address);
 }
 
-
 /**
  * @title V3TemporaryAdmin
  * @notice Auxiliary contract that serves as temporary admin during deployment
@@ -129,25 +128,16 @@ contract V3TemporaryAdmin {
 
         isSetupComplete = true;
 
-        // Get all contract addresses from the LidoLocator
         ILidoLocator locator = ILidoLocator(_lidoLocatorImpl);
-        address vaultHub = locator.vaultHub();
-        address predepositGuarantee = locator.predepositGuarantee();
-        address lazyOracle = locator.lazyOracle();
-        address operatorGrid = locator.operatorGrid();
-        address burner = locator.burner();
-        address accounting = locator.accounting();
-        address stakingRouter = locator.stakingRouter();
 
-        // Get CSM accounting address from staking router
-        address csmAccounting = getCsmAccountingAddress(stakingRouter);
+        address csmAccounting = getCsmAccountingAddress(locator.stakingRouter());
 
+        _setupPredepositGuarantee(locator.predepositGuarantee());
+        _setupLazyOracle(locator.lazyOracle());
+        _setupOperatorGrid(locator.operatorGrid(), _evmScriptExecutor);
+        _setupBurner(locator.burner(), locator.accounting(), csmAccounting);
         bytes32 codehash = _computeCodehash(_beacon);
-        _setupVaultHub(vaultHub, codehash, _evmScriptExecutor, _vaultHubAdapter);
-        _setupPredepositGuarantee(predepositGuarantee);
-        _setupLazyOracle(lazyOracle);
-        _setupOperatorGrid(operatorGrid, _evmScriptExecutor);
-        _setupBurner(burner, accounting, csmAccounting);
+        _setupVaultHub(locator.vaultHub(), codehash, _evmScriptExecutor, _vaultHubAdapter);
     }
 
 
@@ -191,12 +181,8 @@ contract V3TemporaryAdmin {
      * @param _predepositGuarantee The PredepositGuarantee contract address
      */
     function _setupPredepositGuarantee(address _predepositGuarantee) private {
-        // Get role from the contract
         bytes32 pauseRole = IPausableUntil(_predepositGuarantee).PAUSE_ROLE();
-
-        // Grant PAUSE_ROLE to gateSeal
         IAccessControl(_predepositGuarantee).grantRole(pauseRole, GATE_SEAL);
-
         _transferAdminToAgent(_predepositGuarantee);
     }
 
@@ -205,12 +191,8 @@ contract V3TemporaryAdmin {
      * @param _lazyOracle The LazyOracle contract address
      */
     function _setupLazyOracle(address _lazyOracle) private {
-        // Get role from the contract
         bytes32 updateSanityParamsRole = ILazyOracle(_lazyOracle).UPDATE_SANITY_PARAMS_ROLE();
-
-        // Grant UPDATE_SANITY_PARAMS_ROLE to agent
         IAccessControl(_lazyOracle).grantRole(updateSanityParamsRole, AGENT);
-
         _transferAdminToAgent(_lazyOracle);
     }
 
@@ -255,28 +237,14 @@ contract V3TemporaryAdmin {
         return _computeCodehash(_beacon);
     }
 
-
     /**
      * @notice Compute the codehash of PinnedBeaconProxy using the beacon implementation
      * @param _beacon The UpgradeableBeacon address
      * @return The keccak256 hash of the PinnedBeaconProxy bytecode
      */
     function _computeCodehash(address _beacon) private returns (bytes32) {
-        // Deploy a temporary PinnedBeaconProxy to get its runtime bytecode
         PinnedBeaconProxy tempProxy = new PinnedBeaconProxy(_beacon, "");
-
-        bytes memory deployedCode;
-        address proxyAddress = address(tempProxy);
-
-        assembly {
-            let size := extcodesize(proxyAddress)
-            deployedCode := mload(0x40)
-            mstore(0x40, add(deployedCode, add(size, 0x20)))
-            mstore(deployedCode, size)
-            extcodecopy(proxyAddress, add(deployedCode, 0x20), 0, size)
-        }
-
-        return keccak256(deployedCode);
+        return keccak256(address(tempProxy).code);
     }
 
     function _transferAdminToAgent(address _contract) private {
