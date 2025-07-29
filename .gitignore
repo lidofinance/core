@@ -3,7 +3,6 @@
 .vscode/
 .cursor/
 .claude/
-**/CLAUDE.md
 
 node_modules/
 coverage/

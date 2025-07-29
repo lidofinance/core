@@ -10,7 +10,7 @@
   "scripts": {
     "compile": "hardhat compile",
     "cleanup": "hardhat clean",
-    "lint:sol": "solhint 'contracts/**/*.sol'",
+    "lint:sol": "hardhat lint-solidity",
     "lint:sol:fix": "yarn lint:sol --fix",
     "lint:ts": "eslint . --max-warnings=0",
     "lint:ts:fix": "yarn lint:ts --fix",
