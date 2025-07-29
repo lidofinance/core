@@ -2,159 +2,25 @@ import fs from "fs";
 
 import * as toml from "@iarna/toml";
 
+import { ScratchParameters, validateScratchParameters } from "lib/config-schemas";
+
 const SCRATCH_DEPLOY_CONFIG = process.env.SCRATCH_DEPLOY_CONFIG || "scripts/scratch/deploy-params-testnet.toml";
 
-export interface ScratchParameters {
-  chainSpec: {
-    slotsPerEpoch: number;
-    secondsPerSlot: number;
-  };
-  gateSeal: {
-    sealDuration: number;
-    expiryTimestamp: number;
-    sealingCommittee: string[];
-  };
-  lidoApm: {
-    ensName: string;
-    ensRegDurationSec: number;
-  };
-  dao: {
-    aragonId: string;
-    aragonEnsLabelName: string;
-    initialSettings: {
-      voting: {
-        minSupportRequired: string;
-        minAcceptanceQuorum: string;
-        voteDuration: number;
-        objectionPhaseDuration: number;
-      };
-      fee: {
-        totalPercent: number;
-        treasuryPercent: number;
-        nodeOperatorsPercent: number;
-      };
-      token: {
-        name: string;
-        symbol: string;
-      };
-    };
-  };
-  vesting: {
-    unvestedTokensAmount: string;
-    start: number;
-    cliff: number;
-    end: number;
-    revokable: boolean;
-    holders: Record<string, string>;
-  };
-  burner: {
-    isMigrationAllowed: boolean;
-    totalCoverSharesBurnt: string;
-    totalNonCoverSharesBurnt: string;
-  };
-  hashConsensusForAccountingOracle: {
-    fastLaneLengthSlots: number;
-    epochsPerFrame: number;
-  };
-  vaultHub: {
-    maxRelativeShareLimitBP: number;
-  };
-  lazyOracle: {
-    quarantinePeriod: number;
-    maxRewardRatioBP: number;
-  };
-  accountingOracle: {
-    consensusVersion: number;
-  };
-  hashConsensusForValidatorsExitBusOracle: {
-    fastLaneLengthSlots: number;
-    epochsPerFrame: number;
-  };
-  validatorsExitBusOracle: {
-    consensusVersion: number;
-    maxValidatorsPerRequest: number;
-    maxExitRequestsLimit: number;
-    exitsPerFrame: number;
-    frameDurationInSec: number;
-  };
-  depositSecurityModule: {
-    maxOperatorsPerUnvetting: number;
-    pauseIntentValidityPeriodBlocks: number;
-    usePredefinedAddressInstead?: string;
-  };
-  oracleReportSanityChecker: {
-    exitedValidatorsPerDayLimit: number;
-    appearedValidatorsPerDayLimit: number;
-    deprecatedOneOffCLBalanceDecreaseBPLimit: number;
-    annualBalanceIncreaseBPLimit: number;
-    simulatedShareRateDeviationBPLimit: number;
-    maxValidatorExitRequestsPerReport: number;
-    maxItemsPerExtraDataTransaction: number;
-    maxNodeOperatorsPerExtraDataItem: number;
-    requestTimestampMargin: number;
-    maxPositiveTokenRebase: number;
-    initialSlashingAmountPWei: number;
-    inactivityPenaltiesAmountPWei: number;
-    clBalanceOraclesErrorUpperBPLimit: number;
-  };
-  oracleDaemonConfig: {
-    NORMALIZED_CL_REWARD_PER_EPOCH: number;
-    NORMALIZED_CL_REWARD_MISTAKE_RATE_BP: number;
-    REBASE_CHECK_NEAREST_EPOCH_DISTANCE: number;
-    REBASE_CHECK_DISTANT_EPOCH_DISTANCE: number;
-    VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS: number;
-    VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS: number;
-    NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP: number;
-    PREDICTION_DURATION_IN_SLOTS: number;
-    FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT: number;
-  };
-  nodeOperatorsRegistry: {
-    stakingModuleName: string;
-    stakingModuleTypeId: string;
-    stuckPenaltyDelay: number;
-  };
-  simpleDvt: {
-    stakingModuleName: string;
-    stakingModuleTypeId: string;
-    stuckPenaltyDelay: number;
-  };
-  withdrawalQueueERC721: {
-    name: string;
-    symbol: string;
-  };
-  validatorExitDelayVerifier: {
-    gIFirstValidatorPrev: string;
-    gIFirstValidatorCurr: string;
-    gIFirstHistoricalSummaryPrev: string;
-    gIFirstHistoricalSummaryCurr: string;
-    gIFirstBlockRootInSummaryPrev: string;
-    gIFirstBlockRootInSummaryCurr: string;
-  };
-  triggerableWithdrawalsGateway: {
-    maxExitRequestsLimit: number;
-    exitsPerFrame: number;
-    frameDurationInSec: number;
-  };
-  predepositGuarantee: {
-    gIndex: string;
-    gIndexAfterChange: string;
-    changeSlot: number;
-  };
-  operatorGrid: {
-    defaultTierParams: {
-      shareLimitInEther: string;
-      reserveRatioBP: number;
-      forcedRebalanceThresholdBP: number;
-      infraFeeBP: number;
-      liquidityFeeBP: number;
-      reservationFeeBP: number;
-    };
-  };
-}
+export { ScratchParameters };
 
 export function readScratchParameters(): ScratchParameters {
+  if (!fs.existsSync(SCRATCH_DEPLOY_CONFIG)) {
+    throw new Error(`Scratch parameters file not found: ${SCRATCH_DEPLOY_CONFIG}`);
+  }
+
   const rawData = fs.readFileSync(SCRATCH_DEPLOY_CONFIG, "utf8");
-  return toml.parse(rawData) as unknown as ScratchParameters;
+  const parsedData = toml.parse(rawData);
+
+  try {
+    return validateScratchParameters(parsedData);
+  } catch (error) {
+    throw new Error(`Invalid scratch parameters: ${error}`);
+  }
 }
 
 // Convert TOML scratch parameters to deployment state format

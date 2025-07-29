@@ -12,6 +12,6 @@ task(TASK_COMPILE, "Compile contracts").setAction(
     }
 
     // Run config validation in silent mode
-    await hre.run("validate-config-consistency", { silent: true });
+    await hre.run("validate-configs", { silent: true });
   },
 );

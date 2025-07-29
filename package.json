@@ -38,7 +38,7 @@
     "test:integration:fork:local": "MODE=scratch hardhat test test/integration/**/*.ts --network local",
     "upgrade:deploy": "STEPS_FILE=upgrade/steps-deploy.json UPGRADE_PARAMETERS_FILE=scripts/upgrade/upgrade-params-mainnet.toml yarn hardhat --network custom run scripts/utils/migrate.ts",
     "upgrade:mock-voting": "STEPS_FILE=upgrade/steps-mock-voting.json UPGRADE_PARAMETERS_FILE=scripts/upgrade/upgrade-params-mainnet.toml yarn hardhat --network custom run scripts/utils/migrate.ts",
-    "validate:config": "yarn hardhat validate-config-consistency",
+    "validate:configs": "yarn hardhat validate-configs",
     "typecheck": "tsc --noEmit",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed",
@@ -122,6 +122,7 @@
     "@openzeppelin/contracts": "3.4.0",
     "@openzeppelin/contracts-v4.4": "npm:@openzeppelin/contracts@4.4.1",
     "@openzeppelin/contracts-v5.2": "npm:@openzeppelin/contracts@5.2.0",
-    "openzeppelin-solidity": "2.0.0"
+    "openzeppelin-solidity": "2.0.0",
+    "zod": "^4.0.13"
   }
 }

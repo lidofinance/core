@@ -7,89 +7,32 @@ import { IDualGovernance, IEmergencyProtectedTimelock, OmnibusBase, TokenManager
 
 import { advanceChainTime, ether, log } from "lib";
 import { impersonate } from "lib/account";
+import { UpgradeParameters, validateUpgradeParameters } from "lib/config-schemas";
 import { loadContract } from "lib/contract";
 import { findEventsWithInterfaces } from "lib/event";
 import { DeploymentState, getAddress, Sk } from "lib/state-file";
 
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE || "scripts/upgrade/upgrade-params-mainnet.toml";
 
-export interface UpgradeParameters {
-  chainSpec: {
-    slotsPerEpoch: number;
-    secondsPerSlot: number;
-    genesisTime: number;
-    depositContract: string;
-  };
-  gateSealForVaults: {
-    address: string;
-  };
-  easyTrack: {
-    evmScriptExecutor: string;
-    vaultHubAdapter: string;
-  };
-  validatorExitDelayVerifier: {
-    gIFirstValidatorPrev: string;
-    gIFirstValidatorCurr: string;
-    gIFirstHistoricalSummaryPrev: string;
-    gIFirstHistoricalSummaryCurr: string;
-    gIFirstBlockRootInSummaryPrev: string;
-    gIFirstBlockRootInSummaryCurr: string;
-  };
-  vaultHub: {
-    relativeShareLimitBP: number;
-  };
-  lazyOracle: {
-    quarantinePeriod: number;
-    maxRewardRatioBP: number;
-  };
-  predepositGuarantee: {
-    genesisForkVersion: string;
-    gIndex: string;
-    gIndexAfterChange: string;
-    changeSlot: number;
-  };
-  delegation: {
-    wethContract: string;
-  };
-  operatorGrid: {
-    defaultTierParams: {
-      shareLimitInEther: string;
-      reserveRatioBP: number;
-      forcedRebalanceThresholdBP: number;
-      infraFeeBP: number;
-      liquidityFeeBP: number;
-      reservationFeeBP: number;
-    };
-  };
-  burner: {
-    isMigrationAllowed: boolean;
-  };
-  oracleVersions: {
-    vebo_consensus_version: number;
-    ao_consensus_version: number;
-  };
-  aragonAppVersions: {
-    nor_version: number[];
-    sdvt_version: number[];
-  };
-  triggerableWithdrawalsGateway: {
-    maxExitRequestsLimit: number;
-    exitsPerFrame: number;
-    frameDurationInSec: number;
-  };
-  triggerableWithdrawals: {
-    exit_events_lookback_window_in_slots: number;
-    nor_exit_deadline_in_sec: number;
-  };
-}
+export { UpgradeParameters };
 
 export function readUpgradeParameters(): UpgradeParameters {
   if (!UPGRADE_PARAMETERS_FILE) {
     throw new Error("UPGRADE_PARAMETERS_FILE is not set");
   }
 
+  if (!fs.existsSync(UPGRADE_PARAMETERS_FILE)) {
+    throw new Error(`Upgrade parameters file not found: ${UPGRADE_PARAMETERS_FILE}`);
+  }
+
   const rawData = fs.readFileSync(UPGRADE_PARAMETERS_FILE, "utf8");
-  return toml.parse(rawData) as unknown as UpgradeParameters;
+  const parsedData = toml.parse(rawData);
+
+  try {
+    return validateUpgradeParameters(parsedData);
+  } catch (error) {
+    throw new Error(`Invalid upgrade parameters: ${error}`);
+  }
 }
 
 export async function mockDGAragonVoting(

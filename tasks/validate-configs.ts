@@ -3,90 +3,16 @@ import { task } from "hardhat/config";
 
 import * as toml from "@iarna/toml";
 
+import {
+  safeValidateScratchParameters,
+  safeValidateUpgradeParameters,
+  ScratchParameters,
+  UpgradeParameters,
+} from "lib/config-schemas";
+
 // Re-implement parameter reading without hardhat dependencies
 const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE || "scripts/upgrade/upgrade-params-mainnet.toml";
 const SCRATCH_DEPLOY_CONFIG = process.env.SCRATCH_DEPLOY_CONFIG || "scripts/scratch/deploy-params-testnet.toml";
-
-interface UpgradeParameters {
-  chainSpec: {
-    slotsPerEpoch: number;
-    secondsPerSlot: number;
-    genesisTime: number;
-    depositContract: string;
-  };
-  gateSealForVaults: {
-    address: string;
-  };
-  validatorExitDelayVerifier: {
-    gIFirstValidatorPrev: string;
-    gIFirstValidatorCurr: string;
-    gIFirstHistoricalSummaryPrev: string;
-    gIFirstHistoricalSummaryCurr: string;
-    gIFirstBlockRootInSummaryPrev: string;
-    gIFirstBlockRootInSummaryCurr: string;
-  };
-  vaultHub: {
-    relativeShareLimitBP: number;
-  };
-  lazyOracle: {
-    quarantinePeriod: number;
-    maxRewardRatioBP: number;
-  };
-  predepositGuarantee: {
-    genesisForkVersion: string;
-    gIndex: string;
-    gIndexAfterChange: string;
-    changeSlot: number;
-  };
-  delegation: {
-    wethContract: string;
-  };
-  operatorGrid: Record<string, unknown>;
-  aragonAppVersions: Record<string, unknown>;
-  burner: {
-    isMigrationAllowed: boolean;
-  };
-  oracleVersions: Record<string, unknown>;
-  triggerableWithdrawals: Record<string, unknown>;
-  triggerableWithdrawalsGateway: Record<string, unknown>;
-}
-
-interface ScratchParameters {
-  chainSpec: {
-    slotsPerEpoch: number;
-    secondsPerSlot: number;
-  };
-  gateSeal: {
-    sealDuration: number;
-    expiryTimestamp: number;
-    sealingCommittee: string[];
-  };
-  lidoApm: {
-    ensName: string;
-    ensRegDurationSec: number;
-  };
-  dao: Record<string, unknown>;
-  vesting: Record<string, unknown>;
-  burner: {
-    isMigrationAllowed: boolean;
-  };
-  vaultHub: {
-    maxRelativeShareLimitBP: number;
-  };
-  lazyOracle: {
-    quarantinePeriod: number;
-    maxRewardRatioBP: number;
-  };
-  predepositGuarantee: {
-    genesisForkVersion: string;
-    gIndex: string;
-    gIndexAfterChange: string;
-    changeSlot: number;
-  };
-  operatorGrid: Record<string, unknown>;
-  appVersions: Record<string, unknown>;
-  triggerableWithdrawalsGateway: Record<string, unknown>;
-}
 
 function readUpgradeParameters(): UpgradeParameters {
   if (!fs.existsSync(UPGRADE_PARAMETERS_FILE)) {
@@ -94,7 +20,14 @@ function readUpgradeParameters(): UpgradeParameters {
   }
 
   const content = fs.readFileSync(UPGRADE_PARAMETERS_FILE, "utf8");
-  return toml.parse(content) as unknown as UpgradeParameters;
+  const parsedData = toml.parse(content);
+  const result = safeValidateUpgradeParameters(parsedData);
+
+  if (!result.success) {
+    throw new Error(`Invalid upgrade parameters: ${result.error.message}`);
+  }
+
+  return result.data;
 }
 
 function readScratchParameters(): ScratchParameters {
@@ -103,7 +36,14 @@ function readScratchParameters(): ScratchParameters {
   }
 
   const content = fs.readFileSync(SCRATCH_DEPLOY_CONFIG, "utf8");
-  return toml.parse(content) as unknown as ScratchParameters;
+  const parsedData = toml.parse(content);
+  const result = safeValidateScratchParameters(parsedData);
+
+  if (!result.success) {
+    throw new Error(`Invalid scratch parameters: ${result.error.message}`);
+  }
+
+  return result.data;
 }
 
 interface ValidationResult {
@@ -132,6 +72,54 @@ const EXPECTED_DIFFERENCES = [
   {
     path: "gateSealForVaults.address",
     reason: "Gate seal address differs between upgrade and scratch contexts",
+  },
+];
+
+// Parameters that are expected to be missing in scratch (upgrade-only)
+const EXPECTED_MISSING_IN_SCRATCH = [
+  {
+    path: "chainSpec.genesisTime",
+    reason: "Genesis time is set via environment variables in scratch deployment",
+  },
+  {
+    path: "chainSpec.depositContract",
+    reason: "Deposit contract address is set via environment variables in scratch deployment",
+  },
+  {
+    path: "gateSealForVaults.address",
+    reason: "Gate seal configuration differs between upgrade and scratch contexts",
+  },
+  {
+    path: "easyTrack.evmScriptExecutor",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.vaultHubAdapter",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "predepositGuarantee.genesisForkVersion",
+    reason: "Genesis fork version is upgrade-specific configuration",
+  },
+  {
+    path: "delegation.wethContract",
+    reason: "Delegation is upgrade-specific configuration",
+  },
+  {
+    path: "oracleVersions.vebo_consensus_version",
+    reason: "Oracle versions are upgrade-specific configuration",
+  },
+  {
+    path: "oracleVersions.ao_consensus_version",
+    reason: "Oracle versions are upgrade-specific configuration",
+  },
+  {
+    path: "triggerableWithdrawals.exit_events_lookback_window_in_slots",
+    reason: "TODO",
+  },
+  {
+    path: "triggerableWithdrawals.nor_exit_deadline_in_sec",
+    reason: "TODO",
   },
 ];
 
@@ -195,9 +183,14 @@ function isExpectedDifference(path: string): boolean {
   return EXPECTED_DIFFERENCES.some((diff) => path.startsWith(diff.path));
 }
 
+function isExpectedMissingInScratch(path: string): boolean {
+  return EXPECTED_MISSING_IN_SCRATCH.some((missing) => path.startsWith(missing.path));
+}
+
 function validateParameterConsistency(): {
   results: ValidationResult[];
   missingInScratch: MissingInScratch[];
+  expectedMissingInScratch: MissingInScratch[];
   matchCount: number;
   totalChecked: number;
 } {
@@ -220,6 +213,7 @@ function validateParameterConsistency(): {
 
   const results: ValidationResult[] = [];
   const missingInScratch: MissingInScratch[] = [];
+  const expectedMissingInScratch: MissingInScratch[] = [];
 
   // Get all paths from upgrade config
   const upgradePaths = getAllPaths(upgradeParams);
@@ -232,10 +226,16 @@ function validateParameterConsistency(): {
     const existsInScratch = hasPath(scratchParams, scratchPath);
 
     if (!existsInScratch) {
-      missingInScratch.push({
+      const missingParam = {
         path,
         upgradeValue,
-      });
+      };
+
+      if (isExpectedMissingInScratch(path)) {
+        expectedMissingInScratch.push(missingParam);
+      } else {
+        missingInScratch.push(missingParam);
+      }
       continue;
     }
 
@@ -254,10 +254,10 @@ function validateParameterConsistency(): {
   const matchCount = results.filter((r) => r.match).length;
   const totalChecked = results.length;
 
-  return { results, missingInScratch, matchCount, totalChecked };
+  return { results, missingInScratch, expectedMissingInScratch, matchCount, totalChecked };
 }
 
-task("validate-config-consistency", "Validate configuration consistency between upgrade and scratch parameters")
+task("validate-configs", "Validate configuration consistency between upgrade and scratch parameters")
   .addFlag("silent", "Run in silent mode (no output on success)")
   .setAction(async (taskArgs) => {
     const silent = taskArgs.silent;
@@ -266,7 +266,8 @@ task("validate-config-consistency", "Validate configuration consistency between 
       console.log("🔍 Validating configuration consistency between upgrade and scratch parameters...\n");
     }
 
-    const { results, missingInScratch, matchCount, totalChecked } = validateParameterConsistency();
+    const { results, missingInScratch, expectedMissingInScratch, matchCount, totalChecked } =
+      validateParameterConsistency();
 
     let unexpectedMismatches = 0;
     const expectedDifferencesFound = results.filter((r) => !r.match && isExpectedDifference(r.path.split(" -> ")[0]));
@@ -276,26 +277,42 @@ task("validate-config-consistency", "Validate configuration consistency between 
       console.log("=".repeat(80));
 
       for (const result of results) {
-        const status = result.match ? "✅ MATCH" : "❌ MISMATCH";
+        const isExpected = !result.match ? isExpectedDifference(result.path.split(" -> ")[0]) : false;
+        let status: string;
+        if (result.match) {
+          status = "✅ MATCH";
+        } else if (isExpected) {
+          status = "🆗 EXPECTED MISMATCH";
+        } else {
+          status = "❌ MISMATCH";
+        }
         console.log(`${status} ${result.path}`);
 
-        if (!result.match) {
-          // Check if this is an expected difference
-          if (!isExpectedDifference(result.path.split(" -> ")[0])) {
-            unexpectedMismatches++;
-            console.log(`  Upgrade: ${JSON.stringify(result.upgradeValue)}`);
-            console.log(`  Scratch: ${JSON.stringify(result.scratchValue)}`);
-          }
+        if (!result.match && !isExpected) {
+          unexpectedMismatches++;
+          console.log(`  Upgrade: ${JSON.stringify(result.upgradeValue)}`);
+          console.log(`  Scratch: ${JSON.stringify(result.scratchValue)}`);
         }
       }
 
       if (missingInScratch.length > 0) {
-        console.log("\n📋 Parameters present in upgrade but missing in scratch:");
+        console.log("\n📋 Unexpected parameters missing in scratch:");
         console.log("=".repeat(80));
 
         for (const missing of missingInScratch) {
-          console.log(`⚠️  ${missing.path}`);
-          console.log(`   Value: ${JSON.stringify(missing.upgradeValue)}`);
+          console.log(`⚠️  ${missing.path} - Value: ${JSON.stringify(missing.upgradeValue)}`);
+        }
+      }
+
+      if (expectedMissingInScratch.length > 0) {
+        console.log("\n📋 Expected parameters missing in scratch (by design):");
+        console.log("=".repeat(80));
+
+        for (const missing of expectedMissingInScratch) {
+          const expectedMissing = EXPECTED_MISSING_IN_SCRATCH.find((exp) => missing.path.startsWith(exp.path));
+          console.log(
+            `ℹ️  ${missing.path} - Reason: ${expectedMissing?.reason} - Value: ${JSON.stringify(missing.upgradeValue)}`,
+          );
         }
       }
 
@@ -305,10 +322,9 @@ task("validate-config-consistency", "Validate configuration consistency between 
       for (const result of expectedDifferencesFound) {
         const originalPath = result.path.split(" -> ")[0];
         const expectedDiff = EXPECTED_DIFFERENCES.find((diff) => originalPath.startsWith(diff.path));
-        console.log(`ℹ️  ${result.path}`);
-        console.log(`   Reason: ${expectedDiff?.reason}`);
-        console.log(`   Upgrade: ${JSON.stringify(result.upgradeValue)}`);
-        console.log(`   Scratch: ${JSON.stringify(result.scratchValue)}\n`);
+        console.log(
+          `ℹ️  ${result.path} - Reason: ${expectedDiff?.reason} - Upgrade: ${JSON.stringify(result.upgradeValue)} - Scratch: ${JSON.stringify(result.scratchValue)}`,
+        );
       }
 
       console.log("📈 Summary:");
@@ -316,7 +332,8 @@ task("validate-config-consistency", "Validate configuration consistency between 
 
       console.log(`✅ Matching parameters: ${matchCount}/${totalChecked}`);
       console.log(`ℹ️  Expected differences: ${expectedDifferencesFound.length}`);
-      console.log(`📋 Missing in scratch: ${missingInScratch.length}`);
+      console.log(`📋 Unexpected missing in scratch: ${missingInScratch.length}`);
+      console.log(`📋 Expected missing in scratch: ${expectedMissingInScratch.length}`);
     } else {
       // In silent mode, count unexpected mismatches without logging details
       for (const result of results) {
@@ -326,11 +343,12 @@ task("validate-config-consistency", "Validate configuration consistency between 
       }
     }
 
-    if (unexpectedMismatches > 0) {
+    if (unexpectedMismatches > 0 || missingInScratch.length > 0) {
       if (!silent) {
         console.log(`❌ Unexpected mismatches: ${unexpectedMismatches}`);
+        console.log(`❌ Unexpected missing parameters: ${missingInScratch.length}`);
         console.log("\n⚠️  Configuration validation FAILED!");
-        console.log("Please review the mismatched parameters and ensure they are intentional.");
+        console.log("Please review the mismatched and missing parameters and ensure they are intentional.");
       } else {
         // In silent mode, show details on failure
         console.log("❌ Configuration validation FAILED!");
@@ -346,17 +364,17 @@ task("validate-config-consistency", "Validate configuration consistency between 
         }
 
         if (missingInScratch.length > 0) {
-          console.log("\n📋 Parameters present in upgrade but missing in scratch:");
+          console.log("\n📋 Unexpected parameters missing in scratch:");
           console.log("=".repeat(80));
 
           for (const missing of missingInScratch) {
-            console.log(`⚠️  ${missing.path}`);
-            console.log(`   Value: ${JSON.stringify(missing.upgradeValue)}`);
+            console.log(`⚠️  ${missing.path} - Value: ${JSON.stringify(missing.upgradeValue)}`);
           }
         }
 
         console.log(`\n❌ Unexpected mismatches: ${unexpectedMismatches}`);
-        console.log("Please review the mismatched parameters and ensure they are intentional.");
+        console.log(`❌ Unexpected missing parameters: ${missingInScratch.length}`);
+        console.log("Please review the mismatched and missing parameters and ensure they are intentional.");
       }
       process.exit(1);
     } else {
