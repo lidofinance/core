@@ -9,7 +9,6 @@
     "reason-string": "off",
     "no-empty-blocks": "off",
     "func-name-mixedcase": "off",
-    "use-natspec": "off",
     "lido/fixed-compiler-version": "error",
     "visibility-modifier-order": "error",
     "no-unused-vars": "error",

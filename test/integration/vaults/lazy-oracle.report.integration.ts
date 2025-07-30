@@ -3,6 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
+import { advanceChainTime } from "lib";
 import { createVaultWithDashboard, getProtocolContext, ProtocolContext, reportVaultDataWithProof } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
@@ -38,6 +39,8 @@ describe("Scenario: Lazy Oracle update vault data", () => {
       nodeOperator,
     );
 
+    await advanceChainTime(60n);
+    // TODO: find out why without time advance there is VaultReportIsFreshEnough although vaultHub.isReportFresh is false
     await reportVaultDataWithProof(ctx, stakingVault);
     await dashboard.connect(owner).voluntaryDisconnect();
     await reportVaultDataWithProof(ctx, stakingVault);

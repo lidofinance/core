@@ -1,134 +1,175 @@
-import { spawn } from "child_process";
-import { subtask, task } from "hardhat/config";
+import { execSync, SpawnSyncReturns } from "child_process";
+import { task } from "hardhat/config";
 
-// Files and their specific rule overrides
-const fileOverrides: Record<string, string[]> = {
-  "contracts/0.4.24/nos/NodeOperatorsRegistry.sol": ["gas-indexed-events"],
-  "contracts/0.4.24/Lido.sol": ["gas-indexed-events"],
-  "contracts/0.4.24/lib/StakeLimitUtils.sol": ["one-contract-per-file", "gas-strict-inequalities"],
-  "contracts/0.4.24/lib/Packed64x4.sol": ["gas-strict-inequalities"],
-  "contracts/0.4.24/lib/SigningKeys.sol": ["gas-strict-inequalities"],
-  "contracts/0.4.24/utils/Versioned.sol": ["no-global-import"],
-  "contracts/0.8.9/utils/Versioned.sol": ["no-global-import"],
-  "contracts/0.8.9/utils/PausableUntil.sol": ["no-global-import"],
-  "contracts/0.8.9/proxy/WithdrawalsManagerProxy.sol": ["one-contract-per-file"],
-  "contracts/0.8.9/lib/ExitLimitUtils.sol": ["one-contract-per-file"],
-  "contracts/0.8.9/proxy/OssifiableProxy.sol": ["no-unused-imports"],
+interface RuleOverride {
+  ruleId: string;
+  line?: number; // Optional line number - if specified, only filter warnings on this specific line
+  // If not specified, filter ALL occurrences of this rule in the file
+}
+
+// Helper functions for clearer override definitions
+const ruleOnLine = (ruleId: string, line: number): RuleOverride => ({ ruleId, line });
+const allOccurrences = (ruleId: string): RuleOverride => ({ ruleId });
+
+// Files and their specific rule overrides with optional line numbers
+const fileOverrides: Record<string, RuleOverride[]> = {
+  "contracts/0.4.24/lib/StakeLimitUtils.sol": [ruleOnLine("one-contract-per-file", 5)],
+  "contracts/0.4.24/utils/Versioned.sol": [ruleOnLine("no-global-import", 5)],
+  "contracts/0.8.9/utils/Versioned.sol": [ruleOnLine("no-global-import", 6)],
+  "contracts/0.8.9/utils/PausableUntil.sol": [ruleOnLine("no-global-import", 5)],
+  "contracts/0.8.9/lib/ExitLimitUtils.sol": [ruleOnLine("one-contract-per-file", 3)],
+  "contracts/0.8.9/proxy/OssifiableProxy.sol": [ruleOnLine("no-unused-import", 7)],
+  "contracts/0.8.9/WithdrawalQueueBase.sol": [ruleOnLine("no-global-import", 7)],
+  "contracts/common/lib/ECDSA.sol": [allOccurrences("gas-custom-errors")],
+  "contracts/common/lib/MemUtils.sol": [ruleOnLine("gas-custom-errors", 50)],
+  "contracts/common/lib/TriggerableWithdrawals.sol": [ruleOnLine("state-visibility", 13)],
 };
 
-// Function to filter solhint output
-function filterOutput(output: string): string {
-  const lines = output.split("\n");
-  const result: string[] = [];
-  let i = 0;
+interface SolhintWarning {
+  filePath: string;
+  ruleId: string;
+  severity: string;
+  message: string;
+  line: number;
+  column: number;
+}
 
-  while (i < lines.length) {
-    const line = lines[i];
+interface SolhintReport {
+  filePath: string;
+  reports: SolhintWarning[];
+}
 
-    if (line.trim() === "") {
-      result.push(line);
-      i++;
-      continue;
-    }
+// Function to filter solhint JSON output
+function filterJsonOutput(jsonOutput: string): {
+  filteredReports: SolhintReport[];
+  totalWarnings: number;
+  filteredWarnings: number;
+} {
+  let warnings: SolhintWarning[];
 
-    // Check if this line is a file header (doesn't start with spaces and contains .sol)
-    if (!line.startsWith(" ") && line.includes(".sol")) {
-      const currentFile = line.trim();
-      const fileWarnings: string[] = [];
-      let j = i + 1;
-
-      // Collect all warning/error lines for this file
-      while (j < lines.length) {
-        const nextLine = lines[j];
-
-        // If empty line, skip it but don't break
-        if (nextLine.trim() === "") {
-          j++;
-          continue;
-        }
-
-        // If we hit another file header, break
-        if (!nextLine.startsWith(" ") && nextLine.includes(".sol")) {
-          break;
-        }
-
-        // This should be a warning/error line
-        if (nextLine.startsWith(" ")) {
-          const shouldIgnore =
-            currentFile &&
-            fileOverrides[currentFile] &&
-            fileOverrides[currentFile].some((rule) => nextLine.includes(rule));
-          if (!shouldIgnore) {
-            fileWarnings.push(nextLine);
-          }
-        } else {
-          // Non-space line that isn't a file header - add it as is
-          fileWarnings.push(nextLine);
-        }
-
-        j++;
-      }
-
-      // Only add the file header and warnings if there are non-filtered warnings
-      if (fileWarnings.length > 0) {
-        result.push(line);
-        result.push(...fileWarnings);
-        result.push(""); // Add empty line after each file section
-      }
-
-      i = j;
-    } else {
-      result.push(line);
-      i++;
-    }
+  try {
+    const parsed = JSON.parse(jsonOutput);
+    // Filter out the conclusion object that solhint adds at the end
+    warnings = parsed.filter((item: SolhintWarning) => item.filePath && item.ruleId);
+  } catch (error) {
+    console.error("Failed to parse solhint JSON output:", error);
+    return { filteredReports: [], totalWarnings: 0, filteredWarnings: 0 };
   }
 
-  return result.join("\n").trim();
+  const totalWarnings = warnings.length;
+  let filteredWarnings = 0;
+
+  // Group warnings by file path
+  const warningsByFile = new Map<string, SolhintWarning[]>();
+
+  warnings.forEach((warning) => {
+    const overriddenRules = fileOverrides[warning.filePath] || [];
+    const shouldIgnore = overriddenRules.some((override) => {
+      // Check if rule matches
+      if (override.ruleId !== warning.ruleId) {
+        return false;
+      }
+      // If line number is specified, check if it matches; otherwise ignore all occurrences of this rule
+      return override.line === undefined || override.line === warning.line;
+    });
+
+    if (shouldIgnore) {
+      filteredWarnings++;
+      return;
+    }
+
+    if (!warningsByFile.has(warning.filePath)) {
+      warningsByFile.set(warning.filePath, []);
+    }
+    warningsByFile.get(warning.filePath)!.push(warning);
+  });
+
+  // Convert to SolhintReport format
+  const filteredReports: SolhintReport[] = Array.from(warningsByFile.entries()).map(([filePath, reports]) => ({
+    filePath,
+    reports,
+  }));
+
+  return { filteredReports, totalWarnings, filteredWarnings };
+}
+
+// Function to format filtered output for display
+function formatOutput(filteredReports: SolhintReport[]): string {
+  if (filteredReports.length === 0) {
+    return "";
+  }
+
+  const lines: string[] = [];
+
+  filteredReports.forEach((report) => {
+    lines.push(report.filePath);
+
+    report.reports.forEach((item) => {
+      const severityText = item.severity === "Warning" ? "Warning" : "Error";
+      lines.push(`  ${item.line}:${item.column}  ${severityText}  ${item.message}  ${item.ruleId}`);
+    });
+
+    lines.push("");
+  });
+
+  return lines.join("\n").trim();
 }
 
 async function runSolhintLinting(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("npx", ["solhint", "--noPoster", "contracts/**/*.sol"], {
-      stdio: ["inherit", "pipe", "pipe"],
-      shell: true,
+  try {
+    const output = execSync("npx solhint --formatter json --noPoster --disc 'contracts/**/*.sol'", {
+      encoding: "utf8",
+      shell: "/bin/bash",
     });
 
-    let stdout = "";
-    let stderr = "";
+    const { filteredReports, totalWarnings, filteredWarnings } = filterJsonOutput(output);
+    const formattedOutput = formatOutput(filteredReports);
 
-    child.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
+    if (formattedOutput) {
+      console.log(formattedOutput);
+    }
 
-    child.stderr?.on("data", (data) => {
-      stderr += data.toString();
-    });
+    const remainingWarnings = totalWarnings - filteredWarnings;
+    if (remainingWarnings > 0) {
+      console.log(
+        `\nFound ${remainingWarnings} unfiltered warning(s) out of ${totalWarnings} total (${filteredWarnings} filtered out)`,
+      );
+      process.exit(1);
+    } else if (filteredWarnings > 0) {
+      console.log(`\nAll ${totalWarnings} warning(s) were filtered out`);
+    } else {
+      console.log("\nNo warnings found");
+    }
+  } catch (error_) {
+    const error = error_ as SpawnSyncReturns<string>;
+    if (error.status !== 0) {
+      console.error("Error running solhint:", { stderr: error.stderr, stdout: error.stdout });
 
-    child.on("close", (code) => {
-      const output = stdout || stderr;
-      const filteredOutput = filterOutput(output);
+      // solhint found issues, parse the output
+      const { filteredReports, totalWarnings, filteredWarnings } = filterJsonOutput(
+        error.stdout || error.output?.toString() || "",
+      );
+      const formattedOutput = formatOutput(filteredReports);
 
-      if (filteredOutput) {
-        console.log(filteredOutput);
+      if (formattedOutput) {
+        console.log(formattedOutput);
       }
 
-      if (code !== 0 && filteredOutput) {
-        process.exit(code || 1);
+      const remainingWarnings = totalWarnings - filteredWarnings;
+      if (remainingWarnings > 0) {
+        console.log(
+          `\nFound ${remainingWarnings} unfiltered warning(s) out of ${totalWarnings} total (${filteredWarnings} filtered out)`,
+        );
+        process.exit(1);
+      } else if (filteredWarnings > 0) {
+        console.log(`\nAll ${totalWarnings} warning(s) were filtered out`);
       }
-
-      resolve();
-    });
-
-    child.on("error", (error) => {
-      reject(error);
-    });
-  });
+    } else {
+      console.error("Error running solhint:", (error_ as Error).message);
+      process.exit(1);
+    }
+  }
 }
-
-// Create both a subtask (for internal use) and a task (for CLI)
-subtask("lint-solidity:internal", "Internal Solidity linting subtask").setAction(async () => {
-  await runSolhintLinting();
-});
 
 task("lint-solidity", "Lint Solidity files with custom rule filtering").setAction(async () => {
   await runSolhintLinting();

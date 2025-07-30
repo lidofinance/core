@@ -4,11 +4,15 @@ import { z } from "zod";
 const EthereumAddressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address");
 const HexStringSchema = z.string().regex(/^0x[a-fA-F0-9]+$/, "Invalid hex string");
 const BigIntStringSchema = z.string().regex(/^\d+$/, "Invalid BigInt string");
+const BasisPointsSchema = z.number().int().min(0).max(10000);
+const PositiveIntSchema = z.number().int().positive();
+const NonNegativeIntSchema = z.number().int().nonnegative();
+const PercentSchema = z.number().int().min(0).max(100);
 
 // Chain specification schema
 const ChainSpecSchema = z.object({
-  slotsPerEpoch: z.number().int().positive(),
-  secondsPerSlot: z.number().int().positive(),
+  slotsPerEpoch: PositiveIntSchema,
+  secondsPerSlot: PositiveIntSchema,
   genesisTime: z.number().int().optional(),
   depositContract: EthereumAddressSchema.optional(),
 });
@@ -21,23 +25,23 @@ const ValidatorExitDelayVerifierSchema = z.object({
   gIFirstHistoricalSummaryCurr: HexStringSchema,
   gIFirstBlockRootInSummaryPrev: HexStringSchema,
   gIFirstBlockRootInSummaryCurr: HexStringSchema,
-  firstSupportedSlot: z.number().int().nonnegative(),
-  pivotSlot: z.number().int().nonnegative(),
-  capellaSlot: z.number().int().nonnegative(),
-  slotsPerHistoricalRoot: z.number().int().positive(),
-  shardCommitteePeriodInSeconds: z.number().int().positive(),
+  firstSupportedSlot: NonNegativeIntSchema,
+  pivotSlot: NonNegativeIntSchema,
+  capellaSlot: NonNegativeIntSchema,
+  slotsPerHistoricalRoot: PositiveIntSchema,
+  shardCommitteePeriodInSeconds: PositiveIntSchema,
 });
 
 // Vault hub schema
 const VaultHubSchema = z.object({
-  relativeShareLimitBP: z.number().int().min(0).max(10000).optional(),
-  maxRelativeShareLimitBP: z.number().int().min(0).max(10000).optional(),
+  relativeShareLimitBP: BasisPointsSchema.optional(),
+  maxRelativeShareLimitBP: BasisPointsSchema.optional(),
 });
 
 // Lazy oracle schema
 const LazyOracleSchema = z.object({
-  quarantinePeriod: z.number().int().positive(),
-  maxRewardRatioBP: z.number().int().min(0).max(10000),
+  quarantinePeriod: PositiveIntSchema,
+  maxRewardRatioBP: BasisPointsSchema,
 });
 
 // Predeposit guarantee schema
@@ -45,18 +49,18 @@ const PredepositGuaranteeSchema = z.object({
   genesisForkVersion: HexStringSchema.optional(),
   gIndex: HexStringSchema,
   gIndexAfterChange: HexStringSchema,
-  changeSlot: z.number().int().nonnegative(),
+  changeSlot: NonNegativeIntSchema,
 });
 
 // Operator grid schema
 const OperatorGridSchema = z.object({
   defaultTierParams: z.object({
     shareLimitInEther: BigIntStringSchema,
-    reserveRatioBP: z.number().int().min(0).max(10000),
-    forcedRebalanceThresholdBP: z.number().int().min(0).max(10000),
-    infraFeeBP: z.number().int().min(0).max(10000),
-    liquidityFeeBP: z.number().int().min(0).max(10000),
-    reservationFeeBP: z.number().int().min(0).max(10000),
+    reserveRatioBP: BasisPointsSchema,
+    forcedRebalanceThresholdBP: BasisPointsSchema,
+    infraFeeBP: BasisPointsSchema,
+    liquidityFeeBP: BasisPointsSchema,
+    reservationFeeBP: BasisPointsSchema,
   }),
 });
 
@@ -69,15 +73,15 @@ const BurnerSchema = z.object({
 
 // Triggerable withdrawals gateway schema
 const TriggerableWithdrawalsGatewaySchema = z.object({
-  maxExitRequestsLimit: z.number().int().positive(),
-  exitsPerFrame: z.number().int().positive(),
-  frameDurationInSec: z.number().int().positive(),
+  maxExitRequestsLimit: PositiveIntSchema,
+  exitsPerFrame: PositiveIntSchema,
+  frameDurationInSec: PositiveIntSchema,
 });
 
 // Oracle versions schema
 const OracleVersionsSchema = z.object({
-  vebo_consensus_version: z.number().int().positive(),
-  ao_consensus_version: z.number().int().positive(),
+  vebo_consensus_version: PositiveIntSchema,
+  ao_consensus_version: PositiveIntSchema,
 });
 
 // Aragon app versions schema
@@ -114,15 +118,15 @@ export const UpgradeParametersSchema = z.object({
   aragonAppVersions: AragonAppVersionsSchema.optional(),
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   triggerableWithdrawals: z.object({
-    exit_events_lookback_window_in_slots: z.number().int().positive(),
-    nor_exit_deadline_in_sec: z.number().int().positive(),
+    exit_events_lookback_window_in_slots: PositiveIntSchema,
+    nor_exit_deadline_in_sec: PositiveIntSchema,
   }),
 });
 
 // Gate seal schema (for scratch deployment)
 const GateSealSchema = z.object({
-  sealDuration: z.number().int().positive(),
-  expiryTimestamp: z.number().int().positive(),
+  sealDuration: PositiveIntSchema,
+  expiryTimestamp: PositiveIntSchema,
   sealingCommittee: z.array(EthereumAddressSchema),
 });
 
@@ -134,13 +138,13 @@ const DaoSchema = z.object({
     voting: z.object({
       minSupportRequired: BigIntStringSchema,
       minAcceptanceQuorum: BigIntStringSchema,
-      voteDuration: z.number().int().positive(),
-      objectionPhaseDuration: z.number().int().positive(),
+      voteDuration: PositiveIntSchema,
+      objectionPhaseDuration: PositiveIntSchema,
     }),
     fee: z.object({
-      totalPercent: z.number().int().min(0).max(100),
-      treasuryPercent: z.number().int().min(0).max(100),
-      nodeOperatorsPercent: z.number().int().min(0).max(100),
+      totalPercent: PercentSchema,
+      treasuryPercent: PercentSchema,
+      nodeOperatorsPercent: PercentSchema,
     }),
     token: z.object({
       name: z.string().min(1),
@@ -152,73 +156,73 @@ const DaoSchema = z.object({
 // Vesting schema
 const VestingSchema = z.object({
   unvestedTokensAmount: BigIntStringSchema,
-  start: z.number().int().nonnegative(),
-  cliff: z.number().int().nonnegative(),
-  end: z.number().int().nonnegative(),
+  start: NonNegativeIntSchema,
+  cliff: NonNegativeIntSchema,
+  end: NonNegativeIntSchema,
   revokable: z.boolean(),
   holders: z.any(),
 });
 
 // Oracle configuration schemas
 const HashConsensusSchema = z.object({
-  fastLaneLengthSlots: z.number().int().positive(),
-  epochsPerFrame: z.number().int().positive(),
+  fastLaneLengthSlots: PositiveIntSchema,
+  epochsPerFrame: PositiveIntSchema,
 });
 
 const OracleSchema = z.object({
-  consensusVersion: z.number().int().positive(),
+  consensusVersion: PositiveIntSchema,
 });
 
 const ValidatorsExitBusOracleSchema = OracleSchema.extend({
-  maxValidatorsPerRequest: z.number().int().positive(),
-  maxExitRequestsLimit: z.number().int().positive(),
-  exitsPerFrame: z.number().int().positive(),
-  frameDurationInSec: z.number().int().positive(),
+  maxValidatorsPerRequest: PositiveIntSchema,
+  maxExitRequestsLimit: PositiveIntSchema,
+  exitsPerFrame: PositiveIntSchema,
+  frameDurationInSec: PositiveIntSchema,
 });
 
 // Deposit security module schema
 const DepositSecurityModuleSchema = z.object({
-  maxOperatorsPerUnvetting: z.number().int().positive(),
-  pauseIntentValidityPeriodBlocks: z.number().int().positive(),
+  maxOperatorsPerUnvetting: PositiveIntSchema,
+  pauseIntentValidityPeriodBlocks: PositiveIntSchema,
   usePredefinedAddressInstead: z.string().optional(),
 });
 
 // Oracle report sanity checker schema
 const OracleReportSanityCheckerSchema = z.object({
-  exitedValidatorsPerDayLimit: z.number().int().positive(),
-  appearedValidatorsPerDayLimit: z.number().int().positive(),
-  deprecatedOneOffCLBalanceDecreaseBPLimit: z.number().int().min(0).max(10000),
-  annualBalanceIncreaseBPLimit: z.number().int().min(0).max(10000),
-  simulatedShareRateDeviationBPLimit: z.number().int().min(0).max(10000),
-  maxValidatorExitRequestsPerReport: z.number().int().positive(),
-  maxItemsPerExtraDataTransaction: z.number().int().positive(),
-  maxNodeOperatorsPerExtraDataItem: z.number().int().positive(),
-  requestTimestampMargin: z.number().int().positive(),
-  maxPositiveTokenRebase: z.number().int().positive(),
-  initialSlashingAmountPWei: z.number().int().positive(),
-  inactivityPenaltiesAmountPWei: z.number().int().positive(),
-  clBalanceOraclesErrorUpperBPLimit: z.number().int().min(0).max(10000),
+  exitedValidatorsPerDayLimit: PositiveIntSchema,
+  appearedValidatorsPerDayLimit: PositiveIntSchema,
+  deprecatedOneOffCLBalanceDecreaseBPLimit: BasisPointsSchema,
+  annualBalanceIncreaseBPLimit: BasisPointsSchema,
+  simulatedShareRateDeviationBPLimit: BasisPointsSchema,
+  maxValidatorExitRequestsPerReport: PositiveIntSchema,
+  maxItemsPerExtraDataTransaction: PositiveIntSchema,
+  maxNodeOperatorsPerExtraDataItem: PositiveIntSchema,
+  requestTimestampMargin: PositiveIntSchema,
+  maxPositiveTokenRebase: PositiveIntSchema,
+  initialSlashingAmountPWei: PositiveIntSchema,
+  inactivityPenaltiesAmountPWei: PositiveIntSchema,
+  clBalanceOraclesErrorUpperBPLimit: BasisPointsSchema,
 });
 
 // Oracle daemon config schema
 const OracleDaemonConfigSchema = z.object({
-  NORMALIZED_CL_REWARD_PER_EPOCH: z.number().int().positive(),
-  NORMALIZED_CL_REWARD_MISTAKE_RATE_BP: z.number().int().min(0).max(10000),
-  REBASE_CHECK_NEAREST_EPOCH_DISTANCE: z.number().int().positive(),
-  REBASE_CHECK_DISTANT_EPOCH_DISTANCE: z.number().int().positive(),
-  VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS: z.number().int().positive(),
-  VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS: z.number().int().positive(),
-  NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP: z.number().int().min(0).max(10000),
-  PREDICTION_DURATION_IN_SLOTS: z.number().int().positive(),
-  FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT: z.number().int().positive(),
-  EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS: z.number().int().positive(),
+  NORMALIZED_CL_REWARD_PER_EPOCH: PositiveIntSchema,
+  NORMALIZED_CL_REWARD_MISTAKE_RATE_BP: BasisPointsSchema,
+  REBASE_CHECK_NEAREST_EPOCH_DISTANCE: PositiveIntSchema,
+  REBASE_CHECK_DISTANT_EPOCH_DISTANCE: PositiveIntSchema,
+  VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS: PositiveIntSchema,
+  VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS: PositiveIntSchema,
+  NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP: BasisPointsSchema,
+  PREDICTION_DURATION_IN_SLOTS: PositiveIntSchema,
+  FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT: PositiveIntSchema,
+  EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS: PositiveIntSchema,
 });
 
 // Staking module schema
 const StakingModuleSchema = z.object({
   stakingModuleName: z.string().min(1),
   stakingModuleTypeId: z.string().min(1),
-  stuckPenaltyDelay: z.number().int().positive(),
+  stuckPenaltyDelay: PositiveIntSchema,
 });
 
 // Withdrawal queue ERC721 schema
@@ -230,7 +234,7 @@ const WithdrawalQueueERC721Schema = z.object({
 // Lido APM schema
 const LidoApmSchema = z.object({
   ensName: z.string().min(1),
-  ensRegDurationSec: z.number().int().positive(),
+  ensRegDurationSec: PositiveIntSchema,
 });
 
 // Scratch parameters schema
@@ -246,7 +250,7 @@ export const ScratchParametersSchema = z.object({
   }),
   hashConsensusForAccountingOracle: HashConsensusSchema,
   vaultHub: z.object({
-    maxRelativeShareLimitBP: z.number().int().min(0).max(10000),
+    maxRelativeShareLimitBP: BasisPointsSchema,
   }),
   lazyOracle: LazyOracleSchema,
   accountingOracle: OracleSchema,

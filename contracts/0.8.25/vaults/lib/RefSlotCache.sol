@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
-pragma solidity 0.8.25;
-
 // solhint-disable one-contract-per-file
+pragma solidity 0.8.25;
 
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
