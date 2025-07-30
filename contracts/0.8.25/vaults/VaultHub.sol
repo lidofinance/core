@@ -476,6 +476,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _reportInOutDelta the inOutDelta of the vault
     /// @param _reportCumulativeLidoFees the cumulative Lido fees of the vault
     /// @param _reportLiabilityShares the liabilityShares of the vault
+    /// @param _reportSlashingReserve the slashingReserve of the vault
     function applyVaultReport(
         address _vault,
         uint256 _reportTimestamp,
@@ -743,25 +744,38 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice pauses beacon chain deposits for the vault
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
+    /// @dev intentionally no-ops when the vault is already paused, allowing to flag the pause as manually triggered
     function pauseBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
 
-        connection.isBeaconDepositsManuallyPaused = true;
-        IStakingVault(_vault).pauseBeaconChainDeposits();
+        if (!connection.isBeaconDepositsManuallyPaused) {
+            connection.isBeaconDepositsManuallyPaused = true;
+            _pauseBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
+
+            emit BeaconChainDepositsPausedByOwner(_vault);
+        }
     }
 
     /// @notice resumes beacon chain deposits for the vault
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
+    /// @dev intentionally no-ops when the vault is already resumed, allowing to remove the manual pause flag
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
-        if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
+
+        if (!_isVaultHealthy(connection, record)) {
+            revert UnhealthyVaultCannotDeposit(_vault);
+        }
 
         _settleObligations(_vault, record, _vaultObligations(_vault), UNSETTLED_THRESHOLD);
 
-        connection.isBeaconDepositsManuallyPaused = false;
-        IStakingVault(_vault).resumeBeaconChainDeposits();
+        if (connection.isBeaconDepositsManuallyPaused) {
+            connection.isBeaconDepositsManuallyPaused = false;
+            _resumeBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
+
+            emit BeaconChainDepositsResumedByOwner(_vault);
+        }
     }
 
     /// @notice Emits a request event for the node operator to perform validator exit
@@ -1421,14 +1435,13 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal {
-        IStakingVault vault_ = IStakingVault(_vault);
         bool isHealthy = _isVaultHealthy(_connection, _record);
-        bool isBeaconDepositsPaused = vault_.beaconChainDepositsPaused();
 
+        IStakingVault vault_ = IStakingVault(_vault);
         if (_totalUnsettledObligations(_vaultObligations(_vault)) >= UNSETTLED_THRESHOLD || !isHealthy) {
-            if (!isBeaconDepositsPaused) vault_.pauseBeaconChainDeposits();
+            _pauseBeaconChainDepositsIfNotAlready(vault_);
         } else if (!_connection.isBeaconDepositsManuallyPaused) {
-            if (isBeaconDepositsPaused) vault_.resumeBeaconChainDeposits();
+            _resumeBeaconChainDepositsIfNotAlready(vault_);
         }
     }
 
@@ -1552,6 +1565,22 @@ contract VaultHub is PausableUntilWithRoles {
         if (!_isReportFresh(_record)) revert VaultReportStale(_vault);
     }
 
+    function _isBeaconChainDepositsPaused(IStakingVault _vault) internal view returns (bool) {
+        return _vault.beaconChainDepositsPaused();
+    }
+
+    function _pauseBeaconChainDepositsIfNotAlready(IStakingVault _vault) internal {
+        if (!_isBeaconChainDepositsPaused(_vault)) {
+            _vault.pauseBeaconChainDeposits();
+        }
+    }
+
+    function _resumeBeaconChainDepositsIfNotAlready(IStakingVault _vault) internal {
+        if (_isBeaconChainDepositsPaused(_vault)) {
+            _vault.resumeBeaconChainDeposits();
+        }
+    }
+
     // -----------------------------
     //           EVENTS
     // -----------------------------
@@ -1622,6 +1651,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 unsettledLidoFees,
         uint256 settledLidoFees
     );
+
+    event BeaconChainDepositsPausedByOwner(address indexed vault);
+    event BeaconChainDepositsResumedByOwner(address indexed vault);
 
     // -----------------------------
     //           ERRORS
