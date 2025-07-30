@@ -168,6 +168,8 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 internal immutable PUBLIC_KEY_LENGTH = 48;
     /// @dev max value for fees in basis points - it's about 650%
     uint256 internal immutable MAX_FEE_BP = type(uint16).max;
+    /// @dev max value for reserve ratio in basis points - 9999
+    uint256 internal immutable MAX_RESERVE_RATIO_BP = 99_99;
 
     /// @notice codehash of the account with no code
     bytes32 private immutable EMPTY_CODEHASH = keccak256("");
@@ -952,7 +954,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) internal {
         _requireSaneShareLimit(_shareLimit);
         _requireNotZero(_reserveRatioBP);
-        _requireLessThanBP(_reserveRatioBP, TOTAL_BASIS_POINTS);
+        _requireLessThanBP(_reserveRatioBP, MAX_RESERVE_RATIO_BP);
         _requireNotZero(_forcedRebalanceThresholdBP);
         _requireLessThanBP(_forcedRebalanceThresholdBP, _reserveRatioBP);
 

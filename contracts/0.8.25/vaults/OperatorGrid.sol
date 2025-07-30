@@ -92,7 +92,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
     /// @dev max value for fees in basis points - it's about 650%
     uint256 internal constant MAX_FEE_BP = type(uint16).max;
-
+    /// @dev max value for reserve ratio in basis points - 9999
+    uint256 internal constant MAX_RESERVE_RATIO_BP = 99_99;
+    
     // -----------------------------
     //            STRUCTS
     // -----------------------------
@@ -625,8 +627,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
       uint256 _reservationFeeBP
     ) internal pure {
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
-        if (_reserveRatioBP >= TOTAL_BASIS_POINTS)
-            revert ReserveRatioTooHigh(_tierId, _reserveRatioBP, TOTAL_BASIS_POINTS);
+        if (_reserveRatioBP > MAX_RESERVE_RATIO_BP)
+            revert ReserveRatioTooHigh(_tierId, _reserveRatioBP, MAX_RESERVE_RATIO_BP);
 
         if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument("_forcedRebalanceThresholdBP");
         if (_forcedRebalanceThresholdBP > _reserveRatioBP)
