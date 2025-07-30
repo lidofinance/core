@@ -625,7 +625,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
       uint256 _reservationFeeBP
     ) internal pure {
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
-        if (_reserveRatioBP > TOTAL_BASIS_POINTS)
+        if (_reserveRatioBP >= TOTAL_BASIS_POINTS)
             revert ReserveRatioTooHigh(_tierId, _reserveRatioBP, TOTAL_BASIS_POINTS);
 
         if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument("_forcedRebalanceThresholdBP");

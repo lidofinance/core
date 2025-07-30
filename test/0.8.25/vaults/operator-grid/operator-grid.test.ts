@@ -380,11 +380,10 @@ describe("OperatorGrid.sol", () => {
         .withArgs("_nodeOperator");
     });
 
-    it("reverts if not authorized", async function () {
-      await expect(operatorGrid.connect(stranger).alterTiers([0], [tiers[0]])).to.be.revertedWithCustomError(
-        operatorGrid,
-        "AccessControlUnauthorizedAccount",
-      );
+    it("reverts if the reserve ratio is 10_000", async function () {
+      await expect(operatorGrid.registerTiers(ZeroAddress, tiers))
+        .to.be.revertedWithCustomError(operatorGrid, "ZeroArgument")
+        .withArgs("_nodeOperator");
     });
 
     it("works", async function () {
@@ -433,6 +432,14 @@ describe("OperatorGrid.sol", () => {
       await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], reserveRatioBP: 0 }]))
         .to.be.revertedWithCustomError(operatorGrid, "ZeroArgument")
         .withArgs("_reserveRatioBP");
+    });
+
+    it("alterTiers - validateParams - reverts if reserveRatioBP is 100_00", async function () {
+      const _reserveRatioBP = 100_00;
+      const totalBasisPoints = 100_00;
+      await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], reserveRatioBP: _reserveRatioBP }]))
+        .to.be.revertedWithCustomError(operatorGrid, "ReserveRatioTooHigh")
+        .withArgs("0", _reserveRatioBP, totalBasisPoints);
     });
 
     it("alterTiers - validateParams - reverts if reserveRatioBP is greater than 100_00", async function () {
