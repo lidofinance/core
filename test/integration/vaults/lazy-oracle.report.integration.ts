@@ -40,6 +40,7 @@ describe("Scenario: Lazy Oracle update vault data", () => {
 
     await reportVaultDataWithProof(ctx, stakingVault);
     await dashboard.connect(owner).voluntaryDisconnect();
+    await reportVaultDataWithProof(ctx, stakingVault);
 
     expect(await lazyOracle.latestReportTimestamp()).to.be.greaterThan(0);
     expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
