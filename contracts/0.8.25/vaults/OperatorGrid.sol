@@ -158,6 +158,15 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         __Confirmations_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
+        _validateParams(
+            DEFAULT_TIER_ID,
+            _defaultTierParams.reserveRatioBP,
+            _defaultTierParams.forcedRebalanceThresholdBP,
+            _defaultTierParams.infraFeeBP,
+            _defaultTierParams.liquidityFeeBP,
+            _defaultTierParams.reservationFeeBP
+        );
+
         ERC7201Storage storage $ = _getStorage();
 
         //create default tier with default share limit
@@ -352,6 +361,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _requestedTierId id of the tier
     /// @param _requestedShareLimit share limit to set
     /// @return bool Whether the tier change was confirmed.
+    /// @dev Requires vault to be connected to VaultHub for successful tier change.
     /*
 
     Legend:
@@ -424,7 +434,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
         uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
 
-        //check if tier limit is exceeded
+        // check if tier limit is exceeded
         if (requestedTier.liabilityShares + vaultLiabilityShares > requestedTier.shareLimit) revert TierLimitExceeded();
 
         // if the vault was in the default tier:
@@ -445,13 +455,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         $.vaultTier[_vault] = _requestedTierId;
 
-        // Vault may not be connected to VaultHub yet.
-        // There are two possible flows:
-        // 1. Vault is created and connected to VaultHub immediately with the default tier.
-        //    In this case, `VaultConnection` is non-zero and updateConnection must be called.
-        // 2. Vault is created, its tier is changed before connecting to VaultHub.
-        //    In this case, `VaultConnection` is still zero, and updateConnection must be skipped.
-        // Hence, we update the VaultHub connection only if the vault is already connected.
         vaultHub.updateConnection(
             _vault,
             _requestedShareLimit,
