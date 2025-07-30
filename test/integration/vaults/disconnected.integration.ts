@@ -62,8 +62,10 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
     roles = await autofillRoles(dashboard, nodeOperator);
 
-    await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
+    // Ensure vault has a fresh report before attempting disconnection
     await reportVaultDataWithProof(ctx, stakingVault);
+
+    await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
     // disconnect is completed when the vault is reported to the hub
     dashboard = dashboard.connect(owner);
   });
