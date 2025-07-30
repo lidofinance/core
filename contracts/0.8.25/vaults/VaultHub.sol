@@ -936,7 +936,6 @@ contract VaultHub is PausableUntilWithRoles {
         _requireLessThanBP(_reservationFeeBP, MAX_FEE_BP);
 
         VaultConnection memory connection = _vaultConnection(_vault);
-        _requireNotDisconnecting(connection.pendingDisconnect, _vault);
         if (connection.vaultIndex != 0) revert AlreadyConnected(_vault, connection.vaultIndex);
 
         bytes32 codehash = address(_vault).codehash;
@@ -1213,7 +1212,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultConnection storage connection = _vaultConnection(_vault);
         _requireConnected(connection, _vault);
-        _requireNotDisconnecting(connection.pendingDisconnect, _vault);
+        if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
 
         return connection;
     }
@@ -1547,10 +1546,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _requireConnected(VaultConnection storage _connection, address _vault) internal view {
         if (_connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
-    }
-
-    function _requireNotDisconnecting(bool _pendingDisconnect, address _vault) internal pure {
-        if (_pendingDisconnect) revert VaultIsDisconnecting(_vault);
     }
 
     function _requireFreshReport(address _vault, VaultRecord storage _record) internal view {
