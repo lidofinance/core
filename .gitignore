@@ -2,9 +2,11 @@
 .yarn/
 .vscode/
 .cursor/
+.claude/
 
 node_modules/
 coverage/
+state-mate/
 
 coverage.json
 

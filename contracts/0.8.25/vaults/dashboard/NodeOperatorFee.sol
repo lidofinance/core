@@ -35,11 +35,13 @@ contract NodeOperatorFee is Permissions {
      * - confirms the transfer of the StakingVault ownership;
      * - sets the node operator fee recipient.
      */
+    /// @dev 0x59783a4ae82167eefad593739a5430c1d9e896a16c35f1e5285ddd0c0980885c
     bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.NodeOperatorFee.NodeOperatorManagerRole");
 
     /**
      * @notice Adjusts rewards to allow fee correction during side deposits or consolidations
      */
+    /// @dev 0xe0b9915a7819e810f29b50730662441fec3443eb363b7e7c90c77fada416f276
     bytes32 public constant NODE_OPERATOR_REWARDS_ADJUST_ROLE = keccak256("vaults.NodeOperatorFee.RewardsAdjustRole");
 
     /**

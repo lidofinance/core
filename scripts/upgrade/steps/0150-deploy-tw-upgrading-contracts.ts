@@ -1,4 +1,5 @@
 import { ethers } from "hardhat";
+import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import { LidoLocator__factory } from "typechain-types";
 
@@ -9,6 +10,7 @@ export async function main() {
   const deployerSigner = await ethers.provider.getSigner();
   const deployer = deployerSigner.address;
   const state = readNetworkState();
+  const parameters = readUpgradeParameters();
 
   const locator = LidoLocator__factory.connect(getAddress(Sk.lidoLocator, state), deployerSigner);
 
@@ -39,12 +41,11 @@ export async function main() {
       // Other parameters
       node_operators_registry_app_id: state[Sk.appNodeOperatorsRegistry].aragonApp.id,
       sdvt_app_id: state[Sk.appSimpleDvt].aragonApp.id,
-      nor_version: [6, 0, 0],
-      sdvt_version: [3, 0, 0],
-      vebo_consensus_version: 4,
-      ao_consensus_version: 4,
-      nor_exit_deadline_in_sec: 30 * 60, // 30 minutes
-      exit_events_lookback_window_in_slots: 7200,
+      vebo_consensus_version: parameters.oracleVersions?.vebo_consensus_version ?? 4,
+      ao_consensus_version: parameters.oracleVersions?.ao_consensus_version ?? 4,
+      nor_exit_deadline_in_sec: parameters.triggerableWithdrawals?.nor_exit_deadline_in_sec ?? 30 * 60, // 30 minutes
+      exit_events_lookback_window_in_slots:
+        parameters.triggerableWithdrawals?.exit_events_lookback_window_in_slots ?? 7200,
       nor_content_uri: state[Sk.appNodeOperatorsRegistry].aragonApp.contentURI,
       sdvt_content_uri: state[Sk.appSimpleDvt].aragonApp.contentURI,
     },
