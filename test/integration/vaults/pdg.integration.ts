@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, PinnedBeaconProxy, StakingVault } from "typechain-types";
 
-import { ether, generatePredeposit, generateValidator } from "lib";
+import { addressToWC, ether, generatePredeposit, generateValidator } from "lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
@@ -25,6 +25,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
   let stakingVault: StakingVault;
   let dashboard: Dashboard;
+  let dashboard2: Dashboard;
   let roles: VaultRoles;
   let proxy: PinnedBeaconProxy;
   let owner: HardhatEthersSigner;
@@ -47,6 +48,15 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
     // Owner can create a vault with operator as a node operator
     ({ stakingVault, dashboard, proxy } = await createVaultWithDashboard(
+      ctx,
+      ctx.contracts.stakingVaultFactory,
+      owner,
+      nodeOperator,
+      nodeOperator,
+      [],
+    ));
+
+    ({ dashboard: dashboard2 } = await createVaultWithDashboard(
       ctx,
       ctx.contracts.stakingVaultFactory,
       owner,
@@ -262,5 +272,62 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
       .to.emit(stakingVault, "DepositedToBeaconChain")
       .withArgs(1, ether("99"));
+  });
+
+  describe("Disproven pubkey compensation", () => {
+    it("Reverts if the validator is not associated with the staking vault", async () => {
+      const { predepositGuarantee } = ctx.contracts;
+
+      // 1. The stVault's owner supplies 100 ETH to the vault
+      await expect(dashboard.connect(roles.funder).fund({ value: ether("100") }))
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(ether("100"));
+
+      // 3. The Node Operator's guarantor tops up 1 ETH to the PDG contract, specifying the Node Operator's address. This serves as the predeposit guarantee collateral.
+      //  Method called: PredepositGuarantee.topUpNodeOperatorBalance(nodeOperator) with ETH transfer.
+      await expect(
+        predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, { value: ether("1") }),
+      )
+        .to.emit(predepositGuarantee, "BalanceToppedUp")
+        .withArgs(nodeOperator, nodeOperator, ether("1"));
+
+      // 4. The Node Operator generates a validator data with correct withdrawal creds
+      const invalidWithdrawalCredentials = addressToWC(await nodeOperator.getAddress());
+      const validator = generateValidator(invalidWithdrawalCredentials);
+
+      const invalidValidatorHackedWC = {
+        ...validator,
+        container: { ...validator.container, withdrawalCredentials: await stakingVault.withdrawalCredentials() },
+      };
+
+      const invalidPredeposit = await generatePredeposit(invalidValidatorHackedWC);
+
+      // 5. The Node Operator predeposits 1 ETH from the vault balance to the validator via the PDG contract.
+      //    same time the PDG locks 1 ETH from the Node Operator's guarantee collateral in the PDG.
+      await expect(
+        predepositGuarantee
+          .connect(nodeOperator)
+          .predeposit(stakingVault, [invalidPredeposit.deposit], [invalidPredeposit.depositY]),
+      )
+        .to.emit(stakingVault, "DepositedToBeaconChain")
+        .withArgs(1, ether("1"))
+        .to.emit(predepositGuarantee, "BalanceLocked")
+        .withArgs(nodeOperator, ether("1"), ether("1"));
+
+      const { witnesses } = await getProofAndDepositData(ctx, validator, invalidWithdrawalCredentials, ether("99"));
+
+      // 6. Anyone (permissionless) submits a Merkle proof of the validator's appearing on the Consensus Layer to the PDG contract with the withdrawal credentials corresponding to the stVault's address.
+      //    6.1. Upon successful verification, 1 ETH of the Node Operator's guarantee collateral is unlocked from the PDG balance
+      //    — making it available for withdrawal or reuse for the next validator predeposit.
+      await expect(
+        predepositGuarantee.connect(stranger).proveInvalidValidatorWC(witnesses[0], invalidWithdrawalCredentials),
+      )
+        .to.emit(predepositGuarantee, "ValidatorDisproven")
+        .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), invalidWithdrawalCredentials);
+
+      await expect(
+        dashboard2.connect(owner).compensateDisprovenPredepositFromPDG(validator.container.pubkey, owner),
+      ).to.be.revertedWithCustomError(ctx.contracts.vaultHub, "ValidatorNotAssociatedWithVault");
+    });
   });
 });

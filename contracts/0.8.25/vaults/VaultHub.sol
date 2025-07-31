@@ -937,6 +937,10 @@ contract VaultHub is PausableUntilWithRoles {
         address _recipient
     ) external returns (uint256) {
         _checkConnectionAndOwner(_vault);
+        
+        if (address(_predepositGuarantee().validatorStatus(_pubkey).stakingVault) != _vault) {
+            revert ValidatorNotAssociatedWithVault();
+        }
 
         return _predepositGuarantee().compensateDisprovenPredeposit(_pubkey, _recipient);
     }
@@ -1683,4 +1687,5 @@ contract VaultHub is PausableUntilWithRoles {
     error ForcedValidatorExitNotAllowed();
     error NoBadDebtToWriteOff(address vault, uint256 totalValueShares, uint256 liabilityShares);
     error BadDebtSocializationNotAllowed();
+    error ValidatorNotAssociatedWithVault();
 }
