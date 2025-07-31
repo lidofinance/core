@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.9;
 
-import {IStakingModule} from "contracts/0.8.9/interfaces/IStakingModule.sol";
+import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 
 contract StakingModule__MockForTriggerableWithdrawals is IStakingModule {
     uint256 private _nonce;

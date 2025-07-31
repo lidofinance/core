@@ -1,6 +1,8 @@
 export { depositAndReportValidators, ensureStakeLimit, unpauseStaking } from "./staking";
 
-export { finalizeWithdrawalQueue, unpauseWithdrawalQueue } from "./withdrawal";
+export { finalizeWQViaElVault, finalizeWQViaSubmit, unpauseWithdrawalQueue } from "./withdrawal";
+
+export { setMaxPositiveTokenRebase } from "./sanity-checker";
 
 export {
   calcReportDataHash,

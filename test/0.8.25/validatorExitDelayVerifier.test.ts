@@ -33,31 +33,41 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     await Snapshot.restore(originalState);
   });
 
-  const FIRST_SUPPORTED_SLOT = 1;
-  const PIVOT_SLOT = 2;
+  const FIRST_SUPPORTED_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+  const PIVOT_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
   const SLOTS_PER_EPOCH = 32;
   const SECONDS_PER_SLOT = 12;
   const GENESIS_TIME = 1606824000;
   const SHARD_COMMITTEE_PERIOD_IN_SECONDS = 8192;
   const LIDO_LOCATOR = "0x0000000000000000000000000000000000000001";
+  const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+  const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
   describe("ValidatorExitDelayVerifier Constructor", () => {
-    const GI_FIRST_VALIDATOR_PREV = `0x${"1".repeat(64)}`;
-    const GI_FIRST_VALIDATOR_CURR = `0x${"2".repeat(64)}`;
-    const GI_HISTORICAL_SUMMARIES_PREV = `0x${"3".repeat(64)}`;
-    const GI_HISTORICAL_SUMMARIES_CURR = `0x${"4".repeat(64)}`;
+    const GI_FIRST_VALIDATOR_PREV = "0x0000000000000000000000000000000000000000000000000096000000000028";
+    const GI_FIRST_VALIDATOR_CURR = "0x0000000000000000000000000000000000000000000000000096000000000028";
+    const GI_FIRST_HISTORICAL_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000b600000018";
+    const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
 
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
     before(async () => {
       validatorExitDelayVerifier = await ethers.deployContract("ValidatorExitDelayVerifier", [
         LIDO_LOCATOR,
-        GI_FIRST_VALIDATOR_PREV,
-        GI_FIRST_VALIDATOR_CURR,
-        GI_HISTORICAL_SUMMARIES_PREV,
-        GI_HISTORICAL_SUMMARIES_CURR,
+        {
+          gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+          gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+          gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+          gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+          gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+          gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+        },
         FIRST_SUPPORTED_SLOT,
         PIVOT_SLOT,
+        CAPELLA_SLOT,
+        SLOTS_PER_HISTORICAL_ROOT,
         SLOTS_PER_EPOCH,
         SECONDS_PER_SLOT,
         GENESIS_TIME,
@@ -66,12 +76,22 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     });
 
     it("sets all parameters correctly", async () => {
+      console.log(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV(), "????");
       expect(await validatorExitDelayVerifier.LOCATOR()).to.equal(LIDO_LOCATOR);
       expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_PREV()).to.equal(GI_FIRST_VALIDATOR_PREV);
-      expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_PREV()).to.equal(GI_FIRST_VALIDATOR_PREV);
       expect(await validatorExitDelayVerifier.GI_FIRST_VALIDATOR_CURR()).to.equal(GI_FIRST_VALIDATOR_CURR);
-      expect(await validatorExitDelayVerifier.GI_HISTORICAL_SUMMARIES_PREV()).to.equal(GI_HISTORICAL_SUMMARIES_PREV);
-      expect(await validatorExitDelayVerifier.GI_HISTORICAL_SUMMARIES_CURR()).to.equal(GI_HISTORICAL_SUMMARIES_CURR);
+      expect(await validatorExitDelayVerifier.GI_FIRST_HISTORICAL_SUMMARY_PREV()).to.equal(
+        GI_FIRST_HISTORICAL_SUMMARY_PREV,
+      );
+      expect(await validatorExitDelayVerifier.GI_FIRST_HISTORICAL_SUMMARY_CURR()).to.equal(
+        GI_FIRST_HISTORICAL_SUMMARY_CURR,
+      );
+      expect(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV()).to.equal(
+        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+      );
+      expect(await validatorExitDelayVerifier.GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR()).to.equal(
+        GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+      );
       expect(await validatorExitDelayVerifier.FIRST_SUPPORTED_SLOT()).to.equal(FIRST_SUPPORTED_SLOT);
       expect(await validatorExitDelayVerifier.PIVOT_SLOT()).to.equal(PIVOT_SLOT);
       expect(await validatorExitDelayVerifier.SLOTS_PER_EPOCH()).to.equal(SLOTS_PER_EPOCH);
@@ -80,18 +100,26 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       expect(await validatorExitDelayVerifier.SHARD_COMMITTEE_PERIOD_IN_SECONDS()).to.equal(
         SHARD_COMMITTEE_PERIOD_IN_SECONDS,
       );
+      expect(await validatorExitDelayVerifier.CAPELLA_SLOT()).to.equal(CAPELLA_SLOT);
+      expect(await validatorExitDelayVerifier.SLOTS_PER_HISTORICAL_ROOT()).to.equal(SLOTS_PER_HISTORICAL_ROOT);
     });
 
     it("reverts with 'InvalidPivotSlot' if firstSupportedSlot > pivotSlot", async () => {
       await expect(
         ethers.deployContract("ValidatorExitDelayVerifier", [
           LIDO_LOCATOR,
-          GI_FIRST_VALIDATOR_PREV,
-          GI_FIRST_VALIDATOR_CURR,
-          GI_HISTORICAL_SUMMARIES_PREV,
-          GI_HISTORICAL_SUMMARIES_CURR,
+          {
+            gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+            gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          },
           200_000, // firstSupportedSlot
           100_000, // pivotSlot < firstSupportedSlot
+          CAPELLA_SLOT,
+          SLOTS_PER_HISTORICAL_ROOT,
           SLOTS_PER_EPOCH,
           SECONDS_PER_SLOT,
           GENESIS_TIME,
@@ -104,12 +132,18 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       await expect(
         ethers.deployContract("ValidatorExitDelayVerifier", [
           ethers.ZeroAddress, // Zero address for locator
-          GI_FIRST_VALIDATOR_PREV,
-          GI_FIRST_VALIDATOR_CURR,
-          GI_HISTORICAL_SUMMARIES_PREV,
-          GI_HISTORICAL_SUMMARIES_CURR,
+          {
+            gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+            gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          },
           FIRST_SUPPORTED_SLOT,
           PIVOT_SLOT,
+          CAPELLA_SLOT,
+          SLOTS_PER_HISTORICAL_ROOT,
           SLOTS_PER_EPOCH,
           SECONDS_PER_SLOT,
           GENESIS_TIME,
@@ -120,12 +154,39 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         "ZeroLidoLocatorAddress",
       );
     });
+
+    it("reverts with 'InvalidCapellaSlot' if capellaSlot > firstSupportedSlot", async () => {
+      await expect(
+        ethers.deployContract("ValidatorExitDelayVerifier", [
+          LIDO_LOCATOR,
+          {
+            gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+            gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+            gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+            gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+            gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+            gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+          },
+          FIRST_SUPPORTED_SLOT,
+          PIVOT_SLOT,
+          FIRST_SUPPORTED_SLOT + 1, // Invalid Capella slot
+          SLOTS_PER_HISTORICAL_ROOT,
+          SLOTS_PER_EPOCH,
+          SECONDS_PER_SLOT,
+          GENESIS_TIME,
+          SHARD_COMMITTEE_PERIOD_IN_SECONDS,
+        ]),
+      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidCapellaSlot");
+    });
   });
 
   describe("verifyValidatorExitDelay method", () => {
-    const GI_FIRST_VALIDATOR_INDEX = "0x0000000000000000000000000000000000000000000000000096000000000028";
-    const GI_HISTORICAL_SUMMARIES_INDEX = "0x0000000000000000000000000000000000000000000000000000000000005b00";
-
+    const GI_FIRST_VALIDATOR_PREV = "0x0000000000000000000000000000000000000000000000000096000000000028";
+    const GI_FIRST_VALIDATOR_CURR = "0x0000000000000000000000000000000000000000000000000096000000000028";
+    const GI_FIRST_HISTORICAL_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000b600000018";
+    const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
+    const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
     let validatorExitDelayVerifier: ValidatorExitDelayVerifier;
 
     let locator: LidoLocator;
@@ -149,12 +210,18 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       validatorExitDelayVerifier = await ethers.deployContract("ValidatorExitDelayVerifier", [
         locatorAddr,
-        GI_FIRST_VALIDATOR_INDEX,
-        GI_FIRST_VALIDATOR_INDEX,
-        GI_HISTORICAL_SUMMARIES_INDEX,
-        GI_HISTORICAL_SUMMARIES_INDEX,
+        {
+          gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+          gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+          gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+          gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+          gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+          gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+        },
         FIRST_SUPPORTED_SLOT,
         PIVOT_SLOT,
+        CAPELLA_SLOT,
+        SLOTS_PER_HISTORICAL_ROOT,
         SLOTS_PER_EPOCH,
         SECONDS_PER_SLOT,
         GENESIS_TIME,
@@ -480,27 +547,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       ).to.be.reverted;
     });
 
-    it("reverts with 'InvalidGIndex' if oldBlock.rootGIndex is not under the historicalSummaries root", async () => {
-      // Provide an obviously wrong rootGIndex that won't match the parent's
-      const invalidRootGIndex = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
-
-      const timestamp = await updateBeaconBlockRoot(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeaderRoot);
-
-      await expect(
-        validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
-          toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.futureBeaconBlockHeader, timestamp),
-          {
-            header: ACTIVE_VALIDATOR_PROOF.beaconBlockHeader,
-            proof: ACTIVE_VALIDATOR_PROOF.historicalRootProof,
-            rootGIndex: invalidRootGIndex,
-          },
-          [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 1)],
-          EMPTY_REPORT,
-        ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "InvalidGIndex");
-    });
-
-    it("reverts with 'EmptyDeliveryHistory' if exit request index is not in delivery history", async () => {
+    it("reverts with 'RequestsNotDelivered' if exit request index is not in delivery history", async () => {
       const exitRequests: ExitRequest[] = [
         {
           moduleId: 1,
@@ -518,7 +565,6 @@ describe("ValidatorExitDelayVerifier.sol", () => {
 
       // Report not unpacked, deliveryTimestamp == 0
       await vebo.setExitRequests(encodedExitRequestsHash, 0, exitRequests);
-      expect(await vebo.getDeliveryTimestamp(encodedExitRequestsHash)).to.equal(0);
 
       await expect(
         validatorExitDelayVerifier.verifyValidatorExitDelay(
@@ -526,7 +572,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
           encodedExitRequests,
         ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "EmptyDeliveryHistory");
+      ).to.be.revertedWithCustomError(vebo, "RequestsNotDelivered");
 
       await expect(
         validatorExitDelayVerifier.verifyHistoricalValidatorExitDelay(
@@ -535,7 +581,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
           [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, unpackedExitRequestIndex)],
           encodedExitRequests,
         ),
-      ).to.be.revertedWithCustomError(validatorExitDelayVerifier, "EmptyDeliveryHistory");
+      ).to.be.revertedWithCustomError(vebo, "RequestsNotDelivered");
     });
 
     it("reverts if the oldBlock proof is corrupted", async () => {

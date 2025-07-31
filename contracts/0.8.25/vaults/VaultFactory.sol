@@ -71,7 +71,7 @@ contract VaultFactory {
         vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
-        dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
@@ -101,7 +101,7 @@ contract VaultFactory {
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry,
         Permissions.RoleAssignment[] calldata _roleAssignments
-    ) external payable returns (IStakingVault vault, Dashboard dashboard) {
+    ) external returns (IStakingVault vault, Dashboard dashboard) {
         ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
 
         // create the vault proxy
@@ -115,7 +115,7 @@ contract VaultFactory {
         vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the _defaultAdmin as the default admin, grant optional node operator managed roles
-        dashboard.initialize(_defaultAdmin, address(this), _nodeOperatorFeeBP, _confirmExpiry);
+        dashboard.initialize(_defaultAdmin, address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 

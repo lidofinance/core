@@ -62,11 +62,18 @@ describe("OperatorGrid.sol", () => {
     },
     liabilityShares: 555n,
     locked: 1000n,
-    inOutDelta: {
-      value: 1000n,
-      valueOnRefSlot: 1000n,
-      refSlot: 2122n,
-    },
+    inOutDelta: [
+      {
+        value: 1000n,
+        valueOnRefSlot: 1000n,
+        refSlot: 1n,
+      },
+      {
+        value: 0n,
+        valueOnRefSlot: 0n,
+        refSlot: 0n,
+      },
+    ],
   };
 
   before(async () => {
@@ -200,6 +207,25 @@ describe("OperatorGrid.sol", () => {
       await expect(operatorGridLocal.initialize(ZeroAddress, defaultTierParams))
         .to.be.revertedWithCustomError(operatorGridImpl, "ZeroArgument")
         .withArgs("_admin");
+    });
+    it("reverts on invalid `_defaultTierParams`", async () => {
+      const operatorGridProxy = await ethers.deployContract(
+        "OssifiableProxy",
+        [operatorGridImpl, deployer, new Uint8Array()],
+        deployer,
+      );
+      const operatorGridLocal = await ethers.getContractAt("OperatorGrid", operatorGridProxy, deployer);
+      const defaultTierParams = {
+        shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+        reserveRatioBP: RESERVE_RATIO,
+        forcedRebalanceThresholdBP: RESERVE_RATIO + 1,
+        infraFeeBP: INFRA_FEE,
+        liquidityFeeBP: LIQUIDITY_FEE,
+        reservationFeeBP: RESERVATION_FEE,
+      };
+      await expect(operatorGridLocal.initialize(stranger, defaultTierParams))
+        .to.be.revertedWithCustomError(operatorGridLocal, "ForcedRebalanceThresholdTooHigh")
+        .withArgs("0", RESERVE_RATIO + 1, RESERVE_RATIO);
     });
   });
 
@@ -1161,7 +1187,7 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, vaultShareLimit);
       await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, vaultShareLimit))
         .to.emit(vaultHub, "VaultConnectionUpdated")
-        .withArgs(vault_NO1_V1, vaultShareLimit, 2000, 1800, 500, 400, 100);
+        .withArgs(vault_NO1_V1, vaultShareLimit, 2000, 1800);
     });
   });
 

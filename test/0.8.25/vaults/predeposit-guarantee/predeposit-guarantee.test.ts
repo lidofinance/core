@@ -241,6 +241,15 @@ describe("PredepositGuarantee.sol", () => {
           .withArgs(ether("1"));
       });
 
+      it("reverts when calling predeposit with invalid depositY length", async () => {
+        await stakingVault.fund({ value: ether("32") });
+        const validator = generateValidator(await stakingVault.withdrawalCredentials());
+        const predeposit = await generatePredeposit(validator);
+        await expect(
+          pdg.predeposit(stakingVault, [predeposit.deposit], [predeposit.depositY, predeposit.depositY]),
+        ).to.be.revertedWithCustomError(pdg, "InvalidDepositYLength");
+      });
+
       it("NO is refunded with setting guarantor", async () => {
         const pdgNO = pdg.connect(vaultOperator);
 

@@ -7,10 +7,12 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
-import {RefSlotCache} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
+import {DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
 
 contract VaultHub__MockForLazyOracle {
-    using RefSlotCache for RefSlotCache.Int112WithRefSlotCache;
+    using DoubleRefSlotCache for DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH];
+
+    uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
 
     address[] public mock__vaults;
     mapping(address vault => VaultHub.VaultConnection connection) public mock__vaultConnections;
@@ -49,19 +51,23 @@ contract VaultHub__MockForLazyOracle {
     }
 
     function inOutDeltaAsOfLastRefSlot(address vault) external view returns (int256) {
-        return mock__vaultRecords[vault].inOutDelta.value;
+        return mock__vaultRecords[vault].inOutDelta.currentValue();
     }
 
     function vaultConnection(address vault) external view returns (VaultHub.VaultConnection memory) {
         return mock__vaultConnections[vault];
     }
 
-    function maxLockableValue(address vault) external view returns (uint256) {
+    function maxLockableValue(address) external pure returns (uint256) {
         return 1000000000000000000;
     }
 
     function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {
         return mock__vaultRecords[vault];
+    }
+
+    function isReportFresh(address _vault) external returns (bool) {
+        return false;
     }
 
     function applyVaultReport(
@@ -81,11 +87,8 @@ contract VaultHub__MockForLazyOracle {
         mock__lastReported_liabilityShares = _reportLiabilityShares;
         mock__lastReported_slashingReserve = _reportSlashingReserve;
 
-        mock__vaultRecords[_vault].report.inOutDelta = int112(_reportInOutDelta);
-        mock__vaultRecords[_vault].inOutDelta.value = int112(_reportInOutDelta);
-        mock__vaultRecords[_vault].inOutDelta.valueOnRefSlot = int112(_reportInOutDelta);
-        mock__vaultRecords[_vault].inOutDelta.refSlot = uint32(_reportTimestamp);
-        mock__vaultRecords[_vault].report.timestamp = uint32(_reportTimestamp);
-        mock__vaultRecords[_vault].report.totalValue = uint112(_reportTotalValue);
+        mock__vaultRecords[_vault].report.inOutDelta = int104(_reportInOutDelta);
+        mock__vaultRecords[_vault].report.timestamp = uint48(_reportTimestamp);
+        mock__vaultRecords[_vault].report.totalValue = uint104(_reportTotalValue);
     }
 }
