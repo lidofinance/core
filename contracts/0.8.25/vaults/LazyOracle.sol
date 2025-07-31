@@ -432,8 +432,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 return _reportedTotalValue;
             } else {
                 // Transition: NO_QUARANTINE → QUARANTINE_ACTIVE (start new quarantine)
-                uint256 newQuarantinedValue = _reportedTotalValue - onchainTotalValueOnRefSlot;
-                _startNewQuarantine(_vault, quarantine, newQuarantinedValue, $.vaultsDataTimestamp);
+                _startNewQuarantine(_vault, quarantine, _reportedTotalValue - onchainTotalValueOnRefSlot, $.vaultsDataTimestamp);
                 return onchainTotalValueOnRefSlot;
             }
         } else if (currentState == QuarantineState.QUARANTINE_ACTIVE) {
@@ -461,8 +460,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             } else {
                 // Transition: QUARANTINE_EXPIRED → QUARANTINE_ACTIVE (release old, start new)
                 emit QuarantineExpired(_vault, quarantinedValue);
-                uint256 newQuarantinedValue = totalValueIncrease - quarantinedValue;
-                _startNewQuarantine(_vault, quarantine, newQuarantinedValue, $.vaultsDataTimestamp);
+                _startNewQuarantine(_vault, quarantine, totalValueIncrease - quarantinedValue, $.vaultsDataTimestamp);
                 return onchainTotalValueOnRefSlot + quarantinedValue;
             }
         }
