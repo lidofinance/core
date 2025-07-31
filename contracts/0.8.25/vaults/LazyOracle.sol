@@ -314,11 +314,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     function removeVaultQuarantine(address _vault) external {
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized();
 
-        Storage storage $ = _storage();
-        if ($.vaultQuarantines[_vault].pendingTotalValueIncrease > 0) {
+        mapping(address => Quarantine) storage quarantines = _storage().vaultQuarantines;
+        if (quarantines[_vault].pendingTotalValueIncrease > 0) {
             emit QuarantineRemoved(_vault);
         }
-        delete $.vaultQuarantines[_vault];
+        delete quarantines[_vault];
     }
 
     /// @notice handle sanity checks for the vault lazy report data
@@ -353,7 +353,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     }
 
     /*
-        Quarantine Finite State Machine (FSM)
+        Quarantine State Diagram
         
         States:
         • NO_QUARANTINE: No active quarantine, all value is immediately available
@@ -365,6 +365,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         │                 ├─────────────────────────────►│                  │
         │  quarantined=0  │                              │  quarantined>0   │
         │  startTime=0    │◄─────────────────────────────┤  startTime>0     │
+        │                 |                              │  time<expiration |
         └─────────────────┘ reported ≤ threshold         └───┬──────────────┘
                 ▲         (early release)                    │       ▲
                 │                                            │       │  increase > quarantined + rewards
@@ -374,8 +375,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 │                                      ┌─────────────┴────────┐
                 │ reported ≤ threshold OR              │  QUARANTINE_EXPIRED  │
                 │ increase ≤ quarantined + rewards     │                      │
-                │                                      │  ready to release    │
-                └──────────────────────────────────────┤                      │
+                │                                      │  quarantined>0       │
+                │                                      │  startTime>0         │
+                └──────────────────────────────────────┤  time>=expiration    │
                                                        └──────────────────────┘
 
         Legend:
@@ -383,6 +385,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         • increase = reportedTotalValue - onchainTotalValue
         • quarantined - total value increase that is currently quarantined
         • rewards - expected EL/CL rewards based on maxRewardRatio
+        • time = block.timestamp
+        • expiration = quarantine.startTimestamp + quarantinePeriod
     */
     function _processTotalValue(
         address _vault,
@@ -405,19 +409,20 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         // 1. Onchain total value on refSlot, it does not include CL difference and EL rewards for the period
         uint256 onchainTotalValueOnRefSlot = 
             uint256(int256(uint256(record.report.totalValue)) + _inOutDeltaOnRefSlot - record.report.inOutDelta);
-        // 2. Some percentage of funds hasn't passed through the vault's balance is allowed for the EL and CL rewards handling
+        // 2. Some percentage of funds that haven’t passed through the vault’s balance is allowed for handling EL and CL rewards.
+        // NB: allowed amount of rewards is not scaled by time here, because:
+        // - if we set a small per-day percentage, honest vaults receiving unexpectedly high MEV would get quarantined;
+        // - if we set a large per-day percentage, a vault that hasn’t reported for a long time could bypass quarantine;
+        // As a result, we would need to impose very tiny limits for non-quarantine percentage — which would complicate the logic 
+        // without bringing meaningful improvements.
         uint256 quarantineThreshold = 
             onchainTotalValueOnRefSlot * (TOTAL_BASIS_POINTS + maxRewardRatioBP) / TOTAL_BASIS_POINTS;
         bool isWithinThreshold = _reportedTotalValue <= quarantineThreshold;
-        // 3. Total value increase since the last report
-        uint256 totalValueIncrease = _reportedTotalValue > onchainTotalValueOnRefSlot 
-            ? _reportedTotalValue - onchainTotalValueOnRefSlot 
-            : 0;
-        // 4. Determine current quarantine state
+        // 3. Determine current quarantine state
         QuarantineState currentState = _determineQuarantineState(quarantine, quarantinedValue, $);
 
 
-        // Execute FSM logic based on current state and conditions ------------
+        // Execute logic based on current state and conditions ----------------
         // --------------------------------------------------------------------
 
         if (currentState == QuarantineState.NO_QUARANTINE) {
@@ -426,7 +431,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 return _reportedTotalValue;
             } else {
                 // Transition: NO_QUARANTINE → QUARANTINE_ACTIVE (start new quarantine)
-                _startNewQuarantine(_vault, quarantine, totalValueIncrease, $.vaultsDataTimestamp);
+                uint256 newQuarantinedValue = _reportedTotalValue - onchainTotalValueOnRefSlot;
+                _startNewQuarantine(_vault, quarantine, newQuarantinedValue, $.vaultsDataTimestamp);
                 return onchainTotalValueOnRefSlot;
             }
         } else if (currentState == QuarantineState.QUARANTINE_ACTIVE) {
@@ -440,10 +446,13 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 return onchainTotalValueOnRefSlot;
             }
         } else { // QuarantineState.QUARANTINE_EXPIRED
-            uint256 expectedMaxIncreaseWithRewards = quarantinedValue + 
+            uint256 totalValueIncrease = _reportedTotalValue > onchainTotalValueOnRefSlot 
+                ? _reportedTotalValue - onchainTotalValueOnRefSlot 
+                : 0;
+            uint256 maxIncreaseWithRewards = quarantinedValue + 
                 (onchainTotalValueOnRefSlot + quarantinedValue) * maxRewardRatioBP / TOTAL_BASIS_POINTS;
 
-            if (isWithinThreshold || totalValueIncrease <= expectedMaxIncreaseWithRewards) {
+            if (isWithinThreshold || totalValueIncrease <= maxIncreaseWithRewards) {
                 // Transition: QUARANTINE_EXPIRED → NO_QUARANTINE (release and accept all)
                 delete $.vaultQuarantines[_vault];
                 emit QuarantineExpired(_vault, isWithinThreshold ? 0 : totalValueIncrease);
@@ -451,34 +460,35 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             } else {
                 // Transition: QUARANTINE_EXPIRED → QUARANTINE_ACTIVE (release old, start new)
                 emit QuarantineExpired(_vault, quarantinedValue);
-                _startNewQuarantine(_vault, quarantine, totalValueIncrease - quarantinedValue, $.vaultsDataTimestamp);
+                uint256 newQuarantinedValue = totalValueIncrease - quarantinedValue;
+                _startNewQuarantine(_vault, quarantine, newQuarantinedValue, $.vaultsDataTimestamp);
                 return onchainTotalValueOnRefSlot + quarantinedValue;
             }
         }
     }
 
     function _determineQuarantineState(
-        Quarantine storage quarantine,
-        uint256 quarantinedValue, 
+        Quarantine storage _quarantine,
+        uint256 _quarantinedValue, 
         Storage storage $
     ) internal view returns (QuarantineState) {
-        if (quarantinedValue == 0) {
+        if (_quarantinedValue == 0) {
             return QuarantineState.NO_QUARANTINE;
         }
         
-        bool isQuarantineExpired = ($.vaultsDataTimestamp - quarantine.startTimestamp) >= $.quarantinePeriod;
+        bool isQuarantineExpired = ($.vaultsDataTimestamp - _quarantine.startTimestamp) >= $.quarantinePeriod;
         return isQuarantineExpired ? QuarantineState.QUARANTINE_EXPIRED : QuarantineState.QUARANTINE_ACTIVE;
     }
 
     function _startNewQuarantine(
         address _vault,
-        Quarantine storage quarantine,
-        uint256 amountToQuarantine,
-        uint64 currentTimestamp
+        Quarantine storage _quarantine,
+        uint256 _amountToQuarantine,
+        uint64 _currentTimestamp
     ) internal {
-        quarantine.pendingTotalValueIncrease = uint128(amountToQuarantine);
-        quarantine.startTimestamp = currentTimestamp;
-        emit QuarantinedDeposit(_vault, amountToQuarantine);
+        _quarantine.pendingTotalValueIncrease = uint128(_amountToQuarantine);
+        _quarantine.startTimestamp = _currentTimestamp;
+        emit QuarantinedDeposit(_vault, _amountToQuarantine);
     }
 
     function _updateSanityParams(uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) internal {
