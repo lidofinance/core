@@ -1121,6 +1121,62 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
+  context("updateConnection", () => {
+    it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
+      const { vault } = await createAndConnectVault(vaultFactory);
+      await expect(
+        vaultHub
+          .connect(stranger)
+          .updateConnection(
+            vault,
+            SHARE_LIMIT,
+            RESERVE_RATIO_BP,
+            FORCED_REBALANCE_THRESHOLD_BP,
+            INFRA_FEE_BP,
+            LIQUIDITY_FEE_BP,
+            RESERVATION_FEE_BP,
+          ),
+      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+    });
+
+    it("update connection parameters", async () => {
+      const { vault } = await createAndConnectVault(vaultFactory);
+      const vaultAddress = await vault.getAddress();
+      const operatorGridSigner = await impersonate(await operatorGridMock.getAddress(), ether("1"));
+
+      const oldConnection = await vaultHub.vaultConnection(vaultAddress);
+      const newInfraFeeBP = oldConnection.infraFeeBP + 10n;
+      const newLiquidityFeeBP = oldConnection.liquidityFeeBP + 11n;
+      const newReservationFeeBP = oldConnection.reservationFeeBP + 12n;
+
+      await expect(
+        vaultHub
+          .connect(operatorGridSigner)
+          .updateConnection(
+            vaultAddress,
+            SHARE_LIMIT,
+            RESERVE_RATIO_BP,
+            FORCED_REBALANCE_THRESHOLD_BP,
+            newInfraFeeBP,
+            newLiquidityFeeBP,
+            newReservationFeeBP,
+          ),
+      )
+        .to.emit(vaultHub, "VaultConnectionUpdated")
+        .withArgs(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP)
+        .to.emit(vaultHub, "VaultFeesUpdated")
+        .withArgs(
+          vaultAddress,
+          oldConnection.infraFeeBP,
+          oldConnection.liquidityFeeBP,
+          oldConnection.reservationFeeBP,
+          newInfraFeeBP,
+          newLiquidityFeeBP,
+          newReservationFeeBP,
+        );
+    });
+  });
+
   context("disconnect", () => {
     let vault: StakingVault__MockForVaultHub;
 
@@ -1162,6 +1218,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("initiates the disconnect process", async () => {
+      await reportVault({ vault, totalValue: ether("1") });
       await expect(vaultHub.connect(user).disconnect(vault))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vault);
@@ -1171,6 +1228,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("clean quarantine after disconnect", async () => {
+      await reportVault({ vault, totalValue: ether("1") });
       await expect(vaultHub.connect(user).disconnect(vault))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vault);
@@ -1245,6 +1303,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("disconnects the vault", async () => {
+      await reportVault({ vault, totalValue: ether("1") });
       await expect(vaultHub.connect(user).disconnect(vaultAddress))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vaultAddress);

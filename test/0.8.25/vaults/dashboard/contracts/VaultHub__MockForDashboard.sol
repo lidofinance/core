@@ -205,15 +205,7 @@ contract VaultHub__MockForDashboard {
         uint256 _reservationFeeBP
     ) external {
         if (!isVaultConnected(_vault)) revert NotConnectedToHub(_vault);
-        emit Mock__VaultConnectionUpdated(
-            _vault,
-            _shareLimit,
-            _reserveRatioBP,
-            _forcedRebalanceThresholdBP,
-            _infraFeeBP,
-            _liquidityFeeBP,
-            _reservationFeeBP
-        );
+        emit Mock__VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP);
     }
 
     event Mock__ValidatorExitRequested(address vault, bytes pubkeys);
@@ -234,10 +226,7 @@ contract VaultHub__MockForDashboard {
         address vault,
         uint256 shareLimit,
         uint256 reserveRatioBP,
-        uint256 forcedRebalanceThresholdBP,
-        uint256 infraFeeBP,
-        uint256 liquidityFeeBP,
-        uint256 reservationFeeBP
+        uint256 forcedRebalanceThresholdBP
     );
 
     error ZeroArgument(string argument);

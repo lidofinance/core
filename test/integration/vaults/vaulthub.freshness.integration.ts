@@ -27,6 +27,8 @@ describe("Scenario: Vault Report Freshness Check", () => {
     ctx = await getProtocolContext();
 
     [, owner, nodeOperator] = await ethers.getSigners();
+
+    await report(ctx);
   });
 
   beforeEach(async () => {

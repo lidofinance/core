@@ -122,7 +122,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     bytes32 private constant LAZY_ORACLE_STORAGE_LOCATION =
         0xe5459f2b48ec5df2407caac4ec464a5cb0f7f31a1f22f649728a9579b25c1d00;
 
-    bytes32 public constant UPDATE_SANITY_PARAMS_ROLE = keccak256("UPDATE_SANITY_PARAMS_ROLE");
+    /// @dev 0x7baf7f4a9784fa74c97162de631a3eb567edeb85878cb6965945310f2c512c63
+    bytes32 public constant UPDATE_SANITY_PARAMS_ROLE = keccak256("vaults.LazyOracle.UpdateSanityParams");
 
     ILidoLocator public immutable LIDO_LOCATOR;
 

@@ -12,9 +12,8 @@ export GAS_PRIORITY_FEE=1
 export GAS_MAX_FEE=100
 
 export NETWORK_STATE_FILE="deployed-holesky.json"
-# export NETWORK_STATE_DEFAULTS_FILE="scripts/scratch/deployed-testnet-defaults.json"
+# export SCRATCH_DEPLOY_CONFIG="scripts/scratch/deploy-params-testnet.toml"
 
 
 # Need this to get sure the last transactions are mined
 npx hardhat --network $NETWORK run scripts/triggerable-withdrawals/tw-deploy.ts
-
