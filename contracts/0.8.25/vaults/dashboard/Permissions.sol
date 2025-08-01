@@ -79,11 +79,6 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
-     * @notice Permission for getting compensation for disproven validator predeposit from PDG
-     */
-    bytes32 public constant PDG_COMPENSATE_PREDEPOSIT_ROLE = keccak256("vaults.Permissions.PDGCompensatePredeposit");
-
-    /**
      * @notice Permission for proving valid vault validators unknown to the PDG
      */
     bytes32 public constant PDG_PROVE_VALIDATOR_ROLE = keccak256("vaults.Permissions.PDGProveValidator");

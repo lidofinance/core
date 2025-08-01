@@ -191,7 +191,6 @@ describe("Permissions", () => {
       await checkSoleMember(rebalancer, await permissions.REBALANCE_ROLE());
       await checkSoleMember(depositPauser, await permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE());
       await checkSoleMember(depositResumer, await permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE());
-      await checkSoleMember(pdgCompensator, await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE());
       await checkSoleMember(unknownValidatorProver, await permissions.PDG_PROVE_VALIDATOR_ROLE());
       await checkSoleMember(
         unguaranteedBeaconChainDepositor,

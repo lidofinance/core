@@ -548,7 +548,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         testDashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
         testDashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
         testDashboard.PDG_PROVE_VALIDATOR_ROLE(),
-        testDashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
       ]);
 
       for (const role of roles) {
