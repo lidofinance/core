@@ -1226,6 +1226,28 @@ describe("VaultHub.sol:hub", () => {
       const vaultSocket = await vaultHub.vaultConnection(vault);
       expect(vaultSocket.pendingDisconnect).to.be.true;
     });
+
+    it("clean quarantine after disconnect", async () => {
+      await reportVault({ vault, totalValue: ether("1") });
+      await expect(vaultHub.connect(user).disconnect(vault))
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
+        .withArgs(vault);
+
+      let vaultSocket = await vaultHub.vaultConnection(vault);
+      expect(vaultSocket.pendingDisconnect).to.be.true;
+
+      await lazyOracle.mock__setIsVaultQuarantined(vault, true);
+      expect(await lazyOracle.isVaultQuarantined(vault)).to.equal(true);
+
+      await expect(lazyOracle.mock__report(vaultHub, vault, 0n, 0n, 0n, 0n, 0n, 0n))
+        .to.emit(vaultHub, "VaultDisconnectCompleted")
+        .withArgs(vault);
+
+      expect(await lazyOracle.isVaultQuarantined(vault)).to.equal(false);
+
+      vaultSocket = await vaultHub.vaultConnection(vault);
+      expect(vaultSocket.vaultIndex).to.equal(0); // vault is disconnected
+    });
   });
 
   context("voluntaryDisconnect", () => {
