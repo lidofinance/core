@@ -794,36 +794,6 @@ describe("Permissions", () => {
     });
   });
 
-  context("compensateDisprovenPredepositFromPDG()", () => {
-    const pubkeys = "0x" + "beef".repeat(24);
-
-    it("compensates the disproven predeposit from PDG", async () => {
-      await expect(permissions.connect(pdgCompensator).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
-        .to.emit(vaultHub, "Mock__CompensateDisprovenPredepositFromPDG")
-        .withArgs(stakingVault, pubkeys, stranger);
-    });
-
-    it("can be called by the admin of the role", async () => {
-      // does not have the explicit role but is the role admin
-      expect(await permissions.hasRole(await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE())).to.equal(
-        await permissions.DEFAULT_ADMIN_ROLE(),
-      );
-
-      await expect(permissions.connect(defaultAdmin).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
-        .to.emit(vaultHub, "Mock__CompensateDisprovenPredepositFromPDG")
-        .withArgs(stakingVault, pubkeys, stranger);
-    });
-
-    it("reverts if the caller is not a member of the compensate disproven predeposit role", async () => {
-      expect(await permissions.hasRole(await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE(), stranger)).to.be.false;
-
-      await expect(permissions.connect(stranger).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
-        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE());
-    });
-  });
-
   context("transferOwnership()", () => {
     it("transfers the ownership of the StakingVault", async () => {
       await expect(permissions.connect(defaultAdmin).transferOwnership(stranger))

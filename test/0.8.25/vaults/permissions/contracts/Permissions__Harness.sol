@@ -68,13 +68,6 @@ contract Permissions__Harness is Permissions {
         _voluntaryDisconnect();
     }
 
-    function compensateDisprovenPredepositFromPDG(
-        bytes calldata _pubkey,
-        address _recipient
-    ) external returns (uint256) {
-        return _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);
-    }
-
     function setConfirmExpiry(uint256 _newConfirmExpiry) external {
         _setConfirmExpiry(_newConfirmExpiry);
     }

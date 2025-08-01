@@ -40,7 +40,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     rebalancer: HardhatEthersSigner,
     depositPauser: HardhatEthersSigner,
     depositResumer: HardhatEthersSigner,
-    pdgCompensator: HardhatEthersSigner,
     unknownValidatorProver: HardhatEthersSigner,
     unguaranteedBeaconChainDepositor: HardhatEthersSigner,
     validatorExitRequester: HardhatEthersSigner,
@@ -67,7 +66,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       rebalancer,
       depositPauser,
       depositResumer,
-      pdgCompensator,
       unknownValidatorProver,
       unguaranteedBeaconChainDepositor,
       validatorExitRequester,
@@ -298,20 +296,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
             },
             [],
             await testDashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
-          );
-        });
-
-        // requires prepared state for this test to pass, skipping for now
-        it.skip("compensateDisprovenPredepositFromPDG", async () => {
-          await testMethod(
-            testDashboard,
-            "compensateDisprovenPredepositFromPDG",
-            {
-              successUsers: [pdgCompensator, owner],
-              failingUsers: allRoles.filter((r) => r !== pdgCompensator && r !== owner),
-            },
-            [SAMPLE_PUBKEY, stranger],
-            await testDashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
           );
         });
 
