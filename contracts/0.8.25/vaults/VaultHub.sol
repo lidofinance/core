@@ -926,25 +926,6 @@ contract VaultHub is PausableUntilWithRoles {
         _predepositGuarantee().proveUnknownValidator(_witness, IStakingVault(_vault));
     }
 
-    /// @notice Compensates disproven predeposit from PDG to the recipient
-    /// @param _vault vault address
-    /// @param _pubkey pubkey of the validator
-    /// @param _recipient address to compensate the disproven validator predeposit to
-    /// @return amount of compensated ether
-    function compensateDisprovenPredepositFromPDG(
-        address _vault,
-        bytes calldata _pubkey,
-        address _recipient
-    ) external returns (uint256) {
-        _checkConnectionAndOwner(_vault);
-        
-        if (address(_predepositGuarantee().validatorStatus(_pubkey).stakingVault) != _vault) {
-            revert ValidatorNotAssociatedWithVault();
-        }
-
-        return _predepositGuarantee().compensateDisprovenPredeposit(_pubkey, _recipient);
-    }
-
     function _connectVault(
         address _vault,
         uint256 _shareLimit,
