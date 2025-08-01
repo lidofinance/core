@@ -29,7 +29,7 @@ import {
   getCurrentBlockTimestamp,
   impersonate,
 } from "lib";
-import { MAX_FEE_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
+import { MAX_FEE_BP, MAX_RESERVE_RATIO_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
@@ -753,8 +753,8 @@ describe("VaultHub.sol:hub", () => {
       await expect(vaultHub.connect(user).connectVault(vault)).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
     });
 
-    it("reverts if reserve ratio is too high", async () => {
-      const tooHighReserveRatioBP = TOTAL_BASIS_POINTS + 1n;
+    it("reverts if reserve ratio is 10,000", async () => {
+      const tooHighReserveRatioBP = MAX_RESERVE_RATIO_BP + 1n;
 
       await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
         shareLimit: SHARE_LIMIT,
@@ -767,7 +767,7 @@ describe("VaultHub.sol:hub", () => {
 
       await expect(vaultHub.connect(user).connectVault(vault))
         .to.be.revertedWithCustomError(vaultHub, "InvalidBasisPoints")
-        .withArgs(tooHighReserveRatioBP, TOTAL_BASIS_POINTS);
+        .withArgs(tooHighReserveRatioBP, MAX_RESERVE_RATIO_BP);
     });
 
     it("reverts if rebalance threshold BP is zero", async () => {
