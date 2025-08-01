@@ -1327,44 +1327,14 @@ describe("PredepositGuarantee.sol", () => {
         await pdg.proveValidatorWC(validValidatorWitness);
       });
 
-      it("reverts if _recipient is zero address", async () => {
-        await expect(
-          pdg.connect(vaultOwner).compensateDisprovenPredeposit(invalidValidator.container.pubkey, ZeroAddress),
-        )
-          .to.be.revertedWithCustomError(pdg, "ZeroArgument")
-          .withArgs("_recipient");
-      });
-
-      it("reverts if trying to compensate directly to vault", async () => {
-        await expect(
-          pdg
-            .connect(vaultOwner)
-            .compensateDisprovenPredeposit(invalidValidator.container.pubkey, await stakingVault.getAddress()),
-        ).to.be.revertedWithCustomError(pdg, "CompensateToVaultNotAllowed");
-      });
-
-      it("reverts if trying to compensate when not staking vault owner", async () => {
-        await expect(
-          pdg.connect(stranger).compensateDisprovenPredeposit(invalidValidator.container.pubkey, vaultOperator.address),
-        ).to.be.revertedWithCustomError(pdg, "NotStakingVaultOwner");
-      });
-
       it("reverts if trying to compensate not disproven validator", async () => {
         await expect(
-          pdg.connect(vaultOwner).compensateDisprovenPredeposit(validValidator.container.pubkey, vaultOperator.address),
+          pdg.connect(vaultOwner).compensateDisprovenPredeposit(validValidator.container.pubkey),
         ).to.be.revertedWithCustomError(pdg, "ValidatorNotDisproven");
 
         await expect(
-          pdg
-            .connect(vaultOwner)
-            .compensateDisprovenPredeposit(generateValidator().container.pubkey, vaultOperator.address),
+          pdg.connect(vaultOwner).compensateDisprovenPredeposit(generateValidator().container.pubkey),
         ).to.be.revertedWithCustomError(pdg, "ValidatorNotDisproven");
-      });
-
-      it("reverts if compensation is rejected", async () => {
-        await expect(
-          pdg.connect(vaultOwner).compensateDisprovenPredeposit(invalidValidator.container.pubkey, rejector),
-        ).to.revertedWithCustomError(pdg, "CompensateFailed");
       });
 
       it("allows to compensate disproven validator", async () => {
@@ -1379,23 +1349,18 @@ describe("PredepositGuarantee.sol", () => {
         // Call compensateDisprovenPredeposit and expect it to succeed
         const compensateDisprovenPredepositTx = pdg
           .connect(vaultOwner)
-          .compensateDisprovenPredeposit(invalidValidator.container.pubkey, vaultOperator.address);
+          .compensateDisprovenPredeposit(invalidValidator.container.pubkey);
 
         await expect(compensateDisprovenPredepositTx)
           .to.emit(pdg, "BalanceCompensated")
           .withArgs(
             vaultOperator.address,
-            vaultOperator.address,
+            stakingVault,
             balanceTotal - PREDEPOSIT_AMOUNT,
             balanceLocked - PREDEPOSIT_AMOUNT,
           )
           .to.emit(pdg, "ValidatorCompensated")
-          .withArgs(
-            invalidValidator.container.pubkey,
-            vaultOperator.address,
-            await stakingVault.getAddress(),
-            vaultOperator.address,
-          );
+          .withArgs(invalidValidator.container.pubkey, vaultOperator.address, await stakingVault.getAddress());
 
         await expect(compensateDisprovenPredepositTx).to.be.ok;
 
@@ -1477,10 +1442,7 @@ describe("PredepositGuarantee.sol", () => {
         pdg,
         "ResumedExpected",
       );
-      await expect(pdg.compensateDisprovenPredeposit("0x00", stakingVault)).to.revertedWithCustomError(
-        pdg,
-        "ResumedExpected",
-      );
+      await expect(pdg.compensateDisprovenPredeposit("0x00")).to.revertedWithCustomError(pdg, "ResumedExpected");
 
       // Resume state
       const resumeTx = pdg.connect(pauser).resume();

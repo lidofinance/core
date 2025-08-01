@@ -73,10 +73,7 @@ interface IPredepositGuarantee {
 
     function validatorStatus(bytes calldata _validatorPubkey) external view returns (ValidatorStatus memory);
 
-    function compensateDisprovenPredeposit(
-        bytes calldata _validatorPubkey,
-        address _recipient
-    ) external returns (uint256 compensatedEther);
+    function compensateDisprovenPredeposit(bytes calldata _validatorPubkey) external returns (uint256 compensatedEther);
 
     function proveUnknownValidator(ValidatorWitness calldata _witness, IStakingVault _stakingVault) external;
 }

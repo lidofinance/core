@@ -316,19 +316,6 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the PDG_COMPENSATE_PREDEPOSIT_ROLE and claims disproven predeposit from PDG.
-     * @param _pubkey The pubkey of the validator.
-     * @param _recipient The address to compensate the disproven validator predeposit to.
-     * @return The amount of ether compensated.
-     */
-    function _compensateDisprovenPredepositFromPDG(
-        bytes calldata _pubkey,
-        address _recipient
-    ) internal onlyRoleMemberOrAdmin(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
-        return VAULT_HUB.compensateDisprovenPredepositFromPDG(address(_stakingVault()), _pubkey, _recipient);
-    }
-
-    /**
      * @dev Proves validators unknown to PDG that have correct vault WC
      */
     function _proveUnknownValidatorsToPDG(

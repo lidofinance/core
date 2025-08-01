@@ -508,24 +508,16 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     }
 
     /**
-     * @notice returns locked ether to the staking vault owner if validator's WC were proven invalid
+     * @notice returns locked ether to the staking vault if validator's WC were proven invalid
      * @param _validatorPubkey to take locked PREDEPOSIT_AMOUNT ether from
-     * @param _recipient address to transfer PREDEPOSIT_AMOUNT ether to
-     * @dev can only be called by owner of vault that had deposited to disproven validator
      */
-    function compensateDisprovenPredeposit(
-        bytes calldata _validatorPubkey,
-        address _recipient
-    ) public whenResumed returns (uint256) {
+    function compensateDisprovenPredeposit(bytes calldata _validatorPubkey) public whenResumed returns (uint256) {
         ValidatorStatus storage validator = _getStorage().validatorStatus[_validatorPubkey];
 
         IStakingVault stakingVault = validator.stakingVault;
         address nodeOperator = validator.nodeOperator;
 
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_recipient == address(stakingVault)) revert CompensateToVaultNotAllowed();
         if (validator.stage != ValidatorStage.DISPROVEN) revert ValidatorNotDisproven(validator.stage);
-        if (msg.sender != stakingVault.owner()) revert NotStakingVaultOwner();
 
         validator.stage = ValidatorStage.COMPENSATED;
 
@@ -534,11 +526,11 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         balance.total -= PREDEPOSIT_AMOUNT;
         balance.locked -= PREDEPOSIT_AMOUNT;
 
-        (bool success, ) = _recipient.call{value: PREDEPOSIT_AMOUNT}("");
+        (bool success, ) = address(stakingVault).call{value: PREDEPOSIT_AMOUNT}("");
         if (!success) revert CompensateFailed();
 
-        emit BalanceCompensated(nodeOperator, _recipient, balance.total, balance.locked);
-        emit ValidatorCompensated(_validatorPubkey, nodeOperator, address(stakingVault), _recipient);
+        emit BalanceCompensated(nodeOperator, address(stakingVault), balance.total, balance.locked);
+        emit ValidatorCompensated(_validatorPubkey, nodeOperator, address(stakingVault));
         return PREDEPOSIT_AMOUNT;
     }
 
@@ -688,8 +680,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     event ValidatorCompensated(
         bytes indexed validatorPubkey,
         address indexed nodeOperator,
-        address indexed stakingVault,
-        address recipient
+        address indexed stakingVault
     );
 
     // * * * * * Errors  * * * * * //

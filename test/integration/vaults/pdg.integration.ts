@@ -25,7 +25,6 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
   let stakingVault: StakingVault;
   let dashboard: Dashboard;
-  let dashboard2: Dashboard;
   let roles: VaultRoles;
   let proxy: PinnedBeaconProxy;
   let owner: HardhatEthersSigner;
@@ -48,15 +47,6 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
     // Owner can create a vault with operator as a node operator
     ({ stakingVault, dashboard, proxy } = await createVaultWithDashboard(
-      ctx,
-      ctx.contracts.stakingVaultFactory,
-      owner,
-      nodeOperator,
-      nodeOperator,
-      [],
-    ));
-
-    ({ dashboard: dashboard2 } = await createVaultWithDashboard(
       ctx,
       ctx.contracts.stakingVaultFactory,
       owner,
@@ -275,7 +265,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
   });
 
   describe("Disproven pubkey compensation", () => {
-    it("Reverts if the validator is not associated with the staking vault", async () => {
+    it("compensates disproven deposit", async () => {
       const { predepositGuarantee } = ctx.contracts;
 
       // 1. The stVault's owner supplies 100 ETH to the vault
@@ -326,8 +316,8 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), invalidWithdrawalCredentials);
 
       await expect(
-        dashboard2.connect(owner).compensateDisprovenPredepositFromPDG(validator.container.pubkey, owner),
-      ).to.be.revertedWithCustomError(ctx.contracts.vaultHub, "ValidatorNotAssociatedWithVault");
+        predepositGuarantee.connect(stranger).compensateDisprovenPredeposit(validator.container.pubkey),
+      ).to.be.emit(predepositGuarantee, "ValidatorCompensated");
     });
   });
 });
