@@ -1290,4 +1290,24 @@ describe("VaultHub.sol:hub", () => {
       expect(vaultSocket.pendingDisconnect).to.be.true;
     });
   });
+
+  context("applyVaultReport", () => {
+    it("reverts if called by non LazyOracle", async () => {
+      const { vault } = await createAndConnectVault(vaultFactory);
+      await expect(
+        vaultHub.connect(stranger).applyVaultReport(vault, 1n, 1n, 1n, 1n, 1n, 1n),
+      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+    });
+
+    it("reverts if vault is not connected", async () => {
+      await lazyOracle.refreshReportTimestamp();
+      const { vault } = await createAndConnectVault(vaultFactory);
+
+      await vaultHub.connect(user).disconnect(vault);
+      await reportVault({ vault });
+      expect(await vaultHub.isVaultConnected(vault)).to.be.false;
+
+      await expect(reportVault({ vault })).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
+    });
+  });
 });

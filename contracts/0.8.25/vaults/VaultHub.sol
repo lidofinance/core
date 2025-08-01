@@ -494,6 +494,7 @@ contract VaultHub is PausableUntilWithRoles {
         _requireSender(address(_lazyOracle()));
 
         VaultConnection storage connection = _vaultConnection(_vault);
+        _requireConnected(connection, _vault);
         VaultRecord storage record = _vaultRecord(_vault);
         VaultObligations storage obligations = _vaultObligations(_vault);
 
