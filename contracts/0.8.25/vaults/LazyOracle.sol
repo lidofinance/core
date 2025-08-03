@@ -404,7 +404,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
         // 0. Read storage values
         Storage storage $ = _storage();
-        uint16 maxRewardRatioBP = $.maxRewardRatioBP;
         Quarantine storage quarantine = $.vaultQuarantines[_vault];
         uint256 quarantinedValue = quarantine.pendingTotalValueIncrease;
         // 1. Onchain total value on refSlot, it does not include CL difference and EL rewards for the period
@@ -417,8 +416,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         // As a result, we would need to impose very tiny limits for non-quarantine percentage — which would complicate the logic 
         // without bringing meaningful improvements.
         uint256 quarantineThreshold = 
-            onchainTotalValueOnRefSlot * (TOTAL_BASIS_POINTS + maxRewardRatioBP) / TOTAL_BASIS_POINTS;
-        bool isWithinThreshold = _reportedTotalValue <= quarantineThreshold;
+            onchainTotalValueOnRefSlot * (TOTAL_BASIS_POINTS + $.maxRewardRatioBP) / TOTAL_BASIS_POINTS;
         // 3. Determine current quarantine state
         QuarantineState currentState = _determineQuarantineState(quarantine, quarantinedValue, $);
 
@@ -427,7 +425,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         // --------------------------------------------------------------------
 
         if (currentState == QuarantineState.NO_QUARANTINE) {
-            if (isWithinThreshold) {
+            if (_reportedTotalValue <= quarantineThreshold) {
                 // Transition: NO_QUARANTINE → NO_QUARANTINE (no change needed)
                 return _reportedTotalValue;
             } else {
@@ -436,7 +434,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 return onchainTotalValueOnRefSlot;
             }
         } else if (currentState == QuarantineState.QUARANTINE_ACTIVE) {
-            if (isWithinThreshold) {
+            if (_reportedTotalValue <= quarantineThreshold) {
                 // Transition: QUARANTINE_ACTIVE → NO_QUARANTINE (release quarantine early)
                 delete $.vaultQuarantines[_vault];
                 emit QuarantineExpired(_vault, 0);
@@ -450,12 +448,12 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 ? _reportedTotalValue - onchainTotalValueOnRefSlot 
                 : 0;
             uint256 maxIncreaseWithRewards = quarantinedValue + 
-                (onchainTotalValueOnRefSlot + quarantinedValue) * maxRewardRatioBP / TOTAL_BASIS_POINTS;
+                (onchainTotalValueOnRefSlot + quarantinedValue) * $.maxRewardRatioBP / TOTAL_BASIS_POINTS;
 
-            if (isWithinThreshold || totalValueIncrease <= maxIncreaseWithRewards) {
+            if (_reportedTotalValue <= quarantineThreshold || totalValueIncrease <= maxIncreaseWithRewards) {
                 // Transition: QUARANTINE_EXPIRED → NO_QUARANTINE (release and accept all)
                 delete $.vaultQuarantines[_vault];
-                emit QuarantineExpired(_vault, isWithinThreshold ? 0 : totalValueIncrease);
+                emit QuarantineExpired(_vault, _reportedTotalValue <= quarantineThreshold ? 0 : totalValueIncrease);
                 return _reportedTotalValue;
             } else {
                 // Transition: QUARANTINE_EXPIRED → QUARANTINE_ACTIVE (release old, start new)
