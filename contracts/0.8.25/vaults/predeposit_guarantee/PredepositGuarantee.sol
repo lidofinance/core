@@ -714,7 +714,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     // compensate
     error ValidatorNotDisproven(ValidatorStage stage);
     error CompensateFailed();
-    error CompensateToVaultNotAllowed();
 
     // auth
     error NotStakingVaultOwner();
