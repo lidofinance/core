@@ -162,19 +162,6 @@ const config: HardhatUserConfig = {
         },
       },
     ],
-    overrides: {
-      "contracts/upgrade/TWVoteScript.sol": {
-        version: "0.8.25",
-        settings: {
-          viaIR: true,
-          optimizer: {
-            enabled: true,
-            runs: 200,
-          },
-          evmVersion: "cancun",
-        },
-      },
-    },
   },
   tracer: {
     tasks: ["watch"],
