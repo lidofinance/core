@@ -359,7 +359,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         States:
         • NO_QUARANTINE: No active quarantine, all value is immediately available
         • QUARANTINE_ACTIVE: Total value increase is quarantined, waiting for expiration
-        • QUARANTINE_EXPIRED: Quarantine period passed, ready for resolution
+        • QUARANTINE_EXPIRED: Quarantine period passed, quarantined value can be released
 
         ┌─────────────────┐                              ┌──────────────────┐
         │  NO_QUARANTINE  │ reported > threshold         │QUARANTINE_ACTIVE │
@@ -437,7 +437,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             if (_reportedTotalValue <= quarantineThreshold) {
                 // Transition: QUARANTINE_ACTIVE → NO_QUARANTINE (release quarantine early)
                 delete $.vaultQuarantines[_vault];
-                emit QuarantineExpired(_vault, 0);
+                emit QuarantineReleased(_vault, 0);
                 return _reportedTotalValue;
             } else {
                 // Transition: QUARANTINE_ACTIVE → QUARANTINE_ACTIVE (maintain quarantine)
@@ -453,11 +453,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             if (_reportedTotalValue <= quarantineThreshold || totalValueIncrease <= maxIncreaseWithRewards) {
                 // Transition: QUARANTINE_EXPIRED → NO_QUARANTINE (release and accept all)
                 delete $.vaultQuarantines[_vault];
-                emit QuarantineExpired(_vault, _reportedTotalValue <= quarantineThreshold ? 0 : totalValueIncrease);
+                emit QuarantineReleased(_vault, _reportedTotalValue <= quarantineThreshold ? 0 : totalValueIncrease);
                 return _reportedTotalValue;
             } else {
                 // Transition: QUARANTINE_EXPIRED → QUARANTINE_ACTIVE (release old, start new)
-                emit QuarantineExpired(_vault, quarantinedValue);
+                emit QuarantineReleased(_vault, quarantinedValue);
                 _startNewQuarantine(_vault, quarantine, totalValueIncrease - quarantinedValue, $.vaultsDataTimestamp);
                 return onchainTotalValueOnRefSlot + quarantinedValue;
             }
@@ -485,7 +485,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     ) internal {
         _quarantine.pendingTotalValueIncrease = uint128(_amountToQuarantine);
         _quarantine.startTimestamp = _currentTimestamp;
-        emit QuarantinedDeposit(_vault, _amountToQuarantine);
+        emit QuarantineActivated(_vault, _amountToQuarantine);
     }
 
     function _updateSanityParams(uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) internal {
@@ -522,10 +522,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     }
 
     event VaultsReportDataUpdated(uint256 indexed timestamp, uint256 indexed refSlot, bytes32 indexed root, string cid);
-    event QuarantinedDeposit(address indexed vault, uint256 delta);
-    event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxRewardRatioBP);
-    event QuarantineExpired(address indexed vault, uint256 delta);
+    event QuarantineActivated(address indexed vault, uint256 delta);
+    event QuarantineReleased(address indexed vault, uint256 delta);
     event QuarantineRemoved(address indexed vault);
+    event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxRewardRatioBP);
 
     error AdminCannotBeZero();
     error NotAuthorized();

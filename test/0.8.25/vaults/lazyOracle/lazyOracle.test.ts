@@ -553,7 +553,7 @@ describe("LazyOracle.sol", () => {
           tree.getProof(0),
         ),
       )
-        .to.emit(lazyOracle, "QuarantinedDeposit")
+        .to.emit(lazyOracle, "QuarantineActivated")
         .withArgs(vault, ether("150"));
       expect(await vaultHub.mock__lastReported_totalValue()).to.equal(ether("100"));
 
@@ -619,7 +619,7 @@ describe("LazyOracle.sol", () => {
           tree3.getProof(0),
         ),
       )
-        .to.emit(lazyOracle, "QuarantinedDeposit")
+        .to.emit(lazyOracle, "QuarantineActivated")
         .withArgs(vault, ether("90"));
 
       const quarantineInfo3 = await lazyOracle.vaultQuarantine(vault);
@@ -653,7 +653,7 @@ describe("LazyOracle.sol", () => {
           tree4.getProof(0),
         ),
       )
-        .to.emit(lazyOracle, "QuarantineExpired")
+        .to.emit(lazyOracle, "QuarantineReleased")
         .withArgs(vault, ether("90"));
 
       const quarantineInfo4 = await lazyOracle.vaultQuarantine(vault);
@@ -712,7 +712,7 @@ describe("LazyOracle.sol", () => {
           tree.getProof(0),
         ),
       )
-        .to.emit(lazyOracle, "QuarantinedDeposit")
+        .to.emit(lazyOracle, "QuarantineActivated")
         .withArgs(vault, ether("150"));
       await expect(await vaultHub.mock__lastReported_totalValue()).to.equal(ether("100"));
 
@@ -747,7 +747,7 @@ describe("LazyOracle.sol", () => {
           tree3.getProof(0),
         ),
       )
-        .to.emit(lazyOracle, "QuarantineExpired")
+        .to.emit(lazyOracle, "QuarantineReleased")
         .withArgs(vault, 0n);
 
       const quarantineInfo2 = await lazyOracle.vaultQuarantine(vault);
