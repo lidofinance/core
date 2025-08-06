@@ -60,7 +60,6 @@ struct ProvableBeaconBlockHeader {
 // A witness for a block header which root is accessible via `historical_summaries` field.
 struct HistoricalHeaderWitness {
     BeaconBlockHeader header;
-    GIndex rootGIndex; // The generalized index of the old block root in the historical_summaries.
     bytes32[] proof; // The Merkle proof for the old block header against the state's historical_summaries root.
 }
 
