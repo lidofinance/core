@@ -126,10 +126,9 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("100") });
       await dashboard.connect(roles.minter).mintShares(roles.burner, ether("1"));
 
-      await expect(vaultHub.connect(redemptionMaster).setVaultRedemptions(stakingVaultAddress, ether("1"))).to.emit(
-        stakingVault,
-        "BeaconChainDepositsPaused",
-      );
+      await expect(
+        vaultHub.connect(redemptionMaster).setVaultRedemptionShares(stakingVaultAddress, ether("1")),
+      ).to.emit(stakingVault, "BeaconChainDepositsPaused");
     });
 
     it("Unpauses beacon deposits on settling obligations", async () => {
