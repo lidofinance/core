@@ -60,13 +60,17 @@ contract StakingVault__MockForVaultHub is Ownable2StepUpgradeable {
 
     function pauseBeaconChainDeposits() external {
         beaconChainDepositsPaused = true;
+        emit BeaconChainDepositsPaused();
     }
 
     function resumeBeaconChainDeposits() external {
         beaconChainDepositsPaused = false;
+        emit BeaconChainDepositsResumed();
     }
 
     event ValidatorWithdrawalsTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
+    event BeaconChainDepositsPaused();
+    event BeaconChainDepositsResumed();
 
     error Mock__HealthyVault();
 }
