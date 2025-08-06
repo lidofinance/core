@@ -953,14 +953,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reservationFeeBP
     ) internal {
         _requireSaneShareLimit(_shareLimit);
-        _requireNotZero(_reserveRatioBP);
-        _requireLessThanBP(_reserveRatioBP, MAX_RESERVE_RATIO_BP);
-        _requireNotZero(_forcedRebalanceThresholdBP);
-        _requireLessThanBP(_forcedRebalanceThresholdBP, _reserveRatioBP);
-
-        _requireLessThanBP(_infraFeeBP, MAX_FEE_BP);
-        _requireLessThanBP(_liquidityFeeBP, MAX_FEE_BP);
-        _requireLessThanBP(_reservationFeeBP, MAX_FEE_BP);
 
         VaultConnection memory connection = _vaultConnection(_vault);
         _requireNotDisconnecting(connection.pendingDisconnect, _vault);

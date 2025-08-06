@@ -29,7 +29,7 @@ import {
   getCurrentBlockTimestamp,
   impersonate,
 } from "lib";
-import { MAX_FEE_BP, MAX_RESERVE_RATIO_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
+import { MAX_FEE_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
@@ -738,64 +738,6 @@ describe("VaultHub.sol:hub", () => {
     before(async () => {
       vault = await createVault(vaultFactory);
       await vault.connect(user).transferOwnership(vaultHub);
-    });
-
-    it("reverts if reserve ratio BP is zero", async () => {
-      await operatorGridMock.changeVaultTierParams(vault, {
-        shareLimit: 0n,
-        reserveRatioBP: 0n,
-        forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        infraFeeBP: INFRA_FEE_BP,
-        liquidityFeeBP: LIQUIDITY_FEE_BP,
-        reservationFeeBP: RESERVATION_FEE_BP,
-      });
-
-      await expect(vaultHub.connect(user).connectVault(vault)).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
-    });
-
-    it("reverts if reserve ratio is 10,000", async () => {
-      const tooHighReserveRatioBP = MAX_RESERVE_RATIO_BP + 1n;
-
-      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
-        shareLimit: SHARE_LIMIT,
-        reserveRatioBP: tooHighReserveRatioBP,
-        forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        infraFeeBP: INFRA_FEE_BP,
-        liquidityFeeBP: LIQUIDITY_FEE_BP,
-        reservationFeeBP: RESERVATION_FEE_BP,
-      });
-
-      await expect(vaultHub.connect(user).connectVault(vault))
-        .to.be.revertedWithCustomError(vaultHub, "InvalidBasisPoints")
-        .withArgs(tooHighReserveRatioBP, MAX_RESERVE_RATIO_BP);
-    });
-
-    it("reverts if rebalance threshold BP is zero", async () => {
-      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
-        shareLimit: SHARE_LIMIT,
-        reserveRatioBP: RESERVE_RATIO_BP,
-        forcedRebalanceThresholdBP: 0n,
-        infraFeeBP: INFRA_FEE_BP,
-        liquidityFeeBP: LIQUIDITY_FEE_BP,
-        reservationFeeBP: RESERVATION_FEE_BP,
-      });
-
-      await expect(vaultHub.connect(user).connectVault(vault)).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
-    });
-
-    it("reverts if rebalance threshold BP is higher than reserve ratio BP", async () => {
-      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
-        shareLimit: SHARE_LIMIT,
-        reserveRatioBP: RESERVE_RATIO_BP,
-        forcedRebalanceThresholdBP: RESERVE_RATIO_BP + 1n,
-        infraFeeBP: INFRA_FEE_BP,
-        liquidityFeeBP: LIQUIDITY_FEE_BP,
-        reservationFeeBP: RESERVATION_FEE_BP,
-      });
-
-      await expect(vaultHub.connect(user).connectVault(vault))
-        .to.be.revertedWithCustomError(vaultHub, "InvalidBasisPoints")
-        .withArgs(RESERVE_RATIO_BP + 1n, RESERVE_RATIO_BP);
     });
 
     it("reverts if vault is already connected", async () => {
