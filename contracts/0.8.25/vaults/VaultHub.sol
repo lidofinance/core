@@ -1220,6 +1220,8 @@ contract VaultHub is PausableUntilWithRoles {
         delete $.connections[_vault];
         delete $.records[_vault];
         delete $.obligations[_vault];
+
+        _lazyOracle().removeVaultQuarantine(_vault);
     }
 
     function _checkConnectionAndOwner(address _vault) internal view returns (VaultConnection storage connection) {
