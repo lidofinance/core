@@ -376,7 +376,7 @@ contract ValidatorExitDelayVerifier {
             ? deliveredTimestamp
             : earliestPossibleVoluntaryExitTimestamp;
 
-        if (referenceSlotTimestamp < eligibleExitRequestTimestamp) {
+        if (referenceSlotTimestamp <= eligibleExitRequestTimestamp) {
             revert ExitIsNotEligibleOnProvableBeaconBlock(referenceSlotTimestamp, eligibleExitRequestTimestamp);
         }
 
