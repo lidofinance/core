@@ -79,7 +79,7 @@ contract VaultHub is PausableUntilWithRoles {
         Report report;
         // ### 2nd slot
         /// @notice amount of ether that is locked from withdrawal on the vault
-        /// consists of ether that back minted stETH plus reserve determined by reserve ratio
+        /// consists of ether that back minted stETH plus reserve determined by reserve ratio and minimal reserve
         uint128 locked;
         /// @notice liability shares of the vault
         uint96 liabilityShares;
@@ -577,9 +577,9 @@ contract VaultHub is PausableUntilWithRoles {
             _record: recordAcceptor,
             _amountOfShares: badDebtToSocialize,
             _reserveRatioBP: connectionAcceptor.reserveRatioBP,
-            // we can overlock here but not going to bad debt
-            _maxLockableValue: _totalValue(recordAcceptor) * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - connectionAcceptor.reserveRatioBP),
-            _shareLimit: connectionAcceptor.shareLimit
+            _maxLockableValue: _totalValue(recordAcceptor) * TOTAL_BASIS_POINTS
+                / (TOTAL_BASIS_POINTS - connectionAcceptor.reserveRatioBP),
+            _shareLimit: type(uint256).max
         });
 
         emit BadDebtSocialized(_badDebtVault, _vaultAcceptor, badDebtToSocialize);
@@ -1029,7 +1029,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 minimalReserve = Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve);
 
         _record.minimalReserve = uint128(minimalReserve);
-        _record.locked = uint128(_collateral({
+        _record.locked = uint128(_locked({
             _liabilityShares: Math256.max(_record.liabilityShares, _reportLiabilityShares), // better way to track liability?
             _minimalReserve: minimalReserve,
             _reserveRatioBP: _connection.reserveRatioBP
@@ -1045,7 +1045,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _minimalReserve minimal amount of additional reserve to be locked
     /// @param _reserveRatioBP the reserve ratio of the vault
     /// @return the amount of collateral that is to be locked on the vault
-    function _collateral(
+    function _locked(
         uint256 _liabilityShares,
         uint256 _minimalReserve,
         uint256 _reserveRatioBP
@@ -1080,8 +1080,7 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).withdraw(_recipient, _amount);
     }
 
-    /// @dev Increases liabilityShares of the vault , checking all the conditions and updating locked
-    /// NB! reserveRatioBP is used to calculate locked amount, while _maxMintableRatioBP is used to check the upper bound
+    /// @dev Increases liabilityShares of the vault and updates the locked amount
     function _increaseLiability(
         address _vault,
         VaultRecord storage _record,
@@ -1094,7 +1093,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (sharesAfterMint > _shareLimit) revert ShareLimitExceeded(_vault, sharesAfterMint, _shareLimit);
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
-        uint256 etherToLock = _collateral(sharesAfterMint, _record.minimalReserve, _reserveRatioBP);
+        uint256 etherToLock = _locked(sharesAfterMint, _record.minimalReserve, _reserveRatioBP);
         if (etherToLock > _maxLockableValue) {
             revert InsufficientValue(_vault, etherToLock, _maxLockableValue);
         }
