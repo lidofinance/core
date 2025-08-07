@@ -243,7 +243,9 @@ describe("VaultHub.sol:forceRebalance", () => {
 
       await vaultHub
         .connect(lazyOracleSigner)
-        .applyVaultReport(vaultAddress, timestamp, ether("1.9"), ether("2"), 0n, ether("1.3"), 0n);
+        .applyVaultReport(vaultAddress, timestamp, ether("1"), ether("3"), 0n, ether("0.9"), 0n);
+
+      expect(await vaultHub.totalValue(vaultAddress)).to.equal(ether("1"));
 
       const sharesMintedBefore = await vaultHub.liabilityShares(vaultAddress);
       const shortfall = await vaultHub.rebalanceShortfall(vaultAddress);

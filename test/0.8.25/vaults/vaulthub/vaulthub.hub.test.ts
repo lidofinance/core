@@ -515,7 +515,7 @@ describe("VaultHub.sol:hub", () => {
       await vaultHub.connect(user).fund(vault, { value: ether("1") });
 
       const totalValue = ether("2"); // connect deposit + 1 ETH
-      const mintingEth = ether("0.5");
+      const mintingEth = ether("1");
       const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
       await reportVault({ vault, totalValue, inOutDelta: totalValue });
       await vaultHub.connect(user).mintShares(vault, user, sharesToMint);
