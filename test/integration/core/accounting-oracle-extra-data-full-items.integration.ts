@@ -245,7 +245,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
 
       // Share balances tracking removed upon Triggerable Withdrawals upgrade
 
-      const { reportTx, submitter, extraDataChunks } = await reportWithoutExtraData(
+      const { submitter, extraDataChunks } = await reportWithoutExtraData(
         ctx,
         numExitedValidatorsByStakingModule,
         modulesWithExited,
