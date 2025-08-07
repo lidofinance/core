@@ -3,13 +3,7 @@ pragma solidity 0.8.25;
 
 import {IAccessControl} from "@openzeppelin/contracts-v5.2/access/IAccessControl.sol";
 import {OmnibusBase} from "./utils/OmnibusBase.sol";
-
-interface IOssifiableProxy {
-    function proxy__upgradeTo(address newImplementation_) external;
-    function proxy__changeAdmin(address newAdmin_) external;
-    function proxy__getAdmin() external view returns (address);
-    function proxy__getImplementation() external view returns (address);
-}
+import {IOssifiableProxy} from "contracts/common/interfaces/IOssifiableProxy.sol";
 
 interface IRepo {
     function newVersion(uint16[3] calldata _newSemanticVersion, address _contractAddress, bytes calldata _contentURI) external;

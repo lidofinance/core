@@ -98,7 +98,7 @@ export enum Sk {
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
 }
 
-export function getAddress(contractKey: Sk): string {
+export function getAddress(contractKey: Sk, state: DeploymentState): string {
   switch (contractKey) {
     case Sk.accountingOracle:
     case Sk.appAgent:
@@ -117,6 +117,7 @@ export function getAddress(contractKey: Sk): string {
     case Sk.validatorsExitBusOracle:
     case Sk.withdrawalQueueERC721:
     case Sk.withdrawalVault:
+      return state[contractKey].proxy.address;
     case Sk.burner:
     case Sk.appSimpleDvt:
     case Sk.aragonNodeOperatorsRegistryAppRepo:
@@ -214,10 +215,7 @@ export async function resetStateFile(networkName: string = hardhatNetwork.name):
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       throw new Error(`No network state file ${fileName}: ${(error as Error).message}`);
     }
-    // If file does not exist, create it with default values
   } finally {
-    // const templateFileName = _getFileName("scripts/defaults", "testnet-defaults", "");
-
     const templateData = readFileSync("scripts/scratch/deployed-testnet-defaults.json", "utf8");
     writeFileSync(fileName, templateData, { encoding: "utf8", flag: "w" });
   }
