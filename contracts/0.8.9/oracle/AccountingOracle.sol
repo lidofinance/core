@@ -4,17 +4,16 @@ pragma solidity 0.8.9;
 
 import { SafeCast } from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
-import { ILidoLocator } from "../../common/interfaces/ILidoLocator.sol";
 import { UnstructuredStorage } from "../lib/UnstructuredStorage.sol";
 
-import { BaseOracle, IConsensusContract } from "./BaseOracle.sol";
+import { BaseOracle, IHashConsensus } from "./BaseOracle.sol";
 
 
 interface ILido {
     function handleOracleReport(
         // Oracle timings
-        uint256 _currentReportTimestamp,
-        uint256 _timeElapsedSeconds,
+        uint256 _reportTimestamp,
+        uint256 _timeElapsed,
         // CL values
         uint256 _clValidators,
         uint256 _clBalance,
@@ -25,7 +24,13 @@ interface ILido {
         // Decision about withdrawals processing
         uint256[] calldata _withdrawalFinalizationBatches,
         uint256 _simulatedShareRate
-    ) external;
+    ) external returns (uint256[4] memory postRebaseAmounts);
+}
+
+interface ILidoLocator {
+    function stakingRouter() external view returns(address);
+    function withdrawalQueue() external view returns(address);
+    function oracleReportSanityChecker() external view returns(address);
 }
 
 
@@ -44,9 +49,9 @@ interface ILegacyOracle {
     // only called after the migration
 
     function handleConsensusLayerReport(
-        uint256 refSlot,
-        uint256 clBalance,
-        uint256 clValidators
+        uint256 _refSlot,
+        uint256 _clBalance,
+        uint256 _clValidators
     ) external;
 }
 
@@ -58,14 +63,14 @@ interface IOracleReportSanityChecker {
 
 interface IStakingRouter {
     function updateExitedValidatorsCountByStakingModule(
-        uint256[] calldata moduleIds,
-        uint256[] calldata exitedValidatorsCounts
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _exitedValidatorsCounts
     ) external returns (uint256);
 
     function reportStakingModuleExitedValidatorsCountByNodeOperator(
-        uint256 stakingModuleId,
-        bytes calldata nodeOperatorIds,
-        bytes calldata exitedValidatorsCounts
+        uint256 _stakingModuleId,
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _exitedValidatorsCounts
     ) external;
 
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
@@ -73,7 +78,7 @@ interface IStakingRouter {
 
 
 interface IWithdrawalQueue {
-    function onOracleReport(bool isBunkerMode, uint256 prevReportTimestamp, uint256 currentReportTimestamp) external;
+    function onOracleReport(bool _isBunkerModeNow, uint256 _bunkerStartTimestamp, uint256 _currentReportTimestamp) external;
 }
 
 
@@ -514,12 +519,11 @@ contract AccountingOracle is BaseOracle {
     )
         internal view returns (uint256)
     {
-        (uint256 initialEpoch,
-            uint256 epochsPerFrame) = IConsensusContract(consensusContract).getFrameConfig();
+        (uint256 initialEpoch, uint256 epochsPerFrame, /* uint256 _fastLaneLengthSlots */) = IHashConsensus(consensusContract).getFrameConfig();
 
         (uint256 slotsPerEpoch,
             uint256 secondsPerSlot,
-            uint256 genesisTime) = IConsensusContract(consensusContract).getChainConfig();
+            uint256 genesisTime) = IHashConsensus(consensusContract).getChainConfig();
 
         {
             // check chain spec to match the prev. one (a block is used to reduce stack allocation)

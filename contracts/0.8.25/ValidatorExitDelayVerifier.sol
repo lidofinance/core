@@ -3,12 +3,35 @@
 
 pragma solidity 0.8.25;
 
-import {BeaconBlockHeader, Validator} from "../common/lib/BeaconTypes.sol";
-import {GIndex} from "../common/lib/GIndex.sol";
-import {SSZ} from "../common/lib/SSZ.sol";
-import {ILidoLocator} from "../common/interfaces/ILidoLocator.sol";
-import {IValidatorsExitBus} from "./interfaces/IValidatorsExitBus.sol";
-import {IStakingRouter} from "./interfaces/IStakingRouter.sol";
+import {BeaconBlockHeader, Validator} from "contracts/common/lib/BeaconTypes.sol";
+import {GIndex} from "contracts/common/lib/GIndex.sol";
+import {SSZ} from "contracts/common/lib/SSZ.sol";
+
+interface ILidoLocator {
+    function stakingRouter() external view returns(address);
+    function validatorsExitBusOracle() external view returns(address);
+}
+
+interface IStakingRouter {
+    function reportValidatorExitDelay(
+        uint256 _stakingModuleId,
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKey,
+        uint256 _eligibleToExitInSec
+    ) external;
+}
+
+interface IValidatorsExitBus {
+    function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 deliveryDateTimestamp);
+
+    function unpackExitRequest(
+        bytes calldata exitRequests,
+        uint256 dataFormat,
+        uint256 index
+    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex);
+}
+
 
 struct ExitRequestData {
     bytes data;
@@ -37,7 +60,6 @@ struct ProvableBeaconBlockHeader {
 // A witness for a block header which root is accessible via `historical_summaries` field.
 struct HistoricalHeaderWitness {
     BeaconBlockHeader header;
-    GIndex rootGIndex; // The generalized index of the old block root in the historical_summaries.
     bytes32[] proof; // The Merkle proof for the old block header against the state's historical_summaries root.
 }
 
@@ -115,7 +137,6 @@ contract ValidatorExitDelayVerifier {
         uint256 provableBeaconBlockTimestamp,
         uint256 eligibleExitRequestTimestamp
     );
-    error EmptyDeliveryHistory();
     error InvalidCapellaSlot();
 
     /**
@@ -206,7 +227,7 @@ contract ValidatorExitDelayVerifier {
                 proofSlotTimestamp
             );
 
-            _verifyValidatorExitUnset(beaconBlock.header, validatorWitnesses[i], pubkey, valIndex);
+            _verifyValidatorExitUnset(beaconBlock.header, witness, pubkey, valIndex);
 
             stakingRouter.reportValidatorExitDelay(moduleId, nodeOpId, proofSlotTimestamp, pubkey, eligibleToExitInSec);
         }
@@ -394,10 +415,6 @@ contract ValidatorExitDelayVerifier {
     ) internal view returns (uint256 deliveryTimestamp) {
         bytes32 exitRequestsHash = keccak256(abi.encode(exitRequests.data, exitRequests.dataFormat));
         deliveryTimestamp = veb.getDeliveryTimestamp(exitRequestsHash);
-
-        if (deliveryTimestamp == 0) {
-            revert EmptyDeliveryHistory();
-        }
     }
 
     function _slotToTimestamp(uint64 slot) internal view returns (uint256) {

@@ -8,9 +8,10 @@ import {AragonApp} from "@aragon/os/contracts/apps/AragonApp.sol";
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStorage.sol";
 
-import {Math256} from "../../common/lib/Math256.sol";
-import {MinFirstAllocationStrategy} from "../../common/lib/MinFirstAllocationStrategy.sol";
-import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
+import {Math256} from "contracts/common/lib/Math256.sol";
+import {MinFirstAllocationStrategy} from "contracts/common/lib/MinFirstAllocationStrategy.sol";
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 import {SigningKeys} from "../lib/SigningKeys.sol";
 import {Packed64x4} from "../lib/Packed64x4.sol";
 import {Versioned} from "../utils/Versioned.sol";
@@ -589,7 +590,8 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @param _nodeOperatorId Id of the node operator
     /// @param _isTargetLimitActive Flag indicating if the soft target limit is active
     /// @param _targetLimit Target limit of the node operator
-    /// @dev This function is deprecated, use updateTargetValidatorsLimits instead
+    /// @dev DEPRECATED: This function updateTargetValidatorsLimits(uint256, bool, uint256) is deprecated
+    /// @dev Use updateTargetValidatorsLimits(uint256, uint256, uint256) instead
     function updateTargetValidatorsLimits(uint256 _nodeOperatorId, bool _isTargetLimitActive, uint256 _targetLimit) public {
         updateTargetValidatorsLimits(_nodeOperatorId, _isTargetLimitActive ? 1 : 0, _targetLimit);
     }
@@ -1071,6 +1073,9 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
 
     function _setExitDeadlineThreshold(uint256 _threshold, uint256 _lateReportingWindow) internal {
         require(_threshold > 0, "INVALID_EXIT_DELAY_THRESHOLD");
+
+        // Check for underflow protection before computing currentCutoffTimestamp
+        require(block.timestamp >= _threshold + _lateReportingWindow, "CUTOFF_TIMESTAMP_UNDERFLOW");
 
         // Set the cutoff timestamp to the current time minus the threshold and reportingWindow period
         uint256 currentCutoffTimestamp = block.timestamp - _threshold - _lateReportingWindow;

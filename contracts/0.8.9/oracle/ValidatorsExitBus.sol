@@ -4,7 +4,6 @@ pragma solidity 0.8.9;
 
 import {AccessControlEnumerable} from "../utils/access/AccessControlEnumerable.sol";
 import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
-import {ILidoLocator} from "../../common/interfaces/ILidoLocator.sol";
 import {Versioned} from "../utils/Versioned.sol";
 import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
 import {PausableUntil} from "../utils/PausableUntil.sol";
@@ -17,15 +16,21 @@ interface ITriggerableWithdrawalsGateway {
     }
 
     function triggerFullWithdrawals(
-        ValidatorData[] calldata triggerableExitData,
+        ValidatorData[] calldata validatorsData,
         address refundRecipient,
         uint256 exitType
     ) external payable;
 }
 
+interface ILidoLocator {
+    function validatorExitDelayVerifier() external view returns (address);
+    function triggerableWithdrawalsGateway() external view returns (address);
+    function oracleReportSanityChecker() external view returns(address);
+}
+
 /**
  * @title ValidatorsExitBus
- * @notice Сontract that serves as the central infrastructure for managing validator exit requests.
+ * @notice Contract that serves as the central infrastructure for managing validator exit requests.
  * It stores report hashes, emits exit events, and maintains data and tools that enables anyone to prove a validator was requested to exit.
  */
 abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, Versioned {
@@ -141,6 +146,12 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      */
     event ExitDataProcessing(bytes32 exitRequestsHash);
 
+    /**
+     * @notice Emitted when max validators per report value is set.
+     * @param maxValidatorsPerReport The number of valdiators allowed per report.
+     */
+    event SetMaxValidatorsPerReport(uint256 maxValidatorsPerReport);
+
     struct ExitRequestsData {
         bytes data;
         uint256 dataFormat;
@@ -193,6 +204,9 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     ILidoLocator internal immutable LOCATOR;
 
+    /// @dev Storage slot: uint256 totalRequestsProcessed
+    bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
+        keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
     // Storage slot for exit request limit configuration and current quota tracking
     bytes32 internal constant EXIT_REQUEST_LIMIT_POSITION = keccak256("lido.ValidatorsExitBus.maxExitRequestLimit");
     // Storage slot for the maximum number of validator exit requests allowed per processing report
@@ -243,6 +257,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * - The data format is not supported.
      * - The data length exceeds the maximum number of requests allowed per payload.
      * - There is no remaining quota available for the current limits.
+     * - The requests was not sorted in strictly increasing order before the report hash submit.
      *
      * Emits `ValidatorExitRequest` events;
      *
@@ -267,6 +282,10 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         _consumeLimit(requestsCount);
 
         _processExitRequestsList(request.data);
+
+        TOTAL_REQUESTS_PROCESSED_POSITION.setStorageUint256(
+            TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256() + requestsCount
+        );
 
         _updateRequestStatus(requestStatus);
 
@@ -308,7 +327,6 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         _checkExitSubmitted(requestStatus);
         _checkDelivered(requestStatus);
         _checkExitRequestData(exitsData.data, exitsData.dataFormat);
-        _checkContractVersion(requestStatus.contractVersion);
 
         ITriggerableWithdrawalsGateway.ValidatorData[]
             memory triggerableExitData = new ITriggerableWithdrawalsGateway.ValidatorData[](exitDataIndexes.length);
@@ -482,6 +500,13 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         _pauseUntil(_pauseUntilInclusive);
     }
 
+    /// @notice Returns the total number of validator exit requests ever processed
+    /// across all received reports.
+    ///
+    function getTotalRequestsProcessed() external view returns (uint256) {
+        return TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256();
+    }
+
     /// Internal functions
 
     function _checkExitRequestData(bytes calldata requests, uint256 dataFormat) internal pure {
@@ -520,6 +545,8 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
         if (maxValidatorsPerReport == 0) revert ZeroArgument("maxValidatorsPerReport");
 
         MAX_VALIDATORS_PER_REPORT_POSITION.setStorageUint256(maxValidatorsPerReport);
+
+        emit SetMaxValidatorsPerReport(maxValidatorsPerReport);
     }
 
     function _getMaxValidatorsPerReport() internal view returns (uint256) {

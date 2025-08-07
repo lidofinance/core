@@ -67,6 +67,8 @@ task("verify:deployed", "Verifies deployed contracts based on state file")
   });
 
 async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnvironment) {
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
   if (!contract.contract) {
     // TODO: In the case of state processing on the local devnet there are skips, we need to find the cause
     return;
