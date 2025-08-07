@@ -22,27 +22,36 @@ export async function main() {
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
-
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
   await makeTx(
     stakingRouter,
     "grantRole",
-    [await stakingRouter.STAKING_MODULE_UNVETTING_ROLE(), depositSecurityModuleAddress],
+    [await stakingRouter.STAKING_MODULE_UNVETTING_ROLE({ gasLimit: 16_000_000 }), depositSecurityModuleAddress],
     { from: deployer },
   );
   await makeTx(
     stakingRouter,
     "grantRole",
-    [await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE(), accountingOracleAddress],
+    [await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE({ gasLimit: 16_000_000 }), accountingOracleAddress],
     { from: deployer },
   );
-  await makeTx(stakingRouter, "grantRole", [await stakingRouter.REPORT_REWARDS_MINTED_ROLE(), lidoAddress], {
-    from: deployer,
-  });
-  await makeTx(stakingRouter, "grantRole", [await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), agentAddress], {
-    from: deployer,
-  });
+  await makeTx(
+    stakingRouter,
+    "grantRole",
+    [await stakingRouter.REPORT_REWARDS_MINTED_ROLE({ gasLimit: 16_000_000 }), lidoAddress],
+    {
+      from: deployer,
+    },
+  );
+  await makeTx(
+    stakingRouter,
+    "grantRole",
+    [await stakingRouter.STAKING_MODULE_MANAGE_ROLE({ gasLimit: 16_000_000 }), agentAddress],
+    {
+      from: deployer,
+    },
+  );
 
   // ValidatorsExitBusOracle
   if (gateSealAddress) {
@@ -50,9 +59,14 @@ export async function main() {
       "ValidatorsExitBusOracle",
       validatorsExitBusOracleAddress,
     );
-    await makeTx(validatorsExitBusOracle, "grantRole", [await validatorsExitBusOracle.PAUSE_ROLE(), gateSealAddress], {
-      from: deployer,
-    });
+    await makeTx(
+      validatorsExitBusOracle,
+      "grantRole",
+      [await validatorsExitBusOracle.PAUSE_ROLE({ gasLimit: 16_000_000 }), gateSealAddress],
+      {
+        from: deployer,
+      },
+    );
   } else {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
     log.emptyLine();
@@ -61,29 +75,47 @@ export async function main() {
   // WithdrawalQueue
   const withdrawalQueue = await loadContract<WithdrawalQueueERC721>("WithdrawalQueueERC721", withdrawalQueueAddress);
   if (gateSealAddress) {
-    await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.PAUSE_ROLE(), gateSealAddress], {
-      from: deployer,
-    });
+    await makeTx(
+      withdrawalQueue,
+      "grantRole",
+      [await withdrawalQueue.PAUSE_ROLE({ gasLimit: 16_000_000 }), gateSealAddress],
+      {
+        from: deployer,
+      },
+    );
   } else {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of withdrawalQueue`);
     log.emptyLine();
   }
-
-  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.FINALIZE_ROLE(), lidoAddress], {
-    from: deployer,
-  });
-
-  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.ORACLE_ROLE(), accountingOracleAddress], {
-    from: deployer,
-  });
+  await makeTx(
+    withdrawalQueue,
+    "grantRole",
+    [await withdrawalQueue.FINALIZE_ROLE({ gasLimit: 16_000_000 }), lidoAddress],
+    {
+      from: deployer,
+    },
+  );
+  await makeTx(
+    withdrawalQueue,
+    "grantRole",
+    [await withdrawalQueue.ORACLE_ROLE({ gasLimit: 16_000_000 }), accountingOracleAddress],
+    {
+      from: deployer,
+    },
+  );
 
   // Burner
   const burner = await loadContract<Burner>("Burner", burnerAddress);
   // NB: REQUEST_BURN_SHARES_ROLE is already granted to Lido in Burner constructor
-  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), nodeOperatorsRegistryAddress], {
-    from: deployer,
-  });
-  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE(), simpleDvtApp], {
+  await makeTx(
+    burner,
+    "grantRole",
+    [await burner.REQUEST_BURN_SHARES_ROLE({ gasLimit: 16_000_000 }), nodeOperatorsRegistryAddress],
+    {
+      from: deployer,
+    },
+  );
+  await makeTx(burner, "grantRole", [await burner.REQUEST_BURN_SHARES_ROLE({ gasLimit: 16_000_000 }), simpleDvtApp], {
     from: deployer,
   });
 }

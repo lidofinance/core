@@ -102,9 +102,10 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   );
 
   state = updateObjectInState(Sk.callsScript, {
-    address: await evmScriptRegistryFactory.baseCallScript(),
+    address: await evmScriptRegistryFactory.baseCallScript({ gasLimit: 16_000_000 }),
     contract: await getContractPath("CallsScript"),
     constructorArgs: [],
+    gasLimit: 16_000_000,
   });
 
   // Process installed apps
@@ -126,7 +127,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
   log.success(idsCheckDesc);
 
   const kernel = await loadContract<Kernel>("Kernel", kernelProxyAddress);
-  const APP_BASES_NAMESPACE = await kernel.APP_BASES_NAMESPACE();
+  const APP_BASES_NAMESPACE = await kernel.APP_BASES_NAMESPACE({ gasLimit: 16_000_000 });
 
   // Process each installed app
   const dataByAppName: { [key: string]: { [key: string]: string } } = {};
@@ -136,9 +137,9 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
     const proxyAddress = ethers.getAddress(evt.args.appProxy);
 
     const proxy = await loadContract<ERCProxy>("ERCProxy", proxyAddress);
-    const implAddress = await proxy.implementation();
+    const implAddress = await proxy.implementation({ gasLimit: 16_000_000 });
 
-    const kernelBaseAddr = await kernel.getApp(APP_BASES_NAMESPACE, appId);
+    const kernelBaseAddr = await kernel.getApp(APP_BASES_NAMESPACE, appId, { gasLimit: 16_000_000 });
 
     // Verify app base
     const baseCheckDesc = `${appName}: the installed app base is ${cy(implAddress)}`;
@@ -209,7 +210,7 @@ async function saveStateFromNewDAOTx(newDAOReceipt: ContractTransactionReceipt) 
     };
     if (appName === Sk.aragonEvmScriptRegistry) {
       state[appName].implementation = {
-        address: await proxy.getFunction("implementation")(),
+        address: await proxy.getFunction("implementation")({ gasLimit: 16_000_000 }),
         contract: await getContractPath("EVMScriptRegistry"),
         constructorArgs: [], // see DAOFactory.newDAO and EVMScriptRegistryFactory.baseReg
       };

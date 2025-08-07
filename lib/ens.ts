@@ -26,10 +26,10 @@ export async function assignENSName(
   log(`Label: ${yl(labelName)} (${cy(labelHash)})`);
 
   let receipt;
-  if ((await ens.owner(node)) === owner) {
+  if ((await ens.owner(node, { gasLimit: 16_000_000 })) === owner) {
     receipt = await makeTx(ens as unknown as LoadedContract, "setOwner", [node, assigneeAddress], { from: owner });
   } else {
-    if ((await ens.owner(parentNode)) !== owner) {
+    if ((await ens.owner(parentNode, { gasLimit: 16_000_000 })) !== owner) {
       throw new Error(
         `the address ${owner} has no ownership rights over the target ` +
           `domain '${labelName}.${parentName}' or parent domain '${parentName}'`,
@@ -57,6 +57,6 @@ export async function assignENSName(
 }
 
 export async function getENSNodeOwner(ens: ENS, node: string) {
-  const ownerAddr = await ens.owner(node);
+  const ownerAddr = await ens.owner(node, { gasLimit: 16_000_000 });
   return ownerAddr == ethers.ZeroAddress ? null : ownerAddr;
 }

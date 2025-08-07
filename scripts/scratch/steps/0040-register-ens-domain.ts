@@ -39,8 +39,8 @@ export async function main() {
   log.emptyLine();
 
   // Check ownership and perform necessary actions
-  const nodeOwner = await ens.owner(node);
-  const tldNodeOwner = await ens.owner(tldNode);
+  const nodeOwner = await ens.owner(node, { gasLimit: 16_000_000 });
+  const tldNodeOwner = await ens.owner(tldNode, { gasLimit: 16_000_000 });
 
   if (nodeOwner !== deployer && tldNodeOwner !== deployer) {
     throw new Error(`This branch is not implemented.
