@@ -35,10 +35,15 @@ export async function makeTx(
 ): Promise<ContractTransactionReceipt> {
   log.withArguments(`Call: ${yl(contract.name)}[${cy(contract.address)}].${yl(funcName)}`, args);
 
+  const estimatedGas = await contract.getFunction(funcName).estimateGas(...args, txParams);
+  log(`Gas estimate: ${cy(estimatedGas.toString())}`);
+
   const tx = await contract.getFunction(funcName)(...args, txParams);
+  log(`Transaction sent: ${cy(tx.hash)}`);
 
   const receipt = await tx.wait();
   const gasUsed = receipt.gasUsed;
+  log(`Gas used: ${cy(gasUsed.toString())}`);
   incrementGasUsed(gasUsed, withStateFile);
 
   return receipt;
@@ -70,11 +75,17 @@ async function deployContractType2(
 ): Promise<DeployedContract> {
   const txParams = await getDeployTxParams(deployer);
   const factory = (await ethers.getContractFactory(artifactName, signerOrOptions)) as ContractFactory;
+  
+  const deployTx = await factory.getDeployTransaction(...constructorArgs, txParams);
+  const estimatedGas = await ethers.provider.estimateGas(deployTx);
+  log(`Deploy gas estimate: ${cy(estimatedGas.toString())}`);
+  
   const contract = await factory.deploy(...constructorArgs, txParams);
   const tx = contract.deploymentTransaction();
   if (!tx) {
     throw new Error(`Failed to send the deployment transaction for ${artifactName}`);
   }
+  log(`Deployment transaction sent: ${cy(tx.hash)}`);
 
   const receipt = await tx.wait();
   if (!receipt) {
@@ -82,6 +93,7 @@ async function deployContractType2(
   }
 
   const gasUsed = receipt.gasUsed;
+  log(`Deployment gas used: ${cy(gasUsed.toString())}`);
   incrementGasUsed(gasUsed, withStateFile);
   (contract as DeployedContract).deploymentGasUsed = gasUsed;
   (contract as DeployedContract).deploymentTx = tx.hash;
