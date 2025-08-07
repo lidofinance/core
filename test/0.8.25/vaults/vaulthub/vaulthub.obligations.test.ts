@@ -35,6 +35,7 @@ describe("VaultHub.sol:obligations", () => {
     connectedVault = await vaultsContext.createMockStakignVaultAndConnect(user, user);
 
     await vaultHub.connect(deployer).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), redemptionMaster);
+    await vaultHub.connect(deployer).grantRole(await vaultHub.PAUSE_ROLE(), user);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -93,6 +94,15 @@ describe("VaultHub.sol:obligations", () => {
       await expect(vaultHub.settleVaultObligations(disconnectedVault)).to.be.revertedWithCustomError(
         vaultHub,
         "ZeroBalance",
+      );
+    });
+
+    it("reverts if vaulthub is paused", async () => {
+      await vaultHub.connect(user).pauseFor(1000n);
+
+      await expect(vaultHub.settleVaultObligations(connectedVault)).to.be.revertedWithCustomError(
+        vaultHub,
+        "ResumedExpected",
       );
     });
 

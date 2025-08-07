@@ -1260,16 +1260,17 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reportCumulativeLidoFees
     ) internal {
         uint256 cumulativeSettledLidoFees = _obligations.settledLidoFees;
-        uint256 cumulativeLidoFees = cumulativeSettledLidoFees + _obligations.unsettledLidoFees;
+        uint256 unsettledLidoFees = _obligations.unsettledLidoFees;
+        uint256 cumulativeLidoFees = cumulativeSettledLidoFees + unsettledLidoFees;
         if (_reportCumulativeLidoFees < cumulativeLidoFees) {
             revert InvalidFees(_vault, _reportCumulativeLidoFees, cumulativeLidoFees);
         }
 
         // update unsettled lido fees
-        uint256 unsettledLidoFees = _reportCumulativeLidoFees - cumulativeSettledLidoFees;
-        if (unsettledLidoFees != _obligations.unsettledLidoFees) {
-            _obligations.unsettledLidoFees = uint128(unsettledLidoFees);
-            emit LidoFeesUpdated(_vault, unsettledLidoFees, cumulativeSettledLidoFees);
+        uint256 newUnsettledLidoFees = _reportCumulativeLidoFees - cumulativeSettledLidoFees;
+        if (newUnsettledLidoFees != unsettledLidoFees) {
+            _obligations.unsettledLidoFees = uint128(newUnsettledLidoFees);
+            emit LidoFeesUpdated(_vault, newUnsettledLidoFees, cumulativeSettledLidoFees);
         }
     }
 
@@ -1303,7 +1304,6 @@ contract VaultHub is PausableUntilWithRoles {
      * @param _record The record of the vault to settle obligations for
      * @param _obligations The obligations of the vault to be settled
      * @param _allowedUnsettled The maximum allowable unsettled obligations post-settlement (triggers reverts)
-     * ISSUE: https://github.com/lidofinance/core/issues/1219
      */
     function _settleObligations(
         address _vault,
@@ -1325,20 +1325,26 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 totalValue_ = _totalValue(_record);
         uint256 unlockedValue = totalValue_ > lockedValue ? totalValue_ - lockedValue : 0;
         uint256 availableForFees = Math256.min(unlockedValue, _vault.balance);
-        uint256 valueToTransferToLido = Math256.min(_obligations.unsettledLidoFees, availableForFees);
+
+        uint256 unsettledLidoFees = _obligations.unsettledLidoFees;
+        uint256 settledLidoFees = _obligations.settledLidoFees;
+        uint256 valueToTransferToLido = Math256.min(unsettledLidoFees, availableForFees);
         if (valueToTransferToLido > 0) {
             _withdraw(_vault, _record, LIDO_LOCATOR.treasury(), valueToTransferToLido);
-            _obligations.unsettledLidoFees -= uint128(valueToTransferToLido);
-            _obligations.settledLidoFees += uint128(valueToTransferToLido);
+            unsettledLidoFees -= valueToTransferToLido;
+            settledLidoFees += valueToTransferToLido;
+
+            _obligations.unsettledLidoFees = uint128(unsettledLidoFees);
+            _obligations.settledLidoFees = uint128(settledLidoFees);
         }
 
         emit VaultObligationsSettled({
             vault: _vault,
             rebalancedShares: sharesToRebalance,
             transferredToLido: valueToTransferToLido,
-            redemptionShares: _obligations.redemptionShares,
-            unsettledLidoFees: _obligations.unsettledLidoFees,
-            settledLidoFees: _obligations.settledLidoFees
+            redemptionShares: redemptionShares - sharesToRebalance,
+            unsettledLidoFees: unsettledLidoFees,
+            settledLidoFees: settledLidoFees
         });
     }
 
