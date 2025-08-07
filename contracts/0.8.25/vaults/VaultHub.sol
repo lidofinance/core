@@ -37,6 +37,8 @@ contract VaultHub is PausableUntilWithRoles {
         mapping(address vault => VaultRecord) records;
         /// @notice connection parameters for each vault
         mapping(address vault => VaultConnection) connections;
+        /// @notice share limit caps for each vault
+        mapping(address vault => ShareLimitCap) shareLimitCaps;
         /// @notice obligation values for each vault
         mapping(address vault => VaultObligations) obligations;
         /// @notice 1-based array of vaults connected to the hub. index 0 is reserved for not connected vaults
@@ -94,6 +96,11 @@ contract VaultHub is PausableUntilWithRoles {
         int104 inOutDelta;
         /// @notice timestamp (in seconds)
         uint48 timestamp;
+    }
+
+    struct ShareLimitCap {
+        uint96 value;
+        bool isActive;
     }
 
     /**
@@ -261,6 +268,11 @@ contract VaultHub is PausableUntilWithRoles {
         return _vaultObligations(_vault);
     }
 
+    /// @return the share limit cap for the vault
+    function shareLimitCap(address _vault) external view returns (ShareLimitCap memory) {
+        return _storage().shareLimitCaps[_vault];
+    }
+
     /// @return true if the vault is connected to the hub
     function isVaultConnected(address _vault) external view returns (bool) {
         return _vaultConnection(_vault).vaultIndex != 0;
@@ -366,6 +378,8 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 reservationFeeBP
         ) = _operatorGrid().vaultInfo(_vault);
 
+        _requireShareLimitCap(_vault, shareLimit);
+
         _connectVault(_vault,
             shareLimit,
             reserveRatioBP,
@@ -400,7 +414,17 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         connection.shareLimit = uint96(_shareLimit);
 
+        if (_shareLimit < uint256(type(uint96).max)) {
+            _storage().shareLimitCaps[_vault] = ShareLimitCap({
+                value: uint96(_shareLimit),
+                isActive: true
+            });
+        } else {
+            delete _storage().shareLimitCaps[_vault];
+        }
+
         emit VaultShareLimitUpdated(_vault, _shareLimit);
+        emit VaultShareLimitCapUpdated(_vault, _shareLimit);
     }
 
     /// @notice updates fees for the vault
@@ -440,6 +464,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) external {
         _requireSender(address(_operatorGrid()));
         _requireSaneShareLimit(_shareLimit);
+        _requireShareLimitCap(_vault, _shareLimit);
 
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
@@ -1562,6 +1587,11 @@ contract VaultHub is PausableUntilWithRoles {
         if (_shareLimit > maxSaneShareLimit) revert ShareLimitTooHigh(_shareLimit, maxSaneShareLimit);
     }
 
+    function _requireShareLimitCap(address _vault, uint256 _shareLimit) internal view {
+        ShareLimitCap memory shareLimitCap = _storage().shareLimitCaps[_vault];
+        if (shareLimitCap.isActive && _shareLimit > shareLimitCap.value) revert ShareLimitCapExceeded(_vault);
+    }
+
     function _requireConnected(VaultConnection storage _connection, address _vault) internal view {
         if (_connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
     }
@@ -1609,6 +1639,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 forcedRebalanceThresholdBP
     );
     event VaultShareLimitUpdated(address indexed vault, uint256 newShareLimit);
+    event VaultShareLimitCapUpdated(address indexed vault, uint256 shareLimitCap);
     event VaultFeesUpdated(
         address indexed vault,
         uint256 preInfraFeeBP,
@@ -1693,6 +1724,7 @@ contract VaultHub is PausableUntilWithRoles {
     );
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 expectedSharesAfterMint, uint256 shareLimit);
+    error ShareLimitCapExceeded(address vault);
     error AlreadyConnected(address vault, uint256 index);
     error NotConnectedToHub(address vault);
     error NotAuthorized();
