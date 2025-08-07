@@ -5,7 +5,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, PinnedBeaconProxy, StakingVault } from "typechain-types";
 
-import { addressToWC, ether, generatePredeposit, generateValidator } from "lib";
+import { addressToWC, ether, generatePredeposit, generateValidator, ONE_ETHER } from "lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
@@ -306,18 +306,22 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
       const { witnesses } = await getProofAndDepositData(ctx, validator, invalidWithdrawalCredentials, ether("99"));
 
+      const balance = await predepositGuarantee.nodeOperatorBalance(nodeOperator);
+
       // 6. Anyone (permissionless) submits a Merkle proof of the validator's appearing on the Consensus Layer to the PDG contract with the withdrawal credentials corresponding to the stVault's address.
       //    6.1. Upon successful verification, 1 ETH of the Node Operator's guarantee collateral is unlocked from the PDG balance
       //    — making it available for withdrawal or reuse for the next validator predeposit.
       await expect(
         predepositGuarantee.connect(stranger).proveInvalidValidatorWC(witnesses[0], invalidWithdrawalCredentials),
       )
-        .to.emit(predepositGuarantee, "ValidatorDisproven")
-        .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), invalidWithdrawalCredentials);
-
-      await expect(
-        predepositGuarantee.connect(stranger).compensateDisprovenPredeposit(validator.container.pubkey),
-      ).to.be.emit(predepositGuarantee, "ValidatorCompensated");
+        .to.emit(predepositGuarantee, "ValidatorCompensated")
+        .withArgs(
+          await stakingVault.getAddress(),
+          nodeOperator,
+          witnesses[0].pubkey,
+          balance.total - ONE_ETHER,
+          balance.locked - ONE_ETHER,
+        );
     });
   });
 });

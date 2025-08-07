@@ -61,6 +61,45 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         mapping(address nodeOperator => address depositor) nodeOperatorDepositor;
     }
 
+    /**
+     * @notice represents validator stages in PDG flow
+     * @param NONE - initial stage
+     * @param PREDEPOSITED - PREDEPOSIT_AMOUNT is deposited with this validator by the vault
+     * @param PROVEN - validator is proven to be valid and can be used to deposit to beacon chain
+     * @param DISPROVEN - validator is proven to have wrong WC and its PREDEPOSIT_AMOUNT can be compensated to staking vault owner
+     * @param COMPENSATED - disproven validator has its PREDEPOSIT_AMOUNT ether compensated to staking vault owner and validator cannot be used in PDG anymore
+     */
+    enum ValidatorStage {
+        NONE,
+        PREDEPOSITED,
+        PROVEN,
+        COMPENSATED
+    }
+
+    /**
+     * @notice represents NO balance in PDG
+     * @dev fits into single 32 bytes slot
+     * @param total total ether balance of the NO
+     * @param locked ether locked in not yet proven predeposits
+     */
+    struct NodeOperatorBalance {
+        uint128 total;
+        uint128 locked;
+    }
+
+    /**
+     * @notice represents status of the validator in PDG
+     * @dev is used to track validator from predeposit -> prove -> deposit
+     * @param stage represents validator stage in PDG flow
+     * @param stakingVault pins validator to specific StakingVault
+     * @param nodeOperator pins validator to specific NO
+     */
+    struct ValidatorStatus {
+        ValidatorStage stage;
+        IStakingVault stakingVault;
+        address nodeOperator;
+    }
+
     uint8 public constant MIN_SUPPORTED_WC_VERSION = 0x01;
     uint8 public constant MAX_SUPPORTED_WC_VERSION = 0x02;
 
@@ -182,7 +221,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _withdrawalCredentials to verify proof with
      * @dev reverts with `InvalidProof` when provided input cannot be proven to Beacon block root
      */
-    function validatePubKeyWCProof(ValidatorWitness calldata _witness, bytes32 _withdrawalCredentials) public view {
+    function validatePubKeyWCProof(ValidatorWitness calldata _witness, bytes32 _withdrawalCredentials) external view {
         _validatePubKeyWCProof(_witness, _withdrawalCredentials);
     }
 
@@ -384,7 +423,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         // WC will be sanity checked in `_processPositiveProof()`
         bytes32 withdrawalCredentials = validator.stakingVault.withdrawalCredentials();
 
-        validatePubKeyWCProof(_witness, withdrawalCredentials);
+        _validatePubKeyWCProof(_witness, withdrawalCredentials);
 
         _processPositiveProof(_witness.pubkey, validator, withdrawalCredentials);
     }
@@ -472,7 +511,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         // sanity check that vault returns valid WC
         _validateWC(_stakingVault, withdrawalCredentials);
 
-        validatePubKeyWCProof(_witness, withdrawalCredentials);
+        _validatePubKeyWCProof(_witness, withdrawalCredentials);
 
         $.validatorStatus[_witness.pubkey] = ValidatorStatus({
             stage: ValidatorStage.PROVEN,
@@ -491,7 +530,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     // * * * * * Negative Proof Flow  * * * * * //
 
     /**
-     * @notice permissionless method to prove incorrect Withdrawal Credentials for the validator on CL
+     * @notice permissionless method to prove and compensate incorrect Withdrawal Credentials for the validator on CL
      * @param _witness object containing validator pubkey, Merkle proof and timestamp for Beacon Block root child block
      * @param _invalidWithdrawalCredentials with which validator was deposited before PDG's predeposit
      * @dev will revert if proof is invalid, validator is not predeposited or withdrawal credentials belong to correct vault
@@ -500,37 +539,44 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     function proveInvalidValidatorWC(
         ValidatorWitness calldata _witness,
         bytes32 _invalidWithdrawalCredentials
-    ) public whenResumed {
-        validatePubKeyWCProof(_witness, _invalidWithdrawalCredentials);
+    ) public whenResumed returns (uint256) {
+        _validatePubKeyWCProof(_witness, _invalidWithdrawalCredentials);
+
+        ERC7201Storage storage $ = _getStorage();
+        ValidatorStatus storage validator = $.validatorStatus[_witness.pubkey];
 
         // validator state and WC incorrectness are enforced inside
-        _processNegativeProof(_witness.pubkey, _invalidWithdrawalCredentials);
-    }
-
-    /**
-     * @notice returns locked ether to the staking vault if validator's WC were proven invalid
-     * @param _validatorPubkey to take locked PREDEPOSIT_AMOUNT ether from
-     */
-    function compensateDisprovenPredeposit(bytes calldata _validatorPubkey) public whenResumed returns (uint256) {
-        ValidatorStatus storage validator = _getStorage().validatorStatus[_validatorPubkey];
+        if (validator.stage != ValidatorStage.PREDEPOSITED) {
+            revert ValidatorNotPreDeposited(_witness.pubkey, validator.stage);
+        }
 
         IStakingVault stakingVault = validator.stakingVault;
+        bytes32 vaultWithdrawalCredentials = stakingVault.withdrawalCredentials();
+
+        // sanity check that vault returns valid WC
+        _validateWC(stakingVault, vaultWithdrawalCredentials);
+
+        // this check prevents negative proving for legit deposits
+        if (_invalidWithdrawalCredentials == vaultWithdrawalCredentials) {
+            revert WithdrawalCredentialsMatch();
+        }
+
+        // immediately compensate the staking vault
+        validator.stage = ValidatorStage.COMPENSATED;
+        
         address nodeOperator = validator.nodeOperator;
 
-        if (validator.stage != ValidatorStage.DISPROVEN) revert ValidatorNotDisproven(validator.stage);
-
-        validator.stage = ValidatorStage.COMPENSATED;
-
         // reduces total&locked NO balance
-        NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[nodeOperator];
+        NodeOperatorBalance storage balance = $.nodeOperatorBalance[nodeOperator];
         balance.total -= PREDEPOSIT_AMOUNT;
         balance.locked -= PREDEPOSIT_AMOUNT;
 
+        // transfer the compensation directly to the vault
         (bool success, ) = address(stakingVault).call{value: PREDEPOSIT_AMOUNT}("");
         if (!success) revert CompensateFailed();
 
-        emit BalanceCompensated(nodeOperator, address(stakingVault), balance.total, balance.locked);
-        emit ValidatorCompensated(_validatorPubkey, nodeOperator, address(stakingVault));
+        emit ValidatorCompensated(address(stakingVault), nodeOperator, _witness.pubkey, balance.total, balance.locked);
+
         return PREDEPOSIT_AMOUNT;
     }
 
@@ -552,34 +598,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         emit BalanceUnlocked(validator.nodeOperator, balance.total, balance.locked);
         emit ValidatorProven(_pubkey, validator.nodeOperator, address(validator.stakingVault), _withdrawalCredentials);
-    }
-
-    function _processNegativeProof(bytes calldata _pubkey, bytes32 _invalidWithdrawalCredentials) internal {
-        ERC7201Storage storage $ = _getStorage();
-        ValidatorStatus storage validator = $.validatorStatus[_pubkey];
-
-        if (validator.stage != ValidatorStage.PREDEPOSITED) {
-            revert ValidatorNotPreDeposited(_pubkey, validator.stage);
-        }
-
-        bytes32 vaultWithdrawalCredentials = validator.stakingVault.withdrawalCredentials();
-
-        // sanity check that vault returns valid WC
-        _validateWC(validator.stakingVault, vaultWithdrawalCredentials);
-
-        // this check prevents negative proving for legit deposits
-        if (_invalidWithdrawalCredentials == vaultWithdrawalCredentials) {
-            revert WithdrawalCredentialsMatch();
-        }
-
-        validator.stage = ValidatorStage.DISPROVEN;
-
-        emit ValidatorDisproven(
-            _pubkey,
-            validator.nodeOperator,
-            address(validator.stakingVault),
-            _invalidWithdrawalCredentials
-        );
     }
 
     function _topUpNodeOperatorBalance(address _nodeOperator) internal onlyGuarantorOf(_nodeOperator) {
@@ -671,16 +689,12 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         address indexed stakingVault,
         bytes32 withdrawalCredentials
     );
-    event ValidatorDisproven(
-        bytes indexed validatorPubkey,
-        address indexed nodeOperator,
-        address indexed stakingVault,
-        bytes32 invalidWithdrawalCredentials
-    );
     event ValidatorCompensated(
-        bytes indexed validatorPubkey,
+        address indexed stakingVault,
         address indexed nodeOperator,
-        address indexed stakingVault
+        bytes indexed validatorPubkey,
+        uint256 guaranteeTotal,
+        uint256 guaranteeLocked
     );
 
     // * * * * * Errors  * * * * * //
