@@ -1,10 +1,13 @@
 import { ZeroAddress } from "ethers";
 
-import { certainAddress, ether, impersonate, log } from "lib";
+import { advanceChainTime, certainAddress, ether, impersonate, log } from "lib";
+import { LIMITER_PRECISION_BASE } from "lib/constants";
 
 import { ProtocolContext } from "../types";
 
 import { report } from "./accounting";
+import { setMaxPositiveTokenRebase } from "./sanity-checker";
+import { removeStakingLimit, setStakingLimit } from "./staking";
 
 /**
  * Unpauses the withdrawal queue contract.
@@ -24,34 +27,54 @@ export const unpauseWithdrawalQueue = async (ctx: ProtocolContext) => {
   }
 };
 
-export const finalizeWithdrawalQueue = async (ctx: ProtocolContext) => {
-  const { lido, withdrawalQueue } = ctx.contracts;
+export const finalizeWQViaElVault = async (ctx: ProtocolContext) => {
+  const { withdrawalQueue, locator } = ctx.contracts;
+  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000000"));
+  const elRewardsVaultAddress = await locator.elRewardsVault();
 
-  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("100000"));
-  const stEthHolder = await impersonate(certainAddress("withdrawalQueue:stEth:whale"), ether("100000"));
-  const stEthHolderAmount = ether("10000");
+  const initialMaxPositiveTokenRebase = await setMaxPositiveTokenRebase(ctx, LIMITER_PRECISION_BASE);
 
-  // Here sendTransaction is used to validate native way of submitting ETH for stETH
-  await stEthHolder.sendTransaction({ to: lido.address, value: stEthHolderAmount });
+  const ethToSubmit = ether("1000000"); // don't calculate required eth from withdrawal queue to accelerate tests
 
-  let lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
-  let lastRequestId = await withdrawalQueue.getLastRequestId();
-
-  while (lastFinalizedRequestId != lastRequestId) {
-    await report(ctx);
-
-    lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
-    lastRequestId = await withdrawalQueue.getLastRequestId();
-
-    log.debug("Withdrawal queue status", {
-      "Last finalized request ID": lastFinalizedRequestId,
-      "Last request ID": lastRequestId,
+  const lastRequestId = await withdrawalQueue.getLastRequestId();
+  while (lastRequestId != (await withdrawalQueue.getLastFinalizedRequestId())) {
+    await ethHolder.sendTransaction({
+      to: elRewardsVaultAddress,
+      value: ethToSubmit,
     });
+    await report(ctx, { clDiff: 0n, reportElVault: true });
+  }
+  await setMaxPositiveTokenRebase(ctx, initialMaxPositiveTokenRebase);
+  await report(ctx, { clDiff: 0n, reportElVault: true });
+};
 
-    await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
+export const finalizeWQViaSubmit = async (ctx: ProtocolContext) => {
+  const { withdrawalQueue, lido } = ctx.contracts;
+  const ethHolder = await impersonate(certainAddress("withdrawalQueue:eth:whale"), ether("1000000000"));
+
+  const ethToSubmit = ether("1000000"); // don't calculate required eth from withdrawal queue to accelerate tests
+
+  const stakeLimitInfo = await lido.getStakeLimitFullInfo();
+  await removeStakingLimit(ctx);
+
+  const lastRequestId = await withdrawalQueue.getLastRequestId();
+  while (lastRequestId != (await withdrawalQueue.getLastFinalizedRequestId())) {
+    await report(ctx, { clDiff: 0n, reportElVault: false });
+    try {
+      await lido.connect(ethHolder).submit(ZeroAddress, { value: ethToSubmit });
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      if (errMsg.includes("STAKE_LIMIT")) {
+        await advanceChainTime(2n * 24n * 60n * 60n);
+        continue;
+      }
+      throw e;
+    }
   }
 
-  await ctx.contracts.lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
-
-  log.success("Finalized withdrawal queue");
+  await setStakingLimit(
+    ctx,
+    stakeLimitInfo.maxStakeLimit,
+    stakeLimitInfo.maxStakeLimit / stakeLimitInfo.maxStakeLimitGrowthBlocks,
+  );
 };

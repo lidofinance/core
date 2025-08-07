@@ -55,3 +55,7 @@ export const EMPTY_PUBLIC_KEY = "0x".padEnd(PUBKEY_LENGTH_HEX + 2, "0");
 export const EMPTY_SIGNATURE = "0x".padEnd(SIGNATURE_LENGTH_HEX + 2, "0");
 
 export const ONE_GWEI = 1_000_000_000n;
+
+export const TOTAL_BASIS_POINTS = 100_00n;
+
+export const LIMITER_PRECISION_BASE = 10n ** 9n;
