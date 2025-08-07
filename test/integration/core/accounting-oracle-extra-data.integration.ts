@@ -107,10 +107,7 @@ describe("Integration: AccountingOracle extra data", () => {
   async function submitMainReport() {
     const { nor } = ctx.contracts;
     const extraData = prepareExtraData(
-      {
-        stuckKeys: [stuckKeys],
-        exitedKeys: [exitedKeys],
-      },
+      { exitedKeys: [exitedKeys] },
       { maxItemsPerChunk: 1 },
     );
 
@@ -131,7 +128,6 @@ describe("Integration: AccountingOracle extra data", () => {
     const { totalExitedValidators } = await nor.getStakingModuleSummary();
 
     const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = prepareExtraData({
-      stuckKeys: [stuckKeys],
       exitedKeys: [exitedKeys],
     });
     expect(extraDataChunks.length).to.equal(1);
