@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { network as hardhatNetwork } from "hardhat";
 
-const NETWORK_STATE_FILE_BASENAME = "deployed";
+const NETWORK_STATE_FILE_PREFIX = "deployed-";
 const NETWORK_STATE_FILE_DIR = ".";
 
 export type DeploymentState = {
@@ -31,7 +31,7 @@ export enum Sk {
   aragonEnsLabelName = "aragonEnsLabelName",
   apmRegistryFactory = "apmRegistryFactory",
   appLido = "app:lido",
-  appOracle = `app:oracle`,
+  appOracle = "app:oracle",
   appNodeOperatorsRegistry = "app:node-operators-registry",
   appSimpleDvt = "app:simple-dvt",
   aragonAcl = "aragon-acl",
@@ -40,6 +40,9 @@ export enum Sk {
   aragonId = "aragonID",
   aragonKernel = "aragon-kernel",
   aragonRepoBase = "aragon-repo-base",
+  aragonLidoAppRepo = "aragon-lido-app-repo",
+  aragonNodeOperatorsRegistryAppRepo = "aragon-node-operators-registry-app-repo",
+  aragonSimpleDvtAppRepo = "aragon-simple-dvt-app-repo",
   appAgent = "app:aragon-agent",
   appFinance = "app:aragon-finance",
   appTokenManager = "app:aragon-token-manager",
@@ -52,7 +55,6 @@ export enum Sk {
   evmScriptRegistryFactory = "evmScriptRegistryFactory",
   ensSubdomainRegistrar = "ensSubdomainRegistrar",
   ldo = "ldo",
-  // lido = "lido",
   lidoApm = "lidoApm",
   lidoApmEnsName = "lidoApmEnsName",
   lidoApmEnsRegDurationSec = "lidoApmEnsRegDurationSec",
@@ -87,8 +89,13 @@ export enum Sk {
   chainSpec = "chainSpec",
   scratchDeployGasUsed = "scratchDeployGasUsed",
   minFirstAllocationStrategy = "minFirstAllocationStrategy",
+  // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
+  TWVoteScript = "TWVoteScript",
+  // Dual Governance
+  dgDualGovernance = "dg:dualGovernance",
+  dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -111,8 +118,11 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.withdrawalQueueERC721:
     case Sk.withdrawalVault:
       return state[contractKey].proxy.address;
-    case Sk.apmRegistryFactory:
     case Sk.burner:
+    case Sk.appSimpleDvt:
+    case Sk.aragonNodeOperatorsRegistryAppRepo:
+    case Sk.aragonSimpleDvtAppRepo:
+    case Sk.apmRegistryFactory:
     case Sk.callsScript:
     case Sk.daoFactory:
     case Sk.depositSecurityModule:
@@ -135,7 +145,9 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.depositContract:
     case Sk.validatorExitDelayVerifier:
     case Sk.triggerableWithdrawalsGateway:
-      return state[contractKey].address;
+    case Sk.dgDualGovernance:
+    case Sk.dgEmergencyProtectedTimelock:
+    case Sk.TWVoteScript:
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);
   }
@@ -148,13 +160,8 @@ export function readNetworkState({
   deployer?: string;
   networkStateFile?: string;
 } = {}) {
-  const networkName = hardhatNetwork.name;
   const networkChainId = hardhatNetwork.config.chainId;
-
-  const fileName = networkStateFile
-    ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
-    : _getFileName(networkName, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
-
+  const fileName = _getStateFileFileName(networkStateFile);
   const state = _readStateFile(fileName);
 
   // Validate the deployer
@@ -201,23 +208,21 @@ export function incrementGasUsed(increment: bigint | number, useStateFile = true
 }
 
 export async function resetStateFile(networkName: string = hardhatNetwork.name): Promise<void> {
-  const fileName = _getFileName(networkName, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
+  const fileName = _getFileName(NETWORK_STATE_FILE_DIR, networkName);
   try {
     await access(fileName, fsPromisesConstants.R_OK | fsPromisesConstants.W_OK);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       throw new Error(`No network state file ${fileName}: ${(error as Error).message}`);
     }
-    // If file does not exist, create it with default values
   } finally {
-    const templateFileName = _getFileName("testnet-defaults", NETWORK_STATE_FILE_BASENAME, "scripts/scratch");
-    const templateData = readFileSync(templateFileName, "utf8");
+    const templateData = readFileSync("scripts/scratch/deployed-testnet-defaults.json", "utf8");
     writeFileSync(fileName, templateData, { encoding: "utf8", flag: "w" });
   }
 }
 
-export function persistNetworkState(state: DeploymentState, networkName: string = hardhatNetwork.name): void {
-  const fileName = _getFileName(networkName, NETWORK_STATE_FILE_BASENAME, NETWORK_STATE_FILE_DIR);
+export function persistNetworkState(state: DeploymentState): void {
+  const fileName = _getStateFileFileName();
   const stateSorted = _sortKeysAlphabetically(state);
   const data = JSON.stringify(stateSorted, null, 2);
 
@@ -228,8 +233,16 @@ export function persistNetworkState(state: DeploymentState, networkName: string 
   }
 }
 
-function _getFileName(networkName: string, baseName: string, dir: string) {
-  return resolve(dir, `${baseName}-${networkName}.json`);
+function _getStateFileFileName(networkStateFile = "") {
+  // Use the specified network state file or the one from the environment
+  networkStateFile = networkStateFile || process.env.NETWORK_STATE_FILE || "";
+  return networkStateFile
+    ? resolve(NETWORK_STATE_FILE_DIR, networkStateFile)
+    : _getFileName(NETWORK_STATE_FILE_DIR, hardhatNetwork.name);
+}
+
+function _getFileName(dir: string, networkName: string, prefix: string = NETWORK_STATE_FILE_PREFIX) {
+  return resolve(dir, `${prefix}${networkName}.json`);
 }
 
 function _readStateFile(fileName: string) {
