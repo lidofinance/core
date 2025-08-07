@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IValidatorsExitBus} from "contracts/common/interfaces/IValidatorsExitBus.sol";
+import {IValidatorsExitBus} from "contracts/0.8.25/ValidatorExitDelayVerifier.sol";
 
 error RequestsNotDelivered();
 
@@ -12,7 +12,7 @@ struct MockExitRequestData {
     uint256 valIndex;
 }
 
-contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
+contract ValidatorsExitBusOracle_Mock {
     bytes32 private _hash;
     uint256 private _deliveryTimestamp;
     MockExitRequestData[] private _data;
@@ -44,7 +44,7 @@ contract ValidatorsExitBusOracle_Mock is IValidatorsExitBus {
         bytes calldata exitRequests,
         uint256 dataFormat,
         uint256 index
-    ) external view override returns (bytes memory, uint256, uint256, uint256) {
+    ) external view returns (bytes memory, uint256, uint256, uint256) {
         require(keccak256(abi.encode(exitRequests, dataFormat)) == _hash, "Mock error, Invalid exitRequestsHash");
 
         MockExitRequestData memory data = _data[index];

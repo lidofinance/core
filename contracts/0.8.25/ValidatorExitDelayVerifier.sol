@@ -3,12 +3,35 @@
 
 pragma solidity 0.8.25;
 
-import {IStakingRouter} from "contracts/common/interfaces/IStakingRouter.sol";
 import {BeaconBlockHeader, Validator} from "contracts/common/lib/BeaconTypes.sol";
 import {GIndex} from "contracts/common/lib/GIndex.sol";
 import {SSZ} from "contracts/common/lib/SSZ.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {IValidatorsExitBus} from "contracts/common/interfaces/IValidatorsExitBus.sol";
+
+interface ILidoLocator {
+    function stakingRouter() external view returns(address);
+    function validatorsExitBusOracle() external view returns(address);
+}
+
+interface IStakingRouter {
+    function reportValidatorExitDelay(
+        uint256 _stakingModuleId,
+        uint256 _nodeOperatorId,
+        uint256 _proofSlotTimestamp,
+        bytes calldata _publicKey,
+        uint256 _eligibleToExitInSec
+    ) external;
+}
+
+interface IValidatorsExitBus {
+    function getDeliveryTimestamp(bytes32 exitRequestsHash) external view returns (uint256 deliveryDateTimestamp);
+
+    function unpackExitRequest(
+        bytes calldata exitRequests,
+        uint256 dataFormat,
+        uint256 index
+    ) external pure returns (bytes memory pubkey, uint256 nodeOpId, uint256 moduleId, uint256 valIndex);
+}
+
 
 struct ExitRequestData {
     bytes data;
@@ -37,7 +60,6 @@ struct ProvableBeaconBlockHeader {
 // A witness for a block header which root is accessible via `historical_summaries` field.
 struct HistoricalHeaderWitness {
     BeaconBlockHeader header;
-    GIndex rootGIndex; // The generalized index of the old block root in the historical_summaries.
     bytes32[] proof; // The Merkle proof for the old block header against the state's historical_summaries root.
 }
 

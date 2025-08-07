@@ -1,6 +1,7 @@
 .idea/
 .yarn/
 .vscode/
+.cursor/
 
 node_modules/
 coverage/
@@ -26,6 +27,7 @@ accounts.json
 deployed-local.json
 deployed-hardhat.json
 deployed-local-devnet.json
+deployed-mainnet-upgrade.json
 
 # MacOS
 .DS_Store
