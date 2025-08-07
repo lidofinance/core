@@ -81,14 +81,14 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice amount of ether that is locked from withdrawal on the vault
         /// consists of ether that back minted stETH plus reserve determined by reserve ratio
         uint128 locked;
-        /// @notice the minimal value that the reserve part of the locked can be
-        uint128 minimalReserve;
+        /// @notice liability shares of the vault
+        uint96 liabilityShares;
         // ### 3rd and 4th slots
         /// @notice inOutDelta of the vault (all deposits - all withdrawals)
         DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] inOutDelta;
         // ### 5th slot
-        /// @notice liability shares of the vault
-        uint96 liabilityShares;
+        /// @notice the minimal value that the reserve part of the locked can be
+        uint128 minimalReserve;
     }
 
     struct Report {
