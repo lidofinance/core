@@ -57,8 +57,8 @@ export async function main() {
 
   const state = readNetworkState();
   const parameters = readUpgradeParameters();
-  const validatorExitDelayVerifierParams = parameters[Sk.validatorExitDelayVerifier].deployParameters;
-  const triggerableWithdrawalsGatewayParams = parameters[Sk.triggerableWithdrawalsGateway].deployParameters;
+  const validatorExitDelayVerifierParams = parameters.validatorExitDelayVerifier;
+  const triggerableWithdrawalsGatewayParams = parameters.triggerableWithdrawalsGateway;
   persistNetworkState(state);
 
   const chainSpec = state[Sk.chainSpec];
@@ -96,7 +96,7 @@ export async function main() {
   // Staking Router
   //
 
-  const DEPOSIT_CONTRACT_ADDRESS = parameters[Sk.chainSpec].depositContract;
+  const DEPOSIT_CONTRACT_ADDRESS = parameters.chainSpec.depositContract;
   log(`Deposit contract address: ${DEPOSIT_CONTRACT_ADDRESS}`);
   const stakingRouterAddress = await deployImplementation(
     Sk.stakingRouter,

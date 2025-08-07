@@ -557,7 +557,7 @@ describe("LazyOracle.sol", () => {
           tree.getProof(0),
         ),
       )
-        .to.emit(lazyOracle, "QuarantinedDeposit")
+        .to.emit(lazyOracle, "QuarantineActivated")
         .withArgs(vault, ether("150"));
       expect(await vaultHub.mock__lastReported_totalValue()).to.equal(ether("100"));
 
@@ -623,7 +623,7 @@ describe("LazyOracle.sol", () => {
           tree3.getProof(0),
         ),
       )
-        .to.emit(lazyOracle, "QuarantinedDeposit")
+        .to.emit(lazyOracle, "QuarantineActivated")
         .withArgs(vault, ether("90"));
 
       const quarantineInfo3 = await lazyOracle.vaultQuarantine(vault);
@@ -657,7 +657,7 @@ describe("LazyOracle.sol", () => {
           tree4.getProof(0),
         ),
       )
-        .to.emit(lazyOracle, "QuarantineExpired")
+        .to.emit(lazyOracle, "QuarantineReleased")
         .withArgs(vault, ether("90"));
 
       const quarantineInfo4 = await lazyOracle.vaultQuarantine(vault);
@@ -665,6 +665,174 @@ describe("LazyOracle.sol", () => {
       expect(quarantineInfo4.pendingTotalValueIncrease).to.equal(0n);
       expect(quarantineInfo4.startTimestamp).to.equal(0n);
       expect(quarantineInfo4.endTimestamp).to.equal(0n);
+    });
+
+    it("inactive quarantine expired", async () => {
+      const vault = await createVault();
+      const vaultReport: VaultReportItem = {
+        vault,
+        totalValue: ether("250"),
+        accruedLidoFees: 0n,
+        liabilityShares: 0n,
+        slashingReserve: 0n,
+      };
+
+      const tree = createVaultsReportTree([vaultReport]);
+      const accountingAddress = await impersonate(await locator.accountingOracle(), ether("100"));
+      const timestamp = await getCurrentBlockTimestamp();
+      const refSlot = 42n;
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
+
+      await vaultHub.mock__addVault(vault);
+      await vaultHub.mock__setVaultRecord(vault, {
+        report: {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+          timestamp: timestamp - 100n,
+        },
+        locked: 0n,
+        liabilityShares: 0n,
+        inOutDelta: [
+          {
+            value: ether("100"),
+            valueOnRefSlot: ether("100"),
+            refSlot: 0n,
+          },
+          {
+            value: 0n,
+            valueOnRefSlot: 0n,
+            refSlot: 0n,
+          },
+        ],
+      });
+
+      await expect(
+        lazyOracle.updateVaultData(
+          vaultReport.vault,
+          vaultReport.totalValue,
+          vaultReport.accruedLidoFees,
+          vaultReport.liabilityShares,
+          vaultReport.slashingReserve,
+          tree.getProof(0),
+        ),
+      )
+        .to.emit(lazyOracle, "QuarantineActivated")
+        .withArgs(vault, ether("150"));
+      await expect(await vaultHub.mock__lastReported_totalValue()).to.equal(ether("100"));
+
+      const quarantineInfo = await lazyOracle.vaultQuarantine(vault);
+      expect(quarantineInfo.isActive).to.equal(true);
+      expect(quarantineInfo.pendingTotalValueIncrease).to.equal(ether("150"));
+      expect(quarantineInfo.startTimestamp).to.equal(timestamp);
+      expect(quarantineInfo.endTimestamp).to.equal(timestamp + QUARANTINE_PERIOD);
+
+      // Second report - in 5 days - bring report without exceeding saneLimitTotalValue
+      const vaultReport2: VaultReportItem = {
+        vault,
+        totalValue: ether("101"),
+        accruedLidoFees: 0n,
+        liabilityShares: 0n,
+        slashingReserve: 0n,
+      };
+
+      const tree3 = createVaultsReportTree([vaultReport2]);
+      await advanceChainTime(60n * 60n * 24n * 5n);
+      const timestamp3 = await getCurrentBlockTimestamp();
+      const refSlot3 = 43n;
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp3, refSlot3, tree3.root, "");
+
+      await expect(
+        lazyOracle.updateVaultData(
+          vaultReport2.vault,
+          vaultReport2.totalValue,
+          vaultReport2.accruedLidoFees,
+          vaultReport2.liabilityShares,
+          vaultReport2.slashingReserve,
+          tree3.getProof(0),
+        ),
+      )
+        .to.emit(lazyOracle, "QuarantineReleased")
+        .withArgs(vault, 0n);
+
+      const quarantineInfo2 = await lazyOracle.vaultQuarantine(vault);
+      expect(quarantineInfo2.isActive).to.equal(false);
+      expect(quarantineInfo2.pendingTotalValueIncrease).to.equal(0n);
+      expect(quarantineInfo2.startTimestamp).to.equal(0n);
+      expect(quarantineInfo2.endTimestamp).to.equal(0n);
+    });
+  });
+
+  context("removeVaultQuarantine", () => {
+    it("only vaultHub can remove quarantine", async () => {
+      await expect(lazyOracle.removeVaultQuarantine(randomAddress())).to.be.revertedWithCustomError(
+        lazyOracle,
+        "NotAuthorized",
+      );
+    });
+
+    it("remove quarantine", async () => {
+      const vault = await createVault();
+      const vaultReport: VaultReportItem = {
+        vault,
+        totalValue: ether("250"),
+        accruedLidoFees: 0n,
+        liabilityShares: 0n,
+        slashingReserve: 0n,
+      };
+
+      const tree = createVaultsReportTree([vaultReport]);
+      const accountingAddress = await impersonate(await locator.accountingOracle(), ether("100"));
+      const timestamp = await getCurrentBlockTimestamp();
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, 42n, tree.root, "");
+
+      await vaultHub.mock__addVault(vault);
+      await vaultHub.mock__setVaultRecord(vault, {
+        report: {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+          timestamp: timestamp - 100n,
+        },
+        locked: 0n,
+        liabilityShares: 0n,
+        inOutDelta: [
+          {
+            value: ether("100"),
+            valueOnRefSlot: ether("100"),
+            refSlot: 0n,
+          },
+          {
+            value: 0n,
+            valueOnRefSlot: 0n,
+            refSlot: 0n,
+          },
+        ],
+      });
+
+      await lazyOracle.updateVaultData(
+        vaultReport.vault,
+        vaultReport.totalValue,
+        vaultReport.accruedLidoFees,
+        vaultReport.liabilityShares,
+        vaultReport.slashingReserve,
+        tree.getProof(0),
+      );
+
+      let quarantineInfo = await lazyOracle.vaultQuarantine(vault);
+      expect(quarantineInfo.isActive).to.equal(true);
+      expect(quarantineInfo.pendingTotalValueIncrease).to.equal(ether("150"));
+      expect(quarantineInfo.startTimestamp).to.equal(timestamp);
+      expect(quarantineInfo.endTimestamp).to.equal(timestamp + QUARANTINE_PERIOD);
+
+      const vaultHubAddress = await impersonate(await vaultHub.getAddress(), ether("100"));
+      await expect(lazyOracle.connect(vaultHubAddress).removeVaultQuarantine(vault))
+        .to.emit(lazyOracle, "QuarantineRemoved")
+        .withArgs(vault);
+
+      quarantineInfo = await lazyOracle.vaultQuarantine(vault);
+      expect(quarantineInfo.isActive).to.equal(false);
+      expect(quarantineInfo.pendingTotalValueIncrease).to.equal(0n);
+      expect(quarantineInfo.startTimestamp).to.equal(0n);
+      expect(quarantineInfo.endTimestamp).to.equal(0n);
     });
   });
 });

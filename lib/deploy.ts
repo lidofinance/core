@@ -168,6 +168,7 @@ export async function deployBehindOssifiableProxy(
   implementation: null | string = null,
   withStateFile = true,
   signerOrOptions?: Signer | FactoryOptions,
+  initializationData: string = "0x",
 ) {
   if (implementation !== null) {
     log(`Using pre-deployed implementation of ${yl(artifactName)}: ${cy(implementation)}`);
@@ -177,7 +178,7 @@ export async function deployBehindOssifiableProxy(
     implementation = contract.address;
   }
 
-  const proxyConstructorArgs = [implementation, proxyOwner, "0x"];
+  const proxyConstructorArgs = [implementation, proxyOwner, initializationData];
   log.withArguments(
     `Deploying ${yl(PROXY_CONTRACT_NAME)} for ${yl(artifactName)} with constructor args `,
     proxyConstructorArgs,

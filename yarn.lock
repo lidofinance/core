@@ -1498,6 +1498,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@iarna/toml@npm:^2.2.5":
+  version: 2.2.5
+  resolution: "@iarna/toml@npm:2.2.5"
+  checksum: 10c0/d095381ad4554aca233b7cf5a91f243ef619e5e15efd3157bc640feac320545450d14b394aebbf6f02a2047437ced778ae598d5879a995441ab7b6c0b2c2f201
+  languageName: node
+  linkType: hard
+
 "@isaacs/balanced-match@npm:^4.0.1":
   version: 4.0.1
   resolution: "@isaacs/balanced-match@npm:4.0.1"
@@ -1698,15 +1705,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/curves@npm:~1.9.2":
-  version: 1.9.3
-  resolution: "@noble/curves@npm:1.9.3"
-  dependencies:
-    "@noble/hashes": "npm:1.8.0"
-  checksum: 10c0/cadea78e50261997d9c4d5050af5fcec9307a4ff7dad3cbda61c432167e2a02d7bcbfdd959586c140a371d9987170d0571ff3347d24a05f462f1d5c7b0cae900
-  languageName: node
-  linkType: hard
-
 "@noble/hashes@npm:1.2.0, @noble/hashes@npm:~1.2.0":
   version: 1.2.0
   resolution: "@noble/hashes@npm:1.2.0"
@@ -1746,13 +1744,6 @@ __metadata:
   version: 1.8.0
   resolution: "@noble/hashes@npm:1.8.0"
   checksum: 10c0/06a0b52c81a6fa7f04d67762e08b2c476a00285858150caeaaff4037356dd5e119f45b2a530f638b77a5eeca013168ec1b655db41bae3236cb2e9d511484fc77
-  languageName: node
-  linkType: hard
-
-"@noble/hashes@npm:2.0.0-beta.1":
-  version: 2.0.0-beta.1
-  resolution: "@noble/hashes@npm:2.0.0-beta.1"
-  checksum: 10c0/dde464e841efb008e40ec2bc8431fec4de11c4778b0491c03247aa05c4e900a8b5212c9c90043b836f47d3d9ff48c22419513ed8219fed380cdaa17e1fc4fddc
   languageName: node
   linkType: hard
 
@@ -7237,9 +7228,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hardhat@npm:2.26.0":
-  version: 2.26.0
-  resolution: "hardhat@npm:2.26.0"
+"hardhat@npm:2.26.1":
+  version: 2.26.1
+  resolution: "hardhat@npm:2.26.1"
   dependencies:
     "@ethereumjs/util": "npm:^9.1.0"
     "@ethersproject/abi": "npm:^5.1.2"
@@ -7264,7 +7255,7 @@ __metadata:
     json-stream-stringify: "npm:^3.1.4"
     keccak: "npm:^3.0.2"
     lodash: "npm:^4.17.11"
-    micro-eth-signer: "npm:^0.16.0"
+    micro-eth-signer: "npm:^0.14.0"
     mnemonist: "npm:^0.38.0"
     mocha: "npm:^10.0.0"
     p-map: "npm:^4.0.0"
@@ -7290,7 +7281,7 @@ __metadata:
       optional: true
   bin:
     hardhat: internal/cli/bootstrap.js
-  checksum: 10c0/8f94dc8ecc73a590723a3b5d45e29e5fdd16ece0164ef705d571e8bd895944b14d7d294d17fd231b811438f69bd79465ec16252404cf00d39cfcb43f5a84ae35
+  checksum: 10c0/5e81cee718fbcd1fa9e88889e5ab815dbff6efa1e3cb92eae2a2fcafae0022996cf951180234abfb892e0fbb1c7e806492ea6ca39ae70300077716aade8b9ddb
   languageName: node
   linkType: hard
 
@@ -8624,6 +8615,7 @@ __metadata:
     "@commitlint/config-conventional": "npm:^19.8.1"
     "@eslint/compat": "npm:1.3.0"
     "@eslint/js": "npm:9.28.0"
+    "@iarna/toml": "npm:^2.2.5"
     "@nomicfoundation/ethereumjs-util": "npm:^9.0.4"
     "@nomicfoundation/hardhat-chai-matchers": "npm:2.0.9"
     "@nomicfoundation/hardhat-ethers": "npm:3.0.9"
@@ -8656,7 +8648,7 @@ __metadata:
     ethers: "npm:6.14.4"
     glob: "npm:11.0.3"
     globals: "npm:15.15.0"
-    hardhat: "npm:2.26.0"
+    hardhat: "npm:2.26.1"
     hardhat-contract-sizer: "npm:2.10.0"
     hardhat-gas-reporter: "npm:2.3.0"
     hardhat-ignore-warnings: "npm:0.2.12"
@@ -8675,6 +8667,7 @@ __metadata:
     typechain: "npm:8.3.2"
     typescript: "npm:5.8.3"
     typescript-eslint: "npm:8.34.0"
+    zod: "npm:^4.0.13"
   languageName: unknown
   linkType: soft
 
@@ -9071,14 +9064,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"micro-eth-signer@npm:^0.16.0":
-  version: 0.16.0
-  resolution: "micro-eth-signer@npm:0.16.0"
+"micro-eth-signer@npm:^0.14.0":
+  version: 0.14.0
+  resolution: "micro-eth-signer@npm:0.14.0"
   dependencies:
-    "@noble/curves": "npm:~1.9.2"
-    "@noble/hashes": "npm:2.0.0-beta.1"
-    micro-packed: "npm:~0.7.3"
-  checksum: 10c0/daac43e339c3bcb4c1598bfb0cfa83878a25f3464bdbecbf1135dd8ffbe1fa687eec6e5fc82fb5a8d007b5fafcae682f66cddee24724c75c95019625d735a36f
+    "@noble/curves": "npm:~1.8.1"
+    "@noble/hashes": "npm:~1.7.1"
+    micro-packed: "npm:~0.7.2"
+  checksum: 10c0/62c90d54d2b97cb4eaf713c69bc4ceb5903012d0237c26f0966076cfb89c4527de68b395e1bc29e6f237152ce08f7b551fb57b332003518a1331c2c0890fb164
   languageName: node
   linkType: hard
 
@@ -9089,7 +9082,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"micro-packed@npm:~0.7.3":
+"micro-packed@npm:~0.7.2":
   version: 0.7.3
   resolution: "micro-packed@npm:0.7.3"
   dependencies:
@@ -13177,5 +13170,12 @@ __metadata:
   version: 1.1.1
   resolution: "yocto-queue@npm:1.1.1"
   checksum: 10c0/cb287fe5e6acfa82690acb43c283de34e945c571a78a939774f6eaba7c285bacdf6c90fbc16ce530060863984c906d2b4c6ceb069c94d1e0a06d5f2b458e2a92
+  languageName: node
+  linkType: hard
+
+"zod@npm:^4.0.13":
+  version: 4.0.13
+  resolution: "zod@npm:4.0.13"
+  checksum: 10c0/e0e3dd3680bcf21fd550ee9777b39ef3c2e06376aab73e713afe82938f5f00c319ca1df20c66480789168bfce4251dc9f7e6aa80021de42857cc6384042b7413
   languageName: node
   linkType: hard

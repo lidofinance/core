@@ -67,6 +67,8 @@ struct LimitsList {
 /// @title Sanity checks for the Lido's oracle report
 /// @notice The contracts contain methods to perform sanity checks of the Lido's oracle report
 ///     and lever methods for granular tuning of the params of the checks
+
+// solhint-disable contract-name-capwords
 interface IOracleReportSanityChecker_preV3 {
 
     /// @notice Returns the limits list for the Lido's oracle report sanity checks
