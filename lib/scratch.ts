@@ -102,7 +102,6 @@ export const resolveMigrationFile = (step: string): string => {
 export async function applyMigrationScript(migrationFile: string): Promise<void> {
   const fullPath = path.resolve(migrationFile);
   const { main } = await import(fullPath);
-
   if (typeof main !== "function") {
     throw new MigrationMainFunctionError(migrationFile);
   }

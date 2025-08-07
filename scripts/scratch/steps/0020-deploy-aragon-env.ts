@@ -45,7 +45,7 @@ async function deployAPM(
 async function deployAragonID(owner: string, ens: LoadedContract<ENS>) {
   // Get public resolver
   const publicNode = ethers.namehash("resolver.eth");
-  const publicResolverAddress = await ens.resolver(publicNode);
+  const publicResolverAddress = await ens.resolver(publicNode, { gasLimit: 16_000_000 });
   log(`Using public resolver: ${cy(publicResolverAddress)}`);
 
   const nodeName = "aragonid.eth";
