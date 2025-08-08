@@ -21,6 +21,7 @@ import { Snapshot } from "test/suite";
 
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 const TEST_STETH_AMOUNT_WEI = 100n;
+const CONNECT_DEPOSIT = ether("1");
 
 describe("Integration: Actions with vault connected to VaultHub", () => {
   let ctx: ProtocolContext;
@@ -62,6 +63,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       nodeOperator,
     ));
 
+    await dashboard.connect(owner).fund({ value: ether("1") });
+
     roles = await autofillRoles(dashboard, nodeOperator);
 
     agent = await ctx.getSigner("agent");
@@ -102,7 +105,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     // check that minting is resumed
     await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
       .to.emit(vaultHub, "MintedSharesOnVault")
-      .withArgs(stakingVault, testSharesAmountWei, ether("1"));
+      .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + TEST_STETH_AMOUNT_WEI);
   });
 
   context("stETH minting", () => {
@@ -112,7 +115,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, testSharesAmountWei, ether("1"));
+        .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + TEST_STETH_AMOUNT_WEI);
     });
 
     // TODO: can mint within share limits of the vault
@@ -130,7 +133,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await dashboard.connect(roles.funder).fund({ value: newLimit + ether("2") }); // try to fund to go healthy
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, testSharesAmountWei, ether("1"));
+        .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + TEST_STETH_AMOUNT_WEI);
     });
   });
 
@@ -198,7 +201,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     it("Owner can rebalance debt to the protocol", async () => {
       const { lido } = ctx.contracts;
 
-      await dashboard.connect(roles.funder).fund({ value: ether("1") }); // total value is 2 ether
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
 
       const sharesBurnt = await vaultHub.liabilityShares(stakingVault);
@@ -221,7 +223,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   describe("If vault is unhealthy", () => {
     it("Can't mint until goes healthy", async () => {
       const { lido } = ctx.contracts;
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
       await dashboard.connect(roles.minter).mintStETH(stranger, ether("1"));
 
       await reportVaultDataWithProof(ctx, stakingVault, { totalValue: TEST_STETH_AMOUNT_WEI }); // slashing
@@ -237,7 +238,10 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const liabilityShares = (await vaultHub.vaultRecord(stakingVault)).liabilityShares + testSharesAmountWei;
       const liability = await lido.getPooledEthBySharesRoundUp(liabilityShares);
       const reserveRatioBP = (await vaultHub.vaultConnection(stakingVault)).reserveRatioBP;
-      const lock = (liability * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - reserveRatioBP);
+
+      const reserve = (liability * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - reserveRatioBP) - liability;
+
+      const lock = liability + (reserve > CONNECT_DEPOSIT ? reserve : CONNECT_DEPOSIT);
 
       await expect(dashboard.connect(roles.minter).mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "MintedSharesOnVault")
