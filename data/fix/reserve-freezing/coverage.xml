@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4700"  lines-covered="4475"  line-rate="0.9521"  branches-valid="2198"  branches-covered="2045"  branch-rate="0.9304000000000001"  timestamp="1754647593706" complexity="0" version="0.1">
+<coverage lines-valid="4700"  lines-covered="4475"  line-rate="0.9521"  branches-valid="2198"  branches-covered="2045"  branch-rate="0.9304000000000001"  timestamp="1754647633783" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2940,32 +2940,32 @@
 			<method name="_applyVaultReport"  hits="47"  signature="()V" >
 				<lines><line number="1020"  hits="47" /></lines>
 			</method>
-			<method name="_locked"  hits="63"  signature="()V" >
-				<lines><line number="1048"  hits="63" /></lines>
-			</method>
 			<method name="_rebalance"  hits="3"  signature="()V" >
-				<lines><line number="1059"  hits="3" /></lines>
+				<lines><line number="1044"  hits="3" /></lines>
 			</method>
 			<method name="_withdraw"  hits="3"  signature="()V" >
-				<lines><line number="1072"  hits="3" /></lines>
+				<lines><line number="1057"  hits="3" /></lines>
 			</method>
 			<method name="_increaseLiability"  hits="16"  signature="()V" >
-				<lines><line number="1084"  hits="16" /></lines>
+				<lines><line number="1069"  hits="16" /></lines>
 			</method>
 			<method name="_decreaseLiability"  hits="4"  signature="()V" >
-				<lines><line number="1110"  hits="4" /></lines>
+				<lines><line number="1095"  hits="4" /></lines>
 			</method>
 			<method name="_writeOffBadDebt"  hits="0"  signature="()V" >
-				<lines><line number="1120"  hits="0" /></lines>
+				<lines><line number="1105"  hits="0" /></lines>
 			</method>
 			<method name="_rebalanceShortfall"  hits="15"  signature="()V" >
-				<lines><line number="1136"  hits="15" /></lines>
+				<lines><line number="1121"  hits="15" /></lines>
 			</method>
 			<method name="_totalValue"  hits="179"  signature="()V" >
-				<lines><line number="1182"  hits="179" /></lines>
+				<lines><line number="1167"  hits="179" /></lines>
 			</method>
 			<method name="_totalValueWithoutUnsettledFees"  hits="16"  signature="()V" >
-				<lines><line number="1188"  hits="16" /></lines>
+				<lines><line number="1173"  hits="16" /></lines>
+			</method>
+			<method name="_locked"  hits="63"  signature="()V" >
+				<lines><line number="1184"  hits="63" /></lines>
 			</method>
 			<method name="_isReportFresh"  hits="25"  signature="()V" >
 				<lines><line number="1195"  hits="25" /></lines>
@@ -3316,53 +3316,53 @@
 			<line number="1031"  hits="47"  branch="false" />
 			<line number="1032"  hits="47"  branch="false" />
 			<line number="1037"  hits="47"  branch="false" />
-			<line number="1053"  hits="63"  branch="false" />
-			<line number="1054"  hits="63"  branch="false" />
-			<line number="1056"  hits="63"  branch="false" />
-			<line number="1060"  hits="3"  branch="false" />
-			<line number="1062"  hits="3"  branch="false" />
-			<line number="1063"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="1045"  hits="3"  branch="false" />
+			<line number="1047"  hits="3"  branch="false" />
+			<line number="1048"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="1050"  hits="3"  branch="false" />
+			<line number="1051"  hits="3"  branch="false" />
+			<line number="1052"  hits="3"  branch="false" />
+			<line number="1054"  hits="3"  branch="false" />
+			<line number="1063"  hits="3"  branch="false" />
 			<line number="1065"  hits="3"  branch="false" />
-			<line number="1066"  hits="3"  branch="false" />
-			<line number="1067"  hits="3"  branch="false" />
-			<line number="1069"  hits="3"  branch="false" />
-			<line number="1078"  hits="3"  branch="false" />
-			<line number="1080"  hits="3"  branch="false" />
+			<line number="1077"  hits="16"  branch="false" />
+			<line number="1078"  hits="16"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="1081"  hits="16"  branch="false" />
+			<line number="1082"  hits="16"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="1083"  hits="0"  branch="false" />
+			<line number="1086"  hits="16"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="1087"  hits="16"  branch="false" />
+			<line number="1090"  hits="16"  branch="false" />
 			<line number="1092"  hits="16"  branch="false" />
-			<line number="1093"  hits="16"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="1096"  hits="16"  branch="false" />
-			<line number="1097"  hits="16"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="1098"  hits="0"  branch="false" />
-			<line number="1101"  hits="16"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="1102"  hits="16"  branch="false" />
-			<line number="1105"  hits="16"  branch="false" />
-			<line number="1107"  hits="16"  branch="false" />
-			<line number="1111"  hits="4"  branch="false" />
-			<line number="1112"  hits="4"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="1114"  hits="4"  branch="false" />
-			<line number="1116"  hits="4"  branch="false" />
-			<line number="1117"  hits="4"  branch="false" />
-			<line number="1125"  hits="0"  branch="false" />
-			<line number="1126"  hits="0"  branch="false" />
-			<line number="1127"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="1128"  hits="0"  branch="false" />
-			<line number="1131"  hits="0"  branch="false" />
-			<line number="1133"  hits="0"  branch="false" />
-			<line number="1140"  hits="15"  branch="false" />
-			<line number="1141"  hits="15"  branch="false" />
-			<line number="1143"  hits="15"  branch="false" />
-			<line number="1150"  hits="15"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="1151"  hits="7"  branch="false" />
-			<line number="1154"  hits="8"  branch="false" />
-			<line number="1155"  hits="8"  branch="false" />
-			<line number="1156"  hits="8"  branch="false" />
-			<line number="1159"  hits="8"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="1160"  hits="1"  branch="false" />
-			<line number="1179"  hits="7"  branch="false" />
-			<line number="1183"  hits="179"  branch="false" />
-			<line number="1184"  hits="179"  branch="false" />
-			<line number="1185"  hits="179"  branch="false" />
-			<line number="1192"  hits="16"  branch="false" />
+			<line number="1096"  hits="4"  branch="false" />
+			<line number="1097"  hits="4"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="1099"  hits="4"  branch="false" />
+			<line number="1101"  hits="4"  branch="false" />
+			<line number="1102"  hits="4"  branch="false" />
+			<line number="1110"  hits="0"  branch="false" />
+			<line number="1111"  hits="0"  branch="false" />
+			<line number="1112"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
+			<line number="1113"  hits="0"  branch="false" />
+			<line number="1116"  hits="0"  branch="false" />
+			<line number="1118"  hits="0"  branch="false" />
+			<line number="1125"  hits="15"  branch="false" />
+			<line number="1126"  hits="15"  branch="false" />
+			<line number="1128"  hits="15"  branch="false" />
+			<line number="1135"  hits="15"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="1136"  hits="7"  branch="false" />
+			<line number="1139"  hits="8"  branch="false" />
+			<line number="1140"  hits="8"  branch="false" />
+			<line number="1141"  hits="8"  branch="false" />
+			<line number="1144"  hits="8"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="1145"  hits="1"  branch="false" />
+			<line number="1164"  hits="7"  branch="false" />
+			<line number="1168"  hits="179"  branch="false" />
+			<line number="1169"  hits="179"  branch="false" />
+			<line number="1170"  hits="179"  branch="false" />
+			<line number="1177"  hits="16"  branch="false" />
+			<line number="1189"  hits="63"  branch="false" />
+			<line number="1190"  hits="63"  branch="false" />
+			<line number="1192"  hits="63"  branch="false" />
 			<line number="1196"  hits="25"  branch="false" />
 			<line number="1197"  hits="25"  branch="false" />
 			<line number="1208"  hits="78"  branch="false" />
