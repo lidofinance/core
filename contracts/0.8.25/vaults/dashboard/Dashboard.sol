@@ -31,6 +31,7 @@ interface IWstETH is IERC20 {
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
 contract Dashboard is NodeOperatorFee {
+    /// @dev 0xa38b301640bddfd3e6a9d2a11d13551d53ef81526347ff09d798738fcc5a49d4
     bytes32 public constant RECOVER_ASSETS_ROLE = keccak256("vaults.Dashboard.RecoverAssets");
 
     /**

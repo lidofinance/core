@@ -59,6 +59,10 @@ export type VaultRoles = {
   [K in (typeof vaultRoleKeys)[number]]: HardhatEthersSigner;
 };
 
+export type VaultRoleMethods = {
+  [K in (typeof vaultRoleKeys)[number]]: Promise<string>;
+};
+
 export interface VaultWithDashboard {
   stakingVault: StakingVault;
   dashboard: Dashboard;
@@ -125,11 +129,8 @@ export async function createVaultWithDashboard(
   };
 }
 
-export async function autofillRoles(
-  dashboard: Dashboard,
-  nodeOperatorManager: HardhatEthersSigner,
-): Promise<VaultRoles> {
-  const roleMethodMap: { [K in (typeof vaultRoleKeys)[number]]: Promise<string> } = {
+export const getRoleMethods = (dashboard: Dashboard): VaultRoleMethods => {
+  return {
     funder: dashboard.FUND_ROLE(),
     withdrawer: dashboard.WITHDRAW_ROLE(),
     minter: dashboard.MINT_ROLE(),
@@ -146,14 +147,23 @@ export async function autofillRoles(
     nodeOperatorRewardAdjuster: dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
     assetRecoverer: dashboard.RECOVER_ASSETS_ROLE(),
   };
+};
+
+export async function autofillRoles(
+  dashboard: Dashboard,
+  nodeOperatorManager: HardhatEthersSigner,
+): Promise<VaultRoles> {
+  const roleMethodMap: VaultRoleMethods = getRoleMethods(dashboard);
 
   const roleIds = await Promise.all(Object.values(roleMethodMap));
   const signers = await ethers.getSigners();
 
+  const OFFSET = 10;
+
   const roleAssignments: Permissions.RoleAssignmentStruct[] = roleIds.map((roleId, i) => {
     return {
       role: roleId,
-      account: signers[i],
+      account: signers[i + OFFSET],
     };
   });
 
@@ -176,7 +186,7 @@ export async function autofillRoles(
   // Build the result using the keys
   const result = {} as VaultRoles;
   vaultRoleKeys.forEach((key, i) => {
-    result[key] = signers[i];
+    result[key] = signers[i + OFFSET];
   });
 
   return result;

@@ -50,6 +50,11 @@ contract V3Addresses {
         address upgradeableBeacon;
         address stakingVaultImpl;
         address dashboardImpl;
+        address gateSealForVaults;
+
+        // EasyTrack addresses
+        address evmScriptExecutor;
+        address vaultHubAdapter;
 
         // Existing proxies and contracts
         address kernel;
@@ -96,6 +101,13 @@ contract V3Addresses {
     address public immutable UPGRADEABLE_BEACON;
     address public immutable STAKING_VAULT_IMPL;
     address public immutable DASHBOARD_IMPL;
+    address public immutable GATE_SEAL;
+
+    //
+    // -------- EasyTrack addresses --------
+    //
+    address public immutable EVM_SCRIPT_EXECUTOR;
+    address public immutable VAULT_HUB_ADAPTER;
 
     //
     // -------- Unchanged contracts --------
@@ -141,6 +153,9 @@ contract V3Addresses {
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;
+        GATE_SEAL = params.gateSealForVaults;
+        EVM_SCRIPT_EXECUTOR = params.evmScriptExecutor;
+        VAULT_HUB_ADAPTER = params.vaultHubAdapter;
 
         //
         // Discovered via other contracts

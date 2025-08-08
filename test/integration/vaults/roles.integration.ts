@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractMethodArgs, ContractTransactionReceipt, ZeroAddress } from "ethers";
+import { ContractMethodArgs, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 import { beforeEach } from "mocha";
 
@@ -8,15 +8,20 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Dashboard } from "typechain-types";
 
 import { days, ether } from "lib";
-import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import {
+  autofillRoles,
+  createVaultWithDashboard,
+  getProtocolContext,
+  getRoleMethods,
+  ProtocolContext,
+  report,
+  VaultRoles,
+} from "lib/protocol";
+import { vaultRoleKeys } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
 
-const VAULT_NODE_OPERATOR_FEE = 1_00n; // 3% node operator fee
-
 const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
-
-const VAULT_CONNECTION_DEPOSIT = ether("1");
 
 type Methods<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,55 +35,29 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
   let snapshot: string;
 
-  let owner: HardhatEthersSigner,
-    nodeOperatorManager: HardhatEthersSigner,
-    funder: HardhatEthersSigner,
-    withdrawer: HardhatEthersSigner,
-    assetRecoverer: HardhatEthersSigner,
-    minter: HardhatEthersSigner,
-    burner: HardhatEthersSigner,
-    rebalancer: HardhatEthersSigner,
-    depositPauser: HardhatEthersSigner,
-    depositResumer: HardhatEthersSigner,
-    unknownValidatorProver: HardhatEthersSigner,
-    unguaranteedBeaconChainDepositor: HardhatEthersSigner,
-    validatorExitRequester: HardhatEthersSigner,
-    validatorWithdrawalTriggerer: HardhatEthersSigner,
-    disconnecter: HardhatEthersSigner,
-    tierChanger: HardhatEthersSigner,
-    nodeOperatorRewardAdjuster: HardhatEthersSigner,
-    stranger: HardhatEthersSigner;
+  let owner: HardhatEthersSigner;
+  let nodeOperatorManager: HardhatEthersSigner;
+  let stranger: HardhatEthersSigner;
 
-  let allRoles: HardhatEthersSigner[];
+  let dashboard: Dashboard;
+  let roles: VaultRoles;
 
   before(async () => {
     ctx = await getProtocolContext();
 
-    allRoles = await ethers.getSigners();
-    [
+    await report(ctx); // we need a report in LazyOracle for vault to be created with fresh report automatically
+
+    [owner, nodeOperatorManager, stranger] = await ethers.getSigners();
+
+    ({ dashboard } = await createVaultWithDashboard(
+      ctx,
+      ctx.contracts.stakingVaultFactory,
       owner,
       nodeOperatorManager,
-      assetRecoverer,
-      funder,
-      withdrawer,
-      minter,
-      burner,
-      rebalancer,
-      depositPauser,
-      depositResumer,
-      unknownValidatorProver,
-      unguaranteedBeaconChainDepositor,
-      validatorExitRequester,
-      validatorWithdrawalTriggerer,
-      disconnecter,
-      tierChanger, // nodeOperatorFeeRecipientSetter
-      ,
-      nodeOperatorRewardAdjuster,
-      stranger,
-    ] = allRoles;
+      nodeOperatorManager,
+    ));
 
-    // we need a report in LazyOracle for vault to be created with fresh report automatically
-    await report(ctx);
+    await dashboard.connect(owner).fund({ value: ether("1") });
   });
 
   beforeEach(async () => {
@@ -87,471 +66,13 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
   afterEach(async () => await Snapshot.restore(snapshot));
 
-  // initializing contracts with signers
-  describe("Vault created with all the roles", () => {
-    let testDashboard: Dashboard;
-
-    before(async () => {
-      const { stakingVaultFactory } = ctx.contracts;
-
-      // Owner can create a vault with operator as a node operator
-      const deployTx = await stakingVaultFactory
-        .connect(owner)
-        .createVaultWithDashboard(
-          owner,
-          nodeOperatorManager,
-          nodeOperatorManager,
-          VAULT_NODE_OPERATOR_FEE,
-          days(7n),
-          [],
-          { value: VAULT_CONNECTION_DEPOSIT },
-        );
-
-      const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
-      const createDashboardEvent = ctx.getEvents(createVaultTxReceipt, "DashboardCreated")[0];
-      testDashboard = await ethers.getContractAt("Dashboard", createDashboardEvent.args?.dashboard);
-
-      await testDashboard.connect(owner).grantRoles([
-        {
-          account: assetRecoverer,
-          role: await testDashboard.RECOVER_ASSETS_ROLE(),
-        },
-        {
-          account: funder,
-          role: await testDashboard.FUND_ROLE(),
-        },
-        {
-          account: withdrawer,
-          role: await testDashboard.WITHDRAW_ROLE(),
-        },
-        {
-          account: minter,
-          role: await testDashboard.MINT_ROLE(),
-        },
-        {
-          account: burner,
-          role: await testDashboard.BURN_ROLE(),
-        },
-        {
-          account: rebalancer,
-          role: await testDashboard.REBALANCE_ROLE(),
-        },
-        {
-          account: depositPauser,
-          role: await testDashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
-        },
-        {
-          account: depositResumer,
-          role: await testDashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
-        },
-        {
-          account: unknownValidatorProver,
-          role: await testDashboard.PDG_PROVE_VALIDATOR_ROLE(),
-        },
-        {
-          account: unguaranteedBeaconChainDepositor,
-          role: await testDashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
-        },
-        {
-          account: validatorExitRequester,
-          role: await testDashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
-        },
-        {
-          account: validatorWithdrawalTriggerer,
-          role: await testDashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
-        },
-        {
-          account: disconnecter,
-          role: await testDashboard.VOLUNTARY_DISCONNECT_ROLE(),
-        },
-        {
-          account: tierChanger,
-          role: await testDashboard.CHANGE_TIER_ROLE(),
-        },
-      ]);
-
-      await testDashboard.connect(nodeOperatorManager).grantRoles([
-        {
-          account: nodeOperatorRewardAdjuster,
-          role: await testDashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
-        },
-      ]);
-    });
-
-    it("Allows anyone to read public metrics of the vault", async () => {
-      expect(await testDashboard.connect(funder).nodeOperatorDisbursableFee()).to.equal(0);
-      expect(await testDashboard.connect(funder).withdrawableValue()).to.equal(0);
-    });
-
-    it("Allows to retrieve roles addresses", async () => {
-      expect(await testDashboard.getRoleMembers(await testDashboard.MINT_ROLE())).to.deep.equal([minter.address]);
-    });
-
-    it("Allows NO Manager to add and remove new managers", async () => {
-      await testDashboard
-        .connect(nodeOperatorManager)
-        .grantRole(await testDashboard.NODE_OPERATOR_MANAGER_ROLE(), stranger);
-      expect(await testDashboard.getRoleMembers(await testDashboard.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
-        nodeOperatorManager.address,
-        stranger.address,
-      ]);
-      await testDashboard
-        .connect(nodeOperatorManager)
-        .revokeRole(await testDashboard.NODE_OPERATOR_MANAGER_ROLE(), stranger);
-      expect(await testDashboard.getRoleMembers(await testDashboard.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
-        nodeOperatorManager.address,
-      ]);
-    });
-
-    describe("Verify ACL for methods that require only role", () => {
-      describe("Dashboard methods", () => {
-        it("claimNodeOperatorFee", async () => {
-          // TODO:
-          // await testMethod(
-          //   testDashboard,
-          //   "claimNodeOperatorFee",
-          //   {
-          //     successUsers: [nodeOperatorFeeClaimer],
-          //     failingUsers: allRoles.filter((r) => r !== nodeOperatorFeeClaimer),
-          //   },
-          //   [stranger],
-          //   await testDashboard.NODE_OPERATOR_FEE_CLAIM_ROLE(),
-          //);
-        });
-      });
-
-      describe("Dashboard methods", () => {
-        it("recoverERC20", async () => {
-          await testMethod(
-            testDashboard,
-            "recoverERC20",
-            {
-              successUsers: [assetRecoverer, owner],
-              failingUsers: allRoles.filter((r) => r !== assetRecoverer && r !== owner),
-            },
-            [ZeroAddress, owner, 1n],
-            await testDashboard.RECOVER_ASSETS_ROLE(),
-          );
-        });
-
-        it("recoverERC721", async () => {
-          await testMethod(
-            testDashboard,
-            "recoverERC721",
-            {
-              successUsers: [assetRecoverer, owner],
-              failingUsers: allRoles.filter((r) => r !== assetRecoverer && r !== owner),
-            },
-            [ZeroAddress, 0, stranger],
-            await testDashboard.RECOVER_ASSETS_ROLE(),
-          );
-        });
-
-        it("triggerValidatorWithdrawal", async () => {
-          await testMethod(
-            testDashboard,
-            "triggerValidatorWithdrawals",
-            {
-              successUsers: [validatorWithdrawalTriggerer, owner],
-              failingUsers: allRoles.filter((r) => r !== validatorWithdrawalTriggerer && r !== owner),
-            },
-            ["0x", [0n], stranger],
-            await testDashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
-          );
-        });
-
-        it("requestValidatorExit", async () => {
-          await testMethod(
-            testDashboard,
-            "requestValidatorExit",
-            {
-              successUsers: [validatorExitRequester, owner],
-              failingUsers: allRoles.filter((r) => r !== validatorExitRequester && r !== owner),
-            },
-            ["0x" + "ab".repeat(48)],
-            await testDashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
-          );
-        });
-
-        it("resumeBeaconChainDeposits", async () => {
-          await testMethod(
-            testDashboard,
-            "resumeBeaconChainDeposits",
-            {
-              successUsers: [depositResumer, owner],
-              failingUsers: allRoles.filter((r) => r !== depositResumer && r !== owner),
-            },
-            [],
-            await testDashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
-          );
-        });
-
-        it("pauseBeaconChainDeposits", async () => {
-          await testMethod(
-            testDashboard,
-            "pauseBeaconChainDeposits",
-            {
-              successUsers: [depositPauser, owner],
-              failingUsers: allRoles.filter((r) => r !== depositPauser && r !== owner),
-            },
-            [],
-            await testDashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
-          );
-        });
-
-        // requires prepared state for this test to pass, skipping for now
-        it.skip("proveUnknownValidatorsToPDG", async () => {
-          await testMethod(
-            testDashboard,
-            "proveUnknownValidatorsToPDG",
-            {
-              successUsers: [unknownValidatorProver, owner],
-              failingUsers: allRoles.filter((r) => r !== unknownValidatorProver && r !== owner),
-            },
-            [SAMPLE_PUBKEY, stranger],
-            await testDashboard.PDG_PROVE_VALIDATOR_ROLE(),
-          );
-        });
-
-        // requires prepared state for this test to pass, skipping for now
-        it.skip("increaseAccruedRewardsAdjustment", async () => {
-          await testMethod(
-            testDashboard,
-            "increaseRewardsAdjustment",
-            {
-              successUsers: [nodeOperatorRewardAdjuster, nodeOperatorManager],
-              failingUsers: allRoles.filter((r) => r !== nodeOperatorRewardAdjuster && r !== nodeOperatorManager),
-            },
-            [SAMPLE_PUBKEY, stranger],
-            await testDashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
-          );
-        });
-
-        it("rebalanceVaultWithShares", async () => {
-          await testMethod(
-            testDashboard,
-            "rebalanceVaultWithShares",
-            {
-              successUsers: [rebalancer, owner],
-              failingUsers: allRoles.filter((r) => r !== rebalancer && r !== owner),
-            },
-            [1n],
-            await testDashboard.REBALANCE_ROLE(),
-          );
-        });
-
-        it("rebalanceVaultWithEther", async () => {
-          await testMethod(
-            testDashboard,
-            "rebalanceVaultWithEther",
-            {
-              successUsers: [rebalancer, owner],
-              failingUsers: allRoles.filter((r) => r !== rebalancer && r !== owner),
-            },
-            [1n],
-            await testDashboard.REBALANCE_ROLE(),
-          );
-        });
-
-        it("mintWstETH", async () => {
-          await testMethod(
-            testDashboard,
-            "mintWstETH",
-            {
-              successUsers: [minter, owner],
-              failingUsers: allRoles.filter((r) => r !== minter && r !== owner),
-            },
-            [ZeroAddress, 0, stranger],
-            await testDashboard.MINT_ROLE(),
-          );
-        });
-
-        it("mintStETH", async () => {
-          await testMethod(
-            testDashboard,
-            "mintStETH",
-            {
-              successUsers: [minter, owner],
-              failingUsers: allRoles.filter((r) => r !== minter && r !== owner),
-            },
-            [stranger, 1n],
-            await testDashboard.MINT_ROLE(),
-          );
-        });
-
-        it("mintShares", async () => {
-          await testMethod(
-            testDashboard,
-            "mintShares",
-            {
-              successUsers: [minter, owner],
-              failingUsers: allRoles.filter((r) => r !== minter && r !== owner),
-            },
-            [stranger, 100n],
-            await testDashboard.MINT_ROLE(),
-          );
-        });
-
-        // requires prepared state for this test to pass, skipping for now
-        // fund 2 ether, cause vault has 1 ether locked already
-        it("withdraw", async () => {
-          await testDashboard.connect(funder).fund({ value: ether("2") });
-          await testMethod(
-            testDashboard,
-            "withdraw",
-            {
-              successUsers: [withdrawer, owner],
-              failingUsers: allRoles.filter((r) => r !== withdrawer && r !== owner),
-            },
-            [stranger, ether("1")],
-            await testDashboard.WITHDRAW_ROLE(),
-          );
-        });
-
-        it("fund", async () => {
-          await testMethod(
-            testDashboard,
-            "fund",
-            {
-              successUsers: [funder, owner],
-              failingUsers: allRoles.filter((r) => r !== funder && r !== owner),
-            },
-            [{ value: 1n }],
-            await testDashboard.FUND_ROLE(),
-          );
-        });
-
-        //TODO: burnWstETH, burnStETH, burnShares
-
-        it("voluntaryDisconnect", async () => {
-          await testMethod(
-            testDashboard,
-            "voluntaryDisconnect",
-            {
-              successUsers: [disconnecter, owner],
-              failingUsers: allRoles.filter((r) => r !== disconnecter && r !== owner),
-            },
-            [],
-            await testDashboard.VOLUNTARY_DISCONNECT_ROLE(),
-          );
-        });
-
-        it("requestTierChange", async () => {
-          await testMethod(
-            testDashboard,
-            "changeTier",
-            {
-              successUsers: [tierChanger, owner],
-              failingUsers: allRoles.filter((r) => r !== tierChanger && r !== owner),
-            },
-            [1n, 1n],
-            await testDashboard.CHANGE_TIER_ROLE(),
-          );
-        });
-      });
-    });
-
-    describe("Verify ACL for methods that require confirmations", () => {
-      it("setNodeOperatorFeeBP", async () => {
-        await expect(testDashboard.connect(owner).setNodeOperatorFeeRate(1n)).not.to.emit(
-          testDashboard,
-          "NodeOperatorFeeRateSet",
-        );
-        await expect(testDashboard.connect(nodeOperatorManager).setNodeOperatorFeeRate(1n)).to.emit(
-          testDashboard,
-          "NodeOperatorFeeRateSet",
-        );
-
-        await testMethodConfirmedRoles(
-          testDashboard,
-          "setNodeOperatorFeeRate",
-          {
-            successUsers: [],
-            failingUsers: allRoles.filter((r) => r !== owner && r !== nodeOperatorManager),
-          },
-          [1n],
-        );
-      });
-
-      it("setConfirmExpiry", async () => {
-        await expect(testDashboard.connect(owner).setConfirmExpiry(days(7n))).not.to.emit(
-          testDashboard,
-          "ConfirmExpirySet",
-        );
-        await expect(testDashboard.connect(nodeOperatorManager).setConfirmExpiry(days(7n))).to.emit(
-          testDashboard,
-          "ConfirmExpirySet",
-        );
-
-        await testMethodConfirmedRoles(
-          testDashboard,
-          "setConfirmExpiry",
-          {
-            successUsers: [],
-            failingUsers: allRoles.filter((r) => r !== owner && r !== nodeOperatorManager),
-          },
-          [days(7n)],
-        );
-      });
-    });
-
-    it("Allows anyone to read public metrics of the vault", async () => {
-      expect(await testDashboard.connect(funder).nodeOperatorDisbursableFee()).to.equal(0);
-      expect(await testDashboard.connect(funder).withdrawableValue()).to.equal(0);
-    });
-
-    it("Allows to retrieve roles addresses", async () => {
-      expect(await testDashboard.getRoleMembers(await testDashboard.MINT_ROLE())).to.deep.equal([minter.address]);
-    });
-  });
-
   // initializing contracts without signers
-  describe("Vault created with no roles", () => {
-    let testDashboard: Dashboard;
-
-    before(async () => {
-      const { stakingVaultFactory } = ctx.contracts;
-      allRoles = await ethers.getSigners();
-
-      [owner, stranger] = allRoles;
-      // Owner can create a vault with operator as a node operator
-      const deployTx = await stakingVaultFactory
-        .connect(owner)
-        .createVaultWithDashboard(
-          owner,
-          nodeOperatorManager,
-          nodeOperatorManager,
-          VAULT_NODE_OPERATOR_FEE,
-          days(7n),
-          [],
-          { value: VAULT_CONNECTION_DEPOSIT },
-        );
-
-      const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
-      const createDashboardEvent = ctx.getEvents(createVaultTxReceipt, "DashboardCreated")[0];
-
-      testDashboard = await ethers.getContractAt("Dashboard", createDashboardEvent.args?.dashboard);
-    });
-
+  describe("No roles are assigned", () => {
     it("Verify that roles are not assigned", async () => {
-      const roles = await Promise.all([
-        testDashboard.FUND_ROLE(),
-        testDashboard.WITHDRAW_ROLE(),
-        testDashboard.MINT_ROLE(),
-        testDashboard.BURN_ROLE(),
-        testDashboard.REBALANCE_ROLE(),
-        testDashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
-        testDashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
-        testDashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
-        testDashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
-        testDashboard.VOLUNTARY_DISCONNECT_ROLE(),
-        testDashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
-        testDashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
-        testDashboard.PDG_PROVE_VALIDATOR_ROLE(),
-      ]);
+      const roleMethods = getRoleMethods(dashboard);
 
-      for (const role of roles) {
-        expect(await testDashboard.getRoleMembers(role)).to.deep.equal([]);
+      for (const role of vaultRoleKeys) {
+        expect(await dashboard.getRoleMembers(await roleMethods[role])).to.deep.equal([], `Role "${role}" is assigned`);
       }
     });
 
@@ -559,9 +80,8 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       describe("Dashboard methods", () => {
         it("setNodeOperatorFeeRecipient", async () => {
           await testGrantingRole(
-            testDashboard,
             "setNodeOperatorFeeRecipient",
-            await testDashboard.NODE_OPERATOR_MANAGER_ROLE(),
+            await dashboard.NODE_OPERATOR_MANAGER_ROLE(),
             [stranger],
             nodeOperatorManager,
           );
@@ -570,8 +90,313 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     });
   });
 
+  // initializing contracts with signers
+  describe("All the roles are assigned", () => {
+    before(async () => {
+      roles = await autofillRoles(dashboard, nodeOperatorManager);
+    });
+
+    it("Allows anyone to read public metrics of the vault", async () => {
+      expect(await dashboard.connect(stranger).nodeOperatorDisbursableFee()).to.equal(0);
+      expect(await dashboard.connect(stranger).withdrawableValue()).to.equal(ether("1"));
+    });
+
+    it("Allows to retrieve roles addresses", async () => {
+      expect(await dashboard.getRoleMembers(await dashboard.MINT_ROLE())).to.deep.equal([roles.minter.address]);
+    });
+
+    it("Allows NO Manager to add and remove new managers", async () => {
+      await dashboard.connect(nodeOperatorManager).grantRole(await dashboard.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await dashboard.getRoleMembers(await dashboard.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        nodeOperatorManager.address,
+        stranger.address,
+      ]);
+      await dashboard.connect(nodeOperatorManager).revokeRole(await dashboard.NODE_OPERATOR_MANAGER_ROLE(), stranger);
+      expect(await dashboard.getRoleMembers(await dashboard.NODE_OPERATOR_MANAGER_ROLE())).to.deep.equal([
+        nodeOperatorManager.address,
+      ]);
+    });
+
+    describe("Verify ACL for methods that require only role", () => {
+      describe("Dashboard methods", () => {
+        it("recoverERC20", async () => {
+          await testMethod(
+            "recoverERC20",
+            {
+              successUsers: [roles.assetRecoverer, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.assetRecoverer && r !== owner),
+            },
+            [ZeroAddress, owner, 1n],
+            await dashboard.RECOVER_ASSETS_ROLE(),
+          );
+        });
+
+        it("recoverERC721", async () => {
+          await testMethod(
+            "recoverERC721",
+            {
+              successUsers: [roles.assetRecoverer, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.assetRecoverer && r !== owner),
+            },
+            [ZeroAddress, 0, stranger],
+            await dashboard.RECOVER_ASSETS_ROLE(),
+          );
+        });
+
+        it("triggerValidatorWithdrawal", async () => {
+          await testMethod(
+            "triggerValidatorWithdrawals",
+            {
+              successUsers: [roles.validatorWithdrawalTriggerer, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.validatorWithdrawalTriggerer && r !== owner),
+            },
+            ["0x", [0n], stranger],
+            await dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
+          );
+        });
+
+        it("requestValidatorExit", async () => {
+          await testMethod(
+            "requestValidatorExit",
+            {
+              successUsers: [roles.validatorExitRequester, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.validatorExitRequester && r !== owner),
+            },
+            ["0x" + "ab".repeat(48)],
+            await dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
+          );
+        });
+
+        it("resumeBeaconChainDeposits", async () => {
+          await testMethod(
+            "resumeBeaconChainDeposits",
+            {
+              successUsers: [roles.depositResumer, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.depositResumer && r !== owner),
+            },
+            [],
+            await dashboard.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(),
+          );
+        });
+
+        it("pauseBeaconChainDeposits", async () => {
+          await testMethod(
+            "pauseBeaconChainDeposits",
+            {
+              successUsers: [roles.depositPauser, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.depositPauser && r !== owner),
+            },
+            [],
+            await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        it("compensateDisprovenPredepositFromPDG", async () => {
+          await testMethod(
+            "compensateDisprovenPredepositFromPDG",
+            {
+              successUsers: [roles.pdgCompensator, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.pdgCompensator && r !== owner),
+            },
+            [SAMPLE_PUBKEY, stranger],
+            await dashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        it.skip("proveUnknownValidatorsToPDG", async () => {
+          await testMethod(
+            "proveUnknownValidatorsToPDG",
+            {
+              successUsers: [roles.unknownValidatorProver, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.unknownValidatorProver && r !== owner),
+            },
+            [SAMPLE_PUBKEY, stranger],
+            await dashboard.PDG_PROVE_VALIDATOR_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        it("increaseRewardsAdjustment", async () => {
+          await testMethod(
+            "increaseRewardsAdjustment",
+            {
+              successUsers: [roles.nodeOperatorRewardAdjuster, nodeOperatorManager],
+              failingUsers: Object.values(roles).filter(
+                (r) => r !== roles.nodeOperatorRewardAdjuster && r !== nodeOperatorManager,
+              ),
+            },
+            [100n],
+            await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+          );
+        });
+
+        it("rebalanceVaultWithShares", async () => {
+          await testMethod(
+            "rebalanceVaultWithShares",
+            {
+              successUsers: [roles.rebalancer, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.rebalancer && r !== owner),
+            },
+            [1n],
+            await dashboard.REBALANCE_ROLE(),
+          );
+        });
+
+        it("rebalanceVaultWithEther", async () => {
+          await testMethod(
+            "rebalanceVaultWithEther",
+            {
+              successUsers: [roles.rebalancer, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.rebalancer && r !== owner),
+            },
+            [1n],
+            await dashboard.REBALANCE_ROLE(),
+          );
+        });
+
+        it("mintWstETH", async () => {
+          await testMethod(
+            "mintWstETH",
+            {
+              successUsers: [roles.minter, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.minter && r !== owner),
+            },
+            [ZeroAddress, 0, stranger],
+            await dashboard.MINT_ROLE(),
+          );
+        });
+
+        it("mintStETH", async () => {
+          await testMethod(
+            "mintStETH",
+            {
+              successUsers: [roles.minter, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.minter && r !== owner),
+            },
+            [stranger, 1n],
+            await dashboard.MINT_ROLE(),
+          );
+        });
+
+        it("mintShares", async () => {
+          await testMethod(
+            "mintShares",
+            {
+              successUsers: [roles.minter, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.minter && r !== owner),
+            },
+            [stranger, 100n],
+            await dashboard.MINT_ROLE(),
+          );
+        });
+
+        // requires prepared state for this test to pass, skipping for now
+        // fund 2 ether, cause vault has 1 ether locked already
+        it("withdraw", async () => {
+          await dashboard.connect(roles.funder).fund({ value: ether("2") });
+          await testMethod(
+            "withdraw",
+            {
+              successUsers: [roles.withdrawer, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.withdrawer && r !== owner),
+            },
+            [stranger, ether("1")],
+            await dashboard.WITHDRAW_ROLE(),
+          );
+        });
+
+        it("fund", async () => {
+          await testMethod(
+            "fund",
+            {
+              successUsers: [roles.funder, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.funder && r !== owner),
+            },
+            [{ value: 1n }],
+            await dashboard.FUND_ROLE(),
+          );
+        });
+
+        //TODO: burnWstETH, burnStETH, burnShares
+
+        it("voluntaryDisconnect", async () => {
+          await testMethod(
+            "voluntaryDisconnect",
+            {
+              successUsers: [roles.disconnecter, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.disconnecter && r !== owner),
+            },
+            [],
+            await dashboard.VOLUNTARY_DISCONNECT_ROLE(),
+          );
+        });
+
+        it("requestTierChange", async () => {
+          await testMethod(
+            "changeTier",
+            {
+              successUsers: [roles.tierChanger, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.tierChanger && r !== owner),
+            },
+            [1n, 1n],
+            await dashboard.CHANGE_TIER_ROLE(),
+          );
+        });
+      });
+    });
+
+    describe("Verify ACL for methods that require confirmations", () => {
+      it("setNodeOperatorFeeBP", async () => {
+        await expect(dashboard.connect(owner).setNodeOperatorFeeRate(1n)).not.to.emit(
+          dashboard,
+          "NodeOperatorFeeRateSet",
+        );
+        await expect(dashboard.connect(nodeOperatorManager).setNodeOperatorFeeRate(1n)).to.emit(
+          dashboard,
+          "NodeOperatorFeeRateSet",
+        );
+
+        await testMethodConfirmedRoles(
+          "setNodeOperatorFeeRate",
+          {
+            successUsers: [],
+            failingUsers: Object.values(roles).filter((r) => r !== owner && r !== nodeOperatorManager),
+          },
+          [1n],
+        );
+      });
+
+      it("setConfirmExpiry", async () => {
+        await expect(dashboard.connect(owner).setConfirmExpiry(days(7n))).not.to.emit(dashboard, "ConfirmExpirySet");
+        await expect(dashboard.connect(nodeOperatorManager).setConfirmExpiry(days(7n))).to.emit(
+          dashboard,
+          "ConfirmExpirySet",
+        );
+
+        await testMethodConfirmedRoles(
+          "setConfirmExpiry",
+          {
+            successUsers: [],
+            failingUsers: Object.values(roles).filter((r) => r !== owner && r !== nodeOperatorManager),
+          },
+          [days(7n)],
+        );
+      });
+    });
+
+    it("Allows anyone to read public metrics of the vault", async () => {
+      expect(await dashboard.connect(stranger).nodeOperatorDisbursableFee()).to.equal(0);
+      expect(await dashboard.connect(stranger).withdrawableValue()).to.equal(ether("1"));
+    });
+
+    it("Allows to retrieve roles addresses", async () => {
+      expect(await dashboard.getRoleMembers(await dashboard.MINT_ROLE())).to.deep.equal([roles.minter.address]);
+    });
+  });
+
   async function testMethod<T extends unknown[]>(
-    dashboard: Dashboard,
     methodName: DashboardMethods,
     { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
     argument: T,
@@ -591,7 +416,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   }
 
   async function testMethodConfirmedRoles<T extends unknown[]>(
-    dashboard: Dashboard,
     methodName: DashboardMethods,
     { successUsers, failingUsers }: { successUsers: HardhatEthersSigner[]; failingUsers: HardhatEthersSigner[] },
     argument: T,
@@ -610,7 +434,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   }
 
   async function testGrantingRole<T extends unknown[]>(
-    dashboard: Dashboard,
     methodName: DashboardMethods,
     roleToGrant: string,
     argument: T,
