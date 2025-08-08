@@ -498,7 +498,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/LidoLocator.sol",
-      "address": "0x003f20CD17e7683A7F88A7AfF004f0C44F0cfB31",
+      "address": "0xA656983a6686615850BE018b7d42a7C3E46DcD71",
       "constructorArgs": [
         [
           "0xcb883B1bD0a41512b42D2dB267F2A2cd919FB216",
@@ -515,7 +515,7 @@
           "0xfe56573178f1bcdf53F01A6E9977670dcBBD9186",
           "0x4473dCDDbf77679A643BdB654dbd86D67F8d32f2",
           "0x2a833402e3F46fFC1ecAb3598c599147a78731a9",
-          "0xFd4386A8795956f4B6D01cbb6dB116749731D7bD",
+          "0x7990A2F4E16E3c0D651306D26084718DB5aC9947",
           "0x6679090D92b08a2a686eF8614feECD8cDFE209db"
         ]
       ]
@@ -608,7 +608,7 @@
       ]
     ]
   },
-  "scratchDeployGasUsed": "173935386",
+  "scratchDeployGasUsed": "175831654",
   "simpleDvt": {
     "deployParameters": {
       "stakingModuleTypeId": "curated-onchain-v1",
@@ -649,7 +649,7 @@
   "validatorExitDelayVerifier": {
     "implementation": {
       "contract": "contracts/0.8.25/ValidatorExitDelayVerifier.sol",
-      "address": "0xFd4386A8795956f4B6D01cbb6dB116749731D7bD",
+      "address": "0x7990A2F4E16E3c0D651306D26084718DB5aC9947",
       "constructorArgs": [
         "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
         {
