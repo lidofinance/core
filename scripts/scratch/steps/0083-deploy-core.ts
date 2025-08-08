@@ -18,6 +18,7 @@ import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
 
 const ZERO_LAST_PROCESSING_REF_SLOT = 0;
 
+// These exports are kept for compatibility with other modules that might import them
 export const FIRST_SUPPORTED_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
 export const PIVOT_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
 export const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
@@ -318,17 +319,14 @@ export async function main() {
       gIFirstBlockRootInSummaryPrev: validatorExitDelayVerifierParams.gIFirstBlockRootInSummaryPrev,
       gIFirstBlockRootInSummaryCurr: validatorExitDelayVerifierParams.gIFirstBlockRootInSummaryCurr,
     },
-    FIRST_SUPPORTED_SLOT, // uint64 firstSupportedSlot,
-    PIVOT_SLOT, // uint64 pivotSlot,
-    // TODO: update this to the actual Capella slot for e2e testing in mainnet-fork
-    CAPELLA_SLOT, // uint64 capellaSlot,
-    SLOTS_PER_HISTORICAL_ROOT, // uint64 slotsPerHistoricalRoot,
-    chainSpec.slotsPerEpoch, // uint32 slotsPerEpoch,
-    chainSpec.secondsPerSlot, // uint32 secondsPerSlot,
-    // parseInt(getEnvVariable("GENESIS_TIME")), // uint64 genesisTime,
+    validatorExitDelayVerifierParams.firstSupportedSlot,
+    validatorExitDelayVerifierParams.pivotSlot,
+    validatorExitDelayVerifierParams.capellaSlot,
+    validatorExitDelayVerifierParams.slotsPerHistoricalRoot,
+    chainSpec.slotsPerEpoch,
+    chainSpec.secondsPerSlot,
     chainSpec.genesisTime,
-    // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
-    2 ** 8 * 32 * 12, // uint32 shardCommitteePeriodInSeconds
+    validatorExitDelayVerifierParams.shardCommitteePeriodInSeconds,
   ];
   await deployWithoutProxy(
     Sk.validatorExitDelayVerifier,

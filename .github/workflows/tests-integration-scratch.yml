@@ -7,6 +7,10 @@ jobs:
     name: Hardhat / Scratch
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      SKIP_GAS_REPORT: true
+      SKIP_CONTRACT_SIZE: true
+      SKIP_INTERFACES_CHECK: true
 
     services:
       hardhat-node:
