@@ -889,8 +889,9 @@ contract VaultHub is PausableUntilWithRoles {
         VaultObligations storage obligations = _vaultObligations(_vault);
 
         uint256 newRedemptionShares = Math256.min(_redemptionShares, record.liabilityShares);
-        if (newRedemptionShares == obligations.redemptionShares) {
-            revert RedemptionSharesNotSet(_vault, _redemptionShares, newRedemptionShares);
+        uint256 currentRedemptionShares = obligations.redemptionShares;
+        if (newRedemptionShares == currentRedemptionShares) {
+            revert RedemptionSharesNotSet(_vault, _redemptionShares, currentRedemptionShares);
         }
 
         obligations.redemptionShares = uint128(newRedemptionShares);
@@ -1313,12 +1314,16 @@ contract VaultHub is PausableUntilWithRoles {
     ) internal {
         _verifySettlementPossibility(_vault, _record, _obligations, _allowedUnsettled);
 
+        /// ORDER IS IMPORTANT HERE BECAUSE OF THE BALANCE REDUCTION IN THE REBALANCE FUNCTION
+
+        /// 1. Rebalance
         uint256 redemptionShares = _obligations.redemptionShares;
         uint256 sharesToRebalance = Math256.min(redemptionShares, _getSharesByPooledEth(_vault.balance));
         if (sharesToRebalance > 0) {
             _rebalance(_vault, _record, sharesToRebalance);
         }
 
+        /// 2. Settle obligations
         /// @dev NB: Fees are deducted from the vault's current balance, which reduces the total value, so the
         ///          current locked value must be considered to prevent the vault from entering an unhealthy state
         uint256 lockedValue = _record.locked;
@@ -1338,14 +1343,17 @@ contract VaultHub is PausableUntilWithRoles {
             _obligations.settledLidoFees = uint128(settledLidoFees);
         }
 
-        emit VaultObligationsSettled({
-            vault: _vault,
-            rebalancedShares: sharesToRebalance,
-            transferredToLido: valueToTransferToLido,
-            redemptionShares: redemptionShares - sharesToRebalance,
-            unsettledLidoFees: unsettledLidoFees,
-            settledLidoFees: settledLidoFees
-        });
+        /// 3. Emit event if there was any settlement
+        if (sharesToRebalance > 0 || valueToTransferToLido > 0) {
+            emit VaultObligationsSettled({
+                vault: _vault,
+                rebalancedShares: sharesToRebalance,
+                transferredToLido: valueToTransferToLido,
+                redemptionShares: redemptionShares - sharesToRebalance,
+                unsettledLidoFees: unsettledLidoFees,
+                cumulativeSettledLidoFees: settledLidoFees
+            });
+        }
     }
 
     function _decreaseRedemptions(address _vault, uint256 _amountOfShares) internal {
@@ -1583,7 +1591,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 transferredToLido,
         uint256 redemptionShares,
         uint256 unsettledLidoFees,
-        uint256 settledLidoFees
+        uint256 cumulativeSettledLidoFees
     );
 
     event BeaconChainDepositsPausedByOwner(address indexed vault);

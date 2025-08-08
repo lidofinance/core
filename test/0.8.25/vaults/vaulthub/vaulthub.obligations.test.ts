@@ -55,10 +55,21 @@ describe("VaultHub.sol:obligations", () => {
         .withArgs(disconnectedVault);
     });
 
-    it("reverts if redemption shares are not set (either because they are 0 or because they are already set)", async () => {
+    it("reverts if redemption shares are not set (either because they are 0 or because they are same as before)", async () => {
       await expect(vaultHub.connect(redemptionMaster).setVaultRedemptionShares(connectedVault, 1000n))
         .to.be.revertedWithCustomError(vaultHub, "RedemptionSharesNotSet")
         .withArgs(connectedVault, 1000n, 0n);
+
+      const liabilityShares = 100n;
+      await connectedVault.connect(user).fund({ value: ether("1000") });
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("1000") });
+      await vaultHub.connect(user).mintShares(connectedVault, user, liabilityShares);
+
+      await expect(vaultHub.connect(redemptionMaster).setVaultRedemptionShares(connectedVault, liabilityShares));
+
+      await expect(vaultHub.connect(redemptionMaster).setVaultRedemptionShares(connectedVault, liabilityShares))
+        .to.be.revertedWithCustomError(vaultHub, "RedemptionSharesNotSet")
+        .withArgs(connectedVault, liabilityShares, liabilityShares);
     });
 
     it("sets redemption shares to liability shares in case of overflow", async () => {
@@ -86,6 +97,29 @@ describe("VaultHub.sol:obligations", () => {
         .to.emit(vaultHub, "RedemptionSharesUpdated")
         .withArgs(connectedVault, redemptionShares)
         .and.to.emit(connectedVault, "BeaconChainDepositsPaused");
+    });
+
+    it("allows to reset redemption shares to 0", async () => {
+      const liabilityShares = ether("2");
+      const redemptionShares = ether("1");
+
+      await connectedVault.connect(user).fund({ value: ether("1000") });
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("1000") });
+      await vaultHub.connect(user).mintShares(connectedVault, user, liabilityShares);
+
+      await expect(vaultHub.connect(redemptionMaster).setVaultRedemptionShares(connectedVault, redemptionShares))
+        .to.emit(vaultHub, "RedemptionSharesUpdated")
+        .withArgs(connectedVault, redemptionShares)
+        .and.to.emit(connectedVault, "BeaconChainDepositsPaused");
+
+      await expect(vaultHub.connect(redemptionMaster).setVaultRedemptionShares(connectedVault, 0n))
+        .to.emit(vaultHub, "RedemptionSharesUpdated")
+        .withArgs(connectedVault, 0n)
+        .and.to.emit(connectedVault, "BeaconChainDepositsResumed");
+
+      const obligations = await vaultHub.vaultObligations(connectedVault);
+      expect(await connectedVault.beaconChainDepositsPaused()).to.be.false;
+      expect(obligations.redemptionShares).to.equal(0n);
     });
   });
 
