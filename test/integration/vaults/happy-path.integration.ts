@@ -399,6 +399,8 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     // Top-up and rebalance the vault
     await dashboard.connect(owner).rebalanceVaultWithShares(sharesToRebalance);
 
+    await reportVaultDataWithProof(ctx, stakingVault);
+
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_CONNECTION_DEPOSIT); // 1 ETH locked as a connection fee
   });
 
