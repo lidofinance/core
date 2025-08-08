@@ -10,6 +10,7 @@ import {
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
+  report,
   reportVaultDataWithProof,
   setupLidoForVaults,
 } from "lib/protocol";
@@ -38,6 +39,8 @@ describe("Integration: LazyOracle", () => {
     originalSnapshot = await Snapshot.take();
 
     await setupLidoForVaults(ctx);
+
+    await report(ctx);
 
     ({ vaultHub, lazyOracle } = ctx.contracts);
 
