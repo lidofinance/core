@@ -20,6 +20,9 @@ cache_path = 'foundry/cache'
 # Only run tests in contracts matching the specified glob pattern
 match_path = '**/test/**/*.t.sol'
 
+# Enable latest EVM features
+evm_version = "cancun"
+
 # https://book.getfoundry.sh/reference/config/testing#fuzz
 # fuzz = { runs = 256 }
 # https://book.getfoundry.sh/reference/config/testing#invariant
@@ -28,5 +31,12 @@ match_path = '**/test/**/*.t.sol'
 # Fails the invariant fuzzing if a revert occurs
 # fail_on_revert = true
 
-# Style of uint/int256 types
 fmt = { int_types = 'long' }
+
+additional_compiler_profiles = [
+    { name = "via-ir", via_ir = true, optimizer = true, optimizer_runs = 200 }
+]
+
+compilation_restrictions = [
+    { paths = "contracts/upgrade/*", via_ir = true, optimizer = true, optimizer_runs = 200 }
+]

@@ -1,0 +1,6 @@
+{
+  "steps": [
+    "upgrade/steps/0000-check-env",
+    "upgrade/steps/0100-deploy-tw-contracts"
+  ]
+}

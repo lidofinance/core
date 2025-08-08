@@ -14,7 +14,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/oracle/AccountingOracle.sol",
-      "address": "0x748CE008ac6b15634ceD5a6083796f75695052a2",
+      "address": "0xE63267AAaC507A329213593e8A9bCa37e2994F1C",
       "constructorArgs": [
         "0x28FAB2059C713A7F9D8c86Db49f9bb0e96Af1ef8",
         "0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034",
@@ -133,7 +133,7 @@
   "app:node-operators-registry": {
     "implementation": {
       "contract": "contracts/0.4.24/nos/NodeOperatorsRegistry.sol",
-      "address": "0x605A3AFadF35A8a8fa4f4Cd4fe34a09Bbcea7718",
+      "address": "0x834aa47DCd21A32845099a78B4aBb17A7f0bD503",
       "constructorArgs": []
     },
     "aragonApp": {
@@ -368,12 +368,16 @@
     "implementation": {
       "contract": "@aragon/os/contracts/kernel/Kernel.sol",
       "address": "0x34c0cbf9836FD945423bD3d2d72880da9d068E5F",
-      "constructorArgs": [true]
+      "constructorArgs": [
+        true
+      ]
     },
     "proxy": {
       "address": "0x3b03f75Ec541Ca11a223bB58621A3146246E1644",
       "contract": "@aragon/os/contracts/kernel/KernelProxy.sol",
-      "constructorArgs": ["0x34c0cbf9836FD945423bD3d2d72880da9d068E5F"]
+      "constructorArgs": [
+        "0x34c0cbf9836FD945423bD3d2d72880da9d068E5F"
+      ]
     }
   },
   "aragonEnsLabelName": "aragonpm",
@@ -465,7 +469,9 @@
   "eip712StETH": {
     "contract": "contracts/0.8.9/EIP712StETH.sol",
     "address": "0xE154732c5Eab277fd88a9fF6Bdff7805eD97BCB1",
-    "constructorArgs": ["0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034"]
+    "constructorArgs": [
+      "0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034"
+    ]
   },
   "ensAddress": "0x4327d1Fc6E5fa0326CCAE737F67C066c50BcC258",
   "ensFactoryAddress": "0xADba3e3122F2Da8F7B07723a3e1F1cEDe3fe8d7d",
@@ -476,14 +482,24 @@
   "executionLayerRewardsVault": {
     "contract": "contracts/0.8.9/LidoExecutionLayerRewardsVault.sol",
     "address": "0xE73a3602b99f1f913e72F8bdcBC235e206794Ac8",
-    "constructorArgs": ["0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034", "0xE92329EC7ddB11D25e25b3c21eeBf11f15eB325d"]
+    "constructorArgs": [
+      "0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034",
+      "0xE92329EC7ddB11D25e25b3c21eeBf11f15eB325d"
+    ]
   },
   "gateSeal": {
     "factoryAddress": "0x1134F7077055b0B3559BE52AfeF9aA22A0E1eEC2",
-    "sealDuration": 518400,
-    "expiryTimestamp": 1714521600,
+    "sealDuration": 1209600,
+    "expiryTimestamp": 1782208512,
     "sealingCommittee": "0xCD1f9954330AF39a74Fd6e7B25781B4c24ee373f",
-    "address": "0x7f6FA688d4C12a2d51936680b241f3B0F0F9ca60"
+    "address": "0xE900BC859EB750562E1009e912B63743BC877662"
+  },
+  "gateSealTW": {
+    "factoryAddress": "0x1134F7077055b0B3559BE52AfeF9aA22A0E1eEC2",
+    "sealDuration": 1209600,
+    "expiryTimestamp": 1782208512,
+    "sealingCommittee": "0xCD1f9954330AF39a74Fd6e7B25781B4c24ee373f",
+    "address": "0xaEEF47C61f2A9CCe4C4D0363911C5d49e2cFb6f1"
   },
   "hashConsensusForAccountingOracle": {
     "deployParameters": {
@@ -559,7 +575,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/LidoLocator.sol",
-      "address": "0xab89ED3D8f31bcF8BB7De53F02084d1e6F043D34",
+      "address": "0xa437ab5614033d071493C88Fd351aFEbc802521f",
       "constructorArgs": [
         [
           "0x4E97A3972ce8511D87F334dA17a2C332542a5246",
@@ -567,7 +583,7 @@
           "0xE73a3602b99f1f913e72F8bdcBC235e206794Ac8",
           "0x072f72BE3AcFE2c52715829F2CD9061A6C8fF019",
           "0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034",
-          "0xd7C870777e08325Ad0A3A85F41E66E7D84B63E4f",
+          "0x80D1B1fF6E84134404abA18A628347960c38ccA7",
           "0x072f72BE3AcFE2c52715829F2CD9061A6C8fF019",
           "0x4E46BD7147ccf666E1d73A3A456fC7a68de82eCA",
           "0xd6EbF043D30A7fe46D1Db32BA90a0A51207FE229",
@@ -575,7 +591,9 @@
           "0xffDDF7025410412deaa05E3E1cE68FE53208afcb",
           "0xc7cc160b58F8Bb0baC94b80847E2CF2800565C50",
           "0xF0179dEC45a37423EAD4FaD5fCb136197872EAd9",
-          "0xC01fC1F2787687Bc656EAc0356ba9Db6e6b7afb7"
+          "0xC01fC1F2787687Bc656EAc0356ba9Db6e6b7afb7",
+          "0x9c5da60e54fcae8592132Fc9a67511e686b52BE8",
+          "0x4FD4113f2B92856B59BC3be77f2943B7F4eaa9a5"
         ]
       ]
     }
@@ -613,7 +631,10 @@
   "oracleDaemonConfig": {
     "contract": "contracts/0.8.9/OracleDaemonConfig.sol",
     "address": "0xC01fC1F2787687Bc656EAc0356ba9Db6e6b7afb7",
-    "constructorArgs": ["0x22896Bfc68814BFD855b1a167255eE497006e730", []],
+    "constructorArgs": [
+      "0x22896Bfc68814BFD855b1a167255eE497006e730",
+      []
+    ],
     "deployParameters": {
       "NORMALIZED_CL_REWARD_PER_EPOCH": 64,
       "NORMALIZED_CL_REWARD_MISTAKE_RATE_BP": 1000,
@@ -643,11 +664,34 @@
     "constructorArgs": [
       "0x28FAB2059C713A7F9D8c86Db49f9bb0e96Af1ef8",
       "0xE92329EC7ddB11D25e25b3c21eeBf11f15eB325d",
-      [9000, 500, 1000, 50, 600, 8, 62, 7680, 750000, 43200],
-      [[], [], [], [], [], [], [], [], [], [], []]
+      [
+        9000,
+        500,
+        1000,
+        50,
+        600,
+        8,
+        62,
+        7680,
+        750000,
+        43200
+      ],
+      [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
     ]
   },
-  "scratchDeployGasUsed": "20484707",
+  "scratchDeployGasUsed": "70437128",
   "stakingRouter": {
     "proxy": {
       "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
@@ -660,8 +704,42 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/StakingRouter.sol",
-      "address": "0x9b5890E950E3Df487Bb64E0A6743cdE791139152",
-      "constructorArgs": ["0x4242424242424242424242424242424242424242"]
+      "address": "0xE6E775C6AdF8753588237b1De32f61937bC54341",
+      "constructorArgs": [
+        "0x4242424242424242424242424242424242424242"
+      ]
+    }
+  },
+  "triggerableWithdrawalsGateway": {
+    "implementation": {
+      "contract": "contracts/0.8.9/TriggerableWithdrawalsGateway.sol",
+      "address": "0x4FD4113f2B92856B59BC3be77f2943B7F4eaa9a5",
+      "constructorArgs": [
+        "0xE92329EC7ddB11D25e25b3c21eeBf11f15eB325d",
+        "0x28FAB2059C713A7F9D8c86Db49f9bb0e96Af1ef8",
+        11200,
+        1,
+        48
+      ]
+    }
+  },
+  "validatorExitDelayVerifier": {
+    "implementation": {
+      "contract": "contracts/0.8.25/ValidatorExitDelayVerifier.sol",
+      "address": "0x9c5da60e54fcae8592132Fc9a67511e686b52BE8",
+      "constructorArgs": [
+        "0x28FAB2059C713A7F9D8c86Db49f9bb0e96Af1ef8",
+        "0x0000000000000000000000000000000000000000000000000096000000000028",
+        "0x0000000000000000000000000000000000000000000000000096000000000028",
+        "0x0000000000000000000000000000000000000000000000000000000000005b00",
+        "0x0000000000000000000000000000000000000000000000000000000000005b00",
+        1,
+        1,
+        32,
+        12,
+        1695902400,
+        98304
+      ]
     }
   },
   "validatorsExitBusOracle": {
@@ -679,8 +757,12 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol",
-      "address": "0x210f60EC8A4D020b3e22f15fee2d2364e9b22357",
-      "constructorArgs": [12, 1695902400, "0x28FAB2059C713A7F9D8c86Db49f9bb0e96Af1ef8"]
+      "address": "0xeCE105ABd3F2653398BE75e680dB033A238E2aD6",
+      "constructorArgs": [
+        12,
+        1695902400,
+        "0x28FAB2059C713A7F9D8c86Db49f9bb0e96Af1ef8"
+      ]
     }
   },
   "vestingParams": {
@@ -712,24 +794,37 @@
     "implementation": {
       "contract": "contracts/0.8.9/WithdrawalQueueERC721.sol",
       "address": "0xFF72B5cdc701E9eE677966B2702c766c38F412a4",
-      "constructorArgs": ["0x8d09a4502Cc8Cf1547aD300E066060D043f6982D", "stETH Withdrawal NFT", "unstETH"]
+      "constructorArgs": [
+        "0x8d09a4502Cc8Cf1547aD300E066060D043f6982D",
+        "stETH Withdrawal NFT",
+        "unstETH"
+      ]
     }
   },
   "withdrawalVault": {
     "implementation": {
       "contract": "contracts/0.8.9/WithdrawalVault.sol",
-      "address": "0xd517d9d04DA9B47dA23df91261bd3bF435BE964A",
-      "constructorArgs": ["0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034", "0xE92329EC7ddB11D25e25b3c21eeBf11f15eB325d"]
+      "address": "0x6aAA28C515E02ED0fe1B51e74323e14E910eA7d7",
+      "constructorArgs": [
+        "0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034",
+        "0xE92329EC7ddB11D25e25b3c21eeBf11f15eB325d",
+        "0x4FD4113f2B92856B59BC3be77f2943B7F4eaa9a5"
+      ]
     },
     "proxy": {
       "contract": "contracts/0.8.4/WithdrawalsManagerProxy.sol",
       "address": "0xF0179dEC45a37423EAD4FaD5fCb136197872EAd9",
-      "constructorArgs": ["0xdA7d2573Df555002503F29aA4003e398d28cc00f", "0xd517d9d04DA9B47dA23df91261bd3bF435BE964A"]
+      "constructorArgs": [
+        "0xdA7d2573Df555002503F29aA4003e398d28cc00f",
+        "0xd517d9d04DA9B47dA23df91261bd3bF435BE964A"
+      ]
     }
   },
   "wstETH": {
     "contract": "contracts/0.6.12/WstETH.sol",
     "address": "0x8d09a4502Cc8Cf1547aD300E066060D043f6982D",
-    "constructorArgs": ["0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034"]
+    "constructorArgs": [
+      "0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034"
+    ]
   }
 }
