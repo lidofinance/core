@@ -1350,10 +1350,12 @@ contract VaultHub is PausableUntilWithRoles {
         /// 2. Settle obligations
         /// @dev NB: Fees are deducted from the vault's current balance, which reduces the total value, so the
         ///          current locked value must be considered to prevent the vault from entering an unhealthy state
-        uint256 lockedValue = _record.locked;
         uint256 totalValue_ = _totalValue(_record);
-        uint256 unlockedValue = totalValue_ > lockedValue ? totalValue_ - lockedValue : 0;
-        uint256 availableForFees = Math256.min(unlockedValue, _vault.balance);
+        uint256 lockedValue = _record.locked;
+        uint256 availableForFees = Math256.min(
+            totalValue_ > lockedValue ? totalValue_ - lockedValue : 0,
+            _vault.balance
+        );
 
         uint256 unsettledLidoFees = _obligations.unsettledLidoFees;
         uint256 settledLidoFees = _obligations.settledLidoFees;
@@ -1621,12 +1623,12 @@ contract VaultHub is PausableUntilWithRoles {
     event BeaconChainDepositsPausedByOwner(address indexed vault);
     event BeaconChainDepositsResumedByOwner(address indexed vault);
 
+    event BadDebtSocialized(address indexed vaultDonor, address indexed vaultAcceptor, uint256 badDebtShares);
+    event BadDebtWrittenOffToBeInternalized(address indexed vault, uint256 badDebtShares);
+
     // -----------------------------
     //           ERRORS
     // -----------------------------
-
-    event BadDebtSocialized(address indexed vaultDonor, address indexed vaultAcceptor, uint256 badDebtShares);
-    event BadDebtWrittenOffToBeInternalized(address indexed vault, uint256 badDebtShares);
 
     error ZeroBalance();
 
