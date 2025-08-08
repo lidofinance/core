@@ -27,7 +27,7 @@ STEPS_FILE=scripts/upgrade/steps.json \
 yarn hardhat --network sepolia run --no-compile scripts/utils/migrate.ts
 ```
 
-specifying require values under `<PUT-YOU-VALUE>`.
+specifying required values under `<PUT-YOU-VALUE>`.
 
-Names of env variables specifying new addresses (e.g. `postTokenRebaseReceiver`) correspond to immutables names of
+Names of env variables specifying new addresses (e.g. `postTokenRebaseReceiver`) correspond to immutable names of
 `LidoLocator` contract.
