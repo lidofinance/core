@@ -1,6 +1,6 @@
 ## Disclaimer!
 
-This is the core repository of the Lido on Ethereum protocol. The entire codebase, excluding contracts, has undergone significant refactoring and tooling modernization. For historical context or legacy information, refer to the [last legacy commit](https://github.com/lidofinance/lido-dao/tree/de9e895879126b482effedd8fa1f2af3f7dc2dd4).
+This is the core repository of the Lido on Ethereum protocol. The entire codebase, excluding contracts, has undergone significant refactoring and modernization of tools. For historical context or legacy information, refer to the [last legacy commit](https://github.com/lidofinance/lido-dao/tree/de9e895879126b482effedd8fa1f2af3f7dc2dd4).
 
 ---
 
