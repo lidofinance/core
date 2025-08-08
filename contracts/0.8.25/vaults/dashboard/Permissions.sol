@@ -89,12 +89,6 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
-     * @notice Permission for getting compensation for disproven validator predeposit from PDG
-     */
-    /// @dev 0x17960a6b137243c888669d93712b617414dd6d1ab55d5eca488ccb1d0894cd5c
-    bytes32 public constant PDG_COMPENSATE_PREDEPOSIT_ROLE = keccak256("vaults.Permissions.PDGCompensatePredeposit");
-
-    /**
      * @notice Permission for proving valid vault validators unknown to the PDG
      */
     /// @dev 0xb850402129bccae797798069a8cf3147a0cb7c3193f70558a75f7df0b8651c30
@@ -327,19 +321,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _acceptOwnership() internal onlyRole(DEFAULT_ADMIN_ROLE) {
         _stakingVault().acceptOwnership();
-    }
-
-    /**
-     * @dev Checks the PDG_COMPENSATE_PREDEPOSIT_ROLE and claims disproven predeposit from PDG.
-     * @param _pubkey The pubkey of the validator.
-     * @param _recipient The address to compensate the disproven validator predeposit to.
-     * @return The amount of ether compensated.
-     */
-    function _compensateDisprovenPredepositFromPDG(
-        bytes calldata _pubkey,
-        address _recipient
-    ) internal onlyRoleMemberOrAdmin(PDG_COMPENSATE_PREDEPOSIT_ROLE) returns (uint256) {
-        return VAULT_HUB.compensateDisprovenPredepositFromPDG(address(_stakingVault()), _pubkey, _recipient);
     }
 
     /**
