@@ -355,6 +355,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         BLS12_381.DepositY[] calldata _depositsY
     ) external payable whenResumed {
         if (_deposits.length == 0) revert EmptyDeposits();
+        if (_depositsY.length != _deposits.length) revert InvalidDepositYLength();
 
         address nodeOperator = _stakingVault.nodeOperator();
         if (msg.sender != _depositorOf(nodeOperator)) revert NotDepositor();
@@ -744,6 +745,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
     // predeposit errors
     error EmptyDeposits();
+    error InvalidDepositYLength();
     error PredepositAmountInvalid(bytes validatorPubkey, uint256 depositAmount);
     error ValidatorNotNew(bytes validatorPubkey, ValidatorStage stage);
     error NotEnoughUnlocked(uint256 unlocked, uint256 amount);

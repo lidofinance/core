@@ -19,11 +19,11 @@ import {
 
 import { getCurrentBlockTimestamp, impersonate } from "lib";
 import { findEvents } from "lib/event";
-import { createVaultsReportTree } from "lib/protocol/helpers/vaults";
+import { createVaultsReportTree } from "lib/protocol";
 import { ether } from "lib/units";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP, ZERO_BYTES32 } from "test/suite";
 
 const SHARE_LIMIT = ether("10");
 
@@ -139,6 +139,15 @@ describe("VaultHub.sol:forceRebalance", () => {
 
   afterEach(async () => await Snapshot.restore(originalState));
 
+  async function refreshReport() {
+    const timestamp = await getCurrentBlockTimestamp();
+    const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100"));
+    await lazyOracle.connect(accountingOracleSigner).updateReportData(timestamp, 0, ZERO_BYTES32, "");
+    await vaultHub
+      .connect(lazyOracleSigner)
+      .applyVaultReport(vaultAddress, await getCurrentBlockTimestamp(), ether("1"), ether("1"), 0n, 0n, 0n);
+  }
+
   it("reverts if vault is zero address", async () => {
     await expect(vaultHub.forceRebalance(ethers.ZeroAddress)).to.be.revertedWithCustomError(vaultHub, "ZeroAddress");
   });
@@ -157,6 +166,7 @@ describe("VaultHub.sol:forceRebalance", () => {
   });
 
   it("reverts if called for a disconnecting vault", async () => {
+    await refreshReport();
     await vaultHub.connect(user).disconnect(vaultAddress);
 
     await expect(vaultHub.forceRebalance(vaultAddress))
@@ -165,6 +175,7 @@ describe("VaultHub.sol:forceRebalance", () => {
   });
 
   it("reverts if called for a disconnecting vault", async () => {
+    await refreshReport();
     await vaultHub.connect(user).disconnect(vaultAddress);
 
     await vaultHub
@@ -181,9 +192,18 @@ describe("VaultHub.sol:forceRebalance", () => {
 
     beforeEach(async () => {
       timestamp = await getCurrentBlockTimestamp();
+      const [refSlot] = await hashConsensus.getCurrentFrame();
       const accountingOracleSigner = await impersonate(await locator.accountingOracle(), ether("100"));
-      const reportTree = createVaultsReportTree([[vaultAddress, ether("1"), ether("1"), 0n, 0n]]);
-      await lazyOracle.connect(accountingOracleSigner).updateReportData(timestamp, reportTree.root, "");
+      const reportTree = createVaultsReportTree([
+        {
+          vault: vaultAddress,
+          totalValue: ether("1"),
+          accruedLidoFees: ether("1"),
+          liabilityShares: 0n,
+          slashingReserve: 0n,
+        },
+      ]);
+      await lazyOracle.connect(accountingOracleSigner).updateReportData(timestamp, refSlot, reportTree.root, "");
 
       await vaultHub
         .connect(lazyOracleSigner)

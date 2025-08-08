@@ -21,7 +21,7 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
   const isScratch = getMode() === "scratch";
 
   if (isScratch) {
-    await deployScratchProtocol(hre.network.name);
+    await deployScratchProtocol();
   } else if (process.env.UPGRADE) {
     await deployUpgrade(hre.network.name, "upgrade/steps-upgrade-for-tests.json");
   }

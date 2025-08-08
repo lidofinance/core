@@ -20,7 +20,15 @@ import {
 } from "typechain-types";
 import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 
-import { BigIntMath, certainAddress, ether, findEvents, GENESIS_FORK_VERSION, impersonate } from "lib";
+import {
+  BigIntMath,
+  certainAddress,
+  ether,
+  findEvents,
+  GENESIS_FORK_VERSION,
+  getCurrentBlockTimestamp,
+  impersonate,
+} from "lib";
 import { MAX_FEE_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
@@ -112,7 +120,9 @@ describe("VaultHub.sol:hub", () => {
     const timestamp = await lazyOracle.latestReportTimestamp();
 
     totalValue = totalValue ?? (await vaultHub.totalValue(vault));
-    inOutDelta = inOutDelta ?? (await vaultHub.vaultRecord(vault)).inOutDelta.value;
+    const record = await vaultHub.vaultRecord(vault);
+    const activeIndex = record.inOutDelta[0].refSlot >= record.inOutDelta[1].refSlot ? 0 : 1;
+    inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
     liabilityShares = liabilityShares ?? (await vaultHub.vaultRecord(vault)).liabilityShares;
     lidoFees = lidoFees ?? (await vaultHub.vaultObligations(vault)).unsettledLidoFees;
     slashingReserve = slashingReserve ?? 0n;
@@ -140,9 +150,12 @@ describe("VaultHub.sol:hub", () => {
       locked: formatEther(record.locked),
       shares: formatEther(record.liabilityShares),
       inOutDelta: {
-        value: formatEther(record.inOutDelta.value),
-        valueOnRefSlot: formatEther(record.inOutDelta.valueOnRefSlot),
-        refSlot: record.inOutDelta.refSlot,
+        value: formatEther(record.inOutDelta[0].value),
+        valueOnRefSlot: formatEther(record.inOutDelta[0].valueOnRefSlot),
+        refSlot: record.inOutDelta[0].refSlot,
+        value2: formatEther(record.inOutDelta[1].value),
+        valueOnRefSlot2: formatEther(record.inOutDelta[1].valueOnRefSlot),
+        refSlot2: record.inOutDelta[1].refSlot,
       },
     });
   }
@@ -327,17 +340,24 @@ describe("VaultHub.sol:hub", () => {
       expect(record.report).to.deep.equal([0n, 0n, 0n]);
       expect(record.locked).to.equal(0n);
       expect(record.liabilityShares).to.equal(0n);
-      expect(record.inOutDelta).to.deep.equal([0n, 0n, 0n]);
+      expect(record.inOutDelta).to.deep.equal([
+        [0n, 0n, 0n],
+        [0n, 0n, 0n],
+      ]);
     });
 
     it("returns the record values if the vault is connected", async () => {
       const { vault } = await createAndConnectVault(vaultFactory);
       const record = await vaultHub.vaultRecord(vault);
 
-      expect(record.report).to.deep.equal([ether("1"), ether("1"), 0n]);
+      const timestamp = await getCurrentBlockTimestamp();
+      expect(record.report).to.deep.equal([ether("1"), ether("1"), timestamp]);
       expect(record.locked).to.equal(ether("1"));
       expect(record.liabilityShares).to.equal(0n);
-      expect(record.inOutDelta).to.deep.equal([ether("1"), 0n, 0n]);
+      expect(record.inOutDelta).to.deep.equal([
+        [ether("1"), 0n, 0n],
+        [0n, 0n, 0n],
+      ]);
     });
   });
 
@@ -1101,6 +1121,62 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
+  context("updateConnection", () => {
+    it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
+      const { vault } = await createAndConnectVault(vaultFactory);
+      await expect(
+        vaultHub
+          .connect(stranger)
+          .updateConnection(
+            vault,
+            SHARE_LIMIT,
+            RESERVE_RATIO_BP,
+            FORCED_REBALANCE_THRESHOLD_BP,
+            INFRA_FEE_BP,
+            LIQUIDITY_FEE_BP,
+            RESERVATION_FEE_BP,
+          ),
+      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+    });
+
+    it("update connection parameters", async () => {
+      const { vault } = await createAndConnectVault(vaultFactory);
+      const vaultAddress = await vault.getAddress();
+      const operatorGridSigner = await impersonate(await operatorGridMock.getAddress(), ether("1"));
+
+      const oldConnection = await vaultHub.vaultConnection(vaultAddress);
+      const newInfraFeeBP = oldConnection.infraFeeBP + 10n;
+      const newLiquidityFeeBP = oldConnection.liquidityFeeBP + 11n;
+      const newReservationFeeBP = oldConnection.reservationFeeBP + 12n;
+
+      await expect(
+        vaultHub
+          .connect(operatorGridSigner)
+          .updateConnection(
+            vaultAddress,
+            SHARE_LIMIT,
+            RESERVE_RATIO_BP,
+            FORCED_REBALANCE_THRESHOLD_BP,
+            newInfraFeeBP,
+            newLiquidityFeeBP,
+            newReservationFeeBP,
+          ),
+      )
+        .to.emit(vaultHub, "VaultConnectionUpdated")
+        .withArgs(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP)
+        .to.emit(vaultHub, "VaultFeesUpdated")
+        .withArgs(
+          vaultAddress,
+          oldConnection.infraFeeBP,
+          oldConnection.liquidityFeeBP,
+          oldConnection.reservationFeeBP,
+          newInfraFeeBP,
+          newLiquidityFeeBP,
+          newReservationFeeBP,
+        );
+    });
+  });
+
   context("disconnect", () => {
     let vault: StakingVault__MockForVaultHub;
 
@@ -1142,12 +1218,35 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("initiates the disconnect process", async () => {
+      await reportVault({ vault, totalValue: ether("1") });
       await expect(vaultHub.connect(user).disconnect(vault))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vault);
 
       const vaultSocket = await vaultHub.vaultConnection(vault);
       expect(vaultSocket.pendingDisconnect).to.be.true;
+    });
+
+    it("clean quarantine after disconnect", async () => {
+      await reportVault({ vault, totalValue: ether("1") });
+      await expect(vaultHub.connect(user).disconnect(vault))
+        .to.emit(vaultHub, "VaultDisconnectInitiated")
+        .withArgs(vault);
+
+      let vaultSocket = await vaultHub.vaultConnection(vault);
+      expect(vaultSocket.pendingDisconnect).to.be.true;
+
+      await lazyOracle.mock__setIsVaultQuarantined(vault, true);
+      expect(await lazyOracle.isVaultQuarantined(vault)).to.equal(true);
+
+      await expect(lazyOracle.mock__report(vaultHub, vault, 0n, 0n, 0n, 0n, 0n, 0n))
+        .to.emit(vaultHub, "VaultDisconnectCompleted")
+        .withArgs(vault);
+
+      expect(await lazyOracle.isVaultQuarantined(vault)).to.equal(false);
+
+      vaultSocket = await vaultHub.vaultConnection(vault);
+      expect(vaultSocket.vaultIndex).to.equal(0); // vault is disconnected
     });
   });
 
@@ -1204,12 +1303,33 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("disconnects the vault", async () => {
+      await reportVault({ vault, totalValue: ether("1") });
       await expect(vaultHub.connect(user).disconnect(vaultAddress))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vaultAddress);
 
       const vaultSocket = await vaultHub.vaultConnection(vaultAddress);
       expect(vaultSocket.pendingDisconnect).to.be.true;
+    });
+  });
+
+  context("applyVaultReport", () => {
+    it("reverts if called by non LazyOracle", async () => {
+      const { vault } = await createAndConnectVault(vaultFactory);
+      await expect(
+        vaultHub.connect(stranger).applyVaultReport(vault, 1n, 1n, 1n, 1n, 1n, 1n),
+      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+    });
+
+    it("reverts if vault is not connected", async () => {
+      await lazyOracle.refreshReportTimestamp();
+      const { vault } = await createAndConnectVault(vaultFactory);
+
+      await vaultHub.connect(user).disconnect(vault);
+      await reportVault({ vault });
+      expect(await vaultHub.isVaultConnected(vault)).to.be.false;
+
+      await expect(reportVault({ vault })).to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub");
     });
   });
 });

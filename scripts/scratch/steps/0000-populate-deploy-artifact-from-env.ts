@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 
 import { log } from "lib";
-import { persistNetworkState, readNetworkState, Sk } from "lib/state-file";
+import { persistNetworkState, readNetworkState, resetStateFileFromDeployParams, Sk } from "lib/state-file";
 
 function getEnvVariable(name: string, defaultValue?: string): string {
   const value = process.env[name] ?? defaultValue;
@@ -23,6 +23,7 @@ export async function main() {
   const dsmPredefinedAddress = getEnvVariable("DSM_PREDEFINED_ADDRESS", "");
   const genesisForkVersion = getEnvVariable("GENESIS_FORK_VERSION", "0x00000000");
 
+  await resetStateFileFromDeployParams();
   const state = readNetworkState();
 
   // Update network-related information
