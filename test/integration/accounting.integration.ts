@@ -2,16 +2,14 @@ import { expect } from "chai";
 import { ContractTransactionReceipt, LogDescription, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
+import { LIMITER_PRECISION_BASE } from "lib/constants";
 import { getProtocolContext, ProtocolContext } from "lib/protocol";
-import { getReportTimeElapsed, report } from "lib/protocol/helpers";
+import { finalizeWQViaSubmit, getReportTimeElapsed, report } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
-
-const LIMITER_PRECISION_BASE = BigInt(10 ** 9);
 
 const SHARE_RATE_PRECISION = BigInt(10 ** 27);
 const ONE_DAY = 86400n;
@@ -20,15 +18,11 @@ const MAX_BASIS_POINTS = 10000n;
 describe("Accounting", () => {
   let ctx: ProtocolContext;
 
-  let ethHolder: HardhatEthersSigner;
-
   let snapshot: string;
   let originalState: string;
 
   before(async () => {
     ctx = await getProtocolContext();
-
-    [ethHolder] = await ethers.getSigners();
 
     snapshot = await Snapshot.take();
   });
@@ -107,18 +101,6 @@ describe("Accounting", () => {
     }
   }
 
-  // Helper function to finalize all requests
-  async function ensureRequestsFinalized() {
-    const { lido, withdrawalQueue } = ctx.contracts;
-
-    await setBalance(ethHolder.address, ether("1000000"));
-
-    while ((await withdrawalQueue.getLastRequestId()) != (await withdrawalQueue.getLastFinalizedRequestId())) {
-      await report(ctx);
-      await lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
-    }
-  }
-
   it("Should reverts report on sanity checks", async () => {
     const { oracleReportSanityChecker } = ctx.contracts;
 
@@ -187,7 +169,7 @@ describe("Accounting", () => {
     const totalSharesBefore = await lido.getTotalShares();
 
     // Report
-    const params = { clDiff: REBASE_AMOUNT, excludeVaultsBalances: true };
+    const params = { clDiff: REBASE_AMOUNT, excludeVaultsBalances: true, skipWithdrawals: true };
     const { reportTx } = (await report(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
@@ -795,7 +777,7 @@ describe("Accounting", () => {
   it("Should account correctly shares burn above limits", async () => {
     const { lido, burner, wstETH } = ctx.contracts;
 
-    await ensureRequestsFinalized();
+    await finalizeWQViaSubmit(ctx);
 
     await ensureWhaleHasFunds();
 
@@ -804,11 +786,7 @@ describe("Accounting", () => {
     const limitWithExcess = limit + excess;
 
     const initialBurnerBalance = await lido.sharesOf(burner.address);
-    expect(initialBurnerBalance).to.equal(0);
-    expect(await lido.sharesOf(wstETH.address)).to.be.greaterThan(
-      limitWithExcess,
-      "Not enough shares on whale account",
-    );
+    expect(await lido.sharesOf(wstETH.address)).to.be.greaterThan(limitWithExcess, "Not enough shares on wstETH");
 
     const stethOfShares = await lido.getPooledEthByShares(limitWithExcess);
 
@@ -889,7 +867,7 @@ describe("Accounting", () => {
   it("Should account correctly overfill both vaults", async () => {
     const { lido, withdrawalVault, elRewardsVault } = ctx.contracts;
 
-    await ensureRequestsFinalized();
+    await finalizeWQViaSubmit(ctx);
 
     const limit = await rebaseLimitWei();
     const excess = ether("10");

@@ -1,6 +1,7 @@
 import { ContractTransactionReceipt } from "ethers";
+import hre from "hardhat";
 
-import { ether, findEventsWithInterfaces, impersonate, log } from "lib";
+import { deployScratchProtocol, deployUpgrade, ether, findEventsWithInterfaces, impersonate, log } from "lib";
 
 import { discover } from "./discover";
 import { provision } from "./provision";
@@ -11,13 +12,28 @@ const getSigner = async (signer: Signer, balance = ether("100"), signers: Protoc
   return impersonate(signerAddress, balance);
 };
 
+export const withCSM = () => {
+  return process.env.INTEGRATION_WITH_CSM !== "off";
+};
+
 export const getProtocolContext = async (): Promise<ProtocolContext> => {
+  let isScratch = false;
+  if (hre.network.name === "hardhat") {
+    const networkConfig = hre.config.networks[hre.network.name];
+    if (!networkConfig.forking?.enabled) {
+      await deployScratchProtocol(hre.network.name);
+      isScratch = true;
+    }
+  } else {
+    await deployUpgrade(hre.network.name);
+  }
+
   const { contracts, signers } = await discover();
   const interfaces = Object.values(contracts).map((contract) => contract.interface);
 
   // By default, all flags are "on"
   const flags = {
-    withCSM: process.env.INTEGRATION_WITH_CSM !== "off",
+    withCSM: withCSM(),
   } as ProtocolContextFlags;
 
   log.debug("Protocol context flags", {
@@ -29,6 +45,7 @@ export const getProtocolContext = async (): Promise<ProtocolContext> => {
     signers,
     interfaces,
     flags,
+    isScratch,
     getSigner: async (signer: Signer, balance?: bigint) => getSigner(signer, balance, signers),
     getEvents: (receipt: ContractTransactionReceipt, eventName: string) =>
       findEventsWithInterfaces(receipt, eventName, interfaces),

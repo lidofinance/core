@@ -19,6 +19,7 @@ import {
   ONE_GWEI,
   streccak,
 } from "lib";
+import { EXTRA_DATA_FORMAT_LIST, prepareExtraData } from "lib/oracle";
 
 import { ProtocolContext } from "../types";
 
@@ -64,10 +65,9 @@ export type OracleReportPushOptions = {
   extraDataList?: Uint8Array;
 };
 
-const ZERO_HASH = new Uint8Array(32).fill(0);
+export const ZERO_HASH = new Uint8Array(32).fill(0);
 const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
 const SHARE_RATE_PRECISION = 10n ** 27n;
-const MIN_MEMBERS_COUNT = 3n;
 
 /**
  * Prepare and push oracle report.
@@ -256,6 +256,56 @@ export const report = async (
 
   return submitReport(ctx, reportParams);
 };
+
+export async function reportWithoutExtraData(
+  ctx: ProtocolContext,
+  numExitedValidatorsByStakingModule: bigint[],
+  stakingModuleIdsWithNewlyExitedValidators: bigint[],
+  extraData: ReturnType<typeof prepareExtraData>,
+) {
+  const { accountingOracle } = ctx.contracts;
+
+  const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = extraData;
+
+  const reportData: Partial<OracleReportOptions> = {
+    excludeVaultsBalances: true,
+    extraDataFormat: EXTRA_DATA_FORMAT_LIST,
+    extraDataHash: extraDataChunkHashes[0],
+    extraDataItemsCount: BigInt(extraDataItemsCount),
+    numExitedValidatorsByStakingModule,
+    stakingModuleIdsWithNewlyExitedValidators,
+    skipWithdrawals: true,
+  };
+
+  const { data } = await report(ctx, { ...reportData, dryRun: true });
+
+  const items = getReportDataItems(data);
+  const hash = calcReportDataHash(items);
+  const oracleVersion = await accountingOracle.getContractVersion();
+
+  const submitter = await reachConsensus(ctx, {
+    refSlot: BigInt(data.refSlot),
+    reportHash: hash,
+    consensusVersion: BigInt(data.consensusVersion),
+  });
+
+  const reportTx = await accountingOracle.connect(submitter).submitReportData(data, oracleVersion);
+  log.debug("Pushed oracle report main data", {
+    "Ref slot": data.refSlot,
+    "Consensus version": data.consensusVersion,
+    "Report hash": hash,
+  });
+
+  // Get processing state after main report is submitted
+  const processingStateAfterMainReport = await accountingOracle.getProcessingState();
+
+  // Verify that extra data is not yet submitted
+  expect(processingStateAfterMainReport.extraDataSubmitted).to.be.false;
+  expect(processingStateAfterMainReport.extraDataItemsCount).to.equal(extraDataItemsCount);
+  expect(processingStateAfterMainReport.extraDataItemsSubmitted).to.equal(0n);
+
+  return { reportTx, data, submitter, extraDataChunks, extraDataChunkHashes };
+}
 
 export const getReportTimeElapsed = async (ctx: ProtocolContext) => {
   const { hashConsensus } = ctx.contracts;
@@ -686,7 +736,7 @@ export const submitReport = async (
 /**
  * Ensure that the oracle committee has the required number of members.
  */
-export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount = MIN_MEMBERS_COUNT) => {
+export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMembersCount: bigint, quorum: bigint) => {
   const { hashConsensus } = ctx.contracts;
 
   const members = await hashConsensus.getFastLaneMembers();
@@ -709,14 +759,10 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
 
   let count = addresses.length;
   while (addresses.length < minMembersCount) {
+    log.warning(`Adding oracle committee member ${count}`);
+
     const address = getOracleCommitteeMemberAddress(count);
-
-    log.debug(`Adding oracle committee member ${count}`, {
-      "Min members count": minMembersCount,
-      "Address": address,
-    });
-
-    await hashConsensus.connect(agentSigner).addMember(address, minMembersCount);
+    await hashConsensus.connect(agentSigner).addMember(address, quorum);
 
     addresses.push(address);
 
@@ -800,7 +846,7 @@ const reachConsensus = async (
 /**
  * Helper function to get report data items in the required order.
  */
-const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
+export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.consensusVersion,
   data.refSlot,
   data.numValidators,
@@ -821,7 +867,7 @@ const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
 /**
  * Helper function to calculate hash of the report data.
  */
-const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
+export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>) => {
   const types = [
     "uint256", // consensusVersion
     "uint256", // refSlot
