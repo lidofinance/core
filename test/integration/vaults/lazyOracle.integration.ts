@@ -17,7 +17,7 @@ import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/va
 
 import { Snapshot } from "test/suite";
 
-describe("Integration: Actions with vault connected to VaultHub", () => {
+describe("Integration: LazyOracle", () => {
   let ctx: ProtocolContext;
 
   let dashboard: Dashboard;
@@ -53,8 +53,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     ));
 
     dashboard = dashboard.connect(owner);
-
-    await reportVaultDataWithProof(ctx, stakingVault);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -80,7 +78,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await advanceChainTime(days(2n));
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      const { locator, hashConsensus } = ctx.contracts;
+      const { locator, hashConsensus, lido } = ctx.contracts;
 
       const totalValueArg = ether("1");
       const accruedLidoFeesArg = ether("0.1");
@@ -130,7 +128,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       const record = await vaultHub.vaultRecord(stakingVault);
       expect(record.report.totalValue).to.equal(ether("1"));
-      expect(record.locked).to.equal(ether("1"));
+      expect(record.minimalReserve).to.equal(slashingReserveArg);
+      expect(record.locked).to.equal(slashingReserveArg + (await lido.getPooledEthBySharesRoundUp(liabilitySharesArg)));
+
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
     });
   });
@@ -170,7 +170,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const sharesToMint = await ctx.contracts.lido.getSharesByPooledEth(etherToMint);
       await expect(dashboard.mintStETH(stranger, etherToMint))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, sharesToMint, ether("1"));
+        .withArgs(stakingVault, sharesToMint, ether("1") + etherToMint);
     });
 
     it("Can't withdraw until brings the fresh report", async () => {
