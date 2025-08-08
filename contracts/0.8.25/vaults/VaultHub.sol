@@ -1041,21 +1041,6 @@ contract VaultHub is PausableUntilWithRoles {
         });
     }
 
-    /// @param _liabilityShares amount of shares that the vault is minted
-    /// @param _minimalReserve minimal amount of additional reserve to be locked
-    /// @param _reserveRatioBP the reserve ratio of the vault
-    /// @return the amount of collateral that is to be locked on the vault
-    function _locked(
-        uint256 _liabilityShares,
-        uint256 _minimalReserve,
-        uint256 _reserveRatioBP
-    ) internal view returns (uint256) {
-        uint256 liability = _getPooledEthBySharesRoundUp(_liabilityShares);
-        uint256 reserve = liability * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - _reserveRatioBP) - liability; // roundUp?
-
-        return liability + Math256.max(reserve, _minimalReserve);
-    }
-
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _shares) internal {
         uint256 valueToRebalance = _getPooledEthBySharesRoundUp(_shares);
 
@@ -1190,6 +1175,21 @@ contract VaultHub is PausableUntilWithRoles {
         VaultObligations storage _obligations
     ) internal view returns (uint256) {
         return _totalValue(_record) - _obligations.unsettledLidoFees;
+    }
+
+    /// @param _liabilityShares amount of shares that the vault is minted
+    /// @param _minimalReserve minimal amount of additional reserve to be locked
+    /// @param _reserveRatioBP the reserve ratio of the vault
+    /// @return the amount of collateral that is to be locked on the vault
+    function _locked(
+        uint256 _liabilityShares,
+        uint256 _minimalReserve,
+        uint256 _reserveRatioBP
+    ) internal view returns (uint256) {
+        uint256 liability = _getPooledEthBySharesRoundUp(_liabilityShares);
+        uint256 reserve = liability * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - _reserveRatioBP) - liability; // roundUp?
+
+        return liability + Math256.max(reserve, _minimalReserve);
     }
 
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
