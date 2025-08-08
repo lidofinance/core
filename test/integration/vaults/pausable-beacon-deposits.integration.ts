@@ -7,13 +7,11 @@ import { Dashboard, StakingVault, VaultHub } from "typechain-types";
 
 import { ether } from "lib";
 import {
-  autofillRoles,
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-  VaultRoles,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
@@ -24,7 +22,6 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
   let vaultHub: VaultHub;
   let stakingVault: StakingVault;
   let dashboard: Dashboard;
-  let roles: VaultRoles;
 
   let stakingVaultAddress: string;
 
@@ -54,10 +51,9 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       owner,
       nodeOperator,
       nodeOperator,
-      [],
     ));
 
-    roles = await autofillRoles(dashboard, nodeOperator);
+    dashboard = dashboard.connect(owner);
 
     stakingVaultAddress = await stakingVault.getAddress();
 
@@ -122,9 +118,8 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
     });
 
     it("Pause beacon deposits on setting redemptions obligations", async () => {
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
-      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("100") });
-      await dashboard.connect(roles.minter).mintShares(roles.burner, ether("1"));
+      await dashboard.fund({ value: ether("1") });
+      await dashboard.mintShares(agentSigner, ether("1"));
 
       await expect(
         vaultHub.connect(redemptionMaster).setVaultRedemptionShares(stakingVaultAddress, ether("1")),
@@ -138,7 +133,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       );
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
 
       await expect(vaultHub.settleVaultObligations(stakingVaultAddress)).to.emit(
         stakingVault,
@@ -154,7 +149,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       );
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
 
       await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") })).to.emit(
         stakingVault,
@@ -179,7 +174,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       // Check that owner now pauses the vault
       expect((await vaultHub.vaultConnection(stakingVaultAddress)).isBeaconDepositsManuallyPaused).to.be.true;
 
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
 
       // Check that even if obligation settled vault is still paused
       await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") }))

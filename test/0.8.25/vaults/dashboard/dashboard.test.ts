@@ -99,6 +99,7 @@ describe("Dashboard.sol", () => {
         refSlot: 0n,
       },
     ],
+    minimalReserve: 0n,
   };
 
   const connection: Readonly<VaultHub.VaultConnectionStruct> = {
