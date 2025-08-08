@@ -121,10 +121,9 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       await dashboard.fund({ value: ether("1") });
       await dashboard.mintShares(agentSigner, ether("1"));
 
-      await expect(vaultHub.connect(redemptionMaster).setVaultRedemptions(stakingVaultAddress, ether("1"))).to.emit(
-        stakingVault,
-        "BeaconChainDepositsPaused",
-      );
+      await expect(
+        vaultHub.connect(redemptionMaster).setVaultRedemptionShares(stakingVaultAddress, ether("1")),
+      ).to.emit(stakingVault, "BeaconChainDepositsPaused");
     });
 
     it("Unpauses beacon deposits on settling obligations", async () => {

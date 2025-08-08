@@ -106,13 +106,13 @@ contract VaultHub is PausableUntilWithRoles {
      *
      *  Obligations have two types:
      *  1. Redemptions. Under extreme conditions Lido protocol may rebalance the part of the vault's liability to serve
-     *     the Lido Core withdrawal queue requests to guarantee that every stETH is redeemable. Calculated in ether.
+     *     the Lido Core withdrawal queue requests to guarantee that every stETH is redeemable. Calculated in shares.
      *  2. Lido fees. Record of infra, liquidity and reservation fees charged to the vault. Charged in ether on every
      *     oracle report.
      *
      *  Obligations settlement:
+     *  - Redemptions are settled by rebalancing the vault or by burning shares on the vault
      *  - Lido fees are settled by transferring ether to the Lido protocol treasury
-     *  - Redemptions are settled by rebalancing the vault or by burning stETH on the vault
      *  - Obligations may be settled manually using the `settleVaultObligations` function
      *  - Obligations try to automatically settle:
      *    - every time oracle report is applied to the vault
@@ -122,20 +122,20 @@ contract VaultHub is PausableUntilWithRoles {
      *
      *  Constraints until obligations settled:
      *  - Beacon chain deposits are paused while unsettled obligations ≥ OBLIGATIONS_THRESHOLD (1 ETH)
-     *  - Unsettled obligations can't be withdrawn
+     *  - Unsettled obligations can't be withdrawn from the vault's balance
      *  - Minting new stETH is limited by unsettled Lido fees (NB: redemptions do not affect minting capacity)
      *  - Vault disconnect is refused until both unsettled redemptions and Lido fees obligations hit zero
      *
      * @dev NB: Under extreme conditions, Lido protocol may trigger validator exits to withdraw ether to the vault and
-     *          rebalance it to settle redemptions.
+     *          rebalance it to settle redemptions
      */
     struct VaultObligations {
         /// @notice cumulative value for Lido fees that were settled on the vault
         uint128 settledLidoFees;
         /// @notice current unsettled Lido fees amount
         uint128 unsettledLidoFees;
-        /// @notice current unsettled redemptions amount
-        uint128 redemptions;
+        /// @notice amount of liability shares that are set as the redemptions obligation
+        uint128 redemptionShares;
     }
 
     // -----------------------------
@@ -184,7 +184,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice no limit for the unsettled obligations on settlement
     uint256 internal immutable MAX_UNSETTLED_ALLOWED = type(uint256).max;
     /// @notice threshold for the unsettled obligations that will activate the beacon chain deposits pause
-    uint256 internal immutable UNSETTLED_THRESHOLD = 1 ether;
+    uint256 internal immutable UNSETTLED_OBLIGATIONS_THRESHOLD = 1 ether;
     /// @notice no unsettled obligations allowed on settlement
     uint256 internal immutable NO_UNSETTLED_ALLOWED = 0;
 
@@ -779,7 +779,8 @@ contract VaultHub is PausableUntilWithRoles {
             revert UnhealthyVaultCannotDeposit(_vault);
         }
 
-        _settleObligations(_vault, record, _vaultObligations(_vault), UNSETTLED_THRESHOLD);
+        // ISSUE: https://github.com/lidofinance/core/issues/1264
+        _settleObligations(_vault, record, _vaultObligations(_vault), UNSETTLED_OBLIGATIONS_THRESHOLD);
 
         if (connection.isBeaconDepositsManuallyPaused) {
             connection.isBeaconDepositsManuallyPaused = false;
@@ -820,7 +821,7 @@ contract VaultHub is PausableUntilWithRoles {
         ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
         ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
         ///          settle the unsettled obligations
-        if (!_isVaultHealthy(connection, record) || obligations.redemptions >= UNSETTLED_THRESHOLD) {
+        if (!_isVaultHealthy(connection, record) || obligations.redemptionShares >= UNSETTLED_OBLIGATIONS_THRESHOLD) {
             uint256 minPartialAmount = type(uint256).max;
             for (uint256 i = 0; i < _amounts.length; i++) {
                 if (_amounts[i] > 0 && _amounts[i] < minPartialAmount) minPartialAmount = _amounts[i];
@@ -828,6 +829,7 @@ contract VaultHub is PausableUntilWithRoles {
 
             if (minPartialAmount < type(uint256).max) {
                 uint256 currentVaultBalance = _vault.balance;
+                // ISSUE: https://github.com/lidofinance/core/issues/1263
                 uint256 required = _totalUnsettledObligations(obligations) + _rebalanceShortfall(connection, record);
                 uint256 amountToCover = required > currentVaultBalance ? required - currentVaultBalance : 0;
 
@@ -856,7 +858,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (
             _isVaultHealthy(connection, record) &&
             // Check if the vault has redemptions under the threshold, or enough balance to cover the redemptions fully
-            _vaultObligations(_vault).redemptions < Math256.max(UNSETTLED_THRESHOLD, _vault.balance)
+            _vaultObligations(_vault).redemptionShares < Math256.max(UNSETTLED_OBLIGATIONS_THRESHOLD, _vault.balance)
         ) {
             revert ForcedValidatorExitNotAllowed();
         }
@@ -885,22 +887,22 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Accrues a redemption obligation on the vault under extreme conditions
     /// @param _vault The address of the vault
-    /// @param _redemptionsValue The value of the redemptions obligation
-    function setVaultRedemptions(address _vault, uint256 _redemptionsValue) external onlyRole(REDEMPTION_MASTER_ROLE) {
+    /// @param _redemptionShares The part of the vault's liability that is set as the redemptions obligation
+    function setVaultRedemptionShares(address _vault, uint256 _redemptionShares) external onlyRole(REDEMPTION_MASTER_ROLE) {
+        VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
+        VaultObligations storage obligations = _vaultObligations(_vault);
 
-        uint256 liabilityShares_ = record.liabilityShares;
-
-        // This function may intentionally perform no action in some cases, as these are EasyTrack motions
-        if (liabilityShares_ > 0) {
-            uint256 newRedemptions = Math256.min(_redemptionsValue, _getPooledEthBySharesRoundUp(liabilityShares_));
-            _vaultObligations(_vault).redemptions = uint128(newRedemptions);
-            emit RedemptionsUpdated(_vault, newRedemptions);
-
-            _checkAndUpdateBeaconChainDepositsPause(_vault, _vaultConnection(_vault), record);
-        } else {
-            emit RedemptionsNotSet(_vault, _redemptionsValue);
+        uint256 newRedemptionShares = Math256.min(_redemptionShares, record.liabilityShares);
+        uint256 currentRedemptionShares = obligations.redemptionShares;
+        if (newRedemptionShares == currentRedemptionShares) {
+            revert RedemptionSharesNotSet(_vault, _redemptionShares, currentRedemptionShares);
         }
+
+        obligations.redemptionShares = uint128(newRedemptionShares);
+        emit RedemptionSharesUpdated(_vault, newRedemptionShares);
+
+        _checkAndUpdateBeaconChainDepositsPause(_vault, connection, record);
     }
 
     /// @notice Allows permissionless full or partial settlement of unsettled obligations on the vault
@@ -908,10 +910,11 @@ contract VaultHub is PausableUntilWithRoles {
     function settleVaultObligations(address _vault) external whenResumed {
         if (_vault.balance == 0) revert ZeroBalance();
 
+        VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
         _settleObligations(_vault, record, _vaultObligations(_vault), MAX_UNSETTLED_ALLOWED);
 
-        _checkAndUpdateBeaconChainDepositsPause(_vault, _vaultConnection(_vault), record);
+        _checkAndUpdateBeaconChainDepositsPause(_vault, connection, record);
     }
 
     /// @notice Proves that validators unknown to PDG have correct WC to participate in the vault
@@ -1282,109 +1285,42 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reportCumulativeLidoFees
     ) internal {
         uint256 cumulativeSettledLidoFees = _obligations.settledLidoFees;
-        uint256 cumulativeLidoFees = cumulativeSettledLidoFees + _obligations.unsettledLidoFees;
+        uint256 unsettledLidoFees = _obligations.unsettledLidoFees;
+        uint256 cumulativeLidoFees = cumulativeSettledLidoFees + unsettledLidoFees;
         if (_reportCumulativeLidoFees < cumulativeLidoFees) {
             revert InvalidFees(_vault, _reportCumulativeLidoFees, cumulativeLidoFees);
         }
 
         // update unsettled lido fees
-        uint256 unsettledLidoFees = _reportCumulativeLidoFees - cumulativeSettledLidoFees;
-        if (unsettledLidoFees != _obligations.unsettledLidoFees) {
-            _obligations.unsettledLidoFees = uint128(unsettledLidoFees);
-            emit LidoFeesUpdated(_vault, unsettledLidoFees, cumulativeSettledLidoFees);
+        uint256 newUnsettledLidoFees = _reportCumulativeLidoFees - cumulativeSettledLidoFees;
+        if (newUnsettledLidoFees != unsettledLidoFees) {
+            _obligations.unsettledLidoFees = uint128(newUnsettledLidoFees);
+            emit LidoFeesUpdated(_vault, newUnsettledLidoFees, cumulativeSettledLidoFees);
         }
     }
 
-    /**
-     * @notice Calculates a settlement plan based on vault balance and obligations
-     * @param _vault The address of the vault
-     * @param _record The record of the vault
-     * @param _obligations The obligations of the vault to be settled
-     * @return valueToRebalance The ETH amount to be rebalanced for redemptions
-     * @return sharesToRebalance The shares to be rebalanced for redemptions
-     * @return valueToTransferToLido The ETH amount to be sent to the Lido
-     * @return unsettledRedemptions The remaining redemptions after the planned settlement
-     * @return unsettledLidoFees The remaining Lido fees after the planned settlement
-     * @return totalUnsettled The total ETH value of obligations remaining after the planned settlement
-     */
-    function _planSettlement(
-        address _vault,
-        VaultRecord storage _record,
-        VaultObligations storage _obligations
-    ) internal view returns (
-        uint256 valueToRebalance,
-        uint256 sharesToRebalance,
-        uint256 valueToTransferToLido,
-        uint256 unsettledRedemptions,
-        uint256 unsettledLidoFees,
-        uint256 totalUnsettled
-    ) {
-        (valueToRebalance, sharesToRebalance, unsettledRedemptions) = _planRebalance(_vault, _record, _obligations);
-        (valueToTransferToLido, unsettledLidoFees) = _planLidoTransfer(_vault, _record, _obligations, valueToRebalance);
-        totalUnsettled = unsettledRedemptions + unsettledLidoFees;
-    }
-
-    /**
-     * @notice Plans the amounts and shares to rebalance for redemptions
-     * @param _vault The address of the vault
-     * @param _record The record of the vault
-     * @param _obligations The obligations of the vault
-     * @return valueToRebalance The ETH amount to be rebalanced for redemptions
-     * @return sharesToRebalance The shares to be rebalanced for redemptions
-     * @return unsettledRedemptions The remaining redemptions after the planned settlement
-     */
-    function _planRebalance(
-        address _vault,
-        VaultRecord storage _record,
-        VaultObligations storage _obligations
-    ) internal view returns (uint256 valueToRebalance, uint256 sharesToRebalance, uint256 unsettledRedemptions) {
-        uint256 redemptionShares = _getSharesByPooledEth(_obligations.redemptions);
-        uint256 maxRedemptionsValue = _getPooledEthBySharesRoundUp(redemptionShares);
-        // if the max redemptions value is less than the redemptions, we need to round up the redemptions shares
-        if (maxRedemptionsValue < _obligations.redemptions) redemptionShares += 1;
-
-        uint256 cappedRedemptionsShares = Math256.min(_record.liabilityShares, redemptionShares);
-        sharesToRebalance = Math256.min(cappedRedemptionsShares, _getSharesByPooledEth(_vault.balance));
-        valueToRebalance = _getPooledEthBySharesRoundUp(sharesToRebalance);
-        unsettledRedemptions = _getPooledEthBySharesRoundUp(redemptionShares - sharesToRebalance);
-    }
-
-    /**
-     * @notice Plans the amount to transfer to Lido for fees
-     * @param _vault The address of the vault
-     * @param _record The record of the vault
-     * @param _obligations The obligations of the vault
-     * @param _valueToRebalance The ETH amount already allocated for rebalancing
-     * @return valueToTransferToLido The ETH amount to be sent to the Lido
-     * @return unsettledLidoFees The remaining Lido fees after the planned settlement
-     */
-    function _planLidoTransfer(
+    function _verifySettlementPossibility(
         address _vault,
         VaultRecord storage _record,
         VaultObligations storage _obligations,
-        uint256 _valueToRebalance
-    ) internal view returns (uint256 valueToTransferToLido, uint256 unsettledLidoFees) {
+        uint256 _allowedUnsettled
+    ) internal view {
         uint256 vaultBalance = _vault.balance;
-        uint256 remainingBalance = vaultBalance - _valueToRebalance;
+        uint256 totalValue_ = _totalValue(_record);
+        uint256 totalUnsettledValue = _totalUnsettledObligations(_obligations);
 
-        if (_vaultConnection(_vault).pendingDisconnect) {
-            /// @dev connection deposit is unlocked, so it's available for fees
-            valueToTransferToLido = Math256.min(_obligations.unsettledLidoFees, remainingBalance);
-        } else {
-            /// @dev connection deposit is permanently locked, so it's not available for fees
-            /// @dev NB: Fees are deducted from the vault's current balance, which reduces the total value, so the
-            ///          current locked value must be considered to prevent the vault from entering an unhealthy state
-            uint256 lockedValue = _record.locked;
-            uint256 totalValue_ = _totalValue(_record);
-            uint256 unlockedValue = totalValue_ > lockedValue ? totalValue_ - lockedValue : 0;
-            uint256 availableForFees = Math256.min(
-                unlockedValue > _valueToRebalance ? unlockedValue - _valueToRebalance : 0,
-                remainingBalance
-            );
-            valueToTransferToLido = Math256.min(_obligations.unsettledLidoFees, availableForFees);
+        uint256 valueToWithdraw = vaultBalance < totalUnsettledValue ? totalUnsettledValue - vaultBalance : totalUnsettledValue;
+        uint256 valueToCarryOver = totalUnsettledValue - valueToWithdraw;
+
+        // Can't withdraw more than the total value, to avoid underflow in total value calculation
+        if (valueToWithdraw > totalValue_) {
+            revert WithdrawalExceedsTotalValue(_vault, valueToWithdraw, totalValue_);
         }
 
-        unsettledLidoFees = _obligations.unsettledLidoFees - valueToTransferToLido;
+        // In case of 0 value to carry over, we don't need to check the allowance
+        if (valueToCarryOver > 0 && valueToCarryOver >= _allowedUnsettled) {
+            revert UnsettledObligationsExceedsAllowance(_vault, valueToCarryOver, _allowedUnsettled);
+        }
     }
 
     /**
@@ -1400,64 +1336,65 @@ contract VaultHub is PausableUntilWithRoles {
         VaultObligations storage _obligations,
         uint256 _allowedUnsettled
     ) internal {
-        (
-            uint256 valueToRebalance,
-            uint256 sharesToRebalance,
-            uint256 valueToTransferToLido,
-            uint256 unsettledRedemptions,
-            uint256 unsettledLidoFees,
-            uint256 totalUnsettled
-        ) = _planSettlement(_vault, _record, _obligations);
+        _verifySettlementPossibility(_vault, _record, _obligations, _allowedUnsettled);
 
-        // Enforce requirement for settlement completeness
-        if (totalUnsettled > _allowedUnsettled) {
-            revert VaultHasUnsettledObligations(_vault, totalUnsettled, _allowedUnsettled);
+        /// ORDER IS IMPORTANT HERE BECAUSE OF THE BALANCE REDUCTION IN THE REBALANCE FUNCTION
+
+        /// 1. Rebalance
+        uint256 redemptionShares = _obligations.redemptionShares;
+        uint256 sharesToRebalance = Math256.min(redemptionShares, _getSharesByPooledEth(_vault.balance));
+        if (sharesToRebalance > 0) {
+            _rebalance(_vault, _record, sharesToRebalance);
         }
 
-        // Skip if no changes to obligations
-        if (valueToTransferToLido == 0 && valueToRebalance == 0) {
-            return;
-        }
+        /// 2. Settle obligations
+        /// @dev NB: Fees are deducted from the vault's current balance, which reduces the total value, so the
+        ///          current locked value must be considered to prevent the vault from entering an unhealthy state
+        uint256 totalValue_ = _totalValue(_record);
+        uint256 lockedValue = _record.locked;
+        uint256 availableForFees = Math256.min(
+            totalValue_ > lockedValue ? totalValue_ - lockedValue : 0,
+            _vault.balance
+        );
 
-        if (valueToRebalance > 0) {
-            _decreaseLiability(_vault, _record, sharesToRebalance);
-            _withdraw(_vault, _record, address(this), valueToRebalance);
-            _rebalanceExternalEtherToInternal(valueToRebalance);
-        }
-
+        uint256 unsettledLidoFees = _obligations.unsettledLidoFees;
+        uint256 settledLidoFees = _obligations.settledLidoFees;
+        uint256 valueToTransferToLido = Math256.min(unsettledLidoFees, availableForFees);
         if (valueToTransferToLido > 0) {
             _withdraw(_vault, _record, LIDO_LOCATOR.treasury(), valueToTransferToLido);
-            _obligations.settledLidoFees += uint128(valueToTransferToLido);
+            unsettledLidoFees -= valueToTransferToLido;
+            settledLidoFees += valueToTransferToLido;
+
+            _obligations.unsettledLidoFees = uint128(unsettledLidoFees);
+            _obligations.settledLidoFees = uint128(settledLidoFees);
         }
 
-        _obligations.redemptions = uint128(unsettledRedemptions);
-        _obligations.unsettledLidoFees = uint128(unsettledLidoFees);
-
-        emit VaultObligationsSettled({
-            vault: _vault,
-            rebalanced: valueToRebalance,
-            transferredToLido: valueToTransferToLido,
-            unsettledRedemptions: unsettledRedemptions,
-            unsettledLidoFees: unsettledLidoFees,
-            settledLidoFees: _obligations.settledLidoFees
-        });
+        /// 3. Emit event if there was any settlement
+        if (sharesToRebalance > 0 || valueToTransferToLido > 0) {
+            emit VaultObligationsSettled({
+                vault: _vault,
+                rebalancedShares: sharesToRebalance,
+                transferredToLido: valueToTransferToLido,
+                redemptionShares: redemptionShares - sharesToRebalance,
+                unsettledLidoFees: unsettledLidoFees,
+                cumulativeSettledLidoFees: settledLidoFees
+            });
+        }
     }
 
-    function _decreaseRedemptions(address _vault, uint256 _shares) internal {
+    function _decreaseRedemptions(address _vault, uint256 _amountOfShares) internal {
         VaultObligations storage obligations = _vaultObligations(_vault);
 
-        if (obligations.redemptions > 0) {
-            uint256 redemptionsValue = _getPooledEthBySharesRoundUp(_shares);
-            uint256 decrease = Math256.min(obligations.redemptions, redemptionsValue);
-            if (decrease > 0) {
-                obligations.redemptions -= uint128(decrease);
-                emit RedemptionsUpdated(_vault, obligations.redemptions);
-            }
+        uint256 redemptionShares = obligations.redemptionShares;
+        if (redemptionShares > 0 && _amountOfShares > 0) {
+            uint256 newValue = redemptionShares - Math256.min(redemptionShares, _amountOfShares);
+            obligations.redemptionShares = uint128(newValue);
+            emit RedemptionSharesUpdated(_vault, newValue);
         }
     }
 
     function _totalUnsettledObligations(VaultObligations storage _obligations) internal view returns (uint256) {
-        return _obligations.unsettledLidoFees + _obligations.redemptions;
+        return _obligations.unsettledLidoFees + _getPooledEthBySharesRoundUp(_obligations.redemptionShares);
     }
 
     function _checkAndUpdateBeaconChainDepositsPause(
@@ -1468,7 +1405,8 @@ contract VaultHub is PausableUntilWithRoles {
         bool isHealthy = _isVaultHealthy(_connection, _record);
 
         IStakingVault vault_ = IStakingVault(_vault);
-        if (_totalUnsettledObligations(_vaultObligations(_vault)) >= UNSETTLED_THRESHOLD || !isHealthy) {
+        // ISSUE: https://github.com/lidofinance/core/issues/1264
+        if (_totalUnsettledObligations(_vaultObligations(_vault)) >= UNSETTLED_OBLIGATIONS_THRESHOLD || !isHealthy) {
             _pauseBeaconChainDepositsIfNotAlready(vault_);
         } else if (!_connection.isBeaconDepositsManuallyPaused) {
             _resumeBeaconChainDepositsIfNotAlready(vault_);
@@ -1484,6 +1422,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 totalValue_ = _totalValue(_record);
         uint256 lockedPlusUnsettled = _record.locked + _totalUnsettledObligations(_vaultObligations(_vault));
 
+        // ISSUE: https://github.com/lidofinance/core/issues/1306
         return Math256.min(
             _vault.balance,
             totalValue_ > lockedPlusUnsettled ? totalValue_ - lockedPlusUnsettled : 0
@@ -1671,26 +1610,25 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultOwnershipTransferred(address indexed vault, address indexed newOwner, address indexed oldOwner);
 
     event LidoFeesUpdated(address indexed vault, uint256 unsettledLidoFees, uint256 settledLidoFees);
-    event RedemptionsUpdated(address indexed vault, uint256 unsettledRedemptions);
-    event RedemptionsNotSet(address indexed vault, uint256 redemptionsValue);
+    event RedemptionSharesUpdated(address indexed vault, uint256 redemptionShares);
     event VaultObligationsSettled(
         address indexed vault,
-        uint256 rebalanced,
+        uint256 rebalancedShares,
         uint256 transferredToLido,
-        uint256 unsettledRedemptions,
+        uint256 redemptionShares,
         uint256 unsettledLidoFees,
-        uint256 settledLidoFees
+        uint256 cumulativeSettledLidoFees
     );
 
     event BeaconChainDepositsPausedByOwner(address indexed vault);
     event BeaconChainDepositsResumedByOwner(address indexed vault);
 
+    event BadDebtSocialized(address indexed vaultDonor, address indexed vaultAcceptor, uint256 badDebtShares);
+    event BadDebtWrittenOffToBeInternalized(address indexed vault, uint256 badDebtShares);
+
     // -----------------------------
     //           ERRORS
     // -----------------------------
-
-    event BadDebtSocialized(address indexed vaultDonor, address indexed vaultAcceptor, uint256 badDebtShares);
-    event BadDebtWrittenOffToBeInternalized(address indexed vault, uint256 badDebtShares);
 
     error ZeroBalance();
 
@@ -1708,6 +1646,11 @@ contract VaultHub is PausableUntilWithRoles {
      * @param requested The amount attempting to withdraw
      */
     error AmountExceedsWithdrawableValue(address vault, uint256 withdrawable, uint256 requested);
+
+    error WithdrawalExceedsTotalValue(address vault, uint256 requested, uint256 totalValue);
+
+    error RedemptionSharesNotSet(address vault, uint256 requestedRedemptionShares, uint256 currentRedemptionShares);
+    error UnsettledObligationsExceedsAllowance(address vault, uint256 unsettled, uint256 allowed);
 
     error AlreadyHealthy(address vault);
     error VaultMintingCapacityExceeded(
@@ -1737,7 +1680,6 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultHubNotPendingOwner(address vault);
     error UnhealthyVaultCannotDeposit(address vault);
     error VaultIsDisconnecting(address vault);
-    error VaultHasUnsettledObligations(address vault, uint256 unsettledObligations, uint256 allowedUnsettled);
     error PartialValidatorWithdrawalNotAllowed();
     error ForcedValidatorExitNotAllowed();
     error NoBadDebtToWriteOff(address vault, uint256 totalValueShares, uint256 liabilityShares);

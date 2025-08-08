@@ -117,7 +117,7 @@ describe("Dashboard.sol", () => {
 
   const obligations: Readonly<VaultHub.VaultObligationsStruct> = {
     unsettledLidoFees: 0n,
-    redemptions: 0n,
+    redemptionShares: 0n,
     settledLidoFees: 0n,
   };
 
@@ -129,7 +129,7 @@ describe("Dashboard.sol", () => {
     locked,
     unsettledLidoFees,
     settledLidoFees,
-    redemptions,
+    redemptionShares,
     vaultBalance = 0n,
     pendingDisconnect = false,
     isConnected = true,
@@ -163,7 +163,7 @@ describe("Dashboard.sol", () => {
       ...obligations,
       unsettledLidoFees: unsettledLidoFees ?? obligations.unsettledLidoFees,
       settledLidoFees: settledLidoFees ?? obligations.settledLidoFees,
-      redemptions: redemptions ?? obligations.redemptions,
+      redemptionShares: redemptionShares ?? obligations.redemptionShares,
     });
 
     if (vaultBalance > 0n) {
@@ -457,7 +457,7 @@ describe("Dashboard.sol", () => {
           totalValue: 0n,
           liabilityShares: 0n,
           unsettledLidoFees: 0n,
-          redemptions: 0n,
+          redemptionShares: 0n,
           settledLidoFees: 0n,
         });
         expect(await dashboard.unsettledObligations()).to.equal(0n);
