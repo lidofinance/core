@@ -437,7 +437,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     function depositToBeaconChain(
         IStakingVault _stakingVault,
         IStakingVault.Deposit[] calldata _deposits
-    ) public payable whenResumed {
+    ) public whenResumed {
         if (msg.sender != _depositorOf(_stakingVault.nodeOperator())) {
             revert NotDepositor();
         }
