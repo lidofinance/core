@@ -10,6 +10,7 @@ import {
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
+  report,
   reportVaultDataWithProof,
   setupLidoForVaults,
 } from "lib/protocol";
@@ -39,6 +40,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
     await setupLidoForVaults(ctx);
 
+    await report(ctx);
+
     ({ vaultHub, lazyOracle } = ctx.contracts);
 
     [owner, nodeOperator, stranger] = await ethers.getSigners();
@@ -53,8 +56,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     ));
 
     dashboard = dashboard.connect(owner);
-
-    await reportVaultDataWithProof(ctx, stakingVault);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
