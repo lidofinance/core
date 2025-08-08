@@ -22,7 +22,11 @@ import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
 import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
 import { removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
-import { CSM_MODULE_ID, NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module";
+import {
+  CSM_MODULE_ID,
+  NOR_MODULE_ID,
+  SDVT_MODULE_ID,
+} from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 
@@ -138,11 +142,8 @@ describe("Integration: AccountingOracle extra data full items", () => {
     sdvtExitedItems,
     csmExitedItems,
   }: {
-    norStuckItems: number;
     norExitedItems: number;
-    sdvtStuckItems: number;
     sdvtExitedItems: number;
-    csmStuckItems: number;
     csmExitedItems: number;
   }) {
     return async () => {
@@ -196,8 +197,6 @@ describe("Integration: AccountingOracle extra data full items", () => {
 
       const reportExtraItems: ItemType[] = [];
 
-      // Stuck keys reporting removed upon Triggerable Withdrawals upgrade
-
       for (const { moduleId, module } of modules) {
         const ids = idsExited.get(moduleId)!;
         for (const id of ids) {
@@ -243,8 +242,6 @@ describe("Integration: AccountingOracle extra data full items", () => {
         );
       }
 
-      // Share balances tracking removed upon Triggerable Withdrawals upgrade
-
       const { submitter, extraDataChunks } = await reportWithoutExtraData(
         ctx,
         numExitedValidatorsByStakingModule,
@@ -280,46 +277,24 @@ describe("Integration: AccountingOracle extra data full items", () => {
           const numExpectedExited = numKeysReportedByNo.get([moduleId, id, EXTRA_DATA_TYPE_EXITED_VALIDATORS]);
           expect(summary.totalExitedValidators).to.equal(numExpectedExited);
         }
-
-        // Stuck validators check removed upon Triggerable Withdrawals upgrade
-
-        if (moduleId === CSM_MODULE_ID) {
-          continue;
-        }
-        // Penalty check removed upon Triggerable Withdrawals upgrade
       }
     };
   }
 
-  // TODO: stuck items reporting test is not working, but maybe there is no need to fix it
-  //       because stuck items reporting is removed upon Triggerable Withdrawals upgrade
-  for (const norStuckItems of [0]) {
-    for (const norExitedItems of [0, 1]) {
-      for (const sdvtStuckItems of [0]) {
-        for (const sdvtExitedItems of [0, 1]) {
-          for (const csmStuckItems of [0]) {
-            // stuck items reporting is removed upon Triggerable Withdrawals upgrade
-            for (const csmExitedItems of withCSM() ? [0, 1] : [0]) {
-              if (
-                norStuckItems + norExitedItems + sdvtStuckItems + sdvtExitedItems + csmStuckItems + csmExitedItems ===
-                0
-              ) {
-                continue;
-              }
-              it(
-                `should process extra data with full items for all modules with norStuckItems=${norStuckItems}, norExitedItems=${norExitedItems}, sdvtStuckItems=${sdvtStuckItems}, sdvtExitedItems=${sdvtExitedItems}, csmStuckItems=${csmStuckItems}, csmExitedItems=${csmExitedItems}`,
-                testReportingModuleWithMaxExtraDataItems({
-                  norStuckItems,
-                  norExitedItems,
-                  sdvtStuckItems,
-                  sdvtExitedItems,
-                  csmStuckItems,
-                  csmExitedItems,
-                }),
-              );
-            }
-          }
+  for (const norExitedItems of [0, 1]) {
+    for (const sdvtExitedItems of [0, 1]) {
+      for (const csmExitedItems of withCSM() ? [0, 1] : [0]) {
+        if (norExitedItems + sdvtExitedItems + csmExitedItems === 0) {
+          continue;
         }
+        it(
+          `should process extra data with full items for all modules with norExitedItems=${norExitedItems}, sdvtExitedItems=${sdvtExitedItems}, csmExitedItems=${csmExitedItems}`,
+          testReportingModuleWithMaxExtraDataItems({
+            norExitedItems,
+            sdvtExitedItems,
+            csmExitedItems,
+          }),
+        );
       }
     }
   }
