@@ -7,13 +7,11 @@ import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
 import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
 import {
-  autofillRoles,
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-  VaultRoles,
 } from "lib/protocol";
 import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
 
@@ -26,8 +24,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   let stakingVault: StakingVault;
   let vaultHub: VaultHub;
   let lazyOracle: LazyOracle;
-
-  let roles: VaultRoles;
 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
@@ -56,7 +52,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       nodeOperator,
     ));
 
-    roles = await autofillRoles(dashboard, nodeOperator);
+    dashboard = dashboard.connect(owner);
 
     await reportVaultDataWithProof(ctx, stakingVault);
   });
@@ -143,7 +139,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     beforeEach(async () => {
       // Spoil the report freshness
       await advanceChainTime((await vaultHub.REPORT_FRESHNESS_DELTA()) + 100n);
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
 
       const maxStakeLimit = ether("0.5");
       const sender = await impersonate(randomAddress(), maxStakeLimit + ether("1"));
@@ -157,7 +153,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     });
 
     it("Can't mint until brings the fresh report", async () => {
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, ether("1"))).to.be.revertedWithCustomError(
+      await expect(dashboard.mintStETH(stranger, ether("1"))).to.be.revertedWithCustomError(
         vaultHub,
         "VaultReportStale",
       );
@@ -165,27 +161,27 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await reportVaultDataWithProof(ctx, stakingVault);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, ether("2.1"))).to.be.revertedWithCustomError(
+      await expect(dashboard.mintStETH(stranger, ether("2.1"))).to.be.revertedWithCustomError(
         dashboard,
         "ExceedsMintingCapacity",
       );
 
       const etherToMint = ether("0.1");
       const sharesToMint = await ctx.contracts.lido.getSharesByPooledEth(etherToMint);
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, etherToMint))
+      await expect(dashboard.mintStETH(stranger, etherToMint))
         .to.emit(vaultHub, "MintedSharesOnVault")
         .withArgs(stakingVault, sharesToMint, ether("1"));
     });
 
     it("Can't withdraw until brings the fresh report", async () => {
-      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3"))).to.be.revertedWithCustomError(
+      await expect(dashboard.withdraw(stranger, ether("0.3"))).to.be.revertedWithCustomError(
         vaultHub,
         "VaultReportStale",
       );
 
       await reportVaultDataWithProof(ctx, stakingVault);
 
-      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3")))
+      await expect(dashboard.withdraw(stranger, ether("0.3")))
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(stranger, ether("0.3"));
     });
@@ -202,7 +198,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     it("Should allow huge totalValue increase using SAFE funding", async () => {
       const hugeValue = ether("1000");
 
-      await dashboard.connect(roles.funder).fund({ value: hugeValue });
+      await dashboard.fund({ value: hugeValue });
 
       await reportVaultDataWithProof(ctx, stakingVault);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
@@ -293,7 +289,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // safe deposit in the middle of quarantine period
       await advanceChainTime(quarantinePeriod / 2n);
 
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
 
@@ -338,7 +334,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
       // safe deposit after last refslot
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
 
       await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
@@ -368,10 +364,10 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(quarantine.isActive).to.equal(true);
 
       // safe deposit and withdrawal in the middle of quarantine period
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
 
-      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3"));
+      await dashboard.withdraw(stranger, ether("0.3"));
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7"));
 
       // end of quarantine period ------------------------------
@@ -406,7 +402,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       // safe deposit in the middle of quarantine period
       await advanceChainTime(quarantinePeriod / 2n);
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
 
       await advanceChainTime(quarantinePeriod / 2n - 60n * 60n);
@@ -427,7 +423,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
-      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3"));
+      await dashboard.withdraw(stranger, ether("0.3"));
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7"));
 
       await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("2") + value });
@@ -589,7 +585,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     });
 
     it("Sanity check for dynamic total value underflow", async () => {
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
 
       await advanceChainTime(days(1n));
 
@@ -597,7 +593,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       await advanceChainTime(days(1n));
 
-      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
+      await dashboard.withdraw(stranger, ether("0.1"));
 
       // int256(_totalValue) + curInOutDelta - _inOutDelta < 0
       await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: 0n })).to.be.revertedWithCustomError(
@@ -618,7 +614,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(record.inOutDelta[1].valueOnRefSlot).to.equal(0);
       expect(record.inOutDelta[1].refSlot).to.equal(0);
 
-      await dashboard.connect(roles.funder).fund({ value: value });
+      await dashboard.fund({ value: value });
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].valueOnRefSlot).to.equal(0);
@@ -628,7 +624,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(record.inOutDelta[1].refSlot).to.equal(refSlot);
 
       // second deposit in frame
-      await dashboard.connect(roles.funder).fund({ value: value });
+      await dashboard.fund({ value: value });
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[1].valueOnRefSlot).to.equal(ether("1"));
@@ -638,7 +634,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     it("InOutDelta cache in withdraw", async () => {
       const value = ether("1.234");
 
-      await dashboard.connect(roles.funder).fund({ value: value });
+      await dashboard.fund({ value: value });
 
       let [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
       let record = await vaultHub.vaultRecord(stakingVault);
@@ -649,7 +645,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await reportVaultDataWithProof(ctx, stakingVault);
 
       // first withdraw in frame
-      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
+      await dashboard.withdraw(stranger, ether("0.1"));
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].valueOnRefSlot).to.equal(value + ether("1"));
@@ -657,7 +653,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(record.inOutDelta[0].refSlot).to.equal(refSlot);
 
       // second withdraw in frame
-      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
+      await dashboard.withdraw(stranger, ether("0.1"));
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].valueOnRefSlot).to.equal(value + ether("1"));
@@ -689,7 +685,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       // FRAME 1 -----------------------------------------------
       // fund in frame 1 - init cache
-      await dashboard.connect(roles.funder).fund({ value: ether("10") });
+      await dashboard.fund({ value: ether("10") });
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[1].value).to.equal(ether("11"));
@@ -743,7 +739,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       // FRAME 1 -----------------------------------------------
       // fund in frame 1 - init cache
-      await dashboard.connect(roles.funder).fund({ value: ether("10") });
+      await dashboard.fund({ value: ether("10") });
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[1].value).to.equal(ether("11"));
@@ -761,7 +757,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       // FRAME 2 -----------------------------------------------
       // fund in frame 2
-      await dashboard.connect(roles.funder).fund({ value: ether("10") });
+      await dashboard.fund({ value: ether("10") });
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].value).to.equal(ether("21"));
