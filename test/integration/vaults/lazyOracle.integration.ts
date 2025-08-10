@@ -18,7 +18,7 @@ import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/va
 
 import { Snapshot } from "test/suite";
 
-describe("Integration: Actions with vault connected to VaultHub", () => {
+describe("Integration: LazyOracle", () => {
   let ctx: ProtocolContext;
 
   let dashboard: Dashboard;
