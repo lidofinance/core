@@ -20,6 +20,8 @@ import { Snapshot } from "test/suite";
 
 describe("Integration: LazyOracle", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
 
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
@@ -30,12 +32,8 @@ describe("Integration: LazyOracle", () => {
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let snapshot: string;
-  let originalSnapshot: string;
-
   before(async () => {
     ctx = await getProtocolContext();
-
     originalSnapshot = await Snapshot.take();
 
     await setupLidoForVaults(ctx);
@@ -59,9 +57,7 @@ describe("Integration: LazyOracle", () => {
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(snapshot));
-
   after(async () => await Snapshot.restore(originalSnapshot));
 
   beforeEach(async () => {

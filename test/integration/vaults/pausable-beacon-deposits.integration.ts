@@ -18,6 +18,8 @@ import { Snapshot } from "test/suite";
 
 describe("Integration: Vault hub beacon deposits pause flows", () => {
   let ctx: ProtocolContext;
+  let originalSnapshot: string;
+  let snapshot: string;
 
   let vaultHub: VaultHub;
   let stakingVault: StakingVault;
@@ -29,9 +31,6 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
   let nodeOperator: HardhatEthersSigner;
   let agentSigner: HardhatEthersSigner;
   let redemptionMaster: HardhatEthersSigner;
-
-  let originalSnapshot: string;
-  let snapshot: string;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -63,9 +62,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
   });
 
   after(async () => await Snapshot.restore(originalSnapshot));
-
   beforeEach(async () => (snapshot = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(snapshot));
 
   context("Manual pause", () => {

@@ -50,6 +50,7 @@ const CONFIRM_EXPIRY = days(7n);
 
 describe("Scenario: Staking Vaults Happy Path", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
@@ -65,10 +66,9 @@ describe("Scenario: Staking Vaults Happy Path", () => {
   let stakingVaultCLBalance = 0n;
   let stakingVaultMaxMintingShares = 0n;
 
-  let snapshot: string;
-
   before(async () => {
     ctx = await getProtocolContext();
+    snapshot = await Snapshot.take();
 
     [, owner, nodeOperator] = await ethers.getSigners();
 
@@ -79,8 +79,6 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     // add ETH to NO for PDG deposit + gas
     await setBalance(nodeOperator.address, ether((VALIDATORS_PER_VAULT + 1n).toString()));
-
-    snapshot = await Snapshot.take();
   });
 
   after(async () => await Snapshot.restore(snapshot));

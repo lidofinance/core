@@ -32,8 +32,8 @@ type DashboardMethods = Methods<Dashboard>; // "foo" | "bar"
 
 describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   let ctx: ProtocolContext;
-
   let snapshot: string;
+  let originalSnapshot: string;
 
   let owner: HardhatEthersSigner;
   let nodeOperatorManager: HardhatEthersSigner;
@@ -44,6 +44,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
+    originalSnapshot = await Snapshot.take();
 
     await report(ctx); // we need a report in LazyOracle for vault to be created with fresh report automatically
 
@@ -60,11 +61,9 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     await dashboard.connect(owner).fund({ value: ether("1") });
   });
 
-  beforeEach(async () => {
-    snapshot = await Snapshot.take();
-  });
-
+  beforeEach(async () => (snapshot = await Snapshot.take()));
   afterEach(async () => await Snapshot.restore(snapshot));
+  after(async () => await Snapshot.restore(originalSnapshot));
 
   // initializing contracts without signers
   describe("No roles are assigned", () => {

@@ -29,6 +29,8 @@ import { Snapshot } from "test/suite";
 
 describe("Integration: Actions with vault disconnected from hub", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
 
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
@@ -38,13 +40,9 @@ describe("Integration: Actions with vault disconnected from hub", () => {
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let snapshot: string;
-  let originalSnapshot: string;
-
   before(async () => {
-    originalSnapshot = await Snapshot.take();
-
     ctx = await getProtocolContext();
+    originalSnapshot = await Snapshot.take();
 
     await setupLidoForVaults(ctx);
 

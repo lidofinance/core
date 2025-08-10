@@ -24,6 +24,8 @@ const TEST_STETH_AMOUNT_WEI = 100n;
 
 describe("Integration: Actions with vault connected to VaultHub", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
 
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
@@ -39,12 +41,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
   let testSharesAmountWei: bigint;
 
-  let snapshot: string;
-  let originalSnapshot: string;
-
   before(async () => {
     ctx = await getProtocolContext();
-
     originalSnapshot = await Snapshot.take();
 
     await setupLidoForVaults(ctx);
@@ -72,9 +70,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(snapshot));
-
   after(async () => await Snapshot.restore(originalSnapshot));
 
   beforeEach(async () => {

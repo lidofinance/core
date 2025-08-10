@@ -15,27 +15,26 @@ import { ether } from "lib/units";
 
 import { Snapshot } from "test/suite";
 
-describe("Scenario: Vault Report Freshness Check", () => {
+describe("Integration: VaultHub ", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
 
-  let snapshot: string;
-
   before(async () => {
     ctx = await getProtocolContext();
+    originalSnapshot = await Snapshot.take();
 
     [, owner, nodeOperator] = await ethers.getSigners();
 
     await report(ctx);
   });
 
-  beforeEach(async () => {
-    snapshot = await Snapshot.take();
-  });
-
+  beforeEach(async () => (snapshot = await Snapshot.take()));
   afterEach(async () => await Snapshot.restore(snapshot));
+  after(async () => await Snapshot.restore(originalSnapshot));
 
   it("Vault is created with fresh report", async () => {
     const { stakingVaultFactory, vaultHub } = ctx.contracts;
