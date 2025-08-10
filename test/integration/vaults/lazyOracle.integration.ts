@@ -38,8 +38,6 @@ describe("Integration: LazyOracle", () => {
 
     await setupLidoForVaults(ctx);
 
-    await report(ctx);
-
     ({ vaultHub, lazyOracle } = ctx.contracts);
 
     [owner, nodeOperator, stranger] = await ethers.getSigners();
@@ -66,6 +64,11 @@ describe("Integration: LazyOracle", () => {
   });
 
   describe("Reporting", () => {
+    it("bringing new AO report makes vault report unfresh", async () => {
+      await report(ctx);
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
+    });
+
     it("bringing no report for 2 days makes vault report unfresh", async () => {
       await advanceChainTime(days(1n));
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);

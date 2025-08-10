@@ -65,8 +65,6 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     agent = await ctx.getSigner("agent");
 
     testSharesAmountWei = await ctx.contracts.lido.getSharesByPooledEth(TEST_STETH_AMOUNT_WEI);
-
-    await reportVaultDataWithProof(ctx, stakingVault);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));

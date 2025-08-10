@@ -14,7 +14,6 @@ import {
   getNextBlockTimestamp,
 } from "lib";
 import {
-  autofillRoles,
   createVaultWithDashboard,
   getProofAndDepositData,
   getProtocolContext,
@@ -22,7 +21,6 @@ import {
   ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-  VaultRoles,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
@@ -34,7 +32,6 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
-  let roles: VaultRoles;
 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
@@ -58,13 +55,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       [],
     ));
 
-    roles = await autofillRoles(dashboard, nodeOperator);
-
-    // Ensure vault has a fresh report before attempting disconnection
-    await reportVaultDataWithProof(ctx, stakingVault);
-
-    await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
-
+    await dashboard.connect(owner).voluntaryDisconnect();
     // disconnect is completed when the vault is reported to the hub
     await reportVaultDataWithProof(ctx, stakingVault);
 
