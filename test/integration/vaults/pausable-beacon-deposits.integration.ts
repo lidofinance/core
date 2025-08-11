@@ -115,11 +115,13 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
     });
 
     it("Pause beacon deposits on setting redemptions obligations", async () => {
-      await dashboard.fund({ value: ether("1") });
-      await dashboard.mintStETH(agentSigner, ether("1"));
+      await dashboard.fund({ value: ether("2") });
+      await dashboard.mintStETH(agentSigner, ether("2"));
 
+      // +1n to make sure to have >= 1 ether to pause the vault beacon deposits
+      const redemptionShares = (await ctx.contracts.lido.getSharesByPooledEth(ether("1"))) + 1n;
       await expect(
-        vaultHub.connect(redemptionMaster).setVaultRedemptionShares(stakingVaultAddress, ether("1")),
+        vaultHub.connect(redemptionMaster).setVaultRedemptionShares(stakingVaultAddress, redemptionShares),
       ).to.emit(stakingVault, "BeaconChainDepositsPaused");
     });
 

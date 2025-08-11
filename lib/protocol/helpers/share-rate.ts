@@ -9,8 +9,10 @@ import { ProtocolContext } from "../types";
 import { report } from "./accounting";
 
 const DEPOSIT = 10000;
-const MIN_BURN = 1000;
+const MIN_BURN = 1;
 const BIG_BAG = ether("100000000000");
+
+const SHARES_TO_BURN = process.env.INTEGRATION_SHARES_TO_BURN ? Number(process.env.INTEGRATION_SHARES_TO_BURN) : null;
 
 function calculateShareRate(totalPooledEther: bigint, totalShares: bigint): bigint {
   return (totalPooledEther * SHARE_RATE_PRECISION) / totalShares;
@@ -28,7 +30,7 @@ export const ensureSomeOddShareRate = async (ctx: ProtocolContext) => {
   const currentShareRate = calculateShareRate(totalPooledEther, totalShares);
 
   if (currentShareRate !== SHARE_RATE_PRECISION) {
-    log.success("Share rate is already unequal", logShareRate(currentShareRate));
+    log.success("Share rate:", logShareRate(currentShareRate));
     return;
   }
 
@@ -41,8 +43,9 @@ export const ensureSomeOddShareRate = async (ctx: ProtocolContext) => {
   await lido.connect(whale).submit(ZeroAddress, { value: ether(DEPOSIT.toString()) });
 
   // Calculate random burn amount
-  const burnAmount = MIN_BURN + Math.floor(Math.random() * (DEPOSIT - MIN_BURN));
+  const burnAmount = SHARES_TO_BURN ?? MIN_BURN + Math.floor(Math.random() * (DEPOSIT - MIN_BURN));
   const sharesToBurn = ether(burnAmount.toString());
+  log.warning("Burning shares:", burnAmount, "(* 10^18)");
 
   // Whale transfers shares to burner, burner burns shares
   await lido.connect(whale).transfer(burner, sharesToBurn);
