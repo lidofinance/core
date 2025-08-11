@@ -21,6 +21,8 @@ import { Snapshot } from "test/suite";
 
 describe("Integration: Vault obligations", () => {
   let ctx: ProtocolContext;
+  let originalSnapshot: string;
+  let snapshot: string;
 
   let vaultHub: VaultHub;
   let stakingVault: StakingVault;
@@ -36,9 +38,6 @@ describe("Integration: Vault obligations", () => {
   let agentSigner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let whale: HardhatEthersSigner;
-
-  let originalSnapshot: string;
-  let snapshot: string;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -73,9 +72,7 @@ describe("Integration: Vault obligations", () => {
   });
 
   after(async () => await Snapshot.restore(originalSnapshot));
-
   beforeEach(async () => (snapshot = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(snapshot));
 
   context("Lido fees obligations", () => {

@@ -7,7 +7,6 @@ import { Dashboard, PinnedBeaconProxy, StakingVault } from "typechain-types";
 
 import { ether, generatePredeposit, generateValidator } from "lib";
 import {
-  autofillRoles,
   createVaultWithDashboard,
   generatePredepositData,
   getProofAndDepositData,
@@ -15,26 +14,23 @@ import {
   ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-  VaultRoles,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
 describe("Integration: Predeposit Guarantee core functionality", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
 
   let stakingVault: StakingVault;
   let dashboard: Dashboard;
-  let roles: VaultRoles;
   let proxy: PinnedBeaconProxy;
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let guarantor: HardhatEthersSigner;
   let agent: HardhatEthersSigner;
-
-  let snapshot: string;
-  let originalSnapshot: string;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -55,15 +51,11 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       [],
     ));
 
-    roles = await autofillRoles(dashboard, nodeOperator);
-
     agent = await ctx.getSigner("agent");
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(snapshot));
-
   after(async () => await Snapshot.restore(originalSnapshot));
 
   beforeEach(async () => {
@@ -102,7 +94,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       const { predepositGuarantee } = ctx.contracts;
 
       // 1. The stVault's owner supplies 100 ETH to the vault
-      await expect(dashboard.connect(roles.funder).fund({ value: ether("100") }))
+      await expect(dashboard.connect(owner).fund({ value: ether("100") }))
         .to.emit(stakingVault, "EtherFunded")
         .withArgs(ether("100"));
 
@@ -124,7 +116,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       const validator = generateValidator(withdrawalCredentials);
 
       // Pre-requisite: fund the vault to have enough balance to start a validator
-      await dashboard.connect(roles.funder).fund({ value: ether("32") });
+      await dashboard.connect(owner).fund({ value: ether("32") });
 
       const predepositData = await generatePredeposit(validator, {
         depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
@@ -189,7 +181,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       const { predepositGuarantee } = ctx.contracts;
 
       // 8. The stVault's owner pauses the vault's deposits.
-      await expect(dashboard.connect(roles.depositPauser).pauseBeaconChainDeposits()).to.emit(
+      await expect(dashboard.connect(owner).pauseBeaconChainDeposits()).to.emit(
         stakingVault,
         "BeaconChainDepositsPaused",
       );
@@ -201,7 +193,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       ).to.be.revertedWithCustomError(stakingVault, "BeaconChainDepositsOnPause");
 
       // 10. The stVault's owner resumes the vault's deposits.
-      await expect(dashboard.connect(roles.depositResumer).resumeBeaconChainDeposits()).to.emit(
+      await expect(dashboard.connect(owner).resumeBeaconChainDeposits()).to.emit(
         stakingVault,
         "BeaconChainDepositsResumed",
       );
@@ -218,7 +210,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     const { predepositGuarantee } = ctx.contracts;
 
     // 1. The stVault's owner supplies 100 ETH to the vault.
-    await expect(dashboard.connect(roles.funder).fund({ value: ether("100") }))
+    await expect(dashboard.connect(owner).fund({ value: ether("100") }))
       .to.emit(stakingVault, "EtherFunded")
       .withArgs(ether("100"));
 
@@ -229,7 +221,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     // 3. The Node Operator shares the deposit data with the stVault's owner.
     // (This is a conceptual step, no actual code needed)
 
-    const predepositData = await generatePredepositData(predepositGuarantee, dashboard, roles, nodeOperator, validator);
+    const predepositData = await generatePredepositData(predepositGuarantee, dashboard, owner, nodeOperator, validator);
 
     await dashboard.connect(owner).grantRole(await dashboard.FUND_ROLE(), proxy);
 
@@ -239,11 +231,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     //    Method called: Dashboard.unguaranteedDepositToBeaconChain(deposits).
     //    4.1. As a result, the stVault's total value is temporarily reduced by 1 ETH until the next oracle report delivered containing the appeared validator's balance.
     // todo: this step fails, BUT this is the point of the test!
-    await expect(
-      dashboard
-        .connect(roles.unguaranteedBeaconChainDepositor)
-        .unguaranteedDepositToBeaconChain([predepositData.deposit]),
-    )
+    await expect(dashboard.connect(owner).unguaranteedDepositToBeaconChain([predepositData.deposit]))
       .to.emit(dashboard, "UnguaranteedDeposits")
       .withArgs(await stakingVault.getAddress(), 1, predepositData.deposit.amount);
     // check that emit the event from deposit contract
@@ -251,7 +239,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     const { witnesses, postdeposit } = await getProofAndDepositData(ctx, validator, withdrawalCredentials, ether("99"));
 
     // 5. The stVault's owner submits a Merkle proof of the validator's appearing on the Consensus Layer to the Dashboard contract.
-    await expect(dashboard.connect(roles.unknownValidatorProver).proveUnknownValidatorsToPDG([witnesses[0]]))
+    await expect(dashboard.connect(owner).proveUnknownValidatorsToPDG([witnesses[0]]))
       .to.emit(predepositGuarantee, "ValidatorProven")
       .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials);
 

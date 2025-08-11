@@ -23,6 +23,8 @@ const CONNECT_DEPOSIT = ether("1");
 
 describe("Integration: Actions with vault connected to VaultHub", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
 
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
@@ -36,12 +38,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
   let testSharesAmountWei: bigint;
 
-  let snapshot: string;
-  let originalSnapshot: string;
-
   before(async () => {
     ctx = await getProtocolContext();
-
     originalSnapshot = await Snapshot.take();
 
     await setupLidoForVaults(ctx);
@@ -66,14 +64,10 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     agent = await ctx.getSigner("agent");
 
     testSharesAmountWei = await ctx.contracts.lido.getSharesByPooledEth(TEST_STETH_AMOUNT_WEI);
-
-    await reportVaultDataWithProof(ctx, stakingVault);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(snapshot));
-
   after(async () => await Snapshot.restore(originalSnapshot));
 
   beforeEach(async () => {

@@ -20,6 +20,8 @@ import { Snapshot } from "test/suite";
 
 describe("Integration: LazyOracle", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
 
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
@@ -30,12 +32,8 @@ describe("Integration: LazyOracle", () => {
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let snapshot: string;
-  let originalSnapshot: string;
-
   before(async () => {
     ctx = await getProtocolContext();
-
     originalSnapshot = await Snapshot.take();
 
     await setupLidoForVaults(ctx);
@@ -59,9 +57,7 @@ describe("Integration: LazyOracle", () => {
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(snapshot));
-
   after(async () => await Snapshot.restore(originalSnapshot));
 
   beforeEach(async () => {
@@ -70,6 +66,11 @@ describe("Integration: LazyOracle", () => {
   });
 
   describe("Reporting", () => {
+    it("bringing new AO report makes vault report unfresh", async () => {
+      await report(ctx);
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
+    });
+
     it("bringing no report for 2 days makes vault report unfresh", async () => {
       await advanceChainTime(days(1n));
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
@@ -156,6 +157,8 @@ describe("Integration: LazyOracle", () => {
     });
 
     it("Can't mint until brings the fresh report", async () => {
+      const { lido } = ctx.contracts;
+
       await expect(dashboard.mintStETH(stranger, ether("1"))).to.be.revertedWithCustomError(
         vaultHub,
         "VaultReportStale",
@@ -170,10 +173,10 @@ describe("Integration: LazyOracle", () => {
       );
 
       const etherToMint = ether("0.1");
-      const sharesToMint = await ctx.contracts.lido.getSharesByPooledEth(etherToMint);
+      const sharesToMint = await lido.getSharesByPooledEth(etherToMint);
       await expect(dashboard.mintStETH(stranger, etherToMint))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, sharesToMint, ether("1") + etherToMint);
+        .withArgs(stakingVault, sharesToMint, ether("1") + (await lido.getPooledEthBySharesRoundUp(sharesToMint)));
     });
 
     it("Can't withdraw until brings the fresh report", async () => {

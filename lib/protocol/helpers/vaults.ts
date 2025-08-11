@@ -32,6 +32,8 @@ import {
 import { ether } from "../../units";
 import { LoadedContract, ProtocolContext } from "../types";
 
+import { report } from "./accounting";
+
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
 export const VAULT_CONNECTION_DEPOSIT = ether("1");
@@ -206,6 +208,12 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
   await acl.connect(agentSigner).grantPermission(agentAddress, lido.address, role);
   await lido.connect(agentSigner).setMaxExternalRatioBP(20_00n);
   await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
+
+  if (!ctx.isScratch) {
+    // we need a report to initialize LazyOracle timestamp after the upgrade
+    // if we are running tests in the mainnet fork environment
+    await report(ctx);
+  }
 }
 
 export type VaultReportItem = {
@@ -394,7 +402,7 @@ export const getPubkeys = (num: number): { pubkeys: string[]; stringified: strin
 export const generatePredepositData = async (
   predepositGuarantee: LoadedContract<PredepositGuarantee>,
   dashboard: Dashboard,
-  roles: VaultRoles,
+  owner: HardhatEthersSigner,
   nodeOperator: HardhatEthersSigner,
   validator: Validator,
   guarantor?: HardhatEthersSigner,
@@ -405,7 +413,7 @@ export const generatePredepositData = async (
   guarantor = guarantor ?? nodeOperator;
 
   // Pre-requisite: fund the vault to have enough balance to start a validator
-  await dashboard.connect(roles.funder).fund({ value: ether("32") });
+  await dashboard.connect(owner).fund({ value: ether("32") });
 
   // Step 1: Top up the node operator balance
   await predepositGuarantee.connect(guarantor).topUpNodeOperatorBalance(nodeOperator, {

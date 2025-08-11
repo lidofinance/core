@@ -3,30 +3,33 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { advanceChainTime } from "lib";
-import { createVaultWithDashboard, getProtocolContext, ProtocolContext, reportVaultDataWithProof } from "lib/protocol";
+import {
+  createVaultWithDashboard,
+  getProtocolContext,
+  ProtocolContext,
+  reportVaultDataWithProof,
+  setupLidoForVaults,
+} from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
-describe("Scenario: Lazy Oracle update vault data", () => {
+describe("Scenario: Lazy Oracle prevents overwriting freshly reconnected vault report", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
 
-  let snapshot: string;
-
   before(async () => {
     ctx = await getProtocolContext();
+    snapshot = await Snapshot.take();
+
+    await setupLidoForVaults(ctx);
 
     [, owner, nodeOperator] = await ethers.getSigners();
   });
 
-  beforeEach(async () => {
-    snapshot = await Snapshot.take();
-  });
-
-  afterEach(async () => await Snapshot.restore(snapshot));
+  after(async () => await Snapshot.restore(snapshot));
 
   it("Vault report can't be overwritten if vault is reconnected", async () => {
     const { stakingVaultFactory, vaultHub, lazyOracle } = ctx.contracts;
@@ -39,9 +42,6 @@ describe("Scenario: Lazy Oracle update vault data", () => {
       nodeOperator,
     );
 
-    await advanceChainTime(60n);
-    // TODO: find out why without time advance there is VaultReportIsFreshEnough although vaultHub.isReportFresh is false
-    await reportVaultDataWithProof(ctx, stakingVault);
     await dashboard.connect(owner).voluntaryDisconnect();
     await reportVaultDataWithProof(ctx, stakingVault);
 
