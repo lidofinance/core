@@ -798,6 +798,25 @@ describe("VaultHub.sol:hub", () => {
         .withArgs(RESERVE_RATIO_BP + 1n, RESERVE_RATIO_BP);
     });
 
+    it("reverts if share limit is more than share limit cap", async () => {
+      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
+        shareLimit: SHARE_LIMIT,
+        reserveRatioBP: RESERVE_RATIO_BP,
+        forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: RESERVATION_FEE_BP,
+      });
+
+      await expect(vaultHub.connect(user).updateShareLimitCap(vault, SHARE_LIMIT - 1n))
+        .to.emit(vaultHub, "VaultShareLimitCapUpdated")
+        .withArgs(vault, SHARE_LIMIT - 1n);
+
+      await expect(vaultHub.connect(user).connectVault(vault))
+        .to.be.revertedWithCustomError(vaultHub, "ShareLimitCapExceeded")
+        .withArgs(vault, SHARE_LIMIT, SHARE_LIMIT - 1n);
+    });
+
     it("reverts if vault is already connected", async () => {
       const { vault: connectedVault } = await createAndConnectVault(vaultFactory);
 
@@ -1046,6 +1065,84 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
+  context("updateShareLimitCap", () => {
+    let vault: StakingVault__MockForVaultHub;
+
+    before(async () => {
+      const { vault: _vault } = await createAndConnectVault(vaultFactory);
+      vault = _vault;
+    });
+
+    it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
+      await expect(vaultHub.connect(stranger).updateShareLimitCap(vault, SHARE_LIMIT)).to.be.revertedWithCustomError(
+        vaultHub,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if vault address is zero", async () => {
+      await expect(vaultHub.connect(user).updateShareLimitCap(ZeroAddress, SHARE_LIMIT)).to.be.revertedWithCustomError(
+        vaultHub,
+        "ZeroAddress",
+      );
+    });
+
+    it("updates the share limit cap", async () => {
+      const newShareLimitCap = SHARE_LIMIT + 100n;
+
+      await expect(vaultHub.connect(user).updateShareLimitCap(vault, newShareLimitCap))
+        .to.emit(vaultHub, "VaultShareLimitCapUpdated")
+        .withArgs(vault, newShareLimitCap);
+
+      const shareLimitCap = await vaultHub.shareLimitCap(vault);
+      expect(shareLimitCap.value).to.equal(newShareLimitCap);
+      expect(shareLimitCap.isActive).to.be.true;
+    });
+  });
+
+  context("removeShareLimitCap", () => {
+    let vault: StakingVault__MockForVaultHub;
+
+    before(async () => {
+      const { vault: _vault } = await createAndConnectVault(vaultFactory);
+      vault = _vault;
+    });
+
+    it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
+      await expect(vaultHub.connect(stranger).removeShareLimitCap(vault)).to.be.revertedWithCustomError(
+        vaultHub,
+        "AccessControlUnauthorizedAccount",
+      );
+    });
+
+    it("reverts if vault address is zero", async () => {
+      await expect(vaultHub.connect(user).removeShareLimitCap(ZeroAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "ZeroAddress",
+      );
+    });
+
+    it("removes the share limit cap", async () => {
+      const newShareLimitCap = SHARE_LIMIT + 100n;
+
+      await expect(vaultHub.connect(user).updateShareLimitCap(vault, newShareLimitCap))
+        .to.emit(vaultHub, "VaultShareLimitCapUpdated")
+        .withArgs(vault, newShareLimitCap);
+
+      let shareLimitCap = await vaultHub.shareLimitCap(vault);
+      expect(shareLimitCap.value).to.equal(newShareLimitCap);
+      expect(shareLimitCap.isActive).to.be.true;
+
+      await expect(vaultHub.connect(user).removeShareLimitCap(vault))
+        .to.emit(vaultHub, "VaultShareLimitCapRemoved")
+        .withArgs(vault);
+
+      shareLimitCap = await vaultHub.shareLimitCap(vault);
+      expect(shareLimitCap.value).to.equal(0n);
+      expect(shareLimitCap.isActive).to.be.false;
+    });
+  });
+
   context("updateVaultFees", () => {
     let vault: StakingVault__MockForVaultHub;
 
@@ -1137,6 +1234,31 @@ describe("VaultHub.sol:hub", () => {
             RESERVATION_FEE_BP,
           ),
       ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+    });
+
+    it("reverts if share limit exceeds the share limit cap", async () => {
+      const { vault } = await createAndConnectVault(vaultFactory);
+      const operatorGridSigner = await impersonate(await operatorGridMock.getAddress(), ether("1"));
+
+      await expect(vaultHub.connect(user).updateShareLimitCap(vault, SHARE_LIMIT))
+        .to.emit(vaultHub, "VaultShareLimitCapUpdated")
+        .withArgs(vault, SHARE_LIMIT);
+
+      await expect(
+        vaultHub
+          .connect(operatorGridSigner)
+          .updateConnection(
+            vault,
+            SHARE_LIMIT + 100n,
+            RESERVE_RATIO_BP,
+            FORCED_REBALANCE_THRESHOLD_BP,
+            INFRA_FEE_BP,
+            LIQUIDITY_FEE_BP,
+            RESERVATION_FEE_BP,
+          ),
+      )
+        .to.be.revertedWithCustomError(vaultHub, "ShareLimitCapExceeded")
+        .withArgs(vault, SHARE_LIMIT + 100n, SHARE_LIMIT);
     });
 
     it("update connection parameters", async () => {
