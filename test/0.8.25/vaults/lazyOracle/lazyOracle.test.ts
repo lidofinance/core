@@ -17,6 +17,10 @@ import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/va
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, ZERO_BYTES32 } from "test/suite";
 
+const QUARANTINE_PERIOD = 259200n;
+const MAX_REWARD_RATIO_BP = 350n;
+const MAX_SANE_LIDO_FEES_PER_SECOND = 1000000000000000000n;
+
 describe("LazyOracle.sol", () => {
   let deployer: SignerWithAddress;
   let locator: LidoLocator;
@@ -26,8 +30,6 @@ describe("LazyOracle.sol", () => {
   let lazyOracle: LazyOracle;
 
   let originalState: string;
-
-  const QUARANTINE_PERIOD = 259200n;
 
   before(async () => {
     [deployer] = await ethers.getSigners();
@@ -49,7 +51,12 @@ describe("LazyOracle.sol", () => {
     );
     lazyOracle = await ethers.getContractAt("LazyOracle", proxy);
 
-    await lazyOracle.initialize(deployer.address, QUARANTINE_PERIOD, 350n);
+    await lazyOracle.initialize(
+      deployer.address,
+      QUARANTINE_PERIOD,
+      MAX_REWARD_RATIO_BP,
+      MAX_SANE_LIDO_FEES_PER_SECOND,
+    );
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -185,12 +192,12 @@ describe("LazyOracle.sol", () => {
 
     it("return quarantine period", async () => {
       const quarantinePeriod = await lazyOracle.quarantinePeriod();
-      expect(quarantinePeriod).to.equal(259200n);
+      expect(quarantinePeriod).to.equal(QUARANTINE_PERIOD);
     });
 
     it("return max reward ratio", async () => {
       const maxRewardRatio = await lazyOracle.maxRewardRatioBP();
-      expect(maxRewardRatio).to.equal(350n);
+      expect(maxRewardRatio).to.equal(MAX_REWARD_RATIO_BP);
     });
 
     it("return quarantine info", async () => {
@@ -203,14 +210,15 @@ describe("LazyOracle.sol", () => {
 
   context("sanity params", () => {
     it("update quarantine period", async () => {
-      await expect(lazyOracle.updateSanityParams(250000n, 1000n))
+      await expect(lazyOracle.updateSanityParams(250000n, 1000n, 2000n))
         .to.be.revertedWithCustomError(lazyOracle, "AccessControlUnauthorizedAccount")
         .withArgs(deployer.address, await lazyOracle.UPDATE_SANITY_PARAMS_ROLE());
 
       await lazyOracle.grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), deployer.address);
-      await expect(lazyOracle.updateSanityParams(250000n, 1000n)).to.not.reverted;
+      await expect(lazyOracle.updateSanityParams(250000n, 1000n, 2000n)).to.not.reverted;
       expect(await lazyOracle.quarantinePeriod()).to.equal(250000n);
       expect(await lazyOracle.maxRewardRatioBP()).to.equal(1000n);
+      expect(await lazyOracle.maxLidoFeeRatePerSecond()).to.equal(2000n);
     });
   });
 

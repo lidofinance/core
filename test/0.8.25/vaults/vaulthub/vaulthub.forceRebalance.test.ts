@@ -31,6 +31,7 @@ const NODE_OPERATOR_FEE = 1_00n;
 const CONFIRM_EXPIRY = 24 * 60 * 60;
 const QUARANTINE_PERIOD = 259200;
 const MAX_REWARD_RATIO_BP = 350;
+const MAX_SANE_LIDO_FEES_PER_SECOND = 1000000000000000000n;
 
 describe("VaultHub.sol:forceRebalance", () => {
   let deployer: HardhatEthersSigner;
@@ -78,7 +79,7 @@ describe("VaultHub.sol:forceRebalance", () => {
       new Uint8Array(),
     ]);
     lazyOracle = await ethers.getContractAt("LazyOracle", lazyOracleProxy);
-    await lazyOracle.initialize(deployer, QUARANTINE_PERIOD, MAX_REWARD_RATIO_BP);
+    await lazyOracle.initialize(deployer, QUARANTINE_PERIOD, MAX_REWARD_RATIO_BP, MAX_SANE_LIDO_FEES_PER_SECOND);
 
     // VaultHub
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
