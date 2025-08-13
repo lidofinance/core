@@ -854,6 +854,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) external payable onlyRole(VALIDATOR_EXIT_ROLE) {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
+        _requireFreshReport(_vault, record);
 
         if (
             _isVaultHealthy(connection, record) &&
@@ -875,6 +876,7 @@ contract VaultHub is PausableUntilWithRoles {
     function forceRebalance(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
+        _requireFreshReport(_vault, record);
 
         uint256 sharesToRebalance = Math256.min(
             _rebalanceShortfall(connection, record),

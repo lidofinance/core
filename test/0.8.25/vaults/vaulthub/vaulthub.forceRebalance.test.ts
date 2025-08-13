@@ -152,6 +152,12 @@ describe("VaultHub.sol:forceRebalance", () => {
     await expect(vaultHub.forceRebalance(ethers.ZeroAddress)).to.be.revertedWithCustomError(vaultHub, "ZeroAddress");
   });
 
+  it("reverts if vault report is stale", async () => {
+    await expect(vaultHub.forceRebalance(vaultAddress))
+      .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")
+      .withArgs(vaultAddress);
+  });
+
   it("reverts if vault is not connected to the hub", async () => {
     const vaultCreationTx = (await vaultFactory
       .createVaultWithDashboardWithoutConnectingToVaultHub(user, user, user, NODE_OPERATOR_FEE, CONFIRM_EXPIRY, [])
@@ -174,7 +180,7 @@ describe("VaultHub.sol:forceRebalance", () => {
       .withArgs(vaultAddress);
   });
 
-  it("reverts if called for a disconnecting vault", async () => {
+  it("reverts if called for a disconnected vault", async () => {
     await refreshReport();
     await vaultHub.connect(user).disconnect(vaultAddress);
 
@@ -281,6 +287,7 @@ describe("VaultHub.sol:forceRebalance", () => {
 
   context("healthy vault", () => {
     it("reverts if vault is healthy", async () => {
+      await refreshReport();
       const balanceBefore = await ethers.provider.getBalance(vaultAddress);
 
       await expect(vaultHub.forceRebalance(vaultAddress))

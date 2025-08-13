@@ -216,7 +216,14 @@ describe("VaultHub.sol:forceExit", () => {
         .withArgs(vaultAddress);
     });
 
+    it("reverts if vault report is stale", async () => {
+      await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
+        .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")
+        .withArgs(vaultAddress);
+    });
+
     it("reverts if called for a healthy vault", async () => {
+      await reportVault({ totalValue: ether("1") });
       await expect(
         vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }),
       ).to.be.revertedWithCustomError(vaultHub, "ForcedValidatorExitNotAllowed");
