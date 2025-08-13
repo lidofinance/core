@@ -1094,7 +1094,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function _getTransientBalance() internal view returns (uint256) {
         uint256 depositedValidators = DEPOSITED_VALIDATORS_POSITION.getStorageUint256();
         uint256 clValidators = CL_VALIDATORS_POSITION.getStorageUint256();
-        // clValidators can never be less than deposited ones.
+        // clValidators can never exceed depositedValidators.
         assert(depositedValidators >= clValidators);
         return (depositedValidators - clValidators).mul(DEPOSIT_SIZE);
     }
