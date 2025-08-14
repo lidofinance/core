@@ -506,6 +506,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (connection.pendingDisconnect) {
             if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
+                record.locked = 0; // to be able to dig into connection deposit to pay fees
                 _settleObligations(_vault, record, obligations, NO_UNSETTLED_ALLOWED);
 
                 IStakingVault(_vault).transferOwnership(connection.owner);
@@ -649,8 +650,11 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev vault's `liabilityShares` should be zero
     function voluntaryDisconnect(address _vault) external whenResumed {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
+        VaultRecord storage record = _vaultRecord(_vault);
 
-        _initiateDisconnection(_vault, connection, _vaultRecord(_vault));
+        _settleObligations(_vault, record, _vaultObligations(_vault), NO_UNSETTLED_ALLOWED);
+
+        _initiateDisconnection(_vault, connection, record);
 
         emit VaultDisconnectInitiated(_vault);
     }
@@ -985,9 +989,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (liabilityShares_ > 0) {
             revert NoLiabilitySharesShouldBeLeft(_vault, liabilityShares_);
         }
-
-        _record.locked = 0; // unlock the connection deposit to allow fees settlement
-        _settleObligations(_vault, _record, _vaultObligations(_vault), NO_UNSETTLED_ALLOWED);
 
         _connection.pendingDisconnect = true;
 
