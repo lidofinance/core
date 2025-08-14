@@ -14,7 +14,7 @@ import {
   getProtocolContext,
   getRoleMethods,
   ProtocolContext,
-  report,
+  setupLidoForVaults,
   VaultRoles,
 } from "lib/protocol";
 import { vaultRoleKeys } from "lib/protocol/helpers/vaults";
@@ -46,7 +46,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 
-    await report(ctx); // we need a report in LazyOracle for vault to be created with fresh report automatically
+    await setupLidoForVaults(ctx);
 
     [owner, nodeOperatorManager, stranger] = await ethers.getSigners();
 
@@ -64,6 +64,30 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
   beforeEach(async () => (snapshot = await Snapshot.take()));
   afterEach(async () => await Snapshot.restore(snapshot));
   after(async () => await Snapshot.restore(originalSnapshot));
+
+  // initializing contracts without signers
+  describe("No roles are assigned", () => {
+    it("Verify that roles are not assigned", async () => {
+      const roleMethods = getRoleMethods(dashboard);
+
+      for (const role of vaultRoleKeys) {
+        expect(await dashboard.getRoleMembers(await roleMethods[role])).to.deep.equal([], `Role "${role}" is assigned`);
+      }
+    });
+
+    describe.skip("Verify ACL for methods that require only role", () => {
+      describe("Dashboard methods", () => {
+        it("setNodeOperatorFeeRecipient", async () => {
+          await testGrantingRole(
+            "setNodeOperatorFeeRecipient",
+            await dashboard.NODE_OPERATOR_MANAGER_ROLE(),
+            [stranger],
+            nodeOperatorManager,
+          );
+        });
+      });
+    });
+  });
 
   // initializing contracts without signers
   describe("No roles are assigned", () => {

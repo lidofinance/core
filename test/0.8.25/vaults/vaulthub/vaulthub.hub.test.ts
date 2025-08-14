@@ -195,6 +195,7 @@ describe("VaultHub.sol:hub", () => {
 
     // LazyOracle
     lazyOracle = await ethers.deployContract("LazyOracle__MockForVaultHub");
+    await lazyOracle.setLatestReportTimestamp(await getCurrentBlockTimestamp());
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { operatorGrid, lazyOracle });
 
@@ -469,7 +470,8 @@ describe("VaultHub.sol:hub", () => {
 
       const { vault } = await createAndConnectVault(vaultFactory, config);
 
-      const totalValue = ether("1");
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
+      const totalValue = ether("2");
 
       // steth/share = 1:1
 
@@ -510,8 +512,10 @@ describe("VaultHub.sol:hub", () => {
 
       const { vault } = await createAndConnectVault(vaultFactory, config);
 
-      const totalValue = ether("1");
-      const mintingEth = ether("0.5");
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
+
+      const totalValue = ether("2"); // connect deposit + 1 ETH
+      const mintingEth = ether("1");
       const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
       await reportVault({ vault, totalValue, inOutDelta: totalValue });
       await vaultHub.connect(user).mintShares(vault, user, sharesToMint);
@@ -551,9 +555,11 @@ describe("VaultHub.sol:hub", () => {
 
       const { vault } = await createAndConnectVault(vaultFactory, config);
 
-      await reportVault({ vault, totalValue: ether("1"), inOutDelta: ether("1") });
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
 
-      const mintingEth = ether("0.4999");
+      await reportVault({ vault, totalValue: ether("2"), inOutDelta: ether("2") });
+
+      const mintingEth = ether("1");
       const sharesToMint = await lido.getSharesByPooledEth(mintingEth);
       await vaultHub.connect(user).mintShares(vault, user, sharesToMint);
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(true);
@@ -590,11 +596,13 @@ describe("VaultHub.sol:hub", () => {
 
       const { vault } = await createAndConnectVault(vaultFactory, config);
 
-      await reportVault({ vault, totalValue: ether("1"), inOutDelta: ether("1") });
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
+
+      await reportVault({ vault, totalValue: ether("2"), inOutDelta: ether("2") });
 
       await vaultHub.connect(user).mintShares(vault, user, 1n);
 
-      await reportVault({ vault, totalValue: ether("1") });
+      await reportVault({ vault, totalValue: ether("2") });
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(true);
 
       await reportVault({ vault, totalValue: 2n }); // Minimal totalValue to be healthy with 1 share (50% reserve ratio)
@@ -686,7 +694,9 @@ describe("VaultHub.sol:hub", () => {
         forcedRebalanceThresholdBP: 9_00n, // 9%
       });
 
-      await reportVault({ vault, totalValue: ether("1"), inOutDelta: ether("1") });
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
+
+      await reportVault({ vault, totalValue: ether("2"), inOutDelta: ether("2") });
 
       await vaultHub.connect(user).mintShares(vault, user, ether("0.25"));
 
@@ -1149,8 +1159,7 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("reverts if vault has shares minted", async () => {
-      await vault.fund({ value: ether("1") });
-      await reportVault({ vault });
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
       await vaultHub.connect(user).mintShares(vault, user.address, 1n);
 
       await expect(vaultHub.connect(user).disconnect(vault)).to.be.revertedWithCustomError(
@@ -1234,19 +1243,17 @@ describe("VaultHub.sol:hub", () => {
     });
 
     it("reverts if vault has shares minted", async () => {
-      await vault.fund({ value: ether("1") });
-      await reportVault({ vault });
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
       await vaultHub.connect(user).mintShares(vaultAddress, user.address, 1n);
 
-      await expect(vaultHub.connect(user).disconnect(vaultAddress)).to.be.revertedWithCustomError(
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "NoLiabilitySharesShouldBeLeft",
       );
     });
 
     it("disconnects the vault", async () => {
-      await reportVault({ vault, totalValue: ether("1") });
-      await expect(vaultHub.connect(user).disconnect(vaultAddress))
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vaultAddress);
 
