@@ -44,7 +44,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         /// @notice max reward ratio for refSlot-observed total value, basis points
         uint16 maxRewardRatioBP;
         /// @notice max Lido fee rate per second, in wei
-        uint128 maxLidoFeeRatePerSecond;
+        uint64 maxLidoFeeRatePerSecond;  // 64 bit is enough for up to 18 ETH/s
         /// @notice deposit quarantines for each vault
         mapping(address vault => Quarantine) vaultQuarantines;
     }
@@ -132,6 +132,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @dev basis points base
     uint256 private constant TOTAL_BASIS_POINTS = 100_00;
     uint256 private constant MAX_SANE_TOTAL_VALUE = type(uint96).max;
+    uint256 private constant MAX_QUARANTINE_PERIOD = 30 days;
+    /// @dev max value for reward ratio - it's about 650%
+    uint256 private constant MAX_REWARD_RATIO = type(uint16).max;
+    uint256 private constant MAX_LIDO_FEE_RATE_PER_SECOND = 10 ether;
 
     constructor(address _lidoLocator) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
@@ -144,7 +148,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @param _quarantinePeriod the quarantine period, seconds
     /// @param _maxRewardRatioBP the max reward ratio, basis points
     /// @param _maxLidoFeeRatePerSecond the max Lido fee rate per second
-    function initialize(address _admin, uint64 _quarantinePeriod, uint16 _maxRewardRatioBP, uint128 _maxLidoFeeRatePerSecond) external initializer {
+    function initialize(address _admin, uint256 _quarantinePeriod, uint256 _maxRewardRatioBP, uint256 _maxLidoFeeRatePerSecond) external initializer {
         if (_admin == address(0)) revert AdminCannotBeZero();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
@@ -177,7 +181,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     }
 
     /// @notice returns the max Lido fee rate per second, in ether
-    function maxLidoFeeRatePerSecond() external view returns (uint128) {
+    function maxLidoFeeRatePerSecond() external view returns (uint64) {
         return _storage().maxLidoFeeRatePerSecond;
     }
 
@@ -248,9 +252,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @param _maxRewardRatioBP the max EL CL rewards
     /// @param _maxLidoFeeRatePerSecond the max Lido fee rate per second
     function updateSanityParams(
-        uint64 _quarantinePeriod,
-        uint16 _maxRewardRatioBP,
-        uint128 _maxLidoFeeRatePerSecond
+        uint256 _quarantinePeriod,
+        uint256 _maxRewardRatioBP,
+        uint256 _maxLidoFeeRatePerSecond
     ) external onlyRole(UPDATE_SANITY_PARAMS_ROLE) {
         _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP, _maxLidoFeeRatePerSecond);
     }
@@ -347,7 +351,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     {
         VaultHub vaultHub = _vaultHub();
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
-        VaultHub.VaultObligations memory obligations = vaultHub.vaultObligations(_vault);
+        VaultHub.VaultObligations memory obligations = vaultHub.vaultObligations(_vault); // TODO - take from record
 
         // 0. Check if the report is already fresh enough
         if (uint48(_reportTimestamp) <= record.report.timestamp) {
@@ -367,11 +371,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         }
 
         // 4. Sanity check for cumulative Lido fees
-        uint128 previousCumulativeLidoFees = obligations.settledLidoFees + obligations.unsettledLidoFees;
+        uint256 previousCumulativeLidoFees = obligations.settledLidoFees + obligations.unsettledLidoFees;
         if (previousCumulativeLidoFees > _cumulativeLidoFees) {
             revert CumulativeLidoFeesTooLow(_cumulativeLidoFees, previousCumulativeLidoFees);
         }
-        uint128 maxLidoFees = (_storage().vaultsDataTimestamp - record.report.timestamp) * _storage().maxLidoFeeRatePerSecond;
+        uint256 maxLidoFees = (_storage().vaultsDataTimestamp - record.report.timestamp) * uint256(_storage().maxLidoFeeRatePerSecond);
         if (_cumulativeLidoFees - previousCumulativeLidoFees > maxLidoFees) {
             revert CumulativeLidoFeesTooLarge(_cumulativeLidoFees - previousCumulativeLidoFees, maxLidoFees);
         }
@@ -512,11 +516,15 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         emit QuarantineActivated(_vault, _amountToQuarantine);
     }
 
-    function _updateSanityParams(uint64 _quarantinePeriod, uint16 _maxRewardRatioBP, uint128 _maxLidoFeeRatePerSecond) internal {
+    function _updateSanityParams(uint256 _quarantinePeriod, uint256 _maxRewardRatioBP, uint256 _maxLidoFeeRatePerSecond) internal {
+        if (_quarantinePeriod > MAX_QUARANTINE_PERIOD) revert QuarantinePeriodTooLarge(_quarantinePeriod, MAX_QUARANTINE_PERIOD);
+        if (_maxRewardRatioBP > MAX_REWARD_RATIO) revert MaxRewardRatioTooLarge(_maxRewardRatioBP, MAX_REWARD_RATIO);
+        if (_maxLidoFeeRatePerSecond > MAX_LIDO_FEE_RATE_PER_SECOND) revert MaxLidoFeeRatePerSecondTooLarge(_maxLidoFeeRatePerSecond, MAX_LIDO_FEE_RATE_PER_SECOND);
+
         Storage storage $ = _storage();
-        $.quarantinePeriod = _quarantinePeriod;
-        $.maxRewardRatioBP = _maxRewardRatioBP;
-        $.maxLidoFeeRatePerSecond = _maxLidoFeeRatePerSecond;
+        $.quarantinePeriod = uint64(_quarantinePeriod);
+        $.maxRewardRatioBP = uint16(_maxRewardRatioBP);
+        $.maxLidoFeeRatePerSecond = uint64(_maxLidoFeeRatePerSecond);
         emit SanityParamsUpdated(_quarantinePeriod, _maxRewardRatioBP, _maxLidoFeeRatePerSecond);
     }
 
@@ -550,7 +558,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     event QuarantineActivated(address indexed vault, uint256 delta);
     event QuarantineReleased(address indexed vault, uint256 delta);
     event QuarantineRemoved(address indexed vault);
-    event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxRewardRatioBP, uint128 maxLidoFeeRatePerSecond);
+    event SanityParamsUpdated(uint256 quarantinePeriod, uint256 maxRewardRatioBP, uint256 maxLidoFeeRatePerSecond);
 
     error AdminCannotBeZero();
     error NotAuthorized();
@@ -558,6 +566,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     error UnderflowInTotalValueCalculation();
     error TotalValueTooLarge();
     error VaultReportIsFreshEnough();
-    error CumulativeLidoFeesTooLarge(uint256 feeDifference, uint256 maxFeeDifference);
-    error CumulativeLidoFeesTooLow(uint256 fees, uint256 prevFees);
+    error CumulativeLidoFeesTooLow(uint256 reportingFees, uint256 previousFees);
+    error CumulativeLidoFeesTooLarge(uint256 feeIncrease, uint256 maxFeeIncrease);
+    error QuarantinePeriodTooLarge(uint256 quarantinePeriod, uint256 maxQuarantinePeriod);
+    error MaxRewardRatioTooLarge(uint256 rewardRatio, uint256 maxRewardRatio);
+    error MaxLidoFeeRatePerSecondTooLarge(uint256 feeRate, uint256 maxFeeRate);
 }
