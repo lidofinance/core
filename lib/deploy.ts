@@ -16,6 +16,7 @@ const PROXY_CONTRACT_NAME = "OssifiableProxy";
 type TxParams = {
   from: string;
   value?: bigint | string;
+  gasLimit?: bigint | string;
 };
 
 function logWithConstructorArgs(message: string, constructorArgs: ConvertibleToString[] = []) {
@@ -34,11 +35,16 @@ export async function makeTx(
   withStateFile = true,
 ): Promise<ContractTransactionReceipt> {
   log.withArguments(`Call: ${yl(contract.name)}[${cy(contract.address)}].${yl(funcName)}`, args);
+  txParams["gasLimit"] = 16_000_000n;
+  const estimatedGas = await contract.getFunction(funcName).estimateGas(...args, txParams);
+  log(`Gas estimate: ${cy(estimatedGas.toString())}`);
 
   const tx = await contract.getFunction(funcName)(...args, txParams);
+  log(`Transaction sent: ${cy(tx.hash)}`);
 
   const receipt = await tx.wait();
   const gasUsed = receipt.gasUsed;
+  log(`Gas used: ${cy(gasUsed.toString())}`);
   incrementGasUsed(gasUsed, withStateFile);
 
   return receipt;
@@ -53,8 +59,9 @@ async function getDeployTxParams(deployer: string) {
   if (GAS_PRIORITY_FEE !== null && GAS_MAX_FEE !== null) {
     return {
       type: 2,
-      maxPriorityFeePerGas: ethers.parseUnits(String(GAS_PRIORITY_FEE), "gwei"),
-      maxFeePerGas: ethers.parseUnits(String(GAS_MAX_FEE), "gwei"),
+      maxPriorityFeePerGas: 1000000000n, // ethers.parseUnits(String(GAS_PRIORITY_FEE), "gwei"),
+      maxFeePerGas: 2000000000n, // ethers.parseUnits(String(GAS_MAX_FEE), "gwei"),
+      gasLimit: 16_000_000n,
     };
   } else {
     throw new Error('Must specify gas ENV vars: "GAS_PRIORITY_FEE" and "GAS_MAX_FEE" in gwei (like just "3")');
@@ -70,11 +77,17 @@ async function deployContractType2(
 ): Promise<DeployedContract> {
   const txParams = await getDeployTxParams(deployer);
   const factory = (await ethers.getContractFactory(artifactName, signerOrOptions)) as ContractFactory;
+
+  const deployTx = await factory.getDeployTransaction(...constructorArgs, txParams);
+  const estimatedGas = await ethers.provider.estimateGas(deployTx);
+  log(`Deploy gas estimate: ${cy(estimatedGas.toString())}`);
+
   const contract = await factory.deploy(...constructorArgs, txParams);
   const tx = contract.deploymentTransaction();
   if (!tx) {
     throw new Error(`Failed to send the deployment transaction for ${artifactName}`);
   }
+  log(`Deployment transaction sent: ${cy(tx.hash)}`);
 
   const receipt = await tx.wait();
   if (!receipt) {
@@ -82,6 +95,7 @@ async function deployContractType2(
   }
 
   const gasUsed = receipt.gasUsed;
+  log(`Deployment gas used: ${cy(gasUsed.toString())}`);
   incrementGasUsed(gasUsed, withStateFile);
   (contract as DeployedContract).deploymentGasUsed = gasUsed;
   (contract as DeployedContract).deploymentTx = tx.hash;
@@ -248,7 +262,7 @@ async function getLocatorConfig(locatorAddress: string) {
     "oracleDaemonConfig",
   ] as (keyof LidoLocator.ConfigStruct)[];
 
-  const configPromises = addresses.map((name) => locator[name]());
+  const configPromises = addresses.map((name) => locator[name]({ gasLimit: 16_000_000 }));
 
   const config = await Promise.all(configPromises);
 

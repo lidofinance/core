@@ -134,7 +134,7 @@ export async function main() {
 
   // Set OracleDaemonConfig parameters
   const oracleDaemonConfig = await loadContract("OracleDaemonConfig", oracleDaemonConfigAddress);
-  const CONFIG_MANAGER_ROLE = await oracleDaemonConfig.getFunction("CONFIG_MANAGER_ROLE")();
+  const CONFIG_MANAGER_ROLE = await oracleDaemonConfig.getFunction("CONFIG_MANAGER_ROLE")({ gasLimit: 16_000_000 });
   await makeTx(oracleDaemonConfig, "grantRole", [CONFIG_MANAGER_ROLE, testnetAdmin], { from: testnetAdmin });
 
   // Set each parameter in the OracleDaemonConfig
