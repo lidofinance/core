@@ -66,7 +66,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param NONE - initial stage
      * @param PREDEPOSITED - PREDEPOSIT_AMOUNT is deposited with this validator by the vault
      * @param PROVEN - validator is proven to be valid and can be used to deposit to beacon chain
-     * @param DISPROVEN - validator is proven to have wrong WC and its PREDEPOSIT_AMOUNT can be compensated to staking vault owner
      * @param COMPENSATED - disproven validator has its PREDEPOSIT_AMOUNT ether compensated to staking vault owner and validator cannot be used in PDG anymore
      */
     enum ValidatorStage {
@@ -728,7 +727,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     error WithdrawalCredentialsInvalidVersion(uint8 version);
 
     // compensate
-    error ValidatorNotDisproven(ValidatorStage stage);
     error CompensateFailed();
 
     // auth
