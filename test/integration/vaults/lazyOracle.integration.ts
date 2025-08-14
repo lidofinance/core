@@ -204,10 +204,9 @@ describe("Integration: LazyOracle", () => {
     it("Forbids double reporting", async () => {
       await reportVaultDataWithProof(ctx, stakingVault);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
-      await expect(reportVaultDataWithProof(ctx, stakingVault, {}, false)).to.be.revertedWithCustomError(
-        lazyOracle,
-        "VaultReportIsFreshEnough",
-      );
+      await expect(
+        reportVaultDataWithProof(ctx, stakingVault, { updateReportData: false }),
+      ).to.be.revertedWithCustomError(lazyOracle, "VaultReportIsFreshEnough");
     });
 
     it("Forbids double reporting even if report is stale", async () => {
@@ -217,10 +216,9 @@ describe("Integration: LazyOracle", () => {
       await advanceChainTime((await vaultHub.REPORT_FRESHNESS_DELTA()) + 100n);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      await expect(reportVaultDataWithProof(ctx, stakingVault, {}, false)).to.be.revertedWithCustomError(
-        lazyOracle,
-        "VaultReportIsFreshEnough",
-      );
+      await expect(
+        reportVaultDataWithProof(ctx, stakingVault, { updateReportData: false }),
+      ).to.be.revertedWithCustomError(lazyOracle, "VaultReportIsFreshEnough");
     });
 
     it("Should allow huge totalValue increase using SAFE funding", async () => {
