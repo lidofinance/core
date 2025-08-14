@@ -92,7 +92,7 @@ export async function createVaultWithDashboard(
   stakingVaultFactory: VaultFactory & { address: string },
   owner: HardhatEthersSigner,
   nodeOperator: HardhatEthersSigner,
-  nodeOperatorManager: HardhatEthersSigner,
+  nodeOperatorManager: HardhatEthersSigner = nodeOperator,
   roleAssignments: Permissions.RoleAssignmentStruct[] = [],
   fee = VAULT_NODE_OPERATOR_FEE,
   confirmExpiry = DEFAULT_CONFIRM_EXPIRY,
