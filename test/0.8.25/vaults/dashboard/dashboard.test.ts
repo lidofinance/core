@@ -100,6 +100,9 @@ describe("Dashboard.sol", () => {
       },
     ],
     minimalReserve: 0n,
+    redemptionShares: 0n,
+    settledLidoFees: 0n,
+    unsettledLidoFees: 0n,
   };
 
   const connection: Readonly<VaultHub.VaultConnectionStruct> = {
@@ -113,12 +116,6 @@ describe("Dashboard.sol", () => {
     liquidityFeeBP: 400n,
     reservationFeeBP: 100n,
     isBeaconDepositsManuallyPaused: false,
-  };
-
-  const obligations: Readonly<VaultHub.VaultObligationsStruct> = {
-    unsettledLidoFees: 0n,
-    redemptionShares: 0n,
-    settledLidoFees: 0n,
   };
 
   const setup = async ({
@@ -137,8 +134,7 @@ describe("Dashboard.sol", () => {
   }: Partial<
     VaultHub.VaultRecordStruct &
       VaultHub.VaultConnectionStruct &
-      VaultHub.ReportStruct &
-      VaultHub.VaultObligationsStruct & {
+      VaultHub.ReportStruct & {
         vaultBalance?: bigint;
         isConnected?: boolean;
       }
@@ -157,13 +153,9 @@ describe("Dashboard.sol", () => {
       report: { ...record.report, totalValue: totalValue ?? record.report.totalValue },
       liabilityShares: liabilityShares ?? record.liabilityShares,
       locked: locked ?? record.locked,
-    });
-
-    await hub.mock__setVaultObligations(vault, {
-      ...obligations,
-      unsettledLidoFees: unsettledLidoFees ?? obligations.unsettledLidoFees,
-      settledLidoFees: settledLidoFees ?? obligations.settledLidoFees,
-      redemptionShares: redemptionShares ?? obligations.redemptionShares,
+      unsettledLidoFees: unsettledLidoFees ?? record.unsettledLidoFees,
+      settledLidoFees: settledLidoFees ?? record.settledLidoFees,
+      redemptionShares: redemptionShares ?? record.redemptionShares,
     });
 
     if (vaultBalance > 0n) {
@@ -449,19 +441,6 @@ describe("Dashboard.sol", () => {
       });
 
       // todo: add node operator fee tests
-    });
-
-    context("unsettledObligations", () => {
-      it("returns 0 if no unsettled obligations", async () => {
-        await setup({
-          totalValue: 0n,
-          liabilityShares: 0n,
-          unsettledLidoFees: 0n,
-          redemptionShares: 0n,
-          settledLidoFees: 0n,
-        });
-        expect(await dashboard.unsettledObligations()).to.equal(0n);
-      });
     });
 
     context("remainingMintingCapacityShares", () => {

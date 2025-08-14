@@ -556,15 +556,6 @@ describe("Integration: Vault obligations", () => {
       await vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, redemptionShares);
     });
 
-    it("Reverts when vault balance is zero and no funding provided", async () => {
-      await setBalance(stakingVaultAddress, 0);
-
-      await expect(vaultHub.settleVaultObligations(stakingVaultAddress)).to.be.revertedWithCustomError(
-        vaultHub,
-        "ZeroBalance",
-      );
-    });
-
     it("Partially settles obligations with existing balance", async () => {
       await expect(vaultHub.settleVaultObligations(stakingVaultAddress))
         .to.emit(vaultHub, "VaultObligationsSettled")

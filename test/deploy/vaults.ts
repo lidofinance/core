@@ -88,7 +88,6 @@ async function reportVault(
   const timestamp = await lazyOracle.latestReportTimestamp();
   const record = await vaultHub.vaultRecord(vault);
   const vaultTotalValue = await vaultHub.totalValue(vault);
-  const obligations = await vaultHub.vaultObligations(vault);
 
   const activeIndex = record.inOutDelta[0].refSlot >= record.inOutDelta[1].refSlot ? 0 : 1;
 
@@ -98,7 +97,7 @@ async function reportVault(
     timestamp,
     totalValue ?? vaultTotalValue,
     inOutDelta ?? record.inOutDelta[activeIndex].value,
-    lidoFees ?? obligations.unsettledLidoFees,
+    lidoFees ?? record.unsettledLidoFees,
     liabilityShares ?? record.liabilityShares,
     slashingReserve ?? 0n,
   );
@@ -175,7 +174,9 @@ export async function deployVaults({ deployer, admin }: VaultsConfig) {
   await vaultHub.connect(admin).setAllowedCodehash(codehash, true);
 
   return {
+    lido,
     vaultHub,
+    lazyOracle,
     createMockStakignVault: (owner: HardhatEthersSigner, operator: HardhatEthersSigner) =>
       createMockStakignVault(vaultFactory, owner, operator, predepositGuarantee),
     createMockStakignVaultAndConnect: (owner: HardhatEthersSigner, operator: HardhatEthersSigner) =>

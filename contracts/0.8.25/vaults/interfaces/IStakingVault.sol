@@ -52,7 +52,7 @@ interface IStakingVault {
     function depositToBeaconChain(Deposit[] calldata _deposits) external;
 
     function requestValidatorExit(bytes calldata _pubkeys) external;
-    function triggerValidatorWithdrawals(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable;
+    function triggerValidatorWithdrawals(bytes calldata _pubkeys, uint64[] calldata _amountsInGwei, address _refundRecipient) external payable;
     function ejectValidators(bytes calldata _pubkeys, address _refundRecipient) external payable;
     function setDepositor(address _depositor) external;
     function ossify() external;

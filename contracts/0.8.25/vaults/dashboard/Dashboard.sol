@@ -166,15 +166,6 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the overall unsettled obligations of the vault in ether
-     * @dev includes the node operator fee
-     */
-    function unsettledObligations() external view returns (uint256) {
-        VaultHub.VaultObligations memory obligations = VAULT_HUB.vaultObligations(address(_stakingVault()));
-        return uint256(obligations.unsettledLidoFees) + uint256(obligations.redemptionShares) + nodeOperatorDisbursableFee();
-    }
-
-    /**
      * @notice Returns the locked amount of ether for the vault
      */
     function locked() public view returns (uint256) {

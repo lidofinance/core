@@ -8,6 +8,7 @@ import {
   Lido__MockForLazyOracle,
   LidoLocator,
   OperatorGrid__MockForLazyOracle,
+  VaultHub,
   VaultHub__MockForLazyOracle,
 } from "typechain-types";
 
@@ -16,6 +17,34 @@ import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/va
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, ZERO_BYTES32 } from "test/suite";
+
+const VAULT_TOTAL_VALUE = ether("100");
+
+const record: Readonly<VaultHub.VaultRecordStruct> = {
+  report: {
+    totalValue: VAULT_TOTAL_VALUE,
+    inOutDelta: VAULT_TOTAL_VALUE,
+    timestamp: 2122n,
+  },
+  liabilityShares: 0n,
+  locked: VAULT_TOTAL_VALUE,
+  inOutDelta: [
+    {
+      value: VAULT_TOTAL_VALUE,
+      valueOnRefSlot: VAULT_TOTAL_VALUE,
+      refSlot: 1n,
+    },
+    {
+      value: 0n,
+      valueOnRefSlot: 0n,
+      refSlot: 0n,
+    },
+  ],
+  minimalReserve: 0n,
+  redemptionShares: 0n,
+  settledLidoFees: 0n,
+  unsettledLidoFees: 0n,
+};
 
 describe("LazyOracle.sol", () => {
   let deployer: SignerWithAddress;
@@ -108,6 +137,9 @@ describe("LazyOracle.sol", () => {
           },
         ],
         minimalReserve: 0n,
+        redemptionShares: 0n,
+        settledLidoFees: 0n,
+        unsettledLidoFees: 0n,
       });
       const vaults = await lazyOracle.batchVaultsInfo(0n, 2n);
 
@@ -402,7 +434,6 @@ describe("LazyOracle.sol", () => {
   context("handleSanityChecks", () => {
     it("allows some percentage of the EL and CL rewards handling", async () => {
       const vault = await createVault();
-      const VAULT_TOTAL_VALUE = ether("100");
       const maxRewardRatio = await lazyOracle.maxRewardRatioBP();
       const maxRewardValue = (maxRewardRatio * VAULT_TOTAL_VALUE) / 10000n;
       const vaultReport: VaultReportItem = {
@@ -420,28 +451,7 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
 
       await vaultHub.mock__addVault(vault);
-      await vaultHub.mock__setVaultRecord(vault, {
-        report: {
-          totalValue: VAULT_TOTAL_VALUE,
-          inOutDelta: VAULT_TOTAL_VALUE,
-          timestamp: timestamp - 100n,
-        },
-        locked: 0n,
-        liabilityShares: 0n,
-        inOutDelta: [
-          {
-            value: VAULT_TOTAL_VALUE,
-            valueOnRefSlot: VAULT_TOTAL_VALUE,
-            refSlot: 0n,
-          },
-          {
-            value: 0n,
-            valueOnRefSlot: 0n,
-            refSlot: 0n,
-          },
-        ],
-        minimalReserve: 0n,
-      });
+      await vaultHub.mock__setVaultRecord(vault, record);
 
       await lazyOracle.updateVaultData(
         vaultReport.vault,
@@ -468,28 +478,7 @@ describe("LazyOracle.sol", () => {
       const tree2 = createVaultsReportTree([vaultReport2]);
       await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree2.root, "");
 
-      await vaultHub.mock__setVaultRecord(vault, {
-        report: {
-          totalValue: VAULT_TOTAL_VALUE,
-          inOutDelta: VAULT_TOTAL_VALUE,
-          timestamp: timestamp - 100n,
-        },
-        locked: 0n,
-        liabilityShares: 0n,
-        inOutDelta: [
-          {
-            value: VAULT_TOTAL_VALUE,
-            valueOnRefSlot: VAULT_TOTAL_VALUE,
-            refSlot: 0n,
-          },
-          {
-            value: 0n,
-            valueOnRefSlot: 0n,
-            refSlot: 0n,
-          },
-        ],
-        minimalReserve: 0n,
-      });
+      await vaultHub.mock__setVaultRecord(vault, record);
 
       await lazyOracle.updateVaultData(
         vaultReport2.vault,
@@ -524,28 +513,7 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
 
       await vaultHub.mock__addVault(vault);
-      await vaultHub.mock__setVaultRecord(vault, {
-        report: {
-          totalValue: ether("100"),
-          inOutDelta: ether("100"),
-          timestamp: timestamp - 100n,
-        },
-        locked: 0n,
-        liabilityShares: 0n,
-        inOutDelta: [
-          {
-            value: ether("100"),
-            valueOnRefSlot: ether("100"),
-            refSlot: 0n,
-          },
-          {
-            value: 0n,
-            valueOnRefSlot: 0n,
-            refSlot: 0n,
-          },
-        ],
-        minimalReserve: 0n,
-      });
+      await vaultHub.mock__setVaultRecord(vault, record);
 
       await expect(
         lazyOracle.updateVaultData(
@@ -684,28 +652,7 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
 
       await vaultHub.mock__addVault(vault);
-      await vaultHub.mock__setVaultRecord(vault, {
-        report: {
-          totalValue: ether("100"),
-          inOutDelta: ether("100"),
-          timestamp: timestamp - 100n,
-        },
-        locked: 0n,
-        liabilityShares: 0n,
-        inOutDelta: [
-          {
-            value: ether("100"),
-            valueOnRefSlot: ether("100"),
-            refSlot: 0n,
-          },
-          {
-            value: 0n,
-            valueOnRefSlot: 0n,
-            refSlot: 0n,
-          },
-        ],
-        minimalReserve: 0n,
-      });
+      await vaultHub.mock__setVaultRecord(vault, record);
 
       await expect(
         lazyOracle.updateVaultData(
@@ -787,28 +734,7 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.connect(accountingAddress).updateReportData(timestamp, 42n, tree.root, "");
 
       await vaultHub.mock__addVault(vault);
-      await vaultHub.mock__setVaultRecord(vault, {
-        report: {
-          totalValue: ether("100"),
-          inOutDelta: ether("100"),
-          timestamp: timestamp - 100n,
-        },
-        locked: 0n,
-        liabilityShares: 0n,
-        inOutDelta: [
-          {
-            value: ether("100"),
-            valueOnRefSlot: ether("100"),
-            refSlot: 0n,
-          },
-          {
-            value: 0n,
-            valueOnRefSlot: 0n,
-            refSlot: 0n,
-          },
-        ],
-        minimalReserve: 0n,
-      });
+      await vaultHub.mock__setVaultRecord(vault, record);
 
       await lazyOracle.updateVaultData(
         vaultReport.vault,

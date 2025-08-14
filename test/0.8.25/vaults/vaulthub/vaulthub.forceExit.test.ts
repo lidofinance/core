@@ -163,13 +163,13 @@ describe("VaultHub.sol:forceExit", () => {
     targetVault = targetVault ?? vault;
     await lazyOracle.refreshReportTimestamp();
     const timestamp = await lazyOracle.latestReportTimestamp();
-
-    totalValue = totalValue ?? (await vaultHub.totalValue(targetVault));
     const record = await vaultHub.vaultRecord(targetVault);
     const activeIndex = record.inOutDelta[0].refSlot >= record.inOutDelta[1].refSlot ? 0 : 1;
+
+    totalValue = totalValue ?? (await vaultHub.totalValue(targetVault));
     inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
-    liabilityShares = liabilityShares ?? (await vaultHub.vaultRecord(targetVault)).liabilityShares;
-    lidoFees = lidoFees ?? (await vaultHub.vaultObligations(targetVault)).unsettledLidoFees;
+    liabilityShares = liabilityShares ?? record.liabilityShares;
+    lidoFees = lidoFees ?? record.unsettledLidoFees + record.settledLidoFees;
     slashingReserve = slashingReserve ?? 0n;
 
     await lazyOracle.mock__report(
