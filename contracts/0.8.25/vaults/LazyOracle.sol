@@ -132,10 +132,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @dev basis points base
     uint256 private constant TOTAL_BASIS_POINTS = 100_00;
     uint256 private constant MAX_SANE_TOTAL_VALUE = type(uint96).max;
-    uint256 private constant MAX_QUARANTINE_PERIOD = 30 days;
+    uint256 public constant MAX_QUARANTINE_PERIOD = 30 days;
     /// @dev max value for reward ratio - it's about 650%
-    uint256 private constant MAX_REWARD_RATIO = type(uint16).max;
-    uint256 private constant MAX_LIDO_FEE_RATE_PER_SECOND = 10 ether;
+    uint256 public constant MAX_REWARD_RATIO = type(uint16).max;
+    uint256 public constant MAX_LIDO_FEE_RATE_PER_SECOND = 10 ether;
 
     constructor(address _lidoLocator) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
