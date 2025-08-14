@@ -619,6 +619,10 @@ contract Dashboard is NodeOperatorFee {
         uint256 mintableStETH = (_maxLockableValue * (TOTAL_BASIS_POINTS - reserveRatioBP())) / TOTAL_BASIS_POINTS;
         uint256 minimalReserve_ = minimalReserve();
 
+        if (_maxLockableValue < minimalReserve_) {
+            return 0;
+        }
+
         if (_maxLockableValue - mintableStETH < minimalReserve_) {
             mintableStETH = _maxLockableValue - minimalReserve_;
         }

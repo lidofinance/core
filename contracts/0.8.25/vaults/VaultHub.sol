@@ -1158,14 +1158,17 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _liabilityShares amount of shares that the vault is minted
     /// @param _minimalReserve minimal amount of additional reserve to be locked
     /// @param _reserveRatioBP the reserve ratio of the vault
-    /// @return the amount of collateral that is to be locked on the vault
+    /// @return the amount of collateral to be locked on the vault
     function _locked(
         uint256 _liabilityShares,
         uint256 _minimalReserve,
         uint256 _reserveRatioBP
     ) internal view returns (uint256) {
         uint256 liability = _getPooledEthBySharesRoundUp(_liabilityShares);
-        uint256 reserve = liability * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - _reserveRatioBP) - liability; // roundUp?
+
+        // uint256 reserve = liability * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - _reserveRatioBP) - liability;
+        // simplified to:
+        uint256 reserve = Math256.ceilDiv(liability * _reserveRatioBP, TOTAL_BASIS_POINTS - _reserveRatioBP);
 
         return liability + Math256.max(reserve, _minimalReserve);
     }
