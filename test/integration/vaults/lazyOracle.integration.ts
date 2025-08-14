@@ -195,6 +195,28 @@ describe("Integration: LazyOracle", () => {
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
     });
 
+    it("Forbids double reporting", async () => {
+      await reportVaultDataWithProof(ctx, stakingVault);
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+      await expect(reportVaultDataWithProof(ctx, stakingVault, {}, false)).to.be.revertedWithCustomError(
+        lazyOracle,
+        "VaultReportIsFreshEnough",
+      );
+    });
+
+    it("Forbids double reporting even if report is stale", async () => {
+      await reportVaultDataWithProof(ctx, stakingVault);
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+
+      await advanceChainTime((await vaultHub.REPORT_FRESHNESS_DELTA()) + 100n);
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
+
+      await expect(reportVaultDataWithProof(ctx, stakingVault, {}, false)).to.be.revertedWithCustomError(
+        lazyOracle,
+        "VaultReportIsFreshEnough",
+      );
+    });
+
     it("Should allow huge totalValue increase using SAFE funding", async () => {
       const hugeValue = ether("1000");
 
