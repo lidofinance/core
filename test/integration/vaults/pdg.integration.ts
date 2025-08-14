@@ -257,7 +257,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       const { predepositGuarantee } = ctx.contracts;
 
       // 1. The stVault's owner supplies 100 ETH to the vault
-      await expect(dashboard.connect(roles.funder).fund({ value: ether("100") }))
+      await expect(dashboard.connect(owner).fund({ value: ether("100") }))
         .to.emit(stakingVault, "EtherFunded")
         .withArgs(ether("100"));
 
