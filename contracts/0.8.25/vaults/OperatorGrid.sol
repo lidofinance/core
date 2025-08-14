@@ -78,6 +78,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         └──────────────────────────────────────────────────────┘
      */
 
+    /// @dev 0xa495a3428837724c7f7648cda02eb83c9c4c778c8688d6f254c7f3f80c154d55
     bytes32 public constant REGISTRY_ROLE = keccak256("vaults.OperatorsGrid.Registry");
 
     /// @notice Lido Locator contract
@@ -92,7 +93,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
     /// @dev max value for fees in basis points - it's about 650%
     uint256 internal constant MAX_FEE_BP = type(uint16).max;
-
+    /// @dev max value for reserve ratio in basis points - 9999
+    uint256 internal constant MAX_RESERVE_RATIO_BP = 99_99;
+    
     // -----------------------------
     //            STRUCTS
     // -----------------------------
@@ -156,6 +159,15 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         __AccessControlEnumerable_init();
         __Confirmations_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+
+        _validateParams(
+            DEFAULT_TIER_ID,
+            _defaultTierParams.reserveRatioBP,
+            _defaultTierParams.forcedRebalanceThresholdBP,
+            _defaultTierParams.infraFeeBP,
+            _defaultTierParams.liquidityFeeBP,
+            _defaultTierParams.reservationFeeBP
+        );
 
         ERC7201Storage storage $ = _getStorage();
 
@@ -351,6 +363,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _requestedTierId id of the tier
     /// @param _requestedShareLimit share limit to set
     /// @return bool Whether the tier change was confirmed.
+    /// @dev Requires vault to be connected to VaultHub for successful tier change.
     /*
 
     Legend:
@@ -423,7 +436,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
         uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
 
-        //check if tier limit is exceeded
+        // check if tier limit is exceeded
         if (requestedTier.liabilityShares + vaultLiabilityShares > requestedTier.shareLimit) revert TierLimitExceeded();
 
         // if the vault was in the default tier:
@@ -444,13 +457,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         $.vaultTier[_vault] = _requestedTierId;
 
-        // Vault may not be connected to VaultHub yet.
-        // There are two possible flows:
-        // 1. Vault is created and connected to VaultHub immediately with the default tier.
-        //    In this case, `VaultConnection` is non-zero and updateConnection must be called.
-        // 2. Vault is created, its tier is changed before connecting to VaultHub.
-        //    In this case, `VaultConnection` is still zero, and updateConnection must be skipped.
-        // Hence, we update the VaultHub connection only if the vault is already connected.
         vaultHub.updateConnection(
             _vault,
             _requestedShareLimit,
@@ -625,8 +631,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
       uint256 _reservationFeeBP
     ) internal pure {
         if (_reserveRatioBP == 0) revert ZeroArgument("_reserveRatioBP");
-        if (_reserveRatioBP > TOTAL_BASIS_POINTS)
-            revert ReserveRatioTooHigh(_tierId, _reserveRatioBP, TOTAL_BASIS_POINTS);
+        if (_reserveRatioBP > MAX_RESERVE_RATIO_BP)
+            revert ReserveRatioTooHigh(_tierId, _reserveRatioBP, MAX_RESERVE_RATIO_BP);
 
         if (_forcedRebalanceThresholdBP == 0) revert ZeroArgument("_forcedRebalanceThresholdBP");
         if (_forcedRebalanceThresholdBP > _reserveRatioBP)

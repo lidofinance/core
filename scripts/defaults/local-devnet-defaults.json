@@ -142,16 +142,14 @@
     "deployParameters": {
       "stakingModuleName": "Curated",
       "stakingModuleTypeId": "curated-onchain-v1",
-      "exitDeadlineThresholdInSeconds": 86400,
-      "exitsReportingWindow": 86400
+      "exitDeadlineThresholdInSeconds": 86400
     }
   },
   "simpleDvt": {
     "deployParameters": {
       "stakingModuleName": "SimpleDVT",
       "stakingModuleTypeId": "curated-onchain-v1",
-      "exitDeadlineThresholdInSeconds": 86400,
-      "exitsReportingWindow": 86400
+      "exitDeadlineThresholdInSeconds": 86400
     }
   },
   "withdrawalQueueERC721": {

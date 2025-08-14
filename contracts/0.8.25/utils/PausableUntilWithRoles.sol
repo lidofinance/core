@@ -14,9 +14,13 @@ import {PausableUntil} from "contracts/common/utils/PausableUntil.sol";
  * @dev the inheriting contract must use `whenNotPaused` modifier from `PausableUntil` to block some functions on pause
  */
 abstract contract PausableUntilWithRoles is PausableUntil, AccessControlEnumerableUpgradeable {
+
     /// @notice role that allows to pause the contract
+    /// @dev 0x8d0e4ae4847b49935b55c99f9c3ce025c87e7c4604c35b7ae56929bd32fa5a78
     bytes32 public constant PAUSE_ROLE = keccak256("PausableUntilWithRoles.PauseRole");
+
     /// @notice role that allows to resume the contract
+    /// @dev 0xa79a6aede309e0d48bf2ef0f71355c06ad317956d4c0da2deb0dc47cc34f826c
     bytes32 public constant RESUME_ROLE = keccak256("PausableUntilWithRoles.ResumeRole");
 
     /**

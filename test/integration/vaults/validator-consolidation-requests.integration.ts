@@ -16,7 +16,9 @@ const KEY_LENGTH = 48;
 
 describe("Integration: ValidatorConsolidationRequests", () => {
   let ctx: ProtocolContext;
-  let originalState: string;
+  let snapshot: string;
+  let originalSnapshot: string;
+
   let owner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
@@ -25,6 +27,8 @@ describe("Integration: ValidatorConsolidationRequests", () => {
 
   before(async () => {
     ctx = await getProtocolContext();
+    originalSnapshot = await Snapshot.take();
+
     [owner, stranger, nodeOperator] = await ethers.getSigners();
 
     ({ dashboard, stakingVault } = await createVaultWithDashboard(
@@ -36,9 +40,10 @@ describe("Integration: ValidatorConsolidationRequests", () => {
       [],
     ));
   });
-  beforeEach(async () => (originalState = await Snapshot.take()));
 
-  afterEach(async () => await Snapshot.restore(originalState));
+  beforeEach(async () => (snapshot = await Snapshot.take()));
+  afterEach(async () => await Snapshot.restore(snapshot));
+  after(async () => await Snapshot.restore(originalSnapshot));
 
   it("Consolidates validators by calling max effective balance increaser through contract using delegatecall", async () => {
     const { validatorConsolidationRequests } = ctx.contracts;

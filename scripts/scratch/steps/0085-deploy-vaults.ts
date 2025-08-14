@@ -66,8 +66,6 @@ export async function main() {
   const vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
   const vaultBeaconProxyCodeHash = keccak256(vaultBeaconProxyCode);
 
-  console.log("BeaconProxy address", await vaultBeaconProxy.getAddress());
-
   // Deploy VaultHub
   const vaultHub_ = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     locatorAddress,
@@ -117,12 +115,11 @@ export async function main() {
   const dashboardAddress = await dashboard.getAddress();
 
   // Deploy VaultFactory contract
-  const factory = await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
+  await deployWithoutProxy(Sk.stakingVaultFactory, "VaultFactory", deployer, [
     locatorAddress,
     beaconAddress,
     dashboardAddress,
   ]);
-  console.log("Factory address", await factory.getAddress());
 
   // Deploy PredepositGuarantee
   const pdg_ = await deployBehindOssifiableProxy(
@@ -152,7 +149,6 @@ export async function main() {
     [locatorAddress],
   );
   const validatorConsolidationRequestsAddress = await validatorConsolidationRequests_.getAddress();
-  console.log("ValidatorConsolidationRequests address", validatorConsolidationRequestsAddress);
   updateObjectInState(Sk.validatorConsolidationRequests, {
     validatorConsolidationRequests: validatorConsolidationRequestsAddress,
   });

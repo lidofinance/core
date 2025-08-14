@@ -65,7 +65,7 @@ type OracleReportResults = {
 export const report = async (
   ctx: ProtocolContext,
   {
-    clDiff = ether("10"),
+    clDiff = ether("0.01"),
     clAppearedValidators = 0n,
     elRewardsVaultBalance = null,
     withdrawalVaultBalance = null,
@@ -437,7 +437,7 @@ export const handleOracleReport = async (
 
     await lazyOracle
       .connect(accountingOracleAccount)
-      .updateReportData(reportTimestamp, vaultsDataTreeRoot, vaultsDataTreeCid);
+      .updateReportData(reportTimestamp, refSlot, vaultsDataTreeRoot, vaultsDataTreeCid);
   } catch (error) {
     log.error("Error", (error as Error).message ?? "Unknown error during oracle report simulation");
     expect(error).to.be.undefined;
@@ -808,7 +808,7 @@ export const ensureOracleCommitteeMembers = async (ctx: ProtocolContext, minMemb
 
   let count = addresses.length;
   while (addresses.length < minMembersCount) {
-    log.warning(`Adding oracle committee member ${count}`);
+    log(`Adding oracle committee member ${count}`);
 
     const address = getOracleCommitteeMemberAddress(count);
     await hashConsensus.connect(agentSigner).addMember(address, quorum);

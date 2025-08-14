@@ -31,6 +31,7 @@ interface IWstETH is IERC20 {
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
 contract Dashboard is NodeOperatorFee {
+    /// @dev 0xa38b301640bddfd3e6a9d2a11d13551d53ef81526347ff09d798738fcc5a49d4
     bytes32 public constant RECOVER_ASSETS_ROLE = keccak256("vaults.Dashboard.RecoverAssets");
 
     /**
@@ -87,10 +88,11 @@ contract Dashboard is NodeOperatorFee {
     function initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
+        address _nodeOperatorFeeRecipient,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry
     ) external {
-        super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeRecipient, _nodeOperatorFeeBP, _confirmExpiry);
 
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
@@ -454,20 +456,6 @@ contract Dashboard is NodeOperatorFee {
      */
     function proveUnknownValidatorsToPDG(IPredepositGuarantee.ValidatorWitness[] calldata _witnesses) external {
         _proveUnknownValidatorsToPDG(_witnesses);
-    }
-
-    /**
-     * @notice Compensates ether of disproven validator's predeposit from PDG to the recipient.
-     *         Can be called if validator which was predeposited via `PDG.predeposit` with vault funds
-     *         was frontrun by NO's with non-vault WC (effectively NO's stealing the predeposit) and then
-     *         proof of the validator's invalidity has been provided via `PDG.proveInvalidValidatorWC`.
-     * @param _pubkey of validator that was proven invalid in PDG
-     * @param _recipient address to receive the `PDG.PREDEPOSIT_AMOUNT`
-     * @dev PDG will revert if _recipient is vault address, use fund() instead to return ether to vault
-     * @dev requires the caller to have the `PDG_COMPENSATE_PREDEPOSIT_ROLE`
-     */
-    function compensateDisprovenPredepositFromPDG(bytes calldata _pubkey, address _recipient) external {
-        _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);
     }
 
     /**

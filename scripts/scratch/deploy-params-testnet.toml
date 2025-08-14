@@ -1,0 +1,186 @@
+# Lido Protocol Scratch Deployment Parameters
+# This file contains deployment parameters for fresh scratch deployment of Lido protocol
+
+[chainSpec]
+# Ethereum consensus layer specifications - session specific values set via env vars
+slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum consensus
+secondsPerSlot = 12                   # Duration of each slot in seconds
+# genesisTime and depositContract are set via environment variables or deployment scripts
+
+# Gate seal configuration for testnet deployment
+[gateSeal]
+sealDuration = 518400                 # Gate seal duration in seconds (6 days)
+expiryTimestamp = 1714521600          # Gate seal expiry timestamp
+sealingCommittee = []                 # Empty sealing committee for testnet
+
+# Lido APM ENS configuration
+[lidoApm]
+ensName = "lidopm.eth"                # ENS name for Lido APM
+ensRegDurationSec = 94608000          # ENS registration duration (3 years)
+
+# DAO configuration
+[dao]
+aragonId = "lido-dao"                 # Aragon DAO identifier
+aragonEnsLabelName = "aragonpm"       # Aragon ENS label name
+
+# DAO initial governance settings
+[dao.initialSettings]
+[dao.initialSettings.voting]
+minSupportRequired = "500000000000000000"     # Minimum support required (50%)
+minAcceptanceQuorum = "50000000000000000"     # Minimum acceptance quorum (5%)
+voteDuration = 900                            # Vote duration in seconds (15 minutes)
+objectionPhaseDuration = 300                  # Objection phase duration in seconds (5 minutes)
+
+[dao.initialSettings.fee]
+totalPercent = 10                     # Total fee percentage
+treasuryPercent = 50                  # Treasury fee percentage
+nodeOperatorsPercent = 50             # Node operators fee percentage
+
+[dao.initialSettings.token]
+name = "TEST Lido DAO Token"          # DAO token name for testnet
+symbol = "TLDO"                       # DAO token symbol for testnet
+
+# Vesting parameters for initial token distribution
+[vesting]
+unvestedTokensAmount = "0"            # Amount of unvested tokens
+start = 0                             # Vesting start time
+cliff = 0                             # Vesting cliff period
+end = 0                               # Vesting end time
+revokable = false                     # Whether vesting is revokable
+
+[vesting.holders]
+# Initial token holders and amounts (in wei)
+"0xCD1f9954330AF39a74Fd6e7B25781B4c24ee373f" = "760000000000000000000000" # Default LDO whale
+"0x51Af50A64Ec8A4F442A36Bd5dcEF1e86c127Bd51" = "60000000000000000000000" # Staking Interface DAO Voter
+"0xaa6bfBCD634EE744CB8FE522b29ADD23124593D3" = "60000000000000000000000" # LDO Voter 1
+"0xBA59A84C6440E8cccfdb5448877E26F1A431Fc8B" = "60000000000000000000000" # LDO Voter 2
+"lido-aragon-agent-placeholder" = "60000000000000000000000"
+
+# Burner configuration
+[burner]
+isMigrationAllowed = false            # Migration disabled for scratch deployment (vs true for upgrade)
+totalCoverSharesBurnt = "0"           # Initial cover shares burnt
+totalNonCoverSharesBurnt = "0"        # Initial non-cover shares burnt
+
+# Hash consensus for accounting oracle
+[hashConsensusForAccountingOracle]
+fastLaneLengthSlots = 10              # Fast lane length in slots
+epochsPerFrame = 12                   # Epochs per consensus frame
+
+# Vault hub configuration for managing staking vaults
+[vaultHub]
+maxRelativeShareLimitBP = 1000        # Maximum relative share limit in basis points (10%)
+
+# Lazy oracle configuration for delayed reward calculations
+[lazyOracle]
+quarantinePeriod = 259200             # Quarantine period in seconds (3 days)
+maxRewardRatioBP = 350                # Maximum reward ratio in basis points (3.5%)
+
+# Accounting oracle configuration
+[accountingOracle]
+consensusVersion = 3                  # Consensus version
+
+# Hash consensus for validators exit bus oracle
+[hashConsensusForValidatorsExitBusOracle]
+fastLaneLengthSlots = 10              # Fast lane length in slots
+epochsPerFrame = 4                    # Epochs per consensus frame
+
+# Validators exit bus oracle configuration
+[validatorsExitBusOracle]
+consensusVersion = 3                  # Consensus version
+maxValidatorsPerRequest = 600         # Maximum validators per request
+maxExitRequestsLimit = 13000          # Maximum exit requests limit
+exitsPerFrame = 1                     # Exits per frame
+frameDurationInSec = 48               # Frame duration in seconds
+
+# Deposit security module configuration
+[depositSecurityModule]
+maxOperatorsPerUnvetting = 200        # Maximum operators per unveiling
+pauseIntentValidityPeriodBlocks = 6646 # Pause intent validity period in blocks
+# usePredefinedAddressInstead = ""    # Use predefined address instead (empty for auto-deploy)
+
+# Oracle report sanity checker configuration
+[oracleReportSanityChecker]
+exitedValidatorsPerDayLimit = 1500                     # Exited validators per day limit
+appearedValidatorsPerDayLimit = 1500                   # Appeared validators per day limit
+deprecatedOneOffCLBalanceDecreaseBPLimit = 500         # Deprecated one-off CL balance decrease limit (BP)
+annualBalanceIncreaseBPLimit = 1000                    # Annual balance increase limit (BP)
+simulatedShareRateDeviationBPLimit = 250               # Simulated share rate deviation limit (BP)
+maxValidatorExitRequestsPerReport = 2000               # Maximum validator exit requests per report
+maxItemsPerExtraDataTransaction = 8                    # Maximum items per extra data transaction
+maxNodeOperatorsPerExtraDataItem = 24                  # Maximum node operators per extra data item
+requestTimestampMargin = 128                           # Request timestamp margin
+maxPositiveTokenRebase = 5000000                       # Maximum positive token rebase
+initialSlashingAmountPWei = 1000                       # Initial slashing amount (pWei)
+inactivityPenaltiesAmountPWei = 101                    # Inactivity penalties amount (pWei)
+clBalanceOraclesErrorUpperBPLimit = 50                 # CL balance oracles error upper limit (BP)
+
+# Oracle daemon configuration
+[oracleDaemonConfig]
+NORMALIZED_CL_REWARD_PER_EPOCH = 64                    # Normalized CL reward per epoch
+NORMALIZED_CL_REWARD_MISTAKE_RATE_BP = 1000            # Normalized CL reward mistake rate (BP)
+REBASE_CHECK_NEAREST_EPOCH_DISTANCE = 1               # Rebase check nearest epoch distance
+REBASE_CHECK_DISTANT_EPOCH_DISTANCE = 23              # Rebase check distant epoch distance
+VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS = 7200             # Validator delayed timeout in slots
+VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS = 28800         # Validator delinquent timeout in slots
+NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP = 100  # Node operator network penetration threshold (BP)
+PREDICTION_DURATION_IN_SLOTS = 50400                  # Prediction duration in slots
+FINALIZATION_MAX_NEGATIVE_REBASE_EPOCH_SHIFT = 1350   # Finalization max negative rebase epoch shift
+EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS = 7200           # Lookback window for exit events in slots (1 day)
+
+# Node operators registry configuration
+[nodeOperatorsRegistry]
+stakingModuleName = "Curated"         # Staking module name
+stakingModuleTypeId = "curated-onchain-v1" # Staking module type ID
+stuckPenaltyDelay = 172800            # Stuck penalty delay in seconds (2 days)
+
+# Simple DVT configuration
+[simpleDvt]
+stakingModuleName = "SimpleDVT"       # Staking module name
+stakingModuleTypeId = "curated-onchain-v1" # Staking module type ID
+stuckPenaltyDelay = 432000            # Stuck penalty delay in seconds (5 days)
+
+# Withdrawal queue ERC721 configuration
+[withdrawalQueueERC721]
+name = "Lido: stETH Withdrawal NFT"   # NFT collection name
+symbol = "unstETH"                    # NFT collection symbol
+# baseUri is set to null for testnet deployment
+
+# Validator exit delay verifier configuration for managing validator exits
+[validatorExitDelayVerifier]
+# Generalized indices for validator state verification in Ethereum consensus
+gIFirstValidatorPrev = "0x0000000000000000000000000000000000000000000000000096000000000028"
+gIFirstValidatorCurr = "0x0000000000000000000000000000000000000000000000000096000000000028"
+gIFirstHistoricalSummaryPrev = "0x000000000000000000000000000000000000000000000000000000b600000018"
+gIFirstHistoricalSummaryCurr = "0x000000000000000000000000000000000000000000000000000000b600000018"
+gIFirstBlockRootInSummaryPrev = "0x000000000000000000000000000000000000000000000000000000000040000d"
+gIFirstBlockRootInSummaryCurr = "0x000000000000000000000000000000000000000000000000000000000040000d"
+# Additional deployment parameters for ValidatorExitDelayVerifier
+firstSupportedSlot = 6718464              # First supported slot for validator state verification
+pivotSlot = 6718464                       # Pivot slot for state verification
+capellaSlot = 6718464                     # Capella upgrade slot
+slotsPerHistoricalRoot = 8192             # Number of slots per historical root
+shardCommitteePeriodInSeconds = 98304     # Shard committee period in seconds (2^8 * 32 * 12)
+
+# Triggerable withdrawals gateway for managing validator exit requests
+[triggerableWithdrawalsGateway]
+maxExitRequestsLimit = 13000          # Maximum number of exit requests that can be processed
+exitsPerFrame = 1                     # Number of exits processed per frame
+frameDurationInSec = 48               # Duration of each processing frame in seconds
+
+# Predeposit guarantee configuration for validator deposit guarantees
+[predepositGuarantee]
+gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification
+gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028"
+changeSlot = 0                        # Slot number when the change takes effect
+
+# Operator grid configuration for managing staking operators
+[operatorGrid]
+# Default tier parameters for operator classification and fee structure
+[operatorGrid.defaultTierParams]
+shareLimitInEther = "1000"            # Share limit per tier in ETH
+reserveRatioBP = 2000                 # Reserve ratio in basis points (20%)
+forcedRebalanceThresholdBP = 1800     # Threshold for forced rebalancing in basis points (18%)
+infraFeeBP = 500                      # Infrastructure fee in basis points (5%)
+liquidityFeeBP = 400                  # Liquidity provision fee in basis points (4%)
+reservationFeeBP = 100                # Reservation fee in basis points (1%)
