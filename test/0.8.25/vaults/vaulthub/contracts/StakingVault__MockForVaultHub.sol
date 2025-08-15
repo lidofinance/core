@@ -38,7 +38,12 @@ contract StakingVault__MockForVaultHub is Ownable2StepUpgradeable {
 
     function fund() external payable {}
 
-    function withdraw(address, uint256 amount) external {}
+    function withdraw(address _recipient, uint256 _ether) external {
+        (bool success, ) = _recipient.call{value: _ether}("");
+        if (!success) revert TransferFailed(_recipient, _ether);
+
+        emit EtherWithdrawn(_recipient, _ether);
+    }
 
     function isOssified() external pure returns (bool) {
         return false;
@@ -60,13 +65,20 @@ contract StakingVault__MockForVaultHub is Ownable2StepUpgradeable {
 
     function pauseBeaconChainDeposits() external {
         beaconChainDepositsPaused = true;
+        emit BeaconChainDepositsPaused();
     }
 
     function resumeBeaconChainDeposits() external {
         beaconChainDepositsPaused = false;
+        emit BeaconChainDepositsResumed();
     }
 
     event ValidatorWithdrawalsTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
+    event BeaconChainDepositsPaused();
+    event BeaconChainDepositsResumed();
+    event EtherWithdrawn(address recipient, uint256 amount);
 
     error Mock__HealthyVault();
+
+    error TransferFailed(address recipient, uint256 amount);
 }

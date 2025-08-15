@@ -35,3 +35,5 @@ export {
   VaultRoles,
   VaultRoleMethods,
 } from "./vaults";
+
+export { ensureSomeOddShareRate } from "./share-rate";

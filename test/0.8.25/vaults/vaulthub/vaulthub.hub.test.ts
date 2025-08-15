@@ -118,13 +118,13 @@ describe("VaultHub.sol:hub", () => {
   }) {
     await lazyOracle.refreshReportTimestamp();
     const timestamp = await lazyOracle.latestReportTimestamp();
-
-    totalValue = totalValue ?? (await vaultHub.totalValue(vault));
     const record = await vaultHub.vaultRecord(vault);
     const activeIndex = record.inOutDelta[0].refSlot >= record.inOutDelta[1].refSlot ? 0 : 1;
+
+    totalValue = totalValue ?? (await vaultHub.totalValue(vault));
     inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
-    liabilityShares = liabilityShares ?? (await vaultHub.vaultRecord(vault)).liabilityShares;
-    lidoFees = lidoFees ?? (await vaultHub.vaultObligations(vault)).unsettledLidoFees;
+    liabilityShares = liabilityShares ?? record.liabilityShares;
+    lidoFees = lidoFees ?? record.unsettledLidoFees + record.settledLidoFees;
     slashingReserve = slashingReserve ?? 0n;
 
     await lazyOracle.mock__report(
@@ -359,24 +359,6 @@ describe("VaultHub.sol:hub", () => {
         [ether("1"), 0n, 0n],
         [0n, 0n, 0n],
       ]);
-    });
-  });
-
-  context("vaultObligations", () => {
-    it("returns zeroes if the vault is not connected", async () => {
-      const vault = await createVault(vaultFactory);
-      const obligations = await vaultHub.vaultObligations(vault);
-
-      expect(obligations).to.deep.equal([0n, 0n, 0n]);
-    });
-
-    it("returns the obligations if the vault is connected", async () => {
-      const { vault } = await createAndConnectVault(vaultFactory);
-      const unsettledLidoFees = 100n;
-      await lazyOracle.mock__report(vaultHub, vault, 0n, 0n, 0n, unsettledLidoFees, 0n, 0n);
-      const obligations = await vaultHub.vaultObligations(vault);
-
-      expect(obligations).to.deep.equal([0n, unsettledLidoFees, 0n]);
     });
   });
 
