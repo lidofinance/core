@@ -42,6 +42,7 @@ const VaultHubSchema = z.object({
 const LazyOracleSchema = z.object({
   quarantinePeriod: PositiveIntSchema,
   maxRewardRatioBP: BasisPointsSchema,
+  maxLidoFeeRatePerSecond: BigIntStringSchema,
 });
 
 // Predeposit guarantee schema

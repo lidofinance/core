@@ -107,12 +107,13 @@ export async function main() {
   // Deploy LazyOracle
   //
 
-  // Prepare initialization data for LazyOracle.initialize(address admin, uint256 quarantinePeriod, uint256 maxRewardRatioBP)
+  // Prepare initialization data for LazyOracle.initialize(address admin, uint256 quarantinePeriod, uint256 maxRewardRatioBP, uint256 maxLidoFeeRatePerSecond)
   const lazyOracleInterface = await ethers.getContractFactory("LazyOracle");
   const lazyOracleInitData = lazyOracleInterface.interface.encodeFunctionData("initialize", [
     v3TemporaryAdmin.address,
     lazyOracleParams.quarantinePeriod,
     lazyOracleParams.maxRewardRatioBP,
+    lazyOracleParams.maxLidoFeeRatePerSecond,
   ]);
 
   const lazyOracle_ = await deployBehindOssifiableProxy(

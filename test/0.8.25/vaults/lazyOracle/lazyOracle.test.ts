@@ -11,11 +11,15 @@ import {
   VaultHub__MockForLazyOracle,
 } from "typechain-types";
 
-import { advanceChainTime, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
+import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
 import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, ZERO_BYTES32 } from "test/suite";
+
+const QUARANTINE_PERIOD = days(3n);
+const MAX_REWARD_RATIO_BP = 350n;
+const MAX_SANE_LIDO_FEES_PER_SECOND = 400000000000000n;
 
 describe("LazyOracle.sol", () => {
   let deployer: SignerWithAddress;
@@ -26,8 +30,6 @@ describe("LazyOracle.sol", () => {
   let lazyOracle: LazyOracle;
 
   let originalState: string;
-
-  const QUARANTINE_PERIOD = 259200n;
 
   before(async () => {
     [deployer] = await ethers.getSigners();
@@ -49,7 +51,12 @@ describe("LazyOracle.sol", () => {
     );
     lazyOracle = await ethers.getContractAt("LazyOracle", proxy);
 
-    await lazyOracle.initialize(deployer.address, QUARANTINE_PERIOD, 350n);
+    await lazyOracle.initialize(
+      deployer.address,
+      QUARANTINE_PERIOD,
+      MAX_REWARD_RATIO_BP,
+      MAX_SANE_LIDO_FEES_PER_SECOND,
+    );
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -185,12 +192,17 @@ describe("LazyOracle.sol", () => {
 
     it("return quarantine period", async () => {
       const quarantinePeriod = await lazyOracle.quarantinePeriod();
-      expect(quarantinePeriod).to.equal(259200n);
+      expect(quarantinePeriod).to.equal(QUARANTINE_PERIOD);
     });
 
     it("return max reward ratio", async () => {
       const maxRewardRatio = await lazyOracle.maxRewardRatioBP();
-      expect(maxRewardRatio).to.equal(350n);
+      expect(maxRewardRatio).to.equal(MAX_REWARD_RATIO_BP);
+    });
+
+    it("return max Lido fee rate per second", async () => {
+      const maxLidoFeeRatePerSecond = await lazyOracle.maxLidoFeeRatePerSecond();
+      expect(maxLidoFeeRatePerSecond).to.equal(MAX_SANE_LIDO_FEES_PER_SECOND);
     });
 
     it("return quarantine info", async () => {
@@ -202,15 +214,40 @@ describe("LazyOracle.sol", () => {
   });
 
   context("sanity params", () => {
-    it("update quarantine period", async () => {
-      await expect(lazyOracle.updateSanityParams(250000n, 1000n))
+    it("update quarantine params", async () => {
+      await expect(lazyOracle.updateSanityParams(250000n, 1000n, 2000n))
         .to.be.revertedWithCustomError(lazyOracle, "AccessControlUnauthorizedAccount")
         .withArgs(deployer.address, await lazyOracle.UPDATE_SANITY_PARAMS_ROLE());
 
       await lazyOracle.grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), deployer.address);
-      await expect(lazyOracle.updateSanityParams(250000n, 1000n)).to.not.reverted;
+      await expect(lazyOracle.updateSanityParams(250000n, 1000n, 2000n)).to.not.reverted;
       expect(await lazyOracle.quarantinePeriod()).to.equal(250000n);
       expect(await lazyOracle.maxRewardRatioBP()).to.equal(1000n);
+      expect(await lazyOracle.maxLidoFeeRatePerSecond()).to.equal(2000n);
+    });
+
+    it("reverts on too large quarantine period", async () => {
+      await lazyOracle.grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), deployer.address);
+      const maxQuarantinePeriod = await lazyOracle.MAX_QUARANTINE_PERIOD();
+      await expect(lazyOracle.updateSanityParams(maxQuarantinePeriod + 1n, 1000n, 2000n))
+        .to.be.revertedWithCustomError(lazyOracle, "QuarantinePeriodTooLarge")
+        .withArgs(maxQuarantinePeriod + 1n, maxQuarantinePeriod);
+    });
+
+    it("reverts on too large reward ratio", async () => {
+      await lazyOracle.grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), deployer.address);
+      const maxRewardRatio = await lazyOracle.MAX_REWARD_RATIO();
+      await expect(lazyOracle.updateSanityParams(250000n, maxRewardRatio + 1n, 2000n))
+        .to.be.revertedWithCustomError(lazyOracle, "MaxRewardRatioTooLarge")
+        .withArgs(maxRewardRatio + 1n, maxRewardRatio);
+    });
+
+    it("reverts on too large Lido fee rate per second", async () => {
+      await lazyOracle.grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), deployer.address);
+      const maxLidoFeeRatePerSecond = await lazyOracle.MAX_LIDO_FEE_RATE_PER_SECOND();
+      await expect(lazyOracle.updateSanityParams(250000n, 1000n, maxLidoFeeRatePerSecond + 1n))
+        .to.be.revertedWithCustomError(lazyOracle, "MaxLidoFeeRatePerSecondTooLarge")
+        .withArgs(maxLidoFeeRatePerSecond + 1n, maxLidoFeeRatePerSecond);
     });
   });
 
@@ -755,6 +792,78 @@ describe("LazyOracle.sol", () => {
       expect(quarantineInfo2.pendingTotalValueIncrease).to.equal(0n);
       expect(quarantineInfo2.startTimestamp).to.equal(0n);
       expect(quarantineInfo2.endTimestamp).to.equal(0n);
+    });
+
+    it("reverts on too large/low Lido fee rate per second", async () => {
+      const vault = await createVault();
+      const vaultReport: VaultReportItem = {
+        vault,
+        totalValue: ether("250"),
+        accruedLidoFees: ether("100"),
+        liabilityShares: 0n,
+        slashingReserve: 0n,
+      };
+
+      const tree = createVaultsReportTree([vaultReport]);
+      const accountingAddress = await impersonate(await locator.accountingOracle(), ether("100"));
+      const timestamp = await getCurrentBlockTimestamp();
+      const refSlot = 42n;
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
+
+      await vaultHub.mock__addVault(vault);
+      await vaultHub.mock__setVaultRecord(vault, {
+        report: {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+          timestamp: timestamp - 1n,
+        },
+        locked: 0n,
+        liabilityShares: 0n,
+        inOutDelta: [
+          {
+            value: ether("100"),
+            valueOnRefSlot: ether("100"),
+            refSlot: 0n,
+          },
+          {
+            value: 0n,
+            valueOnRefSlot: 0n,
+            refSlot: 0n,
+          },
+        ],
+      });
+
+      await expect(
+        lazyOracle.updateVaultData(
+          vaultReport.vault,
+          vaultReport.totalValue,
+          vaultReport.accruedLidoFees,
+          vaultReport.liabilityShares,
+          vaultReport.slashingReserve,
+          tree.getProof(0),
+        ),
+      )
+        .to.be.revertedWithCustomError(lazyOracle, "CumulativeLidoFeesTooLarge")
+        .withArgs(ether("100"), MAX_SANE_LIDO_FEES_PER_SECOND);
+
+      await vaultHub.mock__setVaultObligations(vault, {
+        settledLidoFees: ether("101"),
+        unsettledLidoFees: 0n,
+        redemptions: 0n,
+      });
+
+      await expect(
+        lazyOracle.updateVaultData(
+          vaultReport.vault,
+          vaultReport.totalValue,
+          vaultReport.accruedLidoFees,
+          vaultReport.liabilityShares,
+          vaultReport.slashingReserve,
+          tree.getProof(0),
+        ),
+      )
+        .to.be.revertedWithCustomError(lazyOracle, "CumulativeLidoFeesTooLow")
+        .withArgs(ether("100"), ether("101"));
     });
   });
 

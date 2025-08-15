@@ -101,7 +101,12 @@ export async function main() {
   await makeTx(
     lazyOracle,
     "initialize",
-    [lazyOracleAdmin, lazyOracleParams.quarantinePeriod, lazyOracleParams.maxRewardRatioBP],
+    [
+      lazyOracleAdmin,
+      lazyOracleParams.quarantinePeriod,
+      lazyOracleParams.maxRewardRatioBP,
+      lazyOracleParams.maxLidoFeeRatePerSecond,
+    ],
     { from: deployer },
   );
 
