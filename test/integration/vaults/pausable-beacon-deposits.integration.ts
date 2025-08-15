@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, LazyOracle,StakingVault, VaultHub } from "typechain-types";
+import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
 import { days, ether } from "lib";
 import {
