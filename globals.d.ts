@@ -20,6 +20,9 @@ declare namespace NodeJS {
     /* if "on" the integration tests will assume CSM module is present in the StakingRouter, and adjust accordingly */
     INTEGRATION_WITH_CSM?: "on" | "off"; // default: "off"
 
+    /* if set, the integration tests will update the share rate to make it dynamic */
+    INTEGRATION_DYNAMIC_SHARE_RATE?: "true" | "false"; // default: "false"
+
     /* if set, the integration tests will burn this number of shares (* 10^18) to make the share rate odd */
     INTEGRATION_SHARES_TO_BURN?: number; // default: null
 

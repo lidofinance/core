@@ -6,6 +6,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Lido, StakingVault__MockForVaultHub, VaultHub } from "typechain-types";
 
+import { BigIntMath } from "lib";
 import { ether } from "lib/units";
 
 import { deployVaults } from "test/deploy";
@@ -155,6 +156,65 @@ describe("VaultHub.sol:forceRebalance", () => {
         await expect(vaultHub.connect(stranger).forceRebalance(vaultAddress))
           .to.emit(vaultHub, "VaultRebalanced")
           .withArgs(vaultAddress, expectedSharesToBeBurned, expectedRebalanceAmount);
+      });
+
+      it("takes into account redemption shares", async () => {
+        const redemptionShares = await vaultHub.liabilityShares(vaultAddress);
+        const balanceBefore = await ethers.provider.getBalance(vaultAddress);
+        const shortfall = await vaultHub.rebalanceShortfall(vaultAddress);
+
+        await vaultHub.connect(user).updateRedemptionShares(vaultAddress, redemptionShares);
+
+        const record = await vaultHub.vaultRecord(vaultAddress);
+        expect(record.redemptionShares).to.equal(redemptionShares);
+
+        const expectedShortfallAmount = shortfall < balanceBefore ? shortfall : balanceBefore;
+        const expectedShortfallShares = await lido.getSharesByPooledEth(expectedShortfallAmount);
+
+        // redemptions may be greater than shortfall, so we need to take the max
+        const expectedSharesToBeBurned = BigIntMath.max(expectedShortfallShares, redemptionShares);
+        const expectedRebalanceAmount = await lido.getPooledEthBySharesRoundUp(expectedSharesToBeBurned);
+
+        await expect(vaultHub.forceRebalance(vaultAddress))
+          .to.emit(vaultHub, "VaultRebalanced")
+          .withArgs(vaultAddress, expectedSharesToBeBurned, expectedRebalanceAmount);
+
+        const sharesMintedAfter = await vaultHub.liabilityShares(vaultAddress);
+        expect(sharesMintedAfter).to.equal(0n);
+
+        const recordAfter = await vaultHub.vaultRecord(vaultAddress);
+        expect(recordAfter.redemptionShares).to.equal(0n);
+      });
+
+      it("takes into account part of redemption shares if not enough balance", async () => {
+        const redemptionShares = await vaultHub.liabilityShares(vaultAddress);
+        const balanceBefore = await ethers.provider.getBalance(vaultAddress);
+        const shortfall = await vaultHub.rebalanceShortfall(vaultAddress);
+
+        await vaultHub.connect(user).updateRedemptionShares(vaultAddress, redemptionShares);
+
+        const record = await vaultHub.vaultRecord(vaultAddress);
+        expect(record.redemptionShares).to.equal(redemptionShares);
+
+        const expectedShortfallAmount = shortfall < balanceBefore ? shortfall : balanceBefore;
+        const expectedShortfallShares = await lido.getSharesByPooledEth(expectedShortfallAmount);
+        const expectedRebalanceAmount = await lido.getPooledEthBySharesRoundUp(
+          BigIntMath.max(expectedShortfallShares, redemptionShares),
+        );
+
+        const balance = expectedRebalanceAmount - expectedRebalanceAmount / 3n;
+        const expectedSharesToBeBurned = await lido.getSharesByPooledEth(balance);
+
+        await setBalance(vaultAddress, balance); // cheat to make balance lower than rebalanceShortfall
+        await expect(vaultHub.forceRebalance(vaultAddress))
+          .to.emit(vaultHub, "VaultRebalanced")
+          .withArgs(vaultAddress, expectedSharesToBeBurned, balance);
+
+        const sharesMintedAfter = await vaultHub.liabilityShares(vaultAddress);
+        expect(sharesMintedAfter).to.equal(redemptionShares - expectedSharesToBeBurned);
+
+        const recordAfter = await vaultHub.vaultRecord(vaultAddress);
+        expect(recordAfter.redemptionShares).to.equal(redemptionShares - expectedSharesToBeBurned);
       });
     });
 

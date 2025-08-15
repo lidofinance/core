@@ -161,6 +161,7 @@ export async function deployVaults({ deployer, admin }: VaultsConfig) {
   await vaultHubAdmin.grantRole(await vaultHub.RESUME_ROLE(), admin);
   await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
   await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), admin);
+  await vaultHubAdmin.grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), admin);
 
   await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 

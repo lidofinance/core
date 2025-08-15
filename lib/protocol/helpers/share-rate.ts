@@ -12,6 +12,7 @@ const DEPOSIT = 10000;
 const MIN_BURN = 1;
 const BIG_BAG = ether("100000000000");
 
+const DYNAMIC_SHARE_RATE = process.env.INTEGRATION_DYNAMIC_SHARE_RATE === "true";
 const SHARES_TO_BURN = process.env.INTEGRATION_SHARES_TO_BURN ? Number(process.env.INTEGRATION_SHARES_TO_BURN) : null;
 
 function calculateShareRate(totalPooledEther: bigint, totalShares: bigint): bigint {
@@ -42,8 +43,12 @@ export const ensureSomeOddShareRate = async (ctx: ProtocolContext) => {
   // Whale submits deposit
   await lido.connect(whale).submit(ZeroAddress, { value: ether(DEPOSIT.toString()) });
 
-  // Calculate random burn amount
-  const burnAmount = SHARES_TO_BURN ?? MIN_BURN + Math.floor(Math.random() * (DEPOSIT - MIN_BURN));
+  // Calculate burn amount (either predefined or random)
+  // by default, burn half of the deposit
+  const burnAmount = DYNAMIC_SHARE_RATE
+    ? (SHARES_TO_BURN ?? MIN_BURN + Math.floor(Math.random() * (DEPOSIT - MIN_BURN)))
+    : DEPOSIT / 2;
+
   const sharesToBurn = ether(burnAmount.toString());
   log.warning("Burning shares:", burnAmount, "(* 10^18)");
 

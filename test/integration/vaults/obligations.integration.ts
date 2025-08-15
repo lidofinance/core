@@ -17,7 +17,7 @@ import {
 
 import { Snapshot } from "test/suite";
 
-describe("Integration: Vault obligations", () => {
+describe("Integration: Vault redemptions and fees obligations", () => {
   let ctx: ProtocolContext;
   let originalSnapshot: string;
   let snapshot: string;
@@ -73,231 +73,81 @@ describe("Integration: Vault obligations", () => {
   beforeEach(async () => (snapshot = await Snapshot.take()));
   afterEach(async () => await Snapshot.restore(snapshot));
 
-  context("Lido fees obligations", () => {
-    it("Reverts if accrued fees are less than the cumulative fees", async () => {
-      const accruedLidoFees = ether("1.1");
+  context("Redemptions", () => {
+    it("Does not accrue when vault has no liabilities", async () => {
+      const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordBefore.redemptionShares).to.equal(0n);
+      expect(recordBefore.liabilityShares).to.equal(0n);
 
-      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsBefore.unsettledLidoFees).to.equal(0n);
-      expect(obligationsBefore.settledLidoFees).to.equal(0n);
+      const redemptionShares = ether("1");
 
-      // Report the vault data with accrued lido fees
-      await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees });
+      await expect(vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares))
+        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
+        .withArgs(stakingVaultAddress, 0);
 
-      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.unsettledLidoFees).to.equal(accruedLidoFees);
-      expect(obligationsAfter.settledLidoFees).to.equal(0n);
-
-      // Try to lower the fees in the report
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: accruedLidoFees - 1n }))
-        .to.be.revertedWithCustomError(vaultHub, "InvalidFees")
-        .withArgs(stakingVaultAddress, accruedLidoFees - 1n, accruedLidoFees);
+      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfter.redemptionShares).to.equal(0n);
+      expect(recordAfter.liabilityShares).to.equal(0n);
     });
 
-    it("Updates on the vault report for vault with no balance", async () => {
-      const accruedLidoFees = ether("1");
-
-      await setBalance(stakingVaultAddress, 0); // dirty hack to make the vault balance 0
-
-      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsBefore.unsettledLidoFees).to.equal(0n);
-      expect(obligationsBefore.settledLidoFees).to.equal(0n);
-
-      // Report the vault data with accrued Lido fees
-      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees }))
-        .to.emit(vaultHub, "LidoFeesUpdated")
-        .withArgs(stakingVaultAddress, accruedLidoFees, 0n);
-
-      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.unsettledLidoFees).to.equal(accruedLidoFees);
-      expect(obligationsAfter.settledLidoFees).to.equal(0n);
-    });
-
-    it("Setstles on the vault report for vault with enough balance", async () => {
-      const accruedLidoFees = ether("1");
-
-      await dashboard.fund({ value: ether("2") });
-
-      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsBefore.unsettledLidoFees).to.equal(0n);
-      expect(obligationsBefore.settledLidoFees).to.equal(0n);
-
-      // Report the vault data with accrued Lido fees
-      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees }))
-        .to.emit(vaultHub, "LidoFeesUpdated")
-        .withArgs(stakingVaultAddress, accruedLidoFees, 0n)
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 0n, accruedLidoFees, 0n, 0n, accruedLidoFees)
-        .to.emit(stakingVault, "EtherWithdrawn")
-        .withArgs(treasuryAddress, accruedLidoFees);
-
-      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.unsettledLidoFees).to.equal(0n);
-      expect(obligationsAfter.settledLidoFees).to.equal(accruedLidoFees);
-    });
-
-    it("Settles partially on the vault report for vault with some balance", async () => {
-      // Make sure the vault has enough balance
-      const accruedLidoFees = ether("1");
-      const funding = ether("0.5");
-
-      await dashboard.fund({ value: funding });
-
-      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsBefore.unsettledLidoFees).to.equal(0n);
-      expect(obligationsBefore.settledLidoFees).to.equal(0n);
-
-      const unsettledLidoFees = accruedLidoFees - funding;
-      // Report the vault data with accrued lido fees
-      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees }))
-        .to.emit(vaultHub, "LidoFeesUpdated")
-        .withArgs(stakingVaultAddress, accruedLidoFees, 0n)
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 0n, funding, 0n, unsettledLidoFees, funding)
-        .to.emit(stakingVault, "EtherWithdrawn")
-        .withArgs(treasuryAddress, funding);
-
-      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.unsettledLidoFees).to.equal(unsettledLidoFees);
-      expect(obligationsAfter.settledLidoFees).to.equal(funding);
-    });
-
-    it("Updates on several consecutive reports", async () => {
-      let accruedLidoFees = ether("1");
-      const funding = ether("0.5");
-      const unsettledLidoFees = accruedLidoFees - funding;
-
-      await dashboard.fund({ value: funding });
-
-      // 1st report with partial settlement
-      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees }))
-        .to.emit(vaultHub, "LidoFeesUpdated")
-        .withArgs(stakingVaultAddress, accruedLidoFees, 0n)
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 0n, funding, 0n, unsettledLidoFees, funding)
-        .to.emit(stakingVault, "EtherWithdrawn")
-        .withArgs(treasuryAddress, funding);
-
-      // 2nd report with no fees emit nothing because fees are not changed (reported value is cumulative)
-      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees })).not.to.emit(
-        vaultHub,
-        "VaultObligationsSettled",
-      );
-
-      // Increase the fees
-      accruedLidoFees += ether("0.5");
-
-      // 3rd report with zero settlement
-      const expectedUnsettled = accruedLidoFees - funding;
-      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees }))
-        .to.emit(vaultHub, "LidoFeesUpdated")
-        .withArgs(stakingVaultAddress, expectedUnsettled, funding);
-
-      // 4th report with full settlement
-      const delta = ether("0.1");
-      const feesToSettle = expectedUnsettled + delta;
-      accruedLidoFees += delta;
-
-      await dashboard.fund({ value: feesToSettle });
-
-      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees }))
-        .to.emit(vaultHub, "LidoFeesUpdated")
-        .withArgs(stakingVaultAddress, feesToSettle, funding)
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 0n, feesToSettle, 0n, 0n, accruedLidoFees)
-        .to.emit(stakingVault, "EtherWithdrawn")
-        .withArgs(treasuryAddress, feesToSettle);
-
-      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.unsettledLidoFees).to.equal(0n);
-      expect(obligationsAfter.settledLidoFees).to.equal(feesToSettle + funding);
-    });
-  });
-
-  context("Redemption shares obligations setting", () => {
-    it("Reverts if the vault has no liabilities", async () => {
-      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsBefore.redemptionShares).to.equal(0n);
-
-      expect((await vaultHub.vaultRecord(stakingVaultAddress)).liabilityShares).to.equal(0n);
-
-      await expect(vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, ether("1")))
-        .to.be.revertedWithCustomError(vaultHub, "RedemptionSharesNotSet")
-        .withArgs(stakingVaultAddress, ether("1"), 0n);
-
-      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.redemptionShares).to.equal(0n);
-    });
-
-    it("Applies to the vault with liabilities", async () => {
+    it("Accrues on the vault with liabilities", async () => {
       await dashboard.fund({ value: ether("1") });
       await dashboard.mintShares(stranger, 2n);
 
-      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsBefore.redemptionShares).to.equal(0n);
+      const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordBefore.redemptionShares).to.equal(0n);
+      expect(recordBefore.liabilityShares).to.equal(2n);
 
       // Over the max possible withdrawals (3 shares => 2 shares because of the liabilities)
-      await expect(vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, 3n))
-        .to.emit(vaultHub, "RedemptionSharesUpdated")
+      await expect(vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, 3n))
+        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVaultAddress, 2n);
 
-      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.redemptionShares).to.equal(2n);
+      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfter.redemptionShares).to.equal(2n);
+      expect(recordAfter.liabilityShares).to.equal(2n);
 
       // Decrease the obligation
-      await expect(vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, 1n))
-        .to.emit(vaultHub, "RedemptionSharesUpdated")
+      await expect(vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, 1n))
+        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVaultAddress, 1n);
 
-      const obligationsAfterDecreased = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfterDecreased.redemptionShares).to.equal(1n);
+      const recordAfterDecreased = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfterDecreased.redemptionShares).to.equal(1n);
+      expect(recordAfterDecreased.liabilityShares).to.equal(2n);
 
       // Remove the obligation
-      await expect(vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, 0))
-        .to.emit(vaultHub, "RedemptionSharesUpdated")
+      await expect(vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, 0))
+        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVaultAddress, 0n);
 
-      const obligationsAfterRemoved = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfterRemoved.redemptionShares).to.equal(0n);
+      const recordAfterRemoved = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfterRemoved.redemptionShares).to.equal(0n);
+      expect(recordAfterRemoved.liabilityShares).to.equal(2n);
     });
 
-    it("Does not settle immediately", async () => {
-      const redemptionShares = ether("1");
+    it("Pauses beacon chain deposits when redemptions >= 1 ether", async () => {
+      let redemptionShares = (await lido.getSharesByPooledEth(ether("1"))) + 1n;
+
+      if ((await lido.getPooledEthBySharesRoundUp(redemptionShares)) < ether("1")) {
+        redemptionShares += 1n;
+      }
 
       await dashboard.fund({ value: ether("2") });
       await dashboard.mintShares(stranger, redemptionShares);
 
-      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsBefore.redemptionShares).to.equal(0n);
+      const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordBefore.redemptionShares).to.equal(0n);
+      expect(recordBefore.liabilityShares).to.equal(redemptionShares);
 
-      await expect(vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, redemptionShares))
-        .to.emit(vaultHub, "RedemptionSharesUpdated")
-        .withArgs(stakingVaultAddress, redemptionShares)
-        .not.to.emit(vaultHub, "VaultObligationsSettled");
-
-      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.redemptionShares).to.equal(redemptionShares);
-    });
-
-    it("Pauses beacon chain deposits when unsettled obligations are too high", async () => {
-      const redemptionShares = ether("10");
-
-      await dashboard.fund({ value: ether("20") });
-      await dashboard.mintShares(stranger, redemptionShares);
-
-      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsBefore.redemptionShares).to.equal(0n);
-
-      const vaultBalance = ether("1");
-      await setBalance(stakingVaultAddress, vaultBalance);
-
-      await expect(vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, redemptionShares))
-        .to.emit(vaultHub, "RedemptionSharesUpdated")
+      await expect(vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares))
+        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVaultAddress, redemptionShares)
         .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
-      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.redemptionShares).to.equal(redemptionShares);
+      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfter.redemptionShares).to.equal(redemptionShares);
+      expect(recordAfter.liabilityShares).to.equal(redemptionShares);
     });
 
     context("Decreases on liability shares change", () => {
@@ -309,12 +159,12 @@ describe("Integration: Vault obligations", () => {
         await dashboard.fund({ value: ether("2") });
         await dashboard.mintShares(owner, redemptionShares);
 
-        await vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, redemptionShares);
+        await vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares);
       });
 
       it("On shares burned", async () => {
-        const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsBefore.redemptionShares).to.equal(redemptionShares);
+        const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordBefore.redemptionShares).to.equal(redemptionShares);
 
         expect(await lido.sharesOf(owner)).to.equal(redemptionShares);
         await lido.connect(owner).approve(dashboard, redemptionShares);
@@ -324,38 +174,52 @@ describe("Integration: Vault obligations", () => {
         const expectedRedemptions = redemptionShares / parts;
 
         await expect(dashboard.burnShares(sharesToBurn))
-          .to.emit(vaultHub, "RedemptionSharesUpdated")
+          .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
           .withArgs(stakingVaultAddress, expectedRedemptions);
 
-        const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsAfter.redemptionShares).to.equal(expectedRedemptions);
+        const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordAfter.redemptionShares).to.equal(expectedRedemptions);
       });
 
       it("On vault rebalanced", async () => {
-        const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsBefore.redemptionShares).to.equal(redemptionShares);
+        const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordBefore.redemptionShares).to.equal(redemptionShares);
 
         const rebalanceShares = redemptionShares / 2n;
         await expect(dashboard.rebalanceVaultWithShares(rebalanceShares))
           .to.emit(vaultHub, "VaultRebalanced")
           .withArgs(stakingVaultAddress, rebalanceShares, await lido.getPooledEthBySharesRoundUp(rebalanceShares))
-          .to.emit(vaultHub, "RedemptionSharesUpdated")
+          .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
           .withArgs(stakingVaultAddress, rebalanceShares);
 
-        const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsAfter.redemptionShares).to.equal(rebalanceShares);
+        const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordAfter.redemptionShares).to.equal(rebalanceShares);
+      });
+
+      it("On force rebalance", async () => {
+        const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordBefore.redemptionShares).to.equal(redemptionShares);
+
+        await expect(vaultHub.forceRebalance(stakingVaultAddress))
+          .to.emit(vaultHub, "VaultRebalanced")
+          .withArgs(stakingVaultAddress, redemptionShares, await lido.getPooledEthBySharesRoundUp(redemptionShares))
+          .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
+          .withArgs(stakingVaultAddress, 0n);
+
+        const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordAfter.redemptionShares).to.equal(0n);
       });
 
       it("Does not increase on new minting", async () => {
         await dashboard.fund({ value: ether("2") });
         await dashboard.mintShares(stranger, ether("1"));
 
-        const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsAfter.redemptionShares).to.equal(redemptionShares);
+        const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordAfter.redemptionShares).to.equal(redemptionShares);
       });
     });
 
-    context("Settles on report", () => {
+    context("Settlement", () => {
       let redemptionShares: bigint;
 
       beforeEach(async () => {
@@ -363,181 +227,200 @@ describe("Integration: Vault obligations", () => {
 
         await dashboard.fund({ value: ether("2") });
         await dashboard.mintShares(stranger, redemptionShares);
-
-        await vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, redemptionShares);
+        await vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares);
       });
 
-      it("Does not change on report when vault has no balance", async () => {
-        await setBalance(stakingVaultAddress, 0);
-
-        await expect(reportVaultDataWithProof(ctx, stakingVault)).not.to.emit(vaultHub, "VaultObligationsSettled");
-
-        const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsAfter.redemptionShares).to.equal(redemptionShares);
-      });
-
-      it("Partially settles on report when vault has some balance", async () => {
+      it("Allows to partially settle redemptions with force rebalance", async () => {
         const vaultBalance = ether("0.7");
         await setBalance(stakingVaultAddress, vaultBalance);
 
         const sharesToRebalance = await lido.getSharesByPooledEth(vaultBalance);
-        const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsBefore.redemptionShares).to.equal(redemptionShares);
 
-        const unsettledRedemptionShares = redemptionShares - sharesToRebalance;
-        await expect(reportVaultDataWithProof(ctx, stakingVault))
-          .to.emit(vaultHub, "VaultObligationsSettled")
-          .withArgs(stakingVaultAddress, sharesToRebalance, 0n, unsettledRedemptionShares, 0n, 0n)
+        const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordBefore.redemptionShares).to.equal(redemptionShares);
+
+        const expectedRedemptions = redemptionShares - sharesToRebalance;
+
+        await expect(vaultHub.forceRebalance(stakingVaultAddress))
           .to.emit(vaultHub, "VaultRebalanced")
-          .withArgs(stakingVaultAddress, sharesToRebalance, await lido.getPooledEthBySharesRoundUp(sharesToRebalance));
+          .withArgs(stakingVaultAddress, sharesToRebalance, await lido.getPooledEthBySharesRoundUp(sharesToRebalance))
+          .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
+          .withArgs(stakingVaultAddress, expectedRedemptions);
 
-        const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsAfter.redemptionShares).to.equal(unsettledRedemptionShares);
+        const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordAfter.redemptionShares).to.equal(expectedRedemptions);
       });
 
-      it("Fully settles on report when vault has enough balance", async () => {
-        await setBalance(stakingVaultAddress, ether("100"));
+      it("Allows to fully settle redemptions with force rebalance", async () => {
+        const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordBefore.redemptionShares).to.equal(redemptionShares);
 
-        const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsBefore.redemptionShares).to.equal(redemptionShares);
-
-        await expect(reportVaultDataWithProof(ctx, stakingVault))
-          .to.emit(vaultHub, "VaultObligationsSettled")
-          .withArgs(stakingVaultAddress, redemptionShares, 0n, 0n, 0n, 0n)
+        await expect(vaultHub.forceRebalance(stakingVaultAddress))
           .to.emit(vaultHub, "VaultRebalanced")
-          .withArgs(stakingVaultAddress, redemptionShares, await lido.getPooledEthBySharesRoundUp(redemptionShares));
+          .withArgs(stakingVaultAddress, redemptionShares, await lido.getPooledEthBySharesRoundUp(redemptionShares))
+          .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
+          .withArgs(stakingVaultAddress, 0n);
 
-        const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-        expect(obligationsAfter.redemptionShares).to.equal(0n);
+        const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordAfter.redemptionShares).to.equal(0n);
       });
     });
   });
 
-  context("Obligations settlement", () => {
-    let redemptionShares: bigint;
-    let totalValue: bigint;
+  context("Lido Fees", () => {
+    it("Reverts if accrued fees are less than the cumulative fees", async () => {
+      const accruedLidoFees = ether("1.1");
 
-    beforeEach(async () => {
-      redemptionShares = ether("1");
-      const value = await lido.getPooledEthBySharesRoundUp(redemptionShares);
+      const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordBefore.unsettledLidoFees).to.equal(0n);
+      expect(recordBefore.settledLidoFees).to.equal(0n);
 
-      await dashboard.fund({ value });
-      await dashboard.mintShares(stranger, redemptionShares);
+      // Report the vault data with accrued lido fees
+      await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees });
 
-      totalValue = await vaultHub.totalValue(stakingVaultAddress);
+      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfter.unsettledLidoFees).to.equal(accruedLidoFees);
+      expect(recordAfter.settledLidoFees).to.equal(0n);
+
+      // Try to lower the fees in the report
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: accruedLidoFees - 1n }))
+        .to.be.revertedWithCustomError(vaultHub, "InvalidLidoFees")
+        .withArgs(stakingVaultAddress, accruedLidoFees - 1n, accruedLidoFees);
     });
 
-    it("Calculates settlement values correctly", async () => {
+    it("Updates on the vault report for vault with no balance", async () => {
       const accruedLidoFees = ether("1");
-      const vaultBalance = ether("0.7");
 
-      await vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, redemptionShares);
-      await setBalance(stakingVaultAddress, vaultBalance);
+      await setBalance(stakingVaultAddress, 0); // dirty hack to make the vault balance 0
 
-      expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(totalValue);
-      expect(await vaultHub.isVaultHealthy(stakingVaultAddress)).to.be.true;
+      const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordBefore.unsettledLidoFees).to.equal(0n);
+      expect(recordBefore.settledLidoFees).to.equal(0n);
 
-      const sharesToRebalance = await lido.getSharesByPooledEth(vaultBalance);
-      const unsettledRedemptionShares = redemptionShares - sharesToRebalance;
+      // Report the vault data with accrued Lido fees
+      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees }))
+        .to.emit(vaultHub, "LidoFeesUpdated")
+        .withArgs(stakingVaultAddress, accruedLidoFees, 0n);
 
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultBalance, accruedLidoFees }))
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, sharesToRebalance, 0n, unsettledRedemptionShares, accruedLidoFees, 0n);
-
-      const obligationsAfterReport = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfterReport.redemptionShares).to.equal(unsettledRedemptionShares);
-      expect(obligationsAfterReport.unsettledLidoFees).to.equal(accruedLidoFees);
-      expect(obligationsAfterReport.settledLidoFees).to.equal(0n);
+      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfter.unsettledLidoFees).to.equal(accruedLidoFees);
+      expect(recordAfter.settledLidoFees).to.equal(0n);
     });
 
-    it("Settles obligations in correct order", async () => {
-      const vaultBalance = ether("0.7");
+    it("Withdraws fees to the treasury when the vault has enough balance", async () => {
+      const accruedLidoFees = ether("1");
+
+      await dashboard.fund({ value: ether("2") });
+
+      const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordBefore.unsettledLidoFees).to.equal(0n);
+      expect(recordBefore.settledLidoFees).to.equal(0n);
+
+      // Report the vault data with accrued Lido fees
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees }))
+        .to.emit(vaultHub, "LidoFeesUpdated")
+        .withArgs(stakingVaultAddress, accruedLidoFees, 0n)
+        .to.emit(stakingVault, "BeaconChainDepositsPaused");
+
+      // Pay the fees to the treasury
+      await expect(vaultHub.payLidoFees(stakingVaultAddress))
+        .to.emit(vaultHub, "LidoFeesSettled")
+        .withArgs(stakingVaultAddress, accruedLidoFees, 0n, accruedLidoFees)
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(treasuryAddress, accruedLidoFees)
+        .to.emit(stakingVault, "BeaconChainDepositsResumed");
+
+      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfter.unsettledLidoFees).to.equal(0n);
+      expect(recordAfter.settledLidoFees).to.equal(accruedLidoFees);
+    });
+
+    it("Withdraws fees partially to the treasury when the vault has not enough balance", async () => {
+      // Make sure the vault has enough balance
+      const accruedLidoFees = ether("1");
+      const funding = ether("0.5");
+
+      await dashboard.fund({ value: funding });
+
+      const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordBefore.unsettledLidoFees).to.equal(0n);
+      expect(recordBefore.settledLidoFees).to.equal(0n);
+
+      const unsettledLidoFees = accruedLidoFees - funding;
+
+      // Report the vault data with accrued Lido fees
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees }))
+        .to.emit(vaultHub, "LidoFeesUpdated")
+        .withArgs(stakingVaultAddress, accruedLidoFees, 0n)
+        .to.emit(stakingVault, "BeaconChainDepositsPaused");
+
+      // Pay the fees to the treasury
+      await expect(vaultHub.payLidoFees(stakingVaultAddress))
+        .to.emit(vaultHub, "LidoFeesSettled")
+        .withArgs(stakingVaultAddress, funding, unsettledLidoFees, funding)
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(treasuryAddress, funding)
+        .to.emit(stakingVault, "BeaconChainDepositsResumed");
+
+      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfter.unsettledLidoFees).to.equal(unsettledLidoFees);
+      expect(recordAfter.settledLidoFees).to.equal(funding);
+    });
+
+    it("Withdraws fees in several consecutive payments", async () => {
       let accruedLidoFees = ether("1");
+      const initialFunding = ether("0.5");
+      const unsettledLidoFees = accruedLidoFees - initialFunding;
 
-      await vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, redemptionShares);
-      await setBalance(stakingVaultAddress, vaultBalance);
+      await dashboard.fund({ value: initialFunding });
 
-      const obligationsBefore = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsBefore.redemptionShares).to.equal(redemptionShares);
+      // Report the vault data with accrued Lido fees
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees }))
+        .to.emit(vaultHub, "LidoFeesUpdated")
+        .withArgs(stakingVaultAddress, accruedLidoFees, 0n)
+        .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
-      const sharesToRebalance = await lido.getSharesByPooledEth(vaultBalance);
-      const unsettledRedemptionShares = redemptionShares - sharesToRebalance;
-      const leftovers = vaultBalance - (await lido.getPooledEthBySharesRoundUp(sharesToRebalance));
+      // Pay the fees to the treasury partially
+      await expect(vaultHub.payLidoFees(stakingVaultAddress))
+        .to.emit(vaultHub, "LidoFeesSettled")
+        .withArgs(stakingVaultAddress, initialFunding, unsettledLidoFees, initialFunding)
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(treasuryAddress, initialFunding)
+        .to.emit(stakingVault, "BeaconChainDepositsResumed");
 
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue, accruedLidoFees }))
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, sharesToRebalance, 0n, unsettledRedemptionShares, accruedLidoFees, 0n);
-
-      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.redemptionShares).to.equal(unsettledRedemptionShares);
-      expect(obligationsAfter.unsettledLidoFees).to.equal(accruedLidoFees);
-      expect(obligationsAfter.settledLidoFees).to.equal(0n);
-      expect(await ethers.provider.getBalance(stakingVaultAddress)).to.equal(leftovers);
-
-      // fund to the vault to settle some obligations
-      const funded = ether("1");
-      const feesIncreased = ether("0.1");
-      await dashboard.fund({ value: funded });
-      const balanceAfterFunding = await ethers.provider.getBalance(stakingVaultAddress);
-      expect(balanceAfterFunding).to.equal(funded + leftovers);
-
-      // add some Lido fees
-      accruedLidoFees += feesIncreased;
-
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees })).to.emit(
+      // 2nd report with no fees emit nothing because fees are not changed (reported value is cumulative)
+      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees })).not.to.emit(
         vaultHub,
-        "VaultObligationsSettled",
+        "LidoFeesUpdated",
       );
 
-      const obligationsAfterFunding = await vaultHub.vaultObligations(stakingVaultAddress);
-      const balanceAfterReport = await ethers.provider.getBalance(stakingVaultAddress);
+      // Increase the fees
+      const delta = ether("0.1");
+      const expectedUnsettled = accruedLidoFees - initialFunding;
+      const feesToSettle = expectedUnsettled + delta;
+      accruedLidoFees += delta;
 
-      const settledRedemptions = await lido.getPooledEthBySharesRoundUp(unsettledRedemptionShares);
-      const expectedSettledLidoFees = balanceAfterFunding - balanceAfterReport - settledRedemptions;
+      // 3rd report with some fees updated
+      await expect(await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees }))
+        .to.emit(vaultHub, "LidoFeesUpdated")
+        .withArgs(stakingVaultAddress, feesToSettle, initialFunding);
 
-      expect(obligationsAfterFunding.redemptionShares).to.equal(0n);
-      expect(obligationsAfterFunding.unsettledLidoFees).to.equal(accruedLidoFees - expectedSettledLidoFees);
-      expect(obligationsAfterFunding.settledLidoFees).to.equal(expectedSettledLidoFees);
+      await dashboard.fund({ value: feesToSettle });
 
-      // fund the vault to settle all the obligations
-      const unsettledObligations = await vaultHub.vaultObligations(stakingVaultAddress);
-      await dashboard.fund({ value: unsettledObligations.unsettledLidoFees + feesIncreased });
+      // Pay the fees to the treasury
+      await expect(vaultHub.payLidoFees(stakingVaultAddress))
+        .to.emit(vaultHub, "LidoFeesSettled")
+        .withArgs(stakingVaultAddress, feesToSettle, 0n, accruedLidoFees)
+        .to.emit(stakingVault, "EtherWithdrawn")
+        .withArgs(treasuryAddress, feesToSettle);
 
-      accruedLidoFees += feesIncreased;
-
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees })).to.emit(
-        vaultHub,
-        "VaultObligationsSettled",
-      );
-
-      const obligationsAfterReport = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfterReport.redemptionShares).to.equal(0n);
-      expect(obligationsAfterReport.unsettledLidoFees).to.equal(0);
-      expect(obligationsAfterReport.settledLidoFees).to.equal(accruedLidoFees);
-
-      expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(0n);
-    });
-
-    it("Does not make the vault unhealthy", async () => {
-      const accruedLidoFees = ether("1");
-      const vaultBalance = ether("1.5");
-
-      await dashboard.fund({ value: vaultBalance });
-      await dashboard.mintShares(stranger, await dashboard.remainingMintingCapacityShares(0));
-
-      const feesToSettle = 100n;
-      await dashboard.fund({ value: feesToSettle }); // add some ether to make sure some fees are settled
-
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultBalance, accruedLidoFees })).to.emit(
-        vaultHub,
-        "VaultObligationsSettled",
-      );
-
-      expect(await vaultHub.isVaultHealthy(stakingVaultAddress)).to.be.true;
+      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfter.unsettledLidoFees).to.equal(0n);
+      expect(recordAfter.settledLidoFees).to.equal(accruedLidoFees);
     });
   });
 
-  context("Permissionless settlement", () => {
+  context("Settlement", () => {
     let redemptionShares: bigint;
     let accruedLidoFees: bigint;
     let unsettledLidoFees: bigint;
@@ -551,20 +434,23 @@ describe("Integration: Vault obligations", () => {
       await dashboard.mintShares(stranger, redemptionShares);
 
       await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees });
-      ({ unsettledLidoFees, settledLidoFees } = await vaultHub.vaultObligations(stakingVaultAddress));
+      ({ unsettledLidoFees, settledLidoFees } = await vaultHub.vaultRecord(stakingVaultAddress));
 
-      await vaultHub.connect(agentSigner).setVaultRedemptionShares(stakingVaultAddress, redemptionShares);
+      await vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares);
     });
 
-    it("Partially settles obligations with existing balance", async () => {
-      await expect(vaultHub.settleVaultObligations(stakingVaultAddress))
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, redemptionShares, 0n, 0n, unsettledLidoFees, settledLidoFees);
+    it("");
 
-      const obligationsAfter = await vaultHub.vaultObligations(stakingVaultAddress);
-      expect(obligationsAfter.redemptionShares).to.equal(0n);
-      expect(obligationsAfter.unsettledLidoFees).to.equal(unsettledLidoFees);
-      expect(obligationsAfter.settledLidoFees).to.equal(settledLidoFees);
+    it("Reverts when trying to pay fees before redemptions are settled", async () => {
+      await expect(vaultHub.payLidoFees(stakingVaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "UnsettledRedemptions",
+      );
+
+      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfter.redemptionShares).to.equal(redemptionShares);
+      expect(recordAfter.unsettledLidoFees).to.equal(unsettledLidoFees);
+      expect(recordAfter.settledLidoFees).to.equal(settledLidoFees);
     });
 
     it("Fully settles obligations", async () => {
@@ -579,6 +465,25 @@ describe("Integration: Vault obligations", () => {
       expect(obligationsAfter.redemptionShares).to.equal(0n);
       expect(obligationsAfter.unsettledLidoFees).to.equal(0n);
       expect(obligationsAfter.settledLidoFees).to.equal(accruedLidoFees);
+    });
+
+    it("Settles obligations in correct order", async () => {});
+
+    it("Does not make the vault unhealthy", async () => {
+      const vaultBalance = ether("1.5");
+
+      await dashboard.fund({ value: vaultBalance });
+      await dashboard.mintShares(stranger, await dashboard.remainingMintingCapacityShares(0));
+
+      const feesToSettle = 100n;
+      await dashboard.fund({ value: feesToSettle }); // add some ether to make sure some fees are settled
+
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: vaultBalance, accruedLidoFees })).to.emit(
+        vaultHub,
+        "VaultObligationsSettled",
+      );
+
+      expect(await vaultHub.isVaultHealthy(stakingVaultAddress)).to.be.true;
     });
   });
 

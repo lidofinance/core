@@ -557,7 +557,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     /**
      * @notice Emitted when validator withdrawals are requested via EIP-7002
      * @param pubkeys Concatenated public keys of the validators to withdraw
-     * @param amountsInGwei Amounts of ether to withdraw per validator
+     * @param amountsInGwei Amounts of Gwei to withdraw per validator
      * @param refundRecipient Address to receive any excess withdrawal fee
      * @param excess Amount of excess fee refunded to recipient
      */
