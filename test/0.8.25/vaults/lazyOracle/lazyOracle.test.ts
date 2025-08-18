@@ -42,8 +42,8 @@ const record: Readonly<VaultHub.VaultRecordStruct> = {
   ],
   minimalReserve: 0n,
   redemptionShares: 0n,
+  cumulativeLidoFees: 0n,
   settledLidoFees: 0n,
-  unsettledLidoFees: 0n,
 };
 
 describe("LazyOracle.sol", () => {
@@ -138,9 +138,10 @@ describe("LazyOracle.sol", () => {
         ],
         minimalReserve: 0n,
         redemptionShares: 0n,
+        cumulativeLidoFees: 0n,
         settledLidoFees: 0n,
-        unsettledLidoFees: 0n,
       });
+
       const vaults = await lazyOracle.batchVaultsInfo(0n, 2n);
 
       expect(vaults.length).to.equal(1);

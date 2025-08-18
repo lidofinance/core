@@ -73,7 +73,7 @@ contract VaultHub__HarnessForReporting is VaultHub {
             ],
             minimalReserve: 0,
             redemptionShares: 0,
-            unsettledLidoFees: 0,
+            cumulativeLidoFees: 0,
             settledLidoFees: 0
         });
 

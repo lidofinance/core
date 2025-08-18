@@ -225,7 +225,7 @@ describe("VaultHub.sol:forceRebalance", () => {
         const balanceBefore = await ethers.provider.getBalance(vaultAddress);
 
         await expect(vaultHub.forceRebalance(vaultAddress))
-          .to.be.revertedWithCustomError(vaultHub, "NothingToRebalance")
+          .to.be.revertedWithCustomError(vaultHub, "NoReasonForForceRebalance")
           .withArgs(vaultAddress);
 
         const balanceAfter = await ethers.provider.getBalance(vaultAddress);

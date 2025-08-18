@@ -101,8 +101,8 @@ describe("Dashboard.sol", () => {
     ],
     minimalReserve: 0n,
     redemptionShares: 0n,
+    cumulativeLidoFees: 0n,
     settledLidoFees: 0n,
-    unsettledLidoFees: 0n,
   };
 
   const connection: Readonly<VaultHub.VaultConnectionStruct> = {
@@ -124,7 +124,7 @@ describe("Dashboard.sol", () => {
     totalValue,
     liabilityShares,
     locked,
-    unsettledLidoFees,
+    cumulativeLidoFees,
     settledLidoFees,
     redemptionShares,
     vaultBalance = 0n,
@@ -153,7 +153,7 @@ describe("Dashboard.sol", () => {
       report: { ...record.report, totalValue: totalValue ?? record.report.totalValue },
       liabilityShares: liabilityShares ?? record.liabilityShares,
       locked: locked ?? record.locked,
-      unsettledLidoFees: unsettledLidoFees ?? record.unsettledLidoFees,
+      cumulativeLidoFees: cumulativeLidoFees ?? record.cumulativeLidoFees,
       settledLidoFees: settledLidoFees ?? record.settledLidoFees,
       redemptionShares: redemptionShares ?? record.redemptionShares,
     });
