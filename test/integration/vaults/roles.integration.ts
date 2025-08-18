@@ -215,19 +215,6 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         });
 
         // requires prepared state for this test to pass, skipping for now
-        it("compensateDisprovenPredepositFromPDG", async () => {
-          await testMethod(
-            "compensateDisprovenPredepositFromPDG",
-            {
-              successUsers: [roles.pdgCompensator, owner],
-              failingUsers: Object.values(roles).filter((r) => r !== roles.pdgCompensator && r !== owner),
-            },
-            [SAMPLE_PUBKEY, stranger],
-            await dashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
-          );
-        });
-
-        // requires prepared state for this test to pass, skipping for now
         it.skip("proveUnknownValidatorsToPDG", async () => {
           await testMethod(
             "proveUnknownValidatorsToPDG",

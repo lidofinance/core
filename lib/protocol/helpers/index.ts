@@ -23,6 +23,7 @@ export { calcNodeOperatorRewards } from "./staking-module";
 export {
   autofillRoles,
   getRoleMethods,
+  calculateLockedValue,
   createVaultProxy,
   createVaultsReportTree,
   createVaultWithDashboard,

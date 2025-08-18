@@ -732,64 +732,6 @@ describe("VaultHub.sol:hub", () => {
       await vault.connect(user).transferOwnership(vaultHub);
     });
 
-    it("reverts if reserve ratio BP is zero", async () => {
-      await operatorGridMock.changeVaultTierParams(vault, {
-        shareLimit: 0n,
-        reserveRatioBP: 0n,
-        forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        infraFeeBP: INFRA_FEE_BP,
-        liquidityFeeBP: LIQUIDITY_FEE_BP,
-        reservationFeeBP: RESERVATION_FEE_BP,
-      });
-
-      await expect(vaultHub.connect(user).connectVault(vault)).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
-    });
-
-    it("reverts if reserve ratio is too high", async () => {
-      const tooHighReserveRatioBP = TOTAL_BASIS_POINTS + 1n;
-
-      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
-        shareLimit: SHARE_LIMIT,
-        reserveRatioBP: tooHighReserveRatioBP,
-        forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        infraFeeBP: INFRA_FEE_BP,
-        liquidityFeeBP: LIQUIDITY_FEE_BP,
-        reservationFeeBP: RESERVATION_FEE_BP,
-      });
-
-      await expect(vaultHub.connect(user).connectVault(vault))
-        .to.be.revertedWithCustomError(vaultHub, "InvalidBasisPoints")
-        .withArgs(tooHighReserveRatioBP, TOTAL_BASIS_POINTS);
-    });
-
-    it("reverts if rebalance threshold BP is zero", async () => {
-      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
-        shareLimit: SHARE_LIMIT,
-        reserveRatioBP: RESERVE_RATIO_BP,
-        forcedRebalanceThresholdBP: 0n,
-        infraFeeBP: INFRA_FEE_BP,
-        liquidityFeeBP: LIQUIDITY_FEE_BP,
-        reservationFeeBP: RESERVATION_FEE_BP,
-      });
-
-      await expect(vaultHub.connect(user).connectVault(vault)).to.be.revertedWithCustomError(vaultHub, "ZeroArgument");
-    });
-
-    it("reverts if rebalance threshold BP is higher than reserve ratio BP", async () => {
-      await operatorGridMock.changeVaultTierParams(await vault.getAddress(), {
-        shareLimit: SHARE_LIMIT,
-        reserveRatioBP: RESERVE_RATIO_BP,
-        forcedRebalanceThresholdBP: RESERVE_RATIO_BP + 1n,
-        infraFeeBP: INFRA_FEE_BP,
-        liquidityFeeBP: LIQUIDITY_FEE_BP,
-        reservationFeeBP: RESERVATION_FEE_BP,
-      });
-
-      await expect(vaultHub.connect(user).connectVault(vault))
-        .to.be.revertedWithCustomError(vaultHub, "InvalidBasisPoints")
-        .withArgs(RESERVE_RATIO_BP + 1n, RESERVE_RATIO_BP);
-    });
-
     it("reverts if vault is already connected", async () => {
       const { vault: connectedVault } = await createAndConnectVault(vaultFactory);
 

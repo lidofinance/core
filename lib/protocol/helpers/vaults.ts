@@ -26,13 +26,14 @@ import {
   getCurrentBlockTimestamp,
   impersonate,
   prepareLocalMerkleTree,
+  TOTAL_BASIS_POINTS,
   Validator,
 } from "lib";
 
 import { ether } from "../../units";
 import { LoadedContract, ProtocolContext } from "../types";
 
-import { report } from "./accounting";
+import { report, waitNextAvailableReportTime } from "./accounting";
 
 const VAULT_NODE_OPERATOR_FEE = 3_00n; // 3% node operator fee
 const DEFAULT_CONFIRM_EXPIRY = days(7n);
@@ -50,7 +51,6 @@ export const vaultRoleKeys = [
   "validatorExitRequester",
   "validatorWithdrawalTriggerer",
   "disconnecter",
-  "pdgCompensator",
   "unknownValidatorProver",
   "unguaranteedBeaconChainDepositor",
   "tierChanger",
@@ -144,7 +144,6 @@ export const getRoleMethods = (dashboard: Dashboard): VaultRoleMethods => {
     validatorExitRequester: dashboard.REQUEST_VALIDATOR_EXIT_ROLE(),
     validatorWithdrawalTriggerer: dashboard.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),
     disconnecter: dashboard.VOLUNTARY_DISCONNECT_ROLE(),
-    pdgCompensator: dashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(),
     unknownValidatorProver: dashboard.PDG_PROVE_VALIDATOR_ROLE(),
     unguaranteedBeaconChainDepositor: dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
     tierChanger: dashboard.CHANGE_TIER_ROLE(),
@@ -249,8 +248,9 @@ export async function reportVaultDataWithProof(
   params: Partial<Omit<VaultReportItem, "vault">> & {
     reportTimestamp?: bigint;
     reportRefSlot?: bigint;
+    updateReportData?: boolean;
+    waitForNextRefSlot?: boolean;
   } = {},
-  updateReportData = true,
 ) {
   const { vaultHub, locator, lazyOracle, hashConsensus } = ctx.contracts;
 
@@ -264,9 +264,14 @@ export async function reportVaultDataWithProof(
 
   const reportTree = createVaultsReportTree([vaultReport]);
 
-  if (updateReportData) {
+  if (params.waitForNextRefSlot) {
+    await waitNextAvailableReportTime(ctx);
+  }
+
+  if (params.updateReportData ?? true) {
     const reportTimestampArg = params.reportTimestamp ?? (await getCurrentBlockTimestamp());
     const reportRefSlotArg = params.reportRefSlot ?? (await hashConsensus.getCurrentFrame()).refSlot;
+
     const accountingSigner = await impersonate(await locator.accountingOracle(), ether("100"));
     await lazyOracle
       .connect(accountingSigner)
@@ -462,3 +467,32 @@ export const getProofAndDepositData = async (
   ];
   return { witnesses, postdeposit };
 };
+
+export async function calculateLockedValue(
+  ctx: ProtocolContext,
+  stakingVault: StakingVault,
+  params: {
+    liabilityShares?: bigint;
+    liabilitySharesIncrease?: bigint;
+    minimalReserve?: bigint;
+    reserveRatioBP?: bigint;
+  } = {},
+) {
+  const { vaultHub, lido } = ctx.contracts;
+
+  const liabilitySharesIncrease = params.liabilitySharesIncrease ?? 0n;
+
+  const liabilityShares =
+    (params.liabilityShares ?? (await vaultHub.liabilityShares(stakingVault))) + liabilitySharesIncrease;
+  const minimalReserve = params.minimalReserve ?? (await vaultHub.vaultRecord(stakingVault)).minimalReserve;
+  const reserveRatioBP = params.reserveRatioBP ?? (await vaultHub.vaultConnection(stakingVault)).reserveRatioBP;
+
+  const liability = await lido.getPooledEthBySharesRoundUp(liabilityShares);
+  const reserve = ceilDiv(liability * reserveRatioBP, TOTAL_BASIS_POINTS - reserveRatioBP);
+
+  return liability + (reserve > minimalReserve ? reserve : minimalReserve);
+}
+
+function ceilDiv(a: bigint, b: bigint): bigint {
+  return (a + b - 1n) / b;
+}

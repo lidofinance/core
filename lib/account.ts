@@ -1,4 +1,5 @@
 import { bigintToHex } from "bigint-conversion";
+import { Addressable } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -7,7 +8,11 @@ import { randomAddress } from "./address";
 import { getNetworkName } from "./network";
 import { ether } from "./units";
 
-export async function impersonate(address: string, balance?: bigint): Promise<HardhatEthersSigner> {
+export async function impersonate(address: string | Addressable, balance?: bigint): Promise<HardhatEthersSigner> {
+  if (typeof address !== "string") {
+    address = await address.getAddress();
+  }
+
   const networkName = await getNetworkName();
 
   await ethers.provider.send(`${networkName}_impersonateAccount`, [address]);

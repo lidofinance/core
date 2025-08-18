@@ -916,21 +916,6 @@ contract VaultHub is PausableUntilWithRoles {
         _predepositGuarantee().proveUnknownValidator(_witness, IStakingVault(_vault));
     }
 
-    /// @notice Compensates disproven predeposit from PDG to the recipient
-    /// @param _vault vault address
-    /// @param _pubkey pubkey of the validator
-    /// @param _recipient address to compensate the disproven validator predeposit to
-    /// @return amount of compensated ether
-    function compensateDisprovenPredepositFromPDG(
-        address _vault,
-        bytes calldata _pubkey,
-        address _recipient
-    ) external returns (uint256) {
-        _checkConnectionAndOwner(_vault);
-
-        return _predepositGuarantee().compensateDisprovenPredeposit(_pubkey, _recipient);
-    }
-
     function _connectVault(
         address _vault,
         uint256 _shareLimit,
@@ -941,14 +926,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reservationFeeBP
     ) internal {
         _requireSaneShareLimit(_shareLimit);
-        _requireNotZero(_reserveRatioBP);
-        _requireLessThanBP(_reserveRatioBP, TOTAL_BASIS_POINTS);
-        _requireNotZero(_forcedRebalanceThresholdBP);
-        _requireLessThanBP(_forcedRebalanceThresholdBP, _reserveRatioBP);
-
-        _requireLessThanBP(_infraFeeBP, MAX_FEE_BP);
-        _requireLessThanBP(_liquidityFeeBP, MAX_FEE_BP);
-        _requireLessThanBP(_reservationFeeBP, MAX_FEE_BP);
 
         VaultConnection memory connection = _vaultConnection(_vault);
         if (connection.vaultIndex != 0) revert AlreadyConnected(_vault, connection.vaultIndex);
@@ -1178,14 +1155,17 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _liabilityShares amount of shares that the vault is minted
     /// @param _minimalReserve minimal amount of additional reserve to be locked
     /// @param _reserveRatioBP the reserve ratio of the vault
-    /// @return the amount of collateral that is to be locked on the vault
+    /// @return the amount of collateral to be locked on the vault
     function _locked(
         uint256 _liabilityShares,
         uint256 _minimalReserve,
         uint256 _reserveRatioBP
     ) internal view returns (uint256) {
         uint256 liability = _getPooledEthBySharesRoundUp(_liabilityShares);
-        uint256 reserve = liability * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - _reserveRatioBP) - liability; // roundUp?
+
+        // uint256 reserve = liability * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - _reserveRatioBP) - liability;
+        // simplified to:
+        uint256 reserve = Math256.ceilDiv(liability * _reserveRatioBP, TOTAL_BASIS_POINTS - _reserveRatioBP);
 
         return liability + Math256.max(reserve, _minimalReserve);
     }
