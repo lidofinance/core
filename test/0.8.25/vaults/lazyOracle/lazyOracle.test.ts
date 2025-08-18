@@ -42,7 +42,7 @@ const record: Readonly<VaultHub.VaultRecordStruct> = {
   ],
   minimalReserve: 0n,
   redemptionShares: 0n,
-  cumulativeLidoFees: 0n,
+  accruedLidoFees: 0n,
   settledLidoFees: 0n,
 };
 
@@ -138,7 +138,7 @@ describe("LazyOracle.sol", () => {
         ],
         minimalReserve: 0n,
         redemptionShares: 0n,
-        cumulativeLidoFees: 0n,
+        accruedLidoFees: 0n,
         settledLidoFees: 0n,
       });
 

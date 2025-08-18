@@ -130,25 +130,11 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
     });
 
-    it.skip("Unpauses beacon deposits on report when paused by report", async () => {
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") })).to.emit(
-        stakingVault,
-        "BeaconChainDepositsPaused",
-      );
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
-
-      await dashboard.fund({ value: ether("1") });
-
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") })).to.emit(
-        stakingVault,
-        "BeaconChainDepositsResumed",
-      );
-    });
-
     it("Correctly handles paused beacon deposits when paused by owner", async () => {
-      const lidoFees = ether("1");
+      const accruedLidoFees = ether("1");
+
       // Pause by report
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: lidoFees })).to.emit(
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees })).to.emit(
         stakingVault,
         "BeaconChainDepositsPaused",
       );
@@ -163,12 +149,12 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       // Check that owner now pauses the vault
       expect((await vaultHub.vaultConnection(stakingVaultAddress)).isBeaconDepositsManuallyPaused).to.be.true;
 
-      await dashboard.fund({ value: lidoFees });
+      await dashboard.fund({ value: accruedLidoFees });
 
       // Check that even if obligation settled vault is still paused
       await expect(vaultHub.payLidoFees(stakingVaultAddress))
         .to.emit(vaultHub, "LidoFeesSettled")
-        .withArgs(stakingVaultAddress, lidoFees, 0, lidoFees)
+        .withArgs(stakingVaultAddress, accruedLidoFees, accruedLidoFees, accruedLidoFees)
         .and.not.to.emit(stakingVault, "BeaconChainDepositsResumed");
 
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;

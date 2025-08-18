@@ -101,7 +101,7 @@ describe("Dashboard.sol", () => {
     ],
     minimalReserve: 0n,
     redemptionShares: 0n,
-    cumulativeLidoFees: 0n,
+    accruedLidoFees: 0n,
     settledLidoFees: 0n,
   };
 
@@ -124,7 +124,7 @@ describe("Dashboard.sol", () => {
     totalValue,
     liabilityShares,
     locked,
-    cumulativeLidoFees,
+    accruedLidoFees,
     settledLidoFees,
     redemptionShares,
     vaultBalance = 0n,
@@ -153,7 +153,7 @@ describe("Dashboard.sol", () => {
       report: { ...record.report, totalValue: totalValue ?? record.report.totalValue },
       liabilityShares: liabilityShares ?? record.liabilityShares,
       locked: locked ?? record.locked,
-      cumulativeLidoFees: cumulativeLidoFees ?? record.cumulativeLidoFees,
+      accruedLidoFees: accruedLidoFees ?? record.accruedLidoFees,
       settledLidoFees: settledLidoFees ?? record.settledLidoFees,
       redemptionShares: redemptionShares ?? record.redemptionShares,
     });

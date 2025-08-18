@@ -91,7 +91,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint128 redemptionShares;
         // ### 6th slot
         /// @notice cumulative value for Lido fees that accrued on the vault
-        uint128 cumulativeLidoFees;
+        uint128 accruedLidoFees;
         /// @notice cumulative value for Lido fees that were settled on the vault
         uint128 settledLidoFees;
     }
@@ -476,15 +476,16 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
 
         // TODO: remove this check once we have a proper LazyOracle sanity check for Lido fees
-        uint256 cumulativeLidoFees = record.cumulativeLidoFees;
-        if (_reportCumulativeLidoFees < cumulativeLidoFees) {
-            revert InvalidLidoFees(_vault, _reportCumulativeLidoFees, cumulativeLidoFees);
+        uint256 accruedLidoFees = record.accruedLidoFees;
+        if (_reportCumulativeLidoFees < accruedLidoFees) {
+            revert InvalidLidoFees(_vault, _reportCumulativeLidoFees, accruedLidoFees);
         }
 
-        record.cumulativeLidoFees = uint128(_reportCumulativeLidoFees);
-
         uint256 settledLidoFees = record.settledLidoFees;
-        emit LidoFeesUpdated(_vault, settledLidoFees, _reportCumulativeLidoFees);
+        if (_reportCumulativeLidoFees != accruedLidoFees) {
+            record.accruedLidoFees = uint128(_reportCumulativeLidoFees);
+            emit LidoFeesUpdated(_vault, _reportCumulativeLidoFees, settledLidoFees);
+        }
 
         if (connection.pendingDisconnect) {
             // Disconnect the vault if it's healthy and has no slashing reserve
@@ -898,7 +899,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _withdraw(_vault, record, LIDO_LOCATOR.treasury(), transferToLido);
 
-        emit LidoFeesSettled(_vault, transferToLido, settledLidoFees, record.cumulativeLidoFees);
+        emit LidoFeesSettled(_vault, transferToLido, record.accruedLidoFees, settledLidoFees);
 
         _updateBeaconChainDepositsPause(_vault, record, connection);
     }
@@ -970,7 +971,7 @@ contract VaultHub is PausableUntilWithRoles {
             inOutDelta: DoubleRefSlotCache.InitializeInt104DoubleCache(int104(int256(vaultBalance))),
             minimalReserve: uint128(CONNECT_DEPOSIT),
             redemptionShares: 0,
-            cumulativeLidoFees: 0,
+            accruedLidoFees: 0,
             settledLidoFees: 0
         });
 
@@ -1273,7 +1274,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _unsettledLidoFees(VaultRecord storage _record) internal view returns (uint256) {
-        return _record.cumulativeLidoFees - _record.settledLidoFees;
+        return _record.accruedLidoFees - _record.settledLidoFees;
     }
 
     function _calculateLidoFeesToTransfer(
@@ -1315,12 +1316,12 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 locked_ = _record.locked;
         if (totalValue_ <= locked_) return 0;
 
-        uint256 reserved = _getPooledEthBySharesRoundUp(_record.redemptionShares) + _unsettledLidoFees(_record);
+        uint256 obligationsValue = _getPooledEthBySharesRoundUp(_record.redemptionShares) + _unsettledLidoFees(_record);
         uint256 unlocked = totalValue_ - locked_;
         uint256 vaultBalance = _vault.balance;
-        if (unlocked <= reserved || vaultBalance <= reserved) return 0;
+        if (unlocked <= obligationsValue || vaultBalance <= obligationsValue) return 0;
 
-        return Math256.min(unlocked, vaultBalance) - reserved;
+        return Math256.min(unlocked, vaultBalance) - obligationsValue;
     }
 
     function _updateVaultFees(
@@ -1499,8 +1500,8 @@ contract VaultHub is PausableUntilWithRoles {
      */
     event VaultOwnershipTransferred(address indexed vault, address indexed newOwner, address indexed oldOwner);
 
-    event LidoFeesUpdated(address indexed vault, uint256 settledLidoFees, uint256 cumulativeLidoFees);
-    event LidoFeesSettled(address indexed vault, uint256 transfered, uint256 settledLidoFees, uint256 cumulativeLidoFees);
+    event LidoFeesUpdated(address indexed vault, uint256 accruedLidoFees, uint256 settledLidoFees);
+    event LidoFeesSettled(address indexed vault, uint256 transfered, uint256 accruedLidoFees, uint256 settledLidoFees);
     event VaultRedemptionSharesUpdated(address indexed vault, uint256 redemptionShares);
 
     event BeaconChainDepositsPausedByOwner(address indexed vault);
