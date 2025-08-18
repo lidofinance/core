@@ -57,7 +57,7 @@ contract Lido__MockForAccountingOracle is ILido {
         uint256 sharesRequestedToBurn,
         uint256[] calldata withdrawalFinalizationBatches,
         uint256 simulatedShareRate
-    ) external {
+    ) external returns (uint256[4] memory postRebaseAmounts) {
         _handleOracleReportLastCall.currentReportTimestamp = currentReportTimestamp;
         _handleOracleReportLastCall.secondsElapsedSinceLastReport = secondsElapsedSinceLastReport;
         _handleOracleReportLastCall.numValidators = numValidators;
@@ -80,5 +80,11 @@ contract Lido__MockForAccountingOracle is ILido {
                 1 /* IGNORED sharesMintedAsFees */
             );
         }
+
+        // Return mock post rebase amounts
+        postRebaseAmounts[0] = 0; // postTotalPooledEther
+        postRebaseAmounts[1] = 0; // preTotalPooledEther
+        postRebaseAmounts[2] = 0; // timeElapsed
+        postRebaseAmounts[3] = 0; // totalShares
     }
 }

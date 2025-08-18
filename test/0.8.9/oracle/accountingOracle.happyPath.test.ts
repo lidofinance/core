@@ -124,11 +124,6 @@ describe("AccountingOracle.sol:happyPath", () => {
       const { refSlot } = await consensus.getCurrentFrame();
 
       extraData = {
-        stuckKeys: [
-          { moduleId: 1, nodeOpIds: [0], keysCounts: [1] },
-          { moduleId: 2, nodeOpIds: [0], keysCounts: [2] },
-          { moduleId: 3, nodeOpIds: [2], keysCounts: [3] },
-        ],
         exitedKeys: [
           { moduleId: 2, nodeOpIds: [1, 2], keysCounts: [1, 3] },
           { moduleId: 3, nodeOpIds: [1], keysCounts: [2] },
@@ -300,7 +295,6 @@ describe("AccountingOracle.sol:happyPath", () => {
 
     it(`an extra data not matching the consensus hash cannot be submitted`, async () => {
       const invalidExtraData = {
-        stuckKeys: [...extraData.stuckKeys],
         exitedKeys: [...extraData.exitedKeys],
       };
       invalidExtraData.exitedKeys[0].keysCounts = [...invalidExtraData.exitedKeys[0].keysCounts];
@@ -355,27 +349,7 @@ describe("AccountingOracle.sol:happyPath", () => {
       expect(call2.keysCounts).to.equal("0x" + [2].map((i) => numberToHex(i, 16)).join(""));
     });
 
-    it("Staking router got the stuck keys by node op report", async () => {
-      const totalReportCalls = await mockStakingRouter.totalCalls_reportStuckKeysByNodeOperator();
-      expect(totalReportCalls).to.equal(3);
-
-      const call1 = await mockStakingRouter.calls_reportStuckKeysByNodeOperator(0);
-      expect(call1.stakingModuleId).to.equal(1);
-      expect(call1.nodeOperatorIds).to.equal("0x" + [0].map((i) => numberToHex(i, 8)).join(""));
-      expect(call1.keysCounts).to.equal("0x" + [1].map((i) => numberToHex(i, 16)).join(""));
-
-      const call2 = await mockStakingRouter.calls_reportStuckKeysByNodeOperator(1);
-      expect(call2.stakingModuleId).to.equal(2);
-      expect(call2.nodeOperatorIds).to.equal("0x" + [0].map((i) => numberToHex(i, 8)).join(""));
-      expect(call2.keysCounts).to.equal("0x" + [2].map((i) => numberToHex(i, 16)).join(""));
-
-      const call3 = await mockStakingRouter.calls_reportStuckKeysByNodeOperator(2);
-      expect(call3.stakingModuleId).to.equal(3);
-      expect(call3.nodeOperatorIds).to.equal("0x" + [2].map((i) => numberToHex(i, 8)).join(""));
-      expect(call3.keysCounts).to.equal("0x" + [3].map((i) => numberToHex(i, 16)).join(""));
-    });
-
-    it("Staking router was told that stuck and exited keys updating is finished", async () => {
+    it("Staking router was told that exited keys updating is finished", async () => {
       const totalFinishedCalls = await mockStakingRouter.totalCalls_onValidatorsCountsByNodeOperatorReportingFinished();
       expect(totalFinishedCalls).to.equal(1);
     });
@@ -468,12 +442,7 @@ describe("AccountingOracle.sol:happyPath", () => {
       expect(totalReportCalls).to.equal(2);
     });
 
-    it(`Staking router didn't get the stuck keys by node op report`, async () => {
-      const totalReportCalls = await mockStakingRouter.totalCalls_reportStuckKeysByNodeOperator();
-      expect(totalReportCalls).to.equal(3);
-    });
-
-    it("Staking router was told that stuck and exited keys updating is finished", async () => {
+    it("Staking router was told that exited keys updating is finished", async () => {
       const totalFinishedCalls = await mockStakingRouter.totalCalls_onValidatorsCountsByNodeOperatorReportingFinished();
       expect(totalFinishedCalls).to.equal(2);
     });

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 // For full version see: https://github.com/lidofinance/community-staking-module/blob/develop/src/interfaces/ICSModule.sol
-import { IStakingModule } from "contracts/0.8.9/interfaces/IStakingModule.sol";
+import { IStakingModule } from "contracts/common/interfaces/IStakingModule.sol";
 
 pragma solidity 0.8.9;
 
