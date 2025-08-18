@@ -82,6 +82,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Calls the parent's initializer and approves the max allowance for WSTETH for gas savings
      * @param _defaultAdmin The address of the default admin
      * @param _nodeOperatorManager The address of the node operator manager
+     * @param _nodeOperatorFeeRecipient The address of the node operator fee recipient
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry time in seconds
      */

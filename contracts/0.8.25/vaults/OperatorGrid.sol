@@ -129,6 +129,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         mapping(address vault => uint256 tierId) vaultTier;
         mapping(address nodeOperator => Group) groups;
         address[] nodeOperators;
+        /// @notice if true, vault is in jail and can't mint stETH
+        mapping(address vault => bool isInJail) isVaultInJail;
     }
 
     /**
@@ -500,6 +502,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         ERC7201Storage storage $ = _getStorage();
 
+        if ($.isVaultInJail[_vault]) revert VaultInJail();
+
         uint256 tierId = $.vaultTier[_vault];
         Tier storage tier_ = $.tiers[tierId];
 
@@ -540,6 +544,20 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
             Group storage group_ = $.groups[tier_.operator];
             group_.liabilityShares -= uint96(_amount);
         }
+    }
+
+    /// @notice Updates if the vault is in jail
+    /// @param _vault vault address
+    /// @param _isInJail true if the vault is in jail, false otherwise
+    /// @dev msg.sender must have VAULT_MASTER_ROLE
+    function setVaultJailStatus(address _vault, bool _isInJail) external onlyRole(REGISTRY_ROLE) {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+
+        ERC7201Storage storage $ = _getStorage();
+        if ($.isVaultInJail[_vault] == _isInJail) revert VaultInJailAlreadySet();
+        $.isVaultInJail[_vault] = _isInJail;
+
+        emit VaultJailStatusUpdated(_vault, _isInJail);
     }
 
     /// @notice Get vault limits
@@ -591,6 +609,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         uint256 gridShareLimit = _gridRemainingShareLimit(_vault) + liabilityShares;
         return Math256.min(gridShareLimit, shareLimit);
+    }
+
+    /// @notice Returns true if the vault is in jail
+    /// @param _vault address of the vault
+    /// @return true if the vault is in jail
+    function isVaultInJail(address _vault) external view returns (bool) {
+        return _getStorage().isVaultInJail[_vault];
     }
 
     /// @notice Returns the remaining share limit in a given tier and group
@@ -681,6 +706,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
       uint256 liquidityFeeBP,
       uint256 reservationFeeBP
     );
+    event VaultJailStatusUpdated(address indexed vault, bool isInJail);
 
     // -----------------------------
     //            ERRORS
@@ -692,6 +718,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     error GroupLimitExceeded();
     error NodeOperatorNotExists();
     error TierLimitExceeded();
+    error VaultInJailAlreadySet();
+    error VaultInJail();
 
     error TierNotExists();
     error TierAlreadySet();

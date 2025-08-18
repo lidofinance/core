@@ -37,8 +37,6 @@ contract VaultHub is PausableUntilWithRoles {
         mapping(address vault => VaultRecord) records;
         /// @notice connection parameters for each vault
         mapping(address vault => VaultConnection) connections;
-        /// @notice share limit caps for each vault
-        mapping(address vault => ShareLimitCap) shareLimitCaps;
         /// @notice obligation values for each vault
         mapping(address vault => VaultObligations) obligations;
         /// @notice 1-based array of vaults connected to the hub. index 0 is reserved for not connected vaults
@@ -96,11 +94,6 @@ contract VaultHub is PausableUntilWithRoles {
         int104 inOutDelta;
         /// @notice timestamp (in seconds)
         uint48 timestamp;
-    }
-
-    struct ShareLimitCap {
-        uint96 value;
-        bool isActive;
     }
 
     /**
@@ -268,11 +261,6 @@ contract VaultHub is PausableUntilWithRoles {
         return _vaultObligations(_vault);
     }
 
-    /// @return the share limit cap for the vault
-    function shareLimitCap(address _vault) external view returns (ShareLimitCap memory) {
-        return _storage().shareLimitCaps[_vault];
-    }
-
     /// @return true if the vault is connected to the hub
     function isVaultConnected(address _vault) external view returns (bool) {
         return _vaultConnection(_vault).vaultIndex != 0;
@@ -378,8 +366,6 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 reservationFeeBP
         ) = _operatorGrid().vaultInfo(_vault);
 
-        _requireShareLimitCap(_vault, shareLimit);
-
         _connectVault(_vault,
             shareLimit,
             reserveRatioBP,
@@ -400,47 +386,6 @@ contract VaultHub is PausableUntilWithRoles {
             liquidityFeeBP: liquidityFeeBP,
             reservationFeeBP: reservationFeeBP
         });
-    }
-
-    /// @notice updates share limit for the vault
-    /// Setting share limit to zero actually pause the vault's ability to mint
-    /// @param _vault vault address
-    /// @param _shareLimit new share limit
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function updateShareLimit(address _vault, uint256 _shareLimit) external onlyRole(VAULT_MASTER_ROLE) {
-        _requireNotZero(_vault);
-        _requireSaneShareLimit(_shareLimit);
-
-        VaultConnection storage connection = _checkConnection(_vault);
-        connection.shareLimit = uint96(_shareLimit);
-
-        emit VaultShareLimitUpdated(_vault, _shareLimit);
-    }
-
-    /// @notice updates the share limit cap for the vault
-    /// @param _vault vault address
-    /// @param _shareLimitCap new share limit cap
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function updateShareLimitCap(address _vault, uint256 _shareLimitCap) external onlyRole(VAULT_MASTER_ROLE) {
-        _requireNotZero(_vault);
-
-        _storage().shareLimitCaps[_vault] = ShareLimitCap({
-            value: uint96(_shareLimitCap),
-            isActive: true
-        });
-
-        emit VaultShareLimitCapUpdated(_vault, _shareLimitCap);
-    }
-
-    /// @notice removes the share limit cap for the vault
-    /// @param _vault vault address
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function removeShareLimitCap(address _vault) external onlyRole(VAULT_MASTER_ROLE) {
-        _requireNotZero(_vault);
-
-        delete _storage().shareLimitCaps[_vault];
-
-        emit VaultShareLimitCapRemoved(_vault);
     }
 
     /// @notice updates fees for the vault
@@ -480,7 +425,6 @@ contract VaultHub is PausableUntilWithRoles {
     ) external {
         _requireSender(address(_operatorGrid()));
         _requireSaneShareLimit(_shareLimit);
-        _requireShareLimitCap(_vault, _shareLimit);
 
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
@@ -1603,11 +1547,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (_shareLimit > maxSaneShareLimit) revert ShareLimitTooHigh(_shareLimit, maxSaneShareLimit);
     }
 
-    function _requireShareLimitCap(address _vault, uint256 _shareLimit) internal view {
-        ShareLimitCap memory shareLimitCap = _storage().shareLimitCaps[_vault];
-        if (shareLimitCap.isActive && _shareLimit > shareLimitCap.value) revert ShareLimitCapExceeded(_vault, _shareLimit, shareLimitCap.value);
-    }
-
     function _requireConnected(VaultConnection storage _connection, address _vault) internal view {
         if (_connection.vaultIndex == 0) revert NotConnectedToHub(_vault);
     }
@@ -1655,8 +1594,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 forcedRebalanceThresholdBP
     );
     event VaultShareLimitUpdated(address indexed vault, uint256 newShareLimit);
-    event VaultShareLimitCapUpdated(address indexed vault, uint256 shareLimitCap);
-    event VaultShareLimitCapRemoved(address indexed vault);
     event VaultFeesUpdated(
         address indexed vault,
         uint256 preInfraFeeBP,
@@ -1741,7 +1678,6 @@ contract VaultHub is PausableUntilWithRoles {
     );
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 expectedSharesAfterMint, uint256 shareLimit);
-    error ShareLimitCapExceeded(address vault, uint256 newShareLimit, uint256 shareLimitCap);
     error AlreadyConnected(address vault, uint256 index);
     error NotConnectedToHub(address vault);
     error NotAuthorized();
