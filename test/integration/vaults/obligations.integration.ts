@@ -529,22 +529,38 @@ describe("Integration: Vault redemptions and fees obligations", () => {
     });
 
     it("Works when trying to withdraw all the withdrawable balance", async () => {
-      const funding = await lido.getPooledEthBySharesRoundUp(redemptionShares);
-      await dashboard.fund({ value: funding });
+      const totalValue = await vaultHub.totalValue(stakingVaultAddress);
+      const locked = await vaultHub.locked(stakingVaultAddress);
+      expect(totalValue).to.equal(locked);
 
       let withdrawableValue = await vaultHub.withdrawableValue(stakingVaultAddress);
       expect(withdrawableValue).to.equal(0n);
 
-      const withdrawable = ether("1");
-      await dashboard.fund({ value: withdrawable });
-      expect(await vaultHub.withdrawableValue(stakingVaultAddress)).to.equal(withdrawable);
+      const overfunding = ether("0.1");
+      const redemptionsCoverage = await lido.getPooledEthBySharesRoundUp(redemptionShares);
+      await dashboard.fund({ value: redemptionsCoverage + overfunding });
+      expect(await vaultHub.withdrawableValue(stakingVaultAddress)).to.equal(overfunding);
 
-      await expect(dashboard.withdraw(stranger, withdrawable))
+      await expect(dashboard.withdraw(stranger, overfunding))
         .to.emit(stakingVault, "EtherWithdrawn")
-        .withArgs(stranger, withdrawable);
+        .withArgs(stranger, overfunding);
 
       withdrawableValue = await vaultHub.withdrawableValue(stakingVaultAddress);
       expect(withdrawableValue).to.equal(0n);
+
+      await expect(dashboard.rebalanceVaultWithShares(redemptionShares))
+        .to.emit(vaultHub, "VaultRebalanced")
+        .withArgs(stakingVaultAddress, redemptionShares, await lido.getPooledEthBySharesRoundUp(redemptionShares))
+        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
+        .withArgs(stakingVaultAddress, 0n);
+
+      expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(0n);
+
+      // report the vault data to unlock the locked value
+      await reportVaultDataWithProof(ctx, stakingVault);
+
+      expect(await vaultHub.locked(stakingVaultAddress)).to.equal(ether("1")); // connection deposit
+      expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(ether("1") + redemptionsCoverage);
     });
   });
 
