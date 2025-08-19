@@ -593,6 +593,10 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage badDebtConnection = _vaultConnection(_badDebtVault);
         _requireConnected(badDebtConnection, _badDebtVault);
 
+        if (IPredepositGuarantee(_predepositGuarantee()).unresolvedValidators(_badDebtVault) > 0) {
+            revert UnresolvedValidatorsAssociatedWithStakingVault();
+        }
+
         uint256 badDebtToInternalize = _writeOffBadDebt({
             _vault: _badDebtVault,
             _record: _vaultRecord(_badDebtVault),
@@ -1697,4 +1701,5 @@ contract VaultHub is PausableUntilWithRoles {
     error ForcedValidatorExitNotAllowed();
     error NoBadDebtToWriteOff(address vault, uint256 totalValueShares, uint256 liabilityShares);
     error BadDebtSocializationNotAllowed();
+    error UnresolvedValidatorsAssociatedWithStakingVault();
 }

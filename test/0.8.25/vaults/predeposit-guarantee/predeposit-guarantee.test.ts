@@ -145,6 +145,9 @@ describe("PredepositGuarantee.sol", () => {
       const vaultWC = await stakingVault.withdrawalCredentials();
       const validator = generateValidator(vaultWC);
 
+      // Check initial unresolved validators count
+      expect(await pdg.unresolvedValidators(stakingVault)).to.equal(0n);
+
       // NO runs predeposit for the vault
       const { deposit, depositY } = await generatePredeposit(validator);
       const predepositTX = pdg.predeposit(stakingVault, [deposit], [depositY]);
@@ -154,6 +157,9 @@ describe("PredepositGuarantee.sol", () => {
         .withArgs(deposit.pubkey, vaultOperator, stakingVault, vaultWC)
         .to.emit(stakingVault, "Mock_depositToBeaconChain")
         .withArgs(pdg, 1, deposit.amount);
+
+      // Check that unresolved validators count increased after predeposit
+      expect(await pdg.unresolvedValidators(stakingVault)).to.equal(1n);
 
       [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
@@ -199,6 +205,9 @@ describe("PredepositGuarantee.sol", () => {
         .withArgs(validator.container.pubkey, vaultOperator, stakingVault, vaultWC)
         .to.emit(stakingVault, "Mock_depositToBeaconChain")
         .withArgs(pdg, 1, postDepositData.amount);
+
+      // Check that unresolved validators count decreased after proving
+      expect(await pdg.unresolvedValidators(stakingVault)).to.equal(0n);
 
       [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
@@ -671,6 +680,9 @@ describe("PredepositGuarantee.sol", () => {
         await stakingVault.fund({ value: ether("1") * batchCount });
         const vaultWC = await stakingVault.withdrawalCredentials();
 
+        // Check initial unresolved validators count
+        expect(await pdg.unresolvedValidators(stakingVault)).to.equal(0n);
+
         const validators = Array.from({ length: Number(batchCount) }, () => generateValidator(vaultWC));
         const predeposits = await Promise.all(validators.map((validator) => generatePredeposit(validator)));
 
@@ -698,6 +710,9 @@ describe("PredepositGuarantee.sol", () => {
           .withArgs(vaultOperator, totalBalance, totalBalance)
           .to.emit(stakingVault, "Mock_depositToBeaconChain")
           .withArgs(pdg, batchCount, totalBalance);
+
+        // Check that unresolved validators count increased by batch count after predeposit
+        expect(await pdg.unresolvedValidators(stakingVault)).to.equal(batchCount);
 
         expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([totalBalance, totalBalance]);
         expect(await pdg.unlockedBalance(vaultOperator)).to.equal(0n);
@@ -893,9 +908,15 @@ describe("PredepositGuarantee.sol", () => {
         const vaultWC = await stakingVault.withdrawalCredentials();
         const validator = generateValidator(vaultWC);
 
+        // Check initial unresolved validators count
+        expect(await pdg.unresolvedValidators(stakingVault)).to.equal(0n);
+
         // NO runs predeposit for the vault
         const predepositData = await generatePredeposit(validator);
         await pdg.predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]);
+
+        // Check that unresolved validators count increased after predeposit
+        expect(await pdg.unresolvedValidators(stakingVault)).to.equal(1n);
 
         // Validator is added to CL merkle tree
         await sszMerkleTree.addValidatorLeaf(validator.container);
@@ -932,6 +953,9 @@ describe("PredepositGuarantee.sol", () => {
           .withArgs(vaultOperator, ether("1"), ether("0"))
           .to.emit(pdg, "ValidatorProven")
           .withArgs(validator.container.pubkey, vaultOperator, stakingVault, vaultWC);
+
+        // Check that unresolved validators count decreased after proving
+        expect(await pdg.unresolvedValidators(stakingVault)).to.equal(0n);
 
         const validatorStatus = await pdg.validatorStatus(validator.container.pubkey);
         expect(validatorStatus.stage).to.equal(2n);
@@ -1085,6 +1109,9 @@ describe("PredepositGuarantee.sol", () => {
         const vaultWC = await stakingVault.withdrawalCredentials();
         const unknownValidator = generateValidator(vaultWC);
 
+        // Check initial unresolved validators count
+        expect(await pdg.unresolvedValidators(stakingVault)).to.equal(0n);
+
         // Validator is added to CL merkle tree
         await sszMerkleTree.addValidatorLeaf(unknownValidator.container);
         const validatorLeafIndex = firstValidatorLeafIndex + 1n;
@@ -1121,6 +1148,9 @@ describe("PredepositGuarantee.sol", () => {
         await expect(proveUnknownValidatorTx)
           .to.emit(pdg, "ValidatorProven")
           .withArgs(unknownValidator.container.pubkey, vaultOperator, stakingVault, vaultWC);
+
+        // Check that unresolved validators count remains 0 since unknown validator doesn't go through predeposit
+        expect(await pdg.unresolvedValidators(stakingVault)).to.equal(0n);
 
         validatorStatusTx = await pdg.validatorStatus(unknownValidator.container.pubkey);
         // ValidatorStatus.stage
@@ -1250,6 +1280,10 @@ describe("PredepositGuarantee.sol", () => {
       it("allows to prove validator as invalid", async () => {
         // predeposted
         expect((await pdg.validatorStatus(invalidValidator.container.pubkey)).stage).to.equal(1n);
+
+        // Check unresolved validators count before proving invalid
+        expect(await pdg.unresolvedValidators(stakingVault)).to.equal(2n); // 2 validators predeposited
+
         const [total, locked] = await pdg.nodeOperatorBalance(vaultOperator);
         const expectedTotal = total - ether("1");
         const expectedLocked = locked - ether("1");
@@ -1258,6 +1292,9 @@ describe("PredepositGuarantee.sol", () => {
         await expect(proveInvalidTX)
           .to.emit(pdg, "ValidatorCompensated")
           .withArgs(stakingVault, vaultOperator, invalidValidator.container.pubkey, expectedTotal, expectedLocked);
+
+        // Check that unresolved validators count decreased after proving invalid validator
+        expect(await pdg.unresolvedValidators(stakingVault)).to.equal(1n);
 
         const [totalAfter, lockedAfter] = await pdg.nodeOperatorBalance(vaultOperator);
         expect(totalAfter).to.equal(expectedTotal);
@@ -1348,6 +1385,9 @@ describe("PredepositGuarantee.sol", () => {
         expect(validatorStatus.stakingVault).to.equal(stakingVault);
         expect(validatorStatus.nodeOperator).to.equal(vaultOperator.address);
 
+        // Check unresolved validators count before compensation
+        expect(await pdg.unresolvedValidators(stakingVault)).to.equal(1n); // 1 validator remains unresolved after proving valid one
+
         // Call compensateDisprovenPredeposit and expect it to succeed
         const compensateDisprovenPredepositTx = pdg
           .connect(vaultOwner)
@@ -1365,6 +1405,9 @@ describe("PredepositGuarantee.sol", () => {
 
         expect(compensateDisprovenPredepositTx).to.be.ok;
 
+        // Check that unresolved validators count decreased after compensation
+        expect(await pdg.unresolvedValidators(stakingVault)).to.equal(0n);
+
         // Check that the locked balance of the node operator has been reduced
         const nodeOperatorBalance = await pdg.nodeOperatorBalance(vaultOperator.address);
         expect(nodeOperatorBalance.total).to.equal(balanceTotal - PREDEPOSIT_AMOUNT);
@@ -1373,6 +1416,111 @@ describe("PredepositGuarantee.sol", () => {
         validatorStatus = await pdg.validatorStatus(invalidValidator.container.pubkey);
         expect(validatorStatus.stage).to.equal(3n); // 3n is COMPENSATED
       });
+    });
+  });
+
+  context("Unresolved Validators Count", () => {
+    it("should properly track unresolved validators count through different stages", async () => {
+      // Fund vault and top up operator balance
+      await stakingVault.fund({ value: ether("96") }); // 3 validators worth
+      await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("3") });
+
+      const vaultWC = await stakingVault.withdrawalCredentials();
+
+      // Check initial count
+      expect(await pdg.unresolvedValidators(stakingVault)).to.equal(0n);
+
+      // Generate 3 validators
+      const validator1 = generateValidator(vaultWC);
+      const validator2 = generateValidator(vaultWC);
+      const validator3 = generateValidator(vaultWC);
+
+      // Predeposit first validator
+      const predeposit1 = await generatePredeposit(validator1);
+      await pdg.predeposit(stakingVault, [predeposit1.deposit], [predeposit1.depositY]);
+      expect(await pdg.unresolvedValidators(stakingVault)).to.equal(1n);
+
+      // Predeposit second validator
+      const predeposit2 = await generatePredeposit(validator2);
+      await pdg.predeposit(stakingVault, [predeposit2.deposit], [predeposit2.depositY]);
+      expect(await pdg.unresolvedValidators(stakingVault)).to.equal(2n);
+
+      // Predeposit third validator
+      const predeposit3 = await generatePredeposit(validator3);
+      await pdg.predeposit(stakingVault, [predeposit3.deposit], [predeposit3.depositY]);
+      expect(await pdg.unresolvedValidators(stakingVault)).to.equal(3n);
+
+      // Add validators to CL merkle tree
+      await sszMerkleTree.addValidatorLeaf(validator1.container);
+      await sszMerkleTree.addValidatorLeaf(validator2.container);
+      await sszMerkleTree.addValidatorLeaf(validator3.container);
+
+      // Generate beacon block and proofs
+      const beaconHeader = generateBeaconHeader(await sszMerkleTree.getMerkleRoot());
+      const { proof: beaconProof, root: beaconRoot } = await sszMerkleTree.getBeaconBlockHeaderProof(beaconHeader);
+      const childBlockTimestamp = await setBeaconBlockRoot(beaconRoot);
+
+      // Prove first validator as valid
+      const witness1 = {
+        pubkey: validator1.container.pubkey,
+        validatorIndex: 1n,
+        childBlockTimestamp,
+        proof: [
+          ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validator1.container)).proof,
+          ...(await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + 1n)),
+          ...beaconProof,
+        ],
+        slot: beaconHeader.slot,
+        proposerIndex: beaconHeader.proposerIndex,
+      };
+
+      await pdg.proveValidatorWC(witness1);
+      expect(await pdg.unresolvedValidators(stakingVault)).to.equal(2n); // Decreased by 1
+
+      // Verify validator stages
+      expect((await pdg.validatorStatus(validator1.container.pubkey)).stage).to.equal(2n); // PROVEN
+      expect((await pdg.validatorStatus(validator2.container.pubkey)).stage).to.equal(1n); // PREDEPOSITED
+      expect((await pdg.validatorStatus(validator3.container.pubkey)).stage).to.equal(1n); // PREDEPOSITED
+
+      // Check final unresolved count
+      expect(await pdg.unresolvedValidators(stakingVault)).to.equal(2n);
+    });
+
+    it("should handle unresolved validators count with multiple vaults", async () => {
+      // Create second vault
+      const secondVault = await ethers.deployContract("StakingVault__MockForPDG", [stranger, stranger]);
+      await secondVault.fund({ value: ether("32") });
+
+      // Fund first vault and top up operator balance
+      await stakingVault.fund({ value: ether("32") });
+      await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("2") });
+
+      const vaultWC1 = await stakingVault.withdrawalCredentials();
+      const vaultWC2 = await secondVault.withdrawalCredentials();
+
+      // Check initial counts
+      expect(await pdg.unresolvedValidators(stakingVault)).to.equal(0n);
+      expect(await pdg.unresolvedValidators(secondVault)).to.equal(0n);
+
+      // Predeposit validator to first vault
+      const validator1 = generateValidator(vaultWC1);
+      const predeposit1 = await generatePredeposit(validator1);
+      await pdg.predeposit(stakingVault, [predeposit1.deposit], [predeposit1.depositY]);
+
+      // Predeposit validator to second vault
+      const validator2 = generateValidator(vaultWC2);
+      const predeposit2 = await generatePredeposit(validator2);
+      await pdg.connect(stranger).topUpNodeOperatorBalance(stranger, { value: ether("1") });
+      await pdg.connect(stranger).predeposit(secondVault, [predeposit2.deposit], [predeposit2.depositY]);
+
+      // Check counts are tracked separately
+      expect(await pdg.unresolvedValidators(stakingVault)).to.equal(1n);
+      expect(await pdg.unresolvedValidators(secondVault)).to.equal(1n);
+
+      // Total unresolved across all vaults
+      expect((await pdg.unresolvedValidators(stakingVault)) + (await pdg.unresolvedValidators(secondVault))).to.equal(
+        2n,
+      );
     });
   });
 

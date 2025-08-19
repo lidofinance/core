@@ -32,4 +32,6 @@ interface IPredepositGuarantee {
     }
 
     function proveUnknownValidator(ValidatorWitness calldata _witness, IStakingVault _stakingVault) external;
+
+    function unresolvedValidators(address _stakingVault) external view returns (uint256);
 }

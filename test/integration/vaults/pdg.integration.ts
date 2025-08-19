@@ -52,6 +52,8 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     ));
 
     agent = await ctx.getSigner("agent");
+
+    await ctx.contracts.vaultHub.connect(agent).grantRole(await ctx.contracts.vaultHub.BAD_DEBT_MASTER_ROLE(), agent);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -310,6 +312,71 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
           balance.total - ONE_ETHER,
           balance.locked - ONE_ETHER,
         );
+    });
+  });
+
+  context("Bad debt internalization", () => {
+    it("should revert if there are unresolved validators and succeed after proving invalid validator", async () => {
+      const { predepositGuarantee, vaultHub } = ctx.contracts;
+
+      // 1. Fund the vault
+      await expect(dashboard.connect(owner).fund({ value: ether("1") }))
+        .to.emit(stakingVault, "EtherFunded")
+        .withArgs(ether("1"));
+
+      // 2. Top up node operator balance in PDG
+      await expect(
+        predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, { value: ether("1") }),
+      )
+        .to.emit(predepositGuarantee, "BalanceToppedUp")
+        .withArgs(nodeOperator, nodeOperator, ether("1"));
+
+      // 3. Generate validator with INVALID withdrawal credentials
+      const correctWithdrawalCredentials = await stakingVault.withdrawalCredentials();
+      const invalidWithdrawalCredentials = "0x010000000000000000000000" + "2".repeat(40);
+      const validator = generateValidator(invalidWithdrawalCredentials);
+
+      const predepositData = await generatePredeposit(
+        {
+          ...validator,
+          container: { ...validator.container, withdrawalCredentials: correctWithdrawalCredentials },
+        },
+        {
+          depositDomain: await predepositGuarantee.DEPOSIT_DOMAIN(),
+          overrideAmount: ether("1"),
+        },
+      );
+
+      // 4. Predeposit the validator with invalid WC (increments unresolvedValidators count)
+      await expect(
+        predepositGuarantee
+          .connect(nodeOperator)
+          .predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]),
+      )
+        .to.emit(stakingVault, "DepositedToBeaconChain")
+        .withArgs(1, ether("1"))
+        .to.emit(predepositGuarantee, "BalanceLocked")
+        .withArgs(nodeOperator, ether("1"), ether("1"));
+
+      // 6. Verify that there is now 1 unresolved validator
+      expect(await predepositGuarantee.unresolvedValidators(stakingVault)).to.equal(1);
+
+      // 7. Try to internalize bad debt - this should revert due to unresolved validators
+      await expect(vaultHub.connect(agent).internalizeBadDebt(stakingVault, ether("1"))).to.be.revertedWithCustomError(
+        vaultHub,
+        "UnresolvedValidatorsAssociatedWithStakingVault",
+      );
+
+      // 8. Prove the INVALID validator WC to resolve it and create bad debt
+      const { witnesses } = await getProofAndDepositData(ctx, validator, invalidWithdrawalCredentials);
+      await expect(
+        predepositGuarantee.connect(nodeOperator).proveInvalidValidatorWC(witnesses[0], invalidWithdrawalCredentials),
+      )
+        .to.emit(predepositGuarantee, "ValidatorCompensated")
+        .withArgs(await stakingVault.getAddress(), nodeOperator, witnesses[0].pubkey, ether("0"), ether("0"));
+
+      // 9. Verify that there are now 0 unresolved validators
+      expect(await predepositGuarantee.unresolvedValidators(stakingVault)).to.equal(0);
     });
   });
 });

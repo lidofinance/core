@@ -59,6 +59,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         mapping(address guarantor => uint256 claimableEther) guarantorClaimableEther;
         mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) validatorStatus;
         mapping(address nodeOperator => address depositor) nodeOperatorDepositor;
+        mapping(address stakingVault => uint256 unresolvedValidators) unresolvedValidators;
     }
 
     /**
@@ -204,6 +205,15 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      */
     function validatorStatus(bytes calldata _validatorPubkey) external view returns (ValidatorStatus memory) {
         return _getStorage().validatorStatus[_validatorPubkey];
+    }
+
+    /**
+     * @notice returns amount of unresolved (not proven valid or invalid) validators for the staking vault
+     * @param _stakingVault to check unresolved validators for
+     * @return amount of unresolved validators
+     */
+    function unresolvedValidators(address _stakingVault) external view returns (uint256) {
+        return _getStorage().unresolvedValidators[_stakingVault];
     }
 
     /**
@@ -396,6 +406,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
                 nodeOperator: nodeOperator
             });
 
+            $.unresolvedValidators[address(_stakingVault)]++;
+
             emit ValidatorPreDeposited(_deposit.pubkey, nodeOperator, address(_stakingVault), withdrawalCredentials);
         }
 
@@ -413,7 +425,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @dev will revert if proof is invalid or misformed or validator is not predeposited
      */
     function proveValidatorWC(ValidatorWitness calldata _witness) public whenResumed {
-        ValidatorStatus storage validator = _getStorage().validatorStatus[_witness.pubkey];
+        ERC7201Storage storage $ = _getStorage();
+        ValidatorStatus storage validator = $.validatorStatus[_witness.pubkey];
 
         // checking stage here prevents revert on call to zero address at `.stakingVault.withdrawalCredentials()`
         if (validator.stage != ValidatorStage.PREDEPOSITED) {
@@ -426,6 +439,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         _validatePubKeyWCProof(_witness, withdrawalCredentials);
 
         _processPositiveProof(_witness.pubkey, validator, withdrawalCredentials);
+
+        $.unresolvedValidators[address(validator.stakingVault)]--;
     }
 
     /**
@@ -563,7 +578,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         // immediately compensate the staking vault
         validator.stage = ValidatorStage.COMPENSATED;
-        
+        $.unresolvedValidators[address(stakingVault)]--;
+
         address nodeOperator = validator.nodeOperator;
 
         // reduces total&locked NO balance
