@@ -5,14 +5,17 @@ pragma solidity ^0.8.25;
 import {CommonBase} from "forge-std/Base.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
+
+import {StdAssertions} from "forge-std/StdAssertions.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 import {StakingVault} from "contracts/0.8.25/vaults/StakingVault.sol";
 import {ILido} from "contracts/0.8.25/interfaces/ILido.sol";
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
-import {LazyOracleMock, LidoLocatorMock, ConsensusContractMock} from "./CommonMocks.sol";
+import {LidoLocatorMock, ConsensusContractMock} from "./mocks/CommonMocks.sol";
 
+import {LazyOracleMock} from "./mocks/LazyOracleMock.sol";
 import {Constants} from "./StakingVaultConstants.sol";
 import "forge-std/console2.sol";
 
@@ -24,7 +27,7 @@ TODO:
     - compensateDisprovenPredepositFromPDG
 **/
 
-contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils {
+contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions {
     // Protocol contracts
     ILido public lidoContract;
     LidoLocatorMock public lidoLocator;
@@ -51,13 +54,21 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils {
     uint256 constant MIN_SHARES = 1;
     uint256 constant MAX_SHARES = 100;
 
-    uint256 public otcDeposited = 0;
+    uint256 public sv_otcDeposited = 0;
+    uint256 public vh_otcDeposited = 0;
+
+    bool public forceRebalanceReverted = false;
+    bool public forceValidatorExitReverted = false;
+
+    uint256 public appliedTotalValue = 0;
+    uint256 public reportedTotalValue = 0;
 
     enum VaultAction {
         CONNECT,
         VOLUNTARY_DISCONNECT,
         UPDATE_VAULT_DATA,
-        OTC_DEPOSIT,
+        SV_OTC_DEPOSIT,
+        VH_OTC_DEPOSIT,
         FUND,
         VH_WITHDRAW,
         SV_WITHDRAW
@@ -76,7 +87,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils {
         userAccount = _userAccount;
         actionPath = [
             VaultAction.CONNECT, //connect
-            VaultAction.OTC_DEPOSIT, //otc funds
+            VaultAction.SV_OTC_DEPOSIT, //otc funds
             VaultAction.UPDATE_VAULT_DATA, //trigger quarantine
             VaultAction.VOLUNTARY_DISCONNECT, //pendingDisconnect
             VaultAction.UPDATE_VAULT_DATA, //disconnected
@@ -99,6 +110,23 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils {
         _;
     }
 
+    ////////// GETTERS FOR SV FUZZING INVARIANTS //////////
+
+    function getAppliedTotalValue() public returns (uint256) {
+        return appliedTotalValue;
+    }
+
+    function getReportedTotalValue() public returns (uint256) {
+        return reportedTotalValue;
+    }
+
+    function didForceRebalanceReverted() public returns (bool) {
+        return forceRebalanceReverted;
+    }
+
+    function didForceValidatorExitReverted() public returns (bool) {
+        return forceValidatorExitReverted;
+    }
     ////////// VAULTHUB INTERACTIONS //////////
     function connectVault() public actionIndexUpdate(VaultAction.CONNECT) {
         //check if the vault is already connected
@@ -152,10 +180,34 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils {
         vaultHub.withdraw(address(stakingVault), userAccount, amount);
     }
 
-    function rebalance(uint256 amount) public {
-        amount = bound(amount, 1, address(stakingVault).balance);
+    function forceRebalance() public {
+        //Avoid revert when vault is healthy
+        if (vaultHub.isVaultHealthy(address(stakingVault))) {
+            return; //no need to rebalance
+        }
+
         vm.prank(userAccount);
-        vaultHub.rebalance(address(stakingVault), amount);
+        try vaultHub.forceRebalance(address(stakingVault)) {} catch {
+            forceRebalanceReverted = true;
+        }
+    }
+
+    function forceValidatorExit() public {
+        uint256 redemptions = vaultHub.vaultObligations(address(stakingVault)).redemptions;
+        //Avoid revert when vault is healthy or has no redemption over the threshold
+        if (
+            vaultHub.isVaultHealthy(address(stakingVault)) &&
+            redemptions < Math256.max(Constants.UNSETTLED_THRESHOLD, address(stakingVault).balance)
+        ) {
+            return; //no need to force exit
+        }
+        bytes memory pubkeys = new bytes(0);
+        vm.prank(rootAccount); //privileged account can force exit
+        try vaultHub.forceValidatorExit(address(stakingVault), pubkeys, userAccount) {
+            // If the call succeeds, we do nothing
+        } catch {
+            forceValidatorExitReverted = true;
+        }
     }
 
     function mintShares(uint256 shares) public {
@@ -203,10 +255,16 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils {
         return vaultHub.totalValue(address(stakingVault));
     }
 
-    function otcDeposit(uint256 amount) public actionIndexUpdate(VaultAction.OTC_DEPOSIT) {
+    function sv_otcDeposit(uint256 amount) public actionIndexUpdate(VaultAction.SV_OTC_DEPOSIT) {
         amount = bound(amount, 1 ether, 10 ether);
-        otcDeposited += amount;
+        sv_otcDeposited += amount;
         deal(address(address(stakingVault)), amount);
+    }
+
+    function vh_otcDeposit(uint256 amount) public actionIndexUpdate(VaultAction.VH_OTC_DEPOSIT) {
+        amount = bound(amount, 1 ether, 10 ether);
+        vh_otcDeposited += amount;
+        deal(address(address(vaultHub)), amount);
     }
 
     ////////// LazyOracle INTERACTIONS //////////
@@ -222,14 +280,15 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils {
             VaultHub.VaultObligations memory obligations = vaultHub.vaultObligations(address(stakingVault));
 
             lastReport = VaultReport({
-                totalValue: vaultHub.totalValue(address(stakingVault)) + otcDeposited,
+                totalValue: vaultHub.totalValue(address(stakingVault)) + sv_otcDeposited + cl_balance,
+                //totalValue: random_tv,
                 cumulativeLidoFees: obligations.settledLidoFees + obligations.unsettledLidoFees + 1,
                 liabilityShares: vaultHub.liabilityShares(address(stakingVault)),
                 reportTimestamp: uint64(block.timestamp)
             });
 
             //reset otc deposit value
-            otcDeposited = 0;
+            sv_otcDeposited = 0;
         }
 
         //path to trigger to get quarantine back in TV
@@ -242,6 +301,9 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils {
             consensusContract.setCurrentFrame(refSlot);
         }
 
+        //we update the reported total Value
+        reportedTotalValue = lastReport.totalValue;
+
         //update the vault data
         lazyOracle.updateVaultData(
             address(stakingVault),
@@ -250,6 +312,9 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils {
             lastReport.liabilityShares,
             uint64(block.timestamp)
         );
+
+        //we update the applied total value (TV should go through sanity checks, quarantine, etc.)
+        appliedTotalValue = vaultHub.vaultRecord(address(stakingVault)).report.totalValue;
 
         //Handle if disconnect was successfull
         if (stakingVault.pendingOwner() == userAccount) {

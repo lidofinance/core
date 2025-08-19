@@ -14,6 +14,8 @@ library Constants {
 
     //VaultHub params
     uint256 public constant RELATIVE_SHARE_LIMIT = 1000;
+    uint256 public constant UNSETTLED_THRESHOLD = 1 ether;
+    uint256 public constant TOTAL_BASIS_POINTS = 10000;
 
     //LidoMock params
     uint256 public constant TOTAL_SHARES_MAINNET = 7810237 ether;
