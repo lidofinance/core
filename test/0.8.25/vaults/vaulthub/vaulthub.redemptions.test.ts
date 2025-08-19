@@ -58,6 +58,7 @@ describe("VaultHub.sol:redemptions", () => {
     it("sets redemption shares to liability shares in case of overflow", async () => {
       const liabilityShares = 100n;
       const redemptionShares = 1000n;
+
       await connectedVault.connect(user).fund({ value: ether("1000") });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("1000") });
       await vaultHub.connect(user).mintShares(connectedVault, user, liabilityShares);
@@ -70,29 +71,25 @@ describe("VaultHub.sol:redemptions", () => {
 
     it("sets redemption shares fully if it is less than liability shares (and pauses deposits)", async () => {
       const liabilityShares = ether("2");
-      const redemptionShares = ether("1");
 
-      await connectedVault.connect(user).fund({ value: ether("1000") });
-      await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("1000") });
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("3") }); //
       await vaultHub.connect(user).mintShares(connectedVault, user, liabilityShares);
 
-      await expect(vaultHub.connect(redemptionMaster).updateRedemptionShares(connectedVault, redemptionShares))
+      await expect(vaultHub.connect(redemptionMaster).updateRedemptionShares(connectedVault, liabilityShares))
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
-        .withArgs(connectedVault, redemptionShares)
+        .withArgs(connectedVault, liabilityShares)
         .to.emit(connectedVault, "BeaconChainDepositsPaused");
     });
 
     it("allows to reset redemption shares to 0", async () => {
       const liabilityShares = ether("2");
-      const redemptionShares = ether("1");
 
-      await connectedVault.connect(user).fund({ value: ether("1000") });
-      await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("1000") });
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("3") });
       await vaultHub.connect(user).mintShares(connectedVault, user, liabilityShares);
 
-      await expect(vaultHub.connect(redemptionMaster).updateRedemptionShares(connectedVault, redemptionShares))
+      await expect(vaultHub.connect(redemptionMaster).updateRedemptionShares(connectedVault, liabilityShares))
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
-        .withArgs(connectedVault, redemptionShares)
+        .withArgs(connectedVault, liabilityShares)
         .and.to.emit(connectedVault, "BeaconChainDepositsPaused");
 
       await expect(vaultHub.connect(redemptionMaster).updateRedemptionShares(connectedVault, 0n))
