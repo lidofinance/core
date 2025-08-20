@@ -870,17 +870,12 @@ contract VaultHub is PausableUntilWithRoles {
         _requireFreshReport(_vault, record);
 
         uint256 shortfallShares = _rebalanceShortfallShares(connection, record);
-        uint256 redemptionShares = record.redemptionShares;
-        uint256 adjustedRedemptions = redemptionShares > shortfallShares ? redemptionShares - shortfallShares : 0;
         uint256 sharesToRebalance = Math256.min(
-            shortfallShares + adjustedRedemptions,
-            _getSharesByPooledEth(_vault.balance)
+            Math256.max(shortfallShares, record.redemptionShares),
+            _getSharesByPooledEth(Math256.min(_vault.balance, _totalValue(record)))
         );
 
         if (sharesToRebalance == 0) revert NoReasonForForceRebalance(_vault);
-
-        // Prevent rebalancing more than the total value of the vault
-        sharesToRebalance = Math256.min(sharesToRebalance, _getSharesByPooledEth(_totalValue(record)));
 
         _rebalance(_vault, record, sharesToRebalance);
         _updateBeaconChainDepositsPause(_vault, record, connection);
