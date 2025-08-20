@@ -129,11 +129,10 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     }
     ////////// VAULTHUB INTERACTIONS //////////
     function connectVault() public {
-        //check if the vault is already connected
-        VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVault));
-
-        //do nothing if already connected
-        if (vc.vaultIndex != 0) return;
+        //check if the vault is connected
+        if (vaultHub.vaultConnection(address(stakingVault)).vaultIndex == 0) {
+            return;
+        }
 
         if (address(stakingVault).balance < Constants.CONNECT_DEPOSIT) {
             deal(address(userAccount), Constants.CONNECT_DEPOSIT);
@@ -281,10 +280,10 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         daysShift *= 3; //0 or 3 days for quarantine period expiration
         console2.log("DaysShift = %d", daysShift);
 
-        VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVault));
-
-        //do nothing if disconnected
-        if (vc.vaultIndex == 0) return;
+        //Check if vault is connected before proceeding
+        if (vaultHub.vaultConnection(address(stakingVault)).vaultIndex == 0) {
+            return;
+        }
 
         if (daysShift > 0) {
             vm.warp(block.timestamp + daysShift * 1 days);
