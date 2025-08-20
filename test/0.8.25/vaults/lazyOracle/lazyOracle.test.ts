@@ -42,7 +42,7 @@ const record: Readonly<VaultHub.VaultRecordStruct> = {
   ],
   minimalReserve: 0n,
   redemptionShares: 0n,
-  accruedLidoFees: 0n,
+  cumulativeLidoFees: 0n,
   settledLidoFees: 0n,
 };
 
@@ -138,7 +138,7 @@ describe("LazyOracle.sol", () => {
         ],
         minimalReserve: 0n,
         redemptionShares: 0n,
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         settledLidoFees: 0n,
       });
 
@@ -303,70 +303,70 @@ describe("LazyOracle.sol", () => {
         {
           vault: "0xE312f1ed35c4dBd010A332118baAD69d45A0E302",
           totalValue: 33000000000000000000n,
-          accruedLidoFees: 0n,
+          cumulativeLidoFees: 0n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
           vault: "0x652b70E0Ae932896035d553fEaA02f37Ab34f7DC",
           totalValue: 3100000000000000000n,
-          accruedLidoFees: 0n,
+          cumulativeLidoFees: 0n,
           liabilityShares: 0n,
           slashingReserve: 510300000000000000n,
         },
         {
           vault: "0x20d34FD0482E3BdC944952D0277A306860be0014",
           totalValue: 2580000000000012501n,
-          accruedLidoFees: 580000000000012501n,
+          cumulativeLidoFees: 580000000000012501n,
           liabilityShares: 0n,
           slashingReserve: 1449900000000010001n,
         },
         {
           vault: "0x60B614c42d92d6c2E68AF7f4b741867648aBf9A4",
           totalValue: 1000000000000000000n,
-          accruedLidoFees: 1000000000000000000n,
+          cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
           vault: "0xE6BdAFAac1d91605903D203539faEd173793b7D7",
           totalValue: 1030000000000000000n,
-          accruedLidoFees: 1030000000000000000n,
+          cumulativeLidoFees: 1030000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 400000000000000000n,
         },
         {
           vault: "0x34ebc5780F36d3fD6F1e7b43CF8DB4a80dCE42De",
           totalValue: 1000000000000000000n,
-          accruedLidoFees: 1000000000000000000n,
+          cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
           vault: "0x3018F0cC632Aa3805a8a676613c62F55Ae4018C7",
           totalValue: 2000000000000000000n,
-          accruedLidoFees: 2000000000000000000n,
+          cumulativeLidoFees: 2000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 100000000000000000n,
         },
         {
           vault: "0x40998324129B774fFc7cDA103A2d2cFd23EcB56e",
           totalValue: 1000000000000000000n,
-          accruedLidoFees: 1000000000000000000n,
+          cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 300000000000000000n,
         },
         {
           vault: "0x4ae099982712e2164fBb973554991111A418ab2B",
           totalValue: 1000000000000000000n,
-          accruedLidoFees: 1000000000000000000n,
+          cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
           vault: "0x59536AC6211C1deEf1EE37CDC11242A0bDc7db83",
           totalValue: 1000000000000000000n,
-          accruedLidoFees: 1000000000000000000n,
+          cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
@@ -385,14 +385,14 @@ describe("LazyOracle.sol", () => {
         await lazyOracle.updateVaultData(
           vaultReport.vault,
           vaultReport.totalValue,
-          vaultReport.accruedLidoFees,
+          vaultReport.cumulativeLidoFees,
           vaultReport.liabilityShares,
           vaultReport.slashingReserve,
           tree.getProof(index),
         );
         expect(await vaultHub.mock__lastReportedVault()).to.equal(vaultReport.vault);
         expect(await vaultHub.mock__lastReported_timestamp()).to.equal(timestamp);
-        expect(await vaultHub.mock__lastReported_cumulativeLidoFees()).to.equal(vaultReport.accruedLidoFees);
+        expect(await vaultHub.mock__lastReported_cumulativeLidoFees()).to.equal(vaultReport.cumulativeLidoFees);
         expect(await vaultHub.mock__lastReported_liabilityShares()).to.equal(vaultReport.liabilityShares);
         expect(await vaultHub.mock__lastReported_slashingReserve()).to.equal(vaultReport.slashingReserve);
       }
@@ -412,14 +412,14 @@ describe("LazyOracle.sol", () => {
         {
           vault: "0xc1F9c4a809cbc6Cb2cA60bCa09cE9A55bD5337Db",
           totalValue: 2500000000000000000n,
-          accruedLidoFees: 2500000000000000000n,
+          cumulativeLidoFees: 2500000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 1n,
         },
         {
           vault: "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
           totalValue: 99170000769726969624n,
-          accruedLidoFees: 33000000000000000000n,
+          cumulativeLidoFees: 33000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
@@ -440,7 +440,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport: VaultReportItem = {
         vault,
         totalValue: VAULT_TOTAL_VALUE + maxRewardValue,
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -457,7 +457,7 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.updateVaultData(
         vaultReport.vault,
         vaultReport.totalValue,
-        vaultReport.accruedLidoFees,
+        vaultReport.cumulativeLidoFees,
         vaultReport.liabilityShares,
         vaultReport.slashingReserve,
         tree.getProof(0),
@@ -471,7 +471,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport2: VaultReportItem = {
         vault,
         totalValue: VAULT_TOTAL_VALUE + maxRewardValue + 1n,
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -484,7 +484,7 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.updateVaultData(
         vaultReport2.vault,
         vaultReport2.totalValue,
-        vaultReport2.accruedLidoFees,
+        vaultReport2.cumulativeLidoFees,
         vaultReport2.liabilityShares,
         vaultReport2.slashingReserve,
         tree2.getProof(0),
@@ -502,7 +502,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport: VaultReportItem = {
         vault,
         totalValue: ether("250"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -520,7 +520,7 @@ describe("LazyOracle.sol", () => {
         lazyOracle.updateVaultData(
           vaultReport.vault,
           vaultReport.totalValue,
-          vaultReport.accruedLidoFees,
+          vaultReport.cumulativeLidoFees,
           vaultReport.liabilityShares,
           vaultReport.slashingReserve,
           tree.getProof(0),
@@ -540,7 +540,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport2: VaultReportItem = {
         vault,
         totalValue: ether("340"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -554,7 +554,7 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.updateVaultData(
         vaultReport2.vault,
         vaultReport2.totalValue,
-        vaultReport2.accruedLidoFees,
+        vaultReport2.cumulativeLidoFees,
         vaultReport2.liabilityShares,
         vaultReport2.slashingReserve,
         tree2.getProof(0),
@@ -571,7 +571,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport3: VaultReportItem = {
         vault,
         totalValue: ether("340"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -586,7 +586,7 @@ describe("LazyOracle.sol", () => {
         lazyOracle.updateVaultData(
           vaultReport3.vault,
           vaultReport3.totalValue,
-          vaultReport3.accruedLidoFees,
+          vaultReport3.cumulativeLidoFees,
           vaultReport3.liabilityShares,
           vaultReport3.slashingReserve,
           tree3.getProof(0),
@@ -605,7 +605,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport4: VaultReportItem = {
         vault,
         totalValue: ether("340"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -620,7 +620,7 @@ describe("LazyOracle.sol", () => {
         lazyOracle.updateVaultData(
           vaultReport4.vault,
           vaultReport4.totalValue,
-          vaultReport4.accruedLidoFees,
+          vaultReport4.cumulativeLidoFees,
           vaultReport4.liabilityShares,
           vaultReport4.slashingReserve,
           tree4.getProof(0),
@@ -641,7 +641,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport: VaultReportItem = {
         vault,
         totalValue: ether("250"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -659,7 +659,7 @@ describe("LazyOracle.sol", () => {
         lazyOracle.updateVaultData(
           vaultReport.vault,
           vaultReport.totalValue,
-          vaultReport.accruedLidoFees,
+          vaultReport.cumulativeLidoFees,
           vaultReport.liabilityShares,
           vaultReport.slashingReserve,
           tree.getProof(0),
@@ -679,7 +679,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport2: VaultReportItem = {
         vault,
         totalValue: ether("101"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -694,7 +694,7 @@ describe("LazyOracle.sol", () => {
         lazyOracle.updateVaultData(
           vaultReport2.vault,
           vaultReport2.totalValue,
-          vaultReport2.accruedLidoFees,
+          vaultReport2.cumulativeLidoFees,
           vaultReport2.liabilityShares,
           vaultReport2.slashingReserve,
           tree3.getProof(0),
@@ -724,7 +724,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport: VaultReportItem = {
         vault,
         totalValue: ether("250"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -740,7 +740,7 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.updateVaultData(
         vaultReport.vault,
         vaultReport.totalValue,
-        vaultReport.accruedLidoFees,
+        vaultReport.cumulativeLidoFees,
         vaultReport.liabilityShares,
         vaultReport.slashingReserve,
         tree.getProof(0),

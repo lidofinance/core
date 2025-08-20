@@ -35,7 +35,7 @@ interface ReportParams {
   totalValue?: bigint;
   inOutDelta?: bigint;
   liabilityShares?: bigint;
-  accruedLidoFees?: bigint;
+  cumulativeLidoFees?: bigint;
   slashingReserve?: bigint;
 }
 
@@ -82,7 +82,7 @@ async function createMockStakignVaultAndConnect(
 async function reportVault(
   lazyOracle: LazyOracle__MockForVaultHub,
   vaultHub: VaultHub,
-  { vault, totalValue, inOutDelta, accruedLidoFees, liabilityShares, slashingReserve }: ReportParams,
+  { vault, totalValue, inOutDelta, cumulativeLidoFees, liabilityShares, slashingReserve }: ReportParams,
 ) {
   await lazyOracle.refreshReportTimestamp();
   const timestamp = await lazyOracle.latestReportTimestamp();
@@ -97,7 +97,7 @@ async function reportVault(
     timestamp,
     totalValue ?? vaultTotalValue,
     inOutDelta ?? record.inOutDelta[activeIndex].value,
-    accruedLidoFees ?? record.accruedLidoFees,
+    cumulativeLidoFees ?? record.cumulativeLidoFees,
     liabilityShares ?? record.liabilityShares,
     slashingReserve ?? 0n,
   );

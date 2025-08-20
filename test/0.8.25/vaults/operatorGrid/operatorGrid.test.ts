@@ -84,7 +84,7 @@ describe("OperatorGrid.sol", () => {
     ],
     minimalReserve: 0n,
     redemptionShares: 0n,
-    accruedLidoFees: 0n,
+    cumulativeLidoFees: 0n,
     settledLidoFees: 0n,
   };
 

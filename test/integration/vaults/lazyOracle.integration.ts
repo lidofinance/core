@@ -85,7 +85,7 @@ describe("Integration: LazyOracle", () => {
       const { locator, hashConsensus, lido } = ctx.contracts;
 
       const totalValueArg = ether("1");
-      const accruedLidoFeesArg = ether("0.1");
+      const cumulativeLidoFeesArg = ether("0.1");
       const liabilitySharesArg = 13000n;
       const slashingReserveArg = ether("1.5");
       const reportTimestampArg = await getCurrentBlockTimestamp();
@@ -94,7 +94,7 @@ describe("Integration: LazyOracle", () => {
       const vaultReport: VaultReportItem = {
         vault: await stakingVault.getAddress(),
         totalValue: totalValueArg,
-        accruedLidoFees: accruedLidoFeesArg,
+        cumulativeLidoFees: cumulativeLidoFeesArg,
         liabilityShares: liabilitySharesArg,
         slashingReserve: slashingReserveArg,
       };
@@ -113,7 +113,7 @@ describe("Integration: LazyOracle", () => {
         lazyOracle.updateVaultData(
           await stakingVault.getAddress(),
           totalValueArg,
-          accruedLidoFeesArg,
+          cumulativeLidoFeesArg,
           liabilitySharesArg,
           slashingReserveArg,
           reportTree.getProof(0),
@@ -125,7 +125,7 @@ describe("Integration: LazyOracle", () => {
           reportTimestampArg,
           totalValueArg,
           ether("1"),
-          accruedLidoFeesArg,
+          cumulativeLidoFeesArg,
           liabilitySharesArg,
           slashingReserveArg,
         );

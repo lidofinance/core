@@ -91,7 +91,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint128 redemptionShares;
         // ### 6th slot
         /// @notice cumulative value for Lido fees that accrued on the vault
-        uint128 accruedLidoFees;
+        uint128 cumulativeLidoFees;
         /// @notice cumulative value for Lido fees that were settled on the vault
         uint128 settledLidoFees;
     }
@@ -259,21 +259,20 @@ contract VaultHub is PausableUntilWithRoles {
         return _withdrawableValue(_vault, _vaultRecord(_vault));
     }
 
-    /// @return the amount of ether that vault owes to Lido as redemptions and unsettled fees
+    /// @return the amount of ether that vault obliged to transfer as redemptions and unsettled Lido fees
+    /// @dev this value is used to partially block vault balance from withdrawals
     /// @dev returns 0 if the vault is not connected
     function obligationsValue(address _vault) external view returns (uint256) {
         return _obligationsValue(_vaultRecord(_vault));
     }
 
-    /// @return accrued amount of ether that was accrued on the vault as Lido fees
+    /// @return cumulative amount of ether that was accrued on the vault as Lido fees
     /// @return settled amount of ether that was settled on the vault as Lido fees
-    /// @return unsettled amount of ether that is unsettled as Lido fees on the vault
-    /// @dev returns (0, 0, 0) if the vault is not connected
-    function fees(address _vault) external view returns (uint256 accrued, uint256 settled, uint256 unsettled) {
+    /// @dev returns (0, 0) if the vault is not connected
+    function fees(address _vault) external view returns (uint256 cumulative, uint256 settled) {
         VaultRecord storage record = _vaultRecord(_vault);
-        accrued = record.accruedLidoFees;
+        cumulative = record.cumulativeLidoFees;
         settled = record.settledLidoFees;
-        unsettled = accrued - settled;
     }
 
     /// @return the amount of ether that can be transferred as fees to the Lido
@@ -496,35 +495,8 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultRecord storage record = _vaultRecord(_vault);
 
-        // TODO: remove this check once we have a proper LazyOracle sanity check for Lido fees
-        uint256 accruedLidoFees = record.accruedLidoFees;
-        if (_reportCumulativeLidoFees < accruedLidoFees) {
-            revert InvalidLidoFees(_vault, _reportCumulativeLidoFees, accruedLidoFees);
-        }
-
-        uint256 settledLidoFees = record.settledLidoFees;
-        if (_reportCumulativeLidoFees != accruedLidoFees) {
-            record.accruedLidoFees = uint128(_reportCumulativeLidoFees);
-
-            emit LidoFeesUpdated(_vault, _reportCumulativeLidoFees, settledLidoFees);
-        }
-
         if (connection.pendingDisconnect) {
             if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
-                uint256 unsettledLidoFees = _reportCumulativeLidoFees - settledLidoFees;
-                if (unsettledLidoFees > 0) {
-                    /// @dev If the balance is not enough, the vault will revert, thus report will not be applied and
-                    ///      the vault will not be disconnected
-                    IStakingVault(_vault).withdraw(LIDO_LOCATOR.treasury(), unsettledLidoFees);
-
-                    emit LidoFeesSettled({
-                        vault: _vault,
-                        transfered: unsettledLidoFees,
-                        accruedLidoFees: _reportCumulativeLidoFees,
-                        settledLidoFees: _reportCumulativeLidoFees
-                    });
-                }
-
                 IStakingVault(_vault).transferOwnership(connection.owner);
                 _deleteVault(_vault, connection);
 
@@ -542,8 +514,9 @@ contract VaultHub is PausableUntilWithRoles {
             connection,
             _reportTimestamp,
             _reportTotalValue,
-            _reportLiabilityShares,
             _reportInOutDelta,
+            _reportCumulativeLidoFees,
+            _reportLiabilityShares,
             _reportSlashingReserve
         );
 
@@ -910,24 +883,24 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Permissionless payout of unsettled Lido fees to treasury
     /// @param _vault vault address
-    function transferLidoFeesToTreasury(address _vault) external {
+    function settleLidoFees(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 transferToLido = _transferableLidoFeesValue(_vault, record);
-        if (transferToLido == 0) revert NothingToTransferToLido(_vault);
+        uint256 valueToTransfer = _transferableLidoFeesValue(_vault, record);
+        if (valueToTransfer == 0) revert NothingToTransferToLido(_vault);
 
-        uint256 settledLidoFees = record.settledLidoFees + transferToLido;
+        uint256 settledLidoFees = record.settledLidoFees + valueToTransfer;
         record.settledLidoFees = uint128(settledLidoFees);
 
-        _withdraw(_vault, record, LIDO_LOCATOR.treasury(), transferToLido);
+        _withdraw(_vault, record, LIDO_LOCATOR.treasury(), valueToTransfer);
         _updateBeaconChainDepositsPause(_vault, record, connection);
 
         emit LidoFeesSettled({
             vault: _vault,
-            transfered: transferToLido,
-            accruedLidoFees: record.accruedLidoFees,
+            transferred: valueToTransfer,
+            cumulativeLidoFees: record.cumulativeLidoFees,
             settledLidoFees: settledLidoFees
         });
     }
@@ -976,7 +949,7 @@ contract VaultHub is PausableUntilWithRoles {
             inOutDelta: DoubleRefSlotCache.InitializeInt104DoubleCache(int104(int256(vaultBalance))),
             minimalReserve: uint128(CONNECT_DEPOSIT),
             redemptionShares: 0,
-            accruedLidoFees: 0,
+            cumulativeLidoFees: 0,
             settledLidoFees: 0
         });
 
@@ -1022,12 +995,14 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection,
         uint256 _reportTimestamp,
         uint256 _reportTotalValue,
-        uint256 _reportLiabilityShares,
         int256 _reportInOutDelta,
+        uint256 _reportCumulativeLidoFees,
+        uint256 _reportLiabilityShares,
         uint256 _reportSlashingReserve
     ) internal {
         uint256 minimalReserve = Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve);
 
+        _record.cumulativeLidoFees = uint128(_reportCumulativeLidoFees);
         _record.minimalReserve = uint128(minimalReserve);
         _record.locked = uint128(_locked({
             _liabilityShares: Math256.max(_record.liabilityShares, _reportLiabilityShares), // better way to track liability?
@@ -1288,7 +1263,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _unsettledLidoFeesValue(VaultRecord storage _record) internal view returns (uint256) {
-        return _record.accruedLidoFees - _record.settledLidoFees;
+        return _record.cumulativeLidoFees - _record.settledLidoFees;
     }
 
     function _obligationsValue(VaultRecord storage _record) internal view returns (uint256) {
@@ -1522,8 +1497,7 @@ contract VaultHub is PausableUntilWithRoles {
      */
     event VaultOwnershipTransferred(address indexed vault, address indexed newOwner, address indexed oldOwner);
 
-    event LidoFeesUpdated(address indexed vault, uint256 accruedLidoFees, uint256 settledLidoFees);
-    event LidoFeesSettled(address indexed vault, uint256 transfered, uint256 accruedLidoFees, uint256 settledLidoFees);
+    event LidoFeesSettled(address indexed vault, uint256 transferred, uint256 cumulativeLidoFees, uint256 settledLidoFees);
     event VaultRedemptionSharesUpdated(address indexed vault, uint256 redemptionShares);
 
     event BeaconChainDepositsPausedByOwner(address indexed vault);

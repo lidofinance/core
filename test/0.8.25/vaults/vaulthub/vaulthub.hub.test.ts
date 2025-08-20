@@ -104,7 +104,7 @@ describe("VaultHub.sol:hub", () => {
     vault,
     totalValue,
     inOutDelta,
-    accruedLidoFees,
+    cumulativeLidoFees,
     liabilityShares,
     slashingReserve,
   }: {
@@ -113,7 +113,7 @@ describe("VaultHub.sol:hub", () => {
     totalValue?: bigint;
     inOutDelta?: bigint;
     liabilityShares?: bigint;
-    accruedLidoFees?: bigint;
+    cumulativeLidoFees?: bigint;
     slashingReserve?: bigint;
   }) {
     await lazyOracle.refreshReportTimestamp();
@@ -124,7 +124,7 @@ describe("VaultHub.sol:hub", () => {
     totalValue = totalValue ?? (await vaultHub.totalValue(vault));
     inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
     liabilityShares = liabilityShares ?? record.liabilityShares;
-    accruedLidoFees = accruedLidoFees ?? record.accruedLidoFees;
+    cumulativeLidoFees = cumulativeLidoFees ?? record.cumulativeLidoFees;
     slashingReserve = slashingReserve ?? 0n;
 
     await lazyOracle.mock__report(
@@ -133,7 +133,7 @@ describe("VaultHub.sol:hub", () => {
       timestamp,
       totalValue,
       inOutDelta,
-      accruedLidoFees,
+      cumulativeLidoFees,
       liabilityShares,
       slashingReserve,
     );

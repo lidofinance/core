@@ -173,10 +173,10 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the accrued and settled Lido fees for the vault
+     * @notice Returns the cumulative and settled Lido fees for the vault
      */
-    function fees() external view returns (uint256 accrued, uint256 settled, uint256 unsettled) {
-        (accrued, settled, unsettled) = VAULT_HUB.fees(address(_stakingVault()));
+    function fees() external view returns (uint256 cumulative, uint256 settled) {
+        (cumulative, settled) = VAULT_HUB.fees(address(_stakingVault()));
     }
 
     /**

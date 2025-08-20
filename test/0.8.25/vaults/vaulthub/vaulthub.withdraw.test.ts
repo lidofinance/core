@@ -111,10 +111,10 @@ describe("VaultHub.sol:withdrawal", () => {
 
     it("accounts for unsettled Lido fees in obligations", async () => {
       const totalValue = ether("10");
-      const accruedLidoFees = ether("1");
+      const cumulativeLidoFees = ether("1");
 
       await connectedVault.connect(user).fund({ value: totalValue });
-      await vaultsContext.reportVault({ vault: connectedVault, totalValue, accruedLidoFees });
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue, cumulativeLidoFees });
 
       const withdrawableBefore = await vaultHub.withdrawableValue(connectedVault);
 

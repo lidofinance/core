@@ -102,7 +102,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
 
   context("Automatic pause", () => {
     it("Not pause beacon deposits on vault report (big fees)", async () => {
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") }))
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1") }))
         .to.not.emit(stakingVault, "BeaconChainDepositsPaused")
         .and.not.to.emit(stakingVault, "BeaconChainDepositsPaused");
 
