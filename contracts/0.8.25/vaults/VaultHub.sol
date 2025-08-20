@@ -866,6 +866,10 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev rebalance all available amount of ether until the vault is healthy and redemptions are paid
     function forceRebalance(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
+
+        uint256 vaultBalance = _vault.balance;
+        if (vaultBalance == 0) revert NoFundsForForceRebalance(_vault);
+
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
@@ -1546,6 +1550,7 @@ contract VaultHub is PausableUntilWithRoles {
      */
     error AmountExceedsWithdrawableValue(address vault, uint256 withdrawable, uint256 requested);
 
+    error NoFundsForForceRebalance(address vault);
     error NoReasonForForceRebalance(address vault);
     error NothingToTransferToLido(address vault);
     error VaultMintingCapacityExceeded(
