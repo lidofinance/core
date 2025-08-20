@@ -66,9 +66,8 @@ describe("Scenario: Lazy Oracle prevents overwriting freshly reconnected vault r
     const { vaultHub, lazyOracle } = ctx.contracts;
     await advanceChainTime((await vaultHub.REPORT_FRESHNESS_DELTA()) + 100n);
 
-    await expect(reportVaultDataWithProof(ctx, stakingVault, {}, false)).to.be.revertedWithCustomError(
-      lazyOracle,
-      "VaultReportIsFreshEnough",
-    );
+    await expect(
+      reportVaultDataWithProof(ctx, stakingVault, { updateReportData: false }),
+    ).to.be.revertedWithCustomError(lazyOracle, "VaultReportIsFreshEnough");
   });
 });
