@@ -744,7 +744,6 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice pauses beacon chain deposits for the vault
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
-    /// @dev intentionally no-ops when the vault is already paused, allowing to flag the pause as manually triggered
     function pauseBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         if (connection.isBeaconDepositsManuallyPaused) revert ResumedExpected();
@@ -758,7 +757,6 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice resumes beacon chain deposits for the vault
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
-    /// @dev intentionally no-ops when the vault is already resumed, allowing to remove the manual pause flag
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         if (!connection.isBeaconDepositsManuallyPaused) revert PausedExpected();
