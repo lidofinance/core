@@ -106,12 +106,13 @@ describe("VaultHub.sol:forceRebalance", () => {
       it("rebalances the vault with available balance", async () => {
         const sharesMintedBefore = await vaultHub.liabilityShares(vaultAddress);
         const balanceBefore = await ethers.provider.getBalance(vaultAddress);
-        const expectedRebalanceAmount = await vaultHub.rebalanceShortfall(vaultAddress);
-        const expectedSharesToBeBurned = await lido.getSharesByPooledEth(expectedRebalanceAmount);
+        const expectedRebalanceShares = await vaultHub.rebalanceShortfallShares(vaultAddress);
+        const expectedRebalanceAmount = await lido.getPooledEthBySharesRoundUp(expectedRebalanceShares);
+        const expectedSharesToBeBurned = await lido.getSharesByPooledEth(expectedRebalanceShares);
 
         await expect(vaultHub.forceRebalance(vaultAddress))
           .to.emit(vaultHub, "VaultRebalanced")
-          .withArgs(vaultAddress, expectedSharesToBeBurned, expectedRebalanceAmount)
+          .withArgs(vaultAddress, expectedSharesToBeBurned, expectedRebalanceShares)
           .to.emit(vault, "BeaconChainDepositsResumed");
 
         const balanceAfter = await ethers.provider.getBalance(vaultAddress);
@@ -125,10 +126,11 @@ describe("VaultHub.sol:forceRebalance", () => {
 
       it("rebalances with maximum available amount if shortfall exceeds balance", async () => {
         const sharesMintedBefore = await vaultHub.liabilityShares(vaultAddress);
-        const shortfall = await vaultHub.rebalanceShortfall(vaultAddress);
+        const shortfallShares = await vaultHub.rebalanceShortfallShares(vaultAddress);
 
+        const shortfall = await lido.getPooledEthBySharesRoundUp(shortfallShares);
         const expectedRebalanceAmount = shortfall / 2n;
-        await setBalance(vaultAddress, expectedRebalanceAmount); // cheat to make balance lower than rebalanceShortfall
+        await setBalance(vaultAddress, expectedRebalanceAmount);
 
         const expectedSharesToBeBurned = await lido.getSharesByPooledEth(expectedRebalanceAmount);
 
@@ -148,8 +150,9 @@ describe("VaultHub.sol:forceRebalance", () => {
 
       it("can be called by anyone", async () => {
         const balanceBefore = await ethers.provider.getBalance(vaultAddress);
-        const shortfall = await vaultHub.rebalanceShortfall(vaultAddress);
+        const shortfallShares = await vaultHub.rebalanceShortfallShares(vaultAddress);
 
+        const shortfall = await lido.getPooledEthBySharesRoundUp(shortfallShares);
         const expectedRebalanceAmount = shortfall < balanceBefore ? shortfall : balanceBefore;
         const expectedSharesToBeBurned = await lido.getSharesByPooledEth(expectedRebalanceAmount);
 
@@ -161,13 +164,14 @@ describe("VaultHub.sol:forceRebalance", () => {
       it("takes into account redemption shares", async () => {
         const redemptionShares = await vaultHub.liabilityShares(vaultAddress);
         const balanceBefore = await ethers.provider.getBalance(vaultAddress);
-        const shortfall = await vaultHub.rebalanceShortfall(vaultAddress);
+        const shortfallShares = await vaultHub.rebalanceShortfallShares(vaultAddress);
 
         await vaultHub.connect(user).updateRedemptionShares(vaultAddress, redemptionShares);
 
         const record = await vaultHub.vaultRecord(vaultAddress);
         expect(record.redemptionShares).to.equal(redemptionShares);
 
+        const shortfall = await lido.getPooledEthBySharesRoundUp(shortfallShares);
         const expectedShortfallAmount = shortfall < balanceBefore ? shortfall : balanceBefore;
         const expectedShortfallShares = await lido.getSharesByPooledEth(expectedShortfallAmount);
 
@@ -189,13 +193,14 @@ describe("VaultHub.sol:forceRebalance", () => {
       it("takes into account part of redemption shares if not enough balance", async () => {
         const redemptionShares = await vaultHub.liabilityShares(vaultAddress);
         const balanceBefore = await ethers.provider.getBalance(vaultAddress);
-        const shortfall = await vaultHub.rebalanceShortfall(vaultAddress);
+        const shortfallShares = await vaultHub.rebalanceShortfallShares(vaultAddress);
 
         await vaultHub.connect(user).updateRedemptionShares(vaultAddress, redemptionShares);
 
         const record = await vaultHub.vaultRecord(vaultAddress);
         expect(record.redemptionShares).to.equal(redemptionShares);
 
+        const shortfall = await lido.getPooledEthBySharesRoundUp(shortfallShares);
         const expectedShortfallAmount = shortfall < balanceBefore ? shortfall : balanceBefore;
         const expectedShortfallShares = await lido.getSharesByPooledEth(expectedShortfallAmount);
         const expectedRebalanceAmount = await lido.getPooledEthBySharesRoundUp(

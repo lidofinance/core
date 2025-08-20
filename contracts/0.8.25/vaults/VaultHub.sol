@@ -306,8 +306,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @return amount of shares to rebalance or UINT256_MAX if it's impossible to make the vault healthy using rebalance
     /// @dev returns 0 if the vault is not connected
-    function rebalanceShortfall(address _vault) external view returns (uint256) {
-        return _rebalanceShortfall(_vaultConnection(_vault), _vaultRecord(_vault));
+    function rebalanceShortfallShares(address _vault) external view returns (uint256) {
+        return _rebalanceShortfallShares(_vaultConnection(_vault), _vaultRecord(_vault));
     }
 
     /// @notice amount of bad debt to be internalized to become the protocol loss
@@ -815,7 +815,11 @@ contract VaultHub is PausableUntilWithRoles {
 
             if (minPartialAmountInGwei < type(uint256).max) {
                 uint256 vaultBalance = _vault.balance;
-                uint256 sharesToCover = _rebalanceShortfall(connection, record) + record.redemptionShares;
+                uint256 sharesToCover = Math256.max(
+                    _rebalanceShortfallShares(connection, record),
+                    record.redemptionShares
+                );
+
                 uint256 amountToCover = _getPooledEthBySharesRoundUp(sharesToCover);
                 uint256 requiredAmountToCover = amountToCover > vaultBalance ? amountToCover - vaultBalance : 0;
 
@@ -862,11 +866,11 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 shortfall = _rebalanceShortfall(connection, record);
+        uint256 shortfallShares = _rebalanceShortfallShares(connection, record);
         uint256 redemptionShares = record.redemptionShares;
-        uint256 adjustedRedemptions = redemptionShares > shortfall ? redemptionShares - shortfall : 0;
+        uint256 adjustedRedemptions = redemptionShares > shortfallShares ? redemptionShares - shortfallShares : 0;
         uint256 sharesToRebalance = Math256.min(
-            shortfall + adjustedRedemptions,
+            shortfallShares + adjustedRedemptions,
             _getSharesByPooledEth(_vault.balance)
         );
 
@@ -1098,7 +1102,7 @@ contract VaultHub is PausableUntilWithRoles {
         _decreaseLiability(_vault, _record, badDebtWrittenOff);
     }
 
-    function _rebalanceShortfall(
+    function _rebalanceShortfallShares(
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {

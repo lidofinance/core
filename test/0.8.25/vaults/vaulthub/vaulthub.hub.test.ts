@@ -616,7 +616,7 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
-  context("rebalanceShortfall", () => {
+  context("rebalanceShortfallShares", () => {
     it("does not revert when vault address is correct", async () => {
       const { vault } = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
@@ -624,12 +624,12 @@ describe("VaultHub.sol:hub", () => {
         forcedRebalanceThresholdBP: 10_00n, // 10%
       });
 
-      await expect(vaultHub.rebalanceShortfall(vault)).not.to.be.reverted;
+      await expect(vaultHub.rebalanceShortfallShares(vault)).not.to.be.reverted;
     });
 
     it("does not revert when vault address is ZeroAddress", async () => {
       const zeroAddress = ethers.ZeroAddress;
-      await expect(vaultHub.rebalanceShortfall(zeroAddress)).not.to.be.reverted;
+      await expect(vaultHub.rebalanceShortfallShares(zeroAddress)).not.to.be.reverted;
     });
 
     it("returns 0 when stETH was not minted", async () => {
@@ -645,7 +645,7 @@ describe("VaultHub.sol:hub", () => {
       await lido.connect(whale).transfer(burner, ether("1"));
       await lido.connect(burner).burnShares(ether("1"));
 
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(ether("0"));
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(ether("0"));
     });
 
     it("returns 0 when minted small amount of stETH and vault is healthy", async () => {
@@ -666,7 +666,7 @@ describe("VaultHub.sol:hub", () => {
       await lido.connect(burner).burnShares(ether("1"));
 
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(true);
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(0n);
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(0n);
     });
 
     it("different cases when vault is healthy, unhealthy and minted > totalValue", async () => {
@@ -684,15 +684,15 @@ describe("VaultHub.sol:hub", () => {
 
       await reportVault({ vault, totalValue: ether("0.5") }); // at the threshold
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(true);
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(0n);
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(0n);
 
       await reportVault({ vault, totalValue: ether("0.5") - 1n }); // below the threshold
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(true);
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(0n);
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(0n);
 
       await reportVault({ vault, totalValue: 0n }); // minted > totalValue
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(false);
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(MAX_UINT256);
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(MAX_UINT256);
     });
 
     it("returns correct value for rebalance vault", async () => {
@@ -720,7 +720,7 @@ describe("VaultHub.sol:hub", () => {
       const record = await vaultHub.vaultRecord(vault);
       const sharesByTotalValue = await lido.getSharesByPooledEth(await vaultHub.totalValue(vault));
       const shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(shortfall);
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(shortfall);
     });
   });
 
