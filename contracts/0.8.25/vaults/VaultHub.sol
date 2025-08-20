@@ -275,7 +275,9 @@ contract VaultHub is PausableUntilWithRoles {
         settled = record.settledLidoFees;
     }
 
-    /// @return the amount of ether that can be transferred as fees to the Lido
+    /// @return the amount of ether that can be transferred as fees to the Lido.
+    ///         Even if vault's balance is sufficient to cover the fees, some amount may be blocked for redemptions,
+    ///         locked ether, or some amount may be non-transferable to not to make the vault unhealthy
     /// @dev returns 0 if the vault is not connected
     function transferableLidoFeesValue(address _vault) external view returns (uint256) {
         return _transferableLidoFeesValue(_vault, _vaultRecord(_vault));
