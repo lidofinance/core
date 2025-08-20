@@ -1191,6 +1191,287 @@ describe("OperatorGrid.sol", () => {
     });
   });
 
+  context("Vault Jail Status", () => {
+    describe("setVaultJailStatus", () => {
+      it("should set vault jail status to true/false", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+
+        // First set to jail
+        await operatorGrid.setVaultJailStatus(vaultAddress, true);
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.true;
+
+        // Then remove from jail
+        await expect(operatorGrid.setVaultJailStatus(vaultAddress, false))
+          .to.emit(operatorGrid, "VaultJailStatusUpdated")
+          .withArgs(vaultAddress, false);
+
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.false;
+      });
+
+      it("should revert if caller does not have REGISTRY_ROLE", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+
+        await expect(
+          operatorGrid.connect(stranger).setVaultJailStatus(vaultAddress, true),
+        ).to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount");
+      });
+
+      it("should revert if vault address is zero", async () => {
+        await expect(operatorGrid.setVaultJailStatus(ZeroAddress, true))
+          .to.be.revertedWithCustomError(operatorGrid, "ZeroArgument")
+          .withArgs("_vault");
+      });
+
+      it("should revert if trying to set the same jail status", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+
+        // Initially false, trying to set false again
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.false;
+        await expect(operatorGrid.setVaultJailStatus(vaultAddress, false)).to.be.revertedWithCustomError(
+          operatorGrid,
+          "VaultInJailAlreadySet",
+        );
+
+        // Set to true first
+        await operatorGrid.setVaultJailStatus(vaultAddress, true);
+
+        // Try to set true again
+        await expect(operatorGrid.setVaultJailStatus(vaultAddress, true)).to.be.revertedWithCustomError(
+          operatorGrid,
+          "VaultInJailAlreadySet",
+        );
+      });
+
+      it("should allow admin with REGISTRY_ROLE to set jail status", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+
+        // Grant REGISTRY_ROLE to nodeOperator1
+        await operatorGrid.grantRole(await operatorGrid.REGISTRY_ROLE(), nodeOperator1);
+
+        await expect(operatorGrid.connect(nodeOperator1).setVaultJailStatus(vaultAddress, true))
+          .to.emit(operatorGrid, "VaultJailStatusUpdated")
+          .withArgs(vaultAddress, true);
+
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.true;
+      });
+    });
+
+    describe("onMintedShares jail check", () => {
+      const tierShareLimit = 1000;
+      const reserveRatio = 2000;
+      const forcedRebalanceThreshold = 1800;
+      const infraFee = 500;
+      const liquidityFee = 400;
+      const reservationFee = 100;
+      const tiers: TierParamsStruct[] = [
+        {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          forcedRebalanceThresholdBP: forcedRebalanceThreshold,
+          infraFeeBP: infraFee,
+          liquidityFeeBP: liquidityFee,
+          reservationFeeBP: reservationFee,
+        },
+      ];
+
+      beforeEach(async () => {
+        // Set up a group and tier for testing
+        const shareLimit = 2000;
+        await operatorGrid.registerGroup(nodeOperator1, shareLimit);
+        await operatorGrid.registerTiers(nodeOperator1, tiers);
+
+        await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          forcedRebalanceThresholdBP: forcedRebalanceThreshold,
+          infraFeeBP: infraFee,
+          liquidityFeeBP: liquidityFee,
+          reservationFeeBP: reservationFee,
+          owner: vaultOwner,
+          vaultIndex: 1,
+          pendingDisconnect: false,
+          isBeaconDepositsManuallyPaused: false,
+        });
+
+        const tierId = 1;
+        await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, tierId, tierShareLimit);
+        await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, tierId, tierShareLimit);
+      });
+
+      it("should revert onMintedShares if vault is in jail", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+        const mintAmount = 100;
+
+        // Put vault in jail
+        await operatorGrid.setVaultJailStatus(vaultAddress, true);
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.true;
+
+        // Try to mint shares - should revert
+        await expect(
+          operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount),
+        ).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+      });
+
+      it("should allow onMintedShares if vault is not in jail", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+        const mintAmount = 100;
+
+        // Ensure vault is not in jail
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.false;
+
+        // Mint shares - should succeed
+        await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount)).to.not.be
+          .reverted;
+
+        // Verify shares were minted
+        const tier = await operatorGrid.tier(1);
+        expect(tier.liabilityShares).to.equal(mintAmount);
+      });
+
+      it("should allow onMintedShares after vault is removed from jail", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+        const mintAmount = 100;
+
+        // Put vault in jail
+        await operatorGrid.setVaultJailStatus(vaultAddress, true);
+
+        // Verify minting fails while in jail
+        await expect(
+          operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount),
+        ).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+
+        // Remove from jail
+        await operatorGrid.setVaultJailStatus(vaultAddress, false);
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.false;
+
+        // Now minting should succeed
+        await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount)).to.not.be
+          .reverted;
+
+        // Verify shares were minted
+        const tier = await operatorGrid.tier(1);
+        expect(tier.liabilityShares).to.equal(mintAmount);
+      });
+    });
+
+    describe("isVaultInJail", () => {
+      it("should return false for vault not in jail", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.false;
+      });
+
+      it("should return true for vault in jail", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+
+        await operatorGrid.setVaultJailStatus(vaultAddress, true);
+
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.true;
+      });
+
+      it("should return false for non-existent vault", async () => {
+        const nonExistentVault = certainAddress("nonExistentVault");
+
+        expect(await operatorGrid.isVaultInJail(nonExistentVault)).to.be.false;
+      });
+    });
+
+    describe("Integration with other operations", () => {
+      const tierShareLimit = 1000;
+      const reserveRatio = 2000;
+      const forcedRebalanceThreshold = 1800;
+      const infraFee = 500;
+      const liquidityFee = 400;
+      const reservationFee = 100;
+      const tiers: TierParamsStruct[] = [
+        {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          forcedRebalanceThresholdBP: forcedRebalanceThreshold,
+          infraFeeBP: infraFee,
+          liquidityFeeBP: liquidityFee,
+          reservationFeeBP: reservationFee,
+        },
+      ];
+
+      beforeEach(async () => {
+        // Set up a group and tier for testing
+        const shareLimit = 2000;
+        await operatorGrid.registerGroup(nodeOperator1, shareLimit);
+        await operatorGrid.registerTiers(nodeOperator1, tiers);
+
+        await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          forcedRebalanceThresholdBP: forcedRebalanceThreshold,
+          infraFeeBP: infraFee,
+          liquidityFeeBP: liquidityFee,
+          reservationFeeBP: reservationFee,
+          owner: vaultOwner,
+          vaultIndex: 1,
+          pendingDisconnect: false,
+          isBeaconDepositsManuallyPaused: false,
+        });
+      });
+
+      it("should allow tier changes for jailed vaults", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+        const tierId = 1;
+
+        // Put vault in jail
+        await operatorGrid.setVaultJailStatus(vaultAddress, true);
+
+        // Tier changes should still be allowed
+        await operatorGrid.connect(vaultOwner).changeTier(vaultAddress, tierId, tierShareLimit);
+        await expect(operatorGrid.connect(nodeOperator1).changeTier(vaultAddress, tierId, tierShareLimit))
+          .to.emit(operatorGrid, "TierChanged")
+          .withArgs(vaultAddress, tierId, tierShareLimit);
+      });
+
+      it("should preserve jail status across tier resets", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+        const tierId = 1;
+
+        // Set tier first
+        await operatorGrid.connect(vaultOwner).changeTier(vaultAddress, tierId, tierShareLimit);
+        await operatorGrid.connect(nodeOperator1).changeTier(vaultAddress, tierId, tierShareLimit);
+
+        // Put vault in jail
+        await operatorGrid.setVaultJailStatus(vaultAddress, true);
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.true;
+
+        // Reset tier (simulating VaultHub calling resetVaultTier)
+        await operatorGrid.connect(vaultHubAsSigner).resetVaultTier(vaultAddress);
+
+        // Jail status should be preserved
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.true;
+      });
+
+      it("should allow onBurnedShares for jailed vaults", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+        const tierId = 1;
+        const mintAmount = 100;
+        const burnAmount = 50;
+
+        // Set tier and mint some shares first
+        await operatorGrid.connect(vaultOwner).changeTier(vaultAddress, tierId, tierShareLimit);
+        await operatorGrid.connect(nodeOperator1).changeTier(vaultAddress, tierId, tierShareLimit);
+        await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount);
+
+        // Put vault in jail
+        await operatorGrid.setVaultJailStatus(vaultAddress, true);
+
+        // Burning should still be allowed even when jailed
+        await expect(operatorGrid.connect(vaultHubAsSigner).onBurnedShares(vaultAddress, burnAmount)).to.not.be
+          .reverted;
+
+        // Verify shares were burned
+        const tier = await operatorGrid.tier(tierId);
+        expect(tier.liabilityShares).to.equal(mintAmount - burnAmount);
+      });
+    });
+  });
+
   context("burnShares", () => {
     const tierShareLimit = 1000;
     const reserveRatio = 2000;
