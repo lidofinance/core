@@ -105,7 +105,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         if (actionPath[actionIndex] == action) {
             actionIndex++;
         } else {
-            revert("not the good sequence");
+            return; //not the good squence
         }
         _;
     }
@@ -128,7 +128,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         return forceValidatorExitReverted;
     }
     ////////// VAULTHUB INTERACTIONS //////////
-    function connectVault() public actionIndexUpdate(VaultAction.CONNECT) {
+    function connectVault() public {
         //check if the vault is already connected
         VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVault));
 
@@ -147,7 +147,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         vaultHub.connectVault(address(stakingVault));
     }
 
-    function voluntaryDisconnect() public actionIndexUpdate(VaultAction.VOLUNTARY_DISCONNECT) {
+    function voluntaryDisconnect() public {
         VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVault));
 
         //do nothing if disconnected or already disconnecting
@@ -163,15 +163,20 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         vaultHub.voluntaryDisconnect(address(stakingVault));
     }
 
-    function fund(uint256 amount) public actionIndexUpdate(VaultAction.FUND) {
+    function fund(uint256 amount) public {
         amount = bound(amount, 1, 1 ether);
         deal(address(userAccount), amount);
         vm.prank(userAccount);
         vaultHub.fund{value: amount}(address(stakingVault));
     }
 
-    function VHwithdraw(uint256 amount) public actionIndexUpdate(VaultAction.VH_WITHDRAW) {
-        amount = bound(amount, 0, vaultHub.withdrawableValue(address(stakingVault)));
+    function VHwithdraw(uint256 amount) public {
+        amount = bound(amount, 1, vaultHub.withdrawableValue(address(stakingVault)));
+        
+        //check that stakingVault is connected
+        if (vaultHub.vaultConnection(address(stakingVault)).vaultIndex == 0) {
+            return;
+        }
 
         if (amount == 0) {
             return;
@@ -255,24 +260,32 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         return vaultHub.totalValue(address(stakingVault));
     }
 
-    function sv_otcDeposit(uint256 amount) public actionIndexUpdate(VaultAction.SV_OTC_DEPOSIT) {
+    function sv_otcDeposit(uint256 amount) public {
         amount = bound(amount, 1 ether, 10 ether);
         sv_otcDeposited += amount;
-        deal(address(address(stakingVault)), amount);
+        deal(address(stakingVault), address(stakingVault).balance + amount);
+
+        console2.log("stakingVault balance =", address(stakingVault).balance);
     }
 
-    function vh_otcDeposit(uint256 amount) public actionIndexUpdate(VaultAction.VH_OTC_DEPOSIT) {
+    function vh_otcDeposit(uint256 amount) public {
         amount = bound(amount, 1 ether, 10 ether);
         vh_otcDeposited += amount;
-        deal(address(address(vaultHub)), amount);
+        deal(address(vaultHub), address(vaultHub).balance + amount);
     }
 
     ////////// LazyOracle INTERACTIONS //////////
 
-    function updateVaultData(uint256 daysShift) public actionIndexUpdate(VaultAction.UPDATE_VAULT_DATA) {
+    function updateVaultData(uint256 daysShift) public {
         daysShift = bound(daysShift, 0, 1);
         daysShift *= 3; //0 or 3 days for quarantine period expiration
         console2.log("DaysShift = %d", daysShift);
+
+        VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVault));
+
+        //do nothing if disconnected
+        if (vc.vaultIndex == 0)
+            return;
 
         if (daysShift > 0) {
             vm.warp(block.timestamp + daysShift * 1 days);
@@ -301,6 +314,10 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
             consensusContract.setCurrentFrame(refSlot);
         }
 
+        //That means that there has no been any new refSLot meanning no new report since vault connection
+        if (lastReport.totalValue == 0 && lastReport.cumulativeLidoFees == 0)
+            return;
+    
         //we update the reported total Value
         reportedTotalValue = lastReport.totalValue;
 
@@ -325,7 +342,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     ////////// STAKING VAULT INTERACTIONS //////////
 
-    function SVwithdraw(uint256 amount) public actionIndexUpdate(VaultAction.SV_WITHDRAW) {
+    function SVwithdraw(uint256 amount) public {
         if (stakingVault.owner() != userAccount) {
             return; //we are managed by the VaultHub
         }
