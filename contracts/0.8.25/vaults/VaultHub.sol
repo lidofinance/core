@@ -510,7 +510,6 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         if (connection.pendingDisconnect) {
-            // Disconnect the vault if it's healthy and has no slashing reserve
             if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
                 uint256 unsettledLidoFees = _reportCumulativeLidoFees - settledLidoFees;
                 if (unsettledLidoFees > 0) {
