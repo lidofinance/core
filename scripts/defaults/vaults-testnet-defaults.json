@@ -81,7 +81,7 @@
     "deployParameters": {
       "quarantinePeriod": 259200,
       "maxRewardRatioBP": 350,
-      "maxLidoFeeRatePerSecond": "400000000000000"
+      "maxLidoFeeRatePerSecond": "180000000000000000"
     }
   },
   "accountingOracle": {

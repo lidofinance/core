@@ -73,9 +73,9 @@ maxRelativeShareLimitBP = 1000        # Maximum relative share limit in basis po
 
 # Lazy oracle configuration for delayed reward calculations
 [lazyOracle]
-quarantinePeriod = 259200                   # Quarantine period in seconds (3 days)
-maxRewardRatioBP = 350                      # Maximum reward ratio in basis points (3.5%)
-maxLidoFeeRatePerSecond = "400000000000000" # Maximum Lido fee rate per second, in wei (0.0004 ETH)
+quarantinePeriod = 259200                      # Quarantine period in seconds (3 days)
+maxRewardRatioBP = 350                         # Maximum reward ratio in basis points (3.5%)
+maxLidoFeeRatePerSecond = "180000000000000000" # Maximum Lido fee rate per second, in wei (0.18 ETH)
 
 # Accounting oracle configuration
 [accountingOracle]
