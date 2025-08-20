@@ -172,7 +172,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
 
     function VHwithdraw(uint256 amount) public {
         amount = bound(amount, 1, vaultHub.withdrawableValue(address(stakingVault)));
-        
+
         //check that stakingVault is connected
         if (vaultHub.vaultConnection(address(stakingVault)).vaultIndex == 0) {
             return;
@@ -208,7 +208,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         }
         bytes memory pubkeys = new bytes(0);
         vm.prank(rootAccount); //privileged account can force exit
-        try vaultHub.forceValidatorExit(address(stakingVault), pubkeys, userAccount) {
+        try vaultHub.forceValidatorExit{value: 3000}(address(stakingVault), pubkeys, userAccount) {
             // If the call succeeds, we do nothing
         } catch {
             forceValidatorExitReverted = true;
@@ -284,8 +284,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVault));
 
         //do nothing if disconnected
-        if (vc.vaultIndex == 0)
-            return;
+        if (vc.vaultIndex == 0) return;
 
         if (daysShift > 0) {
             vm.warp(block.timestamp + daysShift * 1 days);
@@ -315,9 +314,8 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         }
 
         //That means that there has no been any new refSLot meanning no new report since vault connection
-        if (lastReport.totalValue == 0 && lastReport.cumulativeLidoFees == 0)
-            return;
-    
+        if (lastReport.totalValue == 0 && lastReport.cumulativeLidoFees == 0) return;
+
         //we update the reported total Value
         reportedTotalValue = lastReport.totalValue;
 
