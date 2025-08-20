@@ -790,6 +790,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _amountsInGwei array of amounts to withdraw from each validator (0 for full withdrawal)
     /// @param _refundRecipient address that will receive the refund for transaction costs
     /// @dev msg.sender should be vault's owner
+    /// @dev in case of partial withdrawals, the report should be fresh
     function triggerValidatorWithdrawals(
         address _vault,
         bytes calldata _pubkeys,
@@ -798,38 +799,40 @@ contract VaultHub is PausableUntilWithRoles {
     ) external payable {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
-        _requireFreshReport(_vault, record);
 
-        /// @dev NB: Disallow partial withdrawals when the vault is unhealthy or has redemptions over the threshold
-        ///          in order to prevent the vault owner from clogging the consensus layer withdrawal queue
-        ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
-        ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
-        ///          settle redemptions
-        if (!_isVaultHealthy(connection, record) || _hasInsufficientBalanceForRedemptions(_vault, record)) {
-            uint256 minPartialAmountInGwei = type(uint256).max;
-            for (uint256 i = 0; i < _amountsInGwei.length; i++) {
-                if (_amountsInGwei[i] > 0 && _amountsInGwei[i] < minPartialAmountInGwei) {
-                    minPartialAmountInGwei = _amountsInGwei[i];
-                }
+        uint256 minPartialAmountInGwei = type(uint256).max;
+        for (uint256 i = 0; i < _amountsInGwei.length; i++) {
+            if (_amountsInGwei[i] > 0 && _amountsInGwei[i] < minPartialAmountInGwei) {
+                minPartialAmountInGwei = _amountsInGwei[i];
             }
+        }
 
-            if (minPartialAmountInGwei < type(uint256).max) {
+        if (minPartialAmountInGwei < type(uint256).max) {
+            _requireFreshReport(_vault, record);
+
+            /// @dev NB: Disallow partial withdrawals when the vault is unhealthy or has redemptions over the threshold
+            ///          in order to prevent the vault owner from clogging the consensus layer withdrawal queue
+            ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
+            ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
+            ///          settle redemptions
+            if (!_isVaultHealthy(connection, record) || _hasInsufficientBalanceForRedemptions(_vault, record)) {
                 uint256 vaultBalance = _vault.balance;
                 uint256 sharesToCover = Math256.max(
                     _rebalanceShortfallShares(connection, record),
                     record.redemptionShares
                 );
 
+                if (sharesToCover == type(uint256).max) revert PartialValidatorWithdrawalNotAllowed();
+
                 uint256 amountToCover = _getPooledEthBySharesRoundUp(sharesToCover);
                 uint256 requiredAmountToCover = amountToCover > vaultBalance ? amountToCover - vaultBalance : 0;
-
                 if (minPartialAmountInGwei * 1e9 < requiredAmountToCover) {
                     revert PartialValidatorWithdrawalNotAllowed();
                 }
             }
         }
 
-        IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amountsInGwei, _refundRecipient);
+        _triggerValidatorWithdrawals(_vault, msg.value, _pubkeys, _amountsInGwei, _refundRecipient);
     }
 
     /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault is
@@ -853,7 +856,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         uint64[] memory amountsInGwei = new uint64[](0);
-        IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, amountsInGwei, _refundRecipient);
+        _triggerValidatorWithdrawals(_vault, msg.value, _pubkeys, amountsInGwei, _refundRecipient);
 
         emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
@@ -1021,6 +1024,9 @@ contract VaultHub is PausableUntilWithRoles {
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _shares) internal {
         uint256 valueToRebalance = _getPooledEthBySharesRoundUp(_shares);
 
+        uint256 totalValue_ = _totalValue(_record);
+        if (valueToRebalance > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, valueToRebalance);
+
         _decreaseLiability(_vault, _record, _shares);
         _withdraw(_vault, _record, address(this), valueToRebalance);
         _rebalanceExternalEtherToInternal(valueToRebalance);
@@ -1035,7 +1041,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _amount
     ) internal {
         uint256 totalValue_ = _totalValue(_record);
-        if (_amount > totalValue_) revert WithdrawAmountExceedsTotalValue(_vault, totalValue_, _amount);
+        if (_amount > totalValue_) revert WithdrawAmountExceedsTotalValue(totalValue_, _amount);
 
         _updateInOutDelta(_vault, _record, -int104(int256(_amount)));
 
@@ -1391,6 +1397,16 @@ contract VaultHub is PausableUntilWithRoles {
         LIDO.rebalanceExternalEtherToInternal{value: _ether}();
     }
 
+    function _triggerValidatorWithdrawals(
+        address _vault,
+        uint256 _value,
+        bytes calldata _pubkeys,
+        uint64[] memory _amountsInGwei,
+        address _refundRecipient
+    ) internal {
+        IStakingVault(_vault).triggerValidatorWithdrawals{value: _value}(_pubkeys, _amountsInGwei, _refundRecipient);
+    }
+
     function _nodeOperator(address _vault) internal view returns (address) {
         return IStakingVault(_vault).nodeOperator();
     }
@@ -1512,13 +1528,20 @@ contract VaultHub is PausableUntilWithRoles {
     //           ERRORS
     // -----------------------------
 
+
+    /**
+     * @notice Thrown when attempting to rebalance more ether than the current total value of the vault
+     * @param totalValue Current total value of the vault
+     * @param rebalanceAmount Amount attempting to rebalance (in ether)
+     */
+    error RebalanceAmountExceedsTotalValue(uint256 totalValue, uint256 rebalanceAmount);
+
     /**
      * @notice Thrown when attempting to withdraw more ether than the total value of the vault
-     * @param vault The address of the vault
      * @param totalValue Current total value of the vault
      * @param withdrawAmount Amount attempting to be withdrawn (in ether)
      */
-    error WithdrawAmountExceedsTotalValue(address vault, uint256 totalValue, uint256 withdrawAmount);
+    error WithdrawAmountExceedsTotalValue(uint256 totalValue, uint256 withdrawAmount);
 
     /**
      * @notice Thrown when attempting to withdraw more ether than the available value of the vault

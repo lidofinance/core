@@ -23,6 +23,7 @@ import {
   generatePostDeposit,
   generateValidator,
   MAX_UINT256,
+  ONE_GWEI,
   proxify,
   streccak,
 } from "lib";
@@ -660,6 +661,33 @@ describe("StakingVault.sol", () => {
 
       const strangerBalanceAfter = await ethers.provider.getBalance(stranger);
       expect(strangerBalanceAfter).to.equal(strangerBalanceBefore + valueToRefund);
+    });
+
+    it("requests a bigger than uin64 in wei partial validator withdrawal", async () => {
+      let amount = ether("32");
+
+      // NB: the amount field is uin64 so only works for Gwei, and should not work with Wei
+      let gotError: boolean | undefined = undefined;
+      try {
+        await stakingVault
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [amount], vaultOwner, { value: baseFee });
+      } catch (error) {
+        gotError = !!error;
+      }
+      expect(gotError).to.be.true;
+
+      amount /= ONE_GWEI;
+
+      await expect(
+        stakingVault
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [amount], vaultOwner, { value: baseFee }),
+      )
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
+        .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
+        .to.emit(stakingVault, "ValidatorWithdrawalsTriggered")
+        .withArgs(SAMPLE_PUBKEY, [amount], 0n, vaultOwner);
     });
   });
 

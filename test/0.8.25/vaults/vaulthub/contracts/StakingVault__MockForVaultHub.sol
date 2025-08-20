@@ -36,13 +36,13 @@ contract StakingVault__MockForVaultHub is Ownable2StepUpgradeable {
         nodeOperator = _no;
     }
 
-    function fund() external payable {}
+    function fund() external payable {
+        emit Mock__Funded();
+    }
 
-    function withdraw(address _recipient, uint256 _ether) external {
-        (bool success, ) = _recipient.call{value: _ether}("");
-        if (!success) revert TransferFailed(_recipient, _ether);
-
-        emit EtherWithdrawn(_recipient, _ether);
+    function withdraw(address recipient, uint256 amount) external {
+        payable(recipient).transfer(amount);
+        emit Mock__Withdrawn(recipient, amount);
     }
 
     function isOssified() external pure returns (bool) {
@@ -59,26 +59,32 @@ contract StakingVault__MockForVaultHub is Ownable2StepUpgradeable {
 
     function depositToBeaconChain(IStakingVault.Deposit[] calldata _deposits) external {}
 
+    function requestValidatorExit(bytes calldata _pubkeys) external {
+        emit Mock__ValidatorExitRequested(_pubkeys);
+    }
+
     function ossified() external pure returns (bool) {
         return false;
     }
 
     function pauseBeaconChainDeposits() external {
         beaconChainDepositsPaused = true;
-        emit BeaconChainDepositsPaused();
+        emit Mock__BeaconChainDepositsPaused();
     }
 
     function resumeBeaconChainDeposits() external {
         beaconChainDepositsPaused = false;
-        emit BeaconChainDepositsResumed();
+        emit Mock__BeaconChainDepositsResumed();
     }
 
     event ValidatorWithdrawalsTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
-    event BeaconChainDepositsPaused();
-    event BeaconChainDepositsResumed();
-    event EtherWithdrawn(address recipient, uint256 amount);
+
+    // Mock events for VaultHub forwarding operations
+    event Mock__Funded();
+    event Mock__Withdrawn(address recipient, uint256 amount);
+    event Mock__BeaconChainDepositsPaused();
+    event Mock__BeaconChainDepositsResumed();
+    event Mock__ValidatorExitRequested(bytes pubkeys);
 
     error Mock__HealthyVault();
-
-    error TransferFailed(address recipient, uint256 amount);
 }

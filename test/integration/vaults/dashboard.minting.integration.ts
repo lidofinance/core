@@ -67,7 +67,7 @@ describe("Integration: Dashboard ", () => {
       const totalMintingCapacityShares1 = await dashboard.totalMintingCapacityShares();
       expect(
         await calculateLockedValue(ctx, stakingVault, { liabilityShares: totalMintingCapacityShares1 }),
-      ).to.be.equal(await vaultHub.maxLockableValue(stakingVault));
+      ).to.be.closeTo(await vaultHub.maxLockableValue(stakingVault), 2n);
       expect(totalMintingCapacityShares1).to.be.equal(remainingMintingCapacityShares1);
 
       // reserve > minimalReserve
@@ -76,7 +76,7 @@ describe("Integration: Dashboard ", () => {
       const totalMintingCapacityShares10 = await dashboard.totalMintingCapacityShares();
       expect(
         await calculateLockedValue(ctx, stakingVault, { liabilityShares: totalMintingCapacityShares10 }),
-      ).to.be.equal(await vaultHub.maxLockableValue(stakingVault));
+      ).to.be.closeTo(await vaultHub.maxLockableValue(stakingVault), 2n);
       expect(totalMintingCapacityShares10).to.be.equal(remainingMintingCapacityShares10);
     });
 

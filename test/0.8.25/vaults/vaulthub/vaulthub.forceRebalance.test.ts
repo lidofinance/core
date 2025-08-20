@@ -113,7 +113,7 @@ describe("VaultHub.sol:forceRebalance", () => {
         await expect(vaultHub.forceRebalance(vaultAddress))
           .to.emit(vaultHub, "VaultRebalanced")
           .withArgs(vaultAddress, expectedSharesToBeBurned, expectedRebalanceShares)
-          .to.emit(vault, "BeaconChainDepositsResumed");
+          .to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
         const balanceAfter = await ethers.provider.getBalance(vaultAddress);
         expect(balanceAfter).to.equal(balanceBefore - expectedRebalanceAmount);
@@ -137,7 +137,7 @@ describe("VaultHub.sol:forceRebalance", () => {
         await expect(vaultHub.forceRebalance(vaultAddress))
           .to.emit(vaultHub, "VaultRebalanced")
           .withArgs(vaultAddress, expectedSharesToBeBurned, expectedRebalanceAmount)
-          .not.to.emit(vault, "BeaconChainDepositsResumed");
+          .not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
         const balanceAfter = await ethers.provider.getBalance(vaultAddress);
         expect(balanceAfter).to.equal(0);
