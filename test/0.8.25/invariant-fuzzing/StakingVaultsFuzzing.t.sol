@@ -134,6 +134,10 @@ contract StakingVaultsTest is Test {
         bytes32 vaultCodehashSetRole = vaultHubProxy.VAULT_CODEHASH_SET_ROLE();
         vm.prank(rootAccount);
         vaultHubProxy.grantRole(vaultCodehashSetRole, rootAccount);
+
+        bytes32 validatorExitRole = vaultHubProxy.VALIDATOR_EXIT_ROLE();
+        vm.prank(rootAccount);
+        vaultHubProxy.grantRole(validatorExitRole, rootAccount);
     }
 
     function deployStakingVault() internal {
@@ -209,17 +213,14 @@ contract StakingVaultsTest is Test {
 
     //This invariant checks that the dynamic (accounting for deltas) totalValue of the vault is not underflowed
     function invariant_dynamic_totalValue_should_not_underflow() external {
-        int256 inOutDelta;
-        uint256 totalValue = vaultHubProxy.totalValue(address(stakingVaultProxy));
         VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
-        int256 curInOutDelta = record.inOutDelta.value;
-        (uint256 refSlot, ) = IHashConsensus(consensusContract_addr).getCurrentFrame();
-        if (record.inOutDelta.refSlot == refSlot) {
-            inOutDelta = record.inOutDelta.refSlotValue;
-        } else {
-            inOutDelta = curInOutDelta;
-        }
-        assertGe(int256(totalValue) + curInOutDelta - inOutDelta, 0, "Dynamic total value should not underflow"); //@audit this should revert with high totalValue
+        assertGe(
+            int256(uint256(record.report.totalValue)) +
+                int256(record.inOutDelta.value) -
+                int256(record.report.inOutDelta),
+            0,
+            "Total value should not underflow"
+        );
     }
 
     //forceRebalance and forceValidatorExit should notrevert when the vault is unhealthy
