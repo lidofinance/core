@@ -991,8 +991,6 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         _connection.pendingDisconnect = true;
-
-        _operatorGrid().resetVaultTier(_vault);
     }
 
     function _applyVaultReport(
@@ -1225,6 +1223,7 @@ contract VaultHub is PausableUntilWithRoles {
         delete $.obligations[_vault];
 
         _lazyOracle().removeVaultQuarantine(_vault);
+        _operatorGrid().resetVaultTier(_vault);
     }
 
     function _checkConnectionAndOwner(address _vault) internal view returns (VaultConnection storage connection) {

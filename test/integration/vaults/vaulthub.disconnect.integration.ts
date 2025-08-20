@@ -6,11 +6,13 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { Dashboard, StakingVault } from "typechain-types";
 
 import {
+  changeTier,
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
+  setUpOperatorGrid,
 } from "lib/protocol";
 import { ether } from "lib/units";
 
@@ -26,6 +28,7 @@ describe("Integration: VaultHub", () => {
   let dao: HardhatEthersSigner;
   let stakingVault: StakingVault;
   let dashboard: Dashboard;
+  let tierId: bigint;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -34,12 +37,18 @@ describe("Integration: VaultHub", () => {
     await setupLidoForVaults(ctx);
     [, owner, nodeOperator, dao] = await ethers.getSigners();
 
+    await setUpOperatorGrid(ctx, [nodeOperator]);
+
     ({ stakingVault, dashboard } = await createVaultWithDashboard(
       ctx,
       ctx.contracts.stakingVaultFactory,
       owner,
       nodeOperator,
     ));
+
+    dashboard = dashboard.connect(owner);
+
+    tierId = await changeTier(ctx, dashboard, owner, nodeOperator);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -48,22 +57,39 @@ describe("Integration: VaultHub", () => {
 
   describe("Disconnect initiation", () => {
     describe("Voluntary", () => {
-      it("Fresh vault", async () => {
+      it("Fresh vault can disconnect", async () => {
         const { vaultHub, operatorGrid } = ctx.contracts;
 
-        const { tierId } = await operatorGrid.vaultInfo(stakingVault);
+        await expect(dashboard.voluntaryDisconnect())
+          .to.emit(vaultHub, "VaultDisconnectInitiated")
+          .withArgs(stakingVault);
 
-        await expect(dashboard.connect(owner).voluntaryDisconnect())
+        expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(tierId);
+        expect((await vaultHub.vaultConnection(stakingVault)).pendingDisconnect).to.be.true;
+        expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
+        expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
+      });
+
+      it("Vault with liability can disconnect after liability is paid", async () => {
+        const { vaultHub, lido } = ctx.contracts;
+
+        await dashboard.fund({ value: ether("1.5") });
+
+        await dashboard.mintStETH(owner, ether("1"));
+        await reportVaultDataWithProof(ctx, stakingVault);
+
+        await lido.connect(owner).approve(dashboard, ether("1"));
+        await dashboard.burnStETH(ether("1"));
+        await reportVaultDataWithProof(ctx, stakingVault);
+
+        await expect(dashboard.voluntaryDisconnect())
           .to.emit(vaultHub, "VaultDisconnectInitiated")
           .withArgs(stakingVault);
 
         expect((await vaultHub.vaultConnection(stakingVault)).pendingDisconnect).to.be.true;
         expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
         expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
-        expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(tierId);
       });
-
-      it("Vault with liability", async () => {});
     });
 
     describe("Forced", () => {
@@ -87,12 +113,13 @@ describe("Integration: VaultHub", () => {
     beforeEach(async () => await dashboard.connect(owner).voluntaryDisconnect());
 
     it("Vault brings report and disconnects", async () => {
-      const { vaultHub } = ctx.contracts;
+      const { vaultHub, operatorGrid } = ctx.contracts;
 
       await expect(reportVaultDataWithProof(ctx, stakingVault))
         .to.emit(vaultHub, "VaultDisconnectCompleted")
         .withArgs(stakingVault);
 
+      expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(0n);
       expect((await vaultHub.vaultConnection(stakingVault)).pendingDisconnect).to.be.false;
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
       expect(await vaultHub.locked(stakingVault)).to.be.equal(0n);
@@ -120,12 +147,13 @@ describe("Integration: VaultHub", () => {
     beforeEach(async () => await dashboard.connect(owner).voluntaryDisconnect());
 
     it("Vault brings report with slashing reserve", async () => {
-      const { vaultHub } = ctx.contracts;
+      const { vaultHub, operatorGrid } = ctx.contracts;
 
       await expect(reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: ether("1") }))
         .to.emit(vaultHub, "VaultDisconnectAborted")
         .withArgs(stakingVault, ether("1"));
 
+      expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(tierId);
       expect((await vaultHub.vaultConnection(stakingVault)).pendingDisconnect).to.be.false;
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
       expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
