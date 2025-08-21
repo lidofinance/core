@@ -112,7 +112,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     });
 
     ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
-      it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
+      it(`Should revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
         await consolidationRequestPredeployed.mock__setFeeRaw(unexpectedFee);
 
         await expect(validatorConsolidationRequests.getConsolidationRequestFee()).to.be.revertedWithCustomError(
