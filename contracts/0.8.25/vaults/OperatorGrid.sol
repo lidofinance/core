@@ -95,7 +95,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     uint256 internal constant MAX_FEE_BP = type(uint16).max;
     /// @dev max value for reserve ratio in basis points - 9999
     uint256 internal constant MAX_RESERVE_RATIO_BP = 99_99;
-    
+
     // -----------------------------
     //            STRUCTS
     // -----------------------------
@@ -472,6 +472,74 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         return true;
     }
 
+    /// @notice Sync vault params to the current tier params
+    /// @param _vault address of the vault
+    function syncVaultWithTier(address _vault) external {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+
+        VaultHub vaultHub = _vaultHub();
+        if (!vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
+
+        VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(_vault);
+        address vaultOwner = vaultConnection.owner;
+        if (msg.sender != vaultOwner) revert NotAuthorized("syncVaultWithTier", msg.sender);
+
+        ERC7201Storage storage $ = _getStorage();
+        uint256 vaultTierId = $.vaultTier[_vault];
+        Tier memory tier = $.tiers[vaultTierId];
+
+        vaultHub.updateConnection(
+            _vault,
+            vaultConnection.shareLimit,
+            tier.reserveRatioBP,
+            tier.forcedRebalanceThresholdBP,
+            tier.infraFeeBP,
+            tier.liquidityFeeBP,
+            tier.reservationFeeBP
+        );
+    }
+
+    /// @notice Update vault share limit
+    /// @param _vault address of the vault
+    /// @param _requestedShareLimit share limit to set
+    /// @return bool Whether the update was confirmed.
+    function updateVaultShareLimit(address _vault, uint256 _requestedShareLimit) external returns (bool) {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+
+        VaultHub vaultHub = _vaultHub();
+        if (!vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
+
+        ERC7201Storage storage $ = _getStorage();
+        uint256 vaultTierId = $.vaultTier[_vault];
+        uint256 tierShareLimit = $.tiers[vaultTierId].shareLimit;
+
+        if (_requestedShareLimit > tierShareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, tierShareLimit);
+
+        VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(_vault);
+        address vaultOwner = vaultConnection.owner;
+
+        // nodeOperator confirmation is only needed if vault is not in the default tier and if the requested shareLimit is more than the current one
+        if (vaultTierId == DEFAULT_TIER_ID || _requestedShareLimit <= vaultConnection.shareLimit) {
+            if (msg.sender != vaultOwner) revert NotAuthorized("updateVaultShareLimit", msg.sender);
+        } else {
+            address nodeOperator = IStakingVault(_vault).nodeOperator();
+            // store the caller's confirmation; only proceed if the required number of confirmations is met.
+            if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
+        }
+
+        vaultHub.updateConnection(
+            _vault,
+            _requestedShareLimit,
+            vaultConnection.reserveRatioBP,
+            vaultConnection.forcedRebalanceThresholdBP,
+            vaultConnection.infraFeeBP,
+            vaultConnection.liquidityFeeBP,
+            vaultConnection.reservationFeeBP
+        );
+
+        return true;
+    }
+
     /// @notice Reset vault's tier to default
     /// @param _vault address of the vault
     /// @dev Requires vault's liabilityShares to be zero before resetting the tier
@@ -707,4 +775,5 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     error ReservationFeeTooHigh(uint256 tierId, uint256 reservationFeeBP, uint256 maxReservationFeeBP);
     error ArrayLengthMismatch();
     error RequestedShareLimitTooHigh(uint256 requestedShareLimit, uint256 tierShareLimit);
+    error VaultNotConnected();
 }
