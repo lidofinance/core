@@ -26,14 +26,15 @@ contract MultiStakingVaultsTest is Test {
 
     OperatorGridMock operatorGridProxy;
 
-    uint256[2] groupShareLimit = [1000 ether, 500 ether];
+    //uint256[2] groupShareLimit = [1000 ether, 500 ether];
+    uint256[2] groupShareLimit = [1000, 500];
     MultiStakingVaultHandler msvHandler;
 
     address private rootAccount = makeAddr("rootAccount");
     address[2] private nodeOpAccount = [makeAddr("nodeOpAccount1"), makeAddr("nodeOpAccount2")];
     address[] private userAccount;
 
-    uint256 private constant NB_VAULTS = 4;
+    uint256 private constant NB_VAULTS = 5;
 
     address private treasury_addr = makeAddr("treasury");
     address private depositor = makeAddr("depositor");
@@ -342,6 +343,15 @@ contract MultiStakingVaultsTest is Test {
         }
     }
 
-
+    // Invariant 4: Sum of vaults' liabilityShares in the default tier <= default tier shareLimit
+    function invariant4_default_tier_liability_consistency() external {
+        address[] memory vaults = get_all_vaults_in_tier(Constants.DEFAULT_TIER);
+        OperatorGridMock.Tier memory default_tier = operatorGridProxy.tier(Constants.DEFAULT_TIER);
+        uint256 sumVaultLiabilities = 0;
+        for (uint256 i = 0; i < vaults.length; i++) {
+            sumVaultLiabilities += vaultHubProxy.liabilityShares(vaults[i]);
+        }
+        assertLe(sumVaultLiabilities, default_tier.shareLimit, "Sum of vaults' liabilityShares in the default tier must be less than or equal to the default tier's shareLimit");
+    }
 
 }
