@@ -13,6 +13,7 @@ import {
   reportVaultDataWithProof,
   setupLidoForVaults,
   setUpOperatorGrid,
+  waitNextAvailableReportTime,
 } from "lib/protocol";
 import { ether } from "lib/units";
 
@@ -65,7 +66,7 @@ describe("Integration: VaultHub", () => {
           .withArgs(stakingVault);
 
         expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(tierId);
-        expect((await vaultHub.vaultConnection(stakingVault)).pendingDisconnect).to.be.true;
+        expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
         expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
         expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
       });
@@ -86,7 +87,7 @@ describe("Integration: VaultHub", () => {
           .to.emit(vaultHub, "VaultDisconnectInitiated")
           .withArgs(stakingVault);
 
-        expect((await vaultHub.vaultConnection(stakingVault)).pendingDisconnect).to.be.true;
+        expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
         expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
         expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
       });
@@ -102,7 +103,7 @@ describe("Integration: VaultHub", () => {
           .to.emit(vaultHub, "VaultDisconnectInitiated")
           .withArgs(stakingVault);
 
-        expect((await vaultHub.vaultConnection(stakingVault)).pendingDisconnect).to.be.true;
+        expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
         expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
         expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
       });
@@ -120,7 +121,7 @@ describe("Integration: VaultHub", () => {
         .withArgs(stakingVault);
 
       expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(0n);
-      expect((await vaultHub.vaultConnection(stakingVault)).pendingDisconnect).to.be.false;
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.false;
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
       expect(await vaultHub.locked(stakingVault)).to.be.equal(0n);
     });
@@ -135,7 +136,7 @@ describe("Integration: VaultHub", () => {
         .to.emit(vaultHub, "VaultDisconnectCompleted")
         .withArgs(stakingVault);
 
-      expect((await vaultHub.vaultConnection(stakingVault)).pendingDisconnect).to.be.false;
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.false;
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
       expect(await vaultHub.locked(stakingVault)).to.be.equal(0n);
 
@@ -154,10 +155,38 @@ describe("Integration: VaultHub", () => {
         .withArgs(stakingVault, ether("1"));
 
       expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(tierId);
-      expect((await vaultHub.vaultConnection(stakingVault)).pendingDisconnect).to.be.false;
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.false;
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
       expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
       expect(await dashboard.minimalReserve()).to.be.equal(ether("1"));
+    });
+  });
+
+  describe("Special cases", () => {
+    it("Vault can't disconnect if it initiated disconnect this frame of the oracle", async () => {
+      const { vaultHub, lido } = ctx.contracts;
+
+      await dashboard.fund({ value: ether("1.5") });
+      await dashboard.mintShares(owner, ether("1"));
+      const { reportTimestamp, reportRefSlot } = await waitNextAvailableReportTime(ctx);
+
+      await lido.connect(owner).approve(dashboard, ether("1.5"));
+      await dashboard.burnShares(ether("1"));
+
+      // vault slashes and hastily disconnects
+      await dashboard.voluntaryDisconnect();
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
+
+      await expect(
+        reportVaultDataWithProof(ctx, stakingVault, {
+          liabilityShares: ether("1"),
+          // report data does not contain slashing reserve because oracle has not seen it yet
+          reportTimestamp,
+          reportRefSlot,
+        }),
+      ).to.not.emit(vaultHub, "VaultDisconnectCompleted");
+
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
     });
   });
 });

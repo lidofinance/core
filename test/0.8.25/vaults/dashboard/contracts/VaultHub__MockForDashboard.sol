@@ -34,10 +34,16 @@ contract VaultHub__MockForDashboard {
     mapping(address => VaultHub.VaultRecord) public vaultRecords;
     mapping(address => VaultHub.VaultObligations) public _vaultObligations;
 
+    bool allVaultPendingDisconnect;
+
     receive() external payable {}
 
     function mock__setVaultConnection(address vault, VaultHub.VaultConnection memory connection) external {
         vaultConnections[vault] = connection;
+    }
+
+    function mock__setPendingDisconnect(bool _allVaultPendingDisconnect) external {
+        allVaultPendingDisconnect = _allVaultPendingDisconnect;
     }
 
     function vaultConnection(address vault) external view returns (VaultHub.VaultConnection memory) {
@@ -93,12 +99,16 @@ contract VaultHub__MockForDashboard {
         delete vaultRecords[vault];
     }
 
+    function isPendingDisconnect(address) external view returns (bool) {
+        return allVaultPendingDisconnect;
+    }
+
     function connectVault(address vault) external {
         vaultConnections[vault] = VaultHub.VaultConnection({
             owner: IStakingVault(vault).owner(),
             shareLimit: 1,
             vaultIndex: 2,
-            pendingDisconnect: false,
+            disconnectInitiatedTs: type(uint48).max,
             reserveRatioBP: 500,
             forcedRebalanceThresholdBP: 100,
             infraFeeBP: 100,
@@ -200,9 +210,9 @@ contract VaultHub__MockForDashboard {
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
-        uint256 _infraFeeBP,
-        uint256 _liquidityFeeBP,
-        uint256 _reservationFeeBP
+        uint256,
+        uint256,
+        uint256
     ) external {
         if (!isVaultConnected(_vault)) revert NotConnectedToHub(_vault);
         emit Mock__VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP);

@@ -229,7 +229,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 connection.infraFeeBP,
                 connection.liquidityFeeBP,
                 connection.reservationFeeBP,
-                connection.pendingDisconnect
+                vaultHub.isPendingDisconnect(vaultAddress)
             );
         }
         return batch;

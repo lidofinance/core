@@ -13,7 +13,7 @@ import {
   VaultHub__MockForDashboard,
 } from "typechain-types";
 
-import { deployEIP7251MaxEffectiveBalanceRequestContract, EIP7251_ADDRESS, ether } from "lib";
+import { deployEIP7251MaxEffectiveBalanceRequestContract, DISCONNECT_NOT_INITIATED, EIP7251_ADDRESS, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -60,7 +60,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       owner: dashboardAddress,
       shareLimit: 0,
       vaultIndex: 1,
-      pendingDisconnect: false,
+      disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
       reserveRatioBP: 0,
       forcedRebalanceThresholdBP: 0,
       infraFeeBP: 0,
@@ -208,7 +208,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 0,
-      pendingDisconnect: false,
+      disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
       reserveRatioBP: 0,
       forcedRebalanceThresholdBP: 0,
       infraFeeBP: 0,
@@ -235,7 +235,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 1,
-      pendingDisconnect: true,
+      disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
       reserveRatioBP: 0,
       forcedRebalanceThresholdBP: 0,
       infraFeeBP: 0,
@@ -243,6 +243,8 @@ describe("ValidatorConsolidationRequests.sol", () => {
       reservationFeeBP: 0,
       isBeaconDepositsManuallyPaused: false,
     });
+
+    await vaultHub.mock__setPendingDisconnect(true);
 
     await expect(
       delegateCaller.callDelegate(
@@ -335,10 +337,10 @@ describe("ValidatorConsolidationRequests.sol", () => {
   });
 
   it("Should revert if last pubkey not 48 bytes", async function () {
-    const validPubey =
+    const validPubkey =
       "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
     const invalidPubkey = "1234";
-    const sourcePubkeys = [`0x${validPubey}${invalidPubkey}`];
+    const sourcePubkeys = [`0x${validPubkey}${invalidPubkey}`];
     const { targetPubkeys, adjustmentIncrease } = generateConsolidationRequestPayload(1);
 
     const fee = await getFee();

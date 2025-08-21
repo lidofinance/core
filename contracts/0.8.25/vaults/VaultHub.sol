@@ -56,7 +56,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @dev vaultIndex is always greater than 0
         uint96 vaultIndex;
         /// @notice if true, vault is disconnected and fee is not accrued
-        bool pendingDisconnect;
+        uint48 disconnectInitiatedTs;
         /// @notice share of ether that is locked on the vault as an additional reserve
         /// e.g RR=30% means that for 1stETH minted 1/(1-0.3)=1.428571428571428571 ETH is locked on the vault
         uint16 reserveRatioBP;
@@ -70,7 +70,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 reservationFeeBP;
         /// @notice if true, vault owner manually paused the beacon chain deposits
         bool isBeaconDepositsManuallyPaused;
-        /// 64 bits gap
+        /// 24 bits gap
     }
 
     struct VaultRecord {
@@ -177,6 +177,8 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 internal immutable PUBLIC_KEY_LENGTH = 48;
     /// @dev max value for fees in basis points - it's about 650%
     uint256 internal immutable MAX_FEE_BP = type(uint16).max;
+    /// @dev special value for `disconnectTimestamp` storage means the vault is not marked for disconnect
+    uint48 internal immutable DISCONNECT_NOT_INITIATED = type(uint48).max;
 
     /// @notice codehash of the account with no code
     bytes32 private immutable EMPTY_CODEHASH = keccak256("");
@@ -265,9 +267,15 @@ contract VaultHub is PausableUntilWithRoles {
         return _vaultObligations(_vault);
     }
 
-    /// @return true if the vault is connected to the hub
+    /// @return true if the vault is connected to the hub or pending to be disconnected
     function isVaultConnected(address _vault) external view returns (bool) {
         return _vaultConnection(_vault).vaultIndex != 0;
+    }
+
+    /// @return true if vault is pending for disconnect, false if vault is connected or disconnected
+    /// @dev disconnect can be performed by applying the report for the period when it was initiated
+    function isPendingDisconnect(address vault) external view returns (bool) {
+        return _isPendingDisconnect(_vaultConnection(vault));
     }
 
     /// @return total value of the vault
@@ -296,9 +304,8 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
     /// @dev returns 0 if the vault is not connected
-    /// @dev check for `pendingDisconnect = false` before using this function to avoid reverts
     function withdrawableValue(address _vault) external view returns (uint256) {
-        return _withdrawableValue(_vault, _vaultRecord(_vault));
+        return _withdrawableValue(_vault, _vaultConnection(_vault), _vaultRecord(_vault));
     }
 
     /// @return latest report for the vault
@@ -504,7 +511,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _checkAndUpdateLidoFeesObligations(_vault, obligations, _reportCumulativeLidoFees);
 
-        if (connection.pendingDisconnect) {
+        if (connection.disconnectInitiatedTs <= _reportTimestamp) {
             if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
                 record.locked = 0; // to be able to dig into connection deposit to pay fees
                 _settleObligations(_vault, record, obligations, NO_UNSETTLED_ALLOWED);
@@ -516,7 +523,7 @@ contract VaultHub is PausableUntilWithRoles {
                 return;
             } else {
                 // we abort the disconnect process as there is a slashing conflict yet to be resolved
-                connection.pendingDisconnect = false;
+                connection.disconnectInitiatedTs = DISCONNECT_NOT_INITIATED;
                 emit VaultDisconnectAborted(_vault, _reportSlashingReserve);
             }
         }
@@ -679,12 +686,11 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _ether amount of ether to withdraw
     /// @dev msg.sender should be vault's owner
     function withdraw(address _vault, address _recipient, uint256 _ether) external whenResumed {
-        _checkConnectionAndOwner(_vault);
-
+        VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 withdrawable = _withdrawableValue(_vault, record);
+        uint256 withdrawable = _withdrawableValue(_vault, connection, record);
         if (_ether > withdrawable) revert AmountExceedsWithdrawableValue(_vault, withdrawable, _ether);
 
         _withdraw(_vault, record, _recipient, _ether);
@@ -967,7 +973,7 @@ contract VaultHub is PausableUntilWithRoles {
             owner: IStakingVault(_vault).owner(),
             shareLimit: uint96(_shareLimit),
             vaultIndex: uint96(_storage().vaults.length),
-            pendingDisconnect: false,
+            disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
             reserveRatioBP: uint16(_reserveRatioBP),
             forcedRebalanceThresholdBP: uint16(_forcedRebalanceThresholdBP),
             infraFeeBP: uint16(_infraFeeBP),
@@ -990,7 +996,7 @@ contract VaultHub is PausableUntilWithRoles {
             revert NoLiabilitySharesShouldBeLeft(_vault, liabilityShares_);
         }
 
-        _connection.pendingDisconnect = true;
+        _connection.disconnectInitiatedTs = uint48(block.timestamp);
     }
 
     function _applyVaultReport(
@@ -1231,12 +1237,18 @@ contract VaultHub is PausableUntilWithRoles {
         _requireSender(connection.owner);
     }
 
+    function _isPendingDisconnect(VaultConnection storage _connection) internal view returns (bool) {
+        uint256 disconnectionTs = _connection.disconnectInitiatedTs;
+        return disconnectionTs != 0 // vault is disconnected
+        && disconnectionTs != DISCONNECT_NOT_INITIATED; // vault in connected but not pending for disconnect
+    }
+
     function _checkConnection(address _vault) internal view returns (VaultConnection storage) {
         _requireNotZero(_vault);
 
         VaultConnection storage connection = _vaultConnection(_vault);
         _requireConnected(connection, _vault);
-        if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
+        if (_isPendingDisconnect(connection)) revert VaultIsDisconnecting(_vault);
 
         return connection;
     }
@@ -1347,7 +1359,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 vaultBalance = _vault.balance;
         uint256 remainingBalance = vaultBalance - _valueToRebalance;
 
-        if (_vaultConnection(_vault).pendingDisconnect) {
+        if (_isPendingDisconnect(_vaultConnection(_vault))) {
             /// @dev connection deposit is unlocked, so it's available for fees
             valueToTransferToLido = Math256.min(_obligations.unsettledLidoFees, remainingBalance);
         } else {
@@ -1459,8 +1471,11 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev this amount already accounts locked value and unsettled obligations
     function _withdrawableValue(
         address _vault,
+        VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
+        if (_isPendingDisconnect(_connection)) return 0;
+
         uint256 totalValue_ = _totalValue(_record);
         uint256 lockedPlusUnsettled = _record.locked + _totalUnsettledObligations(_vaultObligations(_vault));
 
