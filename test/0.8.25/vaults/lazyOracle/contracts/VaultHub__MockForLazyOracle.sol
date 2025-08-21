@@ -66,7 +66,11 @@ contract VaultHub__MockForLazyOracle {
         return mock__vaultRecords[vault];
     }
 
-    function isReportFresh(address _vault) external returns (bool) {
+    function isReportFresh(address) external pure returns (bool) {
+        return false;
+    }
+
+    function isPendingDisconnect(address) external pure returns (bool) {
         return false;
     }
 

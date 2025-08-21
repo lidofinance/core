@@ -95,7 +95,7 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
 
     function harness__obtainDepositData(
         uint256 _keysToAllocate
-    ) external returns (uint256 loadedValidatorsKeysCount, bytes memory publicKeys, bytes memory signatures) {
+    ) external returns (uint256, bytes memory publicKeys, bytes memory signatures) {
         (publicKeys, signatures) = this.obtainDepositData(_keysToAllocate, new bytes(0));
 
         obtainedPublicKeys = publicKeys;

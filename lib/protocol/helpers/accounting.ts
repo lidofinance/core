@@ -291,8 +291,11 @@ export const getReportTimeElapsed = async (ctx: ProtocolContext) => {
 
 /**
  * Wait for the next available report time.
+ * Returns the report timestamp and the ref slot of the next frame.
  */
-export const waitNextAvailableReportTime = async (ctx: ProtocolContext): Promise<void> => {
+export const waitNextAvailableReportTime = async (
+  ctx: ProtocolContext,
+): Promise<{ reportTimestamp: bigint; reportRefSlot: bigint }> => {
   const { hashConsensus } = ctx.contracts;
   const { slotsPerEpoch } = await hashConsensus.getChainConfig();
   const { epochsPerFrame } = await hashConsensus.getFrameConfig();
@@ -300,7 +303,7 @@ export const waitNextAvailableReportTime = async (ctx: ProtocolContext): Promise
 
   const slotsPerFrame = slotsPerEpoch * epochsPerFrame;
 
-  const { nextFrameStartWithOffset, timeElapsed } = await getReportTimeElapsed(ctx);
+  const { nextFrameStartWithOffset, timeElapsed, nextFrameStart } = await getReportTimeElapsed(ctx);
 
   await advanceChainTime(timeElapsed);
 
@@ -318,6 +321,8 @@ export const waitNextAvailableReportTime = async (ctx: ProtocolContext): Promise
   });
 
   expect(nextFrame.refSlot).to.equal(refSlot + slotsPerFrame, "Next frame refSlot is incorrect");
+
+  return { reportTimestamp: nextFrameStart, reportRefSlot: nextFrame.refSlot };
 };
 
 type SimulateReportParams = {
