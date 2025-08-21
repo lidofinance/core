@@ -49,7 +49,7 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     uint256 public cl_balance = 0; // Amount deposited on beacon chain
 
     uint256 constant MIN_SHARES = 1;
-    uint256 constant MAX_SHARES = 100;
+    uint256 constant MAX_SHARES = 1000;
 
     uint256 public sv_otcDeposited = 0;
     uint256 public vh_otcDeposited = 0;
@@ -240,6 +240,17 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
         vaultHub.transferAndBurnShares(address(stakingVault), shares);
     }
 
+    /// @notice Calls rebalance on the staking vault (via VaultHub)
+    function rebalance(uint256 amount) public {
+        VaultHub.VaultConnection memory vc = vaultHub.vaultConnection(address(stakingVault));
+        if (vc.vaultIndex == 0 || vc.pendingDisconnect == true) return;
+
+        uint256 totalValue = vaultHub.totalValue(address(stakingVault));
+        amount = bound(amount, 1, totalValue);
+
+        vm.prank(userAccount);
+        vaultHub.rebalance(address(stakingVault), amount);
+    }
 
 
     /// @notice Returns the effective total value of the vault (EL + CL balance)

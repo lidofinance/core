@@ -181,7 +181,7 @@ contract StakingVaultsTest is Test {
         svHandler.connectVault();
 
         // Configure fuzzing targets
-        bytes4[] memory svSelectors = new bytes4[](13);
+        bytes4[] memory svSelectors = new bytes4[](14);
         svSelectors[0] = svHandler.fund.selector;
         svSelectors[1] = svHandler.VHwithdraw.selector;
         svSelectors[2] = svHandler.forceRebalance.selector;
@@ -195,6 +195,7 @@ contract StakingVaultsTest is Test {
         svSelectors[10] = svHandler.updateVaultData.selector;
         svSelectors[11] = svHandler.SVwithdraw.selector;
         svSelectors[12] = svHandler.connectVault.selector;
+        svSelectors[13] = svHandler.rebalance.selector;
 
         targetContract(address(svHandler));
         targetSelector(FuzzSelector({addr: address(svHandler), selectors: svSelectors}));
@@ -371,10 +372,10 @@ contract StakingVaultsTest is Test {
         assertLe(svHandler.getVaultTotalValue(), svHandler.getEffectiveVaultTotalValue());
     }
 
-    /*
-   //for testing purposes only (guiding the fuzzing)
-    function invariant_state() external {
-        assertEq(svHandler.actionIndex() != 11, true, "callpath reached");
-    }
-*/
+    
+    // For testing purposes only (guiding the fuzzing)
+    // function invariant_state() external {
+    //     assertEq(svHandler.actionIndex() != 11, true, "callpath reached");
+    // }
+
 }
