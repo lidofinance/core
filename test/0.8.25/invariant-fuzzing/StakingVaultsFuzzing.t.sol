@@ -205,31 +205,35 @@ contract StakingVaultsTest is Test {
     //With current deployed environement (no slashing, no stETH rebase)
     //the staking Vault should never go below the rebalance threshold
     //Meaning having less locked collateral than the threshold ratio limit (in regards to the liabilityShares converted in ETH)
-    //This is computd by rebalanceShortfall function
-    function invariant_liabilityShares_not_above_collateral() external {
+    //This is computed by rebalanceShortfall function
+
+    // Invariant 1: Staking vault should never go below the rebalance threshold (collateral always covers liability).
+    function invariant1_liabilityShares_not_above_collateral() external {
         uint256 rebalanceShares = vaultHubProxy.rebalanceShortfall(address(stakingVaultProxy));
         assertEq(rebalanceShares, 0, "Staking Vault should never go below the rebalance threshold");
     }
 
-    //This invariant checks that the dynamic (accounting for deltas) totalValue of the vault is not underflowed
-    function invariant_dynamic_totalValue_should_not_underflow() external {
+
+    // Invariant 2: Dynamic total value (including deltas) should never underflow (must be >= 0).
+    function invariant2_dynamic_totalValue_should_not_underflow() external {
         VaultHub.VaultRecord memory record = vaultHubProxy.vaultRecord(address(stakingVaultProxy));
         assertGe(
             int256(uint256(record.report.totalValue)) +
                 int256(record.inOutDelta.value) -
                 int256(record.report.inOutDelta),
             0,
-            "Total value should not underflow"
+            "Dynamic total value should not underflow"
         );
     }
 
-    //forceRebalance and forceValidatorExit should notrevert when the vault is unhealthy
-    function invariant_forceRebalance_should_not_revert_when_unhealthy() external {
+    // Invariant 3: forceRebalance should not revert when the vault is unhealthy.
+    function invariant3_forceRebalance_should_not_revert_when_unhealthy() external {
         bool forceRebalanceReverted = svHandler.didForceRebalanceReverted();
         assertFalse(forceRebalanceReverted, "forceRebalance should not revert when unhealthy");
     }
 
-    function invariant_forceValidatorExit_should_not_revert_when_unhealthy_and_vault_balance_too_low() external {
+    // Invariant 4: forceValidatorExit should not revert when unhealthy and vault balance is too low.
+    function invariant4_forceValidatorExit_should_not_revert_when_unhealthy_and_vault_balance_too_low() external {
         bool forceValidatorExitReverted = svHandler.didForceValidatorExitReverted();
         assertFalse(
             forceValidatorExitReverted,
@@ -237,9 +241,8 @@ contract StakingVaultsTest is Test {
         );
     }
 
-    function invariant_applied_tv_should_not_be_greater_than_reported_tv() external {
-        //This invariant checks that the applied total value is not greater than the reported total value
-
+    // Invariant 5: Applied total value should not be greater than reported total value.
+    function invariant5_applied_tv_should_not_be_greater_than_reported_tv() external {
         uint256 appliedTotalValue = svHandler.getAppliedTotalValue();
         uint256 reportedTotalValue = svHandler.getReportedTotalValue();
 
@@ -250,7 +253,8 @@ contract StakingVaultsTest is Test {
         );
     }
 
-    function invariant_liabilityshares_should_never_be_greater_than_connection_sharelimit() external {
+    // Invariant 6: Liability shares should never be greater than connection share limit.
+    function invariant6_liabilityshares_should_never_be_greater_than_connection_sharelimit() external {
         //Get the share limit from the vault
         uint256 liabilityShares = vaultHubProxy.liabilityShares(address(stakingVaultProxy));
 
@@ -274,9 +278,8 @@ contract StakingVaultsTest is Test {
         _;
     }
 
-    //Locked amount cannot be less than max (slashing reserve, 1 ETH, liability * reserverAtio)
-    //Also safety buffer should be enforced (based on liability) (threshold should not be broken)
-    function invariant_locked_cannot_be_less_than_slashing_connectdep_reserve()
+    // Invariant 7: Locked amount must be >= max(connect deposit, slashing reserve, reserve ratio).
+    function invariant7_locked_cannot_be_less_than_slashing_connectdep_reserve()
         external
         vaultMustBeConnected
         vaultNotPendingDisconnect
@@ -319,7 +322,8 @@ contract StakingVaultsTest is Test {
     //     assertGe(totalValue, lockedAmount , "Total value should be greater than or equal to locked amount");
     // }
 
-    function invariant_withdrawableValue_should_be_less_than_or_equal_to_totalValue_minus_locked_and_obligations()
+    // Invariant 8: Withdrawable value must be <= total value minus locked amount and unsettled obligations.
+    function invariant8_withdrawableValue_should_be_less_than_or_equal_to_totalValue_minus_locked_and_obligations()
         external
     {
         //Get the withdrawable value of the vault
@@ -339,7 +343,6 @@ contract StakingVaultsTest is Test {
             ? totalValue - unsettled_plus_locked
             : 0;
 
-        //Check that withdrawable value is less than or equal to total value minus locked amount and unsettled obligations
         assertLe(
             withdrawableValue,
             tv_minus_locked_and_obligations,
@@ -363,9 +366,10 @@ contract StakingVaultsTest is Test {
     //8. SVwithdraw
     //9. connectVault
     //10. updateVaultData -> reuses previous report; quarantine is expired; TV is kept as is (special branch if the new quarantine delta is lower than the expired one).
-    // function invariant_check_totalValue() external {
-    //     assertLe(svHandler.getVaultTotalValue(), svHandler.getEffectiveVaultTotalValue());
-    // }
+    // Invariant 9: Computed totalValue must be <= effective (real) total value.
+    function invariant9_computed_totalValue_must_be_less_than_or_equal_to_effective_total_value() external {
+        assertLe(svHandler.getVaultTotalValue(), svHandler.getEffectiveVaultTotalValue());
+    }
 
     /*
    //for testing purposes only (guiding the fuzzing)
