@@ -11,9 +11,16 @@ struct ReportValues {
     /// @notice seconds elapsed since the previous report
     uint256 timeElapsed;
     /// @notice total number of Lido validators on Consensus Layers (exited included)
+    /// !DEPRECATED
     uint256 clValidators;
     /// @notice sum of all Lido validators' balances on Consensus Layer
     uint256 clBalance;
+    uint256 clEffectiveBalance;
+    uint256 clPendingBalance;
+
+    // /// @notice sum of all Lido deposits on EL at ref slot since the last report
+    // uint256 depositedEther;
+
     /// @notice withdrawal vault balance
     uint256 withdrawalVaultBalance;
     /// @notice elRewards vault balance

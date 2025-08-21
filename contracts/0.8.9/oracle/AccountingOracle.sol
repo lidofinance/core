@@ -19,25 +19,24 @@ interface IReportReceiver {
 }
 
 interface IOracleReportSanityChecker {
-    function checkExitedValidatorsRatePerDay(uint256 _exitedValidatorsCount) external view;
+    // function checkExitedValidatorsRatePerDay(uint256 _exitedValidatorsCount) external view;
 
     function checkExtraDataItemsCountPerTransaction(uint256 _extraDataListItemsCount) external view;
     function checkNodeOperatorsPerExtraDataItemCount(uint256 _itemIndex, uint256 _nodeOperatorsCount) external view;
 }
 
 interface IStakingRouter {
-    function updateExitedValidatorsCountByStakingModule(
-        uint256[] calldata moduleIds,
-        uint256[] calldata exitedValidatorsCounts
-    ) external returns (uint256);
+    function updateEffectiveBalanceByStakingModule(uint256[] calldata moduleIds, uint256[] calldata effectiveBalances)
+        external
+        returns (uint256);
 
-    function reportStakingModuleExitedValidatorsCountByNodeOperator(
+    function reportStakingModuleEffectiveBalanceByNodeOperator(
         uint256 stakingModuleId,
         bytes calldata nodeOperatorIds,
-        bytes calldata exitedValidatorsCounts
+        bytes calldata effectiveBalances
     ) external;
 
-    function onValidatorsCountsByNodeOperatorReportingFinished() external;
+    function onEffectiveBalanceByNodeOperatorReportingFinished() external;
 }
 
 interface IWithdrawalQueue {
@@ -149,20 +148,37 @@ contract AccountingOracle is BaseOracle {
         /// CL values
         ///
 
+        /// @notice DEPRECATED
         /// @dev The number of validators on consensus layer that were ever deposited
         /// via Lido as observed at the reference slot.
-        uint256 numValidators;
+        // uint256 numActiveValidators;
         /// @dev Cumulative balance of all Lido validators on the consensus layer
         /// as observed at the reference slot.
-        uint256 clBalanceGwei;
+        uint256 clBalanceGwei; //actual balance of all validators in gwei
+        uint256 clEffectiveBalanceGwei; // round to whole ETH ?
+        uint256 clPendingBalanceGwei;
+        uint256 numActiveValidators;
+        uint256[] numActiveValidatorsByStakingModule;
+        uint256[] effectiveBalancesByStakingModule;
         /// @dev Ids of staking modules that have more exited validators than the number
         /// stored in the respective staking module contract as observed at the reference
         /// slot.
-        uint256[] stakingModuleIdsWithNewlyExitedValidators;
+        // uint256[] stakingModuleIdsWithNewlyExitedValidators;
         /// @dev Number of ever exited validators for each of the staking modules from
         /// the stakingModuleIdsWithNewlyExitedValidators array as observed at the
         /// reference slot.
-        uint256[] numExitedValidatorsByStakingModule;
+        // uint256 numActiveValidators;
+        // uint256[] numActiveValidatorsByStakingModule;
+        // uint256[] effectiveBalancesByStakingModule;
+
+        // uint256[] numExitedValidatorsByStakingModule;
+
+        /// @dev Ids of staking modules that have effective balances changed compared to the number
+        /// stored in the respective staking module contract as observed at the reference slot.
+        // uint256[] stakingModuleIdsWithChangedEffectiveBalance;
+        /// @dev Effective balances for each of the staking modules from stakingModuleIdsWithChangedEffectiveBalance
+        /// array as observed at the reference slot.
+        // uint256[] effectiveBalancesByStakingModule;
         ///
         /// EL values
         ///
@@ -286,6 +302,7 @@ contract AccountingOracle is BaseOracle {
 
     uint256 public constant EXTRA_DATA_TYPE_STUCK_VALIDATORS = 1;
     uint256 public constant EXTRA_DATA_TYPE_EXITED_VALIDATORS = 2;
+    uint256 public constant EXTRA_DATA_TYPE_EFF_BALANCES = 3;
 
     /// @notice The extra data format used to signify that the oracle report contains no extra data.
     ///
@@ -437,8 +454,8 @@ contract AccountingOracle is BaseOracle {
     }
 
     function _handleConsensusReport(
-        ConsensusReport memory /* report */,
-        uint256 /* prevSubmittedRefSlot */,
+        ConsensusReport memory, /* report */
+        uint256, /* prevSubmittedRefSlot */
         uint256 prevProcessingRefSlot
     ) internal override {
         ExtraDataProcessingState memory state = _storageExtraDataProcessingState().value;
@@ -492,15 +509,15 @@ contract AccountingOracle is BaseOracle {
 
         uint256 slotsElapsed = data.refSlot - prevRefSlot;
 
-        IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
+        // IStakingRouter stakingRouter = IStakingRouter(LOCATOR.stakingRouter());
         IWithdrawalQueue withdrawalQueue = IWithdrawalQueue(LOCATOR.withdrawalQueue());
 
-        _processStakingRouterExitedValidatorsByModule(
-            stakingRouter,
-            data.stakingModuleIdsWithNewlyExitedValidators,
-            data.numExitedValidatorsByStakingModule,
-            slotsElapsed
-        );
+        // _processStakingRouterExitedValidatorsByModule(
+        //     stakingRouter,
+        //     data.stakingModuleIdsWithNewlyExitedValidators,
+        //     data.numExitedValidatorsByStakingModule,
+        //     slotsElapsed
+        // );
 
         withdrawalQueue.onOracleReport(
             data.isBunkerMode,
@@ -514,6 +531,12 @@ contract AccountingOracle is BaseOracle {
                 slotsElapsed * SECONDS_PER_SLOT,
                 data.numValidators,
                 data.clBalanceGwei * 1e9,
+                data.clEffectiveBalance * 1e9,
+                data.clPendingBalance * 1e9,
+                /// @dev deposit made at the ref slot will be visible on CL as pending deposits only in the next slot
+                ///      so we assume that the deposits made at the ref slot will be accounted in the next report
+                /// TODO check it
+                _extractDepositedEther(data.refSlot.toUint64()),
                 data.withdrawalVaultBalance,
                 data.elRewardsVaultBalance,
                 data.sharesRequestedToBurn,
@@ -538,50 +561,50 @@ contract AccountingOracle is BaseOracle {
         });
     }
 
-    function _processStakingRouterExitedValidatorsByModule(
-        IStakingRouter stakingRouter,
-        uint256[] calldata stakingModuleIds,
-        uint256[] calldata numExitedValidatorsByStakingModule,
-        uint256 slotsElapsed
-    ) internal {
-        if (stakingModuleIds.length != numExitedValidatorsByStakingModule.length) {
-            revert InvalidExitedValidatorsData();
-        }
+    // function _processStakingRouterExitedValidatorsByModule(
+    //     IStakingRouter stakingRouter,
+    //     uint256[] calldata stakingModuleIds,
+    //     uint256[] calldata numExitedValidatorsByStakingModule,
+    //     uint256 slotsElapsed
+    // ) internal {
+    //     if (stakingModuleIds.length != numExitedValidatorsByStakingModule.length) {
+    //         revert InvalidExitedValidatorsData();
+    //     }
 
-        if (stakingModuleIds.length == 0) {
-            return;
-        }
+    //     if (stakingModuleIds.length == 0) {
+    //         return;
+    //     }
 
-        for (uint256 i = 1; i < stakingModuleIds.length; ) {
-            if (stakingModuleIds[i] <= stakingModuleIds[i - 1]) {
-                revert InvalidExitedValidatorsData();
-            }
-            unchecked {
-                ++i;
-            }
-        }
+    //     for (uint256 i = 1; i < stakingModuleIds.length; ) {
+    //         if (stakingModuleIds[i] <= stakingModuleIds[i - 1]) {
+    //             revert InvalidExitedValidatorsData();
+    //         }
+    //         unchecked {
+    //             ++i;
+    //         }
+    //     }
 
-        for (uint256 i = 0; i < stakingModuleIds.length; ) {
-            if (numExitedValidatorsByStakingModule[i] == 0) {
-                revert InvalidExitedValidatorsData();
-            }
-            unchecked {
-                ++i;
-            }
-        }
+    //     for (uint256 i = 0; i < stakingModuleIds.length; ) {
+    //         if (numExitedValidatorsByStakingModule[i] == 0) {
+    //             revert InvalidExitedValidatorsData();
+    //         }
+    //         unchecked {
+    //             ++i;
+    //         }
+    //     }
 
-        uint256 newlyExitedValidatorsCount = stakingRouter.updateExitedValidatorsCountByStakingModule(
-            stakingModuleIds,
-            numExitedValidatorsByStakingModule
-        );
+    //     uint256 newlyExitedValidatorsCount = stakingRouter.updateExitedValidatorsCountByStakingModule(
+    //         stakingModuleIds,
+    //         numExitedValidatorsByStakingModule
+    //     );
 
-        uint256 exitedValidatorsRatePerDay = (newlyExitedValidatorsCount * (1 days)) /
-            (SECONDS_PER_SLOT * slotsElapsed);
+    //     uint256 exitedValidatorsRatePerDay = (newlyExitedValidatorsCount * (1 days)) /
+    //         (SECONDS_PER_SLOT * slotsElapsed);
 
-        IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitedValidatorsRatePerDay(
-            exitedValidatorsRatePerDay
-        );
-    }
+    //     IOracleReportSanityChecker(LOCATOR.oracleReportSanityChecker()).checkExitedValidatorsRatePerDay(
+    //         exitedValidatorsRatePerDay
+    //     );
+    // }
 
     function _submitReportExtraDataEmpty() internal {
         ExtraDataProcessingState memory procState = _storageExtraDataProcessingState().value;
@@ -667,7 +690,7 @@ contract AccountingOracle is BaseOracle {
             procState.dataHash = dataHash;
             procState.itemsProcessed = uint64(itemsProcessed);
             procState.lastSortingKey = iter.lastSortingKey;
-             _storageExtraDataProcessingState().value = procState;
+            _storageExtraDataProcessingState().value = procState;
         }
 
         emit ExtraDataSubmitted(procState.refSlot, procState.itemsProcessed, procState.itemsCount);
@@ -707,11 +730,12 @@ contract AccountingOracle is BaseOracle {
 
             /// @dev The EXTRA_DATA_TYPE_STUCK_VALIDATORS item type was deprecated in the Triggerable Withdrawals update.
             ///      The mechanism for handling stuck validator keys is no longer supported and has been removed.
-            if (itemType == EXTRA_DATA_TYPE_STUCK_VALIDATORS) {
+            ///      The EXTRA_DATA_TYPE_EXITED_VALIDATORS item type is also deprecated and has been removed.
+            if (itemType == EXTRA_DATA_TYPE_STUCK_VALIDATORS || itemType == EXTRA_DATA_TYPE_EXITED_VALIDATORS) {
                 revert DeprecatedExtraDataType(index, itemType);
             }
 
-            if (itemType != EXTRA_DATA_TYPE_EXITED_VALIDATORS) {
+            if (itemType != EXTRA_DATA_TYPE_EFF_BALANCES) {
                 revert UnsupportedExtraDataType(index, itemType);
             }
 

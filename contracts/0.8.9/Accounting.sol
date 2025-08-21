@@ -34,11 +34,13 @@ contract Accounting {
     }
 
     struct PreReportState {
-        uint256 clValidators;
+        // uint256 clValidators;
         uint256 clBalance;
+        uint256 clEffectiveBalance;
+        uint256 clPendingBalance;
         uint256 totalPooledEther;
         uint256 totalShares;
-        uint256 depositedValidators;
+        // uint256 depositedValidators;
         uint256 externalShares;
         uint256 externalEther;
         uint256 badDebtToInternalize;
@@ -154,7 +156,7 @@ contract Accounting {
 
     /// @dev reads the current state of the protocol to the memory
     function _snapshotPreReportState(Contracts memory _contracts) internal view returns (PreReportState memory pre) {
-        (pre.depositedValidators, pre.clValidators, pre.clBalance) = LIDO.getBeaconStat();
+        (pre.clPendingBalance, pre.clEffectiveBalance, pre.clBalance) = LIDO.getBeaconStat();
         pre.totalPooledEther = LIDO.getTotalPooledEther();
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
@@ -185,9 +187,11 @@ contract Accounting {
         }
 
         // Principal CL balance is the sum of the current CL balance and
-        // validator deposits during this report
-        // TODO: to support maxEB we need to get rid of validator counting
-        update.principalClBalance = _pre.clBalance + (_report.clValidators - _pre.clValidators) * DEPOSIT_SIZE;
+        // all deposits made since the last report minus the pending balance on the ref slot
+        // clBalance  = preClBal + depositedEth + preClPendingBalance- clPendingBalance
+
+        update.principalClBalance =
+            _pre.clBalance + _report.depositedEther + _pre.clPendingBalance - _report.clPendingBalance;
 
         // Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in EL rewards vault or withdrawals vault
@@ -288,18 +292,12 @@ contract Accounting {
         if (_update.sharesToFinalizeWQ > 0) {
             _contracts.burner.requestBurnShares(address(_contracts.withdrawalQueue), _update.sharesToFinalizeWQ);
 
-            lastWithdrawalRequestToFinalize = _report.withdrawalFinalizationBatches[
-                _report.withdrawalFinalizationBatches.length - 1
-            ];
+            lastWithdrawalRequestToFinalize =
+                _report.withdrawalFinalizationBatches[_report.withdrawalFinalizationBatches.length - 1];
         }
 
-        LIDO.processClStateUpdate(
-            _report.timestamp,
-            _pre.clValidators,
-            _report.clValidators,
-            _report.clBalance
-        );
-
+        LIDO.processClStateUpdate(_report.timestamp, _report.clPendingBalance, _report.clEffBalance, _report.clBalance);
+    
         if (_pre.badDebtToInternalize > 0) {
             _contracts.vaultHub.decreaseInternalizedBadDebt(_pre.badDebtToInternalize);
             LIDO.internalizeExternalBadDebt(_pre.badDebtToInternalize);
@@ -349,8 +347,10 @@ contract Accounting {
         CalculatedValues memory _update
     ) internal {
         if (_report.timestamp >= block.timestamp) revert IncorrectReportTimestamp(_report.timestamp, block.timestamp);
-        if (_report.clValidators < _pre.clValidators || _report.clValidators > _pre.depositedValidators) {
-            revert IncorrectReportValidators(_report.clValidators, _pre.clValidators, _pre.depositedValidators);
+
+        uint256 preTotalClPendBalance = _pre.clPendingBalance + _report.depositedEther;
+        if (_report.clPendingBalance > preTotalClPendBalance) {
+            revert IncorrectReportPendingBalance(_report.clPendingBalance, _pre.clPendingBalance, preTotalClPendBalance);
         }
 
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
@@ -360,8 +360,8 @@ contract Accounting {
             _report.withdrawalVaultBalance,
             _report.elRewardsVaultBalance,
             _report.sharesRequestedToBurn,
-            _pre.clValidators,
-            _report.clValidators
+            preTotalClPendBalance,
+            _report.clPendingBalance
         );
 
         if (_report.withdrawalFinalizationBatches.length > 0) {
@@ -475,5 +475,5 @@ contract Accounting {
 
     error UnequalArrayLengths(uint256 firstArrayLength, uint256 secondArrayLength);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
-    error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
+    error IncorrectReportPendingBalance(uint256 reportPendingBalance, uint256 minPendingBalance, uint256 maxPendingBalance);
 }

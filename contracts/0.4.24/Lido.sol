@@ -617,6 +617,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         // call SR even in case of depositsAmount == 0
         // to allow the SR to update its internal state
         stakingRouter.deposit.value(depositsAmount)(_stakingModuleId, _depositCalldata);
+        // TODO uint218 consumedDepositsAmount = ... && assert(depositsAmount == 0;
     }
 
     /**
