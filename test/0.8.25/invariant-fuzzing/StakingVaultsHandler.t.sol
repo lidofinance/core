@@ -129,8 +129,8 @@ contract StakingVaultsHandler is CommonBase, StdCheats, StdUtils, StdAssertions 
     }
     ////////// VAULTHUB INTERACTIONS //////////
     function connectVault() public {
-        //check if the vault is connected
-        if (vaultHub.vaultConnection(address(stakingVault)).vaultIndex == 0) {
+        //check if the vault is already connected
+        if (vaultHub.vaultConnection(address(stakingVault)).vaultIndex != 0) {
             return;
         }
 
