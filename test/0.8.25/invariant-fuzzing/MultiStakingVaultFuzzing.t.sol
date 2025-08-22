@@ -151,30 +151,30 @@ contract MultiStakingVaultsTest is Test {
         });
 
         tiersParamsGroup1[1] = TierParams({
-            shareLimit: Constants.SHARE_LIMIT,
-            reserveRatioBP: Constants.RESERVE_RATIO_BP,
-            forcedRebalanceThresholdBP: Constants.FORCED_REBALANCE_THRESHOLD_BP,
-            infraFeeBP: Constants.INFRA_FEE_BP,
-            liquidityFeeBP: Constants.LIQUIDITY_FEE_BP,
-            reservationFeeBP: Constants.RESERVATION_FEE_BP
+            shareLimit: Constants.SHARE_LIMIT + 1,
+            reserveRatioBP: Constants.RESERVE_RATIO_BP + 1,
+            forcedRebalanceThresholdBP: Constants.FORCED_REBALANCE_THRESHOLD_BP + 1,
+            infraFeeBP: Constants.INFRA_FEE_BP + 1,
+            liquidityFeeBP: Constants.LIQUIDITY_FEE_BP + 1,
+            reservationFeeBP: Constants.RESERVATION_FEE_BP + 1
         });
 
         tiersParamsGroup2[0] = TierParams({
-            shareLimit: Constants.SHARE_LIMIT,
-            reserveRatioBP: Constants.RESERVE_RATIO_BP,
-            forcedRebalanceThresholdBP: Constants.FORCED_REBALANCE_THRESHOLD_BP,
-            infraFeeBP: Constants.INFRA_FEE_BP,
-            liquidityFeeBP: Constants.LIQUIDITY_FEE_BP,
-            reservationFeeBP: Constants.RESERVATION_FEE_BP
+            shareLimit: Constants.SHARE_LIMIT + 2,
+            reserveRatioBP: Constants.RESERVE_RATIO_BP + 2,
+            forcedRebalanceThresholdBP: Constants.FORCED_REBALANCE_THRESHOLD_BP + 2,
+            infraFeeBP: Constants.INFRA_FEE_BP + 2,
+            liquidityFeeBP: Constants.LIQUIDITY_FEE_BP + 2,
+            reservationFeeBP: Constants.RESERVATION_FEE_BP + 2
         });
 
         tiersParamsGroup2[1] = TierParams({
-            shareLimit: Constants.SHARE_LIMIT,
-            reserveRatioBP: Constants.RESERVE_RATIO_BP,
-            forcedRebalanceThresholdBP: Constants.FORCED_REBALANCE_THRESHOLD_BP,
-            infraFeeBP: Constants.INFRA_FEE_BP,
-            liquidityFeeBP: Constants.LIQUIDITY_FEE_BP,
-            reservationFeeBP: Constants.RESERVATION_FEE_BP
+            shareLimit: Constants.SHARE_LIMIT + 3,
+            reserveRatioBP: Constants.RESERVE_RATIO_BP + 3,
+            forcedRebalanceThresholdBP: Constants.FORCED_REBALANCE_THRESHOLD_BP + 3,
+            infraFeeBP: Constants.INFRA_FEE_BP + 3,
+            liquidityFeeBP: Constants.LIQUIDITY_FEE_BP + 3,
+            reservationFeeBP: Constants.RESERVATION_FEE_BP + 3
         });
 
         //register Tiers1,2 from Group1 and Tiers3,4 from Group2
@@ -352,6 +352,34 @@ contract MultiStakingVaultsTest is Test {
             sumVaultLiabilities += vaultHubProxy.liabilityShares(vaults[i]);
         }
         assertLe(sumVaultLiabilities, default_tier.shareLimit, "Sum of vaults' liabilityShares in the default tier must be less than or equal to the default tier's shareLimit");
+    }
+
+
+    // Invariant 5: Vault's connection settings must match their current Tier info
+    function invariant5_vault_connection_info() external {
+        for (uint256 i = 0; i < stakingVaultProxies.length; i++) {
+            address vault = address(stakingVaultProxies[i]);
+            VaultHub.VaultConnection memory vc = vaultHubProxy.vaultConnection(vault);
+
+            if (vc.vaultIndex == 0) return;
+
+            (
+                ,
+                ,
+                uint256 shareLimit,
+                uint256 reserveRatioBP,
+                uint256 forcedRebalanceThresholdBP,
+                uint256 infraFeeBP,
+                uint256 liquidityFeeBP,
+                uint256 reservationFeeBP
+            ) = operatorGridProxy.vaultInfo(vault);
+            assertEq(vc.shareLimit, shareLimit, "Vault's shareLimit in connection must match OperatorGrid registered VaultInfo");
+            assertEq(vc.reserveRatioBP, reserveRatioBP, "Vault's reserveRatioBP in connection must match OperatorGrid registered VaultInfo");
+            assertEq(vc.forcedRebalanceThresholdBP, forcedRebalanceThresholdBP, "Vault's forcedRebalanceThresholdBP in connection must match OperatorGrid registered VaultInfo");
+            assertEq(vc.infraFeeBP, infraFeeBP, "Vault's infraFeeBP in connection must match OperatorGrid registered VaultInfo");
+            assertEq(vc.liquidityFeeBP, liquidityFeeBP, "Vault's liquidityFeeBP in connection must match OperatorGrid registered VaultInfo");
+            assertEq(vc.reservationFeeBP, reservationFeeBP, "Vault's reservationFeeBP in connection must match OperatorGrid registered VaultInfo");
+        }
     }
 
 }
