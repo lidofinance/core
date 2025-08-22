@@ -1236,13 +1236,9 @@ contract VaultHub is PausableUntilWithRoles {
         VaultObligations storage _obligations,
         uint256 _reportCumulativeLidoFees
     ) internal {
-        uint256 cumulativeSettledLidoFees = _obligations.settledLidoFees;
-        uint256 cumulativeLidoFees = cumulativeSettledLidoFees + _obligations.unsettledLidoFees;
-        if (_reportCumulativeLidoFees < cumulativeLidoFees) {
-            revert InvalidFees(_vault, _reportCumulativeLidoFees, cumulativeLidoFees);
-        }
-
+        /// @dev NB: LazyOracle sanity checks already verify that the fee can only increase
         // update unsettled lido fees
+        uint256 cumulativeSettledLidoFees = _obligations.settledLidoFees;
         uint256 unsettledLidoFees = _reportCumulativeLidoFees - cumulativeSettledLidoFees;
         if (unsettledLidoFees != _obligations.unsettledLidoFees) {
             _obligations.unsettledLidoFees = uint128(unsettledLidoFees);
