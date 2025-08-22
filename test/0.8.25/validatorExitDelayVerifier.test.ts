@@ -2,7 +2,12 @@ import { expect } from "chai";
 import { ContractTransactionResponse } from "ethers";
 import { ethers } from "hardhat";
 
-import { StakingRouter_Mock, ValidatorExitDelayVerifier, ValidatorsExitBusOracle_Mock } from "typechain-types";
+import {
+  StakingRouter_Mock,
+  ValidatorExitDelayVerifier,
+  ValidatorExitDelayVerifier__Harness,
+  ValidatorsExitBusOracle_Mock,
+} from "typechain-types";
 import { ILidoLocator } from "typechain-types/test/0.8.9/contracts/oracle/OracleReportSanityCheckerMocks.sol";
 
 import { updateBeaconBlockRoot } from "lib";
@@ -234,7 +239,7 @@ describe("ValidatorExitDelayVerifier.sol", () => {
       const veboExitRequestTimestamp =
         GENESIS_TIME +
         (ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot - intervalInSlotsBetweenProvableBlockAndExitRequest) *
-        SECONDS_PER_SLOT;
+          SECONDS_PER_SLOT;
       const proofSlotTimestamp = GENESIS_TIME + ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot * SECONDS_PER_SLOT;
 
       const exitRequests: ExitRequest[] = [
@@ -737,5 +742,127 @@ describe("ValidatorExitDelayVerifier.sol", () => {
         ),
       ).to.be.reverted;
     });
+  });
+});
+
+describe("getHistoricalBlockRootGI", () => {
+  const FIRST_SUPPORTED_SLOT = 8192n;
+  const PIVOT_SLOT = 8192n * 13n;
+  const CAPELLA_SLOT = 8192n;
+  const SLOTS_PER_HISTORICAL_ROOT = 8192n;
+  const SLOTS_PER_EPOCH = 32n;
+  const SECONDS_PER_SLOT = 12n;
+  const GENESIS_TIME = 1606824000n;
+  const SHARD_COMMITTEE_PERIOD_IN_SECONDS = 8192n;
+  const LIDO_LOCATOR = "0x0000000000000000000000000000000000000001";
+
+  const GI_FIRST_HISTORICAL_SUMMARY_PREV = "0x0000000000000000000000000000000000000000000000000000007600000018";
+  const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
+  const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
+  const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000060000d";
+
+  // Validator GI values are irrelevant for this test, but the constructor requires them.
+  const GI_FIRST_VALIDATOR_PREV = "0x0000000000000000000000000000000000000000000000000096000000000028";
+  const GI_FIRST_VALIDATOR_CURR = "0x0000000000000000000000000000000000000000000000000096000000000028";
+
+  let harness: ValidatorExitDelayVerifier__Harness;
+
+  before(async () => {
+    harness = await ethers.deployContract("ValidatorExitDelayVerifier__Harness", [
+      LIDO_LOCATOR,
+      {
+        gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+        gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+        gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+        gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+        gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+        gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+      },
+      FIRST_SUPPORTED_SLOT,
+      PIVOT_SLOT,
+      CAPELLA_SLOT,
+      SLOTS_PER_HISTORICAL_ROOT,
+      SLOTS_PER_EPOCH,
+      SECONDS_PER_SLOT,
+      GENESIS_TIME,
+      SHARD_COMMITTEE_PERIOD_IN_SECONDS,
+    ]);
+  });
+
+  it("computes historical block root GI before pivot", async () => {
+    const recentSlot = PIVOT_SLOT - 1n;
+
+    // historicalSummaries[0].blockRoots[0]
+    let gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, 8192n);
+    expect(gI).to.equal(0x1d80000000000dn);
+
+    // historicalSummaries[0].blockRoots[1]
+    gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, 8193n);
+    expect(gI).to.equal(0x1d80000000010dn);
+
+    // historicalSummaries[4].blockRoots[8082]
+    gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, 49042n);
+    expect(gI).to.equal(0x1d8000011f920dn);
+  });
+
+  it("computes historical block root GI after pivot", async () => {
+    const recentSlot = PIVOT_SLOT + SLOTS_PER_HISTORICAL_ROOT;
+
+    // historicalSummaries[0].blockRoots[0]
+    let gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, 8192n);
+    expect(gI).to.equal(0x2d80000000000dn);
+
+    // historicalSummaries[0].blockRoots[1]
+    gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, 8193n);
+    expect(gI).to.equal(0x2d80000000010dn);
+
+    // historicalSummaries[4].blockRoots[8082]
+    gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, 49042n);
+    expect(gI).to.equal(0x2d8000011f920dn);
+
+    // NOTE: targetSlot < PIVOT, but historicalSummary was built for slot >= PIVOT.
+    // historicalSummaries[11].blockRoots[2195]
+    gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, 100499n);
+    expect(gI).to.equal(0x2d800002e8930dn);
+
+    // historicalSummaries[11].blockRoots[8191]
+    gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, PIVOT_SLOT - 1n);
+    expect(gI).to.equal(0x2d800002ffff0dn);
+
+    // historicalSummaries[12].blockRoots[0]
+    gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, PIVOT_SLOT);
+    expect(gI).to.equal(0x2d80000320000dn);
+
+    // historicalSummaries[X].blockRoots[1]
+    gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, PIVOT_SLOT + 1n);
+    expect(gI).to.equal(0x2d80000320010dn);
+
+    // historicalSummaries[X].blockRoots[42]
+    gI = await harness.getHistoricalBlockRootGI.staticCall(recentSlot, PIVOT_SLOT + 42n);
+    expect(gI).to.equal(0x2d800003202a0dn);
+  });
+
+  it("reverts when the summary cannot exist", async () => {
+    const targetSlot = 8192n;
+
+    await expect(harness.getHistoricalBlockRootGI(8192n, targetSlot)).to.be.revertedWithCustomError(
+      harness,
+      "HistoricalSummaryDoesNotExist",
+    );
+
+    await expect(harness.getHistoricalBlockRootGI(8193n, targetSlot)).to.be.revertedWithCustomError(
+      harness,
+      "HistoricalSummaryDoesNotExist",
+    );
+
+    await expect(harness.getHistoricalBlockRootGI(8192n + 8191n, targetSlot)).to.be.revertedWithCustomError(
+      harness,
+      "HistoricalSummaryDoesNotExist",
+    );
+
+    await expect(harness.getHistoricalBlockRootGI(8191n, targetSlot)).to.be.revertedWithCustomError(
+      harness,
+      "HistoricalSummaryDoesNotExist",
+    );
   });
 });
