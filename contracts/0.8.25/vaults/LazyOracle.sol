@@ -160,28 +160,28 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @return refSlot of the report
     /// @return treeRoot merkle root of the report
     /// @return reportCid IPFS CID for the report JSON file
-    function latestReportData() external view returns (uint64 timestamp, uint48 refSlot, bytes32 treeRoot, string memory reportCid) {
+    function latestReportData() external view returns (uint256 timestamp, uint256 refSlot, bytes32 treeRoot, string memory reportCid) {
         Storage storage $ = _storage();
         return ($.vaultsDataTimestamp, $.vaultsDataRefSlot, $.vaultsDataTreeRoot, $.vaultsDataReportCid);
     }
 
     /// @notice returns the latest report timestamp
-    function latestReportTimestamp() external view returns (uint64) {
+    function latestReportTimestamp() external view returns (uint256) {
         return _storage().vaultsDataTimestamp;
     }
 
     /// @notice returns the quarantine period
-    function quarantinePeriod() external view returns (uint64) {
+    function quarantinePeriod() external view returns (uint256) {
         return _storage().quarantinePeriod;
     }
 
     /// @notice returns the max reward ratio for refSlot total value, basis points
-    function maxRewardRatioBP() external view returns (uint16) {
+    function maxRewardRatioBP() external view returns (uint256) {
         return _storage().maxRewardRatioBP;
     }
 
     /// @notice returns the max Lido fee rate per second, in ether
-    function maxLidoFeeRatePerSecond() external view returns (uint64) {
+    function maxLidoFeeRatePerSecond() external view returns (uint256) {
         return _storage().maxLidoFeeRatePerSecond;
     }
 
