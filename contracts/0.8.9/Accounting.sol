@@ -14,8 +14,21 @@ import {IVaultHub} from "contracts/common/interfaces/IVaultHub.sol";
 import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
 
 import {WithdrawalQueue} from "./WithdrawalQueue.sol";
-import {StakingRouter} from "./StakingRouter.sol";
 
+interface IStakingRouter {
+    function getStakingRewardsDistribution()
+        external
+        view
+        returns (
+            address[] memory recipients,
+            uint256[] memory stakingModuleIds,
+            uint96[] memory stakingModuleFees,
+            uint96 totalFee,
+            uint256 precisionPoints
+        );
+
+    function reportRewardsMinted(uint256[] calldata _stakingModuleIds, uint256[] calldata _totalShares) external;
+}
 
 /// @title Lido Accounting contract
 /// @author folkyatina
@@ -29,7 +42,7 @@ contract Accounting {
         IBurner burner;
         WithdrawalQueue withdrawalQueue;
         IPostTokenRebaseReceiver postTokenRebaseReceiver;
-        StakingRouter stakingRouter;
+        IStakingRouter stakingRouter;
         IVaultHub vaultHub;
     }
 
@@ -99,10 +112,7 @@ contract Accounting {
 
     /// @param _lidoLocator Lido Locator contract
     /// @param _lido Lido contract
-    constructor(
-        ILidoLocator _lidoLocator,
-        ILido _lido
-    ) {
+    constructor(ILidoLocator _lidoLocator, ILido _lido) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
     }
@@ -209,24 +219,38 @@ contract Accounting {
             update.sharesToFinalizeWQ
         );
 
-        uint256 postInternalSharesBeforeFees =
-            _pre.totalShares - _pre.externalShares // internal shares before
-            - update.totalSharesToBurn; // shares to be burned for withdrawals and cover
+        uint256 postInternalSharesBeforeFees = _pre.totalShares -
+            _pre.externalShares - // internal shares before
+            update.totalSharesToBurn; // shares to be burned for withdrawals and cover
 
         update.postInternalEther =
-            _pre.totalPooledEther - _pre.externalEther // internal ether before
-            + _report.clBalance + update.withdrawals - update.principalClBalance // total cl rewards (or penalty)
-            + update.elRewards // MEV and tips
-            - update.etherToFinalizeWQ; // withdrawals
+            _pre.totalPooledEther -
+            _pre.externalEther + // internal ether before
+            _report.clBalance +
+            update.withdrawals -
+            update.principalClBalance + // total cl rewards (or penalty)
+            update.elRewards - // MEV and tips
+            update.etherToFinalizeWQ; // withdrawals
 
         // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
-        update.sharesToMintAsFees = _calculateLidoProtocolFeeShares(_report, update, postInternalSharesBeforeFees, update.postInternalEther);
+        update.sharesToMintAsFees = _calculateLidoProtocolFeeShares(
+            _report,
+            update,
+            postInternalSharesBeforeFees,
+            update.postInternalEther
+        );
 
-        update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees + _pre.badDebtToInternalize;
+        update.postInternalShares =
+            postInternalSharesBeforeFees +
+            update.sharesToMintAsFees +
+            _pre.badDebtToInternalize;
         uint256 postExternalShares = _pre.externalShares - _pre.badDebtToInternalize; // can't underflow by design
 
         update.postTotalShares = update.postInternalShares + postExternalShares;
-        update.postTotalPooledEther = update.postInternalEther + postExternalShares * update.postInternalEther / update.postInternalShares;
+        update.postTotalPooledEther =
+            update.postInternalEther +
+            (postExternalShares * update.postInternalEther) /
+            update.postInternalShares;
     }
 
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
@@ -293,12 +317,7 @@ contract Accounting {
             ];
         }
 
-        LIDO.processClStateUpdate(
-            _report.timestamp,
-            _pre.clValidators,
-            _report.clValidators,
-            _report.clBalance
-        );
+        LIDO.processClStateUpdate(_report.timestamp, _pre.clValidators, _report.clValidators, _report.clBalance);
 
         if (_pre.badDebtToInternalize > 0) {
             _contracts.vaultHub.decreaseInternalizedBadDebt(_pre.badDebtToInternalize);
@@ -394,7 +413,7 @@ contract Accounting {
 
     /// @dev mints protocol fees to the treasury and node operators
     function _distributeFee(
-        StakingRouter _stakingRouter,
+        IStakingRouter _stakingRouter,
         StakingRewardsDistribution memory _rewardsDistribution,
         uint256 _sharesToMintAsFees
     ) internal {
@@ -455,14 +474,14 @@ contract Accounting {
                 IBurner(burner),
                 WithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
-                StakingRouter(payable(stakingRouter)),
+                IStakingRouter(stakingRouter),
                 IVaultHub(payable(vaultHub))
             );
     }
 
     /// @dev loads the staking rewards distribution to the struct in the memory
     function _getStakingRewardsDistribution(
-        StakingRouter _stakingRouter
+        IStakingRouter _stakingRouter
     ) internal view returns (StakingRewardsDistribution memory ret) {
         (ret.recipients, ret.moduleIds, ret.modulesFees, ret.totalFee, ret.precisionPoints) = _stakingRouter
             .getStakingRewardsDistribution();

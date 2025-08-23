@@ -29,6 +29,7 @@ describe("StakingRouter.sol:exit", () => {
 
   const lido = certainAddress("test:staking-router:lido");
   const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials02 = hexlify(randomBytes(32));
   const STAKE_SHARE_LIMIT = 1_00n;
   const PRIORITY_EXIT_SHARE_THRESHOLD = STAKE_SHARE_LIMIT;
   const MODULE_FEE = 5_00n;
@@ -37,6 +38,9 @@ describe("StakingRouter.sol:exit", () => {
   const MIN_DEPOSIT_BLOCK_DISTANCE = 25n;
   const STAKING_MODULE_ID = 1n;
   const NODE_OPERATOR_ID = 1n;
+  const SECONDS_PER_SLOT = 12n;
+  const GENESIS_TIME = 1606824023;
+  const WITHDRAWAL_CREDENTIALS_TYPE_01 = 1n;
 
   before(async () => {
     [deployer, proxyAdmin, stakingRouterAdmin, user, reporter] = await ethers.getSigners();
@@ -49,11 +53,11 @@ describe("StakingRouter.sol:exit", () => {
       },
     });
 
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
+    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
     [stakingRouter] = await proxify({ impl, admin: proxyAdmin, caller: user });
 
     // Initialize StakingRouter
-    await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials);
+    await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials, withdrawalCredentials02);
 
     // Deploy mock staking module
     stakingModule = await ethers.deployContract("StakingModule__MockForTriggerableWithdrawals", deployer);
@@ -63,19 +67,37 @@ describe("StakingRouter.sol:exit", () => {
       .connect(stakingRouterAdmin)
       .grantRole(await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), stakingRouterAdmin);
 
+    const stakingModuleConfig = {
+      /// @notice Maximum stake share that can be allocated to a module, in BP.
+      /// @dev Must be less than or equal to TOTAL_BASIS_POINTS (10_000 BP = 100%).
+      stakeShareLimit: STAKE_SHARE_LIMIT,
+      /// @notice Module's share threshold, upon crossing which, exits of validators from the module will be prioritized, in BP.
+      /// @dev Must be less than or equal to TOTAL_BASIS_POINTS (10_000 BP = 100%) and
+      ///      greater than or equal to `stakeShareLimit`.
+      priorityExitShareThreshold: PRIORITY_EXIT_SHARE_THRESHOLD,
+      /// @notice Part of the fee taken from staking rewards that goes to the staking module, in BP.
+      /// @dev Together with `treasuryFee`, must not exceed TOTAL_BASIS_POINTS.
+      stakingModuleFee: MODULE_FEE,
+      /// @notice Part of the fee taken from staking rewards that goes to the treasury, in BP.
+      /// @dev Together with `stakingModuleFee`, must not exceed TOTAL_BASIS_POINTS.
+      treasuryFee: TREASURY_FEE,
+      /// @notice The maximum number of validators that can be deposited in a single block.
+      /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
+      ///      Value must not exceed type(uint64).max.
+      maxDepositsPerBlock: MAX_DEPOSITS_PER_BLOCK,
+      /// @notice The minimum distance between deposits in blocks.
+      /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
+      ///      Value must be > 0 and ≤ type(uint64).max.
+      minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
+      /// @notice The type of withdrawal credentials for creation of validators.
+      /// @dev 1 = 0x01 withdrawals, 2 = 0x02 withdrawals.
+      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+    };
+
     // Add staking module
     await stakingRouter
       .connect(stakingRouterAdmin)
-      .addStakingModule(
-        randomString(8),
-        await stakingModule.getAddress(),
-        STAKE_SHARE_LIMIT,
-        PRIORITY_EXIT_SHARE_THRESHOLD,
-        MODULE_FEE,
-        TREASURY_FEE,
-        MAX_DEPOSITS_PER_BLOCK,
-        MIN_DEPOSIT_BLOCK_DISTANCE,
-      );
+      .addStakingModule(randomString(8), await stakingModule.getAddress(), stakingModuleConfig);
 
     // Grant necessary roles to reporter
     await stakingRouter

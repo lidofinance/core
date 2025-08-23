@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 // See contracts/COMPILERS.md
-pragma solidity 0.8.9;
+pragma solidity 0.8.25;
 
 import {MemUtils} from "../common/lib/MemUtils.sol";
 
@@ -17,33 +17,36 @@ interface IDepositContract {
     ) external payable;
 }
 
-contract BeaconChainDepositor {
+library BeaconChainDepositor {
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
     uint256 internal constant SIGNATURE_LENGTH = 96;
-    uint256 internal constant DEPOSIT_SIZE = 32 ether;
+    // uint256 internal constant DEPOSIT_SIZE = 32 ether;
+    // uint256 internal constant DEPOSIT_SIZE_02 = 2048 ether;
 
     /// @dev deposit amount 32eth in gweis converted to little endian uint64
     /// DEPOSIT_SIZE_IN_GWEI_LE64 = toLittleEndian64(32 ether / 1 gwei)
     uint64 internal constant DEPOSIT_SIZE_IN_GWEI_LE64 = 0x0040597307000000;
 
-    IDepositContract public immutable DEPOSIT_CONTRACT;
-
-    constructor(address _depositContract) {
-        if (_depositContract == address(0)) revert DepositContractZeroAddress();
-        DEPOSIT_CONTRACT = IDepositContract(_depositContract);
-    }
+    // constructor(address _depositContract) {
+    //     if (_depositContract == address(0)) revert DepositContractZeroAddress();
+    //     DEPOSIT_CONTRACT = IDepositContract(_depositContract);
+    // }
 
     /// @dev Invokes a deposit call to the official Beacon Deposit contract
+    /// @param _depositContract - IDepositContract deposit contract
     /// @param _keysCount amount of keys to deposit
     /// @param _withdrawalCredentials Commitment to a public key for withdrawals
     /// @param _publicKeysBatch A BLS12-381 public keys batch
     /// @param _signaturesBatch A BLS12-381 signatures batch
-    function _makeBeaconChainDeposits32ETH(
+    function makeBeaconChainDeposits32ETH(
+        // TODO: remove 32 from name
+        IDepositContract _depositContract,
         uint256 _keysCount,
+        uint256 depositSize,
         bytes memory _withdrawalCredentials,
         bytes memory _publicKeysBatch,
         bytes memory _signaturesBatch
-    ) internal {
+    ) public {
         if (_publicKeysBatch.length != PUBLIC_KEY_LENGTH * _keysCount) {
             revert InvalidPublicKeysBatchLength(_publicKeysBatch.length, PUBLIC_KEY_LENGTH * _keysCount);
         }
@@ -54,12 +57,15 @@ contract BeaconChainDepositor {
         bytes memory publicKey = MemUtils.unsafeAllocateBytes(PUBLIC_KEY_LENGTH);
         bytes memory signature = MemUtils.unsafeAllocateBytes(SIGNATURE_LENGTH);
 
-        for (uint256 i; i < _keysCount;) {
+        for (uint256 i; i < _keysCount; ) {
             MemUtils.copyBytes(_publicKeysBatch, publicKey, i * PUBLIC_KEY_LENGTH, 0, PUBLIC_KEY_LENGTH);
             MemUtils.copyBytes(_signaturesBatch, signature, i * SIGNATURE_LENGTH, 0, SIGNATURE_LENGTH);
 
-            DEPOSIT_CONTRACT.deposit{value: DEPOSIT_SIZE}(
-                publicKey, _withdrawalCredentials, signature, _computeDepositDataRoot(_withdrawalCredentials, publicKey, signature)
+            _depositContract.deposit{value: depositSize}(
+                publicKey,
+                _withdrawalCredentials,
+                signature,
+                _computeDepositDataRoot(_withdrawalCredentials, publicKey, signature)
             );
 
             unchecked {
@@ -71,11 +77,11 @@ contract BeaconChainDepositor {
     /// @dev computes the deposit_root_hash required by official Beacon Deposit contract
     /// @param _publicKey A BLS12-381 public key.
     /// @param _signature A BLS12-381 signature
-    function _computeDepositDataRoot(bytes memory _withdrawalCredentials, bytes memory _publicKey, bytes memory _signature)
-        private
-        pure
-        returns (bytes32)
-    {
+    function _computeDepositDataRoot(
+        bytes memory _withdrawalCredentials,
+        bytes memory _publicKey,
+        bytes memory _signature
+    ) private pure returns (bytes32) {
         // Compute deposit data root (`DepositData` hash tree root) according to deposit_contract.sol
         bytes memory sigPart1 = MemUtils.unsafeAllocateBytes(64);
         bytes memory sigPart2 = MemUtils.unsafeAllocateBytes(SIGNATURE_LENGTH - 64);
@@ -83,9 +89,12 @@ contract BeaconChainDepositor {
         MemUtils.copyBytes(_signature, sigPart2, 64, 0, SIGNATURE_LENGTH - 64);
 
         bytes32 publicKeyRoot = sha256(abi.encodePacked(_publicKey, bytes16(0)));
-        bytes32 signatureRoot = sha256(abi.encodePacked(sha256(abi.encodePacked(sigPart1)), sha256(abi.encodePacked(sigPart2, bytes32(0)))));
+        bytes32 signatureRoot = sha256(
+            abi.encodePacked(sha256(abi.encodePacked(sigPart1)), sha256(abi.encodePacked(sigPart2, bytes32(0))))
+        );
 
-        return sha256(
+        return
+            sha256(
                 abi.encodePacked(
                     sha256(abi.encodePacked(publicKeyRoot, _withdrawalCredentials)),
                     sha256(abi.encodePacked(DEPOSIT_SIZE_IN_GWEI_LE64, bytes24(0), signatureRoot))
@@ -93,7 +102,7 @@ contract BeaconChainDepositor {
             );
     }
 
-    error DepositContractZeroAddress();
+    // error DepositContractZeroAddress();
     error InvalidPublicKeysBatchLength(uint256 actual, uint256 expected);
     error InvalidSignaturesBatchLength(uint256 actual, uint256 expected);
 }

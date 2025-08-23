@@ -1,11 +1,23 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.9;
+pragma solidity 0.8.25;
 
-import {IStakingRouter} from "contracts/0.8.9/DepositSecurityModule.sol";
 import {StakingRouter} from "contracts/0.8.9/StakingRouter.sol";
 
+interface IStakingRouter {
+    function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
+    function getStakingModuleMaxDepositsPerBlock(uint256 _stakingModuleId) external view returns (uint256);
+    function getStakingModuleIsActive(uint256 _stakingModuleId) external view returns (bool);
+    function getStakingModuleNonce(uint256 _stakingModuleId) external view returns (uint256);
+    function getStakingModuleLastDepositBlock(uint256 _stakingModuleId) external view returns (uint256);
+    function hasStakingModule(uint256 _stakingModuleId) external view returns (bool);
+    function decreaseStakingModuleVettedKeysCountByNodeOperator(
+        uint256 _stakingModuleId,
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _vettedSigningKeysCounts
+    ) external;
+}
 contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     error StakingModuleUnregistered();
 
