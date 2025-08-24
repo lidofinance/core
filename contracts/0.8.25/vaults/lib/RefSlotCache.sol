@@ -9,6 +9,12 @@ import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
 uint256 constant DOUBLE_CACHE_LENGTH = 2;
 
+// wrap external call in function to save bytecode
+function _getCurrentRefSlot(IHashConsensus _consensus) view returns (uint256) {
+    (uint256 refSlot, ) = _consensus.getCurrentFrame();
+    return refSlot;
+}
+
 library RefSlotCache {
     struct Uint104WithCache {
         uint104 value;
@@ -26,7 +32,7 @@ library RefSlotCache {
         IHashConsensus _consensus,
         uint104 _increment
     ) internal view returns (Uint104WithCache memory) {
-        (uint256 refSlot, ) = _consensus.getCurrentFrame();
+        uint256 refSlot = _getCurrentRefSlot(_consensus);
 
         Uint104WithCache memory newCache = _storage;
 
@@ -48,7 +54,7 @@ library RefSlotCache {
         Uint104WithCache storage _storage,
         IHashConsensus _consensus
     ) internal view returns (uint104) {
-        (uint256 refSlot, ) = _consensus.getCurrentFrame();
+        uint256 refSlot = _getCurrentRefSlot(_consensus);
         if (uint48(refSlot) != _storage.refSlot) {
             return _storage.value;
         } else {
@@ -88,7 +94,7 @@ library DoubleRefSlotCache {
         IHashConsensus _consensus,
         int104 _increment
     ) internal view returns (Int104WithCache[DOUBLE_CACHE_LENGTH] memory) {
-        (uint256 refSlot, ) = _consensus.getCurrentFrame();
+        uint256 refSlot = _getCurrentRefSlot(_consensus);
 
         Int104WithCache[DOUBLE_CACHE_LENGTH] memory newCache = _storage;
         uint256 activeCacheIndex = _activeCacheIndex(newCache);
