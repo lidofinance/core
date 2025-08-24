@@ -594,10 +594,10 @@ contract VaultHub is PausableUntilWithRoles {
                 _record: acceptorRecord,
                 _amountOfShares: badDebtSharesToAccept,
                 _reserveRatioBP: acceptorConnection.reserveRatioBP,
-                // don't check lockable because it's limited by capacity ^^
+                // don't check any limits
                 _maxLockableValue: type(uint256).max,
-                // don't check shareLimit
-                _shareLimit: type(uint256).max
+                _shareLimit: type(uint256).max,
+                _overrideOperatorLimits: true
             });
 
             emit BadDebtSocialized(_badDebtVault, _vaultAcceptor, badDebtSharesToAccept);
@@ -743,7 +743,8 @@ contract VaultHub is PausableUntilWithRoles {
             _amountOfShares: _amountOfShares,
             _reserveRatioBP: connection.reserveRatioBP,
             _maxLockableValue: _totalValueWithoutUnsettledFees(record, _vaultObligations(_vault)),
-            _shareLimit: connection.shareLimit
+            _shareLimit: connection.shareLimit,
+            _overrideOperatorLimits: false
         });
 
         LIDO.mintExternalShares(_recipient, _amountOfShares);
@@ -1076,7 +1077,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _amountOfShares,
         uint256 _reserveRatioBP,
         uint256 _maxLockableValue,
-        uint256 _shareLimit
+        uint256 _shareLimit,
+        bool _overrideOperatorLimits
     ) internal {
         uint256 sharesAfterMint = _record.liabilityShares + _amountOfShares;
         if (sharesAfterMint > _shareLimit) {
@@ -1095,7 +1097,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _record.liabilityShares = uint96(sharesAfterMint);
 
-        _operatorGrid().onMintedShares(_vault, _amountOfShares);
+        _operatorGrid().onMintedShares(_vault, _amountOfShares, _overrideOperatorLimits);
     }
 
     function _decreaseLiability(address _vault, VaultRecord storage _record, uint256 _amountOfShares) internal {
