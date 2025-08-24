@@ -85,7 +85,7 @@ describe("VaultHub.sol:withdrawal", () => {
       await vaultHub.connect(user).mintShares(connectedVault, user, redemptionShares); // RR 10%, locked = 10 ether
       expect(await vaultHub.locked(connectedVault)).to.equal(totalValue);
 
-      await vaultHub.connect(redemptionMaster).updateRedemptionShares(connectedVault, redemptionShares);
+      await vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 0n); // all for redemption
 
       expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(0n);
       expect(await vaultHub.obligationsValue(connectedVault)).to.equal(redemptionShares);
@@ -130,7 +130,7 @@ describe("VaultHub.sol:withdrawal", () => {
       await vaultsContext.reportVault({ vault: connectedVault, totalValue });
 
       await vaultHub.connect(user).mintShares(connectedVault, user, redemptionShares);
-      await vaultHub.connect(redemptionMaster).updateRedemptionShares(connectedVault, redemptionShares);
+      await vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 0n); // all for redemption
 
       const balance = ether("5");
       await setBalance(await connectedVault.getAddress(), balance);

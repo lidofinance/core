@@ -74,7 +74,9 @@ describe("Integration: Vault redemptions and fees obligations", () => {
   });
 
   after(async () => await Snapshot.restore(originalSnapshot));
+
   beforeEach(async () => (snapshot = await Snapshot.take()));
+
   afterEach(async () => await Snapshot.restore(snapshot));
 
   context("Redemptions", () => {
@@ -83,9 +85,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       expect(recordBefore.redemptionShares).to.equal(0n);
       expect(recordBefore.liabilityShares).to.equal(0n);
 
-      const redemptionShares = ether("1");
-
-      await expect(vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares))
+      await expect(vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n))
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVaultAddress, 0);
 
@@ -102,17 +102,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       expect(recordBefore.redemptionShares).to.equal(0n);
       expect(recordBefore.liabilityShares).to.equal(2n);
 
-      // Over the max possible withdrawals (3 shares => 2 shares because of the liabilities)
-      await expect(vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, 3n))
-        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
-        .withArgs(stakingVaultAddress, 2n);
-
-      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
-      expect(recordAfter.redemptionShares).to.equal(2n);
-      expect(recordAfter.liabilityShares).to.equal(2n);
-
-      // Decrease the obligation
-      await expect(vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, 1n))
+      // Add redemption shares
+      await expect(vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 1n))
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVaultAddress, 1n);
 
@@ -120,8 +111,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       expect(recordAfterDecreased.redemptionShares).to.equal(1n);
       expect(recordAfterDecreased.liabilityShares).to.equal(2n);
 
-      // Remove the obligation
-      await expect(vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, 0))
+      // Remove the redemption shares
+      await expect(vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 2n))
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVaultAddress, 0n);
 
@@ -145,7 +136,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
       await setBalance(await stakingVault.getAddress(), 0n); // simulate all balance on CL
 
-      await expect(vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares))
+      await expect(vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n))
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVaultAddress, redemptionShares)
         .to.emit(stakingVault, "BeaconChainDepositsPaused");
@@ -168,7 +159,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       expect(recordBefore.redemptionShares).to.equal(0n);
       expect(recordBefore.liabilityShares).to.equal(redemptionShares);
 
-      await expect(vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares))
+      await expect(vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n))
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVaultAddress, redemptionShares)
         .and.not.to.emit(stakingVault, "BeaconChainDepositsPaused");
@@ -187,7 +178,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
         await dashboard.fund({ value: ether("2") });
         await dashboard.mintShares(owner, redemptionShares);
 
-        await vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares);
+        await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n);
       });
 
       it("On shares burned", async () => {
@@ -255,7 +246,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
         await dashboard.fund({ value: ether("2") });
         await dashboard.mintShares(stranger, redemptionShares);
-        await vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares);
+        await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n);
       });
 
       it("Allows to partially settle redemptions with force rebalance", async () => {
@@ -296,8 +287,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
   });
 
   context("Lido Fees", () => {
-    // TODO: must be added as a part of LazyOracle sanity checks
-    it.skip("Reverts if accrued fees are less than the cumulative fees", async () => {
+    it("Reverts if accrued fees are less than the cumulative fees", async () => {
       const cumulativeLidoFees = ether("1.1");
 
       const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
@@ -313,8 +303,8 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
       // Try to lower the fees in the report
       await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: cumulativeLidoFees - 1n }))
-        .to.be.revertedWithCustomError(vaultHub, "InvalidLidoFees")
-        .withArgs(stakingVaultAddress, cumulativeLidoFees - 1n, cumulativeLidoFees);
+        .to.be.revertedWithCustomError(lazyOracle, "CumulativeLidoFeesTooLow")
+        .withArgs(cumulativeLidoFees - 1n, cumulativeLidoFees);
     });
 
     it("Updates on the vault report for vault with no balance", async () => {
@@ -465,7 +455,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       });
 
       it("Reduces the unsettled fees when redemptions are set", async () => {
-        await vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares);
+        await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n);
 
         const redemptionValue = await lido.getPooledEthBySharesRoundUp(redemptionShares);
 
@@ -540,12 +530,12 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       const mintableShares = await dashboard.totalMintingCapacityShares();
       const sharesToMint = mintableShares / 2n;
 
-      // Add 1/2 of the mintable ether to the vault as withdrawals obligation, so if withdrawals obligation is taken into account,
-      // the user will not be able to mint anything from this moment
+      // Add 1/2 of the mintable ether to the vault as withdrawals obligation, so if withdrawals obligation is taken
+      // into account, the user will not be able to mint anything from this moment
       await dashboard.mintShares(stranger, sharesToMint);
-      await vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, sharesToMint);
+      await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n);
 
-      await await expect(dashboard.mintShares(stranger, sharesToMint)).to.emit(vaultHub, "MintedSharesOnVault");
+      await await expect(dashboard.mintShares(stranger, sharesToMint + 1n)).to.emit(vaultHub, "MintedSharesOnVault");
     });
   });
 
@@ -559,7 +549,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       await dashboard.fund({ value });
       await dashboard.mintShares(stranger, redemptionShares);
 
-      await vaultHub.connect(agentSigner).updateRedemptionShares(stakingVaultAddress, redemptionShares);
+      await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n);
     });
 
     it("Reverts when trying to withdraw more than available balance", async () => {

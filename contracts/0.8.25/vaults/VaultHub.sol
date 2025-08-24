@@ -391,17 +391,22 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice updates a redemption shares on the vault to force liability rebalance under extreme conditions
     /// @param _vault The address of the vault
-    /// @param _redemptionShares The part of the vault's liability that has to be rebalanced
-    function updateRedemptionShares(address _vault, uint256 _redemptionShares) external onlyRole(REDEMPTION_MASTER_ROLE) {
+    /// @param _liabilitySharesTarget maximum amount of liability shares that will be preserved, the rest will be
+    ///                                  marked as redemption shares
+    function setLiabilitySharesTarget(address _vault, uint256 _liabilitySharesTarget) external onlyRole(REDEMPTION_MASTER_ROLE) {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        uint256 newRedemptionShares = Math256.min(_redemptionShares, record.liabilityShares);
-        record.redemptionShares = uint128(newRedemptionShares);
+        if (_liabilitySharesTarget > record.liabilityShares) {
+            revert TargetExceedsLiabilityShares(_vault, _liabilitySharesTarget, record.liabilityShares);
+        }
+
+        uint256 redemptionShares = record.liabilityShares - _liabilitySharesTarget;
+        record.redemptionShares = uint128(redemptionShares);
 
         _updateBeaconChainDepositsPause(_vault, record, connection);
 
-        emit VaultRedemptionSharesUpdated(_vault, newRedemptionShares);
+        emit VaultRedemptionSharesUpdated(_vault, record.redemptionShares);
     }
 
     /// @notice updates fees for the vault
@@ -1554,6 +1559,14 @@ contract VaultHub is PausableUntilWithRoles {
      */
     error AmountExceedsWithdrawableValue(address vault, uint256 withdrawable, uint256 requested);
 
+    /**
+     * @notice Thrown when attempting to set a target shares value that exceeds the liability shares
+     * @param vault The address of the vault
+     * @param targetShares The target shares value
+     * @param liabilityShares The liability shares value
+     */
+    error TargetExceedsLiabilityShares(address vault, uint256 targetShares, uint256 liabilityShares);
+
     error NoFundsForForceRebalance(address vault);
     error NoReasonForForceRebalance(address vault);
     error NothingToTransferToLido(address vault);
@@ -1577,7 +1590,6 @@ contract VaultHub is PausableUntilWithRoles {
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
     error NoUnsettledLidoFeesShouldBeLeft(address vault, uint256 unsettledLidoFees);
     error CodehashNotAllowed(address vault, bytes32 codehash);
-    error InvalidLidoFees(address vault, uint256 newFees, uint256 oldFees);
     error VaultOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
     error VaultReportStale(address vault);

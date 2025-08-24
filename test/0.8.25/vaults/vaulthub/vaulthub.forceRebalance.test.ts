@@ -181,7 +181,7 @@ describe("VaultHub.sol:forceRebalance", () => {
         const balanceBefore = await ethers.provider.getBalance(vaultAddress);
         const shortfallShares = await vaultHub.rebalanceShortfallShares(vaultAddress);
 
-        await vaultHub.connect(user).updateRedemptionShares(vaultAddress, redemptionShares);
+        await vaultHub.connect(user).setLiabilitySharesTarget(vaultAddress, 0n);
 
         const record = await vaultHub.vaultRecord(vaultAddress);
         expect(record.redemptionShares).to.equal(redemptionShares);
@@ -210,7 +210,7 @@ describe("VaultHub.sol:forceRebalance", () => {
         const balanceBefore = await ethers.provider.getBalance(vaultAddress);
         const shortfallShares = await vaultHub.rebalanceShortfallShares(vaultAddress);
 
-        await vaultHub.connect(user).updateRedemptionShares(vaultAddress, redemptionShares);
+        await vaultHub.connect(user).setLiabilitySharesTarget(vaultAddress, 0n);
 
         const record = await vaultHub.vaultRecord(vaultAddress);
         expect(record.redemptionShares).to.equal(redemptionShares);

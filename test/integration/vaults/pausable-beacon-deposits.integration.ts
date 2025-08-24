@@ -123,10 +123,10 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       await setBalance(await stakingVault.getAddress(), ether("1") - 1n); // simulate lower than redemption balance
 
       // +1n to make sure to have >= 1 ether to pause the vault beacon deposits
-      const redemptionShares = await ctx.contracts.lido.getSharesByPooledEth(ether("1"));
-      await expect(
-        vaultHub.connect(redemptionMaster).updateRedemptionShares(stakingVaultAddress, redemptionShares + 1n),
-      ).to.emit(stakingVault, "BeaconChainDepositsPaused");
+      await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(stakingVaultAddress, 0n)).to.emit(
+        stakingVault,
+        "BeaconChainDepositsPaused",
+      );
 
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
@@ -143,10 +143,10 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       await setBalance(await stakingVault.getAddress(), ether("1") - 1n); // simulate lower than redemption balance
 
       // +1n to make sure to have >= 1 ether to pause the vault beacon deposits
-      const redemptionShares = await ctx.contracts.lido.getSharesByPooledEth(ether("1"));
-      await expect(
-        vaultHub.connect(redemptionMaster).updateRedemptionShares(stakingVaultAddress, redemptionShares + 1n),
-      ).to.emit(stakingVault, "BeaconChainDepositsPaused");
+      await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(stakingVaultAddress, 0n)).to.emit(
+        stakingVault,
+        "BeaconChainDepositsPaused",
+      );
 
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
