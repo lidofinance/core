@@ -7,12 +7,15 @@ import { Dashboard, StakingVault } from "typechain-types";
 
 import { MAX_UINT256 } from "lib";
 import {
+  changeTier,
   createVaultWithDashboard,
+  DEFAULT_TIER_PARAMS,
   getProtocolContext,
   ProtocolContext,
   report,
   reportVaultDataWithProof,
   setupLidoForVaults,
+  setUpOperatorGrid,
   waitNextAvailableReportTime,
 } from "lib/protocol";
 import { ether } from "lib/units";
@@ -140,6 +143,27 @@ describe("Integration: Vault with bad debt", () => {
       );
     });
 
+    it("OperatorGrid shareLimits can't prevent socialization", async () => {
+      await acceptorDashboard.connect(otherOwner).fund({ value: ether("10") });
+      const { vaultHub, lido } = ctx.contracts;
+
+      await setUpOperatorGrid(
+        ctx,
+        [nodeOperator],
+        [{ noShareLimit: await acceptorDashboard.liabilityShares(), tiers: [DEFAULT_TIER_PARAMS] }],
+      );
+      await changeTier(ctx, acceptorDashboard, otherOwner, nodeOperator);
+
+      const badDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, acceptorStakingVault, badDebtShares))
+        .to.emit(vaultHub, "BadDebtSocialized")
+        .withArgs(stakingVault, acceptorStakingVault, badDebtShares);
+    });
+  });
+
+  describe("Internalization", () => {
     it("Vault's bad debt can be internalized", async () => {
       const { vaultHub, lido } = ctx.contracts;
 
