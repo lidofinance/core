@@ -389,14 +389,19 @@ contract VaultHub is PausableUntilWithRoles {
         emit VaultShareLimitUpdated(_vault, _shareLimit);
     }
 
-    /// @notice updates a redemption shares on the vault to force liability rebalance under extreme conditions
+    /// @notice sets a liability shares limit (effectively a redemption shares value) on the vault to force liability
+    ///         rebalance under extreme conditions
     /// @param _vault The address of the vault
-    /// @param _redemptionShares The part of the vault's liability that has to be rebalanced
-    function updateRedemptionShares(address _vault, uint256 _redemptionShares) external onlyRole(REDEMPTION_MASTER_ROLE) {
+    /// @param _newLiabilitySharesTarget The new liability shares target (will be used to calculate redemption shares)
+    function setLiabilitySharesTarget(address _vault, uint256 _newLiabilitySharesTarget) external onlyRole(REDEMPTION_MASTER_ROLE) {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        uint256 newRedemptionShares = Math256.min(_redemptionShares, record.liabilityShares);
+        if (_newLiabilitySharesTarget > record.liabilityShares) {
+            revert TargetExceedsLiabilityShares(_vault, _newLiabilitySharesTarget, record.liabilityShares);
+        }
+
+        uint256 newRedemptionShares = record.liabilityShares - _newLiabilitySharesTarget;
         record.redemptionShares = uint128(newRedemptionShares);
 
         _updateBeaconChainDepositsPause(_vault, record, connection);
@@ -1553,6 +1558,8 @@ contract VaultHub is PausableUntilWithRoles {
      * @param requested The amount attempting to withdraw
      */
     error AmountExceedsWithdrawableValue(address vault, uint256 withdrawable, uint256 requested);
+
+    error TargetExceedsLiabilityShares(address vault, uint256 targetShares, uint256 liabilityShares);
 
     error NoFundsForForceRebalance(address vault);
     error NoReasonForForceRebalance(address vault);
