@@ -254,8 +254,9 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
     /// @dev returns 0 if the vault is not connected
-    /// @dev check for `pendingDisconnect = false` before using this function to avoid reverts
     function withdrawableValue(address _vault) external view returns (uint256) {
+        if (_vaultConnection(_vault).pendingDisconnect) return 0;
+
         return _withdrawableValue(_vault, _vaultRecord(_vault));
     }
 
