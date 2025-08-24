@@ -621,6 +621,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage badDebtConnection = _vaultConnection(_badDebtVault);
         VaultRecord storage badDebtRecord = _vaultRecord(_badDebtVault);
         _requireConnected(badDebtConnection, _badDebtVault);
+        _requireFreshReport(_badDebtVault, badDebtRecord);
 
         uint256 badDebt = _badDebt(badDebtRecord);
         uint256 badDebtToInternalize_ = Math256.min(badDebt, _maxSharesToInternalize);
