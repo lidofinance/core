@@ -10,8 +10,10 @@ import {
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
+  report,
   reportVaultDataWithProof,
   setupLidoForVaults,
+  waitNextAvailableReportTime,
 } from "lib/protocol";
 import { ether } from "lib/units";
 
@@ -111,8 +113,7 @@ describe("Integration: Vault with bad debt", () => {
       expect(await vaultHub.isVaultHealthy(acceptorStakingVault)).to.be.equal(true);
     });
 
-    it.skip("Socialization doesn't lead to bad debt in acceptor", async () => {
-      // TODO: fix this test
+    it("Socialization doesn't lead to bad debt in acceptor", async () => {
       await acceptorDashboard.connect(otherOwner).fund({ value: ether("1") });
       const { vaultHub, lido } = ctx.contracts;
 
@@ -137,6 +138,31 @@ describe("Integration: Vault with bad debt", () => {
         await lido.getSharesByPooledEth(await acceptorDashboard.totalValue()),
         "No bad debt in acceptor vault",
       );
+    });
+
+    it("Vault's bad debt can be internalized", async () => {
+      const { vaultHub, lido } = ctx.contracts;
+
+      const badDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      await expect(vaultHub.connect(daoAgent).internalizeBadDebt(stakingVault, badDebtShares))
+        .to.emit(vaultHub, "BadDebtWrittenOffToBeInternalized")
+        .withArgs(stakingVault, badDebtShares);
+
+      expect(await dashboard.liabilityShares()).to.be.lessThanOrEqual(
+        await lido.getSharesByPooledEth(await dashboard.totalValue()),
+        "No bad debt in vault",
+      );
+
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.equal(false);
+
+      await waitNextAvailableReportTime(ctx);
+      expect(await vaultHub.badDebtToInternalize()).to.be.equal(badDebtShares);
+
+      await report(ctx, { waitNextReportTime: false });
+
+      expect(await vaultHub.badDebtToInternalize()).to.be.equal(0n);
     });
   });
 });
