@@ -58,6 +58,13 @@ describe("VaultHub.sol:forceRebalance", () => {
         .withArgs(vaultAddress);
     });
 
+    it("reverts if vault has no total value", async () => {
+      await vaultsContext.reportVault({ vault, totalValue: 0n });
+      await expect(vaultHub.forceRebalance(vaultAddress))
+        .to.be.revertedWithCustomError(vaultHub, "NoFundsForForceRebalance")
+        .withArgs(vaultAddress);
+    });
+
     it("reverts if vault report is stale", async () => {
       await expect(vaultHub.forceRebalance(vaultAddress))
         .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")

@@ -871,16 +871,16 @@ contract VaultHub is PausableUntilWithRoles {
     function forceRebalance(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
 
-        uint256 vaultBalance = _vault.balance;
-        if (vaultBalance == 0) revert NoFundsForForceRebalance(_vault);
-
         VaultRecord storage record = _vaultRecord(_vault);
+        uint256 availableBalance = Math256.min(_vault.balance, _totalValue(record));
+        if (availableBalance == 0) revert NoFundsForForceRebalance(_vault);
+
         _requireFreshReport(_vault, record);
 
         uint256 shortfallShares = _rebalanceShortfallShares(connection, record);
         uint256 sharesToRebalance = Math256.min(
             Math256.max(shortfallShares, record.redemptionShares),
-            _getSharesByPooledEth(Math256.min(_vault.balance, _totalValue(record)))
+            _getSharesByPooledEth(availableBalance)
         );
 
         if (sharesToRebalance == 0) revert NoReasonForForceRebalance(_vault);
