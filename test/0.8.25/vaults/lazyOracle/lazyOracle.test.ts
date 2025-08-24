@@ -836,6 +836,7 @@ describe("LazyOracle.sol", () => {
             refSlot: 0n,
           },
         ],
+        minimalReserve: 0n,
       });
 
       await expect(
