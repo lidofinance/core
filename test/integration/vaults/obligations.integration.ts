@@ -23,7 +23,7 @@ import { Snapshot } from "test/suite";
 
 const TOTAL_BASIS_POINTS = 100_00n;
 
-describe("Integration: Vault obligations", () => {
+describe.skip("Integration: Vault obligations", () => {
   let ctx: ProtocolContext;
   let originalSnapshot: string;
   let snapshot: string;

@@ -82,6 +82,7 @@ describe("OperatorGrid.sol", () => {
         refSlot: 0n,
       },
     ],
+    minimalReserve: 0n,
   };
 
   before(async () => {

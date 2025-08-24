@@ -79,12 +79,16 @@ contract VaultHub is PausableUntilWithRoles {
         Report report;
         // ### 2nd slot
         /// @notice amount of ether that is locked from withdrawal on the vault
+        /// consists of ether that back minted stETH plus reserve determined by reserve ratio and minimal reserve
         uint128 locked;
         /// @notice liability shares of the vault
         uint96 liabilityShares;
         // ### 3rd and 4th slots
         /// @notice inOutDelta of the vault (all deposits - all withdrawals)
         DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] inOutDelta;
+        // ### 5th slot
+        /// @notice the minimal value that the reserve part of the locked can be
+        uint128 minimalReserve;
     }
 
     struct Report {
@@ -287,7 +291,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return the amount of ether that can be locked in the vault given the current total value
     /// @dev returns 0 if the vault is not connected
     function maxLockableValue(address _vault) external view returns (uint256) {
-        return _maxLockableValue(_vaultRecord(_vault), _vaultObligations(_vault));
+        return _totalValueWithoutUnsettledFees(_vaultRecord(_vault), _vaultObligations(_vault));
     }
 
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
@@ -522,7 +526,8 @@ contract VaultHub is PausableUntilWithRoles {
             _reportTimestamp,
             _reportTotalValue,
             _reportLiabilityShares,
-            _reportInOutDelta
+            _reportInOutDelta,
+            _reportSlashingReserve
         );
 
         emit VaultReportApplied({
@@ -572,8 +577,9 @@ contract VaultHub is PausableUntilWithRoles {
             _record: recordAcceptor,
             _amountOfShares: badDebtToSocialize,
             _reserveRatioBP: connectionAcceptor.reserveRatioBP,
-            _maxMintableRatioBP: TOTAL_BASIS_POINTS, // maxMintableRatio up to 100% of total value
-            _shareLimit: _getSharesByPooledEth(recordAcceptor.locked) // we can occupy all the locked amount
+            _maxLockableValue: _totalValue(recordAcceptor) * TOTAL_BASIS_POINTS
+                / (TOTAL_BASIS_POINTS - connectionAcceptor.reserveRatioBP),
+            _shareLimit: type(uint256).max
         });
 
         emit BadDebtSocialized(_badDebtVault, _vaultAcceptor, badDebtToSocialize);
@@ -704,13 +710,12 @@ contract VaultHub is PausableUntilWithRoles {
 
         _requireFreshReport(_vault, record);
 
-        uint256 reserveRatioBP = connection.reserveRatioBP;
         _increaseLiability({
             _vault: _vault,
             _record: record,
             _amountOfShares: _amountOfShares,
-            _reserveRatioBP: reserveRatioBP,
-            _maxMintableRatioBP: TOTAL_BASIS_POINTS - reserveRatioBP,
+            _reserveRatioBP: connection.reserveRatioBP,
+            _maxLockableValue: _totalValueWithoutUnsettledFees(record, _vaultObligations(_vault)),
             _shareLimit: connection.shareLimit
         });
 
@@ -950,7 +955,8 @@ contract VaultHub is PausableUntilWithRoles {
             }),
             locked: uint128(CONNECT_DEPOSIT),
             liabilityShares: 0,
-            inOutDelta: DoubleRefSlotCache.InitializeInt104DoubleCache(int104(int256(vaultBalance)))
+            inOutDelta: DoubleRefSlotCache.InitializeInt104DoubleCache(int104(int256(vaultBalance))),
+            minimalReserve: uint128(CONNECT_DEPOSIT)
         });
 
         connection = VaultConnection({
@@ -994,17 +1000,17 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reportTimestamp,
         uint256 _reportTotalValue,
         uint256 _reportLiabilityShares,
-        int256 _reportInOutDelta
+        int256 _reportInOutDelta,
+        uint256 _reportSlashingReserve
     ) internal {
-        uint256 liabilityShares_ = Math256.max(_record.liabilityShares, _reportLiabilityShares);
-        uint256 liability = _getPooledEthBySharesRoundUp(liabilityShares_);
+        uint256 minimalReserve = Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve);
 
-        uint256 lockedEther = Math256.max(
-            liability * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - _connection.reserveRatioBP),
-            CONNECT_DEPOSIT
-        );
-
-        _record.locked = uint128(lockedEther);
+        _record.minimalReserve = uint128(minimalReserve);
+        _record.locked = uint128(_locked({
+            _liabilityShares: Math256.max(_record.liabilityShares, _reportLiabilityShares), // better way to track liability?
+            _minimalReserve: minimalReserve,
+            _reserveRatioBP: _connection.reserveRatioBP
+        }));
         _record.report = Report({
             totalValue: uint104(_reportTotalValue),
             inOutDelta: int104(_reportInOutDelta),
@@ -1036,26 +1042,24 @@ contract VaultHub is PausableUntilWithRoles {
         IStakingVault(_vault).withdraw(_recipient, _amount);
     }
 
+    /// @dev Increases liabilityShares of the vault and updates the locked amount
     function _increaseLiability(
         address _vault,
         VaultRecord storage _record,
         uint256 _amountOfShares,
         uint256 _reserveRatioBP,
-        uint256 _maxMintableRatioBP,
+        uint256 _maxLockableValue,
         uint256 _shareLimit
     ) internal {
         uint256 sharesAfterMint = _record.liabilityShares + _amountOfShares;
         if (sharesAfterMint > _shareLimit) revert ShareLimitExceeded(_vault, sharesAfterMint, _shareLimit);
 
-        uint256 stETHAfterMint = _getPooledEthBySharesRoundUp(sharesAfterMint);
-        uint256 maxLockableValue_ = _maxLockableValue(_record, _vaultObligations(_vault));
-        uint256 maxMintableEther = (maxLockableValue_ * _maxMintableRatioBP) / TOTAL_BASIS_POINTS;
-        if (stETHAfterMint > maxMintableEther) {
-            revert InsufficientValueToMint(_vault, maxLockableValue_);
+        // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
+        uint256 etherToLock = _locked(sharesAfterMint, _record.minimalReserve, _reserveRatioBP);
+        if (etherToLock > _maxLockableValue) {
+            revert InsufficientValue(_vault, etherToLock, _maxLockableValue);
         }
 
-        // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
-        uint256 etherToLock = (stETHAfterMint * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - _reserveRatioBP);
         if (etherToLock > _record.locked) {
             _record.locked = uint128(etherToLock);
         }
@@ -1143,8 +1147,29 @@ contract VaultHub is PausableUntilWithRoles {
         return uint256(int256(uint256(report.totalValue)) + inOutDelta.currentValue() - report.inOutDelta);
     }
 
-    function _maxLockableValue(VaultRecord storage _record, VaultObligations storage _obligations) internal view returns (uint256) {
+    function _totalValueWithoutUnsettledFees(
+        VaultRecord storage _record,
+        VaultObligations storage _obligations
+    ) internal view returns (uint256) {
         return _totalValue(_record) - _obligations.unsettledLidoFees;
+    }
+
+    /// @param _liabilityShares amount of shares that the vault is minted
+    /// @param _minimalReserve minimal amount of additional reserve to be locked
+    /// @param _reserveRatioBP the reserve ratio of the vault
+    /// @return the amount of collateral to be locked on the vault
+    function _locked(
+        uint256 _liabilityShares,
+        uint256 _minimalReserve,
+        uint256 _reserveRatioBP
+    ) internal view returns (uint256) {
+        uint256 liability = _getPooledEthBySharesRoundUp(_liabilityShares);
+
+        // uint256 reserve = liability * TOTAL_BASIS_POINTS / (TOTAL_BASIS_POINTS - _reserveRatioBP) - liability;
+        // simplified to:
+        uint256 reserve = Math256.ceilDiv(liability * _reserveRatioBP, TOTAL_BASIS_POINTS - _reserveRatioBP);
+
+        return liability + Math256.max(reserve, _minimalReserve);
     }
 
     function _isReportFresh(VaultRecord storage _record) internal view returns (bool) {
@@ -1676,7 +1701,7 @@ contract VaultHub is PausableUntilWithRoles {
     error ZeroArgument();
     error InvalidBasisPoints(uint256 valueBP, uint256 maxValueBP);
     error ShareLimitTooHigh(uint256 shareLimit, uint256 maxShareLimit);
-    error InsufficientValueToMint(address vault, uint256 maxLockableValue);
+    error InsufficientValue(address vault, uint256 etherToLock, uint256 maxLockableValue);
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
     error CodehashNotAllowed(address vault, bytes32 codehash);
     error InvalidFees(address vault, uint256 newFees, uint256 oldFees);

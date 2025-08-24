@@ -38,6 +38,8 @@ describe("Integration: LazyOracle", () => {
 
     await setupLidoForVaults(ctx);
 
+    await report(ctx);
+
     ({ vaultHub, lazyOracle } = ctx.contracts);
 
     [owner, nodeOperator, stranger] = await ethers.getSigners();
@@ -80,7 +82,7 @@ describe("Integration: LazyOracle", () => {
       await advanceChainTime(days(2n));
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      const { locator, hashConsensus } = ctx.contracts;
+      const { locator, hashConsensus, lido } = ctx.contracts;
 
       const totalValueArg = ether("1");
       const accruedLidoFeesArg = ether("0.1");
@@ -130,7 +132,9 @@ describe("Integration: LazyOracle", () => {
 
       const record = await vaultHub.vaultRecord(stakingVault);
       expect(record.report.totalValue).to.equal(ether("1"));
-      expect(record.locked).to.equal(ether("1"));
+      expect(record.minimalReserve).to.equal(slashingReserveArg);
+      expect(record.locked).to.equal(slashingReserveArg + (await lido.getPooledEthBySharesRoundUp(liabilitySharesArg)));
+
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
     });
   });
@@ -153,6 +157,8 @@ describe("Integration: LazyOracle", () => {
     });
 
     it("Can't mint until brings the fresh report", async () => {
+      const { lido } = ctx.contracts;
+
       await expect(dashboard.mintStETH(stranger, ether("1"))).to.be.revertedWithCustomError(
         vaultHub,
         "VaultReportStale",
@@ -167,10 +173,10 @@ describe("Integration: LazyOracle", () => {
       );
 
       const etherToMint = ether("0.1");
-      const sharesToMint = await ctx.contracts.lido.getSharesByPooledEth(etherToMint);
+      const sharesToMint = await lido.getSharesByPooledEth(etherToMint);
       await expect(dashboard.mintStETH(stranger, etherToMint))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, sharesToMint, ether("1"));
+        .withArgs(stakingVault, sharesToMint, ether("1") + (await lido.getPooledEthBySharesRoundUp(sharesToMint)));
     });
 
     it("Can't withdraw until brings the fresh report", async () => {
@@ -198,10 +204,9 @@ describe("Integration: LazyOracle", () => {
     it("Forbids double reporting", async () => {
       await reportVaultDataWithProof(ctx, stakingVault);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
-      await expect(reportVaultDataWithProof(ctx, stakingVault, {}, false)).to.be.revertedWithCustomError(
-        lazyOracle,
-        "VaultReportIsFreshEnough",
-      );
+      await expect(
+        reportVaultDataWithProof(ctx, stakingVault, { updateReportData: false }),
+      ).to.be.revertedWithCustomError(lazyOracle, "VaultReportIsFreshEnough");
     });
 
     it("Forbids double reporting even if report is stale", async () => {
@@ -211,10 +216,9 @@ describe("Integration: LazyOracle", () => {
       await advanceChainTime((await vaultHub.REPORT_FRESHNESS_DELTA()) + 100n);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      await expect(reportVaultDataWithProof(ctx, stakingVault, {}, false)).to.be.revertedWithCustomError(
-        lazyOracle,
-        "VaultReportIsFreshEnough",
-      );
+      await expect(
+        reportVaultDataWithProof(ctx, stakingVault, { updateReportData: false }),
+      ).to.be.revertedWithCustomError(lazyOracle, "VaultReportIsFreshEnough");
     });
 
     it("Should allow huge totalValue increase using SAFE funding", async () => {
