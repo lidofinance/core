@@ -4,9 +4,9 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Dashboard, Lido, StakingVault, VaultHub } from "typechain-types";
+import { Dashboard, LazyOracle, Lido, StakingVault, VaultHub } from "typechain-types";
 
-import { ether } from "lib";
+import { days, ether } from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -24,6 +24,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
   let lido: Lido;
   let vaultHub: VaultHub;
+  let lazyOracle: LazyOracle;
   let stakingVault: StakingVault;
   let dashboard: Dashboard;
 
@@ -44,7 +45,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
     await setupLidoForVaults(ctx);
 
-    ({ vaultHub, lido } = ctx.contracts);
+    ({ vaultHub, lazyOracle, lido } = ctx.contracts);
 
     [owner, nodeOperator, redemptionMaster, validatorExit, stranger] = await ethers.getSigners();
 
@@ -62,6 +63,9 @@ describe("Integration: Vault redemptions and fees obligations", () => {
     treasuryAddress = await ctx.contracts.locator.treasury();
 
     agentSigner = await ctx.getSigner("agent");
+
+    // set maximum fee rate per second to 1 ether to allow rapid fee increases
+    await lazyOracle.connect(agentSigner).updateSanityParams(days(30n), 1000n, 1000000000000000000n);
 
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), redemptionMaster);
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.VALIDATOR_EXIT_ROLE(), validatorExit);

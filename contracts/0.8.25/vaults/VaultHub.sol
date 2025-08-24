@@ -481,6 +481,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _reportCumulativeLidoFees the cumulative Lido fees of the vault
     /// @param _reportLiabilityShares the liabilityShares of the vault
     /// @param _reportSlashingReserve the slashingReserve of the vault
+    /// @dev NB: LazyOracle sanity checks already verify that the fee can only increase
     function applyVaultReport(
         address _vault,
         uint256 _reportTimestamp,
