@@ -11,7 +11,7 @@ import {
   StakingRouter,
 } from "typechain-types";
 
-import { ether, getNextBlock, proxify } from "lib";
+import { getNextBlock, proxify } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -39,29 +39,32 @@ describe("StakingRouter.sol:module-sync", () => {
   const maxDepositsPerBlock = 150n;
   const minDepositBlockDistance = 25n;
 
+  const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials02 = hexlify(randomBytes(32));
+
+  const SECONDS_PER_SLOT = 12n;
+  const GENESIS_TIME = 1606824023;
+  const WITHDRAWAL_CREDENTIALS_TYPE_01 = 1n;
+
   let originalState: string;
 
   before(async () => {
     [deployer, admin, user, lido] = await ethers.getSigners();
 
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    // const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
     const stakingRouterFactory = await ethers.getContractFactory("StakingRouter", {
       libraries: {
-        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+        // ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
       },
     });
 
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
+    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
 
     [stakingRouter] = await proxify({ impl, admin });
 
     // initialize staking router
-    await stakingRouter.initialize(
-      admin,
-      lido,
-      hexlify(randomBytes(32)), // mock withdrawal credentials
-    );
+    await stakingRouter.initialize(admin, lido, withdrawalCredentials, withdrawalCredentials02);
 
     // grant roles
 
@@ -81,16 +84,17 @@ describe("StakingRouter.sol:module-sync", () => {
     lastDepositAt = timestamp;
     lastDepositBlock = number;
 
-    await stakingRouter.addStakingModule(
-      name,
-      stakingModuleAddress,
+    const stakingModuleConfig = {
       stakeShareLimit,
       priorityExitShareThreshold,
       stakingModuleFee,
       treasuryFee,
       maxDepositsPerBlock,
       minDepositBlockDistance,
-    );
+      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+    };
+
+    await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);
 
     moduleId = await stakingRouter.getStakingModulesCount();
   });
@@ -873,7 +877,7 @@ describe("StakingRouter.sol:module-sync", () => {
     });
 
     it("Reverts if the caller is not Lido", async () => {
-      await expect(stakingRouter.connect(user).deposit(100n, moduleId, "0x")).to.be.revertedWithCustomError(
+      await expect(stakingRouter.connect(user).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
         "AppAuthLidoFailed",
       );
@@ -882,7 +886,7 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Reverts if withdrawal credentials are not set", async () => {
       await stakingRouter.connect(admin).setWithdrawalCredentials(bigintToHex(0n, true, 32));
 
-      await expect(stakingRouter.deposit(100n, moduleId, "0x")).to.be.revertedWithCustomError(
+      await expect(stakingRouter.deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
         "EmptyWithdrawalsCredentials",
       );
@@ -891,42 +895,48 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Reverts if the staking module is not active", async () => {
       await stakingRouter.connect(admin).setStakingModuleStatus(moduleId, Status.DepositsPaused);
 
-      await expect(stakingRouter.deposit(100n, moduleId, "0x")).to.be.revertedWithCustomError(
+      await expect(stakingRouter.deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
         "StakingModuleNotActive",
       );
     });
 
-    it("Reverts if ether does correspond to the number of deposits", async () => {
-      const deposits = 2n;
-      const depositValue = ether("32.0");
-      const correctAmount = deposits * depositValue;
-      const etherToSend = correctAmount + 1n;
+    // TODO: Add new check on things like DepositValueNotMultipleOfInitialDeposit instead
+    // it("Reverts if ether does correspond to the number of deposits", async () => {
+    //   const deposits = 2n;
+    //   const depositValue = ether("32.0");
+    //   const correctAmount = deposits * depositValue;
+    //   const etherToSend = correctAmount + 1n;
 
-      await expect(
-        stakingRouter.deposit(deposits, moduleId, "0x", {
-          value: etherToSend,
-        }),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidDepositsValue")
-        .withArgs(etherToSend, deposits);
-    });
+    //   await expect(
+    //     stakingRouter.deposit(deposits, moduleId, "0x", {
+    //       value: etherToSend,
+    //     }),
+    //   )
+    //     .to.be.revertedWithCustomError(stakingRouter, "InvalidDepositsValue")
+    //     .withArgs(etherToSend, deposits);
+    // });
 
     it("Does not submit 0 deposits", async () => {
-      await expect(stakingRouter.deposit(0n, moduleId, "0x")).not.to.emit(depositContract, "Deposited__MockEvent");
-    });
-
-    it("Reverts if ether does correspond to the number of deposits", async () => {
-      const deposits = 2n;
-      const depositValue = ether("32.0");
-      const correctAmount = deposits * depositValue;
-
       await expect(
-        stakingRouter.deposit(deposits, moduleId, "0x", {
-          value: correctAmount,
+        stakingRouter.deposit(moduleId, "0x", {
+          value: 0,
         }),
-      ).to.emit(depositContract, "Deposited__MockEvent");
+      ).not.to.emit(depositContract, "Deposited__MockEvent");
     });
+
+    // TODO: initially wrong test
+    // it("Reverts if ether does correspond to the number of deposits", async () => {
+    //   const deposits = 2n;
+    //   const depositValue = ether("32.0");
+    //   const correctAmount = deposits * depositValue;
+
+    //   await expect(
+    //     stakingRouter.deposit(deposits, moduleId, "0x", {
+    //       value: correctAmount,
+    //     }),
+    //   ).to.emit(depositContract, "Deposited__MockEvent");
+    // });
   });
 });
 

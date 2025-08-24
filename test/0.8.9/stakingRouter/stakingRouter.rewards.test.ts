@@ -29,18 +29,25 @@ describe("StakingRouter.sol:rewards", () => {
     minDepositBlockDistance: 25n,
   };
 
+  const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials02 = hexlify(randomBytes(32));
+
+  const SECONDS_PER_SLOT = 12n;
+  const GENESIS_TIME = 1606824023;
+  const WITHDRAWAL_CREDENTIALS_TYPE_01 = 1n;
+
   before(async () => {
     [deployer, admin] = await ethers.getSigners();
 
     const depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    // const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
     const stakingRouterFactory = await ethers.getContractFactory("StakingRouter", {
       libraries: {
-        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+        // ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
       },
     });
 
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
+    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -48,7 +55,8 @@ describe("StakingRouter.sol:rewards", () => {
     await stakingRouter.initialize(
       admin,
       certainAddress("test:staking-router-modules:lido"), // mock lido address
-      hexlify(randomBytes(32)), // mock withdrawal credentials
+      withdrawalCredentials,
+      withdrawalCredentials02,
     );
 
     // grant roles
@@ -461,18 +469,19 @@ describe("StakingRouter.sol:rewards", () => {
     const modulesCount = await stakingRouter.getStakingModulesCount();
     const module = await ethers.deployContract("StakingModule__MockForStakingRouter", deployer);
 
+    const stakingModuleConfig = {
+      stakeShareLimit,
+      priorityExitShareThreshold,
+      stakingModuleFee: moduleFee,
+      treasuryFee,
+      maxDepositsPerBlock,
+      minDepositBlockDistance,
+      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+    };
+
     await stakingRouter
       .connect(admin)
-      .addStakingModule(
-        randomBytes(8).toString(),
-        await module.getAddress(),
-        stakeShareLimit,
-        priorityExitShareThreshold,
-        moduleFee,
-        treasuryFee,
-        maxDepositsPerBlock,
-        minDepositBlockDistance,
-      );
+      .addStakingModule(randomBytes(8).toString(), await module.getAddress(), stakingModuleConfig);
 
     const moduleId = modulesCount + 1n;
     expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount + 1n);

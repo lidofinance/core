@@ -466,6 +466,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         stakingModule.stakingModuleFee = uint16(_stakingModuleFee);
         stakingModule.maxDepositsPerBlock = uint64(_maxDepositsPerBlock);
         stakingModule.minDepositBlockDistance = uint64(_minDepositBlockDistance);
+        // TODO: add check on type
         stakingModule.withdrawalCredentialsType = uint8(_withdrawalCredentialsType);
 
         emit StakingModuleShareLimitSet(_stakingModuleId, _stakeShareLimit, _priorityExitShareThreshold, msg.sender);
