@@ -267,15 +267,6 @@ contract VaultHub is PausableUntilWithRoles {
         return _obligationsValue(_vaultRecord(_vault));
     }
 
-    /// @return cumulative amount of ether that was accrued on the vault as Lido fees
-    /// @return settled amount of ether that was settled on the vault as Lido fees
-    /// @dev returns (0, 0) if the vault is not connected
-    function fees(address _vault) external view returns (uint256 cumulative, uint256 settled) {
-        VaultRecord storage record = _vaultRecord(_vault);
-        cumulative = record.cumulativeLidoFees;
-        settled = record.settledLidoFees;
-    }
-
     /// @return the amount of Lido fees that currently can be settled.
     ///         Even if vault's balance is sufficient to cover the fees, some amount may be blocked for redemptions,
     ///         locked ether, or some amount may be non-transferable to not to make the vault unhealthy

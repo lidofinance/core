@@ -173,10 +173,11 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the cumulative and settled Lido fees for the vault
+     * @notice Returns the amount of ether that was accrued on the vault as Lido fees but not yet settled.
      */
-    function fees() external view returns (uint256 cumulative, uint256 settled) {
-        (cumulative, settled) = VAULT_HUB.fees(address(_stakingVault()));
+    function unsettledFeesValue() external view returns (uint256) {
+        VaultHub.VaultRecord memory record = VAULT_HUB.vaultRecord(address(_stakingVault()));
+        return record.cumulativeLidoFees - record.settledLidoFees;
     }
 
     /**
