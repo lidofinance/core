@@ -548,20 +548,13 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Requests a change of tier on the OperatorGrid.
+     * @notice Requests a change of tier or sync of tier (if same tier) on the OperatorGrid.
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
-     * @return bool Whether the tier change was confirmed.
+     * @return bool Whether the tier change/sync was confirmed.
      */
     function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external returns (bool) {
         return _changeTier(_tierId, _requestedShareLimit);
-    }
-
-    /**
-     * @notice Syncs the vault params to the current tier params on the OperatorGrid.
-     */
-    function syncVaultWithTier() external {
-        _syncVaultWithTier();
     }
 
     /**
