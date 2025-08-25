@@ -69,7 +69,7 @@ describe("VaultHub.sol:forceRebalance", () => {
     // OperatorGrid
     const operatorGridMock = await ethers.deployContract("OperatorGrid__MockForVaultHub", [], { from: deployer });
     const operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridMock, deployer);
-    await operatorGridMock.initialize(ether("1"));
+    await operatorGridMock.initialize(SHARE_LIMIT);
 
     // LazyOracle
     const lazyOracleImpl = await ethers.deployContract("LazyOracle", [locator]);
@@ -132,8 +132,6 @@ describe("VaultHub.sol:forceRebalance", () => {
 
     dashboardSigner = await impersonate(dashboardAddress, ether("100"));
     lazyOracleSigner = await impersonate(await lazyOracle.getAddress(), ether("100"));
-
-    await vaultHub.connect(user).updateShareLimit(vaultAddress, SHARE_LIMIT);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

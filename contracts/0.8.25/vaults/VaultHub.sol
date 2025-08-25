@@ -392,21 +392,6 @@ contract VaultHub is PausableUntilWithRoles {
         });
     }
 
-    /// @notice updates share limit for the vault
-    /// Setting share limit to zero actually pause the vault's ability to mint
-    /// @param _vault vault address
-    /// @param _shareLimit new share limit
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function updateShareLimit(address _vault, uint256 _shareLimit) external onlyRole(VAULT_MASTER_ROLE) {
-        _requireNotZero(_vault);
-        _requireSaneShareLimit(_shareLimit);
-
-        VaultConnection storage connection = _checkConnection(_vault);
-        connection.shareLimit = uint96(_shareLimit);
-
-        emit VaultShareLimitUpdated(_vault, _shareLimit);
-    }
-
     /// @notice updates fees for the vault
     /// @param _vault vault address
     /// @param _infraFeeBP new infra fee in basis points
@@ -579,7 +564,8 @@ contract VaultHub is PausableUntilWithRoles {
             _reserveRatioBP: connectionAcceptor.reserveRatioBP,
             _maxLockableValue: _totalValue(recordAcceptor) * TOTAL_BASIS_POINTS
                 / (TOTAL_BASIS_POINTS - connectionAcceptor.reserveRatioBP),
-            _shareLimit: type(uint256).max
+            _shareLimit: type(uint256).max,
+            _bypassLimits: true
         });
 
         emit BadDebtSocialized(_badDebtVault, _vaultAcceptor, badDebtToSocialize);
@@ -716,7 +702,8 @@ contract VaultHub is PausableUntilWithRoles {
             _amountOfShares: _amountOfShares,
             _reserveRatioBP: connection.reserveRatioBP,
             _maxLockableValue: _totalValueWithoutUnsettledFees(record, _vaultObligations(_vault)),
-            _shareLimit: connection.shareLimit
+            _shareLimit: connection.shareLimit,
+            _bypassLimits: false
         });
 
         LIDO.mintExternalShares(_recipient, _amountOfShares);
@@ -1049,7 +1036,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _amountOfShares,
         uint256 _reserveRatioBP,
         uint256 _maxLockableValue,
-        uint256 _shareLimit
+        uint256 _shareLimit,
+        bool _bypassLimits
     ) internal {
         uint256 sharesAfterMint = _record.liabilityShares + _amountOfShares;
         if (sharesAfterMint > _shareLimit) revert ShareLimitExceeded(_vault, sharesAfterMint, _shareLimit);
@@ -1066,7 +1054,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _record.liabilityShares = uint96(sharesAfterMint);
 
-        _operatorGrid().onMintedShares(_vault, _amountOfShares);
+        _operatorGrid().onMintedShares(_vault, _amountOfShares, _bypassLimits);
     }
 
     function _decreaseLiability(address _vault, VaultRecord storage _record, uint256 _amountOfShares) internal {
@@ -1609,7 +1597,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 reserveRatioBP,
         uint256 forcedRebalanceThresholdBP
     );
-    event VaultShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultFeesUpdated(
         address indexed vault,
         uint256 preInfraFeeBP,
