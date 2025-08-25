@@ -76,6 +76,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         │  │  Vault_2 ... Vault_k │  │                      │  │
         │  └──────────────────────┘  └──────────────────────┘  │
         └──────────────────────────────────────────────────────┘
+
+        5. Jail Mechanism:
+         - A vault can be "jailed" as a penalty mechanism for misbehavior or violations
+         - When a vault is in jail, it cannot mint new stETH shares (normal minting operations are blocked)
+         - Administrative operations (like bad debt socialization) can bypass jail restrictions using the _bypassLimits flag
+         - Vaults can be jailed/unjailed by addresses with appropriate governance roles
      */
 
     /// @dev 0xa495a3428837724c7f7648cda02eb83c9c4c778c8688d6f254c7f3f80c154d55
@@ -123,13 +129,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
      * @custom:vaultTier Vault tier
      * @custom:groups Groups
      * @custom:nodeOperators Node operators
+     * @custom:isVaultInJail if true, vault is in jail and can't mint stETH
      */
     struct ERC7201Storage {
         Tier[] tiers;
         mapping(address vault => uint256 tierId) vaultTier;
         mapping(address nodeOperator => Group) groups;
         address[] nodeOperators;
-        /// @notice if true, vault is in jail and can't mint stETH
         mapping(address vault => bool isInJail) isVaultInJail;
     }
 
@@ -494,21 +500,23 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @notice Mint shares limit check
     /// @param _vault address of the vault
     /// @param _amount amount of shares will be minted
+    /// @param _bypassLimits if true, bypass the limits check
     function onMintedShares(
         address _vault,
-        uint256 _amount
+        uint256 _amount,
+        bool _bypassLimits
     ) external {
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("onMintedShares", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
 
-        if ($.isVaultInJail[_vault]) revert VaultInJail();
+        if ($.isVaultInJail[_vault] && !_bypassLimits) revert VaultInJail();
 
         uint256 tierId = $.vaultTier[_vault];
         Tier storage tier_ = $.tiers[tierId];
 
         uint96 tierLiabilityShares = tier_.liabilityShares;
-        if (tierLiabilityShares + _amount > tier_.shareLimit) revert TierLimitExceeded();
+        if (tierLiabilityShares + _amount > tier_.shareLimit && !_bypassLimits) revert TierLimitExceeded();
 
         tier_.liabilityShares = tierLiabilityShares + uint96(_amount);
 

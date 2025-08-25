@@ -776,7 +776,7 @@ describe("OperatorGrid.sol", () => {
       });
 
       //and update tier sharesMinted
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares, false);
 
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
       await expect(
@@ -819,7 +819,7 @@ describe("OperatorGrid.sol", () => {
       });
 
       //and update tier sharesMinted
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares, false);
 
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
       await expect(
@@ -856,7 +856,7 @@ describe("OperatorGrid.sol", () => {
         isBeaconDepositsManuallyPaused: false,
       });
       //and update tier sharesMinted
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares, false);
 
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
       await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit))
@@ -907,7 +907,7 @@ describe("OperatorGrid.sol", () => {
       });
 
       //and update tier sharesMinted
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares, false);
 
       const tier0before = await operatorGrid.tier(0);
       const tier1before = await operatorGrid.tier(1);
@@ -981,10 +981,9 @@ describe("OperatorGrid.sol", () => {
     ];
 
     it("mintShares should revert if sender is not `VaultHub`", async function () {
-      await expect(operatorGrid.connect(stranger).onMintedShares(vault_NO1_V1, 100)).to.be.revertedWithCustomError(
-        operatorGrid,
-        "NotAuthorized",
-      );
+      await expect(
+        operatorGrid.connect(stranger).onMintedShares(vault_NO1_V1, 100, false),
+      ).to.be.revertedWithCustomError(operatorGrid, "NotAuthorized");
     });
 
     it("mintShares should revert if group shares limit is exceeded", async function () {
@@ -1022,7 +1021,7 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, tierId, tierShareLimit);
 
       await expect(
-        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit),
+        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit, false),
       ).to.be.revertedWithCustomError(operatorGrid, "GroupLimitExceeded");
     });
 
@@ -1047,7 +1046,7 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, tierId, tierShareLimit);
       await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, tierId, tierShareLimit);
 
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit, false);
 
       const group = await operatorGrid.group(nodeOperator1);
 
@@ -1083,10 +1082,10 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V2, tier_NO1_Id1, tierShareLimit);
       await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V2, tier_NO1_Id1, tierShareLimit);
 
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit, false);
 
       await expect(
-        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, 1),
+        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, 1, false),
       ).to.be.revertedWithCustomError(operatorGrid, "TierLimitExceeded");
     });
 
@@ -1137,8 +1136,8 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO2_V2, tier_NO2_Id2, tierShareLimit);
       await operatorGrid.connect(nodeOperator2).changeTier(vault_NO2_V2, tier_NO2_Id2, tierShareLimit);
 
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit);
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO2_V2, tierShareLimit);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit, false);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO2_V2, tierShareLimit, false);
 
       const group = await operatorGrid.group(nodeOperator1);
       const group2 = await operatorGrid.group(nodeOperator2);
@@ -1308,7 +1307,7 @@ describe("OperatorGrid.sol", () => {
 
         // Try to mint shares - should revert
         await expect(
-          operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount),
+          operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, false),
         ).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
       });
 
@@ -1320,7 +1319,7 @@ describe("OperatorGrid.sol", () => {
         expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.false;
 
         // Mint shares - should succeed
-        await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount)).to.not.be
+        await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, false)).to.not.be
           .reverted;
 
         // Verify shares were minted
@@ -1337,7 +1336,7 @@ describe("OperatorGrid.sol", () => {
 
         // Verify minting fails while in jail
         await expect(
-          operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount),
+          operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, false),
         ).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
 
         // Remove from jail
@@ -1345,7 +1344,7 @@ describe("OperatorGrid.sol", () => {
         expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.false;
 
         // Now minting should succeed
-        await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount)).to.not.be
+        await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, false)).to.not.be
           .reverted;
 
         // Verify shares were minted
@@ -1456,7 +1455,7 @@ describe("OperatorGrid.sol", () => {
         // Set tier and mint some shares first
         await operatorGrid.connect(vaultOwner).changeTier(vaultAddress, tierId, tierShareLimit);
         await operatorGrid.connect(nodeOperator1).changeTier(vaultAddress, tierId, tierShareLimit);
-        await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount);
+        await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, false);
 
         // Put vault in jail
         await operatorGrid.setVaultJailStatus(vaultAddress, true);
@@ -1521,8 +1520,8 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V2, tier_NO1_Id2, tierShareLimit);
       await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V2, tier_NO1_Id2, tierShareLimit);
 
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit);
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, 1);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit, false);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, 1, false);
 
       await operatorGrid.connect(vaultHubAsSigner).onBurnedShares(vault_NO1_V1, tierShareLimit);
 
@@ -1540,7 +1539,7 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("burnShares works on DEFAULT_TIER, minted=limit+1, burned=limit", async function () {
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit, false);
       await operatorGrid.connect(vaultHubAsSigner).onBurnedShares(vault_NO1_V1, tierShareLimit - 1);
 
       const tier = await operatorGrid.tier(await operatorGrid.DEFAULT_TIER_ID());
@@ -1692,8 +1691,8 @@ describe("OperatorGrid.sol", () => {
       });
 
       //and update tier sharesMinted
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares);
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, _liabilityShares + 1);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares, false);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, _liabilityShares + 1, false);
 
       const tier = await operatorGrid.tier(await operatorGrid.DEFAULT_TIER_ID());
       const vault1LiabilityShares = await vaultHub.liabilityShares(vault_NO1_V1);
@@ -1735,8 +1734,8 @@ describe("OperatorGrid.sol", () => {
       });
 
       //and update tier sharesMinted
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares);
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, _liabilityShares + 1);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares, false);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, _liabilityShares + 1, false);
 
       const tier = await operatorGrid.tier(await operatorGrid.DEFAULT_TIER_ID());
       const vault1LiabilityShares = await vaultHub.liabilityShares(vault_NO1_V1);
@@ -1775,8 +1774,8 @@ describe("OperatorGrid.sol", () => {
       });
 
       //and update tier sharesMinted
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares);
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, _liabilityShares);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares, false);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, _liabilityShares, false);
 
       const tier = await operatorGrid.tier(await operatorGrid.DEFAULT_TIER_ID());
       const vault1LiabilityShares = await vaultHub.liabilityShares(vault_NO1_V1);
@@ -1829,7 +1828,7 @@ describe("OperatorGrid.sol", () => {
       });
 
       //and update tier sharesMinted
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, liabilityShares);
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, liabilityShares, false);
 
       const tier = await operatorGrid.tier(1);
       const vault1LiabilityShares = await vaultHub.liabilityShares(vault_NO1_V1);
@@ -1882,7 +1881,7 @@ describe("OperatorGrid.sol", () => {
       });
 
       //and update tier sharesMinted
-      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, ether("500"));
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, ether("500"), false);
 
       //decrease group share limit
       await operatorGrid.updateGroupShareLimit(nodeOperator1, 1n);

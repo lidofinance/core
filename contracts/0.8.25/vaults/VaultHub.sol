@@ -557,7 +557,8 @@ contract VaultHub is PausableUntilWithRoles {
             _amountOfShares: badDebtToSocialize,
             _reserveRatioBP: connectionAcceptor.reserveRatioBP,
             _maxMintableRatioBP: TOTAL_BASIS_POINTS, // maxMintableRatio up to 100% of total value
-            _shareLimit: _getSharesByPooledEth(recordAcceptor.locked) // we can occupy all the locked amount
+            _shareLimit: _getSharesByPooledEth(recordAcceptor.locked), // we can occupy all the locked amount
+            _bypassLimits: true
         });
 
         emit BadDebtSocialized(_badDebtVault, _vaultAcceptor, badDebtToSocialize);
@@ -695,7 +696,8 @@ contract VaultHub is PausableUntilWithRoles {
             _amountOfShares: _amountOfShares,
             _reserveRatioBP: reserveRatioBP,
             _maxMintableRatioBP: TOTAL_BASIS_POINTS - reserveRatioBP,
-            _shareLimit: connection.shareLimit
+            _shareLimit: connection.shareLimit,
+            _bypassLimits: false
         });
 
         LIDO.mintExternalShares(_recipient, _amountOfShares);
@@ -1049,7 +1051,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _amountOfShares,
         uint256 _reserveRatioBP,
         uint256 _maxMintableRatioBP,
-        uint256 _shareLimit
+        uint256 _shareLimit,
+        bool _bypassLimits
     ) internal {
         uint256 sharesAfterMint = _record.liabilityShares + _amountOfShares;
         if (sharesAfterMint > _shareLimit) revert ShareLimitExceeded(_vault, sharesAfterMint, _shareLimit);
@@ -1069,7 +1072,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _record.liabilityShares = uint96(sharesAfterMint);
 
-        _operatorGrid().onMintedShares(_vault, _amountOfShares);
+        _operatorGrid().onMintedShares(_vault, _amountOfShares, _bypassLimits);
     }
 
     function _decreaseLiability(address _vault, VaultRecord storage _record, uint256 _amountOfShares) internal {
@@ -1593,7 +1596,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 reserveRatioBP,
         uint256 forcedRebalanceThresholdBP
     );
-    event VaultShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultFeesUpdated(
         address indexed vault,
         uint256 preInfraFeeBP,
