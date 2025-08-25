@@ -366,6 +366,22 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
+     * @dev Checks the CHANGE_TIER_ROLE and syncs the vault params to the current tier params on the OperatorGrid.
+     */
+    function _syncVaultWithTier() internal onlyRoleMemberOrAdmin(CHANGE_TIER_ROLE) {
+        _operatorGrid().syncVaultWithTier(address(_stakingVault()));
+    }
+
+    /**
+     * @dev Checks the CHANGE_TIER_ROLE and updates the share limit on the OperatorGrid.
+     * @param _requestedShareLimit The requested share limit.
+     * @return bool Whether the tier change was confirmed.
+     */
+    function _updateVaultShareLimit(uint256 _requestedShareLimit) internal onlyRoleMemberOrAdmin(CHANGE_TIER_ROLE) returns (bool) {
+        return _operatorGrid().updateVaultShareLimit(address(_stakingVault()), _requestedShareLimit);
+    }
+
+    /**
      * @dev Loads the address of the underlying StakingVault.
      * @return addr The address of the StakingVault.
      */
