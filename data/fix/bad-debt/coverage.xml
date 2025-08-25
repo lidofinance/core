@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4714"  lines-covered="4535"  line-rate="0.9620000000000001"  branches-valid="2202"  branches-covered="2074"  branch-rate="0.9419"  timestamp="1756041880881" complexity="0" version="0.1">
+<coverage lines-valid="4714"  lines-covered="4535"  line-rate="0.9620000000000001"  branches-valid="2202"  branches-covered="2074"  branch-rate="0.9419"  timestamp="1756141005878" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2967,7 +2967,7 @@
 			<method name="_decreaseLiability"  hits="8"  signature="()V" >
 				<lines><line number="1104"  hits="8" /></lines>
 			</method>
-			<method name="_badDebt"  hits="0"  signature="()V" >
+			<method name="_badDebtShares"  hits="0"  signature="()V" >
 				<lines><line number="1114"  hits="0" /></lines>
 			</method>
 			<method name="_rebalanceShortfall"  hits="16"  signature="()V" >
