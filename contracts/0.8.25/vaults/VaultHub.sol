@@ -1300,27 +1300,20 @@ contract VaultHub is PausableUntilWithRoles {
         }
     }
 
-    /// @notice maximum amount of ether that can be used for transfers from the vault without redemptions
-    function _adjustedAvailableBalance(
-        address _vault,
-        VaultRecord storage _record,
-        uint256 _adjustment
-    ) internal view returns (uint256) {
-        uint256 totalValue_ = _totalValue(_record);
-
-        uint256 locked_ = _record.locked - _adjustment;
-        uint256 unlocked = totalValue_ > locked_ ? totalValue_ - locked_ : 0;
-        return Math256.min(unlocked, _vault.balance);
-    }
-
     /// @notice the amount of lido fees that can be settled on the vault based on the available balance
     /// @dev    this amount already accounts locked value
     function _settleableLidoFeesValue(
         address _vault,
         VaultRecord storage _record
     ) internal view returns (uint256) {
-        uint256 availableBalance = _adjustedAvailableBalance(_vault, _record, 0);
-        return Math256.min(availableBalance, _unsettledLidoFeesValue(_record));
+        uint256 totalValue_ = _totalValue(_record);
+        uint256 locked_ = _record.locked;
+        uint256 unlocked = totalValue_ > locked_ ? totalValue_ - locked_ : 0;
+
+        return Math256.min(
+            Math256.min(unlocked, _vault.balance),
+            _unsettledLidoFeesValue(_record)
+        );
     }
 
     /// @notice the amount of ether that can be instantly withdrawn from the vault based on the available balance
@@ -1329,10 +1322,13 @@ contract VaultHub is PausableUntilWithRoles {
         address _vault,
         VaultRecord storage _record
     ) internal view returns (uint256) {
-        uint256 redemptions = _getPooledEthBySharesRoundUp(_record.redemptionShares);
-        uint256 availableBalance = _adjustedAvailableBalance(_vault, _record, redemptions);
+        uint256 totalValue_ = _totalValue(_record);
+        uint256 redemptionsValue = _getPooledEthBySharesRoundUp(_record.redemptionShares);
+        uint256 locked_ = _record.locked - redemptionsValue;
+        uint256 unlockedValueWithoutRedemptions = totalValue_ > locked_ ? totalValue_ - locked_ : 0;
 
-        uint256 obligations = redemptions + _unsettledLidoFeesValue(_record);
+        uint256 availableBalance = Math256.min(unlockedValueWithoutRedemptions, _vault.balance);
+        uint256 obligations = redemptionsValue + _unsettledLidoFeesValue(_record);
         return availableBalance > obligations ? availableBalance - obligations : 0;
     }
 
