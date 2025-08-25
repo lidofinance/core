@@ -83,6 +83,9 @@ describe("OperatorGrid.sol", () => {
       },
     ],
     minimalReserve: 0n,
+    redemptionShares: 0n,
+    cumulativeLidoFees: 0n,
+    settledLidoFees: 0n,
   };
 
   before(async () => {
