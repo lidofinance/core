@@ -7,41 +7,38 @@ import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
 import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
 import {
-  autofillRoles,
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
+  report,
   reportVaultDataWithProof,
   setupLidoForVaults,
-  VaultRoles,
 } from "lib/protocol";
 import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
 
-describe("Integration: Actions with vault connected to VaultHub", () => {
+describe("Integration: LazyOracle", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
 
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
   let vaultHub: VaultHub;
   let lazyOracle: LazyOracle;
 
-  let roles: VaultRoles;
-
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let snapshot: string;
-  let originalSnapshot: string;
-
   before(async () => {
     ctx = await getProtocolContext();
-
     originalSnapshot = await Snapshot.take();
 
     await setupLidoForVaults(ctx);
+
+    await report(ctx);
 
     ({ vaultHub, lazyOracle } = ctx.contracts);
 
@@ -56,15 +53,11 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       nodeOperator,
     ));
 
-    roles = await autofillRoles(dashboard, nodeOperator);
-
-    await reportVaultDataWithProof(ctx, stakingVault);
+    dashboard = dashboard.connect(owner);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(snapshot));
-
   after(async () => await Snapshot.restore(originalSnapshot));
 
   beforeEach(async () => {
@@ -73,6 +66,11 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   });
 
   describe("Reporting", () => {
+    it("bringing new AO report makes vault report unfresh", async () => {
+      await report(ctx);
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
+    });
+
     it("bringing no report for 2 days makes vault report unfresh", async () => {
       await advanceChainTime(days(1n));
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
@@ -84,7 +82,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await advanceChainTime(days(2n));
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      const { locator, hashConsensus } = ctx.contracts;
+      const { locator, hashConsensus, lido } = ctx.contracts;
 
       const totalValueArg = ether("1");
       const accruedLidoFeesArg = ether("0.1");
@@ -134,7 +132,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       const record = await vaultHub.vaultRecord(stakingVault);
       expect(record.report.totalValue).to.equal(ether("1"));
-      expect(record.locked).to.equal(ether("1"));
+      expect(record.minimalReserve).to.equal(slashingReserveArg);
+      expect(record.locked).to.equal(slashingReserveArg + (await lido.getPooledEthBySharesRoundUp(liabilitySharesArg)));
+
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
     });
   });
@@ -143,7 +143,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     beforeEach(async () => {
       // Spoil the report freshness
       await advanceChainTime((await vaultHub.REPORT_FRESHNESS_DELTA()) + 100n);
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
 
       const maxStakeLimit = ether("0.5");
       const sender = await impersonate(randomAddress(), maxStakeLimit + ether("1"));
@@ -157,7 +157,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     });
 
     it("Can't mint until brings the fresh report", async () => {
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, ether("1"))).to.be.revertedWithCustomError(
+      const { lido } = ctx.contracts;
+
+      await expect(dashboard.mintStETH(stranger, ether("1"))).to.be.revertedWithCustomError(
         vaultHub,
         "VaultReportStale",
       );
@@ -165,27 +167,27 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await reportVaultDataWithProof(ctx, stakingVault);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, ether("2.1"))).to.be.revertedWithCustomError(
+      await expect(dashboard.mintStETH(stranger, ether("2.1"))).to.be.revertedWithCustomError(
         dashboard,
         "ExceedsMintingCapacity",
       );
 
       const etherToMint = ether("0.1");
-      const sharesToMint = await ctx.contracts.lido.getSharesByPooledEth(etherToMint);
-      await expect(dashboard.connect(roles.minter).mintStETH(stranger, etherToMint))
+      const sharesToMint = await lido.getSharesByPooledEth(etherToMint);
+      await expect(dashboard.mintStETH(stranger, etherToMint))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, sharesToMint, ether("1"));
+        .withArgs(stakingVault, sharesToMint, ether("1") + (await lido.getPooledEthBySharesRoundUp(sharesToMint)));
     });
 
     it("Can't withdraw until brings the fresh report", async () => {
-      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3"))).to.be.revertedWithCustomError(
+      await expect(dashboard.withdraw(stranger, ether("0.3"))).to.be.revertedWithCustomError(
         vaultHub,
         "VaultReportStale",
       );
 
       await reportVaultDataWithProof(ctx, stakingVault);
 
-      await expect(dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3")))
+      await expect(dashboard.withdraw(stranger, ether("0.3")))
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(stranger, ether("0.3"));
     });
@@ -199,10 +201,30 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
     });
 
+    it("Forbids double reporting", async () => {
+      await reportVaultDataWithProof(ctx, stakingVault);
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+      await expect(
+        reportVaultDataWithProof(ctx, stakingVault, { updateReportData: false }),
+      ).to.be.revertedWithCustomError(lazyOracle, "VaultReportIsFreshEnough");
+    });
+
+    it("Forbids double reporting even if report is stale", async () => {
+      await reportVaultDataWithProof(ctx, stakingVault);
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+
+      await advanceChainTime((await vaultHub.REPORT_FRESHNESS_DELTA()) + 100n);
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
+
+      await expect(
+        reportVaultDataWithProof(ctx, stakingVault, { updateReportData: false }),
+      ).to.be.revertedWithCustomError(lazyOracle, "VaultReportIsFreshEnough");
+    });
+
     it("Should allow huge totalValue increase using SAFE funding", async () => {
       const hugeValue = ether("1000");
 
-      await dashboard.connect(roles.funder).fund({ value: hugeValue });
+      await dashboard.fund({ value: hugeValue });
 
       await reportVaultDataWithProof(ctx, stakingVault);
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
@@ -293,7 +315,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       // safe deposit in the middle of quarantine period
       await advanceChainTime(quarantinePeriod / 2n);
 
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
 
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
 
@@ -338,7 +360,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
       // safe deposit after last refslot
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
 
       await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("1") + value });
@@ -368,10 +390,10 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(quarantine.isActive).to.equal(true);
 
       // safe deposit and withdrawal in the middle of quarantine period
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
 
-      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3"));
+      await dashboard.withdraw(stranger, ether("0.3"));
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7"));
 
       // end of quarantine period ------------------------------
@@ -406,7 +428,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       // safe deposit in the middle of quarantine period
       await advanceChainTime(quarantinePeriod / 2n);
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
 
       await advanceChainTime(quarantinePeriod / 2n - 60n * 60n);
@@ -427,7 +449,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
 
-      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.3"));
+      await dashboard.withdraw(stranger, ether("0.3"));
       expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1.7"));
 
       await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("2") + value });
@@ -589,12 +611,15 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     });
 
     it("Sanity check for dynamic total value underflow", async () => {
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
+
+      await advanceChainTime(days(1n));
+
       await reportVaultDataWithProof(ctx, stakingVault);
 
       await advanceChainTime(days(1n));
 
-      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
+      await dashboard.withdraw(stranger, ether("0.1"));
 
       // int256(_totalValue) + curInOutDelta - _inOutDelta < 0
       await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: 0n })).to.be.revertedWithCustomError(
@@ -615,7 +640,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(record.inOutDelta[1].valueOnRefSlot).to.equal(0);
       expect(record.inOutDelta[1].refSlot).to.equal(0);
 
-      await dashboard.connect(roles.funder).fund({ value: value });
+      await dashboard.fund({ value: value });
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].valueOnRefSlot).to.equal(0);
@@ -625,7 +650,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(record.inOutDelta[1].refSlot).to.equal(refSlot);
 
       // second deposit in frame
-      await dashboard.connect(roles.funder).fund({ value: value });
+      await dashboard.fund({ value: value });
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[1].valueOnRefSlot).to.equal(ether("1"));
@@ -635,7 +660,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     it("InOutDelta cache in withdraw", async () => {
       const value = ether("1.234");
 
-      await dashboard.connect(roles.funder).fund({ value: value });
+      await dashboard.fund({ value: value });
 
       let [refSlot] = await ctx.contracts.hashConsensus.getCurrentFrame();
       let record = await vaultHub.vaultRecord(stakingVault);
@@ -646,7 +671,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await reportVaultDataWithProof(ctx, stakingVault);
 
       // first withdraw in frame
-      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
+      await dashboard.withdraw(stranger, ether("0.1"));
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].valueOnRefSlot).to.equal(value + ether("1"));
@@ -654,7 +679,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       expect(record.inOutDelta[0].refSlot).to.equal(refSlot);
 
       // second withdraw in frame
-      await dashboard.connect(roles.withdrawer).withdraw(stranger, ether("0.1"));
+      await dashboard.withdraw(stranger, ether("0.1"));
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].valueOnRefSlot).to.equal(value + ether("1"));
@@ -686,7 +711,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       // FRAME 1 -----------------------------------------------
       // fund in frame 1 - init cache
-      await dashboard.connect(roles.funder).fund({ value: ether("10") });
+      await dashboard.fund({ value: ether("10") });
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[1].value).to.equal(ether("11"));
@@ -740,7 +765,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       // FRAME 1 -----------------------------------------------
       // fund in frame 1 - init cache
-      await dashboard.connect(roles.funder).fund({ value: ether("10") });
+      await dashboard.fund({ value: ether("10") });
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[1].value).to.equal(ether("11"));
@@ -758,7 +783,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
 
       // FRAME 2 -----------------------------------------------
       // fund in frame 2
-      await dashboard.connect(roles.funder).fund({ value: ether("10") });
+      await dashboard.fund({ value: ether("10") });
 
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.inOutDelta[0].value).to.equal(ether("21"));
@@ -788,6 +813,113 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.report.totalValue).to.equal(ether("11"));
       expect(record.report.inOutDelta).to.equal(ether("11"));
+    });
+
+    describe("Cumulative Lido fees sanity checks", () => {
+      beforeEach(async () => {
+        // Set up initial state with some settled fees to test against
+        await reportVaultDataWithProof(ctx, stakingVault, {
+          accruedLidoFees: ether("5"),
+        });
+
+        // Advance time to make reports stale again for subsequent tests
+        await advanceChainTime((await vaultHub.REPORT_FRESHNESS_DELTA()) + 100n);
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
+      });
+
+      it("Should reject report with cumulative Lido fees too low", async () => {
+        // Current cumulative fees are 5 ETH, trying to report 3 ETH should fail
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, {
+            accruedLidoFees: ether("3"),
+          }),
+        )
+          .to.be.revertedWithCustomError(lazyOracle, "CumulativeLidoFeesTooLow")
+          .withArgs(ether("3"), ether("5"));
+      });
+
+      it("Should accept report with same cumulative Lido fees (no change)", async () => {
+        // Same cumulative fees should be accepted
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, {
+            accruedLidoFees: ether("5"),
+          }),
+        ).to.not.be.reverted;
+
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+      });
+
+      it("Should accept report with valid cumulative Lido fees increase within rate limit", async () => {
+        const maxLidoFeeRatePerSecond = await lazyOracle.maxLidoFeeRatePerSecond();
+        const timeDelta = 3600n; // 1 hour
+        const maxFeeIncrease = maxLidoFeeRatePerSecond * timeDelta;
+        const validFeeIncrease = maxFeeIncrease / 2n; // Half of max allowed
+
+        // Report with timestamp 1 hour later and valid fee increase
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, {
+            accruedLidoFees: ether("5") + validFeeIncrease,
+            reportTimestamp: (await lazyOracle.latestReportTimestamp()) + timeDelta,
+          }),
+        ).to.not.be.reverted;
+
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+
+        const obligations = await vaultHub.vaultObligations(stakingVault);
+        expect(obligations.settledLidoFees + obligations.unsettledLidoFees).to.equal(ether("5") + validFeeIncrease);
+      });
+
+      it("Should reject report with cumulative Lido fees increase exceeding rate limit", async () => {
+        const maxLidoFeeRatePerSecond = await lazyOracle.maxLidoFeeRatePerSecond();
+        const timeDelta = 3600n; // 1 hour
+        const maxFeeIncrease = maxLidoFeeRatePerSecond * timeDelta;
+        const excessiveFeeIncrease = maxFeeIncrease + ether("1"); // Exceed limit by 1 ETH
+
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, {
+            accruedLidoFees: ether("5") + excessiveFeeIncrease,
+            reportTimestamp: (await lazyOracle.latestReportTimestamp()) + timeDelta,
+          }),
+        )
+          .to.be.revertedWithCustomError(lazyOracle, "CumulativeLidoFeesTooLarge")
+          .withArgs(excessiveFeeIncrease, maxFeeIncrease);
+      });
+
+      it("Should handle edge case: exactly at maximum allowed fee rate", async () => {
+        const maxLidoFeeRatePerSecond = await lazyOracle.maxLidoFeeRatePerSecond();
+        const timeDelta = 3600n; // 1 hour
+        const maxFeeIncrease = maxLidoFeeRatePerSecond * timeDelta;
+
+        // Report with exactly the maximum allowed fee increase
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, {
+            accruedLidoFees: ether("5") + maxFeeIncrease,
+            reportTimestamp: (await lazyOracle.latestReportTimestamp()) + timeDelta,
+          }),
+        ).to.not.be.reverted;
+
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+      });
+
+      it("Should handle large time delta with proportional fee increase", async () => {
+        const maxLidoFeeRatePerSecond = await lazyOracle.maxLidoFeeRatePerSecond();
+        const timeDelta = 365n * 24n * 60n * 60n; // 1 year
+        const maxFeeIncrease = maxLidoFeeRatePerSecond * timeDelta;
+        const validFeeIncrease = maxFeeIncrease - ether("1"); // Just under the limit
+
+        await advanceChainTime(timeDelta);
+
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, {
+            accruedLidoFees: ether("5") + validFeeIncrease,
+          }),
+        ).to.not.be.reverted;
+
+        const obligations = await vaultHub.vaultObligations(stakingVault);
+        expect(obligations.settledLidoFees + obligations.unsettledLidoFees).to.equal(ether("5") + validFeeIncrease);
+
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+      });
     });
   });
 });

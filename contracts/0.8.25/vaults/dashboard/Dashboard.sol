@@ -183,6 +183,14 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Returns tha amount of ether that is locked on the vault only as a reserve.
+     * @dev There is no way to mint stETH for it (it includes connection deposit and slashing reserve)
+     */
+    function minimalReserve() public view returns (uint256) {
+        return VAULT_HUB.vaultRecord(address(_stakingVault())).minimalReserve;
+    }
+
+    /**
      * @notice Returns the max total lockable amount of ether for the vault (excluding the Lido and node operator fees)
      */
     function maxLockableValue() public view returns (uint256) {
@@ -194,7 +202,7 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
-    function totalMintingCapacityShares() public view returns (uint256) {
+    function totalMintingCapacityShares() external view returns (uint256) {
         uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
 
         return Math256.min(effectiveShareLimit, _mintableShares(maxLockableValue()));
@@ -460,20 +468,6 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Compensates ether of disproven validator's predeposit from PDG to the recipient.
-     *         Can be called if validator which was predeposited via `PDG.predeposit` with vault funds
-     *         was frontrun by NO's with non-vault WC (effectively NO's stealing the predeposit) and then
-     *         proof of the validator's invalidity has been provided via `PDG.proveInvalidValidatorWC`.
-     * @param _pubkey of validator that was proven invalid in PDG
-     * @param _recipient address to receive the `PDG.PREDEPOSIT_AMOUNT`
-     * @dev PDG will revert if _recipient is vault address, use fund() instead to return ether to vault
-     * @dev requires the caller to have the `PDG_COMPENSATE_PREDEPOSIT_ROLE`
-     */
-    function compensateDisprovenPredepositFromPDG(bytes calldata _pubkey, address _recipient) external {
-        _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);
-    }
-
-    /**
      * @notice Recovers ERC20 tokens or ether from the dashboard contract to sender
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
@@ -620,10 +614,20 @@ contract Dashboard is NodeOperatorFee {
         _burnShares(unwrappedShares);
     }
 
-    /// @notice Calculates the total number of shares that can be minted by the vault
-    /// @param _ether The amount of ether to consider for minting
-    function _mintableShares(uint256 _ether) internal view returns (uint256) {
-        uint256 mintableStETH = (_ether * (TOTAL_BASIS_POINTS - reserveRatioBP())) / TOTAL_BASIS_POINTS;
+    /// @notice Calculates the total number of shares that that is possible to mint on the vault
+    /// @param _maxLockableValue The amount of ether that is possible to lock on the vault
+    function _mintableShares(uint256 _maxLockableValue) internal view returns (uint256) {
+        uint256 mintableStETH = (_maxLockableValue * (TOTAL_BASIS_POINTS - reserveRatioBP())) / TOTAL_BASIS_POINTS;
+        uint256 minimalReserve_ = minimalReserve();
+
+        if (_maxLockableValue < minimalReserve_) {
+            return 0;
+        }
+
+        if (_maxLockableValue - mintableStETH < minimalReserve_) {
+            mintableStETH = _maxLockableValue - minimalReserve_;
+        }
+
         return _getSharesByPooledEth(mintableStETH);
     }
 

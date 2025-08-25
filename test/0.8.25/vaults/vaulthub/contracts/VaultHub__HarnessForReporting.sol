@@ -70,7 +70,8 @@ contract VaultHub__HarnessForReporting is VaultHub {
             inOutDelta: [
                 DoubleRefSlotCache.Int104WithCache({value: 0, valueOnRefSlot: 0, refSlot: 0}),
                 DoubleRefSlotCache.Int104WithCache({value: 0, valueOnRefSlot: 0, refSlot: 0})
-            ]
+            ],
+            minimalReserve: 0
         });
 
         $.records[_vault] = record;

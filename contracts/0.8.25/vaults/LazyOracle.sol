@@ -23,6 +23,12 @@ import {DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "./lib/RefSlotCache.sol";
 contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     using DoubleRefSlotCache for DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH];
 
+    enum QuarantineState {
+        NO_QUARANTINE,      // No active quarantine
+        QUARANTINE_ACTIVE,  // Quarantine active, not expired
+        QUARANTINE_EXPIRED  // Quarantine period has passed
+    }
+
     /// @custom:storage-location erc7201:LazyOracle
     struct Storage {
         /// @notice root of the vaults data tree
@@ -37,6 +43,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint64 quarantinePeriod;
         /// @notice max reward ratio for refSlot-observed total value, basis points
         uint16 maxRewardRatioBP;
+        /// @notice max Lido fee rate per second, in wei
+        uint64 maxLidoFeeRatePerSecond;  // 64 bit is enough for up to 18 ETH/s
         /// @notice deposit quarantines for each vault
         mapping(address vault => Quarantine) vaultQuarantines;
     }
@@ -124,6 +132,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @dev basis points base
     uint256 private constant TOTAL_BASIS_POINTS = 100_00;
     uint256 private constant MAX_SANE_TOTAL_VALUE = type(uint96).max;
+    uint256 public constant MAX_QUARANTINE_PERIOD = 30 days;
+    /// @dev max value for reward ratio - it's about 650%
+    uint256 public constant MAX_REWARD_RATIO = type(uint16).max;
+    uint256 public constant MAX_LIDO_FEE_RATE_PER_SECOND = 10 ether;
 
     constructor(address _lidoLocator) {
         LIDO_LOCATOR = ILidoLocator(payable(_lidoLocator));
@@ -135,11 +147,12 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @param _admin Address of the admin
     /// @param _quarantinePeriod the quarantine period, seconds
     /// @param _maxRewardRatioBP the max reward ratio, basis points
-    function initialize(address _admin, uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) external initializer {
+    /// @param _maxLidoFeeRatePerSecond the max Lido fee rate per second
+    function initialize(address _admin, uint256 _quarantinePeriod, uint256 _maxRewardRatioBP, uint256 _maxLidoFeeRatePerSecond) external initializer {
         if (_admin == address(0)) revert AdminCannotBeZero();
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
 
-        _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP);
+        _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP, _maxLidoFeeRatePerSecond);
     }
 
     /// @notice returns the latest report data
@@ -147,24 +160,29 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @return refSlot of the report
     /// @return treeRoot merkle root of the report
     /// @return reportCid IPFS CID for the report JSON file
-    function latestReportData() external view returns (uint64 timestamp, uint48 refSlot, bytes32 treeRoot, string memory reportCid) {
+    function latestReportData() external view returns (uint256 timestamp, uint256 refSlot, bytes32 treeRoot, string memory reportCid) {
         Storage storage $ = _storage();
         return ($.vaultsDataTimestamp, $.vaultsDataRefSlot, $.vaultsDataTreeRoot, $.vaultsDataReportCid);
     }
 
     /// @notice returns the latest report timestamp
-    function latestReportTimestamp() external view returns (uint64) {
+    function latestReportTimestamp() external view returns (uint256) {
         return _storage().vaultsDataTimestamp;
     }
 
     /// @notice returns the quarantine period
-    function quarantinePeriod() external view returns (uint64) {
+    function quarantinePeriod() external view returns (uint256) {
         return _storage().quarantinePeriod;
     }
 
     /// @notice returns the max reward ratio for refSlot total value, basis points
-    function maxRewardRatioBP() external view returns (uint16) {
+    function maxRewardRatioBP() external view returns (uint256) {
         return _storage().maxRewardRatioBP;
+    }
+
+    /// @notice returns the max Lido fee rate per second, in ether
+    function maxLidoFeeRatePerSecond() external view returns (uint256) {
+        return _storage().maxLidoFeeRatePerSecond;
     }
 
     /// @notice returns the quarantine info for the vault
@@ -232,11 +250,13 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @notice update the sanity parameters
     /// @param _quarantinePeriod the quarantine period
     /// @param _maxRewardRatioBP the max EL CL rewards
+    /// @param _maxLidoFeeRatePerSecond the max Lido fee rate per second
     function updateSanityParams(
-        uint64 _quarantinePeriod,
-        uint16 _maxRewardRatioBP
+        uint256 _quarantinePeriod,
+        uint256 _maxRewardRatioBP,
+        uint256 _maxLidoFeeRatePerSecond
     ) external onlyRole(UPDATE_SANITY_PARAMS_ROLE) {
-        _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP);
+        _updateSanityParams(_quarantinePeriod, _maxRewardRatioBP, _maxLidoFeeRatePerSecond);
     }
 
     /// @notice Store the report root and its meta information
@@ -290,12 +310,13 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         );
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
+        uint256 vaultsDataTimestamp = _storage().vaultsDataTimestamp;
         int256 inOutDelta;
-        (_totalValue, inOutDelta) = _handleSanityChecks(_vault, _totalValue, _storage().vaultsDataRefSlot);
+        (_totalValue, inOutDelta) = _handleSanityChecks(_vault, _totalValue, _storage().vaultsDataRefSlot, vaultsDataTimestamp, _cumulativeLidoFees);
 
         _vaultHub().applyVaultReport(
             _vault,
-            _storage().vaultsDataTimestamp,
+            vaultsDataTimestamp,
             _totalValue,
             inOutDelta,
             _cumulativeLidoFees,
@@ -304,21 +325,36 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         );
     }
 
+    /// @notice removes the quarantine for the vault
+    /// @param _vault the address of the vault
+    function removeVaultQuarantine(address _vault) external {
+        if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized();
+
+        mapping(address => Quarantine) storage quarantines = _storage().vaultQuarantines;
+        if (quarantines[_vault].pendingTotalValueIncrease > 0) {
+            emit QuarantineRemoved(_vault);
+        }
+        delete quarantines[_vault];
+    }
+
     /// @notice handle sanity checks for the vault lazy report data
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault in refSlot
     /// @param _reportRefSlot the refSlot of the report
+    /// @param _reportTimestamp the timestamp of the report
+    /// @param _cumulativeLidoFees the cumulative Lido fees accrued on the vault (nominated in ether)
     /// @return totalValueWithoutQuarantine the smoothed total value of the vault after sanity checks
     /// @return inOutDeltaOnRefSlot the inOutDelta in the refSlot
-    function _handleSanityChecks(address _vault, uint256 _totalValue, uint48 _reportRefSlot)
+    function _handleSanityChecks(address _vault, uint256 _totalValue, uint48 _reportRefSlot, uint256 _reportTimestamp, uint256 _cumulativeLidoFees)
         internal
         returns (uint256 totalValueWithoutQuarantine, int256 inOutDeltaOnRefSlot)
     {
         VaultHub vaultHub = _vaultHub();
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
+        VaultHub.VaultObligations memory obligations = vaultHub.vaultObligations(_vault); // TODO - take from record
 
         // 0. Check if the report is already fresh enough
-        if (vaultHub.isReportFresh(_vault)) {
+        if (uint48(_reportTimestamp) <= record.report.timestamp) {
             revert VaultReportIsFreshEnough();
         }
 
@@ -333,8 +369,54 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         if (int256(totalValueWithoutQuarantine) + currentInOutDelta - inOutDeltaOnRefSlot < 0) {
             revert UnderflowInTotalValueCalculation();
         }
+
+        // 4. Sanity check for cumulative Lido fees
+        uint256 previousCumulativeLidoFees = obligations.settledLidoFees + obligations.unsettledLidoFees;
+        if (previousCumulativeLidoFees > _cumulativeLidoFees) {
+            revert CumulativeLidoFeesTooLow(_cumulativeLidoFees, previousCumulativeLidoFees);
+        }
+        uint256 maxLidoFees = (_storage().vaultsDataTimestamp - record.report.timestamp) * uint256(_storage().maxLidoFeeRatePerSecond);
+        if (_cumulativeLidoFees - previousCumulativeLidoFees > maxLidoFees) {
+            revert CumulativeLidoFeesTooLarge(_cumulativeLidoFees - previousCumulativeLidoFees, maxLidoFees);
+        }
     }
 
+    /*
+        Quarantine State Diagram
+
+        States:
+        • NO_QUARANTINE: No active quarantine, all value is immediately available
+        • QUARANTINE_ACTIVE: Total value increase is quarantined, waiting for expiration
+        • QUARANTINE_EXPIRED: Quarantine period passed, quarantined value can be released
+
+        ┌─────────────────┐                              ┌──────────────────┐
+        │  NO_QUARANTINE  │ reported > threshold         │QUARANTINE_ACTIVE │
+        │                 ├─────────────────────────────►│                  │
+        │  quarantined=0  │                              │  quarantined>0   │
+        │  startTime=0    │◄─────────────────────────────┤  startTime>0     │
+        │                 |                              │  time<expiration |
+        └─────────────────┘ reported ≤ threshold         └───┬──────────────┘
+                ▲         (early release)                    │       ▲
+                │                                            │       │  increase > quarantined + rewards
+                │                          time ≥            │       │  (release old, start new)
+                │                          quarantine period │       │
+                │                                            ▼       │
+                │                                      ┌─────────────┴────────┐
+                │ reported ≤ threshold OR              │  QUARANTINE_EXPIRED  │
+                │ increase ≤ quarantined + rewards     │                      │
+                │                                      │  quarantined>0       │
+                │                                      │  startTime>0         │
+                └──────────────────────────────────────┤  time>=expiration    │
+                                                       └──────────────────────┘
+
+        Legend:
+        • threshold = onchainTotalValue * (100% + maxRewardRatio)
+        • increase = reportedTotalValue - onchainTotalValue
+        • quarantined - total value increase that is currently quarantined
+        • rewards - expected EL/CL rewards based on maxRewardRatio
+        • time = block.timestamp
+        • expiration = quarantine.startTimestamp + quarantinePeriod
+    */
     function _processTotalValue(
         address _vault,
         uint256 _reportedTotalValue,
@@ -345,48 +427,105 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             revert TotalValueTooLarge();
         }
 
-        Storage storage $ = _storage();
+        // Calculate base values for quarantine logic -------------------------
+        // --------------------------------------------------------------------
 
-        // total value from the previous report with inOutDelta correction till the current refSlot
-        // it does not include CL difference and EL rewards for the period
+        // 0. Read storage values
+        Storage storage $ = _storage();
+        Quarantine storage quarantine = $.vaultQuarantines[_vault];
+        uint256 quarantinedValue = quarantine.pendingTotalValueIncrease;
+        // 1. Onchain total value on refSlot, it does not include CL difference and EL rewards for the period
         uint256 onchainTotalValueOnRefSlot =
             uint256(int256(uint256(record.report.totalValue)) + _inOutDeltaOnRefSlot - record.report.inOutDelta);
-        // some percentage of funds hasn't passed through the vault's balance is allowed for the EL and CL rewards handling
-        uint256 maxSaneTotalValue = onchainTotalValueOnRefSlot *
-            (TOTAL_BASIS_POINTS + $.maxRewardRatioBP) / TOTAL_BASIS_POINTS;
+        // 2. Some percentage of funds that haven’t passed through the vault’s balance is allowed for handling EL and CL rewards.
+        // NB: allowed amount of rewards is not scaled by time here, because:
+        // - if we set a small per-day percentage, honest vaults receiving unexpectedly high MEV would get quarantined;
+        // - if we set a large per-day percentage, a vault that hasn’t reported for a long time could bypass quarantine;
+        // As a result, we would need to impose very tiny limits for non-quarantine percentage — which would complicate the logic
+        // without bringing meaningful improvements.
+        uint256 quarantineThreshold =
+            onchainTotalValueOnRefSlot * (TOTAL_BASIS_POINTS + $.maxRewardRatioBP) / TOTAL_BASIS_POINTS;
+        // 3. Determine current quarantine state
+        QuarantineState currentState = _determineQuarantineState(quarantine, quarantinedValue, $);
 
-        if (_reportedTotalValue > maxSaneTotalValue) {
-            Quarantine storage q = $.vaultQuarantines[_vault];
-            uint64 reportTs = $.vaultsDataTimestamp;
-            uint128 quarDelta = q.pendingTotalValueIncrease;
-            uint128 delta = uint128(_reportedTotalValue - onchainTotalValueOnRefSlot);
 
-            if (quarDelta == 0) { // first overlimit report
-                _reportedTotalValue = onchainTotalValueOnRefSlot;
-                q.pendingTotalValueIncrease = delta;
-                q.startTimestamp = reportTs;
-                emit QuarantinedDeposit(_vault, delta);
-            } else if (reportTs - q.startTimestamp < $.quarantinePeriod) { // quarantine not expired
-                _reportedTotalValue = onchainTotalValueOnRefSlot;
-            } else if (delta <= quarDelta + onchainTotalValueOnRefSlot * $.maxRewardRatioBP / TOTAL_BASIS_POINTS) { // quarantine expired
-                q.pendingTotalValueIncrease = 0;
-                emit QuarantineExpired(_vault, delta);
-            } else { // start new quarantine
-                _reportedTotalValue = onchainTotalValueOnRefSlot + quarDelta;
-                q.pendingTotalValueIncrease = delta - quarDelta;
-                q.startTimestamp = reportTs;
-                emit QuarantinedDeposit(_vault, delta - quarDelta);
+        // Execute logic based on current state and conditions ----------------
+        // --------------------------------------------------------------------
+
+        if (currentState == QuarantineState.NO_QUARANTINE) {
+            if (_reportedTotalValue <= quarantineThreshold) {
+                // Transition: NO_QUARANTINE → NO_QUARANTINE (no change needed)
+                return _reportedTotalValue;
+            } else {
+                // Transition: NO_QUARANTINE → QUARANTINE_ACTIVE (start new quarantine)
+                _startNewQuarantine(_vault, quarantine, _reportedTotalValue - onchainTotalValueOnRefSlot, $.vaultsDataTimestamp);
+                return onchainTotalValueOnRefSlot;
+            }
+        } else if (currentState == QuarantineState.QUARANTINE_ACTIVE) {
+            if (_reportedTotalValue <= quarantineThreshold) {
+                // Transition: QUARANTINE_ACTIVE → NO_QUARANTINE (release quarantine early)
+                delete $.vaultQuarantines[_vault];
+                emit QuarantineReleased(_vault, 0);
+                return _reportedTotalValue;
+            } else {
+                // Transition: QUARANTINE_ACTIVE → QUARANTINE_ACTIVE (maintain quarantine)
+                return onchainTotalValueOnRefSlot;
+            }
+        } else { // QuarantineState.QUARANTINE_EXPIRED
+            uint256 totalValueIncrease = _reportedTotalValue > onchainTotalValueOnRefSlot
+                ? _reportedTotalValue - onchainTotalValueOnRefSlot
+                : 0;
+            uint256 maxIncreaseWithRewards = quarantinedValue +
+                (onchainTotalValueOnRefSlot + quarantinedValue) * $.maxRewardRatioBP / TOTAL_BASIS_POINTS;
+
+            if (_reportedTotalValue <= quarantineThreshold || totalValueIncrease <= maxIncreaseWithRewards) {
+                // Transition: QUARANTINE_EXPIRED → NO_QUARANTINE (release and accept all)
+                delete $.vaultQuarantines[_vault];
+                emit QuarantineReleased(_vault, _reportedTotalValue <= quarantineThreshold ? 0 : totalValueIncrease);
+                return _reportedTotalValue;
+            } else {
+                // Transition: QUARANTINE_EXPIRED → QUARANTINE_ACTIVE (release old, start new)
+                emit QuarantineReleased(_vault, quarantinedValue);
+                _startNewQuarantine(_vault, quarantine, totalValueIncrease - quarantinedValue, $.vaultsDataTimestamp);
+                return onchainTotalValueOnRefSlot + quarantinedValue;
             }
         }
-
-        return _reportedTotalValue;
     }
 
-    function _updateSanityParams(uint64 _quarantinePeriod, uint16 _maxRewardRatioBP) internal {
+    function _determineQuarantineState(
+        Quarantine storage _quarantine,
+        uint256 _quarantinedValue,
+        Storage storage $
+    ) internal view returns (QuarantineState) {
+        if (_quarantinedValue == 0) {
+            return QuarantineState.NO_QUARANTINE;
+        }
+
+        bool isQuarantineExpired = ($.vaultsDataTimestamp - _quarantine.startTimestamp) >= $.quarantinePeriod;
+        return isQuarantineExpired ? QuarantineState.QUARANTINE_EXPIRED : QuarantineState.QUARANTINE_ACTIVE;
+    }
+
+    function _startNewQuarantine(
+        address _vault,
+        Quarantine storage _quarantine,
+        uint256 _amountToQuarantine,
+        uint64 _currentTimestamp
+    ) internal {
+        _quarantine.pendingTotalValueIncrease = uint128(_amountToQuarantine);
+        _quarantine.startTimestamp = _currentTimestamp;
+        emit QuarantineActivated(_vault, _amountToQuarantine);
+    }
+
+    function _updateSanityParams(uint256 _quarantinePeriod, uint256 _maxRewardRatioBP, uint256 _maxLidoFeeRatePerSecond) internal {
+        if (_quarantinePeriod > MAX_QUARANTINE_PERIOD) revert QuarantinePeriodTooLarge(_quarantinePeriod, MAX_QUARANTINE_PERIOD);
+        if (_maxRewardRatioBP > MAX_REWARD_RATIO) revert MaxRewardRatioTooLarge(_maxRewardRatioBP, MAX_REWARD_RATIO);
+        if (_maxLidoFeeRatePerSecond > MAX_LIDO_FEE_RATE_PER_SECOND) revert MaxLidoFeeRatePerSecondTooLarge(_maxLidoFeeRatePerSecond, MAX_LIDO_FEE_RATE_PER_SECOND);
+
         Storage storage $ = _storage();
-        $.quarantinePeriod = _quarantinePeriod;
-        $.maxRewardRatioBP = _maxRewardRatioBP;
-        emit SanityParamsUpdated(_quarantinePeriod, _maxRewardRatioBP);
+        $.quarantinePeriod = uint64(_quarantinePeriod);
+        $.maxRewardRatioBP = uint16(_maxRewardRatioBP);
+        $.maxLidoFeeRatePerSecond = uint64(_maxLidoFeeRatePerSecond);
+        emit SanityParamsUpdated(_quarantinePeriod, _maxRewardRatioBP, _maxLidoFeeRatePerSecond);
     }
 
     function _mintableStETH(address _vault) internal view returns (uint256) {
@@ -416,9 +555,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     }
 
     event VaultsReportDataUpdated(uint256 indexed timestamp, uint256 indexed refSlot, bytes32 indexed root, string cid);
-    event QuarantinedDeposit(address indexed vault, uint128 delta);
-    event SanityParamsUpdated(uint64 quarantinePeriod, uint16 maxRewardRatioBP);
-    event QuarantineExpired(address indexed vault, uint128 delta);
+    event QuarantineActivated(address indexed vault, uint256 delta);
+    event QuarantineReleased(address indexed vault, uint256 delta);
+    event QuarantineRemoved(address indexed vault);
+    event SanityParamsUpdated(uint256 quarantinePeriod, uint256 maxRewardRatioBP, uint256 maxLidoFeeRatePerSecond);
 
     error AdminCannotBeZero();
     error NotAuthorized();
@@ -426,4 +566,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     error UnderflowInTotalValueCalculation();
     error TotalValueTooLarge();
     error VaultReportIsFreshEnough();
+    error CumulativeLidoFeesTooLow(uint256 reportingFees, uint256 previousFees);
+    error CumulativeLidoFeesTooLarge(uint256 feeIncrease, uint256 maxFeeIncrease);
+    error QuarantinePeriodTooLarge(uint256 quarantinePeriod, uint256 maxQuarantinePeriod);
+    error MaxRewardRatioTooLarge(uint256 rewardRatio, uint256 maxRewardRatio);
+    error MaxLidoFeeRatePerSecondTooLarge(uint256 feeRate, uint256 maxFeeRate);
 }

@@ -3,28 +3,28 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, StakingVault, VaultHub } from "typechain-types";
+import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
-import { ether } from "lib";
+import { days, ether } from "lib";
 import {
-  autofillRoles,
   createVaultWithDashboard,
   getProtocolContext,
   ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-  VaultRoles,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
 describe("Integration: Vault hub beacon deposits pause flows", () => {
   let ctx: ProtocolContext;
+  let originalSnapshot: string;
+  let snapshot: string;
 
   let vaultHub: VaultHub;
   let stakingVault: StakingVault;
   let dashboard: Dashboard;
-  let roles: VaultRoles;
+  let lazyOracle: LazyOracle;
 
   let stakingVaultAddress: string;
 
@@ -33,9 +33,6 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
   let agentSigner: HardhatEthersSigner;
   let redemptionMaster: HardhatEthersSigner;
 
-  let originalSnapshot: string;
-  let snapshot: string;
-
   before(async () => {
     ctx = await getProtocolContext();
 
@@ -43,7 +40,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
 
     await setupLidoForVaults(ctx);
 
-    ({ vaultHub } = ctx.contracts);
+    ({ vaultHub, lazyOracle } = ctx.contracts);
 
     [owner, nodeOperator, redemptionMaster] = await ethers.getSigners();
 
@@ -54,22 +51,22 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       owner,
       nodeOperator,
       nodeOperator,
-      [],
     ));
 
-    roles = await autofillRoles(dashboard, nodeOperator);
+    dashboard = dashboard.connect(owner);
 
     stakingVaultAddress = await stakingVault.getAddress();
 
     agentSigner = await ctx.getSigner("agent");
 
+    // set maximum fee rate per second to 1 ether to allow rapid fee increases
+    await lazyOracle.connect(agentSigner).updateSanityParams(days(30n), 1000n, 1000000000000000000n);
+
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), redemptionMaster);
   });
 
   after(async () => await Snapshot.restore(originalSnapshot));
-
   beforeEach(async () => (snapshot = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(snapshot));
 
   context("Manual pause", () => {
@@ -122,8 +119,8 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
     });
 
     it("Pause beacon deposits on setting redemptions obligations", async () => {
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
-      await dashboard.connect(roles.minter).mintShares(roles.burner, ether("1"));
+      await dashboard.fund({ value: ether("1") });
+      await dashboard.mintStETH(agentSigner, ether("1"));
 
       await expect(vaultHub.connect(redemptionMaster).setVaultRedemptions(stakingVaultAddress, ether("1"))).to.emit(
         stakingVault,
@@ -138,7 +135,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       );
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
 
       await expect(vaultHub.settleVaultObligations(stakingVaultAddress)).to.emit(
         stakingVault,
@@ -154,7 +151,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       );
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
 
       await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") })).to.emit(
         stakingVault,
@@ -179,7 +176,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       // Check that owner now pauses the vault
       expect((await vaultHub.vaultConnection(stakingVaultAddress)).isBeaconDepositsManuallyPaused).to.be.true;
 
-      await dashboard.connect(roles.funder).fund({ value: ether("1") });
+      await dashboard.fund({ value: ether("1") });
 
       // Check that even if obligation settled vault is still paused
       await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") }))

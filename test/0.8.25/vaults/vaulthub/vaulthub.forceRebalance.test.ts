@@ -31,6 +31,7 @@ const NODE_OPERATOR_FEE = 1_00n;
 const CONFIRM_EXPIRY = 24 * 60 * 60;
 const QUARANTINE_PERIOD = 259200;
 const MAX_REWARD_RATIO_BP = 350;
+const MAX_SANE_LIDO_FEES_PER_SECOND = 1000000000000000000n;
 
 describe("VaultHub.sol:forceRebalance", () => {
   let deployer: HardhatEthersSigner;
@@ -78,7 +79,7 @@ describe("VaultHub.sol:forceRebalance", () => {
       new Uint8Array(),
     ]);
     lazyOracle = await ethers.getContractAt("LazyOracle", lazyOracleProxy);
-    await lazyOracle.initialize(deployer, QUARANTINE_PERIOD, MAX_REWARD_RATIO_BP);
+    await lazyOracle.initialize(deployer, QUARANTINE_PERIOD, MAX_REWARD_RATIO_BP, MAX_SANE_LIDO_FEES_PER_SECOND);
 
     // VaultHub
     const vaultHubImpl = await ethers.deployContract("VaultHub", [
@@ -207,11 +208,12 @@ describe("VaultHub.sol:forceRebalance", () => {
         .connect(lazyOracleSigner)
         .applyVaultReport(vaultAddress, timestamp, ether("1"), ether("1"), 0n, 0n, 0n);
 
+      await vaultHub.connect(dashboardSigner).fund(vaultAddress, { value: ether("1") });
       await vaultHub.connect(dashboardSigner).mintShares(vaultAddress, user, ether("0.8"));
 
       await vaultHub
         .connect(lazyOracleSigner)
-        .applyVaultReport(vaultAddress, timestamp, ether("0.9"), ether("1"), 0n, ether("0.8"), 0n);
+        .applyVaultReport(vaultAddress, timestamp, ether("0.9"), ether("2"), 0n, ether("0.8"), 0n);
     });
 
     it("rebalances the vault with available balance", async () => {
@@ -232,15 +234,17 @@ describe("VaultHub.sol:forceRebalance", () => {
     });
 
     it("rebalances with maximum available amount if shortfall exceeds balance", async () => {
-      // Mint +0.5 ether of shares to the vault
+      // Mint +0.1 ether of shares to the vault
       await vaultHub.connect(dashboardSigner).fund(vaultAddress, { value: ether("1") });
-      await vaultHub.connect(dashboardSigner).mintShares(vaultAddress, user, ether("0.5"));
+      await vaultHub.connect(dashboardSigner).mintShares(vaultAddress, user, ether("0.1"));
 
-      expect(await vaultHub.liabilityShares(vaultAddress)).to.equal(ether("1.3"));
+      expect(await vaultHub.liabilityShares(vaultAddress)).to.equal(ether("0.9"));
 
       await vaultHub
         .connect(lazyOracleSigner)
-        .applyVaultReport(vaultAddress, timestamp, ether("1.5"), ether("2"), 0n, ether("1.3"), 0n);
+        .applyVaultReport(vaultAddress, timestamp, ether("1"), ether("3"), 0n, ether("0.9"), 0n);
+
+      expect(await vaultHub.totalValue(vaultAddress)).to.equal(ether("1"));
 
       const sharesMintedBefore = await vaultHub.liabilityShares(vaultAddress);
       const shortfall = await vaultHub.rebalanceShortfall(vaultAddress);

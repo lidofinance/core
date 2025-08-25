@@ -22,6 +22,8 @@ export { norSdvtEnsureOperators } from "./nor-sdvt";
 export { calcNodeOperatorRewards } from "./staking-module";
 export {
   autofillRoles,
+  getRoleMethods,
+  calculateLockedValue,
   createVaultProxy,
   createVaultsReportTree,
   createVaultWithDashboard,
@@ -31,4 +33,5 @@ export {
   reportVaultDataWithProof,
   setupLidoForVaults,
   VaultRoles,
+  VaultRoleMethods,
 } from "./vaults";

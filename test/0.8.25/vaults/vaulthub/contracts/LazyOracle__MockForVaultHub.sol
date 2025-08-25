@@ -10,6 +10,16 @@ import "hardhat/console.sol";
 contract LazyOracle__MockForVaultHub {
     uint256 public latestReportTimestamp;
 
+    mapping(address vault => bool isQuarantined) public isVaultQuarantined;
+
+    function mock__setIsVaultQuarantined(address _vault, bool _isQuarantined) external {
+        isVaultQuarantined[_vault] = _isQuarantined;
+    }
+
+    function removeVaultQuarantine(address _vault) external {
+        delete isVaultQuarantined[_vault];
+    }
+
     function setLatestReportTimestamp(uint256 _timestamp) external {
         latestReportTimestamp = _timestamp;
     }

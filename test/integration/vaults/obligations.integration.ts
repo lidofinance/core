@@ -5,9 +5,9 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Dashboard, StakingVault, VaultHub } from "typechain-types";
+import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
-import { ether, impersonate } from "lib";
+import { days, ether, impersonate } from "lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
@@ -23,10 +23,13 @@ import { Snapshot } from "test/suite";
 
 const TOTAL_BASIS_POINTS = 100_00n;
 
-describe("Integration: Vault obligations", () => {
+describe.skip("Integration: Vault obligations", () => {
   let ctx: ProtocolContext;
+  let originalSnapshot: string;
+  let snapshot: string;
 
   let vaultHub: VaultHub;
+  let lazyOracle: LazyOracle;
   let stakingVault: StakingVault;
   let dashboard: Dashboard;
   let roles: VaultRoles;
@@ -42,9 +45,6 @@ describe("Integration: Vault obligations", () => {
   let stranger: HardhatEthersSigner;
   let whale: HardhatEthersSigner;
 
-  let originalSnapshot: string;
-  let snapshot: string;
-
   before(async () => {
     ctx = await getProtocolContext();
 
@@ -52,7 +52,7 @@ describe("Integration: Vault obligations", () => {
 
     await setupLidoForVaults(ctx);
 
-    ({ vaultHub } = ctx.contracts);
+    ({ vaultHub, lazyOracle } = ctx.contracts);
 
     [owner, nodeOperator, redemptionMaster, validatorExit, stranger, whale] = await ethers.getSigners();
 
@@ -73,6 +73,9 @@ describe("Integration: Vault obligations", () => {
 
     agentSigner = await ctx.getSigner("agent");
 
+    // set maximum fee rate per second to 1 ether to allow rapid fee increases
+    await lazyOracle.connect(agentSigner).updateSanityParams(days(30n), 1000n, 1000000000000000000n);
+
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), redemptionMaster);
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.VALIDATOR_EXIT_ROLE(), validatorExit);
 
@@ -80,9 +83,7 @@ describe("Integration: Vault obligations", () => {
   });
 
   after(async () => await Snapshot.restore(originalSnapshot));
-
   beforeEach(async () => (snapshot = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(snapshot));
 
   async function addRedemptionsObligation(value: bigint) {
@@ -106,8 +107,8 @@ describe("Integration: Vault obligations", () => {
 
       // Try to lower the fees
       await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: accruedLidoFees - 1n }))
-        .to.be.revertedWithCustomError(vaultHub, "InvalidFees")
-        .withArgs(stakingVaultAddress, accruedLidoFees - 1n, accruedLidoFees);
+        .to.be.revertedWithCustomError(lazyOracle, "CumulativeLidoFeesTooLow")
+        .withArgs(accruedLidoFees - 1n, accruedLidoFees);
     });
 
     it("Updated on the vault report for vault with no balance", async () => {

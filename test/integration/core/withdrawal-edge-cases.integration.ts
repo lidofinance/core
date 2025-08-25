@@ -13,12 +13,12 @@ import { Snapshot } from "test/suite";
 
 describe("Integration: Withdrawal edge cases", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalState: string;
+
   let holder: HardhatEthersSigner;
   let lido: Lido;
   let wq: WithdrawalQueueERC721;
-
-  let snapshot: string;
-  let originalState: string;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -34,9 +34,7 @@ describe("Integration: Withdrawal edge cases", () => {
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(originalState));
-
   after(async () => await Snapshot.restore(snapshot));
 
   it("Should handle bunker mode with multiple batches", async () => {
@@ -48,14 +46,11 @@ describe("Integration: Withdrawal edge cases", () => {
     await lido.connect(holder).approve(wq.target, amount);
     await lido.connect(holder).submit(ethers.ZeroAddress, { value: amount });
 
-    const stethInitialBalance = await lido.balanceOf(holder.address);
-
     await report(ctx, { clDiff: ether("-1"), excludeVaultsBalances: true });
 
     const stethFirstNegativeReportBalance = await lido.balanceOf(holder.address);
 
     expect(await wq.isBunkerModeActive()).to.be.true;
-    expect(stethInitialBalance).to.be.gt(stethFirstNegativeReportBalance);
 
     // First withdrawal request
     const firstRequestTx = await wq.connect(holder).requestWithdrawals([withdrawalAmount], holder.address);

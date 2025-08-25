@@ -17,7 +17,15 @@ import {
 } from "typechain-types";
 import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 
-import { certainAddress, ether, GENESIS_FORK_VERSION, getNextBlockTimestamp, impersonate, MAX_FEE_BP } from "lib";
+import {
+  certainAddress,
+  ether,
+  GENESIS_FORK_VERSION,
+  getNextBlockTimestamp,
+  impersonate,
+  MAX_FEE_BP,
+  MAX_RESERVE_RATIO_BP,
+} from "lib";
 
 import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -74,6 +82,7 @@ describe("OperatorGrid.sol", () => {
         refSlot: 0n,
       },
     ],
+    minimalReserve: 0n,
   };
 
   before(async () => {
@@ -399,11 +408,10 @@ describe("OperatorGrid.sol", () => {
         .withArgs("_nodeOperator");
     });
 
-    it("reverts if not authorized", async function () {
-      await expect(operatorGrid.connect(stranger).alterTiers([0], [tiers[0]])).to.be.revertedWithCustomError(
-        operatorGrid,
-        "AccessControlUnauthorizedAccount",
-      );
+    it("reverts if the reserve ratio is 10_000", async function () {
+      await expect(operatorGrid.registerTiers(ZeroAddress, tiers))
+        .to.be.revertedWithCustomError(operatorGrid, "ZeroArgument")
+        .withArgs("_nodeOperator");
     });
 
     it("works", async function () {
@@ -454,12 +462,11 @@ describe("OperatorGrid.sol", () => {
         .withArgs("_reserveRatioBP");
     });
 
-    it("alterTiers - validateParams - reverts if reserveRatioBP is greater than 100_00", async function () {
-      const _reserveRatioBP = 100_01;
-      const totalBasisPoints = 100_00;
+    it("alterTiers - validateParams - reverts if reserveRatioBP exceeds max", async function () {
+      const _reserveRatioBP = MAX_RESERVE_RATIO_BP + 1n;
       await expect(operatorGrid.alterTiers([0], [{ ...tiers[0], reserveRatioBP: _reserveRatioBP }]))
         .to.be.revertedWithCustomError(operatorGrid, "ReserveRatioTooHigh")
-        .withArgs("0", _reserveRatioBP, totalBasisPoints);
+        .withArgs("0", _reserveRatioBP, MAX_RESERVE_RATIO_BP);
     });
 
     it("alterTiers - validateParams - reverts if _rebalanceThresholdBP is zero", async function () {

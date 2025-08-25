@@ -99,6 +99,7 @@ describe("Dashboard.sol", () => {
         refSlot: 0n,
       },
     ],
+    minimalReserve: 0n,
   };
 
   const connection: Readonly<VaultHub.VaultConnectionStruct> = {
@@ -1101,32 +1102,6 @@ describe("Dashboard.sol", () => {
 
     it("proves unknown validators to PDG", async () => {
       await expect(dashboard.proveUnknownValidatorsToPDG(witnesses)).to.emit(hub, "Mock__ValidatorProvedToPDG");
-    });
-  });
-
-  context("compensateDisprovenPredepositFromPDG", () => {
-    let pdgWithdrawalSigner: HardhatEthersSigner;
-
-    beforeEach(async () => {
-      pdgWithdrawalSigner = await impersonate(certainAddress("pdg-withdrawal-signer"), ether("1"));
-      await dashboard.grantRole(await dashboard.PDG_COMPENSATE_PREDEPOSIT_ROLE(), pdgWithdrawalSigner);
-    });
-
-    it("reverts if called not by a PDG_COMPENSATE_PREDEPOSIT_ROLE", async () => {
-      await expect(
-        dashboard.connect(stranger).compensateDisprovenPredepositFromPDG(new Uint8Array(), vaultOwner),
-      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
-    });
-
-    it("calls the PDG contract to compensate the disproven predeposit", async () => {
-      const pubkey = new Uint8Array(32);
-      pubkey[0] = 1;
-
-      await expect(
-        dashboard.connect(pdgWithdrawalSigner).compensateDisprovenPredepositFromPDG(pubkey, pdgWithdrawalSigner),
-      )
-        .to.emit(hub, "Mock__CompensatedDisprovenPredepositFromPDG")
-        .withArgs(vault, pubkey, pdgWithdrawalSigner);
     });
   });
 
