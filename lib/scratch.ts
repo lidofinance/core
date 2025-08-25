@@ -4,7 +4,6 @@ import path from "node:path";
 import { ethers } from "hardhat";
 
 import { log } from "./log";
-import { resetStateFile } from "./state-file";
 
 class StepsFileNotFoundError extends Error {
   constructor(filePath: string) {
@@ -62,11 +61,10 @@ export async function deployUpgrade(networkName: string, stepsFile: string): Pro
   }
 }
 
-export async function deployScratchProtocol(networkName: string): Promise<void> {
+export async function deployScratchProtocol(): Promise<void> {
   const stepsFile = process.env.STEPS_FILE || "scratch/steps.json";
   const steps = loadSteps(stepsFile);
 
-  await resetStateFile(networkName);
   await applySteps(steps);
 }
 

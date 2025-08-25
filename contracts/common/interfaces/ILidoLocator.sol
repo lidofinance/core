@@ -19,8 +19,6 @@ interface ILidoLocator {
     function withdrawalVault() external view returns(address);
     function postTokenRebaseReceiver() external view returns(address);
     function oracleDaemonConfig() external view returns(address);
-    function validatorExitDelayVerifier() external view returns (address);
-    function triggerableWithdrawalsGateway() external view returns (address);
     function accounting() external view returns (address);
     function predepositGuarantee() external view returns (address);
     function wstETH() external view returns (address);

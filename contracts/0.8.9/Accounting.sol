@@ -159,7 +159,7 @@ contract Accounting {
         pre.totalShares = LIDO.getTotalShares();
         pre.externalShares = LIDO.getExternalShares();
         pre.externalEther = LIDO.getExternalEther();
-        pre.badDebtToInternalize = _contracts.vaultHub.badDebtToInternalizeAsOfLastRefSlot();
+        pre.badDebtToInternalize = _contracts.vaultHub.badDebtToInternalize();
     }
 
     /// @dev calculates all the state changes that is required to apply the report

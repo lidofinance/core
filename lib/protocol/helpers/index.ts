@@ -1,6 +1,8 @@
 export { depositAndReportValidators, ensureStakeLimit, unpauseStaking } from "./staking";
 
-export { finalizeWithdrawalQueue, unpauseWithdrawalQueue } from "./withdrawal";
+export { finalizeWQViaElVault, finalizeWQViaSubmit, unpauseWithdrawalQueue } from "./withdrawal";
+
+export { setMaxPositiveTokenRebase } from "./sanity-checker";
 
 export {
   calcReportDataHash,
@@ -20,6 +22,8 @@ export { norSdvtEnsureOperators } from "./nor-sdvt";
 export { calcNodeOperatorRewards } from "./staking-module";
 export {
   autofillRoles,
+  getRoleMethods,
+  calculateLockedValue,
   createVaultProxy,
   createVaultsReportTree,
   createVaultWithDashboard,
@@ -29,4 +33,7 @@ export {
   reportVaultDataWithProof,
   setupLidoForVaults,
   VaultRoles,
+  VaultRoleMethods,
 } from "./vaults";
+
+export * from "./operatorGrid";
