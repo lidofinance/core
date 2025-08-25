@@ -13,6 +13,7 @@ import {
   reportVaultDataWithProof,
   setupLidoForVaults,
 } from "lib/protocol";
+import { VAULT_CONNECTION_DEPOSIT } from "lib/protocol/helpers/vaults";
 import { ether } from "lib/units";
 
 import { Snapshot } from "test/suite";
@@ -109,6 +110,37 @@ describe("Integration: Vault with bad debt", () => {
 
       expect(await acceptorDashboard.liabilityShares()).to.be.equal(badDebtShares);
       expect(await vaultHub.isVaultHealthy(acceptorStakingVault)).to.be.equal(true);
+    });
+
+    it("Socialization bypasses limits using _bypassLimits flag", async () => {
+      await acceptorDashboard.connect(otherOwner).fund({ value: ether("10") });
+      const { vaultHub, lido, operatorGrid } = ctx.contracts;
+      const agentSigner = await ctx.getSigner("agent");
+
+      // Put acceptor vault in jail to test bypass functionality
+      await operatorGrid.connect(agentSigner).setVaultJailStatus(acceptorStakingVault, true);
+      expect(await operatorGrid.isVaultInJail(acceptorStakingVault)).to.be.true;
+
+      const badDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      // Socialization should succeed even though acceptor vault is in jail
+      // because socializeBadDebt uses _bypassLimits: true
+      await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, acceptorStakingVault, badDebtShares))
+        .to.emit(vaultHub, "BadDebtSocialized")
+        .withArgs(stakingVault, acceptorStakingVault, badDebtShares);
+
+      // Verify bad debt was transferred despite jail restriction
+      expect(await acceptorDashboard.liabilityShares()).to.equal(badDebtShares);
+      expect(await operatorGrid.isVaultInJail(acceptorStakingVault)).to.be.true; // Still in jail
+
+      // Verify operator grid counters are updated
+      const vaultInfo = await operatorGrid.vaultInfo(acceptorStakingVault);
+      const tier = await operatorGrid.tier(vaultInfo.tierId);
+      expect(tier.liabilityShares).to.equal(VAULT_CONNECTION_DEPOSIT + badDebtShares);
+
+      // Clean up jail status
+      await operatorGrid.connect(agentSigner).setVaultJailStatus(acceptorStakingVault, false);
     });
 
     it.skip("Socialization doesn't lead to bad debt in acceptor", async () => {

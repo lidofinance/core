@@ -1096,6 +1096,52 @@ describe("OperatorGrid.sol", () => {
       ).to.be.revertedWithCustomError(operatorGrid, "TierLimitExceeded");
     });
 
+    it("mintShares - should bypass tier limit check when _bypassLimits=true", async function () {
+      const shareLimit = 2000;
+      const tier_NO1_Id1 = 1;
+
+      const tiers2: TierParamsStruct[] = [
+        {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          forcedRebalanceThresholdBP: forcedRebalanceThreshold,
+          infraFeeBP: infraFee,
+          liquidityFeeBP: liquidityFee,
+          reservationFeeBP: reservationFee,
+        },
+      ];
+
+      await operatorGrid.registerGroup(nodeOperator1, shareLimit);
+      await operatorGrid.registerTiers(nodeOperator1, tiers2);
+
+      await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, tier_NO1_Id1, tierShareLimit);
+      await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, tier_NO1_Id1, tierShareLimit);
+
+      await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V2, tier_NO1_Id1, tierShareLimit);
+      await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V2, tier_NO1_Id1, tierShareLimit);
+
+      // Fill up the tier limit
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, tierShareLimit, false);
+
+      // Verify tier is at limit
+      const tierBefore = await operatorGrid.tier(tier_NO1_Id1);
+      expect(tierBefore.liabilityShares).to.equal(tierShareLimit);
+
+      // This should fail without bypass
+      await expect(
+        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, 1, false),
+      ).to.be.revertedWithCustomError(operatorGrid, "TierLimitExceeded");
+
+      // But should succeed with _bypassLimits=true
+      const exceedingAmount = 50;
+      await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V2, exceedingAmount, true)).to.not.be
+        .reverted;
+
+      // Verify shares were actually minted beyond the limit
+      const tierAfter = await operatorGrid.tier(tier_NO1_Id1);
+      expect(tierAfter.liabilityShares).to.equal(tierShareLimit + exceedingAmount);
+    });
+
     it("mintShares - group1=2000, group2=1000, g1Tier1=1000, g2Tier1=1000", async function () {
       const shareLimit = 2000;
       const shareLimit2 = 1000;
@@ -1194,6 +1240,117 @@ describe("OperatorGrid.sol", () => {
       await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, vaultShareLimit))
         .to.emit(vaultHub, "VaultConnectionUpdated")
         .withArgs(vault_NO1_V1, vaultShareLimit, 2000, 1800);
+    });
+  });
+
+  context("Bypass Limits (_bypassLimits flag)", () => {
+    const tierShareLimit = 1000;
+    const reserveRatio = 2000;
+    const forcedRebalanceThreshold = 1800;
+    const infraFee = 500;
+    const liquidityFee = 400;
+    const reservationFee = 100;
+
+    beforeEach(async () => {
+      await operatorGrid.registerGroup(nodeOperator1, 2000);
+      await operatorGrid.registerTiers(nodeOperator1, [
+        {
+          shareLimit: tierShareLimit,
+          reserveRatioBP: reserveRatio,
+          forcedRebalanceThresholdBP: forcedRebalanceThreshold,
+          infraFeeBP: infraFee,
+          liquidityFeeBP: liquidityFee,
+          reservationFeeBP: reservationFee,
+        },
+      ]);
+
+      await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, tierShareLimit);
+      await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, tierShareLimit);
+    });
+
+    it("should bypass jail restriction when _bypassLimits=true", async () => {
+      const vaultAddress = vault_NO1_V1.target;
+      const mintAmount = 100;
+
+      // Put vault in jail
+      await operatorGrid.setVaultJailStatus(vaultAddress, true);
+      expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.true;
+
+      // Normal minting should fail
+      await expect(
+        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, false),
+      ).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+
+      // But bypass should work
+      await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, true)).to.not.be
+        .reverted;
+
+      // Verify shares were minted
+      const tier = await operatorGrid.tier(1);
+      expect(tier.liabilityShares).to.equal(mintAmount);
+    });
+
+    it("should bypass tier limit when _bypassLimits=true", async () => {
+      const vaultAddress = vault_NO1_V1.target;
+
+      // Fill tier to capacity
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, tierShareLimit, false);
+
+      // Verify tier is at limit
+      const tierBefore = await operatorGrid.tier(1);
+      expect(tierBefore.liabilityShares).to.equal(tierShareLimit);
+
+      const exceedingAmount = 200;
+
+      // Normal minting should fail when exceeding tier limit
+      await expect(
+        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, exceedingAmount, false),
+      ).to.be.revertedWithCustomError(operatorGrid, "TierLimitExceeded");
+
+      // But bypass should work
+      await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, exceedingAmount, true)).to.not.be
+        .reverted;
+
+      // Verify shares were minted beyond the limit
+      const tierAfter = await operatorGrid.tier(1);
+      expect(tierAfter.liabilityShares).to.equal(tierShareLimit + exceedingAmount);
+    });
+
+    it("onMintedShares with _bypassLimits=true bypasses both jail and tier limit", async () => {
+      const vaultAddress = vault_NO1_V1.target;
+
+      // Put vault in jail
+      await operatorGrid.setVaultJailStatus(vaultAddress, true);
+      expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.true;
+
+      // Fill tier to capacity first (using bypass since vault is in jail)
+      await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, tierShareLimit, true);
+
+      // Verify tier is at limit
+      const tierBefore = await operatorGrid.tier(1);
+      expect(tierBefore.liabilityShares).to.equal(tierShareLimit);
+
+      // Now simulate socializeBadDebt by calling onMintedShares with bypass
+      // This should exceed tier limits but still update counters
+      const exceedingAmount = 300;
+      await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, exceedingAmount, true)).to.not.be
+        .reverted;
+
+      // Verify tier counters are still updated correctly despite bypass
+      const tierAfter = await operatorGrid.tier(1);
+      expect(tierAfter.liabilityShares).to.equal(tierShareLimit + exceedingAmount);
+
+      // Verify group counters are also updated
+      const groupAfter = await operatorGrid.group(nodeOperator1);
+      expect(groupAfter.liabilityShares).to.equal(tierShareLimit + exceedingAmount);
+
+      // Verify vault is still in jail
+      expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.true;
+
+      // Verify normal minting would still fail due to jail (even if tier had capacity)
+      await expect(
+        operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, 1, false),
+      ).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
     });
   });
 
@@ -1352,6 +1509,23 @@ describe("OperatorGrid.sol", () => {
 
         // Now minting should succeed
         await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, false)).to.not.be
+          .reverted;
+
+        // Verify shares were minted
+        const tier = await operatorGrid.tier(1);
+        expect(tier.liabilityShares).to.equal(mintAmount);
+      });
+
+      it("should allow onMintedShares with _bypassLimits=true even when vault is in jail", async () => {
+        const vaultAddress = vault_NO1_V1.target;
+        const mintAmount = 100;
+
+        // Put vault in jail
+        await operatorGrid.setVaultJailStatus(vaultAddress, true);
+        expect(await operatorGrid.isVaultInJail(vaultAddress)).to.be.true;
+
+        // Minting with _bypassLimits=true should succeed even when in jail
+        await expect(operatorGrid.connect(vaultHubAsSigner).onMintedShares(vaultAddress, mintAmount, true)).to.not.be
           .reverted;
 
         // Verify shares were minted
