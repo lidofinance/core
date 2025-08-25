@@ -575,8 +575,8 @@ contract VaultHub is PausableUntilWithRoles {
         _requireFreshReport(_badDebtVault, badDebtRecord);
         _requireFreshReport(_vaultAcceptor, acceptorRecord);
 
-        uint256 badDebt = _badDebt(badDebtRecord);
-        uint256 badDebtToSocialize = Math256.min(badDebt, _maxSharesToSocialize);
+        uint256 badDebtShares = _badDebtShares(badDebtRecord);
+        uint256 badDebtToSocialize = Math256.min(badDebtShares, _maxSharesToSocialize);
 
         uint256 acceptorTotalValueShares = _getSharesByPooledEth(_totalValue(acceptorRecord));
         uint256 acceptorLiabilityShares = acceptorRecord.liabilityShares;
@@ -623,8 +623,8 @@ contract VaultHub is PausableUntilWithRoles {
         _requireConnected(badDebtConnection, _badDebtVault);
         _requireFreshReport(_badDebtVault, badDebtRecord);
 
-        uint256 badDebt = _badDebt(badDebtRecord);
-        uint256 badDebtToInternalize_ = Math256.min(badDebt, _maxSharesToInternalize);
+        uint256 badDebtShares = _badDebtShares(badDebtRecord);
+        uint256 badDebtToInternalize_ = Math256.min(badDebtShares, _maxSharesToInternalize);
 
         if (badDebtToInternalize_ > 0) {
             _decreaseLiability(_badDebtVault, badDebtRecord, badDebtToInternalize_);
@@ -1111,7 +1111,7 @@ contract VaultHub is PausableUntilWithRoles {
         _operatorGrid().onBurnedShares(_vault, _amountOfShares);
     }
 
-    function _badDebt(VaultRecord storage _record) internal view returns (uint256) {
+    function _badDebtShares(VaultRecord storage _record) internal view returns (uint256) {
         uint256 liabilityShares_ = _record.liabilityShares;
         uint256 totalValueShares = _getSharesByPooledEth(_totalValue(_record));
 
