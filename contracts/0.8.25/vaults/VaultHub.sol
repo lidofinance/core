@@ -392,16 +392,13 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice updates a redemption shares on the vault to force liability rebalance under extreme conditions
     /// @param _vault The address of the vault
     /// @param _liabilitySharesTarget maximum amount of liability shares that will be preserved, the rest will be
-    ///                                  marked as redemption shares
+    ///                               marked as redemption shares
     function setLiabilitySharesTarget(address _vault, uint256 _liabilitySharesTarget) external onlyRole(REDEMPTION_MASTER_ROLE) {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        if (_liabilitySharesTarget > record.liabilityShares) {
-            revert TargetExceedsLiabilityShares(_vault, _liabilitySharesTarget, record.liabilityShares);
-        }
-
-        uint256 redemptionShares = record.liabilityShares - _liabilitySharesTarget;
+        uint256 liabilityShares_ = record.liabilityShares;
+        uint256 redemptionShares = liabilityShares_ > _liabilitySharesTarget ? liabilityShares_ - _liabilitySharesTarget : 0;
         record.redemptionShares = uint128(redemptionShares);
 
         _updateBeaconChainDepositsPause(_vault, record, connection);
@@ -1547,14 +1544,6 @@ contract VaultHub is PausableUntilWithRoles {
      * @param requested The amount attempting to withdraw
      */
     error AmountExceedsWithdrawableValue(address vault, uint256 withdrawable, uint256 requested);
-
-    /**
-     * @notice Thrown when attempting to set a target shares value that exceeds the liability shares
-     * @param vault The address of the vault
-     * @param targetShares The target shares value
-     * @param liabilityShares The liability shares value
-     */
-    error TargetExceedsLiabilityShares(address vault, uint256 targetShares, uint256 liabilityShares);
 
     error NoFundsForForceRebalance(address vault);
     error NoReasonForForceRebalance(address vault);

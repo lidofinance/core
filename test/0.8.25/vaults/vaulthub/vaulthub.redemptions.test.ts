@@ -55,12 +55,6 @@ describe("VaultHub.sol:redemptions", () => {
         .withArgs(disconnectedVault);
     });
 
-    it("reverts if target exceeds liability shares", async () => {
-      await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 1000n))
-        .to.be.revertedWithCustomError(vaultHub, "TargetExceedsLiabilityShares")
-        .withArgs(connectedVault, 1000n, 0n);
-    });
-
     it("sets redemption shares to all liability shares if target is 0", async () => {
       const liabilityShares = 100n;
 
@@ -101,7 +95,7 @@ describe("VaultHub.sol:redemptions", () => {
         .and.not.to.emit(connectedVault, "Mock__BeaconChainDepositsPaused");
     });
 
-    it("allows to reset redemption shares to 0", async () => {
+    it("allows to reset redemption shares to 0 passing target more than liability shares", async () => {
       const liabilityShares = ether("2");
 
       await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("3") });
@@ -112,7 +106,7 @@ describe("VaultHub.sol:redemptions", () => {
         .withArgs(connectedVault, liabilityShares)
         .and.to.emit(connectedVault, "Mock__BeaconChainDepositsPaused");
 
-      await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, liabilityShares))
+      await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, liabilityShares + 1n))
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(connectedVault, 0n)
         .and.to.emit(connectedVault, "Mock__BeaconChainDepositsResumed");
