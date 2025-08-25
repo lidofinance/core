@@ -253,7 +253,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
-    /// @dev returns 0 if the vault is not connected
+    /// @dev returns 0 if the vault is not connected or disconnect pending
     function withdrawableValue(address _vault) external view returns (uint256) {
         if (_vaultConnection(_vault).pendingDisconnect) return 0;
 
@@ -276,12 +276,12 @@ contract VaultHub is PausableUntilWithRoles {
         settled = record.settledLidoFees;
     }
 
-    /// @return the amount of ether that can be transferred as fees to the Lido.
+    /// @return the amount of Lido fees that currently can be settled.
     ///         Even if vault's balance is sufficient to cover the fees, some amount may be blocked for redemptions,
     ///         locked ether, or some amount may be non-transferable to not to make the vault unhealthy
     /// @dev returns 0 if the vault is not connected
-    function transferableLidoFeesValue(address _vault) external view returns (uint256) {
-        return _transferableLidoFeesValue(_vault, _vaultRecord(_vault));
+    function settleableLidoFeesValue(address _vault) external view returns (uint256) {
+        return _settleableLidoFeesValue(_vault, _vaultRecord(_vault));
     }
 
     /// @return latest report for the vault
@@ -901,7 +901,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 valueToTransfer = _transferableLidoFeesValue(_vault, record);
+        uint256 valueToTransfer = _settleableLidoFeesValue(_vault, record);
         if (valueToTransfer == 0) revert NothingToTransferToLido(_vault);
 
         uint256 settledLidoFees = record.settledLidoFees + valueToTransfer;
@@ -1031,9 +1031,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _rebalance(address _vault, VaultRecord storage _record, uint256 _shares) internal {
         uint256 valueToRebalance = _getPooledEthBySharesRoundUp(_shares);
-
-        uint256 totalValue_ = _totalValue(_record);
-        if (valueToRebalance > totalValue_) revert RebalanceAmountExceedsTotalValue(totalValue_, valueToRebalance);
 
         _decreaseLiability(_vault, _record, _shares);
         _withdraw(_vault, _record, address(this), valueToRebalance);
@@ -1308,16 +1305,16 @@ contract VaultHub is PausableUntilWithRoles {
         return Math256.min(unlocked, _vault.balance);
     }
 
-    /// @notice the amount of lido fees that can be transferred to the vault based on the available balance
-    ///         this amount already accounts locked value
-    function _transferableLidoFeesValue(
+    /// @notice the amount of lido fees that can be settled on the vault based on the available balance
+    /// @dev    this amount already accounts locked value
+    function _settleableLidoFeesValue(
         address _vault,
         VaultRecord storage _record
     ) internal view returns (uint256) {
         uint256 available = _availableBalance(_vault, _record);
         if (available == 0) return 0;
 
-        // Redemptions have priority over Lido fees, so we need to deduct them from the transferable amount
+        // Redemptions have priority over Lido fees, so we need to deduct them from the available amount
         uint256 redemptions = _getPooledEthBySharesRoundUp(_record.redemptionShares);
         uint256 availableForLidoFees = available > redemptions ? available - redemptions : 0;
 
@@ -1535,14 +1532,6 @@ contract VaultHub is PausableUntilWithRoles {
     // -----------------------------
     //           ERRORS
     // -----------------------------
-
-
-    /**
-     * @notice Thrown when attempting to rebalance more ether than the current total value of the vault
-     * @param totalValue Current total value of the vault
-     * @param rebalanceAmount Amount attempting to rebalance (in ether)
-     */
-    error RebalanceAmountExceedsTotalValue(uint256 totalValue, uint256 rebalanceAmount);
 
     /**
      * @notice Thrown when attempting to withdraw more ether than the total value of the vault

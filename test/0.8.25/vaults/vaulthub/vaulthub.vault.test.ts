@@ -540,16 +540,6 @@ describe("VaultHub.sol:owner-functions", () => {
       );
     });
 
-    it("reverts when rebalancing more than total value", async () => {
-      const totalValue = await vaultHub.totalValue(vaultAddress);
-      const excessiveAmount = await lido.getSharesByPooledEth(totalValue + 1n);
-
-      await expect(vaultHub.connect(vaultOwner).rebalance(vaultAddress, excessiveAmount)).to.be.revertedWithCustomError(
-        vaultHub,
-        "RebalanceAmountExceedsTotalValue",
-      );
-    });
-
     it("rebalances vault successfully", async () => {
       const rebalanceAmount = ether("0.1");
       const liabilitySharesBefore = await vaultHub.liabilityShares(vaultAddress);

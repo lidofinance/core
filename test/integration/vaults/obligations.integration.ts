@@ -480,7 +480,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       });
 
       it("Does not make the vault unhealthy", async () => {
-        const feesToSettle = await vaultHub.transferableLidoFeesValue(stakingVaultAddress);
+        const feesToSettle = await vaultHub.settleableLidoFeesValue(stakingVaultAddress);
 
         // make sure the vault has enough balance to pay all the fees
         const vaultBalance = await ethers.provider.getBalance(stakingVaultAddress);

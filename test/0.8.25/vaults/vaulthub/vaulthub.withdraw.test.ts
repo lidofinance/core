@@ -122,7 +122,7 @@ describe("VaultHub.sol:withdrawal", () => {
       expect(withdrawableBefore).to.equal(ether("8"));
     });
 
-    it("accounts for redemption shares in obligations", async () => {
+    it("accounts for redemption shares in obligations part on CL", async () => {
       const totalValue = ether("9");
       const redemptionShares = ether("3");
 
@@ -141,6 +141,25 @@ describe("VaultHub.sol:withdrawal", () => {
 
       // 5 balance, 3 forced for redemption, 2 withdrawable
       expect(withdrawable).to.equal(ether("2"));
+    });
+
+    it.skip("accounts for redemption shares in obligations all on EL", async () => {
+      const totalValue = ether("9");
+      const redemptionShares = ether("3");
+
+      await connectedVault.connect(user).fund({ value: totalValue });
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue });
+
+      await vaultHub.connect(user).mintShares(connectedVault, user, redemptionShares);
+      await vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 0n); // all for redemption
+
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(ether("9"));
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("4"));
+
+      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
+
+      // 9 balance, 3 forced for redemption, 6 withdrawable
+      expect(withdrawable).to.equal(ether("6"));
     });
   });
 
