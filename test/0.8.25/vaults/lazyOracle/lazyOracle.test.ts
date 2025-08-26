@@ -8,11 +8,13 @@ import {
   Lido__MockForLazyOracle,
   LidoLocator,
   OperatorGrid__MockForLazyOracle,
+  VaultHub,
   VaultHub__MockForLazyOracle,
 } from "typechain-types";
 
 import {
   advanceChainTime,
+  days,
   DISCONNECT_NOT_INITIATED,
   ether,
   getCurrentBlockTimestamp,
@@ -24,6 +26,38 @@ import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/va
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot, ZERO_BYTES32 } from "test/suite";
 
+const QUARANTINE_PERIOD = days(3n);
+const MAX_REWARD_RATIO_BP = 350n;
+const MAX_SANE_LIDO_FEES_PER_SECOND = 400000000000000n;
+
+const VAULT_TOTAL_VALUE = ether("100");
+
+const record: Readonly<VaultHub.VaultRecordStruct> = {
+  report: {
+    totalValue: VAULT_TOTAL_VALUE,
+    inOutDelta: VAULT_TOTAL_VALUE,
+    timestamp: 2122n,
+  },
+  liabilityShares: 0n,
+  locked: VAULT_TOTAL_VALUE,
+  inOutDelta: [
+    {
+      value: VAULT_TOTAL_VALUE,
+      valueOnRefSlot: VAULT_TOTAL_VALUE,
+      refSlot: 1n,
+    },
+    {
+      value: 0n,
+      valueOnRefSlot: 0n,
+      refSlot: 0n,
+    },
+  ],
+  minimalReserve: 0n,
+  redemptionShares: 0n,
+  cumulativeLidoFees: 0n,
+  settledLidoFees: 0n,
+};
+
 describe("LazyOracle.sol", () => {
   let deployer: SignerWithAddress;
   let locator: LidoLocator;
@@ -33,8 +67,6 @@ describe("LazyOracle.sol", () => {
   let lazyOracle: LazyOracle;
 
   let originalState: string;
-
-  const QUARANTINE_PERIOD = 259200n;
 
   before(async () => {
     [deployer] = await ethers.getSigners();
@@ -56,7 +88,12 @@ describe("LazyOracle.sol", () => {
     );
     lazyOracle = await ethers.getContractAt("LazyOracle", proxy);
 
-    await lazyOracle.initialize(deployer.address, QUARANTINE_PERIOD, 350n);
+    await lazyOracle.initialize(
+      deployer.address,
+      QUARANTINE_PERIOD,
+      MAX_REWARD_RATIO_BP,
+      MAX_SANE_LIDO_FEES_PER_SECOND,
+    );
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -115,7 +152,11 @@ describe("LazyOracle.sol", () => {
           },
         ],
         minimalReserve: 0n,
+        redemptionShares: 0n,
+        cumulativeLidoFees: 0n,
+        settledLidoFees: 0n,
       });
+
       const vaults = await lazyOracle.batchVaultsInfo(0n, 2n);
 
       expect(vaults.length).to.equal(1);
@@ -193,12 +234,17 @@ describe("LazyOracle.sol", () => {
 
     it("return quarantine period", async () => {
       const quarantinePeriod = await lazyOracle.quarantinePeriod();
-      expect(quarantinePeriod).to.equal(259200n);
+      expect(quarantinePeriod).to.equal(QUARANTINE_PERIOD);
     });
 
     it("return max reward ratio", async () => {
       const maxRewardRatio = await lazyOracle.maxRewardRatioBP();
-      expect(maxRewardRatio).to.equal(350n);
+      expect(maxRewardRatio).to.equal(MAX_REWARD_RATIO_BP);
+    });
+
+    it("return max Lido fee rate per second", async () => {
+      const maxLidoFeeRatePerSecond = await lazyOracle.maxLidoFeeRatePerSecond();
+      expect(maxLidoFeeRatePerSecond).to.equal(MAX_SANE_LIDO_FEES_PER_SECOND);
     });
 
     it("return quarantine info", async () => {
@@ -210,15 +256,40 @@ describe("LazyOracle.sol", () => {
   });
 
   context("sanity params", () => {
-    it("update quarantine period", async () => {
-      await expect(lazyOracle.updateSanityParams(250000n, 1000n))
+    it("update quarantine params", async () => {
+      await expect(lazyOracle.updateSanityParams(250000n, 1000n, 2000n))
         .to.be.revertedWithCustomError(lazyOracle, "AccessControlUnauthorizedAccount")
         .withArgs(deployer.address, await lazyOracle.UPDATE_SANITY_PARAMS_ROLE());
 
       await lazyOracle.grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), deployer.address);
-      await expect(lazyOracle.updateSanityParams(250000n, 1000n)).to.not.reverted;
+      await expect(lazyOracle.updateSanityParams(250000n, 1000n, 2000n)).to.not.reverted;
       expect(await lazyOracle.quarantinePeriod()).to.equal(250000n);
       expect(await lazyOracle.maxRewardRatioBP()).to.equal(1000n);
+      expect(await lazyOracle.maxLidoFeeRatePerSecond()).to.equal(2000n);
+    });
+
+    it("reverts on too large quarantine period", async () => {
+      await lazyOracle.grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), deployer.address);
+      const maxQuarantinePeriod = await lazyOracle.MAX_QUARANTINE_PERIOD();
+      await expect(lazyOracle.updateSanityParams(maxQuarantinePeriod + 1n, 1000n, 2000n))
+        .to.be.revertedWithCustomError(lazyOracle, "QuarantinePeriodTooLarge")
+        .withArgs(maxQuarantinePeriod + 1n, maxQuarantinePeriod);
+    });
+
+    it("reverts on too large reward ratio", async () => {
+      await lazyOracle.grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), deployer.address);
+      const maxRewardRatio = await lazyOracle.MAX_REWARD_RATIO();
+      await expect(lazyOracle.updateSanityParams(250000n, maxRewardRatio + 1n, 2000n))
+        .to.be.revertedWithCustomError(lazyOracle, "MaxRewardRatioTooLarge")
+        .withArgs(maxRewardRatio + 1n, maxRewardRatio);
+    });
+
+    it("reverts on too large Lido fee rate per second", async () => {
+      await lazyOracle.grantRole(await lazyOracle.UPDATE_SANITY_PARAMS_ROLE(), deployer.address);
+      const maxLidoFeeRatePerSecond = await lazyOracle.MAX_LIDO_FEE_RATE_PER_SECOND();
+      await expect(lazyOracle.updateSanityParams(250000n, 1000n, maxLidoFeeRatePerSecond + 1n))
+        .to.be.revertedWithCustomError(lazyOracle, "MaxLidoFeeRatePerSecondTooLarge")
+        .withArgs(maxLidoFeeRatePerSecond + 1n, maxLidoFeeRatePerSecond);
     });
   });
 
@@ -277,70 +348,70 @@ describe("LazyOracle.sol", () => {
         {
           vault: "0xE312f1ed35c4dBd010A332118baAD69d45A0E302",
           totalValue: 33000000000000000000n,
-          accruedLidoFees: 0n,
+          cumulativeLidoFees: 0n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
           vault: "0x652b70E0Ae932896035d553fEaA02f37Ab34f7DC",
           totalValue: 3100000000000000000n,
-          accruedLidoFees: 0n,
+          cumulativeLidoFees: 0n,
           liabilityShares: 0n,
           slashingReserve: 510300000000000000n,
         },
         {
           vault: "0x20d34FD0482E3BdC944952D0277A306860be0014",
           totalValue: 2580000000000012501n,
-          accruedLidoFees: 580000000000012501n,
+          cumulativeLidoFees: 580000000000012501n,
           liabilityShares: 0n,
           slashingReserve: 1449900000000010001n,
         },
         {
           vault: "0x60B614c42d92d6c2E68AF7f4b741867648aBf9A4",
           totalValue: 1000000000000000000n,
-          accruedLidoFees: 1000000000000000000n,
+          cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
           vault: "0xE6BdAFAac1d91605903D203539faEd173793b7D7",
           totalValue: 1030000000000000000n,
-          accruedLidoFees: 1030000000000000000n,
+          cumulativeLidoFees: 1030000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 400000000000000000n,
         },
         {
           vault: "0x34ebc5780F36d3fD6F1e7b43CF8DB4a80dCE42De",
           totalValue: 1000000000000000000n,
-          accruedLidoFees: 1000000000000000000n,
+          cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
           vault: "0x3018F0cC632Aa3805a8a676613c62F55Ae4018C7",
           totalValue: 2000000000000000000n,
-          accruedLidoFees: 2000000000000000000n,
+          cumulativeLidoFees: 2000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 100000000000000000n,
         },
         {
           vault: "0x40998324129B774fFc7cDA103A2d2cFd23EcB56e",
           totalValue: 1000000000000000000n,
-          accruedLidoFees: 1000000000000000000n,
+          cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 300000000000000000n,
         },
         {
           vault: "0x4ae099982712e2164fBb973554991111A418ab2B",
           totalValue: 1000000000000000000n,
-          accruedLidoFees: 1000000000000000000n,
+          cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
           vault: "0x59536AC6211C1deEf1EE37CDC11242A0bDc7db83",
           totalValue: 1000000000000000000n,
-          accruedLidoFees: 1000000000000000000n,
+          cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
@@ -359,14 +430,14 @@ describe("LazyOracle.sol", () => {
         await lazyOracle.updateVaultData(
           vaultReport.vault,
           vaultReport.totalValue,
-          vaultReport.accruedLidoFees,
+          vaultReport.cumulativeLidoFees,
           vaultReport.liabilityShares,
           vaultReport.slashingReserve,
           tree.getProof(index),
         );
         expect(await vaultHub.mock__lastReportedVault()).to.equal(vaultReport.vault);
         expect(await vaultHub.mock__lastReported_timestamp()).to.equal(timestamp);
-        expect(await vaultHub.mock__lastReported_cumulativeLidoFees()).to.equal(vaultReport.accruedLidoFees);
+        expect(await vaultHub.mock__lastReported_cumulativeLidoFees()).to.equal(vaultReport.cumulativeLidoFees);
         expect(await vaultHub.mock__lastReported_liabilityShares()).to.equal(vaultReport.liabilityShares);
         expect(await vaultHub.mock__lastReported_slashingReserve()).to.equal(vaultReport.slashingReserve);
       }
@@ -386,14 +457,14 @@ describe("LazyOracle.sol", () => {
         {
           vault: "0xc1F9c4a809cbc6Cb2cA60bCa09cE9A55bD5337Db",
           totalValue: 2500000000000000000n,
-          accruedLidoFees: 2500000000000000000n,
+          cumulativeLidoFees: 2500000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 1n,
         },
         {
           vault: "0xEcB7C8D2BaF7270F90066B4cd8286e2CA1154F60",
           totalValue: 99170000769726969624n,
-          accruedLidoFees: 33000000000000000000n,
+          cumulativeLidoFees: 33000000000000000000n,
           liabilityShares: 0n,
           slashingReserve: 0n,
         },
@@ -409,13 +480,12 @@ describe("LazyOracle.sol", () => {
   context("handleSanityChecks", () => {
     it("allows some percentage of the EL and CL rewards handling", async () => {
       const vault = await createVault();
-      const VAULT_TOTAL_VALUE = ether("100");
       const maxRewardRatio = await lazyOracle.maxRewardRatioBP();
       const maxRewardValue = (maxRewardRatio * VAULT_TOTAL_VALUE) / 10000n;
       const vaultReport: VaultReportItem = {
         vault,
         totalValue: VAULT_TOTAL_VALUE + maxRewardValue,
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -427,33 +497,12 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
 
       await vaultHub.mock__addVault(vault);
-      await vaultHub.mock__setVaultRecord(vault, {
-        report: {
-          totalValue: VAULT_TOTAL_VALUE,
-          inOutDelta: VAULT_TOTAL_VALUE,
-          timestamp: timestamp - 100n,
-        },
-        locked: 0n,
-        liabilityShares: 0n,
-        inOutDelta: [
-          {
-            value: VAULT_TOTAL_VALUE,
-            valueOnRefSlot: VAULT_TOTAL_VALUE,
-            refSlot: 0n,
-          },
-          {
-            value: 0n,
-            valueOnRefSlot: 0n,
-            refSlot: 0n,
-          },
-        ],
-        minimalReserve: 0n,
-      });
+      await vaultHub.mock__setVaultRecord(vault, record);
 
       await lazyOracle.updateVaultData(
         vaultReport.vault,
         vaultReport.totalValue,
-        vaultReport.accruedLidoFees,
+        vaultReport.cumulativeLidoFees,
         vaultReport.liabilityShares,
         vaultReport.slashingReserve,
         tree.getProof(0),
@@ -467,7 +516,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport2: VaultReportItem = {
         vault,
         totalValue: VAULT_TOTAL_VALUE + maxRewardValue + 1n,
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -475,33 +524,12 @@ describe("LazyOracle.sol", () => {
       const tree2 = createVaultsReportTree([vaultReport2]);
       await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree2.root, "");
 
-      await vaultHub.mock__setVaultRecord(vault, {
-        report: {
-          totalValue: VAULT_TOTAL_VALUE,
-          inOutDelta: VAULT_TOTAL_VALUE,
-          timestamp: timestamp - 100n,
-        },
-        locked: 0n,
-        liabilityShares: 0n,
-        inOutDelta: [
-          {
-            value: VAULT_TOTAL_VALUE,
-            valueOnRefSlot: VAULT_TOTAL_VALUE,
-            refSlot: 0n,
-          },
-          {
-            value: 0n,
-            valueOnRefSlot: 0n,
-            refSlot: 0n,
-          },
-        ],
-        minimalReserve: 0n,
-      });
+      await vaultHub.mock__setVaultRecord(vault, record);
 
       await lazyOracle.updateVaultData(
         vaultReport2.vault,
         vaultReport2.totalValue,
-        vaultReport2.accruedLidoFees,
+        vaultReport2.cumulativeLidoFees,
         vaultReport2.liabilityShares,
         vaultReport2.slashingReserve,
         tree2.getProof(0),
@@ -519,7 +547,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport: VaultReportItem = {
         vault,
         totalValue: ether("250"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -531,34 +559,13 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
 
       await vaultHub.mock__addVault(vault);
-      await vaultHub.mock__setVaultRecord(vault, {
-        report: {
-          totalValue: ether("100"),
-          inOutDelta: ether("100"),
-          timestamp: timestamp - 100n,
-        },
-        locked: 0n,
-        liabilityShares: 0n,
-        inOutDelta: [
-          {
-            value: ether("100"),
-            valueOnRefSlot: ether("100"),
-            refSlot: 0n,
-          },
-          {
-            value: 0n,
-            valueOnRefSlot: 0n,
-            refSlot: 0n,
-          },
-        ],
-        minimalReserve: 0n,
-      });
+      await vaultHub.mock__setVaultRecord(vault, record);
 
       await expect(
         lazyOracle.updateVaultData(
           vaultReport.vault,
           vaultReport.totalValue,
-          vaultReport.accruedLidoFees,
+          vaultReport.cumulativeLidoFees,
           vaultReport.liabilityShares,
           vaultReport.slashingReserve,
           tree.getProof(0),
@@ -578,7 +585,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport2: VaultReportItem = {
         vault,
         totalValue: ether("340"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -592,7 +599,7 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.updateVaultData(
         vaultReport2.vault,
         vaultReport2.totalValue,
-        vaultReport2.accruedLidoFees,
+        vaultReport2.cumulativeLidoFees,
         vaultReport2.liabilityShares,
         vaultReport2.slashingReserve,
         tree2.getProof(0),
@@ -609,7 +616,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport3: VaultReportItem = {
         vault,
         totalValue: ether("340"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -624,7 +631,7 @@ describe("LazyOracle.sol", () => {
         lazyOracle.updateVaultData(
           vaultReport3.vault,
           vaultReport3.totalValue,
-          vaultReport3.accruedLidoFees,
+          vaultReport3.cumulativeLidoFees,
           vaultReport3.liabilityShares,
           vaultReport3.slashingReserve,
           tree3.getProof(0),
@@ -643,7 +650,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport4: VaultReportItem = {
         vault,
         totalValue: ether("340"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -658,7 +665,7 @@ describe("LazyOracle.sol", () => {
         lazyOracle.updateVaultData(
           vaultReport4.vault,
           vaultReport4.totalValue,
-          vaultReport4.accruedLidoFees,
+          vaultReport4.cumulativeLidoFees,
           vaultReport4.liabilityShares,
           vaultReport4.slashingReserve,
           tree4.getProof(0),
@@ -679,7 +686,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport: VaultReportItem = {
         vault,
         totalValue: ether("250"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -691,34 +698,13 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
 
       await vaultHub.mock__addVault(vault);
-      await vaultHub.mock__setVaultRecord(vault, {
-        report: {
-          totalValue: ether("100"),
-          inOutDelta: ether("100"),
-          timestamp: timestamp - 100n,
-        },
-        locked: 0n,
-        liabilityShares: 0n,
-        inOutDelta: [
-          {
-            value: ether("100"),
-            valueOnRefSlot: ether("100"),
-            refSlot: 0n,
-          },
-          {
-            value: 0n,
-            valueOnRefSlot: 0n,
-            refSlot: 0n,
-          },
-        ],
-        minimalReserve: 0n,
-      });
+      await vaultHub.mock__setVaultRecord(vault, record);
 
       await expect(
         lazyOracle.updateVaultData(
           vaultReport.vault,
           vaultReport.totalValue,
-          vaultReport.accruedLidoFees,
+          vaultReport.cumulativeLidoFees,
           vaultReport.liabilityShares,
           vaultReport.slashingReserve,
           tree.getProof(0),
@@ -738,7 +724,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport2: VaultReportItem = {
         vault,
         totalValue: ether("101"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -753,7 +739,7 @@ describe("LazyOracle.sol", () => {
         lazyOracle.updateVaultData(
           vaultReport2.vault,
           vaultReport2.totalValue,
-          vaultReport2.accruedLidoFees,
+          vaultReport2.cumulativeLidoFees,
           vaultReport2.liabilityShares,
           vaultReport2.slashingReserve,
           tree3.getProof(0),
@@ -767,6 +753,76 @@ describe("LazyOracle.sol", () => {
       expect(quarantineInfo2.pendingTotalValueIncrease).to.equal(0n);
       expect(quarantineInfo2.startTimestamp).to.equal(0n);
       expect(quarantineInfo2.endTimestamp).to.equal(0n);
+    });
+
+    it("reverts on too large/low Lido fee rate per second", async () => {
+      const vault = await createVault();
+      const vaultReport: VaultReportItem = {
+        vault,
+        totalValue: ether("250"),
+        cumulativeLidoFees: ether("100"),
+        liabilityShares: 0n,
+        slashingReserve: 0n,
+      };
+
+      const tree = createVaultsReportTree([vaultReport]);
+      const accountingAddress = await impersonate(await locator.accountingOracle(), ether("100"));
+      const timestamp = await getCurrentBlockTimestamp();
+      const refSlot = 42n;
+      await lazyOracle.connect(accountingAddress).updateReportData(timestamp, refSlot, tree.root, "");
+
+      await vaultHub.mock__addVault(vault);
+      await vaultHub.mock__setVaultRecord(vault, {
+        ...record,
+        report: {
+          totalValue: ether("100"),
+          inOutDelta: ether("100"),
+          timestamp: timestamp - 1n,
+        },
+        inOutDelta: [
+          {
+            value: ether("100"),
+            valueOnRefSlot: ether("100"),
+            refSlot: 0n,
+          },
+          {
+            value: 0n,
+            valueOnRefSlot: 0n,
+            refSlot: 0n,
+          },
+        ],
+      });
+
+      await expect(
+        lazyOracle.updateVaultData(
+          vaultReport.vault,
+          vaultReport.totalValue,
+          vaultReport.cumulativeLidoFees,
+          vaultReport.liabilityShares,
+          vaultReport.slashingReserve,
+          tree.getProof(0),
+        ),
+      )
+        .to.be.revertedWithCustomError(lazyOracle, "CumulativeLidoFeesTooLarge")
+        .withArgs(ether("100"), MAX_SANE_LIDO_FEES_PER_SECOND);
+
+      await vaultHub.mock__setVaultRecord(vault, {
+        ...record,
+        cumulativeLidoFees: ether("101"),
+      });
+
+      await expect(
+        lazyOracle.updateVaultData(
+          vaultReport.vault,
+          vaultReport.totalValue,
+          vaultReport.cumulativeLidoFees,
+          vaultReport.liabilityShares,
+          vaultReport.slashingReserve,
+          tree.getProof(0),
+        ),
+      )
+        .to.be.revertedWithCustomError(lazyOracle, "CumulativeLidoFeesTooLow")
+        .withArgs(ether("100"), ether("101"));
     });
   });
 
@@ -783,7 +839,7 @@ describe("LazyOracle.sol", () => {
       const vaultReport: VaultReportItem = {
         vault,
         totalValue: ether("250"),
-        accruedLidoFees: 0n,
+        cumulativeLidoFees: 0n,
         liabilityShares: 0n,
         slashingReserve: 0n,
       };
@@ -794,33 +850,12 @@ describe("LazyOracle.sol", () => {
       await lazyOracle.connect(accountingAddress).updateReportData(timestamp, 42n, tree.root, "");
 
       await vaultHub.mock__addVault(vault);
-      await vaultHub.mock__setVaultRecord(vault, {
-        report: {
-          totalValue: ether("100"),
-          inOutDelta: ether("100"),
-          timestamp: timestamp - 100n,
-        },
-        locked: 0n,
-        liabilityShares: 0n,
-        inOutDelta: [
-          {
-            value: ether("100"),
-            valueOnRefSlot: ether("100"),
-            refSlot: 0n,
-          },
-          {
-            value: 0n,
-            valueOnRefSlot: 0n,
-            refSlot: 0n,
-          },
-        ],
-        minimalReserve: 0n,
-      });
+      await vaultHub.mock__setVaultRecord(vault, record);
 
       await lazyOracle.updateVaultData(
         vaultReport.vault,
         vaultReport.totalValue,
-        vaultReport.accruedLidoFees,
+        vaultReport.cumulativeLidoFees,
         vaultReport.liabilityShares,
         vaultReport.slashingReserve,
         tree.getProof(0),

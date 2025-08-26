@@ -85,7 +85,7 @@ describe("Integration: LazyOracle", () => {
       const { locator, hashConsensus, lido } = ctx.contracts;
 
       const totalValueArg = ether("1");
-      const accruedLidoFeesArg = ether("0.1");
+      const cumulativeLidoFeesArg = ether("0.1");
       const liabilitySharesArg = 13000n;
       const slashingReserveArg = ether("1.5");
       const reportTimestampArg = await getCurrentBlockTimestamp();
@@ -94,7 +94,7 @@ describe("Integration: LazyOracle", () => {
       const vaultReport: VaultReportItem = {
         vault: await stakingVault.getAddress(),
         totalValue: totalValueArg,
-        accruedLidoFees: accruedLidoFeesArg,
+        cumulativeLidoFees: cumulativeLidoFeesArg,
         liabilityShares: liabilitySharesArg,
         slashingReserve: slashingReserveArg,
       };
@@ -113,7 +113,7 @@ describe("Integration: LazyOracle", () => {
         lazyOracle.updateVaultData(
           await stakingVault.getAddress(),
           totalValueArg,
-          accruedLidoFeesArg,
+          cumulativeLidoFeesArg,
           liabilitySharesArg,
           slashingReserveArg,
           reportTree.getProof(0),
@@ -125,7 +125,7 @@ describe("Integration: LazyOracle", () => {
           reportTimestampArg,
           totalValueArg,
           ether("1"),
-          accruedLidoFeesArg,
+          cumulativeLidoFeesArg,
           liabilitySharesArg,
           slashingReserveArg,
         );
@@ -813,6 +813,104 @@ describe("Integration: LazyOracle", () => {
       record = await vaultHub.vaultRecord(stakingVault);
       expect(record.report.totalValue).to.equal(ether("11"));
       expect(record.report.inOutDelta).to.equal(ether("11"));
+    });
+
+    describe("Cumulative Lido fees sanity checks", () => {
+      beforeEach(async () => {
+        // Set up initial state with some settled fees to test against
+        await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("5") });
+
+        // Advance time to make reports stale again for subsequent tests
+        await advanceChainTime((await vaultHub.REPORT_FRESHNESS_DELTA()) + 100n);
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
+      });
+
+      it("Should reject report with cumulative Lido fees too low", async () => {
+        // Current cumulative fees are 5 ETH, trying to report 3 ETH should fail
+        await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("3") }))
+          .to.be.revertedWithCustomError(lazyOracle, "CumulativeLidoFeesTooLow")
+          .withArgs(ether("3"), ether("5"));
+      });
+
+      it("Should accept report with same cumulative Lido fees (no change)", async () => {
+        // Same cumulative fees should be accepted
+        await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("5") })).to.not.be
+          .reverted;
+
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+      });
+
+      it("Should accept report with valid cumulative Lido fees increase within rate limit", async () => {
+        const maxLidoFeeRatePerSecond = await lazyOracle.maxLidoFeeRatePerSecond();
+        const timeDelta = 3600n; // 1 hour
+        const maxFeeIncrease = maxLidoFeeRatePerSecond * timeDelta;
+        const validFeeIncrease = maxFeeIncrease / 2n; // Half of max allowed
+
+        // Report with timestamp 1 hour later and valid fee increase
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, {
+            cumulativeLidoFees: ether("5") + validFeeIncrease,
+            reportTimestamp: (await lazyOracle.latestReportTimestamp()) + timeDelta,
+          }),
+        ).to.not.be.reverted;
+
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+
+        const record = await vaultHub.vaultRecord(stakingVault);
+        expect(record.cumulativeLidoFees).to.equal(ether("5") + validFeeIncrease);
+      });
+
+      it("Should reject report with cumulative Lido fees increase exceeding rate limit", async () => {
+        const maxLidoFeeRatePerSecond = await lazyOracle.maxLidoFeeRatePerSecond();
+        const timeDelta = 3600n; // 1 hour
+        const maxFeeIncrease = maxLidoFeeRatePerSecond * timeDelta;
+        const excessiveFeeIncrease = maxFeeIncrease + ether("1"); // Exceed limit by 1 ETH
+
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, {
+            cumulativeLidoFees: ether("5") + excessiveFeeIncrease,
+            reportTimestamp: (await lazyOracle.latestReportTimestamp()) + timeDelta,
+          }),
+        )
+          .to.be.revertedWithCustomError(lazyOracle, "CumulativeLidoFeesTooLarge")
+          .withArgs(excessiveFeeIncrease, maxFeeIncrease);
+      });
+
+      it("Should handle edge case: exactly at maximum allowed fee rate", async () => {
+        const maxLidoFeeRatePerSecond = await lazyOracle.maxLidoFeeRatePerSecond();
+        const timeDelta = 3600n; // 1 hour
+        const maxFeeIncrease = maxLidoFeeRatePerSecond * timeDelta;
+
+        // Report with exactly the maximum allowed fee increase
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, {
+            cumulativeLidoFees: ether("5") + maxFeeIncrease,
+            reportTimestamp: (await lazyOracle.latestReportTimestamp()) + timeDelta,
+          }),
+        ).to.not.be.reverted;
+
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+      });
+
+      it("Should handle large time delta with proportional fee increase", async () => {
+        const maxLidoFeeRatePerSecond = await lazyOracle.maxLidoFeeRatePerSecond();
+        const timeDelta = 365n * 24n * 60n * 60n; // 1 year
+        const maxFeeIncrease = maxLidoFeeRatePerSecond * timeDelta;
+        const validFeeIncrease = maxFeeIncrease - ether("1"); // Just under the limit
+
+        await advanceChainTime(timeDelta);
+
+        await expect(
+          reportVaultDataWithProof(ctx, stakingVault, {
+            cumulativeLidoFees: ether("5") + validFeeIncrease,
+          }),
+        ).to.not.be.reverted;
+
+        const record = await vaultHub.vaultRecord(stakingVault);
+        expect(record.cumulativeLidoFees).to.equal(ether("5") + validFeeIncrease);
+
+        expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+      });
     });
   });
 });

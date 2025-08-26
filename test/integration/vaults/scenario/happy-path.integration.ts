@@ -296,9 +296,12 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(mintEvents.length).to.equal(1n);
     expect(mintEvents[0].args.vault).to.equal(stakingVaultAddress);
     expect(mintEvents[0].args.amountOfShares).to.equal(stakingVaultMaxMintingShares);
-    expect(mintEvents[0].args.lockedAmount).to.equal(VAULT_DEPOSIT);
 
-    expect(await vaultHub.locked(stakingVaultAddress)).to.equal(VAULT_DEPOSIT);
+    const lockedEther = await lido.getPooledEthBySharesRoundUp(stakingVaultMaxMintingShares);
+    const lockedAmount = (lockedEther * TOTAL_BASIS_POINTS) / mintableRatio;
+    expect(mintEvents[0].args.lockedAmount).to.equal(lockedAmount);
+
+    expect(await vaultHub.locked(stakingVaultAddress)).to.equal(lockedAmount);
 
     log.debug("Staking Vault", {
       "Staking Vault Minted Shares": stakingVaultMaxMintingShares,

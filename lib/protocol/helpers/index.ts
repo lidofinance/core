@@ -23,3 +23,5 @@ export { calcNodeOperatorRewards } from "./staking-module";
 
 export * from "./vaults";
 export * from "./operatorGrid";
+
+export * from "./share-rate";

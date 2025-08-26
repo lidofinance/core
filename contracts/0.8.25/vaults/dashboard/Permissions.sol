@@ -290,13 +290,13 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
-        uint64[] calldata _amounts,
+        uint64[] calldata _amountsInGwei,
         address _refundRecipient
     ) internal onlyRoleMemberOrAdmin(TRIGGER_VALIDATOR_WITHDRAWAL_ROLE) {
         VAULT_HUB.triggerValidatorWithdrawals{value: msg.value}(
             address(_stakingVault()),
             _pubkeys,
-            _amounts,
+            _amountsInGwei,
             _refundRecipient
         );
     }

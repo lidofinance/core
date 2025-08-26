@@ -132,7 +132,7 @@ describe("Integration: VaultHub", () => {
 
       const treasuryBalance = await ethers.provider.getBalance(treasury);
 
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") }))
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1") }))
         .to.emit(vaultHub, "VaultDisconnectCompleted")
         .withArgs(stakingVault);
 
