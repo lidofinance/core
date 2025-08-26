@@ -54,18 +54,14 @@ describe("VaultHub.sol:withdrawal", () => {
     });
 
     it("returns 0 when totalValue is equal to locked", async () => {
-      const initialTotalValue = await vaultHub.totalValue(connectedVault);
-      const initialFunding = ether("9");
-
-      const totalValue = initialTotalValue + initialFunding;
-      await connectedVault.connect(user).fund({ value: initialFunding });
-      await vaultsContext.reportVault({ vault: connectedVault, totalValue });
-      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      await connectedVault.connect(user).fund({ value: ether("9") });
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("10") });
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(ether("10"));
 
       await vaultHub.connect(user).mintShares(connectedVault, user, ether("9")); // 10% RR
 
       const locked = await vaultHub.locked(connectedVault);
-      expect(locked).to.equal(totalValue);
+      expect(locked).to.equal(ether("10"));
 
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
       expect(withdrawable).to.equal(0n);
@@ -87,22 +83,23 @@ describe("VaultHub.sol:withdrawal", () => {
       expect(withdrawable).to.equal(0n);
     });
 
-    it("returns 0 when obligations exceed available balance", async () => {
+    it("returns 0 when obligations cap vault balance", async () => {
       const totalValue = ether("10");
       await connectedVault.connect(user).fund({ value: ether("9") });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue });
 
-      const redemptionShares = ether("9");
-      await vaultHub.connect(user).mintShares(connectedVault, user, redemptionShares); // RR 10%, locked = 10 ether
+      const shares = ether("9");
+      await vaultHub.connect(user).mintShares(connectedVault, user, shares); // RR 10%, locked = 10 ether
       expect(await vaultHub.locked(connectedVault)).to.equal(totalValue);
 
       await vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 0n); // all for redemption
+      expect((await vaultHub.vaultRecord(connectedVault)).redemptionShares).to.equal(shares);
 
       expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(0n);
 
       const record = await vaultHub.vaultRecord(connectedVault);
       const obligations = record.redemptionShares + record.cumulativeLidoFees;
-      expect(obligations).to.equal(redemptionShares);
+      expect(obligations).to.equal(shares);
 
       const withdrawableOnRedemptionBalance = await vaultHub.withdrawableValue(connectedVault);
       expect(withdrawableOnRedemptionBalance).to.equal(0n);
