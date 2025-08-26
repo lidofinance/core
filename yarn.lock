@@ -1181,6 +1181,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@lido/dual-governance@https://github.com/lidofinance/dual-governance.git#feature/scratch-deploy-support":
+  version: 0.0.1
+  resolution: "@lido/dual-governance@https://github.com/lidofinance/dual-governance.git#commit=4f379edcfc9ff081517f94d27cd966ac3edbc297"
+  checksum: 10c0/c16a28738eb1394b739d438d09040e2cbcd7b39109452077661ea39e005d3edba37b2668b953cb8c01ead1c78e7ed22e5fa59b9718b2e5da2b1188d823be5f18
+  languageName: node
+  linkType: hard
+
 "@ljharb/resumer@npm:~0.0.1":
   version: 0.0.1
   resolution: "@ljharb/resumer@npm:0.0.1"
@@ -8086,6 +8093,7 @@ __metadata:
     "@commitlint/config-conventional": "npm:^19.8.1"
     "@eslint/compat": "npm:^1.2.9"
     "@eslint/js": "npm:^9.27.0"
+    "@lido/dual-governance": "https://github.com/lidofinance/dual-governance.git#feature/scratch-deploy-support"
     "@nomicfoundation/ethereumjs-util": "npm:^9.0.4"
     "@nomicfoundation/hardhat-chai-matchers": "npm:^2.0.8"
     "@nomicfoundation/hardhat-ethers": "npm:^3.0.8"
