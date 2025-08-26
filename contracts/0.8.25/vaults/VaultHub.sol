@@ -444,6 +444,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
+        _requireFreshReport(_vault, record);
+
         uint256 totalValue_ = _totalValue(record);
         uint256 liabilityShares_ = record.liabilityShares;
 

@@ -13,6 +13,7 @@ import {
   report,
   setupLidoForVaults,
 } from "lib/protocol";
+import { advanceChainTime, days } from "lib/time";
 
 import { Snapshot } from "test/suite";
 
@@ -242,7 +243,7 @@ describe("Integration: OperatorGrid", () => {
       await dashboard.changeTier(1n, ether("1000"));
       await operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, ether("1000"));
 
-      // Try to increase to 1500 → first confirmation by owner via Dashboard returns false
+      // Try to increase to 1200 → first confirmation by owner via Dashboard returns false
       const increaseTo = ether("1200");
       expect(await dashboard.updateShareLimit.staticCall(increaseTo)).to.equal(false);
       await dashboard.updateShareLimit(increaseTo);
@@ -303,6 +304,21 @@ describe("Integration: OperatorGrid", () => {
       await expect(dashboard.updateShareLimit(over)).to.be.revertedWithCustomError(
         operatorGrid,
         "RequestedShareLimitTooHigh",
+      );
+    });
+
+    it("requires fresh report before updating connection (stale report reverts)", async () => {
+      // Ensure we are in a known tier and connected
+      const current = await vaultHub.vaultConnection(stakingVault);
+      const newLimit = current.shareLimit - 1n;
+
+      await expect(dashboard.updateShareLimit(newLimit)).to.emit(vaultHub, "VaultConnectionUpdated");
+
+      await advanceChainTime(days(3n)); // REPORT_FRESHNESS_DELTA = 2 days
+
+      await expect(dashboard.updateShareLimit(newLimit - 1n)).to.be.revertedWithCustomError(
+        vaultHub,
+        "VaultReportStale",
       );
     });
   });

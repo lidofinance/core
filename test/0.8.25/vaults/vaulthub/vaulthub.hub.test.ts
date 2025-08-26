@@ -1091,6 +1091,8 @@ describe("VaultHub.sol:hub", () => {
       const newLiquidityFeeBP = oldConnection.liquidityFeeBP + 11n;
       const newReservationFeeBP = oldConnection.reservationFeeBP + 12n;
 
+      await reportVault({ vault });
+
       await expect(
         vaultHub
           .connect(operatorGridSigner)
