@@ -363,7 +363,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _requestedTierId id of the tier (if same as current tier, performs sync)
     /// @param _requestedShareLimit share limit to set
     /// @return bool Whether the tier change/sync was confirmed.
-    /// @dev Requires vault to be connected to VaultHub.
+    /// @dev Requires vault to be connected to VaultHub to finalize tier change/sync.
     /// @dev In sync mode (same tier ID), syncs vault params with current tier params.
     /// @dev Both vault owner and node operator confirmation required for all operations.
     /*
