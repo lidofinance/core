@@ -1,5 +1,7 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
+
+// solhint-disable-next-line
 pragma solidity >=0.8.9 <0.9.0;
 
 /// @notice Deposit information between two slots
