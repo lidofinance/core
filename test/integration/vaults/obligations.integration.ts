@@ -146,7 +146,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       expect(recordAfter.liabilityShares).to.equal(redemptionShares);
     });
 
-    it("Not pauses beacon chain deposits when redemptions > 1 ether and vault has enough balance", async () => {
+    it("Pauses beacon chain deposits when redemptions >= 1 ether and vault can cover them with balance", async () => {
       let redemptionShares = (await lido.getSharesByPooledEth(ether("1"))) + 1n;
 
       const redemptionValue = await lido.getPooledEthBySharesRoundUp(redemptionShares);
@@ -162,7 +162,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       await expect(vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n))
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(stakingVaultAddress, redemptionShares)
-        .and.not.to.emit(stakingVault, "BeaconChainDepositsPaused");
+        .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
       const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
       expect(recordAfter.redemptionShares).to.equal(redemptionShares);
@@ -339,7 +339,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       // Report the vault data with accrued Lido fees
       await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees }))
         .to.emit(vaultHub, "VaultReportApplied")
-        .and.not.to.emit(stakingVault, "BeaconChainDepositsPaused");
+        .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
       // Pay the fees to the treasury
       await expect(vaultHub.settleLidoFees(stakingVaultAddress))
@@ -347,7 +347,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
         .withArgs(stakingVaultAddress, cumulativeLidoFees, cumulativeLidoFees, cumulativeLidoFees)
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(treasuryAddress, cumulativeLidoFees)
-        .and.not.to.emit(stakingVault, "BeaconChainDepositsResumed");
+        .to.emit(stakingVault, "BeaconChainDepositsResumed");
 
       const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
       expect(recordAfter.cumulativeLidoFees).to.equal(cumulativeLidoFees);
@@ -368,7 +368,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       // Report the vault data with accrued Lido fees
       await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees }))
         .to.emit(vaultHub, "VaultReportApplied")
-        .and.not.to.emit(stakingVault, "BeaconChainDepositsPaused");
+        .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
       const recordAfterReport = await vaultHub.vaultRecord(stakingVaultAddress);
       expect(recordAfterReport.cumulativeLidoFees).to.equal(cumulativeLidoFees);
@@ -380,7 +380,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
         .withArgs(stakingVaultAddress, funding, cumulativeLidoFees, funding)
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(treasuryAddress, funding)
-        .and.not.to.emit(stakingVault, "BeaconChainDepositsResumed");
+        .to.emit(stakingVault, "BeaconChainDepositsResumed");
 
       const recordAfterSettlement = await vaultHub.vaultRecord(stakingVaultAddress);
       expect(recordAfterSettlement.cumulativeLidoFees).to.equal(cumulativeLidoFees);
@@ -396,7 +396,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       // Report the vault data with accrued Lido fees
       await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees }))
         .to.emit(vaultHub, "VaultReportApplied")
-        .and.not.to.emit(stakingVault, "BeaconChainDepositsPaused");
+        .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
       const recordAfterFirstReport = await vaultHub.vaultRecord(stakingVaultAddress);
       expect(recordAfterFirstReport.cumulativeLidoFees).to.equal(cumulativeLidoFees);
@@ -408,7 +408,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
         .withArgs(stakingVaultAddress, initialFunding, cumulativeLidoFees, initialFunding)
         .to.emit(stakingVault, "EtherWithdrawn")
         .withArgs(treasuryAddress, initialFunding)
-        .and.not.to.emit(stakingVault, "BeaconChainDepositsResumed");
+        .to.emit(stakingVault, "BeaconChainDepositsResumed");
 
       // Increase the fees
       const delta = ether("0.1");

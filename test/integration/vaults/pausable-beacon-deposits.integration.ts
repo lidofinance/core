@@ -105,12 +105,12 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
   });
 
   context("Automatic pause", () => {
-    it("Not pause beacon deposits on vault report (big fees)", async () => {
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1") }))
-        .to.not.emit(stakingVault, "BeaconChainDepositsPaused")
-        .and.not.to.emit(stakingVault, "BeaconChainDepositsPaused");
-
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
+    it("Pause beacon deposits on vault report (big fees >= 1 ether)", async () => {
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1") })).to.emit(
+        stakingVault,
+        "BeaconChainDepositsPaused",
+      );
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
       const connection = await vaultHub.vaultConnection(stakingVaultAddress);
       expect(connection.isBeaconDepositsManuallyPaused).to.be.false;
@@ -127,7 +127,6 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
         stakingVault,
         "BeaconChainDepositsPaused",
       );
-
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
       await dashboard.fund({ value: ether("1") });

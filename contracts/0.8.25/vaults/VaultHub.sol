@@ -798,8 +798,9 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
 
-        if (_hasInsufficientBalanceForRedemptions(_vault, record)) {
-            revert RedemptionsTooHighCannotDeposit(_vault, _getPooledEthBySharesRoundUp(record.redemptionShares));
+        uint256 obligations = _obligations(record);
+        if (obligations >= MIN_BEACON_DEPOSIT) {
+            revert ObligationsTooHighCannotDeposit(_vault, obligations);
         }
 
         connection.isBeaconDepositsManuallyPaused = false;
@@ -844,20 +845,19 @@ contract VaultHub is PausableUntilWithRoles {
         if (minPartialAmountInGwei < type(uint256).max) {
             _requireFreshReport(_vault, record);
 
-            /// @dev NB: Disallow partial withdrawals when the vault is unhealthy or has redemptions over the threshold
+            /// @dev NB: Disallow partial withdrawals when the vault is unhealthy or has obligations over the threshold
             ///          in order to prevent the vault owner from clogging the consensus layer withdrawal queue
             ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
             ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
             ///          settle redemptions
-            if (!_isVaultHealthy(connection, record) || _hasInsufficientBalanceForRedemptions(_vault, record)) {
-                uint256 vaultBalance = _vault.balance;
+            if (_isForceValidatorExitAllowed(connection, record, _vault.balance)) {
                 uint256 sharesToCover = Math256.max(
                     _rebalanceShortfallShares(connection, record),
                     record.redemptionShares
                 );
-
                 if (sharesToCover == type(uint256).max) revert PartialValidatorWithdrawalNotAllowed();
 
+                uint256 vaultBalance = _vault.balance;
                 uint256 amountToCover = _getPooledEthBySharesRoundUp(sharesToCover);
                 uint256 requiredAmountToCover = amountToCover > vaultBalance ? amountToCover - vaultBalance : 0;
                 if (minPartialAmountInGwei * 1e9 < requiredAmountToCover) {
@@ -885,7 +885,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        if (_isVaultHealthy(connection, record) && !_hasInsufficientBalanceForRedemptions(_vault, record)) {
+        if (!_isForceValidatorExitAllowed(connection, record, _vault.balance)) {
             revert ForcedValidatorExitNotAllowed();
         }
 
@@ -1239,14 +1239,14 @@ contract VaultHub is PausableUntilWithRoles {
         return liability > _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
     }
 
-    /// @notice Returns true if the vault has insufficient balance to cover the redemptions and redemptions over the
-    ///         minimum beacon deposit threshold
-    function _hasInsufficientBalanceForRedemptions(
-        address _vault,
-        VaultRecord storage _record
+    /// @dev Returns true if the vault is unhealthy or has obligations exceeding the minimum beacon deposit .
+    function _isForceValidatorExitAllowed(
+        VaultConnection storage _connection,
+        VaultRecord storage _record,
+        uint256 _vaultBalance
     ) internal view returns (bool) {
-        uint256 redemptionsValue = _getPooledEthBySharesRoundUp(_record.redemptionShares);
-        return redemptionsValue >= MIN_BEACON_DEPOSIT && redemptionsValue > _vault.balance;
+        uint256 obligations = _obligations(_record);
+        return !_isVaultHealthy(_connection, _record) || (obligations >= MIN_BEACON_DEPOSIT && obligations > _vaultBalance);
     }
 
     function _addVault(address _vault, VaultConnection memory _connection, VaultRecord memory _record) internal {
@@ -1297,17 +1297,14 @@ contract VaultHub is PausableUntilWithRoles {
         emit VaultInOutDeltaUpdated(_vault, inOutDelta.currentValue());
     }
 
-    function _unsettledLidoFeesValue(VaultRecord storage _record) internal view returns (uint256) {
-        return _record.cumulativeLidoFees - _record.settledLidoFees;
-    }
-
     function _updateBeaconChainDepositsPause(
         address _vault,
         VaultRecord storage _record,
         VaultConnection storage _connection
     ) internal {
         IStakingVault vault_ = IStakingVault(_vault);
-        if (!_isVaultHealthy(_connection, _record) || _hasInsufficientBalanceForRedemptions(_vault, _record)) {
+
+        if (!_isVaultHealthy(_connection, _record) || _obligations(_record) >= MIN_BEACON_DEPOSIT) {
             _pauseBeaconChainDepositsIfNotAlready(vault_);
         } else if (!_connection.isBeaconDepositsManuallyPaused) {
             _resumeBeaconChainDepositsIfNotAlready(vault_);
@@ -1341,8 +1338,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 locked_ = _record.locked - redemptionsValue;
         uint256 unlockedValueWithoutRedemptions = totalValue_ > locked_ ? totalValue_ - locked_ : 0;
 
+        uint256 obligations = _obligations(_record);
         uint256 availableBalance = Math256.min(unlockedValueWithoutRedemptions, _vault.balance);
-        uint256 obligations = redemptionsValue + _unsettledLidoFeesValue(_record);
         return availableBalance > obligations ? availableBalance - obligations : 0;
     }
 
@@ -1374,6 +1371,14 @@ contract VaultHub is PausableUntilWithRoles {
             liquidityFeeBP: _liquidityFeeBP,
             reservationFeeBP: _reservationFeeBP
         });
+    }
+
+    function _obligations(VaultRecord storage _record) internal view returns (uint256) {
+        return _getPooledEthBySharesRoundUp(_record.redemptionShares) + _unsettledLidoFeesValue(_record);
+    }
+
+    function _unsettledLidoFeesValue(VaultRecord storage _record) internal view returns (uint256) {
+        return _record.cumulativeLidoFees - _record.settledLidoFees;
     }
 
     function _storage() internal pure returns (Storage storage $) {
@@ -1598,7 +1603,7 @@ contract VaultHub is PausableUntilWithRoles {
     error ZeroCodehash();
     error VaultHubNotPendingOwner(address vault);
     error UnhealthyVaultCannotDeposit(address vault);
-    error RedemptionsTooHighCannotDeposit(address vault, uint256 redemptionsValue);
+    error ObligationsTooHighCannotDeposit(address vault, uint256 obligations);
     error VaultIsDisconnecting(address vault);
     error PartialValidatorWithdrawalNotAllowed();
     error ForcedValidatorExitNotAllowed();
