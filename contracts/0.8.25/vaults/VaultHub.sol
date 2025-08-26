@@ -489,6 +489,21 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (connection.pendingDisconnect) {
             if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
+
+                uint256 settledFees = record.settledLidoFees;
+                uint256 unsettledFees = _reportCumulativeLidoFees - settledFees;
+                if (unsettledFees > 0) {
+                    uint256 withdrawable = Math256.min(unsettledFees, _vault.balance);
+                    _withdrawFromVault(_vault, LIDO_LOCATOR.treasury(), withdrawable);
+
+                    emit LidoFeesSettled({
+                        vault: _vault,
+                        transferred: withdrawable,
+                        cumulativeLidoFees: _reportCumulativeLidoFees,
+                        settledLidoFees: settledFees + withdrawable
+                    });
+                }
+
                 IStakingVault(_vault).transferOwnership(connection.owner);
                 _deleteVault(_vault, connection);
 
@@ -851,7 +866,7 @@ contract VaultHub is PausableUntilWithRoles {
             }
         }
 
-        _triggerValidatorWithdrawals(_vault, msg.value, _pubkeys, _amountsInGwei, _refundRecipient);
+        _triggerVaultValidatorWithdrawals(_vault, msg.value, _pubkeys, _amountsInGwei, _refundRecipient);
     }
 
     /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault is
@@ -875,7 +890,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         uint64[] memory amountsInGwei = new uint64[](0);
-        _triggerValidatorWithdrawals(_vault, msg.value, _pubkeys, amountsInGwei, _refundRecipient);
+        _triggerVaultValidatorWithdrawals(_vault, msg.value, _pubkeys, amountsInGwei, _refundRecipient);
 
         emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
@@ -1059,8 +1074,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (_amount > totalValue_) revert WithdrawAmountExceedsTotalValue(totalValue_, _amount);
 
         _updateInOutDelta(_vault, _record, -int104(int256(_amount)));
-
-        IStakingVault(_vault).withdraw(_recipient, _amount);
+        _withdrawFromVault(_vault, _recipient, _amount);
     }
 
     /// @dev Increases liabilityShares of the vault and updates the locked amount
@@ -1405,7 +1419,7 @@ contract VaultHub is PausableUntilWithRoles {
         LIDO.rebalanceExternalEtherToInternal{value: _ether}();
     }
 
-    function _triggerValidatorWithdrawals(
+    function _triggerVaultValidatorWithdrawals(
         address _vault,
         uint256 _value,
         bytes calldata _pubkeys,
@@ -1413,6 +1427,10 @@ contract VaultHub is PausableUntilWithRoles {
         address _refundRecipient
     ) internal {
         IStakingVault(_vault).triggerValidatorWithdrawals{value: _value}(_pubkeys, _amountsInGwei, _refundRecipient);
+    }
+
+    function _withdrawFromVault(address _vault, address _recipient, uint256 _amount) internal {
+        IStakingVault(_vault).withdraw(_recipient, _amount);
     }
 
     function _nodeOperator(address _vault) internal view returns (address) {

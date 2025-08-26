@@ -439,6 +439,22 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       expect(recordAfter.settledLidoFees).to.equal(cumulativeLidoFees);
     });
 
+    it("Withdraws fees to the treasury when the vault is disonnecting", async () => {
+      await dashboard.voluntaryDisconnect();
+
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("0.1") }))
+        .to.emit(vaultHub, "LidoFeesSettled")
+        .withArgs(stakingVaultAddress, ether("0.1"), ether("0.1"), ether("0.1"));
+    });
+
+    it("Withdraws fees to the treasury when the vault is disonnecting capped by balance", async () => {
+      await dashboard.voluntaryDisconnect();
+
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1.1") }))
+        .to.emit(vaultHub, "LidoFeesSettled")
+        .withArgs(stakingVaultAddress, ether("1"), ether("1.1"), ether("1"));
+    });
+
     context("Settlement", () => {
       let redemptionShares: bigint;
       let cumulativeLidoFees: bigint;
@@ -531,7 +547,10 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       await dashboard.mintShares(stranger, sharesToMint);
       await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n);
 
-      await await expect(dashboard.mintShares(stranger, sharesToMint + 1n)).to.emit(vaultHub, "MintedSharesOnVault");
+      await expect(dashboard.mintShares(stranger, mintableShares - sharesToMint)).to.emit(
+        vaultHub,
+        "MintedSharesOnVault",
+      );
     });
   });
 
