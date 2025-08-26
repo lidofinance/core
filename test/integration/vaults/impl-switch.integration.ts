@@ -7,7 +7,10 @@ import { PinnedBeaconProxy, VaultHub } from "typechain-types";
 
 import { createVaultWithDashboard, getProtocolContext, ProtocolContext, setupLidoForVaults } from "lib/protocol";
 
+import { Snapshot } from "test/suite";
+
 describe("Switching vault implementation by spoofing ossification", () => {
+  let snapshot: string;
   let owner: HardhatEthersSigner;
 
   let ctx: ProtocolContext;
@@ -15,6 +18,7 @@ describe("Switching vault implementation by spoofing ossification", () => {
   let goodProxy: PinnedBeaconProxy;
 
   before(async () => {
+    snapshot = await Snapshot.take();
     ctx = await getProtocolContext();
 
     await setupLidoForVaults(ctx);
@@ -30,6 +34,8 @@ describe("Switching vault implementation by spoofing ossification", () => {
       owner,
     ));
   });
+
+  afterEach(async () => await Snapshot.restore(snapshot));
 
   it("connectVault reverts if the vault is ossified by checking the ossification on the proxy", async () => {
     const spoofImpl = await ethers.deployContract("StakingVault__OssifiedSpoof");
