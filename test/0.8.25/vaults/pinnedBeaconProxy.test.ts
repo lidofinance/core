@@ -147,4 +147,15 @@ describe("PinnedBeaconProxy.sol", () => {
       expect(await proxy2.implementation()).to.equal(await beacon.implementation());
     });
   });
+
+  describe("isOssified()", () => {
+    it("should return false when not ossified", async () => {
+      expect(await pinnedBeaconProxy.isOssified()).to.be.false;
+    });
+
+    it("should return true when ossified", async () => {
+      await ossify(pinnedBeaconProxy, randomAddress());
+      expect(await pinnedBeaconProxy.isOssified()).to.be.true;
+    });
+  });
 });
