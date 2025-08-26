@@ -332,7 +332,9 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice amount of bad debt to be internalized to become the protocol loss
-    function badDebtToInternalizeAsOfLastRefSlot() external view returns (uint256) {
+    /// @return the number of shares to internalize as bad debt during the oracle report
+    /// @dev the value is lagging increases that was done after the current refSlot to the next one
+    function badDebtToInternalize() external view returns (uint256) {
         return _storage().badDebtToInternalize.getValueForLastRefSlot(CONSENSUS_CONTRACT);
     }
 
@@ -549,70 +551,96 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _badDebtVault address of the vault that has the bad debt
     /// @param _vaultAcceptor address of the vault that will accept the bad debt
     /// @param _maxSharesToSocialize maximum amount of shares to socialize
+    /// @return number of shares that was socialized
+    ///         (it's limited by acceptor vault capacity and bad debt actual size)
     /// @dev msg.sender must have BAD_DEBT_MASTER_ROLE
     function socializeBadDebt(
         address _badDebtVault,
         address _vaultAcceptor,
         uint256 _maxSharesToSocialize
-    ) external onlyRole(BAD_DEBT_MASTER_ROLE) {
+    ) external onlyRole(BAD_DEBT_MASTER_ROLE) returns (uint256) {
         _requireNotZero(_badDebtVault);
         _requireNotZero(_vaultAcceptor);
         _requireNotZero(_maxSharesToSocialize);
-        if (_nodeOperator(_vaultAcceptor) != _nodeOperator(_badDebtVault)) revert BadDebtSocializationNotAllowed();
+        if (_nodeOperator(_vaultAcceptor) != _nodeOperator(_badDebtVault)) {
+            revert BadDebtSocializationNotAllowed();
+        }
 
         VaultConnection storage badDebtConnection = _vaultConnection(_badDebtVault);
-        _requireConnected(badDebtConnection, _badDebtVault); // require connected but may be pending disconnect
+        VaultRecord storage badDebtRecord = _vaultRecord(_badDebtVault);
+        VaultConnection storage acceptorConnection = _vaultConnection(_vaultAcceptor);
+        VaultRecord storage acceptorRecord = _vaultRecord(_vaultAcceptor);
 
-        uint256 badDebtToSocialize = _writeOffBadDebt({
-            _vault: _badDebtVault,
-            _record: _vaultRecord(_badDebtVault),
-            _maxSharesToWriteOff: _maxSharesToSocialize
-        });
+        _requireConnected(badDebtConnection, _badDebtVault);
+        _requireConnected(acceptorConnection, _vaultAcceptor);
+        _requireFreshReport(_badDebtVault, badDebtRecord);
+        _requireFreshReport(_vaultAcceptor, acceptorRecord);
 
-        VaultConnection storage connectionAcceptor = _vaultConnection(_vaultAcceptor);
-        _requireConnected(connectionAcceptor, _vaultAcceptor);
+        uint256 badDebtShares = _badDebtShares(badDebtRecord);
+        uint256 badDebtToSocialize = Math256.min(badDebtShares, _maxSharesToSocialize);
 
-        VaultRecord storage recordAcceptor = _vaultRecord(_vaultAcceptor);
-        _increaseLiability({
-            _vault: _vaultAcceptor,
-            _record: recordAcceptor,
-            _amountOfShares: badDebtToSocialize,
-            _reserveRatioBP: connectionAcceptor.reserveRatioBP,
-            _maxLockableValue: _totalValue(recordAcceptor) * TOTAL_BASIS_POINTS
-                / (TOTAL_BASIS_POINTS - connectionAcceptor.reserveRatioBP),
-            _shareLimit: type(uint256).max
-        });
+        uint256 acceptorTotalValueShares = _getSharesByPooledEth(_totalValue(acceptorRecord));
+        uint256 acceptorLiabilityShares = acceptorRecord.liabilityShares;
 
-        emit BadDebtSocialized(_badDebtVault, _vaultAcceptor, badDebtToSocialize);
+        // it's possible to socialize up to bad debt:
+        uint256 acceptorCapacity = acceptorTotalValueShares < acceptorLiabilityShares ? 0
+            : acceptorTotalValueShares - acceptorLiabilityShares;
+
+        uint256 badDebtSharesToAccept = Math256.min(badDebtToSocialize, acceptorCapacity);
+
+        if (badDebtSharesToAccept > 0) {
+            _decreaseLiability(_badDebtVault, badDebtRecord, badDebtSharesToAccept);
+            _increaseLiability({
+                _vault: _vaultAcceptor,
+                _record: acceptorRecord,
+                _amountOfShares: badDebtSharesToAccept,
+                _reserveRatioBP: acceptorConnection.reserveRatioBP,
+                // don't check any limits
+                _maxLockableValue: type(uint256).max,
+                _shareLimit: type(uint256).max,
+                _overrideOperatorLimits: true
+            });
+
+            emit BadDebtSocialized(_badDebtVault, _vaultAcceptor, badDebtSharesToAccept);
+        }
+
+        return badDebtSharesToAccept;
     }
 
     /// @notice Internalize the bad debt to the protocol
     /// @param _badDebtVault address of the vault that has the bad debt
     /// @param _maxSharesToInternalize maximum amount of shares to internalize
+    /// @return number of shares that was internalized (limited by actual size of the bad debt)
     /// @dev msg.sender must have BAD_DEBT_MASTER_ROLE
     function internalizeBadDebt(
         address _badDebtVault,
         uint256 _maxSharesToInternalize
-    ) external onlyRole(BAD_DEBT_MASTER_ROLE) {
+    ) external onlyRole(BAD_DEBT_MASTER_ROLE) returns (uint256) {
         _requireNotZero(_badDebtVault);
         _requireNotZero(_maxSharesToInternalize);
 
         VaultConnection storage badDebtConnection = _vaultConnection(_badDebtVault);
+        VaultRecord storage badDebtRecord = _vaultRecord(_badDebtVault);
         _requireConnected(badDebtConnection, _badDebtVault);
+        _requireFreshReport(_badDebtVault, badDebtRecord);
 
-        uint256 badDebtToInternalize = _writeOffBadDebt({
-            _vault: _badDebtVault,
-            _record: _vaultRecord(_badDebtVault),
-            _maxSharesToWriteOff: _maxSharesToInternalize
-        });
+        uint256 badDebtShares = _badDebtShares(badDebtRecord);
+        uint256 badDebtToInternalize_ = Math256.min(badDebtShares, _maxSharesToInternalize);
 
-        // internalize the bad debt to the protocol
-        _storage().badDebtToInternalize = _storage().badDebtToInternalize.withValueIncrease({
-            _consensus: CONSENSUS_CONTRACT,
-            _increment: uint104(badDebtToInternalize)
-        });
+        if (badDebtToInternalize_ > 0) {
+            _decreaseLiability(_badDebtVault, badDebtRecord, badDebtToInternalize_);
 
-        emit BadDebtWrittenOffToBeInternalized(_badDebtVault, badDebtToInternalize);
+            // store internalization in a separate counter that will be settled
+            // by the Accounting Oracle during the report
+            _storage().badDebtToInternalize = _storage().badDebtToInternalize.withValueIncrease({
+                _consensus: CONSENSUS_CONTRACT,
+                _increment: uint104(badDebtToInternalize_)
+            });
+
+            emit BadDebtWrittenOffToBeInternalized(_badDebtVault, badDebtToInternalize_);
+        }
+
+        return badDebtToInternalize_;
     }
 
     /// @notice Reset the internalized bad debt to zero
@@ -717,7 +745,8 @@ contract VaultHub is PausableUntilWithRoles {
             _amountOfShares: _amountOfShares,
             _reserveRatioBP: connection.reserveRatioBP,
             _maxLockableValue: _totalValueWithoutUnsettledFees(record, _vaultObligations(_vault)),
-            _shareLimit: connection.shareLimit
+            _shareLimit: connection.shareLimit,
+            _overrideOperatorLimits: false
         });
 
         LIDO.mintExternalShares(_recipient, _amountOfShares);
@@ -1050,10 +1079,13 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _amountOfShares,
         uint256 _reserveRatioBP,
         uint256 _maxLockableValue,
-        uint256 _shareLimit
+        uint256 _shareLimit,
+        bool _overrideOperatorLimits
     ) internal {
         uint256 sharesAfterMint = _record.liabilityShares + _amountOfShares;
-        if (sharesAfterMint > _shareLimit) revert ShareLimitExceeded(_vault, sharesAfterMint, _shareLimit);
+        if (sharesAfterMint > _shareLimit) {
+            revert ShareLimitExceeded(_vault, sharesAfterMint, _shareLimit);
+        }
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
         uint256 etherToLock = _locked(sharesAfterMint, _record.minimalReserve, _reserveRatioBP);
@@ -1067,7 +1099,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _record.liabilityShares = uint96(sharesAfterMint);
 
-        _operatorGrid().onMintedShares(_vault, _amountOfShares);
+        _operatorGrid().onMintedShares(_vault, _amountOfShares, _overrideOperatorLimits);
     }
 
     function _decreaseLiability(address _vault, VaultRecord storage _record, uint256 _amountOfShares) internal {
@@ -1080,20 +1112,15 @@ contract VaultHub is PausableUntilWithRoles {
         _operatorGrid().onBurnedShares(_vault, _amountOfShares);
     }
 
-    function _writeOffBadDebt(
-        address _vault,
-        VaultRecord storage _record,
-        uint256 _maxSharesToWriteOff
-    ) internal returns (uint256 badDebtWrittenOff) {
+    function _badDebtShares(VaultRecord storage _record) internal view returns (uint256) {
         uint256 liabilityShares_ = _record.liabilityShares;
         uint256 totalValueShares = _getSharesByPooledEth(_totalValue(_record));
+
         if (totalValueShares > liabilityShares_) {
-            revert NoBadDebtToWriteOff(_vault, totalValueShares, liabilityShares_);
+            return 0;
         }
 
-        badDebtWrittenOff = Math256.min(liabilityShares_ - totalValueShares, _maxSharesToWriteOff);
-
-        _decreaseLiability(_vault, _record, badDebtWrittenOff);
+        return liabilityShares_ - totalValueShares;
     }
 
     function _rebalanceShortfall(
@@ -1515,6 +1542,12 @@ contract VaultHub is PausableUntilWithRoles {
         return _storage().obligations[_vault];
     }
 
+
+    // -----------------------------
+    //          EXTERNAL CALLS
+    // -----------------------------
+    // All external calls that is used more than once is wrapped in internal function to save bytecode
+
     function _operatorGrid() internal view returns (OperatorGrid) {
         return OperatorGrid(LIDO_LOCATOR.operatorGrid());
     }
@@ -1717,6 +1750,5 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultHasUnsettledObligations(address vault, uint256 unsettledObligations, uint256 allowedUnsettled);
     error PartialValidatorWithdrawalNotAllowed();
     error ForcedValidatorExitNotAllowed();
-    error NoBadDebtToWriteOff(address vault, uint256 totalValueShares, uint256 liabilityShares);
     error BadDebtSocializationNotAllowed();
 }

@@ -95,7 +95,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     uint256 internal constant MAX_FEE_BP = type(uint16).max;
     /// @dev max value for reserve ratio in basis points - 9999
     uint256 internal constant MAX_RESERVE_RATIO_BP = 99_99;
-    
+
     // -----------------------------
     //            STRUCTS
     // -----------------------------
@@ -494,9 +494,11 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @notice Mint shares limit check
     /// @param _vault address of the vault
     /// @param _amount amount of shares will be minted
+    /// @param _overrideLimits true if group and tier limits should not be checked
     function onMintedShares(
         address _vault,
-        uint256 _amount
+        uint256 _amount,
+        bool _overrideLimits
     ) external {
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("onMintedShares", msg.sender);
 
@@ -506,14 +508,18 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         Tier storage tier_ = $.tiers[tierId];
 
         uint96 tierLiabilityShares = tier_.liabilityShares;
-        if (tierLiabilityShares + _amount > tier_.shareLimit) revert TierLimitExceeded();
+        if (!_overrideLimits && tierLiabilityShares + _amount > tier_.shareLimit) {
+            revert TierLimitExceeded();
+        }
 
         tier_.liabilityShares = tierLiabilityShares + uint96(_amount);
 
         if (tierId != DEFAULT_TIER_ID) {
             Group storage group_ = $.groups[tier_.operator];
             uint96 groupMintedShares = group_.liabilityShares;
-            if (groupMintedShares + _amount > group_.shareLimit) revert GroupLimitExceeded();
+            if (!_overrideLimits && groupMintedShares + _amount > group_.shareLimit) {
+                revert GroupLimitExceeded();
+            }
 
             group_.liabilityShares = groupMintedShares + uint96(_amount);
         }

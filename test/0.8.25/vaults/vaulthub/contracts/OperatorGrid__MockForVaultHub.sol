@@ -68,9 +68,9 @@ contract OperatorGrid__MockForVaultHub {
         emit TierChanged(_vault, DEFAULT_TIER_ID);
     }
 
-    function onMintedShares(address vault, uint256 amount) external {}
+    function onMintedShares(address, uint256, bool) external {}
 
-    function onBurnedShares(address vault, uint256 amount) external {}
+    function onBurnedShares(address, uint256) external {}
 
     event TierChanged(address vault, uint256 indexed tierId);
 }
