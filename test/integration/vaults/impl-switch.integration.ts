@@ -34,6 +34,9 @@ describe("Switching vault implementation by spoofing ossification", () => {
   it("connectVault reverts if the vault is ossified by checking the ossification on the proxy", async () => {
     const spoofImpl = await ethers.deployContract("StakingVault__OssifiedSpoof");
 
+    // isOssified() returns false on the implementation
+    expect(await spoofImpl.isOssified()).to.be.false;
+
     const badProxy = await ethers.deployContract("PinnedBeaconProxy__BeaconOverride", [
       spoofImpl,
       ctx.contracts.stakingVaultBeacon,
