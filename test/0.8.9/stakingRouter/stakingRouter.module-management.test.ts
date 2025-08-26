@@ -28,11 +28,15 @@ describe("StakingRouter.sol:module-management", () => {
     [deployer, admin, user] = await ethers.getSigners();
 
     const depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    // const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter", {
+
+    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
+    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
+    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
+    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
       libraries: {
-        // ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
-        // TODO: libraries BeaconChainDepositor, DepositsTracker, DepositsTempStorage
+        ["contracts/0.8.9/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
+        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
+        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
       },
     });
 
@@ -90,9 +94,9 @@ describe("StakingRouter.sol:module-management", () => {
     };
 
     it("Reverts if the caller does not have the role", async () => {
-      await expect(
-        stakingRouter.connect(user).addStakingModule(NAME, ADDRESS, stakingModuleConfig),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
+      await expect(stakingRouter.connect(user).addStakingModule(NAME, ADDRESS, stakingModuleConfig))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
     });
 
     it("Reverts if the target share is greater than 100%", async () => {
@@ -215,6 +219,7 @@ describe("StakingRouter.sol:module-management", () => {
         PRIORITY_EXIT_SHARE_THRESHOLD,
         MAX_DEPOSITS_PER_BLOCK,
         MIN_DEPOSIT_BLOCK_DISTANCE,
+        WITHDRAWAL_CREDENTIALS_TYPE_01,
       ]);
     });
   });
@@ -269,7 +274,9 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
           WITHDRAWAL_CREDENTIALS_TYPE_01,
         ),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
     });
 
     it("Reverts if the new target share is greater than 100%", async () => {

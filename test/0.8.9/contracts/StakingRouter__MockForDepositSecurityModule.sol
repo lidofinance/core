@@ -37,6 +37,7 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     uint256 private stakingModuleNonce;
     uint256 private stakingModuleLastDepositBlock;
     uint256 private stakingModuleMaxDepositsPerBlock;
+    uint256 private stakingModuleMaxDepositsAmountPerBlock;
     uint256 private stakingModuleMinDepositBlockDistance;
     uint256 private registeredStakingModuleId;
 
@@ -45,12 +46,12 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     }
 
     function deposit(
-        uint256 maxDepositsCount,
+        // uint256 maxDepositsCount,
         uint256 stakingModuleId,
         bytes calldata depositCalldata
     ) external payable whenModuleIsRegistered(stakingModuleId) returns (uint256 keysCount) {
-        emit StakingModuleDeposited(maxDepositsCount, uint24(stakingModuleId), depositCalldata);
-        return maxDepositsCount;
+        emit StakingModuleDeposited(msg.value, uint24(stakingModuleId), depositCalldata);
+        return msg.value;
     }
 
     function decreaseStakingModuleVettedKeysCountByNodeOperator(
@@ -123,8 +124,18 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         return stakingModuleMaxDepositsPerBlock;
     }
 
+    function getStakingModuleMaxDepositsAmountPerBlock(
+        uint256 stakingModuleId
+    ) external view whenModuleIsRegistered(stakingModuleId) returns (uint256) {
+        return stakingModuleMaxDepositsAmountPerBlock;
+    }
+
     function setStakingModuleMaxDepositsPerBlock(uint256 value) external {
         stakingModuleMaxDepositsPerBlock = value;
+    }
+
+    function setStakingModuleMaxDepositsAmountPerBlock(uint256 value) external {
+        stakingModuleMaxDepositsAmountPerBlock = value;
     }
 
     function getStakingModuleMinDepositBlockDistance(

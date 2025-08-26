@@ -46,10 +46,15 @@ describe("StakingRouter.sol:exit", () => {
     [deployer, proxyAdmin, stakingRouterAdmin, user, reporter] = await ethers.getSigners();
 
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+
+    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
+    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
+    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
     const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
       libraries: {
-        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+        ["contracts/0.8.9/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
+        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
+        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
       },
     });
 
@@ -147,9 +152,7 @@ describe("StakingRouter.sol:exit", () => {
             publicKey,
             eligibleToExitInSec,
           ),
-      ).to.be.revertedWith(
-        `AccessControl: account ${user.address.toLowerCase()} is missing role ${await stakingRouter.REPORT_VALIDATOR_EXITING_STATUS_ROLE()}`,
-      );
+      ).to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount");
     });
   });
 
@@ -221,9 +224,7 @@ describe("StakingRouter.sol:exit", () => {
 
       await expect(
         stakingRouter.connect(user).onValidatorExitTriggered(validatorExitData, withdrawalRequestPaidFee, exitType),
-      ).to.be.revertedWith(
-        `AccessControl: account ${user.address.toLowerCase()} is missing role ${await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE()}`,
-      );
+      ).to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount");
     });
   });
 });

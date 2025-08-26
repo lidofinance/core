@@ -34,11 +34,15 @@ describe("StakingRouter.sol:misc", () => {
     [deployer, proxyAdmin, stakingRouterAdmin, user] = await ethers.getSigners();
 
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    // const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
-    // TODO: libraries BeaconChainDepositor, DepositsTracker, DepositsTempStorage
+
+    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
+    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
+    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
     const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
       libraries: {
-        // ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+        ["contracts/0.8.9/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
+        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
+        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
       },
     });
 
@@ -70,17 +74,18 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("Initializes the contract version, sets up roles and variables", async () => {
+      // TODO: add version check
       await expect(
         stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials, withdrawalCredentials02),
       )
-        .to.emit(stakingRouter, "ContractVersionSet")
-        .withArgs(3)
+        // .to.emit(stakingRouter, "ContractVersionSet")
+        // .withArgs(3)
         .and.to.emit(stakingRouter, "RoleGranted")
         .withArgs(await stakingRouter.DEFAULT_ADMIN_ROLE(), stakingRouterAdmin.address, user.address)
         .and.to.emit(stakingRouter, "WithdrawalCredentialsSet")
         .withArgs(withdrawalCredentials, user.address);
 
-      expect(await stakingRouter.getContractVersion()).to.equal(3);
+      expect(await stakingRouter.getContractVersion()).to.equal(4);
       expect(await stakingRouter.getLido()).to.equal(lido);
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(withdrawalCredentials);
     });
@@ -162,18 +167,18 @@ describe("StakingRouter.sol:misc", () => {
     // });
 
     // do this check via new Initializer from openzeppelin
-    // context("simulate upgrade from v2", () => {
-    //   beforeEach(async () => {
-    //     // reset contract version
-    //     await stakingRouter.testing_setBaseVersion(2);
-    //   });
+    context("simulate upgrade from v2", () => {
+      beforeEach(async () => {
+        // reset contract version
+        await stakingRouter.testing_setVersion(3);
+      });
 
-    //   it("sets correct contract version", async () => {
-    //     expect(await stakingRouter.getContractVersion()).to.equal(2);
-    //     await stakingRouter.finalizeUpgrade_v3();
-    //     expect(await stakingRouter.getContractVersion()).to.be.equal(3);
-    //   });
-    // });
+      it("sets correct contract version", async () => {
+        expect(await stakingRouter.getContractVersion()).to.equal(3);
+        await stakingRouter.migrateUpgrade_v4(lido, withdrawalCredentials, withdrawalCredentials02);
+        expect(await stakingRouter.getContractVersion()).to.be.equal(4);
+      });
+    });
   });
 
   context("receive", () => {

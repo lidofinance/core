@@ -27,8 +27,21 @@ contract StakingRouter__Harness is StakingRouter {
     //     CONTRACT_VERSION_POSITION.setStorageUint256(version);
     // }
 
+    function testing_setVersion(uint256 version) external {
+        _getInitializableStorage_Mock()._initialized = uint64(version);
+    }
+
     function testing_setStakingModuleStatus(uint256 _stakingModuleId, StakingModuleStatus _status) external {
         StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
         _setStakingModuleStatus(stakingModule, _status);
     }
+
+    function _getInitializableStorage_Mock() private pure returns (InitializableStorage storage $) {
+        assembly {
+            $.slot := INITIALIZABLE_STORAGE
+        }
+    }
+
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.Initializable")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant INITIALIZABLE_STORAGE = 0xf0c57e16840df040f15088dc2f81fe391c3923bec73e23a9662efc9c229c6a00;
 }

@@ -32,10 +32,14 @@ context("StakingRouter.sol:status-control", () => {
 
     // deploy staking router
     const depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    // const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
+    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
+    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
+    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
     const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
       libraries: {
-        // ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+        ["contracts/0.8.9/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
+        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
+        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
       },
     });
 
@@ -86,9 +90,9 @@ context("StakingRouter.sol:status-control", () => {
 
   context("setStakingModuleStatus", () => {
     it("Reverts if the caller does not have the role", async () => {
-      await expect(
-        stakingRouter.connect(user).setStakingModuleStatus(moduleId, Status.DepositsPaused),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
+      await expect(stakingRouter.connect(user).setStakingModuleStatus(moduleId, Status.DepositsPaused))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
     });
 
     it("Reverts if the new status is the same", async () => {

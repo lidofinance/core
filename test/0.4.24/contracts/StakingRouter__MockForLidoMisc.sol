@@ -7,6 +7,7 @@ contract StakingRouter__MockForLidoMisc {
     event Mock__DepositCalled();
 
     uint256 private stakingModuleMaxDepositsCount;
+    uint256 private stakingModuleMaxInitialDepositsAmount;
 
     function getWithdrawalCredentials() external pure returns (bytes32) {
         return 0x010000000000000000000000b9d7934878b5fb9610b3fe8a5e441e8fad7e293f; // Lido Withdrawal Creds
@@ -29,6 +30,13 @@ contract StakingRouter__MockForLidoMisc {
         modulesFee = 500;
     }
 
+    function getStakingModuleMaxInitialDepositsAmount(
+        uint256 stakingModuleId,
+        uint256 eth
+    ) external view returns (uint256) {
+        return stakingModuleMaxInitialDepositsAmount;
+    }
+
     function getStakingModuleMaxDepositsCount(
         uint256, // _stakingModuleId,
         uint256 // _maxDepositsValue
@@ -37,7 +45,6 @@ contract StakingRouter__MockForLidoMisc {
     }
 
     function deposit(
-        uint256, // _depositsCount,
         uint256, // _stakingModuleId,
         bytes calldata // _depositCalldata
     ) external payable {
@@ -46,5 +53,9 @@ contract StakingRouter__MockForLidoMisc {
 
     function mock__getStakingModuleMaxDepositsCount(uint256 newValue) external {
         stakingModuleMaxDepositsCount = newValue;
+    }
+
+    function mock__setStakingModuleMaxInitialDepositsAmount(uint256 newValue) external {
+        stakingModuleMaxInitialDepositsAmount = newValue;
     }
 }

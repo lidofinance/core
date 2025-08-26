@@ -328,6 +328,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes32 _withdrawalCredentials,
         bytes32 _withdrawalCredentials02
     ) external reinitializer(4) {
+        // TODO: here is problem, that last version of
         __AccessControlEnumerable_init();
 
         RouterStorage storage rs = _getRouterStorage();
@@ -1429,6 +1430,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             revert WrongWithdrawalCredentialsType();
         }
 
+        if (withdrawalCredentials == 0) revert EmptyWithdrawalsCredentials();
+
         uint256 depositsValue = msg.value;
         address stakingModuleAddress = stakingModule.stakingModuleAddress;
 
@@ -1493,11 +1496,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             return IStakingModule(stakingModuleAddress).obtainDepositData(depositsCount, depositCalldata);
         } else {
             // TODO: clean temp storage after read
-            return
-                IStakingModuleV2(stakingModuleAddress).getOperatorAvailableKeys(
-                    DepositsTempStorage.getOperators(),
-                    DepositsTempStorage.getCounts()
-                );
+
+            (keys, signatures) = IStakingModuleV2(stakingModuleAddress).getOperatorAvailableKeys(
+                DepositsTempStorage.getOperators(),
+                DepositsTempStorage.getCounts()
+            );
+
+            DepositsTempStorage.clearOperators();
+            DepositsTempStorage.clearCounts();
         }
     }
 
