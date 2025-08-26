@@ -512,13 +512,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         ERC7201Storage storage $ = _getStorage();
 
-        if ($.isVaultInJail[_vault] && !_overrideLimits) revert VaultInJail();
+        if (!_overrideLimits && $.isVaultInJail[_vault]) revert VaultInJail();
 
         uint256 tierId = $.vaultTier[_vault];
         Tier storage tier_ = $.tiers[tierId];
 
         uint96 tierLiabilityShares = tier_.liabilityShares;
-
         if (!_overrideLimits && tierLiabilityShares + _amount > tier_.shareLimit) {
             revert TierLimitExceeded();
         }
