@@ -7,11 +7,16 @@ import { Dashboard, StakingVault } from "typechain-types";
 
 import { MAX_UINT256 } from "lib";
 import {
+  changeTier,
   createVaultWithDashboard,
+  DEFAULT_TIER_PARAMS,
   getProtocolContext,
   ProtocolContext,
+  report,
   reportVaultDataWithProof,
   setupLidoForVaults,
+  setUpOperatorGrid,
+  waitNextAvailableReportTime,
 } from "lib/protocol";
 import { VAULT_CONNECTION_DEPOSIT } from "lib/protocol/helpers/vaults";
 import { ether } from "lib/units";
@@ -112,7 +117,7 @@ describe("Integration: Vault with bad debt", () => {
       expect(await vaultHub.isVaultHealthy(acceptorStakingVault)).to.be.equal(true);
     });
 
-    it("Socialization bypasses limits using _bypassLimits flag", async () => {
+    it("Socialization bypasses limits using _overrideLimits flag", async () => {
       await acceptorDashboard.connect(otherOwner).fund({ value: ether("10") });
       const { vaultHub, lido, operatorGrid } = ctx.contracts;
       const agentSigner = await ctx.getSigner("agent");
@@ -125,7 +130,7 @@ describe("Integration: Vault with bad debt", () => {
         (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
 
       // Socialization should succeed even though acceptor vault is in jail
-      // because socializeBadDebt uses _bypassLimits: true
+      // because socializeBadDebt uses _overrideLimits: true
       await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, acceptorStakingVault, badDebtShares))
         .to.emit(vaultHub, "BadDebtSocialized")
         .withArgs(stakingVault, acceptorStakingVault, badDebtShares);
@@ -138,13 +143,9 @@ describe("Integration: Vault with bad debt", () => {
       const vaultInfo = await operatorGrid.vaultInfo(acceptorStakingVault);
       const tier = await operatorGrid.tier(vaultInfo.tierId);
       expect(tier.liabilityShares).to.equal(VAULT_CONNECTION_DEPOSIT + badDebtShares);
-
-      // Clean up jail status
-      await operatorGrid.connect(agentSigner).setVaultJailStatus(acceptorStakingVault, false);
     });
 
-    it.skip("Socialization doesn't lead to bad debt in acceptor", async () => {
-      // TODO: fix this test
+    it("Socialization doesn't lead to bad debt in acceptor", async () => {
       await acceptorDashboard.connect(otherOwner).fund({ value: ether("1") });
       const { vaultHub, lido } = ctx.contracts;
 
@@ -169,6 +170,52 @@ describe("Integration: Vault with bad debt", () => {
         await lido.getSharesByPooledEth(await acceptorDashboard.totalValue()),
         "No bad debt in acceptor vault",
       );
+    });
+
+    it("OperatorGrid shareLimits can't prevent socialization", async () => {
+      await acceptorDashboard.connect(otherOwner).fund({ value: ether("10") });
+      const { vaultHub, lido } = ctx.contracts;
+
+      await setUpOperatorGrid(
+        ctx,
+        [nodeOperator],
+        [{ noShareLimit: await acceptorDashboard.liabilityShares(), tiers: [DEFAULT_TIER_PARAMS] }],
+      );
+      await changeTier(ctx, acceptorDashboard, otherOwner, nodeOperator);
+
+      const badDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, acceptorStakingVault, badDebtShares))
+        .to.emit(vaultHub, "BadDebtSocialized")
+        .withArgs(stakingVault, acceptorStakingVault, badDebtShares);
+    });
+  });
+
+  describe("Internalization", () => {
+    it("Vault's bad debt can be internalized", async () => {
+      const { vaultHub, lido } = ctx.contracts;
+
+      const badDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      await expect(vaultHub.connect(daoAgent).internalizeBadDebt(stakingVault, badDebtShares))
+        .to.emit(vaultHub, "BadDebtWrittenOffToBeInternalized")
+        .withArgs(stakingVault, badDebtShares);
+
+      expect(await dashboard.liabilityShares()).to.be.lessThanOrEqual(
+        await lido.getSharesByPooledEth(await dashboard.totalValue()),
+        "No bad debt in vault",
+      );
+
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.equal(false);
+
+      await waitNextAvailableReportTime(ctx);
+      expect(await vaultHub.badDebtToInternalize()).to.be.equal(badDebtShares);
+
+      await report(ctx, { waitNextReportTime: false });
+
+      expect(await vaultHub.badDebtToInternalize()).to.be.equal(0n);
     });
   });
 });

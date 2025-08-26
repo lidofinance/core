@@ -80,7 +80,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         5. Jail Mechanism:
          - A vault can be "jailed" as a penalty mechanism for misbehavior or violations
          - When a vault is in jail, it cannot mint new stETH shares (normal minting operations are blocked)
-         - Administrative operations (like bad debt socialization) can bypass jail restrictions using the _bypassLimits flag
+         - Administrative operations (like bad debt socialization) can bypass jail restrictions using the _overrideLimits flag
          - Vaults can be jailed/unjailed by addresses with appropriate governance roles
      */
 
@@ -101,7 +101,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     uint256 internal constant MAX_FEE_BP = type(uint16).max;
     /// @dev max value for reserve ratio in basis points - 9999
     uint256 internal constant MAX_RESERVE_RATIO_BP = 99_99;
-    
+
     // -----------------------------
     //            STRUCTS
     // -----------------------------
@@ -502,30 +502,35 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @notice Mint shares limit check
     /// @param _vault address of the vault
     /// @param _amount amount of shares will be minted
-    /// @param _bypassLimits if true, bypass the limits check
+    /// @param _overrideLimits true if group and tier limits should not be checked
     function onMintedShares(
         address _vault,
         uint256 _amount,
-        bool _bypassLimits
+        bool _overrideLimits
     ) external {
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("onMintedShares", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
 
-        if ($.isVaultInJail[_vault] && !_bypassLimits) revert VaultInJail();
+        if ($.isVaultInJail[_vault] && !_overrideLimits) revert VaultInJail();
 
         uint256 tierId = $.vaultTier[_vault];
         Tier storage tier_ = $.tiers[tierId];
 
         uint96 tierLiabilityShares = tier_.liabilityShares;
-        if (tierLiabilityShares + _amount > tier_.shareLimit && !_bypassLimits) revert TierLimitExceeded();
+
+        if (!_overrideLimits && tierLiabilityShares + _amount > tier_.shareLimit) {
+            revert TierLimitExceeded();
+        }
 
         tier_.liabilityShares = tierLiabilityShares + uint96(_amount);
 
         if (tierId != DEFAULT_TIER_ID) {
             Group storage group_ = $.groups[tier_.operator];
             uint96 groupMintedShares = group_.liabilityShares;
-            if (groupMintedShares + _amount > group_.shareLimit) revert GroupLimitExceeded();
+            if (!_overrideLimits && groupMintedShares + _amount > group_.shareLimit) {
+                revert GroupLimitExceeded();
+            }
 
             group_.liabilityShares = groupMintedShares + uint96(_amount);
         }
