@@ -1335,13 +1335,24 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage _record
     ) internal view returns (uint256) {
         uint256 totalValue_ = _totalValue(_record);
-        uint256 redemptionsValue = _getPooledEthBySharesRoundUp(_record.redemptionShares);
-        uint256 locked_ = _record.locked - redemptionsValue;
-        uint256 unlockedValueWithoutRedemptions = totalValue_ > locked_ ? totalValue_ - locked_ : 0;
+        // need to cap to prevent for gift withdrawals (MEV)
+        uint256 availableBalance = Math256.min(_vault.balance, totalValue_);
+        uint256 clBalance = totalValue_ - availableBalance;
 
-        uint256 obligations = _obligations(_record);
-        uint256 availableBalance = Math256.min(unlockedValueWithoutRedemptions, _vault.balance);
-        return availableBalance > obligations ? availableBalance - obligations : 0;
+        // 1. Decrease the available balance (and the locked value, see below) by the redemptions value
+        uint256 redemptionsValue = _getPooledEthBySharesRoundUp(_record.redemptionShares);
+        if (redemptionsValue > availableBalance) return 0;
+        availableBalance -= redemptionsValue;
+
+        // 2. Subtract the unsettled fees from the available balance
+        uint256 unsettledFees = _unsettledLidoFeesValue(_record);
+        if (unsettledFees > availableBalance) return 0;
+        availableBalance -= unsettledFees;
+
+        // 3. Subtract the locked (minus the redemptions value, see above) value from the available balance
+        uint256 lockedWithoutRedemptions = _record.locked - redemptionsValue;
+        uint256 locked_ = lockedWithoutRedemptions > clBalance ? lockedWithoutRedemptions - clBalance : 0;
+        return locked_ > availableBalance ? 0 : availableBalance - locked_;
     }
 
     function _updateVaultFees(

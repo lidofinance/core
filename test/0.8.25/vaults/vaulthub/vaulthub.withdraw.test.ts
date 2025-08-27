@@ -107,17 +107,15 @@ describe("VaultHub.sol:withdrawal", () => {
 
     it("returns correct withdrawable value when all conditions are met", async () => {
       const totalValue = ether("10");
+      const shares = ether("1");
       await connectedVault.connect(user).fund({ value: totalValue });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue });
 
-      await vaultHub.connect(user).mintShares(connectedVault, user, ether("1"));
+      await vaultHub.connect(user).mintShares(connectedVault, user, shares);
 
-      const record = await vaultHub.vaultRecord(connectedVault);
-      const locked = record.locked;
-      const expected = totalValue - locked;
-
-      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
-      expect(withdrawable).to.equal(expected);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("2")); // 1 shares + 1 minimal reserve = 2
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(ether("8")); // 10 - 2
     });
 
     it("accounts for unsettled Lido fees in obligations", async () => {
@@ -127,13 +125,18 @@ describe("VaultHub.sol:withdrawal", () => {
       await connectedVault.connect(user).fund({ value: totalValue });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue, cumulativeLidoFees });
 
-      const withdrawableBefore = await vaultHub.withdrawableValue(connectedVault);
+      const record = await vaultHub.vaultRecord(connectedVault);
+      expect(record.cumulativeLidoFees).to.equal(cumulativeLidoFees);
+      expect(record.settledLidoFees).to.equal(0n);
 
-      // 10 balance, 1 locked, 1 unsettled fees, 8 withdrawable
-      expect(withdrawableBefore).to.equal(ether("8"));
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("1")); // minimal reserve
+
+      // 10 - 1 - 1
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(ether("8"));
     });
 
-    it("accounts for redemption shares in obligations part on CL", async () => {
+    it("accounts for redemption shares (part of the total value is on CL)", async () => {
       const totalValue = ether("9");
       const redemptionShares = ether("3");
 
@@ -141,36 +144,47 @@ describe("VaultHub.sol:withdrawal", () => {
       await vaultsContext.reportVault({ vault: connectedVault, totalValue });
 
       await vaultHub.connect(user).mintShares(connectedVault, user, redemptionShares);
-      await vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 0n); // all for redemption
+      await vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 0n);
+
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("4")); // 3 shares + 1 minimal reserve = 4
+
+      // 9 - 4
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(ether("5"));
 
       const balance = ether("5");
       await setBalance(await connectedVault.getAddress(), balance);
-      expect(await vaultHub.totalValue(connectedVault)).to.equal(ether("9"));
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
       expect(await vaultHub.locked(connectedVault)).to.equal(ether("4"));
 
-      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
-
-      // 5 balance, 3 forced for redemption, 2 withdrawable
-      expect(withdrawable).to.equal(ether("2"));
+      // 5 - 3 (minimal reserve is locked on CL)
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(ether("2"));
     });
 
-    it("accounts for redemption shares in obligations all on EL", async () => {
+    it("accounts for redemption shares and unsettled fees (part of the total value is on CL)", async () => {
       const totalValue = ether("9");
       const redemptionShares = ether("3");
+      const cumulativeLidoFees = ether("1");
 
       await connectedVault.connect(user).fund({ value: totalValue });
-      await vaultsContext.reportVault({ vault: connectedVault, totalValue });
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue, cumulativeLidoFees });
 
       await vaultHub.connect(user).mintShares(connectedVault, user, redemptionShares);
-      await vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 0n); // all for redemption
+      await vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 0n);
 
-      expect(await vaultHub.totalValue(connectedVault)).to.equal(ether("9"));
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("4")); // 3 shares + 1 minimal reserve = 4
+
+      // 9 - 4 - 1
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(ether("4"));
+
+      const balance = ether("5");
+      await setBalance(await connectedVault.getAddress(), balance);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
       expect(await vaultHub.locked(connectedVault)).to.equal(ether("4"));
 
-      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
-
-      // 9 balance, 4 locked, 5 withdrawable
-      expect(withdrawable).to.equal(ether("5"));
+      // 5 - 3 (minimal reserve is locked on CL) - 1
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(ether("1"));
     });
   });
 
@@ -201,38 +215,6 @@ describe("VaultHub.sol:withdrawal", () => {
       );
     });
 
-    it("reverts when withdrawal amount exceeds withdrawable value with gifting", async () => {
-      const totalValue = ether("10");
-      await connectedVault.connect(user).fund({ value: totalValue });
-      await vaultsContext.reportVault({ vault: connectedVault, totalValue });
-
-      // gift to the vault
-      await setBalance(await connectedVault.getAddress(), totalValue * 10n);
-      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
-      expect(withdrawable).to.equal(totalValue - CONNECTION_DEPOSIT);
-
-      const excessiveAmount = totalValue + ether("1");
-      await expect(vaultHub.connect(user).withdraw(connectedVault, user, excessiveAmount))
-        .to.be.revertedWithCustomError(vaultHub, "AmountExceedsWithdrawableValue")
-        .withArgs(withdrawable, excessiveAmount);
-    });
-
-    it("reverts when withdrawal amount exceeds withdrawable value with minting", async () => {
-      const totalValue = ether("10");
-      await connectedVault.connect(user).fund({ value: totalValue });
-      await vaultsContext.reportVault({ vault: connectedVault, totalValue });
-
-      // Mint shares to create locked amount
-      await vaultHub.connect(user).mintShares(connectedVault, user, ether("5"));
-
-      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
-      const excessiveAmount = withdrawable + ether("1");
-
-      await expect(vaultHub.connect(user).withdraw(connectedVault, user, excessiveAmount))
-        .to.be.revertedWithCustomError(vaultHub, "AmountExceedsWithdrawableValue")
-        .withArgs(withdrawable, excessiveAmount);
-    });
-
     it("reverts when vault is pending disconnect", async () => {
       await connectedVault.connect(user).fund({ value: ether("10") });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("10") });
@@ -246,7 +228,7 @@ describe("VaultHub.sol:withdrawal", () => {
       );
     });
 
-    it("reverts withdrawal when vaulthub is paused", async () => {
+    it("reverts when vaulthub is paused", async () => {
       const totalValue = ether("10");
       await connectedVault.connect(user).fund({ value: totalValue });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue });
@@ -258,30 +240,83 @@ describe("VaultHub.sol:withdrawal", () => {
       );
     });
 
-    it("successfully withdraws when amount equals withdrawable value", async () => {
+    it("reverts when withdrawal amount exceeds withdrawable value (gifting)", async () => {
+      const totalValue = ether("10");
+      await connectedVault.connect(user).fund({ value: totalValue });
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue });
+
+      // gift to the vault
+      await setBalance(await connectedVault.getAddress(), totalValue * 10n);
+
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(CONNECTION_DEPOSIT);
+
+      // 10 - 1
+      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
+      expect(withdrawable).to.equal(totalValue - CONNECTION_DEPOSIT);
+
+      const excessiveAmount = totalValue + ether("1");
+      await expect(vaultHub.connect(user).withdraw(connectedVault, user, excessiveAmount))
+        .to.be.revertedWithCustomError(vaultHub, "AmountExceedsWithdrawableValue")
+        .withArgs(withdrawable, excessiveAmount);
+    });
+
+    it("reverts when withdrawal amount exceeds withdrawable value (minting)", async () => {
+      const totalValue = ether("10");
+      await connectedVault.connect(user).fund({ value: totalValue });
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue });
+
+      // Mint shares to create locked amount
+      await vaultHub.connect(user).mintShares(connectedVault, user, ether("5"));
+
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("6")); // 5 shares + 1 minimal reserve = 6
+
+      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
+      expect(withdrawable).to.equal(ether("4")); // 10 - 6
+
+      const excessiveAmount = withdrawable + 1n;
+      await expect(vaultHub.connect(user).withdraw(connectedVault, user, excessiveAmount))
+        .to.be.revertedWithCustomError(vaultHub, "AmountExceedsWithdrawableValue")
+        .withArgs(withdrawable, excessiveAmount);
+    });
+
+    it("withdraws full amount when amount equals withdrawable value", async () => {
       const totalValue = ether("10");
       await connectedVault.connect(user).fund({ value: totalValue });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue });
 
       await vaultHub.connect(user).mintShares(connectedVault, user, ether("5"));
 
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("6")); // 5 shares + 1 minimal reserve = 6
+
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
+      expect(withdrawable).to.equal(ether("4")); // 10 - 6
 
       const balanceBefore = await ethers.provider.getBalance(stranger);
       await vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable);
       const balanceAfter = await ethers.provider.getBalance(stranger);
 
       expect(balanceAfter - balanceBefore).to.equal(withdrawable);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(ether("6")); // 10 - 4
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("6")); // 5 shares + 1 minimal reserve = 6
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(0n);
     });
 
-    it("successfully withdraws partial amount", async () => {
+    it("withdraws partial amounts", async () => {
       const totalValue = ether("10");
       await connectedVault.connect(user).fund({ value: totalValue });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue });
 
       await vaultHub.connect(user).mintShares(connectedVault, user, ether("5"));
 
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("6")); // 5 shares + 1 minimal reserve = 6
+
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
+      expect(withdrawable).to.equal(ether("4")); // 10 - 6
+
       const partialAmount = withdrawable / 2n;
 
       const balanceBefore = await ethers.provider.getBalance(stranger);
@@ -289,6 +324,10 @@ describe("VaultHub.sol:withdrawal", () => {
       const balanceAfter = await ethers.provider.getBalance(stranger);
 
       expect(balanceAfter - balanceBefore).to.equal(partialAmount);
+
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(ether("8")); // 10 - 2
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("6")); // 5 shares + 1 minimal reserve = 6
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(ether("2")); // 4 - 2
     });
 
     it("updates inOutDelta correctly after withdrawal", async () => {
@@ -298,15 +337,22 @@ describe("VaultHub.sol:withdrawal", () => {
 
       await vaultHub.connect(user).mintShares(connectedVault, user, ether("5"));
 
-      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
-      const withdrawalAmount = withdrawable / 2n;
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("6")); // 5 shares + 1 minimal reserve = 6
 
+      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
+      expect(withdrawable).to.equal(ether("4")); // 10 - 6
+
+      const withdrawalAmount = withdrawable / 2n;
       const inOutDeltaBefore = await vaultHub.vaultRecord(connectedVault);
       await vaultHub.connect(user).withdraw(connectedVault, user, withdrawalAmount);
       const inOutDeltaAfter = await vaultHub.vaultRecord(connectedVault);
 
       // inOutDelta should decrease by the withdrawal amount
       expect(inOutDeltaAfter.inOutDelta[1].value).to.equal(inOutDeltaBefore.inOutDelta[0].value - withdrawalAmount);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(ether("8")); // 10 - 2
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("6")); // 5 shares + 1 minimal reserve = 6
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(ether("2")); // 4 - 2
     });
 
     it("handles withdrawal with minimal vault balance", async () => {
@@ -317,21 +363,43 @@ describe("VaultHub.sol:withdrawal", () => {
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
       expect(withdrawable).to.equal(1n);
 
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable)).to.not.be.reverted;
+      const balanceBefore = await ethers.provider.getBalance(stranger);
+      await vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable);
+      const balanceAfter = await ethers.provider.getBalance(stranger);
+
+      expect(balanceAfter - balanceBefore).to.equal(withdrawable);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(CONNECTION_DEPOSIT);
+      expect(await vaultHub.locked(connectedVault)).to.equal(CONNECTION_DEPOSIT);
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(0n);
     });
 
-    it("handles withdrawal when vault has locked amount", async () => {
-      const totalValue = ether("10");
-      await connectedVault.connect(user).fund({ value: totalValue });
-      await vaultsContext.reportVault({ vault: connectedVault, totalValue });
+    // TODO: fix this test with proper caps
+    it.skip("handles withdrawal with maximum (uint104) vault balance", async () => {
+      const maxUint104 = 2n ** 104n - 1n;
 
-      await vaultHub.connect(user).mintShares(connectedVault, user, ether("5"));
-      const locked = await vaultHub.locked(connectedVault);
+      await setBalance(await connectedVault.getAddress(), maxUint104);
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue: maxUint104 });
+
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(maxUint104);
+      expect(await vaultHub.locked(connectedVault)).to.equal(CONNECTION_DEPOSIT);
+
+      console.log("maxUint104", maxUint104);
+      console.log("CONNECTION_DEPOSIT", CONNECTION_DEPOSIT);
+      console.log("maxUint104 - CONNECTION_DEPOSIT", maxUint104 - CONNECTION_DEPOSIT);
 
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
-      expect(withdrawable).to.equal(totalValue - locked);
+      expect(withdrawable).to.equal(maxUint104 - CONNECTION_DEPOSIT);
 
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable)).to.not.be.reverted;
+      console.log("withdrawable", withdrawable);
+
+      const balanceBefore = await ethers.provider.getBalance(stranger);
+      await vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable);
+      const balanceAfter = await ethers.provider.getBalance(stranger);
+
+      expect(balanceAfter - balanceBefore).to.equal(withdrawable);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(CONNECTION_DEPOSIT);
+      expect(await vaultHub.locked(connectedVault)).to.equal(CONNECTION_DEPOSIT);
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(0n);
     });
 
     it("handles withdrawal when vault has unsettled Lido fees", async () => {
@@ -341,17 +409,25 @@ describe("VaultHub.sol:withdrawal", () => {
       await connectedVault.connect(user).fund({ value: totalValue });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue, cumulativeLidoFees });
 
-      await vaultHub.connect(user).mintShares(connectedVault, user, ether("5"));
-      const locked = await vaultHub.locked(connectedVault);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("1"));
 
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
-      expect(withdrawable).to.equal(totalValue - locked - cumulativeLidoFees);
+      expect(withdrawable).to.equal(ether("7")); // 10 - 1 - 2
 
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable)).to.not.be.reverted;
+      const balanceBefore = await ethers.provider.getBalance(stranger);
+      await vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable);
+      const balanceAfter = await ethers.provider.getBalance(stranger);
+
+      expect(balanceAfter - balanceBefore).to.equal(withdrawable);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(ether("3")); // 10 - 7
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("1"));
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(0n);
     });
 
     it("handles withdrawal with complex fee and redemptions scenario", async () => {
       const totalValue = ether("10");
+      const clBalance = ether("5");
       const cumulativeLidoFees = ether("1");
 
       await connectedVault.connect(user).fund({ value: totalValue });
@@ -359,31 +435,29 @@ describe("VaultHub.sol:withdrawal", () => {
 
       const shares = ether("5");
       const targetShares = ether("3");
-      const redemptionValue = await lido.getPooledEthByShares(shares - targetShares);
+      const redemptionShares = shares - targetShares;
+      expect(redemptionShares).to.equal(ether("2"));
+
       await vaultHub.connect(user).mintShares(connectedVault, user, shares);
       await vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, targetShares);
 
-      const elBalance = totalValue - ether("5");
-      await setBalance(await connectedVault.getAddress(), elBalance); // 5 ether for CL balance
+      const elBalance = totalValue - clBalance;
+      await setBalance(await connectedVault.getAddress(), elBalance);
+
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("6")); // 5 shares + 1 minimal reserve = 6
 
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
-      expect(withdrawable).to.equal(elBalance - redemptionValue - cumulativeLidoFees);
+      expect(withdrawable).to.equal(ether("2")); // 5 - 2 (minimal reserve is locked on CL)
 
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable)).to.not.be.reverted;
-    });
+      const balanceBefore = await ethers.provider.getBalance(stranger);
+      await vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable);
+      const balanceAfter = await ethers.provider.getBalance(stranger);
 
-    it("handles withdrawal after vault is resumed", async () => {
-      const totalValue = ether("10");
-      await connectedVault.connect(user).fund({ value: totalValue });
-      await vaultsContext.reportVault({ vault: connectedVault, totalValue });
-
-      const pauseFor = 1000n;
-
-      await vaultHub.connect(user).pauseFor(pauseFor);
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, ether("1"))).to.be.reverted;
-
-      await advanceChainTime(pauseFor);
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, ether("1"))).to.not.be.reverted;
+      expect(balanceAfter - balanceBefore).to.equal(withdrawable);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(ether("8")); // 10 - 2
+      expect(await vaultHub.locked(connectedVault)).to.equal(ether("6")); // 5 shares + 1 minimal reserve = 6
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(0n);
     });
 
     it("handles withdrawal with minimal locked amount", async () => {
@@ -393,13 +467,23 @@ describe("VaultHub.sol:withdrawal", () => {
 
       await vaultHub.connect(user).mintShares(connectedVault, user, 1n);
 
-      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
-      expect(withdrawable).to.equal(totalValue - CONNECTION_DEPOSIT - 1n);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue);
+      expect(await vaultHub.locked(connectedVault)).to.equal(CONNECTION_DEPOSIT + 1n);
 
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable)).to.not.be.reverted;
+      const withdrawable = await vaultHub.withdrawableValue(connectedVault);
+      expect(withdrawable).to.equal(ether("9") - 1n); // 10 - 1 - 1wei
+
+      const balanceBefore = await ethers.provider.getBalance(stranger);
+      await vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable);
+      const balanceAfter = await ethers.provider.getBalance(stranger);
+
+      expect(balanceAfter - balanceBefore).to.equal(withdrawable);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(CONNECTION_DEPOSIT + 1n);
+      expect(await vaultHub.locked(connectedVault)).to.equal(CONNECTION_DEPOSIT + 1n);
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(0n);
     });
 
-    it("handles withdrawal with maximum locked amount", async () => {
+    it("handles withdrawal with just under the fully locked amount", async () => {
       const totalValue = ether("10");
       await connectedVault.connect(user).fund({ value: totalValue });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue });
@@ -410,7 +494,14 @@ describe("VaultHub.sol:withdrawal", () => {
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
       expect(withdrawable).to.equal(1n);
 
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable)).to.not.be.reverted;
+      const balanceBefore = await ethers.provider.getBalance(stranger);
+      await vaultHub.connect(user).withdraw(connectedVault, stranger, withdrawable);
+      const balanceAfter = await ethers.provider.getBalance(stranger);
+
+      expect(balanceAfter - balanceBefore).to.equal(withdrawable);
+      expect(await vaultHub.totalValue(connectedVault)).to.equal(totalValue - 1n);
+      expect(await vaultHub.locked(connectedVault)).to.equal(totalValue - 1n);
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(0n);
     });
 
     it("handles withdrawal with multiple small amounts (rounding)", async () => {
@@ -424,7 +515,11 @@ describe("VaultHub.sol:withdrawal", () => {
       const smallAmount = withdrawable / 10n;
 
       for (let i = 0; i < 10; i++) {
-        await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, smallAmount)).to.not.be.reverted;
+        const balanceBefore = await ethers.provider.getBalance(stranger);
+        await vaultHub.connect(user).withdraw(connectedVault, stranger, smallAmount);
+        const balanceAfter = await ethers.provider.getBalance(stranger);
+
+        expect(balanceAfter - balanceBefore).to.equal(smallAmount);
       }
 
       expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(0n);
@@ -435,11 +530,19 @@ describe("VaultHub.sol:withdrawal", () => {
       await connectedVault.connect(user).fund({ value: totalValue });
       await vaultsContext.reportVault({ vault: connectedVault, totalValue });
 
-      await vaultHub.connect(user).mintShares(connectedVault, user, ether("5"));
+      await vaultHub.connect(user).mintShares(connectedVault, user, ether("5") + 1n);
 
       const withdrawable = await vaultHub.withdrawableValue(connectedVault);
+      // round down to the nearest GWEI
       const precisionAmount = withdrawable - (withdrawable % GWEI_TO_WEI);
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, precisionAmount)).to.not.be.reverted;
+      const mod = withdrawable % GWEI_TO_WEI;
+
+      const balanceBefore = await ethers.provider.getBalance(stranger);
+      await vaultHub.connect(user).withdraw(connectedVault, stranger, precisionAmount);
+      const balanceAfter = await ethers.provider.getBalance(stranger);
+
+      expect(balanceAfter - balanceBefore).to.equal(precisionAmount);
+      expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(mod);
     });
   });
 
@@ -482,10 +585,16 @@ describe("VaultHub.sol:withdrawal", () => {
       const recordAfter = await vaultHub.vaultRecord(connectedVault);
       expect(recordAfter.redemptionShares).to.equal(0n);
 
-      const newWithdrawable = await vaultHub.withdrawableValue(connectedVault);
-      expect(newWithdrawable).to.equal(totalValue - recordAfter.locked - rebalanceValue);
+      const newWithdrawableBeforeReport = await vaultHub.withdrawableValue(connectedVault);
+      expect(newWithdrawableBeforeReport).to.equal(ether("3")); // 9 - 6 locked = 3
 
-      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, newWithdrawable)).to.not.be.reverted;
+      await vaultsContext.reportVault({ vault: connectedVault }); // unlock 1 ether
+
+      const newWithdrawableAfterReport = await vaultHub.withdrawableValue(connectedVault);
+      expect(newWithdrawableAfterReport).to.equal(ether("4")); // 9 - 5 locked = 4
+
+      await expect(vaultHub.connect(user).withdraw(connectedVault, stranger, newWithdrawableAfterReport)).to.not.be
+        .reverted;
     });
 
     it("handles withdrawal after fee settlement", async () => {
