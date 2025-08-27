@@ -998,7 +998,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         (uint256 bufferedEther, uint256 depositedValidators) = _getBufferedEtherAndDepositedValidators();
         (uint256 clBalance, uint256 clValidators) = _getClBalanceAndClValidators();
 
-        // clValidators can never be less than deposited ones.
+        // clValidators can never exceed depositedValidators.
         assert(depositedValidators >= clValidators);
         // the total base balance (multiple of 32) of validators in transient state,
         // i.e. submitted to the official Deposit contract but not yet visible in the CL state.
