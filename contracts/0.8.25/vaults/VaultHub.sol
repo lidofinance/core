@@ -361,20 +361,6 @@ contract VaultHub is PausableUntilWithRoles {
         });
     }
 
-    /// @notice updates share limit for the vault
-    /// Setting share limit to zero actually pause the vault's ability to mint
-    /// @param _vault vault address
-    /// @param _shareLimit new share limit
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function updateShareLimit(address _vault, uint256 _shareLimit) external onlyRole(VAULT_MASTER_ROLE) {
-        _requireSaneShareLimit(_shareLimit);
-
-        VaultConnection storage connection = _checkConnection(_vault);
-        connection.shareLimit = uint96(_shareLimit);
-
-        emit VaultShareLimitUpdated(_vault, _shareLimit);
-    }
-
     /// @notice updates a redemption shares on the vault to force liability rebalance under extreme conditions
     /// @param _vault The address of the vault
     /// @param _liabilitySharesTarget maximum amount of liability shares that will be preserved, the rest will be
@@ -1521,7 +1507,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 reserveRatioBP,
         uint256 forcedRebalanceThresholdBP
     );
-    event VaultShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultFeesUpdated(
         address indexed vault,
         uint256 preInfraFeeBP,

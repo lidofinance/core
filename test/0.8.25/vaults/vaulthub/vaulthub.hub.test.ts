@@ -935,51 +935,6 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
-  context("updateShareLimit", () => {
-    let vault: StakingVault__MockForVaultHub;
-
-    before(async () => {
-      const { vault: _vault } = await createAndConnectVault(vaultFactory);
-      vault = _vault;
-    });
-
-    it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
-      await expect(vaultHub.connect(stranger).updateShareLimit(vault, SHARE_LIMIT)).to.be.revertedWithCustomError(
-        vaultHub,
-        "AccessControlUnauthorizedAccount",
-      );
-    });
-
-    it("reverts if vault address is zero", async () => {
-      await expect(vaultHub.connect(user).updateShareLimit(ZeroAddress, SHARE_LIMIT)).to.be.revertedWithCustomError(
-        vaultHub,
-        "ZeroAddress",
-      );
-    });
-
-    it("reverts if share limit exceeds the maximum vault limit", async () => {
-      const insaneLimit = ether("1000000000000000000000000");
-      const totalShares = await lido.getTotalShares();
-      const maxRelativeShareLimitBP = VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP;
-      const relativeShareLimitPerVault = (totalShares * maxRelativeShareLimitBP) / TOTAL_BASIS_POINTS;
-
-      await expect(vaultHub.connect(user).updateShareLimit(vault, insaneLimit))
-        .to.be.revertedWithCustomError(vaultHub, "ShareLimitTooHigh")
-        .withArgs(insaneLimit, relativeShareLimitPerVault);
-    });
-
-    it("updates the share limit", async () => {
-      const newShareLimit = SHARE_LIMIT + 100n;
-
-      await expect(vaultHub.connect(user).updateShareLimit(vault, newShareLimit))
-        .to.emit(vaultHub, "VaultShareLimitUpdated")
-        .withArgs(vault, newShareLimit);
-
-      const vaultSocket = await vaultHub.vaultConnection(vault);
-      expect(vaultSocket.shareLimit).to.equal(newShareLimit);
-    });
-  });
-
   context("updateVaultFees", () => {
     let vault: StakingVault__MockForVaultHub;
 
