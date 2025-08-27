@@ -212,7 +212,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev NB: by default, staking and the whole Lido pool are in paused state
      * @dev The contract's balance must be non-zero to mint initial shares of stETH
      */
-    function initialize(address _lidoLocator, address _eip712StETH) external payable onlyInit {
+    function initialize(address _lidoLocator, address _eip712StETH) public payable onlyInit {
         _bootstrapInitialHolder(); // stone in the elevator
 
         _setLidoLocator(_lidoLocator);
@@ -670,7 +670,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      *      NB: Reverts if the external balance limit is exceeded.
      */
     function mintExternalShares(address _recipient, uint256 _amountOfShares) external {
-        require(_recipient != address(0), "MINT_RECEIVER_ZERO_ADDRESS");
         require(_amountOfShares != 0, "MINT_ZERO_AMOUNT_OF_SHARES");
         _auth(_getLidoLocator().vaultHub());
         _whenNotStopped();

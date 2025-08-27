@@ -33,6 +33,8 @@ contract StETHPermit__HarnessForDashboard is StETHPermit {
     // Lido::burnShares
     function burnExternalShares(uint256 _sharesAmount) external {
         _burnShares(msg.sender, _sharesAmount);
+        uint256 eth = getPooledEthByShares(_sharesAmount);
+        _emitSharesBurnt(msg.sender, eth, eth, _sharesAmount);
     }
 
     // StETH::_getTotalShares

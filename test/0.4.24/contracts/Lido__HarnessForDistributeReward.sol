@@ -13,8 +13,8 @@ contract Lido__HarnessForDistributeReward is Lido {
     uint256 internal constant UNLIMITED_TOKEN_REBASE = uint256(-1);
     uint256 private totalPooledEther;
 
-    function initialize(address _lidoLocator, address _eip712StETH) external payable {
-        this.initialize(_lidoLocator, _eip712StETH);
+    function initialize(address _lidoLocator, address _eip712StETH) public payable {
+        super.initialize(_lidoLocator, _eip712StETH);
 
         _resume();
     }
@@ -31,8 +31,16 @@ contract Lido__HarnessForDistributeReward is Lido {
         CONTRACT_VERSION_POSITION.setStorageUint256(_version);
     }
 
-    function resetEip712StETH() external {
-        EIP712_STETH_POSITION.setStorageAddress(0);
+    function allowRecoverability(address /*token*/) public view returns (bool) {
+        return getAllowRecoverability();
+    }
+
+    function setAllowRecoverability(bool allow) public {
+        ALLOW_TOKEN_POSITION.setStorageBool(allow);
+    }
+
+    function getAllowRecoverability() public view returns (bool) {
+        return ALLOW_TOKEN_POSITION.getStorageBool();
     }
 
     function setTotalPooledEther(uint256 _totalPooledEther) public {

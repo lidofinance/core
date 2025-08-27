@@ -507,11 +507,12 @@ contract StETH is IERC20, Pausable {
      *
      * Requirements:
      *
-     * - `_recipient` cannot be the zero address.
+     * - `_recipient` cannot be the zero address or StETH token contract itself
      * - the contract must not be paused.
      */
     function _mintShares(address _recipient, uint256 _sharesAmount) internal returns (uint256 newTotalShares) {
         require(_recipient != address(0), "MINT_TO_ZERO_ADDR");
+        require(_recipient != address(this), "MINT_TO_STETH_CONTRACT");
 
         newTotalShares = _getTotalShares().add(_sharesAmount);
         TOTAL_SHARES_POSITION.setLowUint128(uint128(newTotalShares));
