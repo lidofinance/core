@@ -184,7 +184,12 @@ describe("Integration: Vault with bad debt", () => {
       await waitNextAvailableReportTime(ctx);
       expect(await vaultHub.badDebtToInternalize()).to.be.equal(badDebtShares);
 
-      await report(ctx, { waitNextReportTime: false });
+      const { reportTx } = await report(ctx, { waitNextReportTime: false });
+      await expect(reportTx)
+        .to.emit(lido, "ExternalBadDebtInternalized")
+        .withArgs(badDebtShares)
+        .to.emit(lido, "ExternalSharesBurnt")
+        .withArgs(badDebtShares);
 
       expect(await vaultHub.badDebtToInternalize()).to.be.equal(0n);
     });

@@ -192,7 +192,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event ExternalSharesMinted(address indexed receiver, uint256 amountOfShares, uint256 amountOfStETH);
 
     // External shares burned for account
-    event ExternalSharesBurned(address indexed account, uint256 amountOfShares, uint256 stethAmount);
+    event ExternalSharesBurnt(uint256 amountOfShares);
 
     // Maximum ratio of external shares to total shares in basis points set
     event MaxExternalRatioBPSet(uint256 maxExternalRatioBP);
@@ -212,7 +212,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev NB: by default, staking and the whole Lido pool are in paused state
      * @dev The contract's balance must be non-zero to mint initial shares of stETH
      */
-    function initialize(address _lidoLocator, address _eip712StETH) public payable onlyInit {
+    function initialize(address _lidoLocator, address _eip712StETH) external payable onlyInit {
         _bootstrapInitialHolder(); // stone in the elevator
 
         _setLidoLocator(_lidoLocator);
@@ -636,13 +636,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _amountOfShares amount of shares to mint
      * @dev can be called only by accounting
      */
-    function mintShares(address _recipient, uint256 _amountOfShares) public {
+    function mintShares(address _recipient, uint256 _amountOfShares) external {
         _auth(_getLidoLocator().accounting());
         _whenNotStopped();
 
         _mintShares(_recipient, _amountOfShares);
-        // emit event after minting shares because we are always having the net new ether under the hood
-        // for vaults we have new locked ether and for fees we have a part of rewards
         _emitTransferAfterMintingShares(_recipient, _amountOfShares);
     }
 
@@ -651,14 +649,17 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _amountOfShares amount of shares to burn
      * @dev can be called only by burner
      */
-    function burnShares(uint256 _amountOfShares) public {
+    function burnShares(uint256 _amountOfShares) external {
         _auth(_getLidoLocator().burner());
         _whenNotStopped();
-        _burnShares(msg.sender, _amountOfShares);
 
-        // historically there is no events for this kind of burning
-        // TODO: should burn events be emitted here?
-        // maybe TransferShare for cover burn and all events for withdrawal burn
+        uint256 preRebaseTokenAmount = getPooledEthByShares(_amountOfShares);
+        _burnShares(msg.sender, _amountOfShares);
+        uint256 postRebaseTokenAmount = getPooledEthByShares(_amountOfShares);
+
+        // Historically, Lido contract does not emit Transfer to zero address events
+        // for burning but emits SharesBurnt instead, so it's kept here for compatibility
+        _emitSharesBurnt(msg.sender, preRebaseTokenAmount, postRebaseTokenAmount, _amountOfShares);
     }
 
     /**
@@ -679,8 +680,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _setExternalShares(_getExternalShares() + _amountOfShares);
 
         _mintShares(_recipient, _amountOfShares);
-        // emit event after minting shares because we are always having the net new ether under the hood
-        // for vaults we have new locked ether and for fees we have a part of rewards
         _emitTransferAfterMintingShares(_recipient, _amountOfShares);
 
         emit ExternalSharesMinted(_recipient, _amountOfShares, getPooledEthByShares(_amountOfShares));
@@ -689,6 +688,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /**
      * @notice Burn external shares from the `msg.sender` address
      * @param _amountOfShares Amount of shares to burn
+     * @dev can be called only by VaultHub
      */
     function burnExternalShares(uint256 _amountOfShares) external {
         require(_amountOfShares != 0, "BURN_ZERO_AMOUNT_OF_SHARES");
@@ -703,8 +703,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _burnShares(msg.sender, _amountOfShares);
 
         uint256 stethAmount = getPooledEthByShares(_amountOfShares);
-        _emitTransferEvents(msg.sender, address(0), stethAmount, _amountOfShares);
-        emit ExternalSharesBurned(msg.sender, _amountOfShares, stethAmount);
+
+        // Historically, Lido contract does not emit Transfer to zero address events
+        // for burning but emits SharesBurnt instead, so it's kept here for compatibility
+        // we use the same `stethAmount` here as external shares burn does not change share rate
+        _emitSharesBurnt(msg.sender, stethAmount, stethAmount, _amountOfShares);
+        emit ExternalSharesBurnt(_amountOfShares);
     }
 
     /**
@@ -734,6 +738,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         // but it's not worth then using submit for it,
         // so invariants are the same
         emit ExternalEtherTransferredToBuffer(msg.value);
+        emit ExternalSharesBurnt(amountOfShares);
     }
 
     /**
@@ -785,6 +790,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _setExternalShares(externalShares - _amountOfShares);
 
         emit ExternalBadDebtInternalized(_amountOfShares);
+        emit ExternalSharesBurnt(_amountOfShares);
     }
 
     /**

@@ -300,8 +300,8 @@ describe("Lido.sol:externalShares", () => {
         .withArgs(vaultHubSigner.address, ZeroAddress, stethAmount)
         .to.emit(lido, "TransferShares")
         .withArgs(vaultHubSigner.address, ZeroAddress, amountToMint)
-        .to.emit(lido, "ExternalSharesBurned")
-        .withArgs(vaultHubSigner.address, amountToMint, stethAmount);
+        .to.emit(lido, "ExternalSharesBurnt")
+        .withArgs(amountToMint);
 
       // Verify external balance was reduced
       const externalEther = await lido.getExternalEther();

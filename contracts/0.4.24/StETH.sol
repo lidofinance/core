@@ -542,24 +542,10 @@ contract StETH is IERC20, Pausable {
         uint256 accountShares = shares[_account];
         require(_sharesAmount <= accountShares, "BALANCE_EXCEEDED");
 
-        uint256 preRebaseTokenAmount = getPooledEthByShares(_sharesAmount);
-
         newTotalShares = _getTotalShares().sub(_sharesAmount);
         TOTAL_SHARES_POSITION.setLowUint128(uint128(newTotalShares));
 
         shares[_account] = accountShares.sub(_sharesAmount);
-
-        uint256 postRebaseTokenAmount = getPooledEthByShares(_sharesAmount);
-
-        emit SharesBurnt(_account, preRebaseTokenAmount, postRebaseTokenAmount, _sharesAmount);
-
-        // Notice: we're not emitting a Transfer event to the zero address here since shares burn
-        // works by redistributing the amount of tokens corresponding to the burned shares between
-        // all other token holders. The total supply of the token doesn't change as the result.
-        // This is equivalent to performing a send from `address` to each other token holder address,
-        // but we cannot reflect this as it would require sending an unbounded number of events.
-
-        // We're emitting `SharesBurnt` event to provide an explicit rebase log record nonetheless.
     }
 
     /**
@@ -575,6 +561,15 @@ contract StETH is IERC20, Pausable {
      */
     function _emitTransferAfterMintingShares(address _to, uint256 _sharesAmount) internal {
         _emitTransferEvents(address(0), _to, getPooledEthByShares(_sharesAmount), _sharesAmount);
+    }
+
+    /**
+     * @dev Emits {SharesBurnt} event
+     */
+    function _emitSharesBurnt(
+        address _account, uint256 _preRebaseTokenAmount, uint256 _postRebaseTokenAmount, uint256 _sharesAmount
+    ) internal {
+        emit SharesBurnt(_account, _preRebaseTokenAmount, _postRebaseTokenAmount, _sharesAmount);
     }
 
     /**
