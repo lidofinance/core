@@ -754,6 +754,8 @@ contract VaultHub is PausableUntilWithRoles {
 
         LIDO.burnExternalShares(_amountOfShares);
 
+        _updateBeaconChainDepositsPause(_vault, record, _vaultConnection(_vault));
+
         emit BurnedSharesOnVault(_vault, _amountOfShares);
     }
 
@@ -838,7 +840,7 @@ contract VaultHub is PausableUntilWithRoles {
             ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
             ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
             ///          settle redemptions
-            if (_isForceValidatorExitAllowed(_vault, connection, record)) {
+            if (_isForceValidatorExitAllowed(connection, record, _vault.balance)) {
                 uint256 sharesToCover = Math256.max(
                     _rebalanceShortfallShares(connection, record),
                     record.redemptionShares
@@ -873,7 +875,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        if (!_isForceValidatorExitAllowed(_vault, connection, record)) {
+        if (!_isForceValidatorExitAllowed(connection, record, _vault.balance)) {
             revert ForcedValidatorExitNotAllowed();
         }
 
@@ -904,7 +906,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (sharesToRebalance == 0) revert NoReasonForForceRebalance(_vault);
 
         _rebalance(_vault, record, sharesToRebalance);
-        _updateBeaconChainDepositsPause(_vault, record, connection);
     }
 
     /// @notice Permissionless payout of unsettled Lido fees to treasury
@@ -1042,6 +1043,8 @@ contract VaultHub is PausableUntilWithRoles {
         _decreaseLiability(_vault, _record, _shares);
         _withdraw(_vault, _record, address(this), valueToRebalance);
         _rebalanceExternalEtherToInternal(valueToRebalance);
+
+        _updateBeaconChainDepositsPause(_vault, _record, _vaultConnection(_vault));
 
         emit VaultRebalanced(_vault, _shares, valueToRebalance);
     }
@@ -1228,12 +1231,21 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _isForceValidatorExitAllowed(
-        address _vault,
         VaultConnection storage _connection,
-        VaultRecord storage _record
+        VaultRecord storage _record,
+        uint256 _vaultBalance
     ) internal view returns (bool) {
-        return !_isVaultHealthy(_connection, _record) ||
-            (_obligationsTooHigh(_record) && _vault.balance < _obligations(_record));
+        // Uncovered obligations must allow to trigger force validator exits
+        if (_obligationsTooHigh(_record) && _vaultBalance < _obligations(_record)) return true;
+
+        // Unhealthy vault must allow to trigger force validator exits
+        if (!_isVaultHealthy(_connection, _record)) {
+            uint256 sharesToRebalance = _rebalanceShortfallShares(_connection, _record);
+            if (sharesToRebalance == type(uint256).max) return true;
+            if (_getPooledEthBySharesRoundUp(sharesToRebalance) > _vaultBalance) return true;
+        }
+
+        return false;
     }
 
     function _addVault(address _vault, VaultConnection memory _connection, VaultRecord memory _record) internal {
