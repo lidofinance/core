@@ -64,6 +64,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
        4. Tier Capacity:
          - Tiers are not limited by the number of vaults
          - Tiers are limited by the sum of vaults' liability shares
+         - Administrative operations (like bad debt socialization) can bypass tier/group limits
 
         ┌──────────────────────────────────────────────────────┐
         │                 Group 1 = operator 1                 │
@@ -80,8 +81,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         5. Jail Mechanism:
          - A vault can be "jailed" as a penalty mechanism for misbehavior or violations
          - When a vault is in jail, it cannot mint new stETH shares (normal minting operations are blocked)
-         - Administrative operations (like bad debt socialization) can bypass jail restrictions using the _overrideLimits flag
          - Vaults can be jailed/unjailed by addresses with appropriate governance roles
+         - Administrative operations (like bad debt socialization) can bypass jail restrictions
      */
 
     /// @dev 0xa495a3428837724c7f7648cda02eb83c9c4c778c8688d6f254c7f3f80c154d55
