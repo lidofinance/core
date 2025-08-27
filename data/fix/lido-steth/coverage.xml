@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4717"  lines-covered="4537"  line-rate="0.9618000000000001"  branches-valid="2206"  branches-covered="2077"  branch-rate="0.9415"  timestamp="1756328800267" complexity="0" version="0.1">
+<coverage lines-valid="4717"  lines-covered="4538"  line-rate="0.9621"  branches-valid="2206"  branches-covered="2077"  branch-rate="0.9415"  timestamp="1756328982321" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1577,7 +1577,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.4.24.utils"  line-rate="0.9643"  branch-rate="1" >
+	<package name="0.4.24.utils"  line-rate="1"  branch-rate="1" >
 	<classes>
 		<class name="Pausable.sol"  filename="contracts/0.4.24/utils/Pausable.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
@@ -1609,7 +1609,7 @@
 			<line number="41"  hits="55"  branch="false" />
 		</lines>
 		</class>
-		<class name="UnstructuredStorageExt.sol"  filename="contracts/0.4.24/utils/UnstructuredStorageExt.sol"  line-rate="0.9286"  branch-rate="1" >
+		<class name="UnstructuredStorageExt.sol"  filename="contracts/0.4.24/utils/UnstructuredStorageExt.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
 			<method name="getLowUint128"  hits="938"  signature="()V" >
 				<lines><line number="20"  hits="938" /></lines>
@@ -1629,8 +1629,8 @@
 			<method name="setLowAndHighUint128"  hits="2"  signature="()V" >
 				<lines><line number="44"  hits="2" /></lines>
 			</method>
-			<method name="getLowUint160"  hits="0"  signature="()V" >
-				<lines><line number="48"  hits="0" /></lines>
+			<method name="getLowUint160"  hits="274"  signature="()V" >
+				<lines><line number="48"  hits="274" /></lines>
 			</method>
 			<method name="setLowUint160"  hits="54"  signature="()V" >
 				<lines><line number="52"  hits="54" /></lines>
@@ -1653,7 +1653,7 @@
 			<line number="40"  hits="2989"  branch="false" />
 			<line number="41"  hits="2989"  branch="false" />
 			<line number="45"  hits="2"  branch="false" />
-			<line number="49"  hits="0"  branch="false" />
+			<line number="49"  hits="274"  branch="false" />
 			<line number="53"  hits="54"  branch="false" />
 			<line number="57"  hits="61"  branch="false" />
 			<line number="61"  hits="29"  branch="false" />
