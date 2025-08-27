@@ -14,7 +14,7 @@ import {Versioned} from "./utils/Versioned.sol";
 
 import {Math256} from "../common/lib/Math256.sol";
 import {StakeLimitUtils, StakeLimitUnstructuredStorage, StakeLimitState} from "./lib/StakeLimitUtils.sol";
-import {UnstructuredStorageUint128} from "./utils/UnstructuredStorageUint128.sol";
+import {UnstructuredStorageExt} from "./utils/UnstructuredStorageExt.sol";
 
 interface IBurnerMigration {
     function migrate(address _oldBurner) external;
@@ -71,18 +71,18 @@ interface IWithdrawalVault {
  * @dev Lido is derived from `StETHPermit` that has a structured storage:
  * SLOT 0: mapping (address => uint256) private shares (`StETH`)
  * SLOT 1: mapping (address => mapping (address => uint256)) private allowances (`StETH`)
- * SLOT 2: mapping(address => uint256) internal noncesByAddress (`StETHPermit`)
+ * SLOT 2: mapping (address => uint256) internal noncesByAddress (`StETHPermit`)
  *
  * `Versioned` and `AragonApp` both don't have the pre-allocated structured storage.
  */
 contract Lido is Versioned, StETHPermit, AragonApp {
     using SafeMath for uint256;
     using UnstructuredStorage for bytes32;
-    using UnstructuredStorageUint128 for bytes32;
+    using UnstructuredStorageExt for bytes32;
     using StakeLimitUnstructuredStorage for bytes32;
     using StakeLimitUtils for StakeLimitState.Data;
 
-    /// ACL
+    /// ACL Roles
     bytes32 public constant PAUSE_ROLE = 0x139c2898040ef16910dc9f44dc697df79363da767d8bc92f2e310312b816e46d; // keccak256("PAUSE_ROLE");
     bytes32 public constant RESUME_ROLE = 0x2fc10cc8ae19568712f7a176fb4978616a610650813c9d05326c34abb62749c7; // keccak256("RESUME_ROLE");
     bytes32 public constant STAKING_PAUSE_ROLE = 0x84ea57490227bc2be925c684e2a367071d69890b629590198f4125a018eb1de8; // keccak256("STAKING_PAUSE_ROLE")
@@ -109,21 +109,21 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         0x9ef78dff90f100ea94042bd00ccb978430524befc391d3e510b5f55ff3166df7; // keccak256("lido.Lido.lidoLocator")
     /// @dev amount of ether (on the current Ethereum side) buffered on this smart contract balance
     /// Since version 3, high 128 bits are used for the deposited validators count
-    /// |----- 128 bit -----|------ 128 bit -------|
-    /// |   buffered ether  | deposited validators |
+    /// |------ 128 bit -------|------ 128 bit -------|
+    /// | deposited validators |    buffered ether    |
     bytes32 internal constant BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION =
         0xed310af23f61f96daefbcd140b306c0bdbf8c178398299741687b90e794772b0; // keccak256("lido.Lido.bufferedEther");
     /// @dev total amount of ether on Consensus Layer (sum of all the balances of Lido validators)
     // "beacon" in the `keccak256()` parameter is staying here for compatibility reason
     /// Since version 3, high 128 bits are used for the CL validators count
     /// |----- 128 bit -----|------ 128 bit -------|
-    /// |   CL balance      |   CL validators      |
+    /// |   CL validators   |     CL balance       |
     bytes32 internal constant CL_BALANCE_AND_CL_VALIDATORS_POSITION =
         0xa66d35f054e68143c18f32c990ed5cb972bb68a68f500cd2dd3a16bbf3686483; // keccak256("lido.Lido.beaconBalance");
     /// @dev storage slot position of the staking rate limit structure
     bytes32 internal constant STAKING_STATE_POSITION =
         0xa3678de4a579be090bed1177e0a24f77cc29d181ac22fd7688aca344d8938015; // keccak256("lido.Lido.stakeLimit");
-    /// @dev Just a counter of total amount of execution layer rewards received by Lido contract. Not used in the logic.
+    /// @dev storage slot position for the total amount of execution layer rewards received by Lido contract.
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
         0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb; // keccak256("lido.Lido.totalELRewardsCollected");
 
@@ -139,7 +139,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     // Emitted when validators number delivered by the oracle
     event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
 
-    // Emitted when var at `DEPOSITED_VALIDATORS_POSITION` changed
+    // Emitted when depositedValidators value is changed
     event DepositedValidatorsChanged(uint256 depositedValidators);
 
     // Emitted when oracle accounting report processed
@@ -154,7 +154,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 postBufferedEther
     );
 
-    // Emitted when token is rebased (total supply and/or total shares were changed)
+    // Emitted when the token is rebased (an oracle report is delivered)
     event TokenRebased(
         uint256 indexed reportTimestamp,
         uint256 timeElapsed,
@@ -204,13 +204,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     event ExternalBadDebtInternalized(uint256 amountOfShares);
 
     /**
-     * @dev As AragonApp, Lido contract must be initialized with following variables:
-     *      NB: by default, staking and the whole Lido pool are in paused state
-     *
-     * The contract's balance must be non-zero to allow initial holder bootstrap.
+     * @notice Initializer function for scratch deploy of Lido contract
      *
      * @param _lidoLocator lido locator contract
      * @param _eip712StETH eip712 helper contract for StETH
+     *
+     * @dev NB: by default, staking and the whole Lido pool are in paused state
+     * @dev The contract's balance must be non-zero to mint initial shares of stETH
      */
     function initialize(address _lidoLocator, address _eip712StETH) public payable onlyInit {
         _bootstrapInitialHolder(); // stone in the elevator
@@ -666,7 +666,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _recipient Address to receive the minted shares
      * @param _amountOfShares Amount of shares to mint
      * @dev Can be called only by VaultHub
-     *      NB: Reverts if the the external balance limit is exceeded.
+     *      NB: Reverts if the external balance limit is exceeded.
      */
     function mintExternalShares(address _recipient, uint256 _amountOfShares) external {
         require(_recipient != address(0), "MINT_RECEIVER_ZERO_ADDRESS");
@@ -850,8 +850,18 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     /**
-     * @notice Emit the `TokenRebase` event
-     * @dev It's here for back compatibility reasons
+     * @notice Emits the `TokenRebase` and `InternalShareRateUpdated` events
+     * @param _reportTimestamp timestamp of the refSlot block fro the report applied
+     * @param _timeElapsed seconds since the previous applied report
+     * @param _preTotalShares the total number of shares before the oracle report tx
+     * @param _preTotalEther the total amount of ether before the oracle report tx
+     * @param _postTotalShares the total number of shares after the oracle report tx
+     * @param _postTotalEther the total amount of ether after the oracle report tx
+     * @param _postInternalShares the total number of internal shares before the oracle report tx
+     * @param _postInternalEther the total amount of internal ether after the oracle tx
+     * @param _sharesMintedAsFees the number of shares minted to pay fees to Lido and StakingModules
+     * @dev this events are used to calculate protocol APR
+     *
      */
     function emitTokenRebase(
         uint256 _reportTimestamp,
@@ -970,7 +980,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         _mintShares(msg.sender, sharesAmount);
 
-        _setBufferedEther(_getBufferedEther().add(msg.value));
+        _setBufferedEther(_getBufferedEther() + msg.value);
         emit Submitted(msg.sender, msg.value, _referral);
 
         _emitTransferAfterMintingShares(msg.sender, sharesAmount);

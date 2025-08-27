@@ -8,7 +8,8 @@ import {IERC20} from "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStorage.sol";
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 import {Pausable} from "./utils/Pausable.sol";
-import {UnstructuredStorageUint128} from "./utils/UnstructuredStorageUint128.sol";
+import {UnstructuredStorageExt} from "./utils/UnstructuredStorageExt.sol";
+import {Math256} from "../common/lib/Math256.sol";
 
 /**
  * @title Interest-bearing ERC20-like token for Lido Liquid Stacking protocol.
@@ -50,7 +51,7 @@ import {UnstructuredStorageUint128} from "./utils/UnstructuredStorageUint128.sol
 contract StETH is IERC20, Pausable {
     using SafeMath for uint256;
     using UnstructuredStorage for bytes32;
-    using UnstructuredStorageUint128 for bytes32;
+    using UnstructuredStorageExt for bytes32;
 
     address constant internal INITIAL_TOKEN_HOLDER = 0xdead;
     uint256 constant internal INFINITE_ALLOWANCE = ~uint256(0);
@@ -333,18 +334,12 @@ contract StETH is IERC20, Pausable {
      * @dev The result is rounded up. So,
      *  for `shareRate >= 0.5`, `getSharesByPooledEth(getPooledEthBySharesRoundUp(1))` will be 1.
      */
-    function getPooledEthBySharesRoundUp(uint256 _sharesAmount) public view returns (uint256 etherAmount) {
+    function getPooledEthBySharesRoundUp(uint256 _sharesAmount) public view returns (uint256) {
         require(_sharesAmount < UINT128_MAX, "SHARES_TOO_LARGE");
         uint256 numeratorInEther = _getShareRateNumerator();
         uint256 denominatorInShares = _getShareRateDenominator();
 
-        etherAmount = (_sharesAmount
-            * numeratorInEther)
-            / denominatorInShares;
-
-        if (_sharesAmount * numeratorInEther != etherAmount * denominatorInShares) {
-            ++etherAmount;
-        }
+        return Math256.ceilDiv(_sharesAmount * numeratorInEther, denominatorInShares);
     }
 
     /**
