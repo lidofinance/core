@@ -439,18 +439,18 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       expect(recordAfter.settledLidoFees).to.equal(cumulativeLidoFees);
     });
 
-    it("Withdraws fees to the treasury when the vault is disonnecting", async () => {
-      await dashboard.voluntaryDisconnect();
+    it("Withdraws some fees to the treasury when the vault is forced disconnecting", async () => {
+      await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("0.1") });
 
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("0.1") }))
+      await expect(vaultHub.connect(agentSigner).disconnect(stakingVaultAddress))
         .to.emit(vaultHub, "LidoFeesSettled")
         .withArgs(stakingVaultAddress, ether("0.1"), ether("0.1"), ether("0.1"));
     });
 
-    it("Withdraws fees to the treasury when the vault is disonnecting capped by balance", async () => {
-      await dashboard.voluntaryDisconnect();
+    it("Withdraws some fees to the treasury when the vault is forced disconnecting capped by balance", async () => {
+      await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1.1") });
 
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1.1") }))
+      await expect(vaultHub.connect(agentSigner).disconnect(stakingVaultAddress))
         .to.emit(vaultHub, "LidoFeesSettled")
         .withArgs(stakingVaultAddress, ether("1"), ether("1.1"), ether("1"));
     });

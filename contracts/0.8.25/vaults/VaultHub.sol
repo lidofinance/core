@@ -457,6 +457,21 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     /// @dev vault's `liabilityShares` should be zero
     function disconnect(address _vault) external onlyRole(VAULT_MASTER_ROLE) {
+        VaultRecord storage record = _vaultRecord(_vault);
+
+        uint256 unsettledLidoFees = _unsettledLidoFeesValue(record);
+        if (unsettledLidoFees > 0) {
+            uint256 withdrawable = Math256.min(unsettledLidoFees, _vault.balance);
+            _withdrawFromVault(_vault, LIDO_LOCATOR.treasury(), withdrawable);
+
+            emit LidoFeesSettled({
+                vault: _vault,
+                transferred: withdrawable,
+                cumulativeLidoFees: record.cumulativeLidoFees,
+                settledLidoFees: record.settledLidoFees + withdrawable
+            });
+        }
+
         _initiateDisconnection(_vault, _checkConnection(_vault), _vaultRecord(_vault));
 
         emit VaultDisconnectInitiated(_vault);
@@ -489,21 +504,6 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (connection.pendingDisconnect) {
             if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
-
-                uint256 settledFees = record.settledLidoFees;
-                uint256 unsettledFees = _reportCumulativeLidoFees - settledFees;
-                if (unsettledFees > 0) {
-                    uint256 withdrawable = Math256.min(unsettledFees, _vault.balance);
-                    _withdrawFromVault(_vault, LIDO_LOCATOR.treasury(), withdrawable);
-
-                    emit LidoFeesSettled({
-                        vault: _vault,
-                        transferred: withdrawable,
-                        cumulativeLidoFees: _reportCumulativeLidoFees,
-                        settledLidoFees: settledFees + withdrawable
-                    });
-                }
-
                 IStakingVault(_vault).transferOwnership(connection.owner);
                 _deleteVault(_vault, connection);
 
@@ -671,8 +671,14 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev vault's `liabilityShares` should be zero
     function voluntaryDisconnect(address _vault) external whenResumed {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
+        VaultRecord storage record = _vaultRecord(_vault);
 
-        _initiateDisconnection(_vault, connection, _vaultRecord(_vault));
+        uint256 unsettledLidoFees = _unsettledLidoFeesValue(record);
+        if (unsettledLidoFees > 0) {
+            revert NoUnsettledLidoFeesShouldBeLeft(_vault, unsettledLidoFees);
+        }
+
+        _initiateDisconnection(_vault, connection, record);
 
         emit VaultDisconnectInitiated(_vault);
     }
@@ -1012,12 +1018,6 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 liabilityShares_ = _record.liabilityShares;
         if (liabilityShares_ > 0) revert NoLiabilitySharesShouldBeLeft(_vault, liabilityShares_);
 
-        uint256 unsettledLidoFees = _unsettledLidoFeesValue(_record);
-        if (unsettledLidoFees > 0) {
-            revert NoUnsettledLidoFeesShouldBeLeft(_vault, unsettledLidoFees);
-        }
-
-        // TODO: apply fixes from Alex's branch
         _record.locked = 0; // unlock the connection deposit to allow fees settlement
         _connection.pendingDisconnect = true;
 
