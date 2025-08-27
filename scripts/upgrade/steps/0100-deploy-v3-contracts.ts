@@ -224,6 +224,7 @@ export async function main() {
       oldCheckerLimits.exitedValidatorsPerDayLimit,
       oldCheckerLimits.appearedValidatorsPerDayLimit,
       oldCheckerLimits.annualBalanceIncreaseBPLimit,
+      oldCheckerLimits.simulatedShareRateDeviationBPLimit,
       oldCheckerLimits.maxValidatorExitRequestsPerReport,
       oldCheckerLimits.maxItemsPerExtraDataTransaction,
       oldCheckerLimits.maxNodeOperatorsPerExtraDataItem,

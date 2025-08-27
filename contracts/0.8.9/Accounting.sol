@@ -129,27 +129,19 @@ contract Accounting {
         Contracts memory contracts = _loadOracleReportContracts();
         if (msg.sender != contracts.accountingOracle) revert NotAuthorized("handleOracleReport", msg.sender);
 
-        (
-            PreReportState memory pre,
-            CalculatedValues memory update,
-            uint256 withdrawalsShareRate
-        ) = _calculateOracleReportContext(contracts, _report);
+        (PreReportState memory pre, CalculatedValues memory update) = _calculateOracleReportContext(contracts, _report);
 
-        _applyOracleReportContext(contracts, _report, pre, update, withdrawalsShareRate);
+        _applyOracleReportContext(contracts, _report, pre, update);
     }
 
     /// @dev prepare all the required data to process the report
     function _calculateOracleReportContext(
         Contracts memory _contracts,
         ReportValues calldata _report
-    ) internal view returns (PreReportState memory pre, CalculatedValues memory update, uint256 withdrawalsShareRate) {
+    ) internal view returns (PreReportState memory pre, CalculatedValues memory update) {
         pre = _snapshotPreReportState(_contracts);
 
-        CalculatedValues memory updateNoWithdrawals = _simulateOracleReport(_contracts, pre, _report, 0);
-
-        withdrawalsShareRate = (updateNoWithdrawals.postTotalPooledEther * 1e27) / updateNoWithdrawals.postTotalShares;
-
-        update = _simulateOracleReport(_contracts, pre, _report, withdrawalsShareRate);
+        update = _simulateOracleReport(_contracts, pre, _report, _report.simulatedShareRate);
     }
 
     /// @dev reads the current state of the protocol to the memory
@@ -279,8 +271,7 @@ contract Accounting {
         Contracts memory _contracts,
         ReportValues calldata _report,
         PreReportState memory _pre,
-        CalculatedValues memory _update,
-        uint256 _withdrawalShareRate
+        CalculatedValues memory _update
     ) internal {
         _checkAccountingOracleReport(_contracts, _report, _pre, _update);
 
@@ -321,7 +312,7 @@ contract Accounting {
             _update.withdrawals,
             _update.elRewards,
             lastWithdrawalRequestToFinalize,
-            _withdrawalShareRate,
+            _report.simulatedShareRate,
             _update.etherToFinalizeWQ
         );
 
@@ -338,6 +329,17 @@ contract Accounting {
             _update.postInternalEther,
             _update.sharesToMintAsFees
         );
+
+        // Sanity check for the provided simulated share rate
+        if (_report.withdrawalFinalizationBatches.length != 0) {
+            _contracts.oracleReportSanityChecker.checkSimulatedShareRate(
+                _update.postTotalPooledEther,
+                _update.postTotalShares,
+                _update.etherToFinalizeWQ,
+                _update.totalSharesToBurn,
+                _report.simulatedShareRate
+            );
+        }
     }
 
     /// @dev checks the provided oracle data internally and against the sanity checker contract

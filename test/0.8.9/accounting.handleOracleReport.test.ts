@@ -92,6 +92,7 @@ describe("Accounting.sol:report", () => {
       elRewardsVaultBalance: 0n,
       sharesRequestedToBurn: 0n,
       withdrawalFinalizationBatches: [],
+      simulatedShareRate: 10n ** 27n,
       ...overrides,
     };
   }
@@ -231,6 +232,7 @@ describe("Accounting.sol:report", () => {
         accounting.handleOracleReport(
           report({
             withdrawalFinalizationBatches: [1n],
+            simulatedShareRate: 10n ** 27n,
           }),
         ),
       )
