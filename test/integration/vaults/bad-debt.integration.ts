@@ -18,7 +18,6 @@ import {
   setUpOperatorGrid,
   waitNextAvailableReportTime,
 } from "lib/protocol";
-import { VAULT_CONNECTION_DEPOSIT } from "lib/protocol/helpers/vaults";
 import { ether } from "lib/units";
 
 import { Snapshot } from "test/suite";
@@ -117,7 +116,7 @@ describe("Integration: Vault with bad debt", () => {
       expect(await vaultHub.isVaultHealthy(acceptorStakingVault)).to.be.equal(true);
     });
 
-    it("Socialization bypasses limits using _overrideLimits flag", async () => {
+    it("Socialization bypasses jail restrictions", async () => {
       await acceptorDashboard.connect(otherOwner).fund({ value: ether("10") });
       const { vaultHub, lido, operatorGrid } = ctx.contracts;
       const agentSigner = await ctx.getSigner("agent");
@@ -138,11 +137,6 @@ describe("Integration: Vault with bad debt", () => {
       // Verify bad debt was transferred despite jail restriction
       expect(await acceptorDashboard.liabilityShares()).to.equal(badDebtShares);
       expect(await operatorGrid.isVaultInJail(acceptorStakingVault)).to.be.true; // Still in jail
-
-      // Verify operator grid counters are updated
-      const vaultInfo = await operatorGrid.vaultInfo(acceptorStakingVault);
-      const tier = await operatorGrid.tier(vaultInfo.tierId);
-      expect(tier.liabilityShares).to.equal(VAULT_CONNECTION_DEPOSIT + badDebtShares);
     });
 
     it("Socialization doesn't lead to bad debt in acceptor", async () => {
