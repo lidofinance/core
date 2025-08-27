@@ -65,7 +65,7 @@ describe("VaultHub.sol:redemptions", () => {
       await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 0n))
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(connectedVault, liabilityShares)
-        .and.not.to.emit(connectedVault, "Mock__BeaconChainDepositsPaused");
+        .and.to.emit(connectedVault, "Mock__BeaconChainDepositsPaused");
     });
 
     it("allows to set redemption shares fully up to liability shares", async () => {
@@ -95,9 +95,9 @@ describe("VaultHub.sol:redemptions", () => {
         .to.emit(connectedVault, "Mock__BeaconChainDepositsPaused");
     });
 
-    it("does not pause deposits if redemption shares are set to < MIN_BEACON_DEPOSIT (1 ether)", async () => {
+    it("does pause deposits if redemption shares are set to > 0", async () => {
       const liabilityShares = ether("2");
-      const redemptionShares = ether("1") - 1n;
+      const redemptionShares = 1n;
 
       await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("3") });
       await vaultHub.connect(user).mintShares(connectedVault, user, liabilityShares);
@@ -107,7 +107,7 @@ describe("VaultHub.sol:redemptions", () => {
       )
         .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
         .withArgs(connectedVault, redemptionShares)
-        .and.not.to.emit(connectedVault, "Mock__BeaconChainDepositsPaused");
+        .and.to.emit(connectedVault, "Mock__BeaconChainDepositsPaused");
     });
 
     it("allows to reset redemption shares to 0 passing target more than liability shares", async () => {

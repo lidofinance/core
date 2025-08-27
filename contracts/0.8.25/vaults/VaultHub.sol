@@ -797,11 +797,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultRecord storage record = _vaultRecord(_vault);
         if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
-
-        uint256 obligations = _obligations(record);
-        if (obligations >= MIN_BEACON_DEPOSIT) {
-            revert ObligationsTooHighCannotDeposit(_vault, obligations);
-        }
+        if (_obligationsTooHigh(record)) revert ObligationsTooHighCannotDeposit(_vault, _obligations(record));
 
         connection.isBeaconDepositsManuallyPaused = false;
         emit BeaconChainDepositsResumedByOwner(_vault);
@@ -850,7 +846,7 @@ contract VaultHub is PausableUntilWithRoles {
             ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
             ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
             ///          settle redemptions
-            if (_isForceValidatorExitAllowed(connection, record, _vault.balance)) {
+            if (_isForceValidatorExitAllowed(_vault, connection, record)) {
                 uint256 sharesToCover = Math256.max(
                     _rebalanceShortfallShares(connection, record),
                     record.redemptionShares
@@ -885,7 +881,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        if (!_isForceValidatorExitAllowed(connection, record, _vault.balance)) {
+        if (!_isForceValidatorExitAllowed(_vault, connection, record)) {
             revert ForcedValidatorExitNotAllowed();
         }
 
@@ -1239,14 +1235,19 @@ contract VaultHub is PausableUntilWithRoles {
         return liability > _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
     }
 
-    /// @dev Returns true if the vault is unhealthy or has obligations exceeding the minimum beacon deposit .
-    function _isForceValidatorExitAllowed(
-        VaultConnection storage _connection,
-        VaultRecord storage _record,
-        uint256 _vaultBalance
+    function _obligationsTooHigh(
+        VaultRecord storage _record
     ) internal view returns (bool) {
-        uint256 obligations = _obligations(_record);
-        return !_isVaultHealthy(_connection, _record) || (obligations >= MIN_BEACON_DEPOSIT && obligations > _vaultBalance);
+        return _record.redemptionShares > 0 || _unsettledLidoFeesValue(_record) >= MIN_BEACON_DEPOSIT;
+    }
+
+    function _isForceValidatorExitAllowed(
+        address _vault,
+        VaultConnection storage _connection,
+        VaultRecord storage _record
+    ) internal view returns (bool) {
+        return !_isVaultHealthy(_connection, _record) ||
+            (_obligationsTooHigh(_record) && _vault.balance < _obligations(_record));
     }
 
     function _addVault(address _vault, VaultConnection memory _connection, VaultRecord memory _record) internal {
@@ -1304,7 +1305,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) internal {
         IStakingVault vault_ = IStakingVault(_vault);
 
-        if (!_isVaultHealthy(_connection, _record) || _obligations(_record) >= MIN_BEACON_DEPOSIT) {
+        if (!_isVaultHealthy(_connection, _record) || _obligationsTooHigh(_record)) {
             _pauseBeaconChainDepositsIfNotAlready(vault_);
         } else if (!_connection.isBeaconDepositsManuallyPaused) {
             _resumeBeaconChainDepositsIfNotAlready(vault_);
