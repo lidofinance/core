@@ -1192,7 +1192,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     }
 
     function _getLidoLocator() internal view returns (ILidoLocator) {
-        return ILidoLocator(LOCATOR_AND_MAX_EXTERNAL_RATIO_POSITION.getStorageAddress());
+        return ILidoLocator(LOCATOR_AND_MAX_EXTERNAL_RATIO_POSITION.getLowUint160());
     }
 
     function _setMaxExternalRatioBP(uint256 _newMaxExternalRatioBP) internal {
