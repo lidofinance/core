@@ -302,6 +302,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function resumeStaking() external {
         _auth(STAKING_CONTROL_ROLE);
         require(hasInitialized(), "NOT_INITIALIZED");
+        _whenNotStopped();
 
         _resumeStaking();
     }
