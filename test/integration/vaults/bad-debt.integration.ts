@@ -116,6 +116,29 @@ describe("Integration: Vault with bad debt", () => {
       expect(await vaultHub.isVaultHealthy(acceptorStakingVault)).to.be.equal(true);
     });
 
+    it("Socialization bypasses jail restrictions", async () => {
+      await acceptorDashboard.connect(otherOwner).fund({ value: ether("10") });
+      const { vaultHub, lido, operatorGrid } = ctx.contracts;
+      const agentSigner = await ctx.getSigner("agent");
+
+      // Put acceptor vault in jail to test bypass functionality
+      await operatorGrid.connect(agentSigner).setVaultJailStatus(acceptorStakingVault, true);
+      expect(await operatorGrid.isVaultInJail(acceptorStakingVault)).to.be.true;
+
+      const badDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      // Socialization should succeed even though acceptor vault is in jail
+      // because socializeBadDebt uses _overrideLimits: true
+      await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, acceptorStakingVault, badDebtShares))
+        .to.emit(vaultHub, "BadDebtSocialized")
+        .withArgs(stakingVault, acceptorStakingVault, badDebtShares);
+
+      // Verify bad debt was transferred despite jail restriction
+      expect(await acceptorDashboard.liabilityShares()).to.equal(badDebtShares);
+      expect(await operatorGrid.isVaultInJail(acceptorStakingVault)).to.be.true; // Still in jail
+    });
+
     it("Socialization doesn't lead to bad debt in acceptor", async () => {
       await acceptorDashboard.connect(otherOwner).fund({ value: ether("1") });
       const { vaultHub, lido } = ctx.contracts;
