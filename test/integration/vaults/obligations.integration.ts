@@ -121,52 +121,62 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       expect(recordAfterRemoved.liabilityShares).to.equal(2n);
     });
 
-    it("Pauses beacon chain deposits when redemptions >= 1 ether", async () => {
-      let redemptionShares = (await lido.getSharesByPooledEth(ether("1"))) + 1n;
+    context("Pauses beacon chain deposits when redemptions >= 1 ether", () => {
+      let redemptionShares: bigint;
+      let redemptionValue: bigint;
 
-      const redemptionValue = await lido.getPooledEthBySharesRoundUp(redemptionShares);
-      if (redemptionValue < ether("1")) redemptionShares += 1n;
+      beforeEach(async () => {
+        redemptionShares = (await lido.getSharesByPooledEth(ether("1"))) + 1n;
+        redemptionValue = await lido.getPooledEthBySharesRoundUp(redemptionShares);
+        if (redemptionValue < ether("1")) redemptionShares += 1n;
 
-      await dashboard.fund({ value: redemptionValue });
-      await dashboard.mintShares(stranger, redemptionShares);
+        await dashboard.fund({ value: redemptionValue });
+        await dashboard.mintShares(stranger, redemptionShares);
+      });
 
-      const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
-      expect(recordBefore.redemptionShares).to.equal(0n);
-      expect(recordBefore.liabilityShares).to.equal(redemptionShares);
+      it("when vault has no balance (all on CL)", async () => {
+        const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordBefore.redemptionShares).to.equal(0n);
+        expect(recordBefore.liabilityShares).to.equal(redemptionShares);
 
-      await setBalance(await stakingVault.getAddress(), 0n); // simulate all balance on CL
+        await setBalance(await stakingVault.getAddress(), 0n); // simulate all balance on CL
 
-      await expect(vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n))
-        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
-        .withArgs(stakingVaultAddress, redemptionShares)
-        .to.emit(stakingVault, "BeaconChainDepositsPaused");
+        await expect(vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n))
+          .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
+          .withArgs(stakingVaultAddress, redemptionShares)
+          .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
-      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
-      expect(recordAfter.redemptionShares).to.equal(redemptionShares);
-      expect(recordAfter.liabilityShares).to.equal(redemptionShares);
-    });
+        const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordAfter.redemptionShares).to.equal(redemptionShares);
+        expect(recordAfter.liabilityShares).to.equal(redemptionShares);
+      });
 
-    it("Pauses beacon chain deposits when redemptions >= 1 ether and vault can cover them with balance", async () => {
-      let redemptionShares = (await lido.getSharesByPooledEth(ether("1"))) + 1n;
+      it("when vault can cover them with balance", async () => {
+        const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordBefore.redemptionShares).to.equal(0n);
+        expect(recordBefore.liabilityShares).to.equal(redemptionShares);
 
-      const redemptionValue = await lido.getPooledEthBySharesRoundUp(redemptionShares);
-      if (redemptionValue < ether("1")) redemptionShares += 1n;
+        await expect(vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n))
+          .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
+          .withArgs(stakingVaultAddress, redemptionShares)
+          .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
-      await dashboard.fund({ value: redemptionValue });
-      await dashboard.mintShares(stranger, redemptionShares);
+        const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordAfter.redemptionShares).to.equal(redemptionShares);
+        expect(recordAfter.liabilityShares).to.equal(redemptionShares);
 
-      const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
-      expect(recordBefore.redemptionShares).to.equal(0n);
-      expect(recordBefore.liabilityShares).to.equal(redemptionShares);
+        // cover the redemptions with balance
+        await expect(vaultHub.connect(agentSigner).forceRebalance(stakingVaultAddress))
+          .to.emit(vaultHub, "VaultRebalanced")
+          .withArgs(stakingVaultAddress, redemptionShares, await lido.getPooledEthBySharesRoundUp(redemptionShares))
+          .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
+          .withArgs(stakingVaultAddress, 0n)
+          .to.emit(stakingVault, "BeaconChainDepositsResumed");
 
-      await expect(vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n))
-        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
-        .withArgs(stakingVaultAddress, redemptionShares)
-        .to.emit(stakingVault, "BeaconChainDepositsPaused");
-
-      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
-      expect(recordAfter.redemptionShares).to.equal(redemptionShares);
-      expect(recordAfter.liabilityShares).to.equal(redemptionShares);
+        const recordAfterForceRebalance = await vaultHub.vaultRecord(stakingVaultAddress);
+        expect(recordAfterForceRebalance.redemptionShares).to.equal(0n);
+        expect(recordAfterForceRebalance.liabilityShares).to.equal(0n);
+      });
     });
 
     context("Decreases on liability shares change", () => {
@@ -283,6 +293,51 @@ describe("Integration: Vault redemptions and fees obligations", () => {
         const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
         expect(recordAfter.redemptionShares).to.equal(0n);
       });
+    });
+
+    // https://github.com/lidofinance/core/issues/1219
+    it("Does not break the vault", async () => {
+      await dashboard.fund({ value: ether("10") });
+
+      const maxMintableShares = await dashboard.totalMintingCapacityShares();
+      await dashboard.mintShares(stranger, maxMintableShares);
+
+      await expect(vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n))
+        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
+        .withArgs(stakingVaultAddress, maxMintableShares)
+        .to.emit(stakingVault, "BeaconChainDepositsPaused");
+
+      const totalValue = await vaultHub.totalValue(stakingVaultAddress);
+      expect(totalValue).to.equal(ether("11"));
+      expect(await vaultHub.locked(stakingVaultAddress)).to.equal(ether("11"));
+
+      const slashingAmount = ether("5");
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: totalValue - slashingAmount });
+
+      await setBalance(stakingVaultAddress, totalValue + ether("5")); // simulate the vault has more balance than the total value
+
+      const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
+      const redemptionShares = recordBefore.redemptionShares;
+      const expectedRebalance = await lido.getPooledEthBySharesRoundUp(redemptionShares);
+
+      await expect(vaultHub.forceRebalance(stakingVaultAddress))
+        .to.emit(vaultHub, "VaultRebalanced")
+        .withArgs(stakingVaultAddress, redemptionShares, expectedRebalance)
+        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
+        .withArgs(stakingVaultAddress, 0n)
+        .to.emit(stakingVault, "BeaconChainDepositsResumed");
+
+      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfter.redemptionShares).to.equal(0n);
+      expect(recordAfter.liabilityShares).to.equal(0n);
+      expect(recordAfter.locked).to.equal(ether("11"));
+
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: totalValue - expectedRebalance });
+
+      const recordAfterReport = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfterReport.redemptionShares).to.equal(0n);
+      expect(recordAfterReport.liabilityShares).to.equal(0n);
+      expect(recordAfterReport.locked).to.equal(ether("1")); // minimal reserve
     });
   });
 
@@ -510,6 +565,24 @@ describe("Integration: Vault redemptions and fees obligations", () => {
         expect(recordAfter.cumulativeLidoFees).to.equal(cumulativeLidoFees);
         expect(recordAfter.settledLidoFees).to.equal(feesToSettle);
       });
+    });
+
+    it("Does not break the vault", async () => {
+      const cumulativeLidoFees = ether("2");
+      await dashboard.fund({ value: ether("1") }); // 1 ether of the connection deposit
+
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("10"), cumulativeLidoFees });
+
+      const totalValue = await vaultHub.totalValue(stakingVaultAddress);
+      await setBalance(stakingVaultAddress, totalValue + ether("5")); // simulate the vault has more balance than the total value
+
+      await expect(vaultHub.settleLidoFees(stakingVaultAddress))
+        .to.emit(vaultHub, "LidoFeesSettled")
+        .withArgs(stakingVaultAddress, ether("1"), ether("2"), ether("1"));
+
+      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(recordAfter.cumulativeLidoFees).to.equal(cumulativeLidoFees);
+      expect(recordAfter.settledLidoFees).to.equal(ether("1"));
     });
   });
 

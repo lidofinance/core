@@ -110,6 +110,7 @@ describe("VaultHub.sol:redemptions", () => {
         .and.to.emit(connectedVault, "Mock__BeaconChainDepositsPaused");
     });
 
+    // https://github.com/lidofinance/core/issues/1297
     it("allows to reset redemption shares to 0 passing target more than liability shares", async () => {
       const liabilityShares = ether("2");
 
