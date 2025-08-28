@@ -258,7 +258,7 @@ describe("VaultHub.sol:withdrawal", () => {
       const excessiveAmount = totalValue + ether("1");
       await expect(vaultHub.connect(user).withdraw(connectedVault, user, excessiveAmount))
         .to.be.revertedWithCustomError(vaultHub, "AmountExceedsWithdrawableValue")
-        .withArgs(withdrawable, excessiveAmount);
+        .withArgs(connectedVault, withdrawable, excessiveAmount);
     });
 
     it("reverts when withdrawal amount exceeds withdrawable value (minting)", async () => {
@@ -278,7 +278,7 @@ describe("VaultHub.sol:withdrawal", () => {
       const excessiveAmount = withdrawable + 1n;
       await expect(vaultHub.connect(user).withdraw(connectedVault, user, excessiveAmount))
         .to.be.revertedWithCustomError(vaultHub, "AmountExceedsWithdrawableValue")
-        .withArgs(withdrawable, excessiveAmount);
+        .withArgs(connectedVault, withdrawable, excessiveAmount);
     });
 
     it("withdraws full amount when amount equals withdrawable value", async () => {

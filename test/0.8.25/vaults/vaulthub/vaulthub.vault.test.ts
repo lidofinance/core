@@ -287,7 +287,7 @@ describe("VaultHub.sol:owner-functions", () => {
 
       await expect(vaultHub.connect(vaultOwner).withdraw(vaultAddress, recipient, withdrawable + 1n))
         .to.be.revertedWithCustomError(vaultHub, "AmountExceedsWithdrawableValue")
-        .withArgs(withdrawable, withdrawable + 1n);
+        .withArgs(vaultAddress, withdrawable, withdrawable + 1n);
     });
 
     it("withdraws successfully", async () => {
