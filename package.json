@@ -33,6 +33,7 @@
     "test:integration:fork:mainnet:custom": "MODE=forking hardhat test --network mainnet-fork",
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
+    "postinstall": "yarn ts-node lib/dg-installation.ts",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed"
   },
@@ -106,6 +107,7 @@
     "@aragon/id": "2.1.1",
     "@aragon/minime": "1.0.0",
     "@aragon/os": "4.4.0",
+    "@lido/dual-governance": "https://github.com/lidofinance/dual-governance.git#feature/scratch-deploy-support",
     "@openzeppelin/contracts": "3.4.0",
     "@openzeppelin/contracts-v4.4": "npm:@openzeppelin/contracts@4.4.1",
     "openzeppelin-solidity": "2.0.0"

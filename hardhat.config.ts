@@ -48,6 +48,7 @@ const config: HardhatUserConfig = {
     },
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
+      timeout: 120000,
     },
     "local-devnet": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
