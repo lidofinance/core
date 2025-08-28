@@ -82,14 +82,7 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
         _initializeContractVersionTo(3);
     }
 
-    /// @notice Finalizes upgrade to v2 (from v1). Can be called only once.
-    function finalizeUpgrade_v2() external {
-        // Finalization for v1 --> v2
-        _checkContractVersion(1);
-        _updateContractVersion(2);
-    }
-
-        /// @notice Finalizes upgrade to v3 (from v2). Can be called only once.
+    /// @notice Finalizes upgrade to v3 (from v2). Can be called only once.
     function finalizeUpgrade_v3() external {
         // Finalization for v2 --> v3
         _checkContractVersion(2);
@@ -208,7 +201,6 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
         _addConsolidationRequests(sourcePubkeys, targetPubkeys);
     }
 
-
     /**
      * @dev Retrieves the current EIP-7002 withdrawal fee.
      * @return The minimum fee required per withdrawal request.
@@ -216,7 +208,6 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
     function getWithdrawalRequestFee() public view returns (uint256) {
         return _getWithdrawalRequestFee();
     }
-
 
     /**
      * @dev Retrieves the current EIP-7251 consolidation fee.

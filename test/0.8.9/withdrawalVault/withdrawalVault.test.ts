@@ -32,6 +32,7 @@ describe("WithdrawalVault.sol", () => {
   let user: HardhatEthersSigner;
   let treasury: HardhatEthersSigner;
   let triggerableWithdrawalsGateway: HardhatEthersSigner;
+  let consolidationGateway: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
   let originalState: string;
@@ -47,7 +48,7 @@ describe("WithdrawalVault.sol", () => {
   before(async () => {
     [owner, user, treasury] = await ethers.getSigners();
     // TODO
-    [owner, treasury, triggerableWithdrawalsGateway, stranger] = await ethers.getSigners();
+    [owner, treasury, triggerableWithdrawalsGateway, consolidationGateway, stranger] = await ethers.getSigners();
 
     withdrawalsPredeployed = await deployEIP7002WithdrawalRequestContractMock(EIP7002_MIN_WITHDRAWAL_REQUEST_FEE);
 
@@ -58,7 +59,7 @@ describe("WithdrawalVault.sol", () => {
 
     impl = await ethers.deployContract(
       "WithdrawalVault__Harness",
-      [lidoAddress, treasury.address, triggerableWithdrawalsGateway.address],
+      [lidoAddress, treasury.address, triggerableWithdrawalsGateway.address, consolidationGateway.address],
       owner,
     );
 
@@ -78,25 +79,55 @@ describe("WithdrawalVault.sol", () => {
           ZeroAddress,
           treasury.address,
           triggerableWithdrawalsGateway.address,
+          consolidationGateway.address,
         ]),
       ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
 
     it("Reverts if the treasury address is zero", async () => {
       await expect(
-        ethers.deployContract("WithdrawalVault", [lidoAddress, ZeroAddress, triggerableWithdrawalsGateway.address]),
+        ethers.deployContract("WithdrawalVault", [
+          lidoAddress,
+          ZeroAddress,
+          triggerableWithdrawalsGateway.address,
+          consolidationGateway.address,
+        ]),
       ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
 
     it("Reverts if the triggerable withdrawal gateway address is zero", async () => {
       await expect(
-        ethers.deployContract("WithdrawalVault", [lidoAddress, treasury.address, ZeroAddress]),
+        ethers.deployContract("WithdrawalVault", [
+          lidoAddress,
+          treasury.address,
+          ZeroAddress,
+          consolidationGateway.address,
+        ]),
+      ).to.be.revertedWithCustomError(vault, "ZeroAddress");
+    });
+
+    it("Reverts if the consolidation gateway address is zero", async () => {
+      await expect(
+        ethers.deployContract("WithdrawalVault", [
+          lidoAddress,
+          treasury.address,
+          triggerableWithdrawalsGateway.address,
+          ZeroAddress,
+        ]),
       ).to.be.revertedWithCustomError(vault, "ZeroAddress");
     });
 
     it("Sets initial properties", async () => {
       expect(await vault.LIDO()).to.equal(lidoAddress, "Lido address");
       expect(await vault.TREASURY()).to.equal(treasury.address, "Treasury address");
+      expect(await vault.TRIGGERABLE_WITHDRAWALS_GATEWAY()).to.equal(
+        triggerableWithdrawalsGateway.address,
+        "Triggerable Withdrawals Gateway address",
+      );
+      expect(await vault.CONSOLIDATION_GATEWAY()).to.equal(
+        consolidationGateway.address,
+        "Consolidation Gateway address",
+      );
     });
 
     it("Petrifies the implementation", async () => {
@@ -112,38 +143,38 @@ describe("WithdrawalVault.sol", () => {
     it("Should revert if the contract is already initialized", async () => {
       await vault.initialize();
 
-      await expect(vault.initialize()).to.be.revertedWithCustomError(vault, "UnexpectedContractVersion").withArgs(2, 0);
+      await expect(vault.initialize()).to.be.revertedWithCustomError(vault, "UnexpectedContractVersion").withArgs(3, 0);
     });
 
     it("Initializes the contract", async () => {
-      await expect(vault.initialize()).to.emit(vault, "ContractVersionSet").withArgs(2);
+      await expect(vault.initialize()).to.emit(vault, "ContractVersionSet").withArgs(3);
     });
   });
 
-  context("finalizeUpgrade_v2()", () => {
+  context("finalizeUpgrade_v3()", () => {
     it("Should revert with UnexpectedContractVersion error when called on implementation", async () => {
-      await expect(impl.finalizeUpgrade_v2())
+      await expect(impl.finalizeUpgrade_v3())
         .to.be.revertedWithCustomError(impl, "UnexpectedContractVersion")
-        .withArgs(MAX_UINT256, 1);
+        .withArgs(MAX_UINT256, 2);
     });
 
-    it("Should revert with UnexpectedContractVersion error when called on deployed from scratch WithdrawalVaultV2", async () => {
+    it("Should revert with UnexpectedContractVersion error when called on deployed from scratch WithdrawalVaultV3", async () => {
       await vault.initialize();
 
-      await expect(vault.finalizeUpgrade_v2())
+      await expect(vault.finalizeUpgrade_v3())
         .to.be.revertedWithCustomError(impl, "UnexpectedContractVersion")
-        .withArgs(2, 1);
+        .withArgs(3, 2);
     });
 
-    context("Simulate upgrade from v1", () => {
+    context("Simulate upgrade from v2", () => {
       beforeEach(async () => {
-        await vault.harness__initializeContractVersionTo(1);
+        await vault.harness__initializeContractVersionTo(2);
       });
 
       it("Should set correct contract version", async () => {
-        expect(await vault.getContractVersion()).to.equal(1);
-        await vault.finalizeUpgrade_v2();
-        expect(await vault.getContractVersion()).to.be.equal(2);
+        expect(await vault.getContractVersion()).to.equal(2);
+        await vault.finalizeUpgrade_v3();
+        expect(await vault.getContractVersion()).to.be.equal(3);
       });
     });
   });
@@ -346,20 +377,24 @@ describe("WithdrawalVault.sol", () => {
         vault
           .connect(triggerableWithdrawalsGateway)
           .addWithdrawalRequests(invalidPubkeyHexString, [1n], { value: fee }),
-      ).to.be.revertedWithPanic(1); // assertion
+      )
+        .to.be.revertedWithCustomError(vault, "InvalidPublicKeyLength")
+        .withArgs(invalidPubkeyHexString[0]);
     });
 
     it("Should revert if last pubkey not 48 bytes", async function () {
       const validPubkey =
-        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
-      const invalidPubkey = "1234";
-      const pubkeysHexArray = [`0x${validPubkey}`, `0x${invalidPubkey}`];
+        "0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
+      const invalidPubkey = `0x${"12345".repeat(10)}`; // 50 characters, i.e. 25 bytes
+      const pubkeysHexArray = [validPubkey, invalidPubkey];
 
       const fee = (await getFee()) * 2n; // 2 requests
 
       await expect(
         vault.connect(triggerableWithdrawalsGateway).addWithdrawalRequests(pubkeysHexArray, [1n, 2n], { value: fee }),
-      ).to.be.revertedWithPanic(1); // assertion
+      )
+        .to.be.revertedWithCustomError(vault, "InvalidPublicKeyLength")
+        .withArgs(invalidPubkey);
     });
 
     it("Should revert if addition fails at the withdrawal request contract", async function () {
