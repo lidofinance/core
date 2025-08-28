@@ -821,19 +821,9 @@ contract VaultHub is PausableUntilWithRoles {
             ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
             ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
             ///          settle redemptions
-            if (_isForceValidatorExitAllowed(connection, record, _vault.balance)) {
-                uint256 sharesToCover = Math256.max(
-                    _rebalanceShortfallShares(connection, record),
-                    record.redemptionShares
-                );
-                if (sharesToCover == type(uint256).max) revert PartialValidatorWithdrawalNotAllowed();
-
-                uint256 vaultBalance = _vault.balance;
-                uint256 amountToCover = _getPooledEthBySharesRoundUp(sharesToCover);
-                uint256 requiredAmountToCover = amountToCover > vaultBalance ? amountToCover - vaultBalance : 0;
-                if (minPartialAmountInGwei * 1e9 < requiredAmountToCover) {
-                    revert PartialValidatorWithdrawalNotAllowed();
-                }
+            uint256 minPartialWithdrawalAmount = _minPartialWithdrawalAmount(_vault, connection, record);
+            if (minPartialWithdrawalAmount > 0 && minPartialAmountInGwei * 1e9 < minPartialWithdrawalAmount) {
+                revert PartialValidatorWithdrawalNotAllowed();
             }
         }
 
@@ -856,9 +846,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        if (!_isForceValidatorExitAllowed(connection, record, _vault.balance)) {
-            revert ForcedValidatorExitNotAllowed();
-        }
+        uint256 minPartialWithdrawalAmount = _minPartialWithdrawalAmount(_vault, connection, record);
+        if (minPartialWithdrawalAmount == 0) revert ForcedValidatorExitNotAllowed();
 
         uint64[] memory amountsInGwei = new uint64[](0);
         _triggerVaultValidatorWithdrawals(_vault, msg.value, _pubkeys, amountsInGwei, _refundRecipient);
@@ -878,9 +867,8 @@ contract VaultHub is PausableUntilWithRoles {
 
         _requireFreshReport(_vault, record);
 
-        uint256 shortfallShares = _rebalanceShortfallShares(connection, record);
         uint256 sharesToRebalance = Math256.min(
-            Math256.max(shortfallShares, record.redemptionShares),
+            _sharesToCoverForRebalance(connection, record),
             _getSharesByPooledEth(availableBalance)
         );
 
@@ -1213,22 +1201,28 @@ contract VaultHub is PausableUntilWithRoles {
         return _record.redemptionShares > 0 || _unsettledLidoFeesValue(_record) >= MIN_BEACON_DEPOSIT;
     }
 
-    function _isForceValidatorExitAllowed(
+    function _minPartialWithdrawalAmount(
+        address _vault,
         VaultConnection storage _connection,
-        VaultRecord storage _record,
-        uint256 _vaultBalance
-    ) internal view returns (bool) {
-        // Uncovered obligations must allow to trigger force validator exits
-        if (_obligationsTooHigh(_record) && _vaultBalance < _obligations(_record)) return true;
+        VaultRecord storage _record
+    ) internal view returns (uint256) {
+        uint256 sharesToCover = _sharesToCoverForRebalance(_connection, _record);
+        if (sharesToCover == type(uint256).max) return type(uint256).max;
 
-        // Unhealthy vault must allow to trigger force validator exits
-        if (!_isVaultHealthy(_connection, _record)) {
-            uint256 sharesToRebalance = _rebalanceShortfallShares(_connection, _record);
-            if (sharesToRebalance == type(uint256).max) return true;
-            if (_getPooledEthBySharesRoundUp(sharesToRebalance) > _vaultBalance) return true;
-        }
+        // no need to cover fees if they are less than the minimum beacon deposit
+        uint256 unsettledLidoFees = _unsettledLidoFeesValue(_record);
+        uint256 feesToCover = unsettledLidoFees < MIN_BEACON_DEPOSIT ? 0 : unsettledLidoFees;
 
-        return false;
+        uint256 amountToCover = _getPooledEthBySharesRoundUp(sharesToCover) + feesToCover;
+        return amountToCover > _vault.balance ? amountToCover - _vault.balance : 0;
+    }
+
+    /// @dev Returns the amount of shares that can cover the rebalance shortfall and redemption obligations
+    function _sharesToCoverForRebalance(
+        VaultConnection storage _connection,
+        VaultRecord storage _record
+    ) internal view returns (uint256) {
+        return Math256.max(_rebalanceShortfallShares(_connection, _record), _record.redemptionShares);
     }
 
     function _addVault(address _vault, VaultConnection memory _connection, VaultRecord memory _record) internal {
