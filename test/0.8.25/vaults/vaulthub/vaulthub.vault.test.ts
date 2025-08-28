@@ -400,7 +400,7 @@ describe("VaultHub.sol:owner-functions", () => {
 
       await expect(
         vaultHub.connect(vaultOwner).mintShares(vaultAddress, recipient, maxMintable + 1n),
-      ).to.be.revertedWithCustomError(vaultHub, "InsufficientValueToMint");
+      ).to.be.revertedWithCustomError(vaultHub, "InsufficientValue");
     });
 
     it("mints shares successfully", async () => {

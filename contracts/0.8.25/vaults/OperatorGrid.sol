@@ -64,6 +64,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
        4. Tier Capacity:
          - Tiers are not limited by the number of vaults
          - Tiers are limited by the sum of vaults' liability shares
+         - Administrative operations (like bad debt socialization) can bypass tier/group limits
 
         ┌──────────────────────────────────────────────────────┐
         │                 Group 1 = operator 1                 │
@@ -76,6 +77,12 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         │  │  Vault_2 ... Vault_k │  │                      │  │
         │  └──────────────────────┘  └──────────────────────┘  │
         └──────────────────────────────────────────────────────┘
+
+        5. Jail Mechanism:
+         - A vault can be "jailed" as a penalty mechanism for misbehavior or violations
+         - When a vault is in jail, it cannot mint new stETH shares (normal minting operations are blocked)
+         - Vaults can be jailed/unjailed by addresses with appropriate governance roles
+         - Administrative operations (like bad debt socialization) can bypass jail restrictions
      */
 
     /// @dev 0xa495a3428837724c7f7648cda02eb83c9c4c778c8688d6f254c7f3f80c154d55
@@ -125,12 +132,14 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
      * @custom:vaultTier Vault tier
      * @custom:groups Groups
      * @custom:nodeOperators Node operators
+     * @custom:isVaultInJail if true, vault is in jail and can't mint stETH
      */
     struct ERC7201Storage {
         Tier[] tiers;
         mapping(address vault => uint256 tierId) vaultTier;
         mapping(address nodeOperator => Group) groups;
         address[] nodeOperators;
+        mapping(address vault => bool isInJail) isVaultInJail;
     }
 
     /**
@@ -570,26 +579,34 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @notice Mint shares limit check
     /// @param _vault address of the vault
     /// @param _amount amount of shares will be minted
+    /// @param _overrideLimits true if group and tier limits should not be checked
     function onMintedShares(
         address _vault,
-        uint256 _amount
+        uint256 _amount,
+        bool _overrideLimits
     ) external {
         if (msg.sender != LIDO_LOCATOR.vaultHub()) revert NotAuthorized("onMintedShares", msg.sender);
 
         ERC7201Storage storage $ = _getStorage();
 
+        if (!_overrideLimits && $.isVaultInJail[_vault]) revert VaultInJail();
+
         uint256 tierId = $.vaultTier[_vault];
         Tier storage tier_ = $.tiers[tierId];
 
         uint96 tierLiabilityShares = tier_.liabilityShares;
-        if (tierLiabilityShares + _amount > tier_.shareLimit) revert TierLimitExceeded();
+        if (!_overrideLimits && tierLiabilityShares + _amount > tier_.shareLimit) {
+            revert TierLimitExceeded();
+        }
 
         tier_.liabilityShares = tierLiabilityShares + uint96(_amount);
 
         if (tierId != DEFAULT_TIER_ID) {
             Group storage group_ = $.groups[tier_.operator];
             uint96 groupMintedShares = group_.liabilityShares;
-            if (groupMintedShares + _amount > group_.shareLimit) revert GroupLimitExceeded();
+            if (!_overrideLimits && groupMintedShares + _amount > group_.shareLimit) {
+                revert GroupLimitExceeded();
+            }
 
             group_.liabilityShares = groupMintedShares + uint96(_amount);
         }
@@ -618,6 +635,20 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
             Group storage group_ = $.groups[tier_.operator];
             group_.liabilityShares -= uint96(_amount);
         }
+    }
+
+    /// @notice Updates if the vault is in jail
+    /// @param _vault vault address
+    /// @param _isInJail true if the vault is in jail, false otherwise
+    /// @dev msg.sender must have VAULT_MASTER_ROLE
+    function setVaultJailStatus(address _vault, bool _isInJail) external onlyRole(REGISTRY_ROLE) {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+
+        ERC7201Storage storage $ = _getStorage();
+        if ($.isVaultInJail[_vault] == _isInJail) revert VaultInJailAlreadySet();
+        $.isVaultInJail[_vault] = _isInJail;
+
+        emit VaultJailStatusUpdated(_vault, _isInJail);
     }
 
     /// @notice Get vault limits
@@ -669,6 +700,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         uint256 gridShareLimit = _gridRemainingShareLimit(_vault) + liabilityShares;
         return Math256.min(gridShareLimit, shareLimit);
+    }
+
+    /// @notice Returns true if the vault is in jail
+    /// @param _vault address of the vault
+    /// @return true if the vault is in jail
+    function isVaultInJail(address _vault) external view returns (bool) {
+        return _getStorage().isVaultInJail[_vault];
     }
 
     /// @notice Returns the remaining share limit in a given tier and group
@@ -776,6 +814,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
       uint256 liquidityFeeBP,
       uint256 reservationFeeBP
     );
+    event VaultJailStatusUpdated(address indexed vault, bool isInJail);
 
     // -----------------------------
     //            ERRORS
@@ -787,6 +826,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     error GroupLimitExceeded();
     error NodeOperatorNotExists();
     error TierLimitExceeded();
+    error VaultInJailAlreadySet();
+    error VaultInJail();
 
     error TierNotExists();
     error TierAlreadySet();

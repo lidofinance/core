@@ -23,6 +23,7 @@ export { calcNodeOperatorRewards } from "./staking-module";
 export {
   autofillRoles,
   getRoleMethods,
+  calculateLockedValue,
   createVaultProxy,
   createVaultsReportTree,
   createVaultWithDashboard,
@@ -34,3 +35,5 @@ export {
   VaultRoles,
   VaultRoleMethods,
 } from "./vaults";
+
+export * from "./operatorGrid";

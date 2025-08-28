@@ -3,9 +3,9 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, StakingVault, VaultHub } from "typechain-types";
+import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
-import { ether } from "lib";
+import { days, ether } from "lib";
 import {
   createVaultWithDashboard,
   getProtocolContext,
@@ -24,6 +24,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
   let vaultHub: VaultHub;
   let stakingVault: StakingVault;
   let dashboard: Dashboard;
+  let lazyOracle: LazyOracle;
 
   let stakingVaultAddress: string;
 
@@ -39,7 +40,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
 
     await setupLidoForVaults(ctx);
 
-    ({ vaultHub } = ctx.contracts);
+    ({ vaultHub, lazyOracle } = ctx.contracts);
 
     [owner, nodeOperator, redemptionMaster] = await ethers.getSigners();
 
@@ -57,6 +58,9 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
     stakingVaultAddress = await stakingVault.getAddress();
 
     agentSigner = await ctx.getSigner("agent");
+
+    // set maximum fee rate per second to 1 ether to allow rapid fee increases
+    await lazyOracle.connect(agentSigner).updateSanityParams(days(30n), 1000n, 1000000000000000000n);
 
     await vaultHub.connect(agentSigner).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), redemptionMaster);
   });
@@ -116,8 +120,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
 
     it("Pause beacon deposits on setting redemptions obligations", async () => {
       await dashboard.fund({ value: ether("1") });
-      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: ether("100") });
-      await dashboard.mintShares(agentSigner, ether("1"));
+      await dashboard.mintStETH(agentSigner, ether("1"));
 
       await expect(vaultHub.connect(redemptionMaster).setVaultRedemptions(stakingVaultAddress, ether("1"))).to.emit(
         stakingVault,
