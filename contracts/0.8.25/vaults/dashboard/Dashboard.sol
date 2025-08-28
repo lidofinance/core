@@ -562,6 +562,14 @@ contract Dashboard is NodeOperatorFee {
         return _changeTier(_tierId, _requestedShareLimit);
     }
 
+    /**
+     * @notice Normalizes the vault by forcing a rebalance and settling lido fees
+     */
+    function normalizeVault() external {
+        try VAULT_HUB.forceRebalance(address(_stakingVault())) {} catch {}
+        try VAULT_HUB.settleLidoFees(address(_stakingVault())) {} catch {}
+    }
+
     // ==================== Internal Functions ====================
 
     /**

@@ -265,7 +265,8 @@ contract VaultHub is PausableUntilWithRoles {
     ///         locked ether, or some amount may be non-transferable to not to make the vault unhealthy
     /// @dev returns 0 if the vault is not connected
     function settleableLidoFeesValue(address _vault) external view returns (uint256) {
-        return _settleableLidoFeesValue(_vault, _vaultRecord(_vault));
+        VaultRecord storage record = _vaultRecord(_vault);
+        return _settleableLidoFeesValue(_vault, record, _unsettledLidoFeesValue(record));
     }
 
     /// @return latest report for the vault
@@ -859,16 +860,14 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev rebalance all available amount of ether until the vault is healthy and redemptions are paid
     function forceRebalance(address _vault) external {
-        VaultConnection storage connection = _checkConnection(_vault);
-
         VaultRecord storage record = _vaultRecord(_vault);
+        _requireFreshReport(_vault, record);
+
         uint256 availableBalance = Math256.min(_vault.balance, _totalValue(record));
         if (availableBalance == 0) revert NoFundsForForceRebalance(_vault);
 
-        _requireFreshReport(_vault, record);
-
         uint256 sharesToRebalance = Math256.min(
-            _sharesToCoverForRebalance(connection, record),
+            _sharesToCoverForRebalance(_vaultConnection(_vault), record),
             _getSharesByPooledEth(availableBalance)
         );
 
@@ -884,8 +883,11 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 valueToSettle = _settleableLidoFeesValue(_vault, record);
-        if (valueToSettle == 0) revert NothingToTransferToLido(_vault);
+        uint256 unsettledLidoFees = _unsettledLidoFeesValue(record);
+        if (unsettledLidoFees == 0) revert NoUnsettledLidoFeesToSettle(_vault);
+
+        uint256 valueToSettle = _settleableLidoFeesValue(_vault, record, unsettledLidoFees);
+        if (valueToSettle == 0) revert NoFundsToSettleLidoFees(_vault, unsettledLidoFees);
 
         _settleLidoFees(_vault, record, connection, valueToSettle);
     }
@@ -1311,16 +1313,14 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev    this amount already accounts locked value
     function _settleableLidoFeesValue(
         address _vault,
-        VaultRecord storage _record
+        VaultRecord storage _record,
+        uint256 _unsettledLidoFeesValue
     ) internal view returns (uint256) {
         uint256 totalValue_ = _totalValue(_record);
         uint256 locked_ = _record.locked;
         uint256 unlocked = totalValue_ > locked_ ? totalValue_ - locked_ : 0;
 
-        return Math256.min(
-            Math256.min(unlocked, _vault.balance),
-            _unsettledLidoFeesValue(_record)
-        );
+        return Math256.min(Math256.min(unlocked, _vault.balance), _unsettledLidoFeesValue);
     }
 
     /// @notice the amount of ether that can be instantly withdrawn from the vault based on the available balance
@@ -1572,7 +1572,10 @@ contract VaultHub is PausableUntilWithRoles {
 
     error NoFundsForForceRebalance(address vault);
     error NoReasonForForceRebalance(address vault);
-    error NothingToTransferToLido(address vault);
+
+    error NoUnsettledLidoFeesToSettle(address vault);
+    error NoFundsToSettleLidoFees(address vault, uint256 unsettledLidoFees);
+
     error VaultMintingCapacityExceeded(
         address vault,
         uint256 totalValue,
