@@ -1044,10 +1044,12 @@ describe("VaultHub.sol:hub", () => {
       const newReservationFeeBP = RESERVATION_FEE_BP * 2n;
 
       const connectionBefore = await vaultHub.vaultConnection(vault);
+      const nodeOperator = await vault.nodeOperator();
       await expect(vaultHub.connect(user).updateVaultFees(vault, newInfraFeeBP, newLiquidityFeeBP, newReservationFeeBP))
         .to.emit(vaultHub, "VaultFeesUpdated")
         .withArgs(
           vault,
+          nodeOperator,
           connectionBefore.infraFeeBP,
           connectionBefore.liquidityFeeBP,
           connectionBefore.reservationFeeBP,
@@ -1084,6 +1086,7 @@ describe("VaultHub.sol:hub", () => {
     it("update connection parameters", async () => {
       const { vault } = await createAndConnectVault(vaultFactory);
       const vaultAddress = await vault.getAddress();
+      const nodeOperator = await vault.nodeOperator();
       const operatorGridSigner = await impersonate(await operatorGridMock.getAddress(), ether("1"));
 
       const oldConnection = await vaultHub.vaultConnection(vaultAddress);
@@ -1107,10 +1110,11 @@ describe("VaultHub.sol:hub", () => {
           ),
       )
         .to.emit(vaultHub, "VaultConnectionUpdated")
-        .withArgs(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP)
+        .withArgs(vaultAddress, nodeOperator, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP)
         .to.emit(vaultHub, "VaultFeesUpdated")
         .withArgs(
           vaultAddress,
+          nodeOperator,
           oldConnection.infraFeeBP,
           oldConnection.liquidityFeeBP,
           oldConnection.reservationFeeBP,

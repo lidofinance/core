@@ -460,6 +460,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         emit VaultConnectionUpdated({
             vault: _vault,
+            nodeOperator: _nodeOperator(_vault),
             shareLimit: _shareLimit,
             reserveRatioBP: _reserveRatioBP,
             forcedRebalanceThresholdBP: _forcedRebalanceThresholdBP
@@ -1468,6 +1469,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         emit VaultFeesUpdated({
             vault: _vault,
+            nodeOperator: _nodeOperator(_vault),
             preInfraFeeBP: preInfraFeeBP,
             preLiquidityFeeBP: preLiquidityFeeBP,
             preReservationFeeBP: preReservationFeeBP,
@@ -1586,6 +1588,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     event VaultConnectionUpdated(
         address indexed vault,
+        address indexed nodeOperator,
         uint256 shareLimit,
         uint256 reserveRatioBP,
         uint256 forcedRebalanceThresholdBP
@@ -1593,6 +1596,7 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultShareLimitUpdated(address indexed vault, uint256 newShareLimit);
     event VaultFeesUpdated(
         address indexed vault,
+        address indexed nodeOperator,
         uint256 preInfraFeeBP,
         uint256 preLiquidityFeeBP,
         uint256 preReservationFeeBP,

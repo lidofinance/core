@@ -558,9 +558,22 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Requests a sync of tier on the OperatorGrid.
+     * @return bool Whether the tier sync was confirmed.
+     */
+    function syncTier() external returns (bool) {
+        return _syncTier();
+    }
+
+    /**
      * @notice Requests a change of share limit on the OperatorGrid.
      * @param _requestedShareLimit The requested share limit.
      * @return bool Whether the share limit change was confirmed.
+     * @dev Share limit update confirmation logic:
+     *      - Default tier (0): Only vault owner confirmation required (via this function)
+     *      - Non-default tier + decreasing limit: Only vault owner confirmation required (via this function)
+     *      - Non-default tier + increasing limit: Both vault owner (via this function) AND node operator confirmations required
+     *        First call returns false (pending), second call with node operator confirmation completes the update
      */
     function updateShareLimit(uint256 _requestedShareLimit) external returns (bool) {
         return _updateVaultShareLimit(_requestedShareLimit);

@@ -358,14 +358,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         }
     }
 
-    /// @notice Vault tier change or sync with multi-role confirmation
+    /// @notice Vault tier change with multi-role confirmation
     /// @param _vault address of the vault
-    /// @param _requestedTierId id of the tier (if same as current tier, performs sync)
+    /// @param _requestedTierId id of the tier
     /// @param _requestedShareLimit share limit to set
-    /// @return bool Whether the tier change/sync was confirmed.
-    /// @dev Requires vault to be connected to VaultHub to finalize tier change/sync.
-    /// @dev In sync mode (same tier ID), syncs vault params with current tier params.
-    /// @dev Both vault owner and node operator confirmation required for all operations.
+    /// @return bool Whether the tier change was confirmed.
+    /// @dev Requires vault to be connected to VaultHub to finalize tier change.
+    /// @dev Both vault owner and node operator confirmations are required.
     /*
 
     Legend:
@@ -416,12 +415,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         ERC7201Storage storage $ = _getStorage();
         if (_requestedTierId >= $.tiers.length) revert TierNotExists();
-
-        uint256 vaultTierId = $.vaultTier[_vault];
-        bool isSyncMode = (vaultTierId == _requestedTierId);
-
-        // Only prevent changing TO default tier, not syncing WITH default tier
-        if (_requestedTierId == DEFAULT_TIER_ID && !isSyncMode) revert CannotChangeToDefaultTier();
+        if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
         VaultHub vaultHub = _vaultHub();
         bool isVaultConnected = vaultHub.isVaultConnected(_vault);
@@ -432,40 +426,37 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         address nodeOperator = IStakingVault(_vault).nodeOperator();
 
-        Tier storage requestedTier = $.tiers[_requestedTierId];
-        // In sync mode, skip operator check since we're not changing tiers
-        if (!isSyncMode && nodeOperator != requestedTier.operator ) revert TierNotInOperatorGroup();
+        uint256 vaultTierId = $.vaultTier[_vault];
+        if (vaultTierId == _requestedTierId) revert TierAlreadySet();
 
+        Tier storage requestedTier = $.tiers[_requestedTierId];
+        if (nodeOperator != requestedTier.operator) revert TierNotInOperatorGroup();
         if (_requestedShareLimit > requestedTier.shareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
 
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
+        uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
 
-        // If not in sync mode, perform tier change logic
-        if (!isSyncMode) {
-            uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
+        // check if tier limit is exceeded
+        if (requestedTier.liabilityShares + vaultLiabilityShares > requestedTier.shareLimit) revert TierLimitExceeded();
 
-            // check if tier limit is exceeded
-            if (requestedTier.liabilityShares + vaultLiabilityShares > requestedTier.shareLimit) revert TierLimitExceeded();
-
-            // if the vault was in the default tier:
-            // - that mean that the vault has no group, so we decrease only the minted shares of the default tier
-            // - but need to check requested group limit exceeded
-            if (vaultTierId == DEFAULT_TIER_ID) {
-                Group storage requestedGroup = $.groups[nodeOperator];
-                if (requestedGroup.liabilityShares + vaultLiabilityShares > requestedGroup.shareLimit) {
-                    revert GroupLimitExceeded();
-                }
-                requestedGroup.liabilityShares += uint96(vaultLiabilityShares);
+        // if the vault was in the default tier:
+        // - that mean that the vault has no group, so we decrease only the minted shares of the default tier
+        // - but need to check requested group limit exceeded
+        if (vaultTierId == DEFAULT_TIER_ID) {
+            Group storage requestedGroup = $.groups[nodeOperator];
+            if (requestedGroup.liabilityShares + vaultLiabilityShares > requestedGroup.shareLimit) {
+                revert GroupLimitExceeded();
             }
-
-            Tier storage currentTier = $.tiers[vaultTierId];
-
-            currentTier.liabilityShares -= uint96(vaultLiabilityShares);
-            requestedTier.liabilityShares += uint96(vaultLiabilityShares);
-
-            $.vaultTier[_vault] = _requestedTierId;
+            requestedGroup.liabilityShares += uint96(vaultLiabilityShares);
         }
+
+        Tier storage currentTier = $.tiers[vaultTierId];
+
+        currentTier.liabilityShares -= uint96(vaultLiabilityShares);
+        requestedTier.liabilityShares += uint96(vaultLiabilityShares);
+
+        $.vaultTier[_vault] = _requestedTierId;
 
         vaultHub.updateConnection(
             _vault,
@@ -482,32 +473,64 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         return true;
     }
 
+    /// @notice Syncs vault tier with current tier params
+    /// @param _vault address of the vault
+    /// @return bool Whether the sync was confirmed.
+    /// @dev Requires vault to be connected to VaultHub to finalize tier sync.
+    /// @dev Both vault owner and node operator confirmations are required.
+    function syncTier(address _vault) external returns (bool) {
+        (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection, address vaultOwner, address nodeOperator) = _getVaultContextForConnectedVault(_vault);
+
+        ERC7201Storage storage $ = _getStorage();
+        uint256 vaultTierId = $.vaultTier[_vault];
+        Tier storage tier = $.tiers[vaultTierId];
+
+        if (
+            vaultConnection.reserveRatioBP == tier.reserveRatioBP &&
+            vaultConnection.forcedRebalanceThresholdBP == tier.forcedRebalanceThresholdBP &&
+            vaultConnection.infraFeeBP == tier.infraFeeBP &&
+            vaultConnection.liquidityFeeBP == tier.liquidityFeeBP &&
+            vaultConnection.reservationFeeBP == tier.reservationFeeBP
+        ) {
+            revert VaultAlreadySyncedWithTier();
+        }
+
+        // store the caller's confirmation; only proceed if the required number of confirmations is met.
+        if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
+
+        vaultHub.updateConnection(
+            _vault,
+            vaultConnection.shareLimit,
+            tier.reserveRatioBP,
+            tier.forcedRebalanceThresholdBP,
+            tier.infraFeeBP,
+            tier.liquidityFeeBP,
+            tier.reservationFeeBP
+        );
+
+        emit TierSynced(_vault);
+
+        return true;
+    }
+
     /// @notice Update vault share limit
     /// @param _vault address of the vault
     /// @param _requestedShareLimit share limit to set
     /// @return bool Whether the update was confirmed.
     function updateVaultShareLimit(address _vault, uint256 _requestedShareLimit) external returns (bool) {
-        if (_vault == address(0)) revert ZeroArgument("_vault");
-
-        VaultHub vaultHub = _vaultHub();
-        if (!vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
+        (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection, address vaultOwner, address nodeOperator) = _getVaultContextForConnectedVault(_vault);
 
         ERC7201Storage storage $ = _getStorage();
         uint256 vaultTierId = $.vaultTier[_vault];
         uint256 tierShareLimit = $.tiers[vaultTierId].shareLimit;
 
         if (_requestedShareLimit > tierShareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, tierShareLimit);
-
-        VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(_vault);
-        address vaultOwner = vaultConnection.owner;
-
         if (_requestedShareLimit == vaultConnection.shareLimit) revert ShareLimitAlreadySet();
 
         // nodeOperator confirmation is only needed if vault is not in the default tier and if the requested shareLimit is more than the current one
         if (vaultTierId == DEFAULT_TIER_ID || _requestedShareLimit <= vaultConnection.shareLimit) {
-            if (msg.sender != vaultOwner) revert NotAuthorized("updateVaultShareLimit", msg.sender);
+            if (msg.sender != vaultOwner) return false;
         } else {
-            address nodeOperator = IStakingVault(_vault).nodeOperator();
             // store the caller's confirmation; only proceed if the required number of confirmations is met.
             if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
         }
@@ -711,6 +734,22 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         }
     }
 
+    function _getVaultContextForConnectedVault(address _vault) internal view returns (
+        VaultHub vaultHub,
+        VaultHub.VaultConnection memory vaultConnection,
+        address vaultOwner,
+        address nodeOperator
+    ) {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+
+        vaultHub = _vaultHub();
+        if (!vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
+
+        vaultConnection = vaultHub.vaultConnection(_vault);
+        vaultOwner = vaultConnection.owner;
+        nodeOperator = IStakingVault(_vault).nodeOperator();
+    }
+
     // -----------------------------
     //            EVENTS
     // -----------------------------
@@ -727,6 +766,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         uint256 reservationFeeBP
     );
     event TierChanged(address indexed vault, uint256 indexed tierId, uint256 shareLimit);
+    event TierSynced(address indexed vault);
     event TierUpdated(
       uint256 indexed tierId,
       uint256 shareLimit,
@@ -749,6 +789,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     error TierLimitExceeded();
 
     error TierNotExists();
+    error TierAlreadySet();
     error TierNotInOperatorGroup();
     error CannotChangeToDefaultTier();
 
@@ -760,5 +801,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     error ArrayLengthMismatch();
     error RequestedShareLimitTooHigh(uint256 requestedShareLimit, uint256 tierShareLimit);
     error VaultNotConnected();
+    error VaultAlreadySyncedWithTier();
     error ShareLimitAlreadySet();
 }

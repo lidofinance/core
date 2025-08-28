@@ -118,7 +118,7 @@ describe("Integration: OperatorGrid", () => {
       expect(connection.forcedRebalanceThresholdBP).to.equal(afterInfo.forcedRebalanceThresholdBP);
     });
 
-    it("change tier should work with sync mode", async () => {
+    it("sync tier should work", async () => {
       // Setup: register group and tier, then move to tier 1 first
       await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("5000"));
       await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
@@ -161,26 +161,25 @@ describe("Integration: OperatorGrid", () => {
       };
       await operatorGrid.connect(agentSigner).alterTiers([tierId], [updatedTierParams]);
 
-      // Now sync mode: request the same tier but with a new share limit
-      const newLimit = ether("1000");
-      expect(await dashboard.changeTier.staticCall(tierId, newLimit)).to.equal(false);
-      await dashboard.changeTier(tierId, newLimit);
-      await expect(operatorGrid.connect(nodeOperator).changeTier(stakingVault, tierId, newLimit)).to.emit(
-        vaultHub,
-        "VaultConnectionUpdated",
-      );
+      // First confirmation from vault owner via Dashboard → returns false (not yet confirmed)
+      expect(await dashboard.syncTier.staticCall()).to.equal(false);
+      await dashboard.syncTier();
 
-      const connection = await vaultHub.vaultConnection(stakingVault);
-      expect(connection.shareLimit).to.equal(newLimit);
-      // Parameters should be updated in VaultHub after sync
-      expect(connection.reserveRatioBP).to.equal(updatedTierParams.reserveRatioBP);
-      expect(connection.forcedRebalanceThresholdBP).to.equal(updatedTierParams.forcedRebalanceThresholdBP);
-      expect(connection.infraFeeBP).to.equal(updatedTierParams.infraFeeBP);
-      expect(connection.liquidityFeeBP).to.equal(updatedTierParams.liquidityFeeBP);
-      expect(connection.reservationFeeBP).to.equal(updatedTierParams.reservationFeeBP);
+      // Second confirmation from node operator → completes and updates connection
+      await expect(operatorGrid.connect(nodeOperator).syncTier(stakingVault))
+        .to.emit(vaultHub, "VaultConnectionUpdated")
+        .and.to.emit(operatorGrid, "TierSynced");
 
-      const info = await operatorGrid.vaultInfo(stakingVault);
-      expect(info.tierId).to.equal(tierId);
+      // Connection should now reflect updated tier params
+      const connectionAfterSync = await vaultHub.vaultConnection(stakingVault);
+      expect(connectionAfterSync.reserveRatioBP).to.equal(2100);
+      expect(connectionAfterSync.forcedRebalanceThresholdBP).to.equal(1900);
+      expect(connectionAfterSync.infraFeeBP).to.equal(550);
+      expect(connectionAfterSync.liquidityFeeBP).to.equal(420);
+      expect(connectionAfterSync.reservationFeeBP).to.equal(120);
+
+      // Share limit should remain unchanged after sync
+      expect(connectionAfterSync.shareLimit).to.equal(initialLimit);
     });
 
     it("reverts when changing to default tier (non-sync)", async () => {
@@ -278,9 +277,9 @@ describe("Integration: OperatorGrid", () => {
       const decreased = current.shareLimit - 100n;
 
       // Node operator cannot decrease directly
-      await expect(
-        operatorGrid.connect(nodeOperator).updateVaultShareLimit(stakingVault, decreased),
-      ).to.be.revertedWithCustomError(operatorGrid, "NotAuthorized");
+      expect(
+        await operatorGrid.connect(nodeOperator).updateVaultShareLimit.staticCall(stakingVault, decreased),
+      ).to.equal(false);
 
       // Owner (Dashboard) can decrease by itself
       await expect(dashboard.updateShareLimit(decreased)).to.emit(vaultHub, "VaultConnectionUpdated");
