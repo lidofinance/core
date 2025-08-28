@@ -1,0 +1,544 @@
+forge test -vvv test/0.8.25/invariant-fuzzing/StakingVaultsFuzzing.t.sol
+
+Logs:
+  Bound result 9000000000000002508
+  Bound result 1
+  DaysShift = 3
+  Bound result 0
+  DaysShift = 0
+  Bound result 1
+  DaysShift = 3
+  Bound result 3842411754778025856
+  Bound result 0
+  DaysShift = 0
+
+Traces:
+  [43017] StakingVaultsHandler::otcDeposit(2507)
+    ├─ [0] console::log("Bound result", 9000000000000002508 [9e18]) [staticcall]
+    │   └─ ← [Stop]
+    ├─ [0] VM::deal(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 9000000000000002508 [9e18])
+    │   └─ ← [Return]
+    └─ ← [Stop]
+
+  [304981] StakingVaultsHandler::updateVaultData(75637045475 [7.563e10])
+    ├─ [0] console::log("Bound result", 1) [staticcall]
+    │   └─ ← [Stop]
+    ├─ [0] console::log("DaysShift = %d", 3) [staticcall]
+    │   └─ ← [Stop]
+    ├─ [0] VM::warp(259201 [2.592e5])
+    │   └─ ← [Return]
+    ├─ [5591] lazyoracle::setVaultDataTimestamp(259201 [2.592e5])
+    │   └─ ← [Stop]
+    ├─ [10904] vaultHub::vaultObligations(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [5921] VaultHub::vaultObligations(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] VaultObligations({ settledLidoFees: 0, unsettledLidoFees: 0, redemptions: 0 })
+    │   └─ ← [Return] VaultObligations({ settledLidoFees: 0, unsettledLidoFees: 0, redemptions: 0 })
+    ├─ [6472] vaultHub::totalValue(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [5995] VaultHub::totalValue(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] 1000000000000000000 [1e18]
+    │   └─ ← [Return] 1000000000000000000 [1e18]
+    ├─ [3619] vaultHub::liabilityShares(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [3142] VaultHub::liabilityShares(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] 0
+    │   └─ ← [Return] 0
+    ├─ [4688] consensusContract::getCurrentFrame() [staticcall]
+    │   └─ ← [Return] 1, 0
+    ├─ [3337] consensusContract::setCurrentFrame(4)
+    │   └─ ← [Stop]
+    ├─ [147549] lazyoracle::updateVaultData(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 10000000000000002508 [1e19], 1, 0, 259201 [2.592e5])
+    │   ├─ [2538] lidoLocator::vaultHub() [staticcall]
+    │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   ├─ [6458] vaultHub::vaultRecord(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   │   ├─ [5945] VaultHub::vaultRecord(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   │   └─ ← [Return] VaultRecord({ report: Report({ totalValue: 1000000000000000000 [1e18], inOutDelta: 1000000000000000000 [1e18] }), locked: 1000000000000000000 [1e18], liabilityShares: 0, inOutDelta: Int112WithRefSlotCache({ value: 1000000000000000000 [1e18], refSlotValue: 0, refSlot: 0 }), reportTimestamp: 0 })
+    │   │   └─ ← [Return] VaultRecord({ report: Report({ totalValue: 1000000000000000000 [1e18], inOutDelta: 1000000000000000000 [1e18] }), locked: 1000000000000000000 [1e18], liabilityShares: 0, inOutDelta: Int112WithRefSlotCache({ value: 1000000000000000000 [1e18], refSlotValue: 0, refSlot: 0 }), reportTimestamp: 0 })
+    │   ├─ [688] consensusContract::getCurrentFrame() [staticcall]
+    │   │   └─ ← [Return] 4, 0
+    │   ├─ emit QuarantinedDeposit(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], delta: 9000000000000002508 [9e18])
+    │   ├─ [538] lidoLocator::vaultHub() [staticcall]
+    │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   ├─ [100875] vaultHub::applyVaultReport(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 259201 [2.592e5], 1000000000000000000 [1e18], 1000000000000000000 [1e18], 1, 0)
+    │   │   ├─ [100374] VaultHub::applyVaultReport(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 259201 [2.592e5], 1000000000000000000 [1e18], 1000000000000000000 [1e18], 1, 0) [delegatecall]
+    │   │   │   ├─ [2538] lidoLocator::lazyOracle() [staticcall]
+    │   │   │   │   └─ ← [Return] lazyoracle: [0x7C2098EA6428fF3Dc2e11f99096f298eAb463F50]
+    │   │   │   ├─ emit LidoFeesUpdated(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], unsettledLidoFees: 1, settledLidoFees: 0)
+    │   │   │   ├─ [5973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ emit VaultReportApplied(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], reportTimestamp: 259201 [2.592e5], reportTotalValue: 1000000000000000000 [1e18], reportInOutDelta: 1000000000000000000 [1e18], reportCumulativeLidoFees: 1, reportLiabilityShares: 0)
+    │   │   │   ├─ [1286] lido::getSharesByPooledEth(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1286] lido::getSharesByPooledEth(9000000000000002508 [9e18]) [staticcall]
+    │   │   │   │   └─ ← [Return] 7505544420551436254 [7.505e18]
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [7627] ERC1967Proxy::fallback() [staticcall]
+    │   │   │   │   ├─ [2653] StakingVault::beaconChainDepositsPaused() [delegatecall]
+    │   │   │   │   │   └─ ← [Return] false
+    │   │   │   │   └─ ← [Return] false
+    │   │   │   └─ ← [Stop]
+    │   │   └─ ← [Return]
+    │   └─ ← [Stop]
+    ├─ [3119] ERC1967Proxy::fallback() [staticcall]
+    │   ├─ [2645] StakingVault::pendingOwner() [delegatecall]
+    │   │   └─ ← [Return] 0x0000000000000000000000000000000000000000
+    │   └─ ← [Return] 0x0000000000000000000000000000000000000000
+    └─ ← [Stop]
+
+  [178934] StakingVaultsHandler::voluntaryDisconnect()
+    ├─ [13504] vaultHub::vaultConnection(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [8479] VaultHub::vaultConnection(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] VaultConnection({ owner: 0x2D4b02C00A39Fb5A7df795d8464562227657b566, shareLimit: 1000, vaultIndex: 1, pendingDisconnect: false, reserveRatioBP: 2000, forcedRebalanceThresholdBP: 1800, infraFeeBP: 500, liquidityFeeBP: 400, reservationFeeBP: 100, isBeaconDepositsManuallyPaused: false })
+    │   └─ ← [Return] VaultConnection({ owner: 0x2D4b02C00A39Fb5A7df795d8464562227657b566, shareLimit: 1000, vaultIndex: 1, pendingDisconnect: false, reserveRatioBP: 2000, forcedRebalanceThresholdBP: 1800, infraFeeBP: 500, liquidityFeeBP: 400, reservationFeeBP: 100, isBeaconDepositsManuallyPaused: false })
+    ├─ [3619] vaultHub::liabilityShares(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [3142] VaultHub::liabilityShares(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] 0
+    │   └─ ← [Return] 0
+    ├─ [0] VM::prank(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   └─ ← [Return]
+    ├─ [135274] vaultHub::voluntaryDisconnect(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9])
+    │   ├─ [134800] VaultHub::voluntaryDisconnect(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   ├─ [5286] lido::getSharesByPooledEth(0) [staticcall]
+    │   │   │   └─ ← [Return] 0
+    │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   └─ ← [Return] 0
+    │   │   ├─ [1286] lido::getSharesByPooledEth(9000000000000002508 [9e18]) [staticcall]
+    │   │   │   └─ ← [Return] 7505544420551436254 [7.505e18]
+    │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   └─ ← [Return] 0
+    │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   └─ ← [Return] 0
+    │   │   ├─ [2560] lidoLocator::treasury() [staticcall]
+    │   │   │   └─ ← [Return] treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8]
+    │   │   ├─ [4688] consensusContract::getCurrentFrame() [staticcall]
+    │   │   │   └─ ← [Return] 4, 0
+    │   │   ├─ emit VaultInOutDeltaUpdated(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], inOutDelta: 999999999999999999 [9.999e17])
+    │   │   ├─ [44314] ERC1967Proxy::fallback(treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8], 1)
+    │   │   │   ├─ [39337] StakingVault::withdraw(treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8], 1) [delegatecall]
+    │   │   │   │   ├─ [0] treasury::fallback{value: 1}()
+    │   │   │   │   │   └─ ← [Stop]
+    │   │   │   │   ├─ emit EtherWithdrawn(recipient: treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8], amount: 1)
+    │   │   │   │   └─ ← [Stop]
+    │   │   │   └─ ← [Return]
+    │   │   ├─ emit VaultObligationsSettled(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], rebalanced: 0, transferredToLido: 1, unsettledRedemptions: 0, unsettledLidoFees: 0, settledLidoFees: 1)
+    │   │   ├─ [2581] lidoLocator::operatorGrid() [staticcall]
+    │   │   │   └─ ← [Return] operatorGrid: [0x8AFE2092eCE1aF4ba3d4d188acfB187f36003D6f]
+    │   │   ├─ [10887] operatorGrid::resetVaultTier(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9])
+    │   │   │   ├─ [5913] OperatorGrid::resetVaultTier(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   │   │   ├─ [2538] lidoLocator::vaultHub() [staticcall]
+    │   │   │   │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   │   │   │   └─ ← [Stop]
+    │   │   │   └─ ← [Return]
+    │   │   ├─ emit VaultDisconnectInitiated(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9])
+    │   │   └─ ← [Stop]
+    │   └─ ← [Return]
+    └─ ← [Stop]
+
+  [204175] StakingVaultsHandler::updateVaultData(868)
+    ├─ [0] console::log("Bound result", 0) [staticcall]
+    │   └─ ← [Stop]
+    ├─ [0] console::log("DaysShift = %d", 0) [staticcall]
+    │   └─ ← [Stop]
+    ├─ [4688] consensusContract::getCurrentFrame() [staticcall]
+    │   └─ ← [Return] 4, 0
+    ├─ [149797] lazyoracle::updateVaultData(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 10000000000000002508 [1e19], 1, 0, 259201 [2.592e5])
+    │   ├─ [2538] lidoLocator::vaultHub() [staticcall]
+    │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   ├─ [16958] vaultHub::vaultRecord(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   │   ├─ [11945] VaultHub::vaultRecord(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   │   └─ ← [Return] VaultRecord({ report: Report({ totalValue: 1000000000000000000 [1e18], inOutDelta: 1000000000000000000 [1e18] }), locked: 0, liabilityShares: 0, inOutDelta: Int112WithRefSlotCache({ value: 999999999999999999 [9.999e17], refSlotValue: 1000000000000000000 [1e18], refSlot: 4 }), reportTimestamp: 259201 [2.592e5] })
+    │   │   └─ ← [Return] VaultRecord({ report: Report({ totalValue: 1000000000000000000 [1e18], inOutDelta: 1000000000000000000 [1e18] }), locked: 0, liabilityShares: 0, inOutDelta: Int112WithRefSlotCache({ value: 999999999999999999 [9.999e17], refSlotValue: 1000000000000000000 [1e18], refSlot: 4 }), reportTimestamp: 259201 [2.592e5] })
+    │   ├─ [688] consensusContract::getCurrentFrame() [staticcall]
+    │   │   └─ ← [Return] 4, 0
+    │   ├─ [538] lidoLocator::vaultHub() [staticcall]
+    │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   ├─ [109533] vaultHub::applyVaultReport(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 259201 [2.592e5], 1000000000000000000 [1e18], 1000000000000000000 [1e18], 1, 0)
+    │   │   ├─ [109032] VaultHub::applyVaultReport(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 259201 [2.592e5], 1000000000000000000 [1e18], 1000000000000000000 [1e18], 1, 0) [delegatecall]
+    │   │   │   ├─ [2538] lidoLocator::lazyOracle() [staticcall]
+    │   │   │   │   └─ ← [Return] lazyoracle: [0x7C2098EA6428fF3Dc2e11f99096f298eAb463F50]
+    │   │   │   ├─ [5286] lido::getSharesByPooledEth(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1286] lido::getSharesByPooledEth(9000000000000002507 [9e18]) [staticcall]
+    │   │   │   │   └─ ← [Return] 7505544420551436253 [7.505e18]
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [31904] ERC1967Proxy::fallback(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   │   │   │   ├─ [26930] StakingVault::transferOwnership(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]) [delegatecall]
+    │   │   │   │   │   ├─ emit OwnershipTransferStarted(previousOwner: vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D], newOwner: userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   │   │   │   │   └─ ← [Stop]
+    │   │   │   │   └─ ← [Return]
+    │   │   │   ├─ emit VaultDisconnectCompleted(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9])
+    │   │   │   └─ ← [Stop]
+    │   │   └─ ← [Return]
+    │   └─ ← [Stop]
+    ├─ [1119] ERC1967Proxy::fallback() [staticcall]
+    │   ├─ [645] StakingVault::pendingOwner() [delegatecall]
+    │   │   └─ ← [Return] userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]
+    │   └─ ← [Return] userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]
+    ├─ [0] VM::prank(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   └─ ← [Return]
+    ├─ [6160] ERC1967Proxy::fallback()
+    │   ├─ [5689] StakingVault::acceptOwnership() [delegatecall]
+    │   │   ├─ emit OwnershipTransferred(previousOwner: vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D], newOwner: userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   │   └─ ← [Stop]
+    │   └─ ← [Return]
+    └─ ← [Stop]
+
+  [310237] StakingVaultsHandler::connectVault()
+    ├─ [13504] vaultHub::vaultConnection(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [8479] VaultHub::vaultConnection(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] VaultConnection({ owner: 0x0000000000000000000000000000000000000000, shareLimit: 0, vaultIndex: 0, pendingDisconnect: false, reserveRatioBP: 0, forcedRebalanceThresholdBP: 0, infraFeeBP: 0, liquidityFeeBP: 0, reservationFeeBP: 0, isBeaconDepositsManuallyPaused: false })
+    │   └─ ← [Return] VaultConnection({ owner: 0x0000000000000000000000000000000000000000, shareLimit: 0, vaultIndex: 0, pendingDisconnect: false, reserveRatioBP: 0, forcedRebalanceThresholdBP: 0, infraFeeBP: 0, liquidityFeeBP: 0, reservationFeeBP: 0, isBeaconDepositsManuallyPaused: false })
+    ├─ [0] VM::prank(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   └─ ← [Return]
+    ├─ [31904] ERC1967Proxy::fallback(vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D])
+    │   ├─ [26930] StakingVault::transferOwnership(vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]) [delegatecall]
+    │   │   ├─ emit OwnershipTransferStarted(previousOwner: userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566], newOwner: vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D])
+    │   │   └─ ← [Stop]
+    │   └─ ← [Return]
+    ├─ [0] VM::prank(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   └─ ← [Return]
+    ├─ [235169] vaultHub::connectVault(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9])
+    │   ├─ [234695] VaultHub::connectVault(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   ├─ [1119] ERC1967Proxy::fallback() [staticcall]
+    │   │   │   ├─ [645] StakingVault::pendingOwner() [delegatecall]
+    │   │   │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   │   ├─ [3177] ERC1967Proxy::fallback() [staticcall]
+    │   │   │   ├─ [2703] StakingVault::isOssified() [delegatecall]
+    │   │   │   │   └─ ← [Return] false
+    │   │   │   └─ ← [Return] false
+    │   │   ├─ [2582] lidoLocator::predepositGuarantee() [staticcall]
+    │   │   │   └─ ← [Return] predepositGuarantee: [0xE8E43c12E9560fA4c9dB30B6771789B453b0C618]
+    │   │   ├─ [3118] ERC1967Proxy::fallback() [staticcall]
+    │   │   │   ├─ [2644] StakingVault::depositor() [delegatecall]
+    │   │   │   │   └─ ← [Return] predepositGuarantee: [0xE8E43c12E9560fA4c9dB30B6771789B453b0C618]
+    │   │   │   └─ ← [Return] predepositGuarantee: [0xE8E43c12E9560fA4c9dB30B6771789B453b0C618]
+    │   │   ├─ [2581] lidoLocator::operatorGrid() [staticcall]
+    │   │   │   └─ ← [Return] operatorGrid: [0x8AFE2092eCE1aF4ba3d4d188acfB187f36003D6f]
+    │   │   ├─ [16818] operatorGrid::vaultInfo(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   │   │   ├─ [11805] OperatorGrid::vaultInfo(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   │   │   └─ ← [Return] 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF, 0, 1000, 2000, 1800, 500, 400, 100
+    │   │   │   └─ ← [Return] 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF, 0, 1000, 2000, 1800, 500, 400, 100
+    │   │   ├─ [2498] lido::getTotalShares() [staticcall]
+    │   │   │   └─ ← [Return] 7810237000000000000000000 [7.81e24]
+    │   │   ├─ [2538] lidoLocator::lazyOracle() [staticcall]
+    │   │   │   └─ ← [Return] lazyoracle: [0x7C2098EA6428fF3Dc2e11f99096f298eAb463F50]
+    │   │   ├─ [2535] lazyoracle::latestReportTimestamp() [staticcall]
+    │   │   │   └─ ← [Return] 259201 [2.592e5]
+    │   │   ├─ [1120] ERC1967Proxy::fallback() [staticcall]
+    │   │   │   ├─ [646] StakingVault::owner() [delegatecall]
+    │   │   │   │   └─ ← [Return] userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]
+    │   │   │   └─ ← [Return] userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]
+    │   │   ├─ [6160] ERC1967Proxy::fallback()
+    │   │   │   ├─ [5689] StakingVault::acceptOwnership() [delegatecall]
+    │   │   │   │   ├─ emit OwnershipTransferred(previousOwner: userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566], newOwner: vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D])
+    │   │   │   │   └─ ← [Stop]
+    │   │   │   └─ ← [Return]
+    │   │   ├─ emit VaultConnected(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], shareLimit: 1000, reserveRatioBP: 2000, forcedRebalanceThresholdBP: 1800, infraFeeBP: 500, liquidityFeeBP: 400, reservationFeeBP: 100)
+    │   │   └─ ← [Stop]
+    │   └─ ← [Return]
+    └─ ← [Stop]
+
+  [109096] StakingVaultsHandler::voluntaryDisconnect()
+    ├─ [13504] vaultHub::vaultConnection(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [8479] VaultHub::vaultConnection(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] VaultConnection({ owner: 0x2D4b02C00A39Fb5A7df795d8464562227657b566, shareLimit: 1000, vaultIndex: 1, pendingDisconnect: false, reserveRatioBP: 2000, forcedRebalanceThresholdBP: 1800, infraFeeBP: 500, liquidityFeeBP: 400, reservationFeeBP: 100, isBeaconDepositsManuallyPaused: false })
+    │   └─ ← [Return] VaultConnection({ owner: 0x2D4b02C00A39Fb5A7df795d8464562227657b566, shareLimit: 1000, vaultIndex: 1, pendingDisconnect: false, reserveRatioBP: 2000, forcedRebalanceThresholdBP: 1800, infraFeeBP: 500, liquidityFeeBP: 400, reservationFeeBP: 100, isBeaconDepositsManuallyPaused: false })
+    ├─ [3619] vaultHub::liabilityShares(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [3142] VaultHub::liabilityShares(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] 0
+    │   └─ ← [Return] 0
+    ├─ [0] VM::prank(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   └─ ← [Return]
+    ├─ [65436] vaultHub::voluntaryDisconnect(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9])
+    │   ├─ [64962] VaultHub::voluntaryDisconnect(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   ├─ [5286] lido::getSharesByPooledEth(0) [staticcall]
+    │   │   │   └─ ← [Return] 0
+    │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   └─ ← [Return] 0
+    │   │   ├─ [1286] lido::getSharesByPooledEth(9000000000000002507 [9e18]) [staticcall]
+    │   │   │   └─ ← [Return] 7505544420551436253 [7.505e18]
+    │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   └─ ← [Return] 0
+    │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   └─ ← [Return] 0
+    │   │   ├─ [2581] lidoLocator::operatorGrid() [staticcall]
+    │   │   │   └─ ← [Return] operatorGrid: [0x8AFE2092eCE1aF4ba3d4d188acfB187f36003D6f]
+    │   │   ├─ [10887] operatorGrid::resetVaultTier(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9])
+    │   │   │   ├─ [5913] OperatorGrid::resetVaultTier(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   │   │   ├─ [2538] lidoLocator::vaultHub() [staticcall]
+    │   │   │   │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   │   │   │   └─ ← [Stop]
+    │   │   │   └─ ← [Return]
+    │   │   ├─ emit VaultDisconnectInitiated(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9])
+    │   │   └─ ← [Stop]
+    │   └─ ← [Return]
+    └─ ← [Stop]
+
+  [278833] StakingVaultsHandler::updateVaultData(3540135484465009483 [3.54e18])
+    ├─ [0] console::log("Bound result", 1) [staticcall]
+    │   └─ ← [Stop]
+    ├─ [0] console::log("DaysShift = %d", 3) [staticcall]
+    │   └─ ← [Stop]
+    ├─ [0] VM::warp(518401 [5.184e5])
+    │   └─ ← [Return]
+    ├─ [5591] lazyoracle::setVaultDataTimestamp(518401 [5.184e5])
+    │   └─ ← [Stop]
+    ├─ [10904] vaultHub::vaultObligations(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [5921] VaultHub::vaultObligations(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] VaultObligations({ settledLidoFees: 0, unsettledLidoFees: 0, redemptions: 0 })
+    │   └─ ← [Return] VaultObligations({ settledLidoFees: 0, unsettledLidoFees: 0, redemptions: 0 })
+    ├─ [6472] vaultHub::totalValue(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [5995] VaultHub::totalValue(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] 9000000000000002507 [9e18]
+    │   └─ ← [Return] 9000000000000002507 [9e18]
+    ├─ [3619] vaultHub::liabilityShares(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [3142] VaultHub::liabilityShares(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] 0
+    │   └─ ← [Return] 0
+    ├─ [4688] consensusContract::getCurrentFrame() [staticcall]
+    │   └─ ← [Return] 4, 0
+    ├─ [3337] consensusContract::setCurrentFrame(7)
+    │   └─ ← [Stop]
+    ├─ [173007] lazyoracle::updateVaultData(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 9000000000000002507 [9e18], 1, 0, 518401 [5.184e5])
+    │   ├─ [2538] lidoLocator::vaultHub() [staticcall]
+    │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   ├─ [6458] vaultHub::vaultRecord(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   │   ├─ [5945] VaultHub::vaultRecord(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   │   └─ ← [Return] VaultRecord({ report: Report({ totalValue: 9000000000000002507 [9e18], inOutDelta: 9000000000000002507 [9e18] }), locked: 0, liabilityShares: 0, inOutDelta: Int112WithRefSlotCache({ value: 9000000000000002507 [9e18], refSlotValue: 0, refSlot: 0 }), reportTimestamp: 259201 [2.592e5] })
+    │   │   └─ ← [Return] VaultRecord({ report: Report({ totalValue: 9000000000000002507 [9e18], inOutDelta: 9000000000000002507 [9e18] }), locked: 0, liabilityShares: 0, inOutDelta: Int112WithRefSlotCache({ value: 9000000000000002507 [9e18], refSlotValue: 0, refSlot: 0 }), reportTimestamp: 259201 [2.592e5] })
+    │   ├─ [688] consensusContract::getCurrentFrame() [staticcall]
+    │   │   └─ ← [Return] 7, 0
+    │   ├─ [538] lidoLocator::vaultHub() [staticcall]
+    │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   ├─ [151127] vaultHub::applyVaultReport(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 518401 [5.184e5], 9000000000000002507 [9e18], 9000000000000002507 [9e18], 1, 0)
+    │   │   ├─ [150626] VaultHub::applyVaultReport(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 518401 [5.184e5], 9000000000000002507 [9e18], 9000000000000002507 [9e18], 1, 0) [delegatecall]
+    │   │   │   ├─ [2538] lidoLocator::lazyOracle() [staticcall]
+    │   │   │   │   └─ ← [Return] lazyoracle: [0x7C2098EA6428fF3Dc2e11f99096f298eAb463F50]
+    │   │   │   ├─ emit LidoFeesUpdated(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], unsettledLidoFees: 1, settledLidoFees: 0)
+    │   │   │   ├─ [5286] lido::getSharesByPooledEth(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1286] lido::getSharesByPooledEth(9000000000000002507 [9e18]) [staticcall]
+    │   │   │   │   └─ ← [Return] 7505544420551436253 [7.505e18]
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [2560] lidoLocator::treasury() [staticcall]
+    │   │   │   │   └─ ← [Return] treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8]
+    │   │   │   ├─ [688] consensusContract::getCurrentFrame() [staticcall]
+    │   │   │   │   └─ ← [Return] 7, 0
+    │   │   │   ├─ emit VaultInOutDeltaUpdated(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], inOutDelta: 9000000000000002506 [9e18])
+    │   │   │   ├─ [19314] ERC1967Proxy::fallback(treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8], 1)
+    │   │   │   │   ├─ [14337] StakingVault::withdraw(treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8], 1) [delegatecall]
+    │   │   │   │   │   ├─ [0] treasury::fallback{value: 1}()
+    │   │   │   │   │   │   └─ ← [Stop]
+    │   │   │   │   │   ├─ emit EtherWithdrawn(recipient: treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8], amount: 1)
+    │   │   │   │   │   └─ ← [Stop]
+    │   │   │   │   └─ ← [Return]
+    │   │   │   ├─ emit VaultObligationsSettled(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], rebalanced: 0, transferredToLido: 1, unsettledRedemptions: 0, unsettledLidoFees: 0, settledLidoFees: 1)
+    │   │   │   ├─ [25404] ERC1967Proxy::fallback(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   │   │   │   ├─ [24930] StakingVault::transferOwnership(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]) [delegatecall]
+    │   │   │   │   │   ├─ emit OwnershipTransferStarted(previousOwner: vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D], newOwner: userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   │   │   │   │   └─ ← [Stop]
+    │   │   │   │   └─ ← [Return]
+    │   │   │   ├─ emit VaultDisconnectCompleted(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9])
+    │   │   │   └─ ← [Stop]
+    │   │   └─ ← [Return]
+    │   └─ ← [Stop]
+    ├─ [1119] ERC1967Proxy::fallback() [staticcall]
+    │   ├─ [645] StakingVault::pendingOwner() [delegatecall]
+    │   │   └─ ← [Return] userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]
+    │   └─ ← [Return] userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]
+    ├─ [0] VM::prank(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   └─ ← [Return]
+    ├─ [6160] ERC1967Proxy::fallback()
+    │   ├─ [5689] StakingVault::acceptOwnership() [delegatecall]
+    │   │   ├─ emit OwnershipTransferred(previousOwner: vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D], newOwner: userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   │   └─ ← [Stop]
+    │   └─ ← [Return]
+    └─ ← [Stop]
+
+  [72508] StakingVaultsHandler::SVwithdraw(6860636051248840587910698474871198435 [6.86e36])
+    ├─ [7620] ERC1967Proxy::fallback() [staticcall]
+    │   ├─ [2646] StakingVault::owner() [delegatecall]
+    │   │   └─ ← [Return] userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]
+    │   └─ ← [Return] userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]
+    ├─ [0] console::log("Bound result", 3842411754778025856 [3.842e18]) [staticcall]
+    │   └─ ← [Stop]
+    ├─ [0] VM::prank(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   └─ ← [Return]
+    ├─ [37814] ERC1967Proxy::fallback(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566], 3842411754778025856 [3.842e18])
+    │   ├─ [37337] StakingVault::withdraw(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566], 3842411754778025856 [3.842e18]) [delegatecall]
+    │   │   ├─ [0] userAccount::fallback{value: 3842411754778025856}()
+    │   │   │   └─ ← [Stop]
+    │   │   ├─ emit EtherWithdrawn(recipient: userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566], amount: 3842411754778025856 [3.842e18])
+    │   │   └─ ← [Stop]
+    │   └─ ← [Return]
+    └─ ← [Stop]
+
+  [310237] StakingVaultsHandler::connectVault()
+    ├─ [13504] vaultHub::vaultConnection(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   ├─ [8479] VaultHub::vaultConnection(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   └─ ← [Return] VaultConnection({ owner: 0x0000000000000000000000000000000000000000, shareLimit: 0, vaultIndex: 0, pendingDisconnect: false, reserveRatioBP: 0, forcedRebalanceThresholdBP: 0, infraFeeBP: 0, liquidityFeeBP: 0, reservationFeeBP: 0, isBeaconDepositsManuallyPaused: false })
+    │   └─ ← [Return] VaultConnection({ owner: 0x0000000000000000000000000000000000000000, shareLimit: 0, vaultIndex: 0, pendingDisconnect: false, reserveRatioBP: 0, forcedRebalanceThresholdBP: 0, infraFeeBP: 0, liquidityFeeBP: 0, reservationFeeBP: 0, isBeaconDepositsManuallyPaused: false })
+    ├─ [0] VM::prank(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   └─ ← [Return]
+    ├─ [31904] ERC1967Proxy::fallback(vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D])
+    │   ├─ [26930] StakingVault::transferOwnership(vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]) [delegatecall]
+    │   │   ├─ emit OwnershipTransferStarted(previousOwner: userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566], newOwner: vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D])
+    │   │   └─ ← [Stop]
+    │   └─ ← [Return]
+    ├─ [0] VM::prank(userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566])
+    │   └─ ← [Return]
+    ├─ [235169] vaultHub::connectVault(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9])
+    │   ├─ [234695] VaultHub::connectVault(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   ├─ [1119] ERC1967Proxy::fallback() [staticcall]
+    │   │   │   ├─ [645] StakingVault::pendingOwner() [delegatecall]
+    │   │   │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   │   ├─ [3177] ERC1967Proxy::fallback() [staticcall]
+    │   │   │   ├─ [2703] StakingVault::isOssified() [delegatecall]
+    │   │   │   │   └─ ← [Return] false
+    │   │   │   └─ ← [Return] false
+    │   │   ├─ [2582] lidoLocator::predepositGuarantee() [staticcall]
+    │   │   │   └─ ← [Return] predepositGuarantee: [0xE8E43c12E9560fA4c9dB30B6771789B453b0C618]
+    │   │   ├─ [3118] ERC1967Proxy::fallback() [staticcall]
+    │   │   │   ├─ [2644] StakingVault::depositor() [delegatecall]
+    │   │   │   │   └─ ← [Return] predepositGuarantee: [0xE8E43c12E9560fA4c9dB30B6771789B453b0C618]
+    │   │   │   └─ ← [Return] predepositGuarantee: [0xE8E43c12E9560fA4c9dB30B6771789B453b0C618]
+    │   │   ├─ [2581] lidoLocator::operatorGrid() [staticcall]
+    │   │   │   └─ ← [Return] operatorGrid: [0x8AFE2092eCE1aF4ba3d4d188acfB187f36003D6f]
+    │   │   ├─ [16818] operatorGrid::vaultInfo(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   │   │   ├─ [11805] OperatorGrid::vaultInfo(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   │   │   └─ ← [Return] 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF, 0, 1000, 2000, 1800, 500, 400, 100
+    │   │   │   └─ ← [Return] 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF, 0, 1000, 2000, 1800, 500, 400, 100
+    │   │   ├─ [2498] lido::getTotalShares() [staticcall]
+    │   │   │   └─ ← [Return] 7810237000000000000000000 [7.81e24]
+    │   │   ├─ [2538] lidoLocator::lazyOracle() [staticcall]
+    │   │   │   └─ ← [Return] lazyoracle: [0x7C2098EA6428fF3Dc2e11f99096f298eAb463F50]
+    │   │   ├─ [2535] lazyoracle::latestReportTimestamp() [staticcall]
+    │   │   │   └─ ← [Return] 518401 [5.184e5]
+    │   │   ├─ [1120] ERC1967Proxy::fallback() [staticcall]
+    │   │   │   ├─ [646] StakingVault::owner() [delegatecall]
+    │   │   │   │   └─ ← [Return] userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]
+    │   │   │   └─ ← [Return] userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566]
+    │   │   ├─ [6160] ERC1967Proxy::fallback()
+    │   │   │   ├─ [5689] StakingVault::acceptOwnership() [delegatecall]
+    │   │   │   │   ├─ emit OwnershipTransferred(previousOwner: userAccount: [0x2D4b02C00A39Fb5A7df795d8464562227657b566], newOwner: vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D])
+    │   │   │   │   └─ ← [Stop]
+    │   │   │   └─ ← [Return]
+    │   │   ├─ emit VaultConnected(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], shareLimit: 1000, reserveRatioBP: 2000, forcedRebalanceThresholdBP: 1800, infraFeeBP: 500, liquidityFeeBP: 400, reservationFeeBP: 100)
+    │   │   └─ ← [Stop]
+    │   └─ ← [Return]
+    └─ ← [Stop]
+
+  [211464] StakingVaultsHandler::updateVaultData(340126622102151179895729601984262475255939545195358619426284158544426754 [3.401e71])
+    ├─ [0] console::log("Bound result", 0) [staticcall]
+    │   └─ ← [Stop]
+    ├─ [0] console::log("DaysShift = %d", 0) [staticcall]
+    │   └─ ← [Stop]
+    ├─ [4688] consensusContract::getCurrentFrame() [staticcall]
+    │   └─ ← [Return] 7, 0
+    ├─ [164880] lazyoracle::updateVaultData(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 9000000000000002507 [9e18], 1, 0, 518401 [5.184e5])
+    │   ├─ [2538] lidoLocator::vaultHub() [staticcall]
+    │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   ├─ [16958] vaultHub::vaultRecord(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   │   ├─ [11945] VaultHub::vaultRecord(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   │   └─ ← [Return] VaultRecord({ report: Report({ totalValue: 5157588245221976650 [5.157e18], inOutDelta: 5157588245221976650 [5.157e18] }), locked: 1000000000000000000 [1e18], liabilityShares: 0, inOutDelta: Int112WithRefSlotCache({ value: 5157588245221976650 [5.157e18], refSlotValue: 0, refSlot: 0 }), reportTimestamp: 518401 [5.184e5] })
+    │   │   └─ ← [Return] VaultRecord({ report: Report({ totalValue: 5157588245221976650 [5.157e18], inOutDelta: 5157588245221976650 [5.157e18] }), locked: 1000000000000000000 [1e18], liabilityShares: 0, inOutDelta: Int112WithRefSlotCache({ value: 5157588245221976650 [5.157e18], refSlotValue: 0, refSlot: 0 }), reportTimestamp: 518401 [5.184e5] })
+    │   ├─ [688] consensusContract::getCurrentFrame() [staticcall]
+    │   │   └─ ← [Return] 7, 0
+    │   ├─ emit QuarantineExpired(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], delta: 3842411754778025857 [3.842e18])
+    │   ├─ [538] lidoLocator::vaultHub() [staticcall]
+    │   │   └─ ← [Return] vaultHub: [0x501dF6A337e602e9fbd0FD7Af98FD9c3329fe51D]
+    │   ├─ [119173] vaultHub::applyVaultReport(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 518401 [5.184e5], 9000000000000002507 [9e18], 5157588245221976650 [5.157e18], 1, 0)
+    │   │   ├─ [118672] VaultHub::applyVaultReport(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], 518401 [5.184e5], 9000000000000002507 [9e18], 5157588245221976650 [5.157e18], 1, 0) [delegatecall]
+    │   │   │   ├─ [2538] lidoLocator::lazyOracle() [staticcall]
+    │   │   │   │   └─ ← [Return] lazyoracle: [0x7C2098EA6428fF3Dc2e11f99096f298eAb463F50]
+    │   │   │   ├─ emit LidoFeesUpdated(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], unsettledLidoFees: 1, settledLidoFees: 0)
+    │   │   │   ├─ [5973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ emit VaultReportApplied(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], reportTimestamp: 518401 [5.184e5], reportTotalValue: 9000000000000002507 [9e18], reportInOutDelta: 5157588245221976650 [5.157e18], reportCumulativeLidoFees: 1, reportLiabilityShares: 0)
+    │   │   │   ├─ [1286] lido::getSharesByPooledEth(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1286] lido::getSharesByPooledEth(5157588245221976650 [5.157e18]) [staticcall]
+    │   │   │   │   └─ ← [Return] 4301167519714163206 [4.301e18]
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [2560] lidoLocator::treasury() [staticcall]
+    │   │   │   │   └─ ← [Return] treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8]
+    │   │   │   ├─ [688] consensusContract::getCurrentFrame() [staticcall]
+    │   │   │   │   └─ ← [Return] 7, 0
+    │   │   │   ├─ emit VaultInOutDeltaUpdated(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], inOutDelta: 5157588245221976649 [5.157e18])
+    │   │   │   ├─ [19314] ERC1967Proxy::fallback(treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8], 1)
+    │   │   │   │   ├─ [14337] StakingVault::withdraw(treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8], 1) [delegatecall]
+    │   │   │   │   │   ├─ [0] treasury::fallback{value: 1}()
+    │   │   │   │   │   │   └─ ← [Stop]
+    │   │   │   │   │   ├─ emit EtherWithdrawn(recipient: treasury: [0xf43Bca55E8091977223Fa5b776E23528D205dcA8], amount: 1)
+    │   │   │   │   │   └─ ← [Stop]
+    │   │   │   │   └─ ← [Return]
+    │   │   │   ├─ emit VaultObligationsSettled(vault: ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9], rebalanced: 0, transferredToLido: 1, unsettledRedemptions: 0, unsettledLidoFees: 0, settledLidoFees: 1)
+    │   │   │   ├─ [1973] lido::getPooledEthBySharesRoundUp(0) [staticcall]
+    │   │   │   │   └─ ← [Return] 0
+    │   │   │   ├─ [3127] ERC1967Proxy::fallback() [staticcall]
+    │   │   │   │   ├─ [2653] StakingVault::beaconChainDepositsPaused() [delegatecall]
+    │   │   │   │   │   └─ ← [Return] false
+    │   │   │   │   └─ ← [Return] false
+    │   │   │   └─ ← [Stop]
+    │   │   └─ ← [Return]
+    │   └─ ← [Stop]
+    ├─ [3119] ERC1967Proxy::fallback() [staticcall]
+    │   ├─ [2645] StakingVault::pendingOwner() [delegatecall]
+    │   │   └─ ← [Return] 0x0000000000000000000000000000000000000000
+    │   └─ ← [Return] 0x0000000000000000000000000000000000000000
+    └─ ← [Stop]
+
+  [33300] StakingVaultsTest::invariant_check_totalValue()
+    ├─ [18828] StakingVaultsHandler::getVaultTotalValue()
+    │   ├─ [10972] vaultHub::totalValue(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [staticcall]
+    │   │   ├─ [5995] VaultHub::totalValue(ERC1967Proxy: [0x5991A2dF15A8F6A256D3Ec51E99254Cd3fb576A9]) [delegatecall]
+    │   │   │   └─ ← [Return] 9000000000000002506 [9e18]
+    │   │   └─ ← [Return] 9000000000000002506 [9e18]
+    │   └─ ← [Return] 9000000000000002506 [9e18]
+    ├─ [5426] StakingVaultsHandler::getEffectiveVaultTotalValue()
+    │   └─ ← [Return] 5157588245221976649 [5.157e18]
+    ├─ [0] VM::assertLe(9000000000000002506 [9e18], 5157588245221976649 [5.157e18]) [staticcall]
+    │   └─ ← [Revert] assertion failed: 9000000000000002506 > 5157588245221976649
+    └─ ← [Revert] assertion failed: 9000000000000002506 > 5157588245221976649
+
+Suite result: FAILED. 0 passed; 1 failed; 0 skipped; finished in 215.31ms (207.56ms CPU time)
+
+Ran 1 test suite in 220.85ms (215.31ms CPU time): 0 tests passed, 1 failed, 0 skipped (1 total tests)
+
+Failing tests:
+Encountered 1 failing test in test/0.8.25/invariant-fuzzing/StakingVaultsFuzzing.t.sol:StakingVaultsTest
+[FAIL: assertion failed: 9000000000000002505 > 4395295350638772351]
+        [Sequence] (original: 60, shrunk: 10)
+                sender=0x0000000000000000000000000000000000004B84 addr=[test/0.8.25/invariant-fuzzing/StakingVaultsHandler.t.sol:StakingVaultsHandler]0xc7183455a4C133Ae270771860664b6B7ec320bB1 calldata=otcDeposit(uint256) args=[2507]
+                sender=0x0000000000000000000000000000000000000103 addr=[test/0.8.25/invariant-fuzzing/StakingVaultsHandler.t.sol:StakingVaultsHandler]0xc7183455a4C133Ae270771860664b6B7ec320bB1 calldata=updateVaultData(uint256) args=[75637045475 [7.563e10]]
+                sender=0x0000000000000000000000000000000000002906 addr=[test/0.8.25/invariant-fuzzing/StakingVaultsHandler.t.sol:StakingVaultsHandler]0xc7183455a4C133Ae270771860664b6B7ec320bB1 calldata=voluntaryDisconnect() args=[]
+                sender=0x2ab792e53C33c91c5beacc502Ce52FB50a91d18F addr=[test/0.8.25/invariant-fuzzing/StakingVaultsHandler.t.sol:StakingVaultsHandler]0xc7183455a4C133Ae270771860664b6B7ec320bB1 calldata=updateVaultData(uint256) args=[868]
+                sender=0x0000000000000000000000000000000000000472 addr=[test/0.8.25/invariant-fuzzing/StakingVaultsHandler.t.sol:StakingVaultsHandler]0xc7183455a4C133Ae270771860664b6B7ec320bB1 calldata=connectVault() args=[]
+                sender=0x0000000000000000000000000000000000002F9F addr=[test/0.8.25/invariant-fuzzing/StakingVaultsHandler.t.sol:StakingVaultsHandler]0xc7183455a4C133Ae270771860664b6B7ec320bB1 calldata=voluntaryDisconnect() args=[]
+                sender=0x0000000000000000000000000000000000005509 addr=[test/0.8.25/invariant-fuzzing/StakingVaultsHandler.t.sol:StakingVaultsHandler]0xc7183455a4C133Ae270771860664b6B7ec320bB1 calldata=updateVaultData(uint256) args=[3540135484465009483 [3.54e18]]
+                sender=0x00000000000000000000000000000000000029A3 addr=[test/0.8.25/invariant-fuzzing/StakingVaultsHandler.t.sol:StakingVaultsHandler]0xc7183455a4C133Ae270771860664b6B7ec320bB1 calldata=SVwithdraw(uint256) args=[6860636051248840587910698474871198435 [6.86e36]]
+                sender=0x0000000000000000000000000000000000004D71 addr=[test/0.8.25/invariant-fuzzing/StakingVaultsHandler.t.sol:StakingVaultsHandler]0xc7183455a4C133Ae270771860664b6B7ec320bB1 calldata=connectVault() args=[]
+                sender=0x6B29775b48cd953AaFD9084292E6872818526152 addr=[test/0.8.25/invariant-fuzzing/StakingVaultsHandler.t.sol:StakingVaultsHandler]0xc7183455a4C133Ae270771860664b6B7ec320bB1 calldata=updateVaultData(uint256) args=[340126622102151179895729601984262475255939545195358619426284158544426754 [3.401e71]]
+ invariant_check_totalValue() (runs: 0, calls: 0, reverts: 133)
