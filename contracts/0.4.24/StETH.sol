@@ -85,12 +85,12 @@ contract StETH is IERC20, Pausable {
      * and error-prone to implement reference-type unstructured storage using Solidity v0.4;
      * see https://github.com/lidofinance/lido-dao/issues/181#issuecomment-736098834
      *
-     * keccak256("lido.StETH.totalShares")
+     * keccak256("lido.StETH.totalAndExternalShares")
      *
      * @dev Since version 3, high 128 bits can be used to store the external shares from Lido contract
      */
-    bytes32 internal constant TOTAL_SHARES_POSITION =
-        0xe3b4b636e601189b5f4c6742edf2538ac12bb61ed03e6da26949d69838fa447e;
+    bytes32 internal constant TOTAL_SHARES_POSITION_LOW128 =
+        0x6038150aecaa250d524370a0fdcdec13f2690e0723eaf277f41d7cae26b359e6;
 
     /**
       * @notice An executed shares transfer from `sender` to `recipient`.
@@ -466,7 +466,7 @@ contract StETH is IERC20, Pausable {
      * @return the total amount of shares in existence.
      */
     function _getTotalShares() internal view returns (uint256) {
-        return TOTAL_SHARES_POSITION.getLowUint128();
+        return TOTAL_SHARES_POSITION_LOW128.getLowUint128();
     }
 
     /**
@@ -515,7 +515,7 @@ contract StETH is IERC20, Pausable {
         require(_recipient != address(this), "MINT_TO_STETH_CONTRACT");
 
         newTotalShares = _getTotalShares().add(_sharesAmount);
-        TOTAL_SHARES_POSITION.setLowUint128(uint128(newTotalShares));
+        TOTAL_SHARES_POSITION_LOW128.setLowUint128(newTotalShares);
 
         shares[_recipient] = shares[_recipient].add(_sharesAmount);
 
@@ -544,7 +544,7 @@ contract StETH is IERC20, Pausable {
         require(_sharesAmount <= accountShares, "BALANCE_EXCEEDED");
 
         newTotalShares = _getTotalShares().sub(_sharesAmount);
-        TOTAL_SHARES_POSITION.setLowUint128(uint128(newTotalShares));
+        TOTAL_SHARES_POSITION_LOW128.setLowUint128(newTotalShares);
 
         shares[_account] = accountShares.sub(_sharesAmount);
     }

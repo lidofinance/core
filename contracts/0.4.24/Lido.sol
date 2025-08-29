@@ -98,34 +98,39 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /// Since version 3, high 128 bits are used for the external shares
     /// |----- 128 bit -----|------ 128 bit -------|
     /// |   external shares |     total shares     |
+    /// keccak256("lido.StETH.totalAndExternalShares")
     bytes32 internal constant TOTAL_AND_EXTERNAL_SHARES_POSITION =
-        TOTAL_SHARES_POSITION; // this is a slot from StETH contract
-
+        TOTAL_SHARES_POSITION_LOW128;
     /// @dev storage slot position for the Lido protocol contracts locator
     /// Since version 3, high 96 bits are used for the max external ratio BP
     /// |----- 96 bit -----|------ 160 bit -------|
     /// |max external ratio| lido locator address |
+    /// keccak256("lido.Lido.lidoLocatorAndMaxExternalRatio")
     bytes32 internal constant LOCATOR_AND_MAX_EXTERNAL_RATIO_POSITION =
-        0x9ef78dff90f100ea94042bd00ccb978430524befc391d3e510b5f55ff3166df7; // keccak256("lido.Lido.lidoLocator")
+        0xd92bc31601d11a10411d08f59b7146d8a5915af253cde25f8e66b67beb4be223;
     /// @dev amount of ether (on the current Ethereum side) buffered on this smart contract balance
     /// Since version 3, high 128 bits are used for the deposited validators count
     /// |------ 128 bit -------|------ 128 bit -------|
     /// | deposited validators |    buffered ether    |
+    /// keccak256("lido.Lido.bufferedEtherAndDepositedValidators");
     bytes32 internal constant BUFFERED_ETHER_AND_DEPOSITED_VALIDATORS_POSITION =
-        0xed310af23f61f96daefbcd140b306c0bdbf8c178398299741687b90e794772b0; // keccak256("lido.Lido.bufferedEther");
+        0xa84c096ee27e195f25d7b6c7c2a03229e49f1a2a5087e57ce7d7127707942fe3;
     /// @dev total amount of ether on Consensus Layer (sum of all the balances of Lido validators)
     // "beacon" in the `keccak256()` parameter is staying here for compatibility reason
     /// Since version 3, high 128 bits are used for the CL validators count
     /// |----- 128 bit -----|------ 128 bit -------|
     /// |   CL validators   |     CL balance       |
+    /// keccak256("lido.Lido.clBalanceAndClValidators");
     bytes32 internal constant CL_BALANCE_AND_CL_VALIDATORS_POSITION =
-        0xa66d35f054e68143c18f32c990ed5cb972bb68a68f500cd2dd3a16bbf3686483; // keccak256("lido.Lido.beaconBalance");
+        0xc36804a03ec742b57b141e4e5d8d3bd1ddb08451fd0f9983af8aaab357a78e2f;
     /// @dev storage slot position of the staking rate limit structure
+    /// keccak256("lido.Lido.stakeLimit");
     bytes32 internal constant STAKING_STATE_POSITION =
-        0xa3678de4a579be090bed1177e0a24f77cc29d181ac22fd7688aca344d8938015; // keccak256("lido.Lido.stakeLimit");
+        0xa3678de4a579be090bed1177e0a24f77cc29d181ac22fd7688aca344d8938015;
     /// @dev storage slot position for the total amount of execution layer rewards received by Lido contract.
+    /// keccak256("lido.Lido.totalELRewardsCollected");
     bytes32 internal constant TOTAL_EL_REWARDS_COLLECTED_POSITION =
-        0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb; // keccak256("lido.Lido.totalELRewardsCollected");
+        0xafe016039542d12eec0183bb0b1ffc2ca45b027126a494672fba4154ee77facb;
 
     // Staking was paused (don't accept user's ether submits)
     event StakingPaused();
@@ -235,12 +240,44 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function finalizeUpgrade_v3(address _oldBurner, address[] _contractsWithBurnerAllowances) external {
         require(hasInitialized(), "NOT_INITIALIZED");
         _checkContractVersion(2);
+        _setContractVersion(3);
+
+        _migrateStorage();
+        _migrateBurner(_oldBurner, _contractsWithBurnerAllowances);
+    }
+
+    function _migrateStorage() internal {
+        // migrate storage to packed representation
+        bytes32 LIDO_LOCATOR_POSITION = keccak256("lido.Lido.lidoLocator");
+        _setLidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
+        LIDO_LOCATOR_POSITION.setStorageUint256(0);
+
+        bytes32 BUFFERED_ETHER_POSITION = keccak256("lido.Lido.bufferedEther");
+        _setBufferedEther(BUFFERED_ETHER_POSITION.getStorageUint256());
+        BUFFERED_ETHER_POSITION.setStorageUint256(0);
+
+        bytes32 DEPOSITED_VALIDATORS_POSITION = keccak256("lido.Lido.depositedValidators");
+        _setDepositedValidators(DEPOSITED_VALIDATORS_POSITION.getStorageUint256());
+        DEPOSITED_VALIDATORS_POSITION.setStorageUint256(0);
+
+        bytes32 CL_VALIDATORS_POSITION = keccak256("lido.Lido.beaconValidators");
+        bytes32 CL_BALANCE_POSITION = keccak256("lido.Lido.beaconBalance");
+        _setClBalanceAndClValidators(
+            CL_BALANCE_POSITION.getStorageUint256(),
+            CL_VALIDATORS_POSITION.getStorageUint256()
+        );
+        CL_BALANCE_POSITION.setStorageUint256(0);
+        CL_VALIDATORS_POSITION.setStorageUint256(0);
+
+        bytes32 TOTAL_SHARES_POSITION = keccak256("lido.StETH.totalShares");
+        TOTAL_AND_EXTERNAL_SHARES_POSITION.setLowUint128(TOTAL_SHARES_POSITION.getStorageUint256());
+        TOTAL_SHARES_POSITION.setStorageUint256(0);
+    }
+
+    function _migrateBurner(address _oldBurner, address[] _contractsWithBurnerAllowances) internal {
         require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
         address burner = _getLidoLocator().burner();
         require(_oldBurner != burner, "OLD_BURNER_SAME_AS_NEW");
-
-        _setContractVersion(3);
-
         // migrate burner stETH balance
         uint256 oldBurnerShares = _sharesOf(_oldBurner);
         if (oldBurnerShares > 0) {
@@ -258,26 +295,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             _approve(_contractsWithBurnerAllowances[i], _oldBurner, 0);
             _approve(_contractsWithBurnerAllowances[i], burner, oldAllowance);
         }
-
-        // migrate storage to packed representation
-
-        bytes32 DEPOSITED_VALIDATORS_POSITION =
-            0xe6e35175eb53fc006520a2a9c3e9711a7c00de6ff2c32dd31df8c5a24cac1b5c; // keccak256("lido.Lido.depositedValidators");
-
-        _setDepositedValidators(DEPOSITED_VALIDATORS_POSITION.getStorageUint256());
-        DEPOSITED_VALIDATORS_POSITION.setStorageUint256(0);
-
-        // number of Lido's validators available in the Consensus Layer state
-        // "beacon" in the `keccak256()` parameter is staying here for compatibility reason
-        bytes32 CL_VALIDATORS_POSITION =
-            0x9f70001d82b6ef54e9d3725b46581c3eb9ee3aa02b941b6aa54d678a9ca35b10; // keccak256("lido.Lido.beaconValidators");
-
-        _setClValidators(CL_VALIDATORS_POSITION.getStorageUint256());
-        CL_VALIDATORS_POSITION.setStorageUint256(0);
-
-        // nullify new values to be safe
-        _setMaxExternalRatioBP(0);
-        _setExternalShares(0);
     }
 
     /**
@@ -1182,10 +1199,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     function _setClBalanceAndClValidators(uint256 _newClBalance, uint256 _newClValidators) internal {
         CL_BALANCE_AND_CL_VALIDATORS_POSITION.setLowAndHighUint128(_newClBalance, _newClValidators);
-    }
-
-    function _setClValidators(uint256 _newClValidators) internal {
-        CL_BALANCE_AND_CL_VALIDATORS_POSITION.setHighUint128(_newClValidators);
     }
 
     function _setLidoLocator(address _newLidoLocator) internal {
