@@ -17,14 +17,6 @@ contract Lido__HarnessForDistributeReward is Lido {
         super.initialize(_lidoLocator, _eip712StETH);
 
         _resume();
-        // _bootstrapInitialHolder
-        uint256 balance = address(this).balance;
-        assert(balance != 0);
-
-        // address(0xdead) is a holder for initial shares
-        setTotalPooledEther(balance);
-        _mintInitialShares(balance);
-        setAllowRecoverability(true);
     }
 
     /**
@@ -34,11 +26,6 @@ contract Lido__HarnessForDistributeReward is Lido {
         _resume();
         _resumeStaking();
     }
-
-    /**
-     * @dev Only for testing recovery vault
-     */
-    function makeUnaccountedEther() public payable {}
 
     function setVersion(uint256 _version) external {
         CONTRACT_VERSION_POSITION.setStorageUint256(_version);
@@ -56,10 +43,6 @@ contract Lido__HarnessForDistributeReward is Lido {
         return ALLOW_TOKEN_POSITION.getStorageBool();
     }
 
-    function resetEip712StETH() external {
-        EIP712_STETH_POSITION.setStorageAddress(0);
-    }
-
     function setTotalPooledEther(uint256 _totalPooledEther) public {
         totalPooledEther = _totalPooledEther;
     }
@@ -68,18 +51,19 @@ contract Lido__HarnessForDistributeReward is Lido {
         return totalPooledEther;
     }
 
-    function mintShares(address _recipient, uint256 _sharesAmount) public {
+    function mintShares(address _recipient, uint256 _sharesAmount) external {
         _mintShares(_recipient, _sharesAmount);
         _emitTransferAfterMintingShares(_recipient, _sharesAmount);
     }
 
     function mintSteth(address _recipient) public payable {
         uint256 sharesAmount = getSharesByPooledEth(msg.value);
-        mintShares(_recipient, sharesAmount);
+        _mintShares(_recipient, sharesAmount);
+        _emitTransferAfterMintingShares(_recipient, sharesAmount);
         setTotalPooledEther(_getTotalPooledEther().add(msg.value));
     }
 
-    function burnShares(address _account, uint256 _sharesAmount) public {
+    function burnShares(address _account, uint256 _sharesAmount) external {
         _burnShares(_account, _sharesAmount);
     }
 }

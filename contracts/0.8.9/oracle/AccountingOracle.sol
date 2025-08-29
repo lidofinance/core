@@ -18,24 +18,6 @@ interface IReportReceiver {
     function handleOracleReport(ReportValues memory values) external;
 }
 
-interface ILido {
-    function handleOracleReport(
-        // Oracle timings
-        uint256 _reportTimestamp,
-        uint256 _timeElapsed,
-        // CL values
-        uint256 _clValidators,
-        uint256 _clBalance,
-        // EL values
-        uint256 _withdrawalVaultBalance,
-        uint256 _elRewardsVaultBalance,
-        uint256 _sharesRequestedToBurn,
-        // Decision about withdrawals processing
-        uint256[] calldata _withdrawalFinalizationBatches,
-        uint256 _simulatedShareRate
-    ) external returns (uint256[4] memory postRebaseAmounts);
-}
-
 interface ILidoLocator {
     function accounting() external view returns(address);
     function lazyOracle() external view returns(address);
@@ -43,7 +25,6 @@ interface ILidoLocator {
     function stakingRouter() external view returns(address);
     function withdrawalQueue() external view returns(address); // TODO: remove
 }
-
 
 interface ILegacyOracle {
     // only called before the migration

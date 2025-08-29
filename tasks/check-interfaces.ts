@@ -278,8 +278,8 @@ task("check-interfaces").setAction(async (_, hre) => {
     const usingContracts = await findContractsUsingInterface(interfaceName);
 
     if (usingContracts.length > 0) {
-      console.error(`📋 Contracts using this interface (${usingContracts.length}):`);
-      usingContracts.forEach((contract) => {
+      console.error(`📋 This interface used ${usingContracts.length} times in the following contracts:`);
+      [...new Set(usingContracts)].forEach((contract) => {
         console.error(`   ${contract}`);
       });
       console.error();

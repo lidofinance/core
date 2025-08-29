@@ -29,10 +29,10 @@ interface ILido is IERC20 {
 
     /**
      * @notice Get shares amount by the provided stETH amount
-     * @param _pooledEthAmount stETH amount
+     * @param _ethAmount stETH amount
      * @dev dual to `getPooledEthByShares`.
      */
-    function getSharesByPooledEth(uint256 _pooledEthAmount) external view returns (uint256);
+    function getSharesByPooledEth(uint256 _ethAmount) external view returns (uint256);
 
     /**
      * @notice Get shares amount of the provided account
@@ -47,9 +47,9 @@ interface ILido is IERC20 {
 
     /**
      * @notice Burn shares from the account
-     * @param _amount amount of shares to burn
+     * @param _amountOfShares amount of shares to burn
      */
-    function burnShares(uint256 _amount) external;
+    function burnShares(uint256 _amountOfShares) external;
 }
 
 /**
