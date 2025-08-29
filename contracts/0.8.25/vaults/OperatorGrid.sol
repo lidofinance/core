@@ -11,7 +11,7 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 import {Confirmable2Addresses} from "../utils/Confirmable2Addresses.sol";
 
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IStakingVaultProxied} from "./interfaces/IStakingVaultProxied.sol";
 import {VaultHub} from "./VaultHub.sol";
 
 struct TierParams {
@@ -421,9 +421,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
         address vaultOwner = isVaultConnected
             ? vaultHub.vaultConnection(_vault).owner
-            : IStakingVault(_vault).owner();
+            : IStakingVaultProxied(_vault).owner();
 
-        address nodeOperator = IStakingVault(_vault).nodeOperator();
+        address nodeOperator = IStakingVaultProxied(_vault).nodeOperator();
 
         uint256 vaultTierId = $.vaultTier[_vault];
         if (vaultTierId == _requestedTierId) revert TierAlreadySet();

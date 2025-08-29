@@ -5,7 +5,7 @@
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity >=0.8.0;
 
-import {IStakingVault} from "./IStakingVault.sol";
+import {IStakingVaultProxied} from "./IStakingVaultProxied.sol";
 
 /**
  * @title IPredepositGuarantee
@@ -31,5 +31,5 @@ interface IPredepositGuarantee {
         uint64 proposerIndex;
     }
 
-    function proveUnknownValidator(ValidatorWitness calldata _witness, IStakingVault _stakingVault) external;
+    function proveUnknownValidator(ValidatorWitness calldata _witness, IStakingVaultProxied _stakingVault) external;
 }

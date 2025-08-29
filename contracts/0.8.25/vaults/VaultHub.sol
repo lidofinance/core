@@ -9,9 +9,8 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
-import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IStakingVaultProxied} from "./interfaces/IStakingVaultProxied.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
-import {IPinnedBeaconProxy} from "./interfaces/IPinnedBeaconProxy.sol";
 
 import {OperatorGrid} from "./OperatorGrid.sol";
 import {LazyOracle} from "./LazyOracle.sol";
@@ -357,9 +356,9 @@ contract VaultHub is PausableUntilWithRoles {
     function connectVault(address _vault) external whenResumed {
         _requireNotZero(_vault);
 
-        IStakingVault vault_ = IStakingVault(_vault);
+        IStakingVaultProxied vault_ = IStakingVaultProxied(_vault);
         if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
-        if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
+        if (vault_.isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(_predepositGuarantee())) revert PDGNotDepositor(_vault);
 
         (
@@ -382,7 +381,7 @@ contract VaultHub is PausableUntilWithRoles {
             reservationFeeBP
         );
 
-        IStakingVault(_vault).acceptOwnership();
+        vault_.acceptOwnership();
 
         emit VaultConnected({
             vault: _vault,
@@ -511,7 +510,7 @@ contract VaultHub is PausableUntilWithRoles {
             if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
                 _settleObligations(_vault, record, obligations, NO_UNSETTLED_ALLOWED);
 
-                IStakingVault(_vault).transferOwnership(connection.owner);
+                IStakingVaultProxied(_vault).transferOwnership(connection.owner);
                 _deleteVault(_vault, connection);
 
                 emit VaultDisconnectCompleted(_vault);
@@ -695,7 +694,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _updateInOutDelta(_vault, _vaultRecord(_vault), int104(int256(msg.value)));
 
-        IStakingVault(_vault).fund{value: msg.value}();
+        IStakingVaultProxied(_vault).fund{value: msg.value}();
     }
 
     /// @notice withdraws ether from the vault to the recipient address
@@ -791,7 +790,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (!connection.isBeaconDepositsManuallyPaused) {
             connection.isBeaconDepositsManuallyPaused = true;
-            _pauseBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
+            _pauseBeaconChainDepositsIfNotAlready(IStakingVaultProxied(_vault));
 
             emit BeaconChainDepositsPausedByOwner(_vault);
         }
@@ -813,7 +812,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (connection.isBeaconDepositsManuallyPaused) {
             connection.isBeaconDepositsManuallyPaused = false;
-            _resumeBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
+            _resumeBeaconChainDepositsIfNotAlready(IStakingVaultProxied(_vault));
 
             emit BeaconChainDepositsResumedByOwner(_vault);
         }
@@ -826,7 +825,7 @@ contract VaultHub is PausableUntilWithRoles {
     function requestValidatorExit(address _vault, bytes calldata _pubkeys) external {
         _checkConnectionAndOwner(_vault);
 
-        IStakingVault(_vault).requestValidatorExit(_pubkeys);
+        IStakingVaultProxied(_vault).requestValidatorExit(_pubkeys);
     }
 
     /// @notice Triggers validator withdrawals for the vault using EIP-7002
@@ -865,7 +864,7 @@ contract VaultHub is PausableUntilWithRoles {
             }
         }
 
-        IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
+        IStakingVaultProxied(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, _amounts, _refundRecipient);
     }
 
     /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault is
@@ -892,7 +891,7 @@ contract VaultHub is PausableUntilWithRoles {
         }
 
         uint64[] memory amounts = new uint64[](0);
-        IStakingVault(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, amounts, _refundRecipient);
+        IStakingVaultProxied(_vault).triggerValidatorWithdrawals{value: msg.value}(_pubkeys, amounts, _refundRecipient);
 
         emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
@@ -953,7 +952,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) external {
         _checkConnectionAndOwner(_vault);
 
-        _predepositGuarantee().proveUnknownValidator(_witness, IStakingVault(_vault));
+        _predepositGuarantee().proveUnknownValidator(_witness, IStakingVaultProxied(_vault));
     }
 
     function _connectVault(
@@ -990,7 +989,7 @@ contract VaultHub is PausableUntilWithRoles {
         });
 
         connection = VaultConnection({
-            owner: IStakingVault(_vault).owner(),
+            owner: IStakingVaultProxied(_vault).owner(),
             shareLimit: uint96(_shareLimit),
             vaultIndex: uint96(_storage().vaults.length),
             pendingDisconnect: false,
@@ -1069,7 +1068,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) internal {
         _updateInOutDelta(_vault, _record, -int104(int256(_amount)));
 
-        IStakingVault(_vault).withdraw(_recipient, _amount);
+        IStakingVaultProxied(_vault).withdraw(_recipient, _amount);
     }
 
     /// @dev Increases liabilityShares of the vault and updates the locked amount
@@ -1471,7 +1470,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) internal {
         bool isHealthy = _isVaultHealthy(_connection, _record);
 
-        IStakingVault vault_ = IStakingVault(_vault);
+        IStakingVaultProxied vault_ = IStakingVaultProxied(_vault);
         if (_totalUnsettledObligations(_vaultObligations(_vault)) >= UNSETTLED_THRESHOLD || !isHealthy) {
             _pauseBeaconChainDepositsIfNotAlready(vault_);
         } else if (!_connection.isBeaconDepositsManuallyPaused) {
@@ -1573,7 +1572,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     function _nodeOperator(address _vault) internal view returns (address) {
-        return IStakingVault(_vault).nodeOperator();
+        return IStakingVaultProxied(_vault).nodeOperator();
     }
 
     function _requireNotZero(uint256 _value) internal pure {
@@ -1605,17 +1604,17 @@ contract VaultHub is PausableUntilWithRoles {
         if (!_isReportFresh(_record)) revert VaultReportStale(_vault);
     }
 
-    function _isBeaconChainDepositsPaused(IStakingVault _vault) internal view returns (bool) {
+    function _isBeaconChainDepositsPaused(IStakingVaultProxied _vault) internal view returns (bool) {
         return _vault.beaconChainDepositsPaused();
     }
 
-    function _pauseBeaconChainDepositsIfNotAlready(IStakingVault _vault) internal {
+    function _pauseBeaconChainDepositsIfNotAlready(IStakingVaultProxied _vault) internal {
         if (!_isBeaconChainDepositsPaused(_vault)) {
             _vault.pauseBeaconChainDeposits();
         }
     }
 
-    function _resumeBeaconChainDepositsIfNotAlready(IStakingVault _vault) internal {
+    function _resumeBeaconChainDepositsIfNotAlready(IStakingVaultProxied _vault) internal {
         if (_isBeaconChainDepositsPaused(_vault)) {
             _vault.resumeBeaconChainDeposits();
         }

@@ -29,19 +29,13 @@ interface IStakingVault {
     }
 
     function DEPOSIT_CONTRACT() external view returns (IDepositContract);
-    function initialize(address _owner, address _nodeOperator, address _depositor) external;
+    function initialize(address _nodeOperator, address _depositor) external;
     function version() external pure returns (uint64);
     function getInitializedVersion() external view returns (uint64);
     function withdrawalCredentials() external view returns (bytes32);
 
-    function owner() external view returns (address);
-    function pendingOwner() external view returns (address);
-    function acceptOwnership() external;
-    function transferOwnership(address _newOwner) external;
-
     function nodeOperator() external view returns (address);
     function depositor() external view returns (address);
-    function isOssified() external view returns (bool);
     function calculateValidatorWithdrawalFee(uint256 _keysCount) external view returns (uint256);
     function fund() external payable;
     function withdraw(address _recipient, uint256 _ether) external;
@@ -55,5 +49,4 @@ interface IStakingVault {
     function triggerValidatorWithdrawals(bytes calldata _pubkeys, uint64[] calldata _amounts, address _refundRecipient) external payable;
     function ejectValidators(bytes calldata _pubkeys, address _refundRecipient) external payable;
     function setDepositor(address _depositor) external;
-    function ossify() external;
 }

@@ -11,7 +11,7 @@ import {PausableUntilWithRoles} from "contracts/0.8.25/utils/PausableUntilWithRo
 import {CLProofVerifier} from "./CLProofVerifier.sol";
 import {MeIfNobodyElse} from "./MeIfNobodyElse.sol";
 
-import {IStakingVault} from "../interfaces/IStakingVault.sol";
+import {IStakingVaultProxied} from "../interfaces/IStakingVaultProxied.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 
 /**
@@ -95,7 +95,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      */
     struct ValidatorStatus {
         ValidatorStage stage;
-        IStakingVault stakingVault;
+        IStakingVaultProxied stakingVault;
         address nodeOperator;
     }
 
@@ -233,7 +233,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @dev reverts with `InputHasInfinityPoints` if the input contains infinity points(zero values)
      */
     function verifyDepositMessage(
-        IStakingVault.Deposit calldata _deposit,
+        IStakingVaultProxied.Deposit calldata _deposit,
         BLS12_381.DepositY calldata _depositsY,
         bytes32 _withdrawalCredentials
     ) public view {
@@ -349,8 +349,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _deposits StakingVault deposit struct that has amount as PREDEPOSIT_AMOUNT
      */
     function predeposit(
-        IStakingVault _stakingVault,
-        IStakingVault.Deposit[] calldata _deposits,
+        IStakingVaultProxied _stakingVault,
+        IStakingVaultProxied.Deposit[] calldata _deposits,
         BLS12_381.DepositY[] calldata _depositsY
     ) external payable whenResumed {
         if (_deposits.length == 0) revert EmptyDeposits();
@@ -378,7 +378,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         if (unlocked < totalDepositAmount) revert NotEnoughUnlocked(unlocked, totalDepositAmount);
 
         for (uint256 i = 0; i < _deposits.length; i++) {
-            IStakingVault.Deposit calldata _deposit = _deposits[i];
+            IStakingVaultProxied.Deposit calldata _deposit = _deposits[i];
 
             // this check isn't needed in  `depositToBeaconChain` because
             // Beacon Chain doesn't enforce the signature checks for existing validators and just top-ups to their balance
@@ -435,8 +435,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @dev only callable by Node Operator of this staking vault
      */
     function depositToBeaconChain(
-        IStakingVault _stakingVault,
-        IStakingVault.Deposit[] calldata _deposits
+        IStakingVaultProxied _stakingVault,
+        IStakingVaultProxied.Deposit[] calldata _deposits
     ) public whenResumed {
         if (msg.sender != _depositorOf(_stakingVault.nodeOperator())) {
             revert NotDepositor();
@@ -444,7 +444,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         ERC7201Storage storage $ = _getStorage();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
-            IStakingVault.Deposit calldata _deposit = _deposits[i];
+            IStakingVaultProxied.Deposit calldata _deposit = _deposits[i];
 
             ValidatorStatus storage validator = $.validatorStatus[_deposit.pubkey];
 
@@ -478,8 +478,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      */
     function proveAndDeposit(
         ValidatorWitness[] calldata _witnesses,
-        IStakingVault.Deposit[] calldata _deposits,
-        IStakingVault _stakingVault
+        IStakingVaultProxied.Deposit[] calldata _deposits,
+        IStakingVaultProxied _stakingVault
     ) external payable {
         for (uint256 i = 0; i < _witnesses.length; i++) {
             proveValidatorWC(_witnesses[i]);
@@ -496,7 +496,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      */
     function proveUnknownValidator(
         ValidatorWitness calldata _witness,
-        IStakingVault _stakingVault
+        IStakingVaultProxied _stakingVault
     ) external whenResumed {
         if (_stakingVault.owner() != msg.sender) revert NotStakingVaultOwner();
 
@@ -550,7 +550,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             revert ValidatorNotPreDeposited(_witness.pubkey, validator.stage);
         }
 
-        IStakingVault stakingVault = validator.stakingVault;
+        IStakingVaultProxied stakingVault = validator.stakingVault;
         bytes32 vaultWithdrawalCredentials = stakingVault.withdrawalCredentials();
 
         // sanity check that vault returns valid WC
@@ -633,7 +633,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     }
 
     /// @notice validates that WC belong to the vault
-    function _validateWC(IStakingVault _stakingVault, bytes32 _withdrawalCredentials) internal pure {
+    function _validateWC(IStakingVaultProxied _stakingVault, bytes32 _withdrawalCredentials) internal pure {
         uint8 version = uint8(_withdrawalCredentials[0]);
         address wcAddress = address(uint160(uint256(_withdrawalCredentials)));
 

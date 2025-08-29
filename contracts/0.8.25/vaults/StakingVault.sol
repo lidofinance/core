@@ -4,12 +4,10 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {OwnableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/OwnableUpgradeable.sol";
-import {Ownable2StepUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/Ownable2StepUpgradeable.sol";
+import {Initializable} from "contracts/openzeppelin/5.2/upgradeable/proxy/utils/Initializable.sol";
+import {Ownable2StepStorage} from "./lib/Ownable2StepStorage.sol";
 import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawals.sol";
 import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
-
-import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /**
@@ -30,7 +28,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
  * to be ossified (pinned) to prevent future upgrades. The implementation is petrified (non-initializable)
  * and contains immutable references to the beacon chain deposit contract.
  */
-contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
+contract StakingVault is IStakingVault, Initializable {
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
@@ -103,16 +101,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Initializes `StakingVault` with an owner, node operator, and depositor
-     * @param _owner Address of the owner
+     * @notice Initializes `StakingVault` with a node operator and depositor
      * @param _nodeOperator Address of the node operator
      * @param _depositor Address of the depositor
      */
-    function initialize(address _owner, address _nodeOperator, address _depositor) external initializer {
+    function initialize(address _nodeOperator, address _depositor) external initializer {
         if (_nodeOperator == address(0)) revert ZeroArgument("_nodeOperator");
 
-        __Ownable_init(_owner);
-        __Ownable2Step_init();
         _setDepositor(_depositor);
         _storage().nodeOperator = _nodeOperator;
 
@@ -142,22 +137,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Returns owner of the contract
-     * @dev Fixes solidity interface inference
-     */
-    function owner() public view override(IStakingVault, OwnableUpgradeable) returns (address) {
-        return OwnableUpgradeable.owner();
-    }
-
-    /**
-     * @notice Returns the pending owner of the contract
-     * @dev Fixes solidity interface inference
-     */
-    function pendingOwner() public view override(IStakingVault, Ownable2StepUpgradeable) returns (address) {
-        return Ownable2StepUpgradeable.pendingOwner();
-    }
-
-    /**
      * @notice Returns the node operator address
      * @return Address of the node operator
      */
@@ -171,14 +150,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     function depositor() public view returns (address) {
         return _storage().depositor;
-    }
-
-    /**
-     * @notice Returns whether the vault is ossified
-     * @return True if the vault is ossified, false otherwise
-     */
-    function isOssified() public view returns (bool) {
-        return PinnedBeaconUtils.ossified();
     }
 
     /**
@@ -429,40 +400,11 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
 
     /**
-     * @notice Accepts the pending owner
-     * @dev Fixes solidity interface inference
-     * @dev Can only be called by the pending owner
-     */
-    function acceptOwnership() public override(IStakingVault, Ownable2StepUpgradeable) {
-        Ownable2StepUpgradeable.acceptOwnership();
-    }
-
-    /**
-     * @notice Transfers the ownership of the contract to a new owner
-     * @param _newOwner Address of the new owner
-     * @dev Fixes solidity interface inference
-     * @dev Can only be called by the owner
-     */
-    function transferOwnership(address _newOwner) public override(IStakingVault, Ownable2StepUpgradeable) {
-        Ownable2StepUpgradeable.transferOwnership(_newOwner);
-    }
-
-    /**
      * @notice Sets the depositor address
      * @param _depositor Address of the new depositor
      */
     function setDepositor(address _depositor) external onlyOwner {
         _setDepositor(_depositor);
-    }
-
-    /**
-     * @notice Ossifies the current implementation. WARNING: This operation is irreversible.
-     * @dev vault can't be connected to the hub after ossification
-     */
-    function ossify() external onlyOwner {
-        if (isOssified()) revert VaultOssified();
-
-        PinnedBeaconUtils.ossify();
     }
 
     /*
@@ -472,6 +414,12 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * ║ └──────────────────────────────────────────────┘ ║
      * ╚══════════════════════════════════════════════════╝
      */
+
+
+    modifier onlyOwner() {
+        Ownable2StepStorage.checkOwner();
+        _;
+    }
 
     /**
      * @dev Returns the storage struct for the ERC-7201 namespace

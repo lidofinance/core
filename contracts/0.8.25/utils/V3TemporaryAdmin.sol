@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 import {IAccessControl} from "@openzeppelin/contracts-v4.4/access/AccessControl.sol";
-import {PinnedBeaconProxy} from "../vaults/PinnedBeaconProxy.sol";
+import {BeaconProxyOssifiable} from "../vaults/BeaconProxyOssifiable.sol";
 
 interface IVaultHub {
     function VAULT_CODEHASH_SET_ROLE() external view returns (bytes32);
@@ -243,7 +243,7 @@ contract V3TemporaryAdmin {
      * @return The keccak256 hash of the PinnedBeaconProxy bytecode
      */
     function _computeCodehash(address _beacon) private returns (bytes32) {
-        PinnedBeaconProxy tempProxy = new PinnedBeaconProxy(_beacon, "");
+        BeaconProxyOssifiable tempProxy = new BeaconProxyOssifiable(address(0), _beacon, "");
         return keccak256(address(tempProxy).code);
     }
 

@@ -5,7 +5,7 @@
 pragma solidity 0.8.25;
 
 import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
-import {PinnedBeaconProxy} from "./PinnedBeaconProxy.sol";
+import {BeaconProxyOssifiable} from "./BeaconProxyOssifiable.sol";
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
@@ -61,14 +61,14 @@ contract VaultFactory {
         if (msg.value < VaultHub(payable(locator.vaultHub())).CONNECT_DEPOSIT()) revert InsufficientFunds();
 
         // create the vault proxy
-        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+        vault = IStakingVault(address(new BeaconProxyOssifiable(_defaultAdmin, BEACON, "")));
 
         // create the dashboard proxy
         bytes memory immutableArgs = abi.encode(address(vault));
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
         // initialize StakingVault with the dashboard address as the owner
-        vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
+        vault.initialize(_nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
         dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
@@ -105,14 +105,14 @@ contract VaultFactory {
         ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
 
         // create the vault proxy
-        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+        vault = IStakingVault(address(new BeaconProxyOssifiable(_defaultAdmin, BEACON, "")));
 
         // create the dashboard proxy
         bytes memory immutableArgs = abi.encode(address(vault));
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
         // initialize StakingVault with the dashboard address as the owner
-        vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
+        vault.initialize(_nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the _defaultAdmin as the default admin, grant optional node operator managed roles
         dashboard.initialize(_defaultAdmin, address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);

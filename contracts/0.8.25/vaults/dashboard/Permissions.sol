@@ -8,7 +8,7 @@ import {Clones} from "@openzeppelin/contracts-v5.2/proxy/Clones.sol";
 import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConfirmable.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
-import {IStakingVault} from "../interfaces/IStakingVault.sol";
+import {IStakingVaultProxied} from "../interfaces/IStakingVaultProxied.sol";
 import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {OperatorGrid} from "../OperatorGrid.sol";
 import {VaultHub} from "../VaultHub.sol";
@@ -162,7 +162,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @notice Returns the address of the underlying StakingVault.
      * @return The address of the StakingVault.
      */
-    function stakingVault() external view returns (IStakingVault) {
+    function stakingVault() external view returns (IStakingVaultProxied) {
         return _stakingVault();
     }
 
@@ -369,13 +369,13 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Loads the address of the underlying StakingVault.
      * @return addr The address of the StakingVault.
      */
-    function _stakingVault() internal view returns (IStakingVault) {
+    function _stakingVault() internal view returns (IStakingVaultProxied) {
         bytes memory args = Clones.fetchCloneArgs(address(this));
         address stakingVaultAddress;
         assembly {
             stakingVaultAddress := mload(add(args, 32))
         }
-        return IStakingVault(stakingVaultAddress);
+        return IStakingVaultProxied(stakingVaultAddress);
     }
 
     function _operatorGrid() internal view returns (OperatorGrid) {
