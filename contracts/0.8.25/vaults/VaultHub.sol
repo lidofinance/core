@@ -145,7 +145,7 @@ contract VaultHub is PausableUntilWithRoles {
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_LOCATION = 0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
 
-    /// @notice role that allows to connect vaults to the hub
+    /// @notice role that allows to disconnect vaults from the hub
     /// @dev 0x479bc4a51d27fbdc8e51b5b1ebd3dcd58bd229090980bff226f8930587e69ce3
     bytes32 public immutable VAULT_MASTER_ROLE = keccak256("vaults.VaultHub.VaultMasterRole");
 
@@ -175,8 +175,6 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 internal immutable TOTAL_BASIS_POINTS = 100_00;
     /// @notice length of the validator pubkey in bytes
     uint256 internal immutable PUBLIC_KEY_LENGTH = 48;
-    /// @dev max value for fees in basis points - it's about 650%
-    uint256 internal immutable MAX_FEE_BP = type(uint16).max;
 
     /// @notice codehash of the account with no code
     bytes32 private immutable EMPTY_CODEHASH = keccak256("");
@@ -205,7 +203,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _maxRelativeShareLimitBP Maximum share limit relative to TVL in basis points
     constructor(ILidoLocator _locator, ILido _lido, IHashConsensus _consensusContract, uint256 _maxRelativeShareLimitBP) {
         _requireNotZero(_maxRelativeShareLimitBP);
-        _requireLessThanBP(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
+        if (_maxRelativeShareLimitBP > TOTAL_BASIS_POINTS) revert InvalidBasisPoints(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
 
         MAX_RELATIVE_SHARE_LIMIT_BP = _maxRelativeShareLimitBP;
 
@@ -394,23 +392,6 @@ contract VaultHub is PausableUntilWithRoles {
         });
     }
 
-    /// @notice updates fees for the vault
-    /// @param _vault vault address
-    /// @param _infraFeeBP new infra fee in basis points
-    /// @param _liquidityFeeBP new liquidity fee in basis points
-    /// @param _reservationFeeBP new reservation fee in basis points
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function updateVaultFees(
-        address _vault,
-        uint256 _infraFeeBP,
-        uint256 _liquidityFeeBP,
-        uint256 _reservationFeeBP
-    ) external onlyRole(VAULT_MASTER_ROLE) {
-        _requireNotZero(_vault);
-        VaultConnection storage connection = _checkConnection(_vault);
-        _updateVaultFees(_vault, connection, _infraFeeBP, _liquidityFeeBP, _reservationFeeBP);
-    }
-
     /// @notice updates the vault's connection parameters
     /// @dev Reverts if the vault is not healthy as of latest report
     /// @param _vault vault address
@@ -447,14 +428,19 @@ contract VaultHub is PausableUntilWithRoles {
         connection.shareLimit = uint96(_shareLimit);
         connection.reserveRatioBP = uint16(_reserveRatioBP);
         connection.forcedRebalanceThresholdBP = uint16(_forcedRebalanceThresholdBP);
-        _updateVaultFees(_vault, connection, _infraFeeBP, _liquidityFeeBP, _reservationFeeBP);
+        connection.infraFeeBP = uint16(_infraFeeBP);
+        connection.liquidityFeeBP = uint16(_liquidityFeeBP);
+        connection.reservationFeeBP = uint16(_reservationFeeBP);
 
         emit VaultConnectionUpdated({
             vault: _vault,
             nodeOperator: _nodeOperator(_vault),
             shareLimit: _shareLimit,
             reserveRatioBP: _reserveRatioBP,
-            forcedRebalanceThresholdBP: _forcedRebalanceThresholdBP
+            forcedRebalanceThresholdBP: _forcedRebalanceThresholdBP,
+            infraFeeBP: _infraFeeBP,
+            liquidityFeeBP: _liquidityFeeBP,
+            reservationFeeBP: _reservationFeeBP
         });
     }
 
@@ -1481,37 +1467,6 @@ contract VaultHub is PausableUntilWithRoles {
         );
     }
 
-    function _updateVaultFees(
-        address _vault,
-        VaultConnection storage _connection,
-        uint256 _infraFeeBP,
-        uint256 _liquidityFeeBP,
-        uint256 _reservationFeeBP
-    ) internal {
-        _requireLessThanBP(_infraFeeBP, MAX_FEE_BP);
-        _requireLessThanBP(_liquidityFeeBP, MAX_FEE_BP);
-        _requireLessThanBP(_reservationFeeBP, MAX_FEE_BP);
-
-        uint16 preInfraFeeBP = _connection.infraFeeBP;
-        uint16 preLiquidityFeeBP = _connection.liquidityFeeBP;
-        uint16 preReservationFeeBP = _connection.reservationFeeBP;
-
-        _connection.infraFeeBP = uint16(_infraFeeBP);
-        _connection.liquidityFeeBP = uint16(_liquidityFeeBP);
-        _connection.reservationFeeBP = uint16(_reservationFeeBP);
-
-        emit VaultFeesUpdated({
-            vault: _vault,
-            nodeOperator: _nodeOperator(_vault),
-            preInfraFeeBP: preInfraFeeBP,
-            preLiquidityFeeBP: preLiquidityFeeBP,
-            preReservationFeeBP: preReservationFeeBP,
-            infraFeeBP: _infraFeeBP,
-            liquidityFeeBP: _liquidityFeeBP,
-            reservationFeeBP: _reservationFeeBP
-        });
-    }
-
     function _storage() internal pure returns (Storage storage $) {
         assembly {
             $.slot := STORAGE_LOCATION
@@ -1576,10 +1531,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (msg.sender != _sender) revert NotAuthorized();
     }
 
-    function _requireLessThanBP(uint256 _valueBP, uint256 _maxValueBP) internal pure {
-        if (_valueBP > _maxValueBP) revert InvalidBasisPoints(_valueBP, _maxValueBP);
-    }
-
     function _requireSaneShareLimit(uint256 _shareLimit) internal view {
         uint256 maxSaneShareLimit = (LIDO.getTotalShares() * MAX_RELATIVE_SHARE_LIMIT_BP) / TOTAL_BASIS_POINTS;
         if (_shareLimit > maxSaneShareLimit) revert ShareLimitTooHigh(_shareLimit, maxSaneShareLimit);
@@ -1630,14 +1581,7 @@ contract VaultHub is PausableUntilWithRoles {
         address indexed nodeOperator,
         uint256 shareLimit,
         uint256 reserveRatioBP,
-        uint256 forcedRebalanceThresholdBP
-    );
-    event VaultFeesUpdated(
-        address indexed vault,
-        address indexed nodeOperator,
-        uint256 preInfraFeeBP,
-        uint256 preLiquidityFeeBP,
-        uint256 preReservationFeeBP,
+        uint256 forcedRebalanceThresholdBP,
         uint256 infraFeeBP,
         uint256 liquidityFeeBP,
         uint256 reservationFeeBP

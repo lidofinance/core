@@ -569,6 +569,40 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         }
     }
 
+    /// @notice updates fees for the vault
+    /// @param _vault vault address
+    /// @param _infraFeeBP new infra fee in basis points
+    /// @param _liquidityFeeBP new liquidity fee in basis points
+    /// @param _reservationFeeBP new reservation fee in basis points
+    function updateVaultFees(
+        address _vault,
+        uint256 _infraFeeBP,
+        uint256 _liquidityFeeBP,
+        uint256 _reservationFeeBP
+    ) external onlyRole(REGISTRY_ROLE) {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+
+        _requireLessThanBP(_infraFeeBP, MAX_FEE_BP);
+        _requireLessThanBP(_liquidityFeeBP, MAX_FEE_BP);
+        _requireLessThanBP(_reservationFeeBP, MAX_FEE_BP);
+
+        VaultHub vaultHub = _vaultHub();
+        if (!vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
+
+        VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(_vault);
+        if (vaultConnection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
+
+        vaultHub.updateConnection(
+            _vault,
+            vaultConnection.shareLimit,
+            vaultConnection.reserveRatioBP,
+            vaultConnection.forcedRebalanceThresholdBP,
+            _infraFeeBP,
+            _liquidityFeeBP,
+            _reservationFeeBP
+        );
+    }
+
    // -----------------------------
    //     MINT / BURN
    // -----------------------------
@@ -637,7 +671,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @notice Updates if the vault is in jail
     /// @param _vault vault address
     /// @param _isInJail true if the vault is in jail, false otherwise
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
     function setVaultJailStatus(address _vault, bool _isInJail) external onlyRole(REGISTRY_ROLE) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
@@ -788,6 +821,10 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         vaultTierId = _getStorage().vaultTier[_vault];
     }
 
+    function _requireLessThanBP(uint256 _valueBP, uint256 _maxValueBP) internal pure {
+        if (_valueBP > _maxValueBP) revert InvalidBasisPoints(_valueBP, _maxValueBP);
+    }
+
     // -----------------------------
     //            EVENTS
     // -----------------------------
@@ -843,4 +880,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     error VaultNotConnected();
     error VaultAlreadySyncedWithTier();
     error ShareLimitAlreadySet();
+    error VaultIsDisconnecting(address vault);
+    error InvalidBasisPoints(uint256 valueBP, uint256 maxValueBP);
 }

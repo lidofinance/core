@@ -1256,7 +1256,7 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, vaultShareLimit);
       await expect(operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, vaultShareLimit))
         .to.emit(vaultHub, "VaultConnectionUpdated")
-        .withArgs(vault_NO1_V1, vaultShareLimit, 2000, 1800);
+        .withArgs(vault_NO1_V1, vaultShareLimit, 2000, 1800, 500, 400, 100);
     });
   });
 
@@ -2182,6 +2182,9 @@ describe("OperatorGrid.sol", () => {
           originalShareLimit,
           expectedParams.reserveRatioBP,
           expectedParams.forcedRebalanceThresholdBP,
+          expectedParams.infraFeeBP,
+          expectedParams.liquidityFeeBP,
+          expectedParams.reservationFeeBP,
         );
     });
 
@@ -2222,6 +2225,9 @@ describe("OperatorGrid.sol", () => {
           400n, // Original share limit preserved
           expectedParams.reserveRatioBP,
           expectedParams.forcedRebalanceThresholdBP,
+          expectedParams.infraFeeBP,
+          expectedParams.liquidityFeeBP,
+          expectedParams.reservationFeeBP,
         );
     });
 
@@ -2243,6 +2249,9 @@ describe("OperatorGrid.sol", () => {
           originalShareLimit, // Should preserve original share limit
           RESERVE_RATIO, // Default tier params
           FORCED_REBALANCE_THRESHOLD,
+          INFRA_FEE, // Should update infra fee
+          LIQUIDITY_FEE, // Should update liquidity fee
+          RESERVATION_FEE, // Should update reservation fee
         );
     });
 
@@ -2452,6 +2461,9 @@ describe("OperatorGrid.sol", () => {
           newShareLimit + 1n,
           1234, // Should preserve original reserve ratio
           1111, // Should preserve original forced rebalance threshold
+          777, // Should preserve original infra fee
+          888, // Should preserve original liquidity fee
+          999, // Should preserve original reservation fee
         );
     });
 
@@ -2474,6 +2486,96 @@ describe("OperatorGrid.sol", () => {
       await expect(
         operatorGrid.connect(stranger).updateVaultShareLimit(vault_NO1_V1, newShareLimit),
       ).to.be.revertedWithCustomError(operatorGrid, "SenderNotMember");
+    });
+  });
+
+  context("updateVaultFees", () => {
+    let vault: StakingVault__MockForOperatorGrid;
+
+    before(async () => {
+      // Set up a connected vault for fee update tests
+      await vaultHub.mock__setVaultConnection(vault_NO1_V1, {
+        shareLimit: DEFAULT_TIER_SHARE_LIMIT,
+        reserveRatioBP: RESERVE_RATIO,
+        forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD,
+        infraFeeBP: INFRA_FEE,
+        liquidityFeeBP: LIQUIDITY_FEE,
+        reservationFeeBP: RESERVATION_FEE,
+        owner: vaultOwner,
+        vaultIndex: 1,
+        isBeaconDepositsManuallyPaused: false,
+        pendingDisconnect: false,
+      });
+      vault = vault_NO1_V1;
+    });
+
+    it("reverts if called by non-REGISTRY_ROLE", async () => {
+      await expect(
+        operatorGrid.connect(stranger).updateVaultFees(vault, INFRA_FEE, LIQUIDITY_FEE, RESERVATION_FEE),
+      ).to.be.revertedWithCustomError(operatorGrid, "AccessControlUnauthorizedAccount");
+    });
+
+    it("reverts if vault address is zero", async () => {
+      await expect(operatorGrid.updateVaultFees(ZeroAddress, INFRA_FEE, LIQUIDITY_FEE, RESERVATION_FEE))
+        .to.be.revertedWithCustomError(operatorGrid, "ZeroArgument")
+        .withArgs("_vault");
+    });
+
+    it("reverts if infra fee is too high", async () => {
+      const tooHighInfraFeeBP = MAX_FEE_BP + 1n;
+
+      await expect(operatorGrid.updateVaultFees(vault, tooHighInfraFeeBP, LIQUIDITY_FEE, RESERVATION_FEE))
+        .to.be.revertedWithCustomError(operatorGrid, "InvalidBasisPoints")
+        .withArgs(tooHighInfraFeeBP, MAX_FEE_BP);
+    });
+
+    it("reverts if liquidity fee is too high", async () => {
+      const tooHighLiquidityFeeBP = MAX_FEE_BP + 1n;
+
+      await expect(operatorGrid.updateVaultFees(vault, INFRA_FEE, tooHighLiquidityFeeBP, RESERVATION_FEE))
+        .to.be.revertedWithCustomError(operatorGrid, "InvalidBasisPoints")
+        .withArgs(tooHighLiquidityFeeBP, MAX_FEE_BP);
+    });
+
+    it("reverts if reservation fee is too high", async () => {
+      const tooHighReservationFeeBP = MAX_FEE_BP + 1n;
+
+      await expect(operatorGrid.updateVaultFees(vault, INFRA_FEE, LIQUIDITY_FEE, tooHighReservationFeeBP))
+        .to.be.revertedWithCustomError(operatorGrid, "InvalidBasisPoints")
+        .withArgs(tooHighReservationFeeBP, MAX_FEE_BP);
+    });
+
+    it("updates the vault fees", async () => {
+      const newInfraFeeBP = INFRA_FEE * 2;
+      const newLiquidityFeeBP = LIQUIDITY_FEE * 2;
+      const newReservationFeeBP = RESERVATION_FEE * 2;
+
+      // Mock a report timestamp to ensure fresh report for updateConnection requirement
+      await vaultHub.mock__setVaultRecord(vault, {
+        ...record,
+        report: {
+          ...record.report,
+          timestamp: await getNextBlockTimestamp(),
+        },
+      });
+
+      const connectionBefore = await vaultHub.vaultConnection(vault);
+      await expect(operatorGrid.updateVaultFees(vault, newInfraFeeBP, newLiquidityFeeBP, newReservationFeeBP))
+        .to.emit(vaultHub, "VaultConnectionUpdated")
+        .withArgs(
+          vault,
+          connectionBefore.shareLimit,
+          connectionBefore.reserveRatioBP,
+          connectionBefore.forcedRebalanceThresholdBP,
+          newInfraFeeBP,
+          newLiquidityFeeBP,
+          newReservationFeeBP,
+        );
+
+      const connection = await vaultHub.vaultConnection(vault);
+      expect(connection.infraFeeBP).to.equal(newInfraFeeBP);
+      expect(connection.liquidityFeeBP).to.equal(newLiquidityFeeBP);
+      expect(connection.reservationFeeBP).to.equal(newReservationFeeBP);
     });
   });
 });

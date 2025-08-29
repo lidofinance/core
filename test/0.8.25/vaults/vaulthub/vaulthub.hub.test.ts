@@ -29,7 +29,7 @@ import {
   getCurrentBlockTimestamp,
   impersonate,
 } from "lib";
-import { MAX_FEE_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
+import { MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
@@ -953,83 +953,6 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
-  context("updateVaultFees", () => {
-    let vault: StakingVault__MockForVaultHub;
-
-    before(async () => {
-      const { vault: _vault } = await createAndConnectVault(vaultFactory);
-      vault = _vault;
-    });
-
-    it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
-      await expect(
-        vaultHub.connect(stranger).updateVaultFees(vault, INFRA_FEE_BP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
-      ).to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount");
-    });
-
-    it("reverts if vault address is zero", async () => {
-      await expect(
-        vaultHub.connect(user).updateVaultFees(ZeroAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
-      ).to.be.revertedWithCustomError(vaultHub, "ZeroAddress");
-    });
-
-    it("reverts if infra fee is too high", async () => {
-      const tooHighInfraFeeBP = MAX_FEE_BP + 1n;
-
-      await expect(
-        vaultHub.connect(user).updateVaultFees(vault, tooHighInfraFeeBP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
-      )
-        .to.be.revertedWithCustomError(vaultHub, "InvalidBasisPoints")
-        .withArgs(tooHighInfraFeeBP, MAX_FEE_BP);
-    });
-
-    it("reverts if liquidity fee is too high", async () => {
-      const tooHighLiquidityFeeBP = MAX_FEE_BP + 1n;
-
-      await expect(
-        vaultHub.connect(user).updateVaultFees(vault, INFRA_FEE_BP, tooHighLiquidityFeeBP, RESERVATION_FEE_BP),
-      )
-        .to.be.revertedWithCustomError(vaultHub, "InvalidBasisPoints")
-        .withArgs(tooHighLiquidityFeeBP, MAX_FEE_BP);
-    });
-
-    it("reverts if reservation fee is too high", async () => {
-      const tooHighReservationFeeBP = MAX_FEE_BP + 1n;
-
-      await expect(
-        vaultHub.connect(user).updateVaultFees(vault, INFRA_FEE_BP, LIQUIDITY_FEE_BP, tooHighReservationFeeBP),
-      )
-        .to.be.revertedWithCustomError(vaultHub, "InvalidBasisPoints")
-        .withArgs(tooHighReservationFeeBP, MAX_FEE_BP);
-    });
-
-    it("updates the vault fees", async () => {
-      const newInfraFeeBP = INFRA_FEE_BP * 2n;
-      const newLiquidityFeeBP = LIQUIDITY_FEE_BP * 2n;
-      const newReservationFeeBP = RESERVATION_FEE_BP * 2n;
-
-      const connectionBefore = await vaultHub.vaultConnection(vault);
-      const nodeOperator = await vault.nodeOperator();
-      await expect(vaultHub.connect(user).updateVaultFees(vault, newInfraFeeBP, newLiquidityFeeBP, newReservationFeeBP))
-        .to.emit(vaultHub, "VaultFeesUpdated")
-        .withArgs(
-          vault,
-          nodeOperator,
-          connectionBefore.infraFeeBP,
-          connectionBefore.liquidityFeeBP,
-          connectionBefore.reservationFeeBP,
-          newInfraFeeBP,
-          newLiquidityFeeBP,
-          newReservationFeeBP,
-        );
-
-      const connection = await vaultHub.vaultConnection(vault);
-      expect(connection.infraFeeBP).to.equal(newInfraFeeBP);
-      expect(connection.liquidityFeeBP).to.equal(newLiquidityFeeBP);
-      expect(connection.reservationFeeBP).to.equal(newReservationFeeBP);
-    });
-  });
-
   context("updateConnection", () => {
     it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
       const { vault } = await createAndConnectVault(vaultFactory);
@@ -1075,14 +998,12 @@ describe("VaultHub.sol:hub", () => {
           ),
       )
         .to.emit(vaultHub, "VaultConnectionUpdated")
-        .withArgs(vaultAddress, nodeOperator, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP)
-        .to.emit(vaultHub, "VaultFeesUpdated")
         .withArgs(
           vaultAddress,
           nodeOperator,
-          oldConnection.infraFeeBP,
-          oldConnection.liquidityFeeBP,
-          oldConnection.reservationFeeBP,
+          SHARE_LIMIT,
+          RESERVE_RATIO_BP,
+          FORCED_REBALANCE_THRESHOLD_BP,
           newInfraFeeBP,
           newLiquidityFeeBP,
           newReservationFeeBP,
