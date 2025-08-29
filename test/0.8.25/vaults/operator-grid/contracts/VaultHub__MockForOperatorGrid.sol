@@ -56,14 +56,25 @@ contract VaultHub__MockForOperatorGrid {
         connection.liquidityFeeBP = uint16(_liquidityFeeBP);
         connection.reservationFeeBP = uint16(_reservationFeeBP);
 
-        emit VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP);
+        emit VaultConnectionUpdated(
+            _vault,
+            _shareLimit,
+            _reserveRatioBP,
+            _forcedRebalanceThresholdBP,
+            _infraFeeBP,
+            _liquidityFeeBP,
+            _reservationFeeBP
+        );
     }
 
     event VaultConnectionUpdated(
         address indexed vault,
         uint256 shareLimit,
         uint256 reserveRatioBP,
-        uint256 forcedRebalanceThresholdBP
+        uint256 forcedRebalanceThresholdBP,
+        uint256 infraFeeBP,
+        uint256 liquidityFeeBP,
+        uint256 reservationFeeBP
     );
 
     error NotConnectedToHub(address vault);

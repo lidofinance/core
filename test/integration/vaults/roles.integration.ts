@@ -351,7 +351,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
               failingUsers: Object.values(roles).filter((r) => r !== roles.tierChanger && r !== owner),
             },
             [1n, 1n],
-            await dashboard.CHANGE_TIER_ROLE(),
+            await dashboard.VAULT_CONFIGURATION_ROLE(),
           );
         });
       });
