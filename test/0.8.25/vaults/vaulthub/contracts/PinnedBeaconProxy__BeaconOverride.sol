@@ -31,19 +31,20 @@ contract PinnedBeaconProxy__BeaconOverride is BeaconProxy {
         }
     }
 
+    function isOssified() external view returns (bool) {
+        return PinnedBeaconUtils.getPinnedImplementation() != address(0);
+    }
+
     function _implementation() internal view virtual override returns (address) {
         address pinnedImpl = PinnedBeaconUtils.getPinnedImplementation();
         if (pinnedImpl != address(0)) {
             return pinnedImpl;
         }
-        return IBeacon(_getBeacon()).implementation();
+
+        return super._implementation();
     }
 
     function implementation() external view returns (address) {
         return _implementation();
-    }
-
-    function isOssified() external view returns (bool) {
-        return PinnedBeaconUtils.ossified();
     }
 }
