@@ -613,6 +613,18 @@ describe("VaultHub.sol:owner-functions", () => {
         .withArgs(vaultAddress);
     });
 
+    it("reverts when vault is has redemption obligations", async () => {
+      await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
+      await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, ether("8.5"));
+
+      await vaultHub.connect(deployer).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), vaultOwner);
+      await vaultHub.connect(vaultOwner).setLiabilitySharesTarget(vaultAddress, 0n);
+
+      await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
+        .to.be.revertedWithCustomError(vaultHub, "ObligationsTooHighCannotDeposit")
+        .withArgs(vaultAddress, ether("8.5"), 0n);
+    });
+
     it("reverts when called by non-owner", async () => {
       await expect(vaultHub.connect(stranger).resumeBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,

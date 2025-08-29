@@ -566,8 +566,9 @@ contract Dashboard is NodeOperatorFee {
      * @notice Normalizes the vault by forcing a rebalance and settling lido fees
      */
     function normalizeVault() external {
-        try VAULT_HUB.forceRebalance(address(_stakingVault())) {} catch {}
-        try VAULT_HUB.settleLidoFees(address(_stakingVault())) {} catch {}
+        address stakingVault = address(_stakingVault());
+        try VAULT_HUB.forceRebalance(stakingVault) {} catch {}
+        try VAULT_HUB.settleLidoFees(stakingVault) {} catch {}
     }
 
     // ==================== Internal Functions ====================

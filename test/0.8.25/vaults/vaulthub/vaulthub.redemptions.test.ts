@@ -136,7 +136,6 @@ describe("VaultHub.sol:redemptions", () => {
   context("forceRebalance", () => {
     it("reverts if vault is not connected to the hub", async () => {
       await disconnectedVault.connect(user).fund({ value: ether("1") });
-
       await expect(vaultHub.forceRebalance(disconnectedVault))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
         .withArgs(disconnectedVault);

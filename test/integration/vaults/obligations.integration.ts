@@ -693,7 +693,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
     let cumulativeLidoFees: bigint;
 
     beforeEach(async () => {
-      redemptionShares = ether("1");
+      redemptionShares = ether("2");
       cumulativeLidoFees = ether("0.2");
 
       redemptionValue = await lido.getPooledEthBySharesRoundUp(redemptionShares);
