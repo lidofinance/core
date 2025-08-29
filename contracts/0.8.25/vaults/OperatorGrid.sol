@@ -533,7 +533,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (_requestedShareLimit > tierShareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, tierShareLimit);
         if (_requestedShareLimit == vaultConnection.shareLimit) revert ShareLimitAlreadySet();
 
-        // nodeOperator confirmation is only needed if vault is not in the default tier and if the requested shareLimit is more than the current one
+        // nodeOperator confirmation is only needed if vault is not in the default tier and requested shareLimit is more than current one
         if (vaultTierId == DEFAULT_TIER_ID || _requestedShareLimit <= vaultConnection.shareLimit) {
             if (msg.sender != vaultOwner) return false;
         } else {
