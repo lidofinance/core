@@ -2182,9 +2182,7 @@ describe("OperatorGrid.sol", () => {
           originalShareLimit,
           expectedParams.reserveRatioBP,
           expectedParams.forcedRebalanceThresholdBP,
-        )
-        .and.to.emit(operatorGrid, "TierSynced")
-        .withArgs(vault_NO1_V1.target);
+        );
     });
 
     it("syncs vault with non-default tier parameters via syncTier", async () => {
@@ -2224,9 +2222,7 @@ describe("OperatorGrid.sol", () => {
           400n, // Original share limit preserved
           expectedParams.reserveRatioBP,
           expectedParams.forcedRebalanceThresholdBP,
-        )
-        .and.to.emit(operatorGrid, "TierSynced")
-        .withArgs(vault_NO1_V1.target);
+        );
     });
 
     it("preserves the original share limit when syncing via syncTier", async () => {
@@ -2247,9 +2243,7 @@ describe("OperatorGrid.sol", () => {
           originalShareLimit, // Should preserve original share limit
           RESERVE_RATIO, // Default tier params
           FORCED_REBALANCE_THRESHOLD,
-        )
-        .and.to.emit(operatorGrid, "TierSynced")
-        .withArgs(vault_NO1_V1.target);
+        );
     });
 
     it("reverts with VaultAlreadySyncedWithTier when already in sync", async () => {

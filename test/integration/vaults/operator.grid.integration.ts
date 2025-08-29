@@ -167,9 +167,10 @@ describe("Integration: OperatorGrid", () => {
       await dashboard.syncTier();
 
       // Second confirmation from node operator → completes and updates connection
-      await expect(operatorGrid.connect(nodeOperator).syncTier(stakingVault))
-        .to.emit(vaultHub, "VaultConnectionUpdated")
-        .and.to.emit(operatorGrid, "TierSynced");
+      await expect(operatorGrid.connect(nodeOperator).syncTier(stakingVault)).to.emit(
+        vaultHub,
+        "VaultConnectionUpdated",
+      );
 
       // Connection should now reflect updated tier params
       const connectionAfterSync = await vaultHub.vaultConnection(stakingVault);

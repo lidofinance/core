@@ -371,7 +371,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _vault address of the vault
     /// @param _requestedTierId id of the tier
     /// @param _requestedShareLimit share limit to set
-    /// @return bool Whether the tier change was confirmed.
+    /// @return bool Whether the tier change was executed.
     /// @dev Requires vault to be connected to VaultHub to finalize tier change.
     /// @dev Both vault owner and node operator confirmations are required.
     /*
@@ -484,15 +484,14 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
     /// @notice Syncs vault tier with current tier params
     /// @param _vault address of the vault
-    /// @return bool Whether the sync was confirmed.
-    /// @dev Requires vault to be connected to VaultHub to finalize tier sync.
+    /// @return bool Whether the sync was executed.
+    /// @dev Requires vault to be connected to VaultHub.
     /// @dev Both vault owner and node operator confirmations are required.
     function syncTier(address _vault) external returns (bool) {
-        (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection, address vaultOwner, address nodeOperator) = _getVaultContextForConnectedVault(_vault);
+        (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection,
+        address vaultOwner, address nodeOperator, uint256 vaultTierId) = _getVaultContextForConnectedVault(_vault);
 
-        ERC7201Storage storage $ = _getStorage();
-        uint256 vaultTierId = $.vaultTier[_vault];
-        Tier storage tier = $.tiers[vaultTierId];
+        Tier storage tier = _getStorage().tiers[vaultTierId];
 
         if (
             vaultConnection.reserveRatioBP == tier.reserveRatioBP &&
@@ -517,21 +516,19 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
             tier.reservationFeeBP
         );
 
-        emit TierSynced(_vault);
-
         return true;
     }
 
     /// @notice Update vault share limit
     /// @param _vault address of the vault
     /// @param _requestedShareLimit share limit to set
-    /// @return bool Whether the update was confirmed.
+    /// @return bool Whether the update was executed.
+    /// @dev Requires vault to be connected to VaultHub.
     function updateVaultShareLimit(address _vault, uint256 _requestedShareLimit) external returns (bool) {
-        (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection, address vaultOwner, address nodeOperator) = _getVaultContextForConnectedVault(_vault);
+        (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection,
+        address vaultOwner, address nodeOperator, uint256 vaultTierId) = _getVaultContextForConnectedVault(_vault);
 
-        ERC7201Storage storage $ = _getStorage();
-        uint256 vaultTierId = $.vaultTier[_vault];
-        uint256 tierShareLimit = $.tiers[vaultTierId].shareLimit;
+        uint256 tierShareLimit = _getStorage().tiers[vaultTierId].shareLimit;
 
         if (_requestedShareLimit > tierShareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, tierShareLimit);
         if (_requestedShareLimit == vaultConnection.shareLimit) revert ShareLimitAlreadySet();
@@ -776,7 +773,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         VaultHub vaultHub,
         VaultHub.VaultConnection memory vaultConnection,
         address vaultOwner,
-        address nodeOperator
+        address nodeOperator,
+        uint256 vaultTierId
     ) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
@@ -786,6 +784,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         vaultConnection = vaultHub.vaultConnection(_vault);
         vaultOwner = vaultConnection.owner;
         nodeOperator = IStakingVault(_vault).nodeOperator();
+
+        vaultTierId = _getStorage().vaultTier[_vault];
     }
 
     // -----------------------------
@@ -804,7 +804,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         uint256 reservationFeeBP
     );
     event TierChanged(address indexed vault, uint256 indexed tierId, uint256 shareLimit);
-    event TierSynced(address indexed vault);
     event TierUpdated(
       uint256 indexed tierId,
       uint256 shareLimit,
