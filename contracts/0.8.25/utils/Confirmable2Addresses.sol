@@ -9,7 +9,7 @@ import {Confirmations} from "./Confirmations.sol";
 /**
  * @title Confirmable2Addresses
  * @author Lido
- * @notice An extension of Confirmations that allows exectuing functions by mutual confirmation.
+ * @notice An extension of Confirmations that allows executing functions by mutual confirmation.
  * @dev In this implementation, roles are treated as addresses.
  */
 abstract contract Confirmable2Addresses is Confirmations {

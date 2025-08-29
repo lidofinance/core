@@ -23,18 +23,11 @@ library PinnedBeaconUtils {
      * @notice Ossifies the beacon by pinning the current implementation
      */
     function ossify() internal {
-        if (ossified()) revert AlreadyOssified();
+        if (getPinnedImplementation() != address(0)) revert AlreadyOssified();
+        
         address currentImplementation = IBeacon(ERC1967Utils.getBeacon()).implementation();
         StorageSlot.getAddressSlot(PINNED_BEACON_STORAGE_SLOT).value = currentImplementation;
         emit PinnedImplementationUpdated(currentImplementation);
-    }
-
-    /**
-     * @notice Returns true if the proxy is ossified
-     * @return True if the proxy is ossified, false otherwise
-     */
-    function ossified() internal view returns(bool) {
-        return getPinnedImplementation() != address(0);
     }
 
     /**

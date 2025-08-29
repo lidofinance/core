@@ -27,6 +27,9 @@ interface IWithdrawalVaultProxy {
 
 interface IOracleContract {
     function setConsensusVersion(uint256 _version) external;
+}
+
+interface IValidatorExitBusOracle {
     function finalizeUpgrade_v2(
         uint256 _maxValidatorsPerReport,
         uint256 _maxExitRequestsLimit,
@@ -74,8 +77,6 @@ contract TWVoteScript is OmnibusBase {
         // Other parameters
         bytes32 node_operators_registry_app_id;
         bytes32 sdvt_app_id;
-        uint16[3] nor_version;
-        uint16[3] sdvt_version;
         uint256 vebo_consensus_version;
         uint256 ao_consensus_version;
         uint256 nor_exit_deadline_in_sec;
@@ -101,35 +102,9 @@ contract TWVoteScript is OmnibusBase {
     }
 
     function getVotingVoteItems() public view override returns (VoteItem[] memory voteItems) {
-        uint256 numVotingVoteItems = 2;
+        uint256 numVotingVoteItems = 0;
         voteItems = new VoteItem[](numVotingVoteItems);
         uint256 index = 0;
-
-        // TODO: remove these two items as Repo contract are deprecated and no update is needed
-
-        // Publish new NodeOperatorsRegistry implementation in NodeOperatorsRegistry app APM repo
-        voteItems[index++] = VoteItem({
-            description: "Publish new NodeOperatorsRegistry implementation in NodeOperatorsRegistry app APM repo",
-            call: _votingCall(
-                params.nor_app_repo,
-                abi.encodeCall(
-                    IRepo.newVersion,
-                    (params.nor_version, params.node_operators_registry_impl, params.nor_content_uri)
-                )
-            )
-        });
-
-        // Publish new NodeOperatorsRegistry implementation in SimpleDVT app APM repo
-        voteItems[index++] = VoteItem({
-            description: "Publish new NodeOperatorsRegistry implementation in SimpleDVT app APM repo",
-            call: _votingCall(
-                params.sdvt_app_repo,
-                abi.encodeCall(
-                    IRepo.newVersion,
-                    (params.sdvt_version, params.node_operators_registry_impl, params.nor_content_uri)
-                )
-            )
-        });
 
         assert(index == numVotingVoteItems);
     }
@@ -165,7 +140,7 @@ contract TWVoteScript is OmnibusBase {
             call: _forwardCall(
                 params.agent,
                 params.validators_exit_bus_oracle,
-                abi.encodeCall(IOracleContract.finalizeUpgrade_v2, (600, 13000, 1, 48))
+                abi.encodeCall(IValidatorExitBusOracle.finalizeUpgrade_v2, (600, 13000, 1, 48))
             )
         });
 

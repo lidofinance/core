@@ -123,8 +123,6 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, Ownable2StepUpgra
     error ZeroArgument(string name);
     error VaultAlreadyInitialized();
 
-    function isOssified() external view override returns (bool) {}
-
     function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
         uint64[] calldata _amounts,

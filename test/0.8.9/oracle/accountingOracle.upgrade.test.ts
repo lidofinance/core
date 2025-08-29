@@ -27,10 +27,8 @@ describe("AccountingOracle.sol:upgrade", () => {
       const initialConsensusVersion = await oracle.getConsensusVersion();
 
       console.log("version", await oracle.getContractVersion());
-      // Call finalizeUpgrade_v2
       await oracle.connect(admin).finalizeUpgrade_v3(NEW_CONSENSUS_VERSION);
 
-      // Verify contract version updated to 3
       const newContractVersion = await oracle.getContractVersion();
       expect(newContractVersion).to.equal(3);
       expect(newContractVersion).to.not.equal(initialContractVersion);

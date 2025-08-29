@@ -14,7 +14,6 @@ import {
   getNextBlockTimestamp,
 } from "lib";
 import {
-  autofillRoles,
   createVaultWithDashboard,
   getProofAndDepositData,
   getProtocolContext,
@@ -22,29 +21,25 @@ import {
   ProtocolContext,
   reportVaultDataWithProof,
   setupLidoForVaults,
-  VaultRoles,
 } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
 
 describe("Integration: Actions with vault disconnected from hub", () => {
   let ctx: ProtocolContext;
+  let snapshot: string;
+  let originalSnapshot: string;
 
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
-  let roles: VaultRoles;
 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  let snapshot: string;
-  let originalSnapshot: string;
-
   before(async () => {
-    originalSnapshot = await Snapshot.take();
-
     ctx = await getProtocolContext();
+    originalSnapshot = await Snapshot.take();
 
     await setupLidoForVaults(ctx);
 
@@ -60,11 +55,10 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       [],
     ));
 
-    roles = await autofillRoles(dashboard, nodeOperator);
-
-    await dashboard.connect(roles.disconnecter).voluntaryDisconnect();
-    await reportVaultDataWithProof(ctx, stakingVault);
+    await dashboard.connect(owner).voluntaryDisconnect();
     // disconnect is completed when the vault is reported to the hub
+    await reportVaultDataWithProof(ctx, stakingVault);
+
     dashboard = dashboard.connect(owner);
   });
 
@@ -206,47 +200,6 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           .withArgs(stranger, amount);
 
         expect(await ethers.provider.getBalance(stranger)).to.equal(balance + amount);
-      });
-    });
-
-    describe("Ossification", () => {
-      it("Can ossify vault", async () => {
-        await expect(stakingVault.connect(owner).ossify()).to.emit(stakingVault, "PinnedImplementationUpdated");
-
-        expect(await stakingVault.isOssified()).to.equal(true);
-      });
-
-      describe("Ossified", () => {
-        beforeEach(async () => {
-          await stakingVault.connect(owner).ossify();
-        });
-
-        it("Can't ossify vault again", async () => {
-          await expect(stakingVault.connect(owner).ossify()).to.be.revertedWithCustomError(
-            stakingVault,
-            "VaultOssified",
-          );
-        });
-
-        it("Can withdraw the funds", async () => {
-          const balance = await ethers.provider.getBalance(stranger);
-          const amount = await ethers.provider.getBalance(stakingVault);
-
-          await expect(stakingVault.connect(owner).withdraw(stranger, amount))
-            .to.emit(stakingVault, "EtherWithdrawn")
-            .withArgs(stranger, amount);
-
-          expect(await ethers.provider.getBalance(stranger)).to.equal(balance + amount);
-        });
-
-        it("Can't reconnect the vault to the hub", async () => {
-          const { vaultHub } = ctx.contracts;
-          await stakingVault.connect(owner).transferOwnership(vaultHub);
-
-          await expect(vaultHub.connectVault(stakingVault))
-            .to.be.revertedWithCustomError(vaultHub, "VaultOssified")
-            .withArgs(stakingVault);
-        });
       });
     });
 

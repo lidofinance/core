@@ -19,6 +19,8 @@ contract StakingVault__MockForPDG {
         nodeOperator_ = _nodeOperator;
     }
 
+    receive() external payable {}
+
     function totalValue() external view returns (uint256) {
         return address(this).balance;
     }

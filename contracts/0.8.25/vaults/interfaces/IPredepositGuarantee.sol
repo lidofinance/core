@@ -31,10 +31,5 @@ interface IPredepositGuarantee {
         uint64 proposerIndex;
     }
 
-    function compensateDisprovenPredeposit(
-        bytes calldata _validatorPubkey,
-        address _recipient
-    ) external returns (uint256 compensatedEther);
-
     function proveUnknownValidator(ValidatorWitness calldata _witness, IStakingVault _stakingVault) external;
 }

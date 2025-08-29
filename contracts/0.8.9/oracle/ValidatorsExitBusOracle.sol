@@ -8,7 +8,6 @@ import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 
 import {BaseOracle} from "./BaseOracle.sol";
 import {ValidatorsExitBus} from "./ValidatorsExitBus.sol";
-import {ExitRequestLimitData, ExitLimitUtilsStorage, ExitLimitUtils} from "../lib/ExitLimitUtils.sol";
 
 interface IOracleReportSanityChecker {
     function checkExitBusOracleReport(uint256 _exitRequestsCount) external view;
@@ -17,13 +16,10 @@ interface IOracleReportSanityChecker {
 contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     using UnstructuredStorage for bytes32;
     using SafeCast for uint256;
-    using ExitLimitUtilsStorage for bytes32;
-    using ExitLimitUtils for ExitRequestLimitData;
 
     error AdminCannotBeZero();
     error SenderNotAllowed();
     error UnexpectedRequestsDataLength();
-    error ArgumentOutOfBounds();
 
     event WarnDataIncompleteProcessing(uint256 indexed refSlot, uint256 requestsProcessed, uint256 requestsCount);
 
@@ -36,10 +32,6 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
 
     /// @notice An ACL role granting the permission to submit the data for a committee report.
     bytes32 public constant SUBMIT_DATA_ROLE = keccak256("SUBMIT_DATA_ROLE");
-
-    /// @dev Storage slot: uint256 totalRequestsProcessed
-    bytes32 internal constant TOTAL_REQUESTS_PROCESSED_POSITION =
-        keccak256("lido.ValidatorsExitBusOracle.totalRequestsProcessed");
 
     /// @dev [DEPRECATED] Storage slot: mapping(uint256 => RequestedValidator) lastRequestedValidatorIndices
     /// This mapping was previously used for storing last requested validator indexes per (moduleId, nodeOpId) key.
@@ -159,16 +151,9 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
         bytes32 reportDataHash = keccak256(abi.encode(data));
         _checkConsensusData(data.refSlot, data.consensusVersion, reportDataHash);
         _startProcessing();
-        _handleConsensusReportData(data);
         _storeOracleExitRequestHash(dataHash, contractVersion);
+        _handleConsensusReportData(data);
         emit ExitDataProcessing(dataHash);
-    }
-
-    /// @notice Returns the total number of validator exit requests ever processed
-    /// across all received reports.
-    ///
-    function getTotalRequestsProcessed() external view returns (uint256) {
-        return TOTAL_REQUESTS_PROCESSED_POSITION.getStorageUint256();
     }
 
     struct ProcessingState {

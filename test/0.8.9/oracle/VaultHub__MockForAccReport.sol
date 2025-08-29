@@ -3,17 +3,17 @@
 pragma solidity 0.8.9;
 
 contract VaultHub__MockForAccountingReport {
-    uint256 public badDebtToInternalizeAsOfLastRefSlot;
+    uint256 public badDebtToInternalize;
 
-    function mock__badDebtToInternalizeAsOfLastRefSlot() external view returns (uint256) {
-        return badDebtToInternalizeAsOfLastRefSlot;
+    function mock__badDebtToInternalize() external view returns (uint256) {
+        return badDebtToInternalize;
     }
 
-    function setBadDebtToInternalizeAsOfLastRefSlot(uint256 _badDebt) external {
-        badDebtToInternalizeAsOfLastRefSlot = _badDebt;
+    function setBadDebtToInternalize(uint256 _badDebt) external {
+        badDebtToInternalize = _badDebt;
     }
 
     function decreaseInternalizedBadDebt(uint256 _badDebt) external {
-        badDebtToInternalizeAsOfLastRefSlot -= _badDebt;
+        badDebtToInternalize -= _badDebt;
     }
 }

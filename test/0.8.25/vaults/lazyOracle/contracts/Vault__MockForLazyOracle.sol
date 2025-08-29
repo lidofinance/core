@@ -6,7 +6,7 @@ pragma solidity >=0.8.0;
 contract Vault__MockForLazyOracle {
     constructor() {}
 
-    function withdrawalCredentials() external view returns (bytes32) {
+    function withdrawalCredentials() external pure returns (bytes32) {
         return bytes32(0);
     }
 }
