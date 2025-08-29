@@ -17,5 +17,5 @@ if (require.main === module) {
     process.exit(1);
   }
 
-  runMigrations(stepsFile).catch(() => process.exit(1));
+  runMigrations(stepsFile!).catch(() => process.exit(1));
 }
