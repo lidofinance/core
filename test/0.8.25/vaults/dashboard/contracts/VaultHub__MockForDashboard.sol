@@ -32,7 +32,6 @@ contract VaultHub__MockForDashboard {
 
     mapping(address => VaultHub.VaultConnection) public vaultConnections;
     mapping(address => VaultHub.VaultRecord) public vaultRecords;
-    mapping(address => VaultHub.VaultObligations) public _vaultObligations;
 
     receive() external payable {}
 
@@ -46,14 +45,6 @@ contract VaultHub__MockForDashboard {
 
     function mock__setVaultRecord(address vault, VaultHub.VaultRecord memory record) external {
         vaultRecords[vault] = record;
-    }
-
-    function mock__setVaultObligations(address vault, VaultHub.VaultObligations memory obligations) external {
-        _vaultObligations[vault] = obligations;
-    }
-
-    function vaultObligations(address vault) external view returns (VaultHub.VaultObligations memory) {
-        return _vaultObligations[vault];
     }
 
     function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {

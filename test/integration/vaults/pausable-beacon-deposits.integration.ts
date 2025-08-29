@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Dashboard, LazyOracle, StakingVault, VaultHub } from "typechain-types";
 
@@ -66,11 +67,15 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
   });
 
   after(async () => await Snapshot.restore(originalSnapshot));
+
   beforeEach(async () => (snapshot = await Snapshot.take()));
+
   afterEach(async () => await Snapshot.restore(snapshot));
 
   context("Manual pause", () => {
     it("Pause beacon deposits manually", async () => {
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
+
       await expect(dashboard.pauseBeaconChainDeposits())
         .to.emit(stakingVault, "BeaconChainDepositsPaused")
         .and.to.emit(vaultHub, "BeaconChainDepositsPausedByOwner");
@@ -80,10 +85,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       const connection = await vaultHub.vaultConnection(stakingVaultAddress);
       expect(connection.isBeaconDepositsManuallyPaused).to.be.true;
 
-      // Pause again should not emit anything
-      await expect(dashboard.pauseBeaconChainDeposits())
-        .to.not.emit(stakingVault, "BeaconChainDepositsPaused")
-        .and.not.to.emit(vaultHub, "BeaconChainDepositsPausedByOwner");
+      await expect(dashboard.pauseBeaconChainDeposits()).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
     });
 
     it("Resume beacon deposits manually", async () => {
@@ -98,16 +100,49 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       const connection = await vaultHub.vaultConnection(stakingVaultAddress);
       expect(connection.isBeaconDepositsManuallyPaused).to.be.false;
 
-      // Resume again should not emit anything
-      await expect(dashboard.resumeBeaconChainDeposits())
-        .to.not.emit(stakingVault, "BeaconChainDepositsResumed")
-        .and.not.to.emit(vaultHub, "BeaconChainDepositsResumedByOwner");
+      await expect(dashboard.resumeBeaconChainDeposits()).to.be.revertedWithCustomError(vaultHub, "PausedExpected");
     });
   });
 
   context("Automatic pause", () => {
-    it("Pause beacon deposits on vault report (big fees)", async () => {
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") })).to.emit(
+    it("Pause beacon deposits on vault report (big fees >= 1 ether)", async () => {
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1") })).to.emit(
+        stakingVault,
+        "BeaconChainDepositsPaused",
+      );
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
+
+      const connection = await vaultHub.vaultConnection(stakingVaultAddress);
+      expect(connection.isBeaconDepositsManuallyPaused).to.be.false;
+    });
+
+    it("Pause and resume beacon deposits on redemptions accruance and rebalancing", async () => {
+      await dashboard.fund({ value: ether("1") });
+      await dashboard.mintStETH(agentSigner, ether("1"));
+
+      await setBalance(await stakingVault.getAddress(), ether("1") - 1n); // simulate lower than redemption balance
+
+      // +1n to make sure to have >= 1 ether to pause the vault beacon deposits
+      await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(stakingVaultAddress, 0n)).to.emit(
+        stakingVault,
+        "BeaconChainDepositsPaused",
+      );
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
+
+      await dashboard.fund({ value: ether("1") });
+
+      await expect(vaultHub.forceRebalance(stakingVaultAddress)).to.emit(stakingVault, "BeaconChainDepositsResumed");
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
+    });
+
+    it("Correctly handles paused beacon deposits when paused by owner", async () => {
+      await dashboard.fund({ value: ether("1") });
+      await dashboard.mintStETH(agentSigner, ether("1"));
+
+      await setBalance(await stakingVault.getAddress(), ether("1") - 1n); // simulate lower than redemption balance
+
+      // +1n to make sure to have >= 1 ether to pause the vault beacon deposits
+      await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(stakingVaultAddress, 0n)).to.emit(
         stakingVault,
         "BeaconChainDepositsPaused",
       );
@@ -116,57 +151,6 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
 
       const connection = await vaultHub.vaultConnection(stakingVaultAddress);
       expect(connection.isBeaconDepositsManuallyPaused).to.be.false;
-    });
-
-    it("Pause beacon deposits on setting redemptions obligations", async () => {
-      await dashboard.fund({ value: ether("1") });
-      await dashboard.mintStETH(agentSigner, ether("1"));
-
-      await expect(vaultHub.connect(redemptionMaster).setVaultRedemptions(stakingVaultAddress, ether("1"))).to.emit(
-        stakingVault,
-        "BeaconChainDepositsPaused",
-      );
-    });
-
-    it("Unpauses beacon deposits on settling obligations", async () => {
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") })).to.emit(
-        stakingVault,
-        "BeaconChainDepositsPaused",
-      );
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
-
-      await dashboard.fund({ value: ether("1") });
-
-      await expect(vaultHub.settleVaultObligations(stakingVaultAddress)).to.emit(
-        stakingVault,
-        "BeaconChainDepositsResumed",
-      );
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
-    });
-
-    it("Unpauses beacon deposits on report when paused by report", async () => {
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") })).to.emit(
-        stakingVault,
-        "BeaconChainDepositsPaused",
-      );
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
-
-      await dashboard.fund({ value: ether("1") });
-
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") })).to.emit(
-        stakingVault,
-        "BeaconChainDepositsResumed",
-      );
-    });
-
-    it("Correctly handles paused beacon deposits on vault report when paused by owner", async () => {
-      // Pause by report
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") })).to.emit(
-        stakingVault,
-        "BeaconChainDepositsPaused",
-      );
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
-      expect((await vaultHub.vaultConnection(stakingVaultAddress)).isBeaconDepositsManuallyPaused).to.be.false;
 
       // Pause by owner
       await expect(dashboard.pauseBeaconChainDeposits())
@@ -179,10 +163,10 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       await dashboard.fund({ value: ether("1") });
 
       // Check that even if obligation settled vault is still paused
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1") }))
-        .to.emit(vaultHub, "VaultObligationsSettled")
-        .withArgs(stakingVaultAddress, 0, ether("1"), 0, 0, ether("1"))
-        .and.not.to.emit(stakingVault, "BeaconChainDepositsResumed");
+      await expect(vaultHub.forceRebalance(stakingVaultAddress)).to.not.emit(
+        stakingVault,
+        "BeaconChainDepositsResumed",
+      );
 
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
       expect((await vaultHub.vaultConnection(stakingVaultAddress)).isBeaconDepositsManuallyPaused).to.be.true;

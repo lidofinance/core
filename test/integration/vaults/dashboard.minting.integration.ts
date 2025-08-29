@@ -85,7 +85,10 @@ describe("Integration: Dashboard ", () => {
       expect(await dashboard.totalMintingCapacityShares()).to.be.equal(0n);
       expect(await dashboard.remainingMintingCapacityShares(0n)).to.be.equal(0n);
 
-      await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1"), waitForNextRefSlot: true });
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        cumulativeLidoFees: ether("1"),
+        waitForNextRefSlot: true,
+      });
 
       expect(await dashboard.totalMintingCapacityShares()).to.be.equal(0n);
       expect(await dashboard.remainingMintingCapacityShares(0n)).to.be.equal(0n);

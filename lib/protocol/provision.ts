@@ -9,6 +9,7 @@ import {
   ensureDsmGuardians,
   ensureHashConsensusInitialEpoch,
   ensureOracleCommitteeMembers,
+  ensureSomeOddShareRate,
   ensureStakeLimit,
   norSdvtEnsureOperators,
   unpauseStaking,
@@ -55,6 +56,10 @@ export const provision = async (ctx: ProtocolContext) => {
   await ensureStakeLimit(ctx);
 
   await ensureDsmGuardians(ctx, 3n, 2n);
+
+  if (ctx.isScratch) {
+    await ensureSomeOddShareRate(ctx);
+  }
 
   alreadyProvisioned = true;
 
