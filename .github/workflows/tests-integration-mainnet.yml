@@ -18,6 +18,7 @@ jobs:
           - 8545:8545
         env:
           ETH_RPC_URL: "${{ secrets.ETH_RPC_URL }}"
+          HARDFORK: "prague"
 
     steps:
       - uses: actions/checkout@v4
@@ -25,10 +26,34 @@ jobs:
       - name: Common setup
         uses: ./.github/workflows/setup
 
-      - name: Set env
-        run: cp .env.example .env
+      - name: Prepare network state file
+        run: cp deployed-mainnet.json deployed-mainnet-upgrade.json
+
+      - name: Deploy upgrade
+        run: yarn upgrade:deploy
+        env:
+          RPC_URL: http://localhost:8545
+          # first acc of default mnemonic "test test ..."
+          DEPLOYER: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+          GAS_PRIORITY_FEE: 1
+          GAS_MAX_FEE: 100
+          NETWORK_STATE_FILE: deployed-mainnet-upgrade.json
+          GENESIS_TIME: 1606824023
+
+      - name: Mock Aragon voting
+        run: yarn upgrade:mock-voting
+        env:
+          RPC_URL: http://localhost:8545
+          NETWORK_STATE_FILE: deployed-mainnet-upgrade.json
+
+      - name: Workaround for not updated state error when forking a fork
+        run: yarn hardhat --network local run --no-compile scripts/utils/mine.ts
+        env:
+          RPC_URL: http://localhost:8545
 
       - name: Run integration tests
         run: yarn test:integration:fork:mainnet
         env:
           LOG_LEVEL: debug
+          RPC_URL: http://localhost:8545
+          NETWORK_STATE_FILE: deployed-mainnet-upgrade.json

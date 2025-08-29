@@ -28,7 +28,6 @@ describe("Integration: AccountingOracle extra data", () => {
   let snapshot: string;
   let originalState: string;
 
-  let stuckKeys: KeyType;
   let exitedKeys: KeyType;
 
   before(async () => {
@@ -63,27 +62,18 @@ describe("Integration: AccountingOracle extra data", () => {
       }
 
       const numNodeOperators = Math.min(10, Number(await ctx.contracts.nor.getNodeOperatorsCount()));
-      const numStuckKeys = 2;
-      stuckKeys = {
-        moduleId: Number(MODULE_ID),
-        nodeOpIds: [],
-        keysCounts: [],
-      };
       exitedKeys = {
         moduleId: Number(MODULE_ID),
         nodeOpIds: [],
         keysCounts: [],
       };
-      for (let i = firstNodeOperatorInRange; i < firstNodeOperatorInRange + numNodeOperators; i++) {
+      
+      // Add at least 2 node operators with exited validators to test chunking
+      for (let i = firstNodeOperatorInRange; i < firstNodeOperatorInRange + Math.min(2, numNodeOperators); i++) {
         const oldNumExited = await getExitedCount(BigInt(i));
-        const numExited = oldNumExited + (i === firstNodeOperatorInRange ? NUM_NEWLY_EXITED_VALIDATORS : 0n);
-        if (numExited !== oldNumExited) {
-          exitedKeys.nodeOpIds.push(Number(i));
-          exitedKeys.keysCounts.push(Number(numExited));
-        } else {
-          stuckKeys.nodeOpIds.push(Number(i));
-          stuckKeys.keysCounts.push(numStuckKeys);
-        }
+        const numExited = oldNumExited + (i === firstNodeOperatorInRange ? NUM_NEWLY_EXITED_VALIDATORS : 1n);
+        exitedKeys.nodeOpIds.push(Number(i));
+        exitedKeys.keysCounts.push(Number(numExited));
       }
     }
   });
@@ -106,19 +96,33 @@ describe("Integration: AccountingOracle extra data", () => {
 
   async function submitMainReport() {
     const { nor } = ctx.contracts;
+    
+    // Split exitedKeys into two separate entries for different node operators to test chunking
+    const firstExitedKeys = {
+      moduleId: Number(MODULE_ID),
+      nodeOpIds: exitedKeys.nodeOpIds.length > 0 ? [exitedKeys.nodeOpIds[0]] : [],
+      keysCounts: exitedKeys.keysCounts.length > 0 ? [exitedKeys.keysCounts[0]] : [],
+    };
+    
+    const secondExitedKeys = {
+      moduleId: Number(MODULE_ID),
+      nodeOpIds: exitedKeys.nodeOpIds.length > 1 ? [exitedKeys.nodeOpIds[1]] : [],
+      keysCounts: exitedKeys.keysCounts.length > 1 ? [exitedKeys.keysCounts[1]] : [],
+    };
+    
     const extraData = prepareExtraData(
-      {
-        stuckKeys: [stuckKeys],
-        exitedKeys: [exitedKeys],
-      },
-      { maxItemsPerChunk: 1 },
+      { exitedKeys: [firstExitedKeys, secondExitedKeys] }, 
+      { maxItemsPerChunk: 1 } // This will create 2 chunks from 2 items
     );
 
     const { totalExitedValidators } = await nor.getStakingModuleSummary();
+    
+    // Add total exited validators for both entries
+    const totalNewExited = NUM_NEWLY_EXITED_VALIDATORS + 1n; // First operator has 1, second has 1
 
     return await reportWithoutExtraData(
       ctx,
-      [totalExitedValidators + NUM_NEWLY_EXITED_VALIDATORS],
+      [totalExitedValidators + totalNewExited],
       [NOR_MODULE_ID],
       extraData,
     );
@@ -129,10 +133,10 @@ describe("Integration: AccountingOracle extra data", () => {
 
     // Get initial summary
     const { totalExitedValidators } = await nor.getStakingModuleSummary();
-
+    
+    // Use both node operators with exited keys for a single chunk test
     const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = prepareExtraData({
-      stuckKeys: [stuckKeys],
-      exitedKeys: [exitedKeys],
+      exitedKeys: [exitedKeys], // Use all exitedKeys in one chunk
     });
     expect(extraDataChunks.length).to.equal(1);
     expect(extraDataChunkHashes.length).to.equal(1);
@@ -144,7 +148,7 @@ describe("Integration: AccountingOracle extra data", () => {
       extraDataHash: extraDataChunkHashes[0],
       extraDataItemsCount: BigInt(extraDataItemsCount),
       extraDataList: hexToBytes(extraDataChunks[0]),
-      numExitedValidatorsByStakingModule: [totalExitedValidators + NUM_NEWLY_EXITED_VALIDATORS],
+      numExitedValidatorsByStakingModule: [totalExitedValidators + NUM_NEWLY_EXITED_VALIDATORS + 1n], // Both operators
       stakingModuleIdsWithNewlyExitedValidators: [NOR_MODULE_ID],
     };
 
@@ -172,7 +176,7 @@ describe("Integration: AccountingOracle extra data", () => {
     expect(extraDataSubmittedEvents[0].args.itemsCount).to.equal(extraDataItemsCount);
 
     expect((await nor.getStakingModuleSummary()).totalExitedValidators).to.equal(
-      numExitedBefore + NUM_NEWLY_EXITED_VALIDATORS,
+      numExitedBefore + NUM_NEWLY_EXITED_VALIDATORS + 1n, // Both operators
     );
   });
 
