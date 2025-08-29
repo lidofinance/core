@@ -129,19 +129,11 @@ contract Accounting {
         Contracts memory contracts = _loadOracleReportContracts();
         if (msg.sender != contracts.accountingOracle) revert NotAuthorized("handleOracleReport", msg.sender);
 
-        (PreReportState memory pre, CalculatedValues memory update) = _calculateOracleReportContext(contracts, _report);
+        PreReportState memory pre = _snapshotPreReportState(contracts);
+
+        CalculatedValues memory update = _simulateOracleReport(contracts, pre, _report, _report.simulatedShareRate);
 
         _applyOracleReportContext(contracts, _report, pre, update);
-    }
-
-    /// @dev prepare all the required data to process the report
-    function _calculateOracleReportContext(
-        Contracts memory _contracts,
-        ReportValues calldata _report
-    ) internal view returns (PreReportState memory pre, CalculatedValues memory update) {
-        pre = _snapshotPreReportState(_contracts);
-
-        update = _simulateOracleReport(_contracts, pre, _report, _report.simulatedShareRate);
     }
 
     /// @dev reads the current state of the protocol to the memory
@@ -329,17 +321,6 @@ contract Accounting {
             _update.postInternalEther,
             _update.sharesToMintAsFees
         );
-
-        // Sanity check for the provided simulated share rate
-        if (_report.withdrawalFinalizationBatches.length != 0) {
-            _contracts.oracleReportSanityChecker.checkSimulatedShareRate(
-                _update.postTotalPooledEther,
-                _update.postTotalShares,
-                _update.etherToFinalizeWQ,
-                _update.totalSharesToBurn,
-                _report.simulatedShareRate
-            );
-        }
     }
 
     /// @dev checks the provided oracle data internally and against the sanity checker contract
@@ -370,6 +351,17 @@ contract Accounting {
             _contracts.oracleReportSanityChecker.checkWithdrawalQueueOracleReport(
                 _report.withdrawalFinalizationBatches[_report.withdrawalFinalizationBatches.length - 1],
                 _report.timestamp
+            );
+        }
+
+        // Sanity check for the provided simulated share rate
+        if (_report.withdrawalFinalizationBatches.length != 0) {
+            _contracts.oracleReportSanityChecker.checkSimulatedShareRate(
+                _update.postTotalPooledEther,
+                _update.postTotalShares,
+                _update.etherToFinalizeWQ,
+                _update.sharesToBurnForWithdrawals,
+                _report.simulatedShareRate
             );
         }
     }
