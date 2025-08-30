@@ -23,4 +23,6 @@ struct ReportValues {
     /// @notice the ascendingly-sorted array of withdrawal request IDs obtained by calling
     /// WithdrawalQueue.calculateFinalizationBatches. Can be empty array if no withdrawal to finalize
     uint256[] withdrawalFinalizationBatches;
+    /// @notice simulated share rate
+    uint256 simulatedShareRate;
 }

@@ -148,6 +148,7 @@ async function deployOracleReportSanityCheckerForAccounting(
       exitedValidatorsPerDayLimit,
       appearedValidatorsPerDayLimit,
       annualBalanceIncreaseBPLimit: 0n,
+      simulatedShareRateDeviationBPLimit: 0n,
       maxValidatorExitRequestsPerReport: 32n * 12n,
       maxItemsPerExtraDataTransaction: 15n,
       maxNodeOperatorsPerExtraDataItem: 16n,

@@ -74,6 +74,7 @@ describe("AccountingOracle.sol:accessControl", () => {
       elRewardsVaultBalance: ether("2"),
       sharesRequestedToBurn: ether("3"),
       withdrawalFinalizationBatches: [1],
+      simulatedShareRate: 10n ** 27n,
       isBunkerMode: true,
       vaultsDataTreeRoot: ethers.ZeroHash,
       vaultsDataTreeCid: "",

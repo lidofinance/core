@@ -373,6 +373,7 @@ export async function main() {
       sanityCheckerParams.exitedValidatorsPerDayLimit,
       sanityCheckerParams.appearedValidatorsPerDayLimit,
       sanityCheckerParams.annualBalanceIncreaseBPLimit,
+      sanityCheckerParams.simulatedShareRateDeviationBPLimit,
       sanityCheckerParams.maxValidatorExitRequestsPerReport,
       sanityCheckerParams.maxItemsPerExtraDataTransaction,
       sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
