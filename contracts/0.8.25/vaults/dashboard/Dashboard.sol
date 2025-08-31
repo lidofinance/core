@@ -182,7 +182,7 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns tha amount of ether that is locked on the vault only as a reserve.
+     * @notice Returns the amount of ether that is locked on the vault only as a reserve.
      * @dev There is no way to mint stETH for it (it includes connection deposit and slashing reserve)
      */
     function minimalReserve() public view returns (uint256) {

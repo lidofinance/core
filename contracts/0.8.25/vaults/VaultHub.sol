@@ -11,6 +11,7 @@ import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
+import {IPinnedBeaconProxy} from "./interfaces/IPinnedBeaconProxy.sol";
 
 import {OperatorGrid} from "./OperatorGrid.sol";
 import {LazyOracle} from "./LazyOracle.sol";
@@ -326,7 +327,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         IStakingVault vault_ = IStakingVault(_vault);
         if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
-        if (vault_.isOssified()) revert VaultOssified(_vault);
+        if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(_predepositGuarantee())) revert PDGNotDepositor(_vault);
 
         (

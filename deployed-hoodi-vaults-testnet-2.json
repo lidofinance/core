@@ -474,7 +474,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/LazyOracle.sol",
-      "address": "0x65c513a2EE3aadDb5F765bC6e16F33C12C5B8613",
+      "address": "0xf92D61574d81357A5E8A959b5eC7f4CA42C3b3ab",
       "constructorArgs": ["0xD7c1B80fA86965B48cCA3aDcCB08E1DAEa291980"]
     }
   },
@@ -643,6 +643,11 @@
       "0x26EDb7f0f223A25EE390aCCccb577F3a31edDfC5",
       [1500, 1500, 1000, 2000, 8, 24, 128, 5000000, 1000, 101, 50]
     ]
+  },
+  "pinnedBeaconProxy": {
+    "contract": "contracts/0.8.25/vaults/PinnedBeaconProxy.sol",
+    "address": "0x1B1370122Fce84DF7C6D81BFE4E8C5C0e87E36cB",
+    "constructorArgs": ["0x8de3b125221d07b44FCbd2CFD7354251858817B3", "0x"]
   },
   "predepositGuarantee": {
     "deployParameters": {
@@ -865,10 +870,5 @@
     "contract": "contracts/0.6.12/WstETH.sol",
     "address": "0x05F2927c5c2825BC0dCDc14d258a99A36116bE8B",
     "constructorArgs": ["0x2C220A2a91602dd93bEAC7b3A1773cdADE369ba1"]
-  },
-  "pinnedBeaconProxy": {
-    "contract": "contracts/0.8.25/vaults/PinnedBeaconProxy.sol",
-    "address": "0x1B1370122Fce84DF7C6D81BFE4E8C5C0e87E36cB",
-    "constructorArgs": ["0x8de3b125221d07b44FCbd2CFD7354251858817B3", "0x"]
   }
 }

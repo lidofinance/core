@@ -174,14 +174,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Returns whether the vault is ossified
-     * @return True if the vault is ossified, false otherwise
-     */
-    function isOssified() public view returns (bool) {
-        return PinnedBeaconUtils.ossified();
-    }
-
-    /**
      * @notice Returns the 0x02-type withdrawal credentials for the validators deposited from this `StakingVault`
      *         All consensus layer rewards are sent to this contract. Only 0x02-type withdrawal credentials are supported
      * @return Bytes32 value of the withdrawal credentials
@@ -460,8 +452,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @dev vault can't be connected to the hub after ossification
      */
     function ossify() external onlyOwner {
-        if (isOssified()) revert VaultOssified();
-
         PinnedBeaconUtils.ossify();
     }
 
