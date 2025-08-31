@@ -51,7 +51,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 shareLimit;
         // ### 2nd slot
-        /// @notice index of the vault in the list of vaults. Indexes is guaranteed to be stable only if there was no deletions.
+        /// @notice index of the vault in the list of vaults. Indexes are guaranteed to be stable only if there was no deletions.
         /// @dev vaultIndex is always greater than 0
         uint96 vaultIndex;
         /// @notice if true, vault is disconnected and fee is not accrued
@@ -205,7 +205,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice returns the vault address by its index
     /// @param _index index of the vault in the 1-based list of vaults. possible range [1, vaultsCount()]
-    /// @dev Indexes is guaranteed to be stable only in one transaction.
+    /// @dev Indexes are guaranteed to be stable only in one transaction.
     function vaultByIndex(uint256 _index) external view returns (address) {
         _requireNotZero(_index);
         return _storage().vaults[_index];
@@ -1338,7 +1338,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage _record
     ) internal view returns (uint256) {
         uint256 totalValue_ = _totalValue(_record);
-        // we only can withdraw funds that was witnessed by the Oracle
+        // we only can withdraw funds that were witnessed by the Oracle
         uint256 availableBalance = Math256.min(_vault.balance, totalValue_);
         // should be calculated before any deductions on the available balance
         uint256 clBalance = totalValue_ - availableBalance;
@@ -1355,7 +1355,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // 3. We can't withdraw funds that are locked on the vault
         uint256 locked_ = _record.locked;
-        if (redemptionValue > 0) { // if we covering redemptions by reserving some balance, we can unlock it's value
+        if (redemptionValue > 0) { // if we are covering redemptions by reserving some balance, we can unlock it's value
             locked_ -= redemptionValue;
         }
         uint256 lockedELBalance = locked_ > clBalance ? locked_ - clBalance : 0;

@@ -666,7 +666,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _recipient Address to receive the minted shares
      * @param _amountOfShares Amount of shares to mint
      * @dev Can be called only by VaultHub
-     *      NB: Reverts if the the external balance limit is exceeded.
+     *      NB: Reverts if the external balance limit is exceeded.
      */
     function mintExternalShares(address _recipient, uint256 _amountOfShares) external {
         require(_recipient != address(0), "MINT_RECEIVER_ZERO_ADDRESS");

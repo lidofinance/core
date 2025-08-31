@@ -259,7 +259,7 @@ contract StETH is IERC20, Pausable {
      *
      * Requirements:
      *
-     * - `_spender` cannot be the the zero address.
+     * - `_spender` cannot be the zero address.
      */
     function increaseAllowance(address _spender, uint256 _addedValue) external returns (bool) {
         _approve(msg.sender, _spender, allowances[msg.sender][_spender].add(_addedValue));

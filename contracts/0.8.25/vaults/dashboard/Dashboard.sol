@@ -340,7 +340,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Mints stETH tokens backed by the vault to the recipient.
-     * !NB: this will revert with`VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
+     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
      * @param _recipient Address of the recipient
      * @param _amountOfStETH Amount of stETH to mint
      */
