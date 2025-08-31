@@ -87,7 +87,7 @@ contract VaultHub is PausableUntilWithRoles {
         // ### 5th slot
         /// @notice the minimal value that the reserve part of the locked can be
         uint128 minimalReserve;
-        /// @notice amount of liability shares that are set as the Lido Core redemptions
+        /// @notice part of liability shares reserved to be burned as Lido core redemptions
         uint128 redemptionShares;
         // ### 6th slot
         /// @notice cumulative value for Lido fees that accrued on the vault
@@ -262,7 +262,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @return the amount of Lido fees that currently can be settled.
     ///         Even if vault's balance is sufficient to cover the fees, some amount may be blocked for redemptions,
-    ///         locked ether, or some amount may be non-transferable to not to make the vault unhealthy
+    ///         or locked ether
     /// @dev returns 0 if the vault is not connected
     function settleableLidoFeesValue(address _vault) external view returns (uint256) {
         VaultRecord storage record = _vaultRecord(_vault);
@@ -362,7 +362,7 @@ contract VaultHub is PausableUntilWithRoles {
         });
     }
 
-    /// @notice updates a redemption shares on the vault to force liability rebalance under extreme conditions
+    /// @notice updates a redemption shares on the vault
     /// @param _vault The address of the vault
     /// @param _liabilitySharesTarget maximum amount of liability shares that will be preserved, the rest will be
     ///                               marked as redemption shares
@@ -1337,25 +1337,27 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage _record
     ) internal view returns (uint256) {
         uint256 totalValue_ = _totalValue(_record);
-        // need to cap to prevent for gift withdrawals (MEV)
+        // we only can withdraw funds that was witnessed by the Oracle
         uint256 availableBalance = Math256.min(_vault.balance, totalValue_);
         // should be calculated before any deductions on the available balance
         uint256 clBalance = totalValue_ - availableBalance;
 
-        // 1. Decrease the available balance (and the locked value, see below) by the redemptions value
+        // 1. We can't withdraw funds that can be used to fulfill redemptions
         uint256 redemptionValue = _getPooledEthBySharesRoundUp(_record.redemptionShares);
         if (redemptionValue > availableBalance) return 0;
         availableBalance -= redemptionValue;
 
-        // 2. Subtract the unsettled fees value from the available balance
+        // 2. We can't withdraw funds that can be used to settle Lido fees
         uint256 unsettledLidoFeesValue = _unsettledLidoFeesValue(_record);
         if (unsettledLidoFeesValue > availableBalance) return 0;
         availableBalance -= unsettledLidoFeesValue;
 
-        // 3. Subtract the locked (minus the redemptions value, see above) value from the balance on EL taking into
-        //    account that part of the locked value is on the consensus layer
-        uint256 lockedWithoutRedemptions = _record.locked - redemptionValue;
-        uint256 lockedELBalance = lockedWithoutRedemptions > clBalance ? lockedWithoutRedemptions - clBalance : 0;
+        // 3. We can't withdraw funds that are locked on the vault
+        uint256 locked_ = _record.locked;
+        if (redemptionValue > 0) { // if we covering redemptions by reserving some balance, we can unlock it's value
+            locked_ -= redemptionValue;
+        }
+        uint256 lockedELBalance = locked_ > clBalance ? locked_ - clBalance : 0;
         return lockedELBalance > availableBalance ? 0 : availableBalance - lockedELBalance;
     }
 
