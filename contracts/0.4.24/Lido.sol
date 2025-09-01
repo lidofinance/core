@@ -159,7 +159,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 postBufferedEther
     );
 
-    // Emitted when the token is rebased (an oracle report is delivered)
+    // Emitted when the token is rebased (an accounting oracle report is delivered)
     event TokenRebased(
         uint256 indexed reportTimestamp,
         uint256 timeElapsed,
@@ -194,7 +194,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     );
 
     // External shares minted for receiver
-    event ExternalSharesMinted(address indexed receiver, uint256 amountOfShares, uint256 amountOfStETH);
+    event ExternalSharesMinted(address indexed receiver, uint256 amountOfShares);
 
     // External shares burned for account
     event ExternalSharesBurnt(uint256 amountOfShares);
@@ -242,11 +242,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _checkContractVersion(2);
         _setContractVersion(3);
 
-        _migrateStorage();
-        _migrateBurner(_oldBurner, _contractsWithBurnerAllowances);
+        _migrateStorage_v2_to_v3();
+        _migrateBurner_v3_to_v3(_oldBurner, _contractsWithBurnerAllowances);
     }
 
-    function _migrateStorage() internal {
+    function _migrateStorage_v2_to_v3() internal {
         // migrate storage to packed representation
         bytes32 LIDO_LOCATOR_POSITION = keccak256("lido.Lido.lidoLocator");
         _setLidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
@@ -274,7 +274,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         TOTAL_SHARES_POSITION.setStorageUint256(0);
     }
 
-    function _migrateBurner(address _oldBurner, address[] _contractsWithBurnerAllowances) internal {
+    function _migrateBurner_v3_to_v3(address _oldBurner, address[] _contractsWithBurnerAllowances) internal {
         require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
         address burner = _getLidoLocator().burner();
         require(_oldBurner != burner, "OLD_BURNER_SAME_AS_NEW");
@@ -699,7 +699,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _mintShares(_recipient, _amountOfShares);
         _emitTransferAfterMintingShares(_recipient, _amountOfShares);
 
-        emit ExternalSharesMinted(_recipient, _amountOfShares, getPooledEthByShares(_amountOfShares));
+        emit ExternalSharesMinted(_recipient, _amountOfShares);
     }
 
     /**
@@ -883,8 +883,15 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @param _postInternalShares the total number of internal shares before the oracle report tx
      * @param _postInternalEther the total amount of internal ether after the oracle tx
      * @param _sharesMintedAsFees the number of shares minted to pay fees to Lido and StakingModules
-     * @dev this events are used to calculate protocol APR
+     * @dev these events are used to calculate protocol gross (without protocol fess deducted) and net APR (StETH APR)
      *
+     *      preShareRate = preTotalEther * 1e27 / preTotalShares
+     *      postShareRate = postTotalEther * 1e27 / postTotalShares
+     *      NET_APR = SECONDS_IN_YEAR * ((postShareRate - preShareRate) / preShareRate) / timeElapsed
+     *      postShareRateNoFees = postInternalEther * 1e27 / (postInternalShares - sharesMintedAsFees)
+     *      GROSS_APR = SECONDS_IN_YEAR * (postShareRateNoFees - preShareRate) / preShareRate / timeElapsed
+     *
+     *      to be ex
      */
     function emitTokenRebase(
         uint256 _reportTimestamp,

@@ -112,7 +112,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
         .to.emit(lido, "TransferShares")
         .withArgs(ZeroAddress, stranger, testSharesAmountWei)
         .to.emit(lido, "ExternalSharesMinted")
-        .withArgs(stranger, testSharesAmountWei, await lido.getPooledEthByShares(testSharesAmountWei))
+        .withArgs(stranger, testSharesAmountWei)
         .to.emit(vaultHub, "MintedSharesOnVault")
         .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + TEST_STETH_AMOUNT_WEI);
     });

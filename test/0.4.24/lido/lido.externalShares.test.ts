@@ -229,7 +229,7 @@ describe("Lido.sol:externalShares", () => {
         .to.emit(lido, "TransferShares")
         .withArgs(ZeroAddress, whale, sharesToMint)
         .to.emit(lido, "ExternalSharesMinted")
-        .withArgs(whale, sharesToMint, etherToMint);
+        .withArgs(whale, sharesToMint);
 
       // Verify external balance was increased
       const externalEther = await lido.getExternalEther();
@@ -256,7 +256,7 @@ describe("Lido.sol:externalShares", () => {
         .to.emit(lido, "TransferShares")
         .withArgs(ZeroAddress, whale, maxMintableShares)
         .to.emit(lido, "ExternalSharesMinted")
-        .withArgs(whale, maxMintableShares, etherToMint);
+        .withArgs(whale, maxMintableShares);
 
       // Verify external balance was increased to the maximum mintable amount
       const initiallyMintedEther = await lido.getPooledEthByShares(sharesToMintInitially);
