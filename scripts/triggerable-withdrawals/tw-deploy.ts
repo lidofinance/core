@@ -112,8 +112,8 @@ async function main(): Promise<void> {
   const BLOCK_ROOT_IN_SUMMARY_PREV_GINDEX = "0x000000000000000000000000000000000000000000000000000000000040000d";
   const BLOCK_ROOT_IN_SUMMARY_CURR_GINDEX = BLOCK_ROOT_IN_SUMMARY_PREV_GINDEX;
 
-  const FIRST_SUPPORTED_SLOT = 1;
-  const PIVOT_SLOT = 1;
+  const FIRST_SUPPORTED_SLOT = 364032 * SLOTS_PER_EPOCH; // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7600.md#activation
+  const PIVOT_SLOT = FIRST_SUPPORTED_SLOT;
   const CAPELLA_SLOT = 194048 * 32; // capellaSlot @see https://github.com/ethereum/consensus-specs/blob/365320e778965631cbef11fd93328e82a746b1f6/specs/capella/fork.md?plain=1#L22
   const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
