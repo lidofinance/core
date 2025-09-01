@@ -226,7 +226,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         _setContractVersion(3);
 
-        _approve(_getLidoLocator().withdrawalQueue(), _getLidoLocator().burner(), INFINITE_ALLOWANCE);
+        ILidoLocator locator = ILidoLocator(_lidoLocator);
+
+        _approve(_withdrawalQueue(locator), _burner(locator), INFINITE_ALLOWANCE);
         initialized();
     }
 
@@ -243,12 +245,16 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _setContractVersion(3);
 
         _migrateStorage_v2_to_v3();
-        _migrateBurner_v3_to_v3(_oldBurner, _contractsWithBurnerAllowances);
+
+        _migrateBurner_v2_to_v3(_oldBurner, _contractsWithBurnerAllowances);
     }
 
     function _migrateStorage_v2_to_v3() internal {
         // migrate storage to packed representation
         bytes32 LIDO_LOCATOR_POSITION = keccak256("lido.Lido.lidoLocator");
+        address locator = LIDO_LOCATOR_POSITION.getStorageAddress();
+        assert(locator != address(0)); // sanity check
+
         _setLidoLocator(LIDO_LOCATOR_POSITION.getStorageAddress());
         LIDO_LOCATOR_POSITION.setStorageUint256(0);
 
@@ -270,20 +276,25 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         CL_VALIDATORS_POSITION.setStorageUint256(0);
 
         bytes32 TOTAL_SHARES_POSITION = keccak256("lido.StETH.totalShares");
-        TOTAL_AND_EXTERNAL_SHARES_POSITION.setLowUint128(TOTAL_SHARES_POSITION.getStorageUint256());
+        uint256 totalShares = TOTAL_SHARES_POSITION.getStorageUint256();
+        assert(totalShares > 0); // sanity check
+        TOTAL_AND_EXTERNAL_SHARES_POSITION.setLowUint128(totalShares);
         TOTAL_SHARES_POSITION.setStorageUint256(0);
     }
 
-    function _migrateBurner_v3_to_v3(address _oldBurner, address[] _contractsWithBurnerAllowances) internal {
+    function _migrateBurner_v2_to_v3(
+        address _oldBurner,
+        address[] _contractsWithBurnerAllowances
+    ) internal {
         require(_oldBurner != address(0), "OLD_BURNER_ADDRESS_ZERO");
-        address burner = _getLidoLocator().burner();
+        address burner = _burner();
         require(_oldBurner != burner, "OLD_BURNER_SAME_AS_NEW");
+
         // migrate burner stETH balance
         uint256 oldBurnerShares = _sharesOf(_oldBurner);
         if (oldBurnerShares > 0) {
-            uint256 oldBurnerBalance = getPooledEthByShares(oldBurnerShares);
             _transferShares(_oldBurner, burner, oldBurnerShares);
-            _emitTransferEvents(_oldBurner, burner, oldBurnerBalance, oldBurnerShares);
+            _emitTransferEvents(_oldBurner, burner, getPooledEthByShares(oldBurnerShares), oldBurnerShares);
         }
 
         // initialize new burner with state from the old burner
@@ -473,7 +484,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * are treated as a user deposit
      */
     function receiveELRewards() external payable {
-        require(msg.sender == _getLidoLocator().elRewardsVault());
+        _auth(_elRewardsVault());
 
         TOTAL_EL_REWARDS_COLLECTED_POSITION.setStorageUint256(getTotalELRewardsCollected().add(msg.value));
 
@@ -486,7 +497,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * are treated as a user deposit
      */
     function receiveWithdrawals() external payable {
-        require(msg.sender == _getLidoLocator().withdrawalVault());
+        _auth(_withdrawalVault());
 
         emit WithdrawalsReceived(msg.value);
     }
@@ -622,7 +633,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
         require(canDeposit(), "CAN_NOT_DEPOSIT");
 
-        IStakingRouter stakingRouter = IStakingRouter(locator.stakingRouter());
+        IStakingRouter stakingRouter = _stakingRouter(locator);
         uint256 depositsCount = Math256.min(
             _maxDepositsCount,
             stakingRouter.getStakingModuleMaxDepositsCount(_stakingModuleId, getDepositableEther())
@@ -655,7 +666,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev can be called only by accounting
      */
     function mintShares(address _recipient, uint256 _amountOfShares) external {
-        _auth(_getLidoLocator().accounting());
+        _auth(_accounting());
         _whenNotStopped();
 
         _mintShares(_recipient, _amountOfShares);
@@ -668,7 +679,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * @dev can be called only by burner
      */
     function burnShares(uint256 _amountOfShares) external {
-        _auth(_getLidoLocator().burner());
+        _auth(_burner());
         _whenNotStopped();
 
         uint256 preRebaseTokenAmount = getPooledEthByShares(_amountOfShares);
@@ -689,7 +700,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function mintExternalShares(address _recipient, uint256 _amountOfShares) external {
         require(_amountOfShares != 0, "MINT_ZERO_AMOUNT_OF_SHARES");
-        _auth(_getLidoLocator().vaultHub());
+        _auth(_vaultHub());
         _whenNotStopped();
 
         require(_amountOfShares <= _getMaxMintableExternalShares(), "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
@@ -709,7 +720,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function burnExternalShares(uint256 _amountOfShares) external {
         require(_amountOfShares != 0, "BURN_ZERO_AMOUNT_OF_SHARES");
-        _auth(_getLidoLocator().vaultHub());
+        _auth(_vaultHub());
         _whenNotStopped();
 
         uint256 externalShares = _getExternalShares();
@@ -737,7 +748,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function rebalanceExternalEtherToInternal() external payable {
         require(msg.value != 0, "ZERO_VALUE");
-        _auth(_getLidoLocator().vaultHub());
+        _auth(_vaultHub());
         _whenNotStopped();
 
         uint256 amountOfShares = getSharesByPooledEth(msg.value);
@@ -773,7 +784,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _reportClBalance
     ) external {
         _whenNotStopped();
-        _auth(_getLidoLocator().accounting());
+        _auth(_accounting());
 
         // Save the current CL balance and validators to
         // calculate rewards on the next rebase
@@ -790,7 +801,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function internalizeExternalBadDebt(uint256 _amountOfShares) external {
         require(_amountOfShares != 0, "BAD_DEBT_ZERO_SHARES");
         _whenNotStopped();
-        _auth(_getLidoLocator().accounting());
+        _auth(_accounting());
 
         uint256 externalShares = _getExternalShares();
 
@@ -835,21 +846,21 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _whenNotStopped();
 
         ILidoLocator locator = _getLidoLocator();
-        _auth(locator.accounting());
+        _auth(_accounting(locator));
 
         // withdraw execution layer rewards and put them to the buffer
         if (_elRewardsToWithdraw > 0) {
-            ILidoExecutionLayerRewardsVault(locator.elRewardsVault()).withdrawRewards(_elRewardsToWithdraw);
+            _elRewardsVault(locator).withdrawRewards(_elRewardsToWithdraw);
         }
 
         // withdraw withdrawals and put them to the buffer
         if (_withdrawalsToWithdraw > 0) {
-            IWithdrawalVault(locator.withdrawalVault()).withdrawWithdrawals(_withdrawalsToWithdraw);
+            _withdrawalVault(locator).withdrawWithdrawals(_withdrawalsToWithdraw);
         }
 
         // finalize withdrawals (send ether, assign shares for burning)
         if (_etherToLockOnWithdrawalQueue > 0) {
-            IWithdrawalQueue(locator.withdrawalQueue()).finalize.value(_etherToLockOnWithdrawalQueue)(
+            _withdrawalQueue(locator).finalize.value(_etherToLockOnWithdrawalQueue)(
                 _lastWithdrawalRequestToFinalize,
                 _withdrawalsShareRate
             );
@@ -904,7 +915,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         uint256 _postInternalEther,
         uint256 _sharesMintedAsFees
     ) external {
-        _auth(_getLidoLocator().accounting());
+        _auth(_accounting());
 
         emit TokenRebased(
             _reportTimestamp,
@@ -917,6 +928,13 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         );
 
         emit InternalShareRateUpdated(_reportTimestamp, _postInternalShares, _postInternalEther, _sharesMintedAsFees);
+    }
+
+    /**
+     * @notice Overrides default AragonApp behavior to disallow recovery.
+     */
+    function transferToVault(address /* _token */) external {
+        revert("NOT_SUPPORTED");
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -978,12 +996,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         operatorsFeeBasisPoints = uint16((operatorsFeeBasisPointsAbs * totalBasisPoints) / totalFee);
     }
 
-    /**
-     * @notice Overrides default AragonApp behavior to disallow recovery.
-     */
-    function transferToVault(address /* _token */) external {
-        revert("NOT_SUPPORTED");
-    }
 
     /// @dev Process user deposit, mint liquid tokens and increase the pool buffer
     /// @param _referral address of referral.
@@ -1127,12 +1139,56 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         require(msg.sender == _address, "APP_AUTH_FAILED");
     }
 
+    function _stakingRouter(ILidoLocator _locator) internal view returns (IStakingRouter) {
+        return IStakingRouter(_locator.stakingRouter());
+    }
+
     function _stakingRouter() internal view returns (IStakingRouter) {
-        return IStakingRouter(_getLidoLocator().stakingRouter());
+        return _stakingRouter(_getLidoLocator());
+    }
+
+    function _withdrawalQueue(ILidoLocator _locator) internal view returns (IWithdrawalQueue) {
+        return IWithdrawalQueue(_locator.withdrawalQueue());
     }
 
     function _withdrawalQueue() internal view returns (IWithdrawalQueue) {
-        return IWithdrawalQueue(_getLidoLocator().withdrawalQueue());
+        return _withdrawalQueue(_getLidoLocator());
+    }
+
+    function _vaultHub() internal view returns (address) {
+        return _getLidoLocator().vaultHub();
+    }
+
+    function _burner(ILidoLocator _locator) internal view returns (address) {
+        return _locator.burner();
+    }
+
+    function _burner() internal view returns (address) {
+        return _getLidoLocator().burner();
+    }
+
+    function _accounting(ILidoLocator _locator) internal view returns (address) {
+        return _locator.accounting();
+    }
+
+    function _accounting() internal view returns (address) {
+        return _accounting(_getLidoLocator());
+    }
+
+    function _elRewardsVault(ILidoLocator _locator) internal view returns (ILidoExecutionLayerRewardsVault) {
+        return ILidoExecutionLayerRewardsVault(_locator.elRewardsVault());
+    }
+
+    function _elRewardsVault() internal view returns (address) {
+        return address(_elRewardsVault(_getLidoLocator()));
+    }
+
+    function _withdrawalVault(ILidoLocator _locator) internal view returns (IWithdrawalVault) {
+        return IWithdrawalVault(_locator.withdrawalVault());
+    }
+
+    function _withdrawalVault() internal view returns (address) {
+        return address(_withdrawalVault(_getLidoLocator()));
     }
 
     /// @notice Mints shares on behalf of 0xdead address,
