@@ -821,13 +821,13 @@ contract VaultHub is PausableUntilWithRoles {
         if (minPartialAmountInGwei < type(uint256).max) {
             _requireFreshReport(_vault, record);
 
-            /// @dev NB: Disallow partial withdrawals when the vault is unhealthy or has obligations over the threshold
+            /// @dev NB: Disallow partial withdrawals when the vault is unhealthy or has uncovered obligations
             ///          in order to prevent the vault owner from clogging the consensus layer withdrawal queue
             ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
             ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
-            ///          settle redemptions
-            uint256 minPartialWithdrawalAmount = _minPartialWithdrawalAmount(_vault, connection, record);
-            if (minPartialWithdrawalAmount > 0 && minPartialAmountInGwei * 1e9 < minPartialWithdrawalAmount) {
+            ///          settle outstanding redemptions and Lido fees
+            uint256 uncoveredObligations = _uncoveredObligations(_vault, connection, record);
+            if (uncoveredObligations > 0 && minPartialAmountInGwei * 1e9 < uncoveredObligations) {
                 revert PartialValidatorWithdrawalNotAllowed();
             }
         }
@@ -851,8 +851,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 minPartialWithdrawalAmount = _minPartialWithdrawalAmount(_vault, connection, record);
-        if (minPartialWithdrawalAmount == 0) revert ForcedValidatorExitNotAllowed();
+        uint256 uncoveredObligations = _uncoveredObligations(_vault, connection, record);
+        if (uncoveredObligations == 0) revert ForcedValidatorExitNotAllowed();
 
         uint64[] memory amountsInGwei = new uint64[](0);
         _triggerVaultValidatorWithdrawals(_vault, msg.value, _pubkeys, amountsInGwei, _refundRecipient);
@@ -1202,7 +1202,7 @@ contract VaultHub is PausableUntilWithRoles {
         return liability > _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
     }
 
-    function _minPartialWithdrawalAmount(
+    function _uncoveredObligations(
         address _vault,
         VaultConnection storage _connection,
         VaultRecord storage _record
@@ -1322,8 +1322,8 @@ contract VaultHub is PausableUntilWithRoles {
         return Math256.min(Math256.min(unlocked, _vault.balance), _feesToSettle);
     }
 
-    /// @notice the amount of ether that can be instantly withdrawn from the vault based on the available balance
-    ///         this amount already accounts locked value and unsettled obligations
+    /// @notice the amount of ether that can be instantly withdrawn from the vault based on the available balance,
+    ///         locked value and outstanding redemptions and Lido fees
     function _withdrawableValue(
         address _vault,
         VaultRecord storage _record

@@ -544,6 +544,71 @@ describe("VaultHub.sol:withdrawal", () => {
       expect(balanceAfter - balanceBefore).to.equal(precisionAmount);
       expect(await vaultHub.withdrawableValue(connectedVault)).to.equal(mod);
     });
+
+    context("dynamic tests", () => {
+      const testCases = [
+        {
+          name: "TV: 10, balance: 20, cumulativeLidoFees: 0, liabilityShares: 8, liabilitySharesTarget: 7, expectedWithdrawable: 3",
+          totalValue: ether("10"),
+          balance: ether("20"),
+          cumulativeLidoFees: 0n,
+          liabilityShares: ether("8"),
+          liabilitySharesTarget: ether("7"),
+          expectedWithdrawable: ether("1"),
+        },
+        {
+          name: "TV: 10, balance: 3, cumulativeLidoFees: 0, liabilityShares: 8, liabilitySharesTarget: 7, expectedWithdrawable: 2",
+          totalValue: ether("10"),
+          balance: ether("3"),
+          cumulativeLidoFees: 0n,
+          liabilityShares: ether("8"),
+          liabilitySharesTarget: ether("7"),
+          expectedWithdrawable: ether("1"),
+        },
+        {
+          name: "TV: 10, balance: 11, cumulativeLidoFees: 0, liabilityShares: 8, liabilitySharesTarget: 7, expectedWithdrawable: 2",
+          totalValue: ether("10"),
+          balance: ether("11"),
+          cumulativeLidoFees: 0n,
+          liabilityShares: ether("7"),
+          liabilitySharesTarget: ether("6"),
+          expectedWithdrawable: ether("2"),
+        },
+        {
+          name: "TV: 10, balance: 11, cumulativeLidoFees: 1, liabilityShares: 8, liabilitySharesTarget: 7, expectedWithdrawable: 2",
+          totalValue: ether("10"),
+          balance: ether("11"),
+          cumulativeLidoFees: ether("1"),
+          liabilityShares: ether("7"),
+          liabilitySharesTarget: ether("6"),
+          expectedWithdrawable: ether("1"),
+        },
+      ];
+
+      for (let i = 0; i < testCases.length; i++) {
+        const testCase = testCases[i];
+        it(`dynamic test case ${i + 1} - ${testCase.name}`, async () => {
+          await connectedVault.connect(user).fund({ value: testCase.totalValue });
+          await vaultsContext.reportVault({
+            vault: connectedVault,
+            totalValue: testCase.totalValue,
+            cumulativeLidoFees: testCase.cumulativeLidoFees,
+          });
+
+          if (testCase.liabilityShares) {
+            await vaultHub.connect(user).mintShares(connectedVault, user, testCase.liabilityShares);
+            await vaultHub
+              .connect(redemptionMaster)
+              .setLiabilitySharesTarget(connectedVault, testCase.liabilitySharesTarget);
+          }
+
+          await setBalance(await connectedVault.getAddress(), testCase.balance);
+
+          const withdrawable = await vaultHub.withdrawableValue(connectedVault);
+          expect(withdrawable).to.equal(testCase.expectedWithdrawable);
+        });
+      }
+    });
   });
 
   context("withdrawal state transitions", () => {
