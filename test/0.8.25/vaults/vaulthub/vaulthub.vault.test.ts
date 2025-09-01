@@ -621,8 +621,15 @@ describe("VaultHub.sol:owner-functions", () => {
       await vaultHub.connect(vaultOwner).setLiabilitySharesTarget(vaultAddress, 0n);
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.be.revertedWithCustomError(vaultHub, "ObligationsTooHighCannotDeposit")
-        .withArgs(vaultAddress, ether("8.5"), 0n);
+        .to.be.revertedWithCustomError(vaultHub, "HasRedemptionsCannotDeposit")
+        .withArgs(vaultAddress);
+    });
+
+    it("reverts when vault has unsettled lido fees over minimum beacon deposit", async () => {
+      await reportVault({ totalValue: ether("10"), cumulativeLidoFees: ether("10") });
+      await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
+        .to.be.revertedWithCustomError(vaultHub, "FeesTooHighCannotDeposit")
+        .withArgs(vaultAddress);
     });
 
     it("reverts when called by non-owner", async () => {

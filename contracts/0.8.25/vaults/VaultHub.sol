@@ -773,14 +773,9 @@ contract VaultHub is PausableUntilWithRoles {
         if (!connection.isBeaconDepositsManuallyPaused) revert PausedExpected();
 
         VaultRecord storage record = _vaultRecord(_vault);
+        if (record.redemptionShares > 0) revert HasRedemptionsCannotDeposit(_vault);
+        if (_unsettledLidoFeesValue(record) >= MIN_BEACON_DEPOSIT) revert FeesTooHighCannotDeposit(_vault);
         if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
-        if (_obligationsTooHigh(record)) {
-            revert ObligationsTooHighCannotDeposit({
-                vault: _vault,
-                redemptionShares: record.redemptionShares,
-                unsettledLidoFees: _unsettledLidoFeesValue(record)
-            });
-        }
 
         connection.isBeaconDepositsManuallyPaused = false;
         emit BeaconChainDepositsResumedByOwner(_vault);
@@ -1205,12 +1200,6 @@ contract VaultHub is PausableUntilWithRoles {
         return liability > _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
     }
 
-    function _obligationsTooHigh(
-        VaultRecord storage _record
-    ) internal view returns (bool) {
-        return _record.redemptionShares > 0 || _unsettledLidoFeesValue(_record) >= MIN_BEACON_DEPOSIT;
-    }
-
     function _minPartialWithdrawalAmount(
         address _vault,
         VaultConnection storage _connection,
@@ -1290,7 +1279,15 @@ contract VaultHub is PausableUntilWithRoles {
     ) internal {
         IStakingVault vault_ = IStakingVault(_vault);
 
-        if (!_isVaultHealthy(_connection, _record) || _obligationsTooHigh(_record)) {
+        // automatically pause beacon chain deposits:
+        if (
+            // if vault has unsettled redemptions
+            _record.redemptionShares > 0 ||
+            // if vault has unsettled lido fees to avoid indefinitely deferred fees
+            _unsettledLidoFeesValue(_record) >= MIN_BEACON_DEPOSIT ||
+            // if vault is not healthy, to disallow pushing funds to beacon chain instead of rebalancing
+            !_isVaultHealthy(_connection, _record)
+        ) {
             _pauseBeaconChainDepositsIfNotAlready(vault_);
         } else if (!_connection.isBeaconDepositsManuallyPaused) {
             _resumeBeaconChainDepositsIfNotAlready(vault_);
@@ -1607,8 +1604,9 @@ contract VaultHub is PausableUntilWithRoles {
     error PDGNotDepositor(address vault);
     error ZeroCodehash();
     error VaultHubNotPendingOwner(address vault);
+    error HasRedemptionsCannotDeposit(address vault);
+    error FeesTooHighCannotDeposit(address vault);
     error UnhealthyVaultCannotDeposit(address vault);
-    error ObligationsTooHighCannotDeposit(address vault, uint256 redemptionShares, uint256 unsettledLidoFees);
     error VaultIsDisconnecting(address vault);
     error PartialValidatorWithdrawalNotAllowed();
     error ForcedValidatorExitNotAllowed();
