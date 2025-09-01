@@ -365,8 +365,10 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice updates a redemption shares on the vault
     /// @param _vault The address of the vault
-    /// @param _liabilitySharesTarget maximum amount of liability shares that will be preserved, the rest will be
-    ///                               marked as redemption shares
+    /// @param _liabilitySharesTarget maximum amount of liabilityShares that will be preserved, the rest will be
+    ///         marked as redemptionShares. If value is greater than liabilityShares, redemptionShares are set to 0
+    /// @dev NB: Crisis mechanism triggered when Lido core protocol liquidity <= vault TVL. Forces emergency liquidity
+    ///         extraction from vaults to maintain withdrawal queue solvency during systemic stress events.
     function setLiabilitySharesTarget(address _vault, uint256 _liabilitySharesTarget) external onlyRole(REDEMPTION_MASTER_ROLE) {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
@@ -870,7 +872,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (availableBalance == 0) revert NoFundsForForceRebalance(_vault);
 
         uint256 sharesToRebalance = Math256.min(
-            _sharesToCoverForRebalance(connection, record),
+            Math256.max(_rebalanceShortfallShares(connection, record), record.redemptionShares),
             _getSharesByPooledEth(availableBalance)
         );
 
@@ -1205,7 +1207,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
-        uint256 sharesToCover = _sharesToCoverForRebalance(_connection, _record);
+        uint256 sharesToCover = Math256.max(_rebalanceShortfallShares(_connection, _record), _record.redemptionShares);
         if (sharesToCover == type(uint256).max) return type(uint256).max;
 
         // no need to cover fees if they are less than the minimum beacon deposit
@@ -1214,14 +1216,6 @@ contract VaultHub is PausableUntilWithRoles {
 
         uint256 amountToCover = _getPooledEthBySharesRoundUp(sharesToCover) + feesToCover;
         return amountToCover > _vault.balance ? amountToCover - _vault.balance : 0;
-    }
-
-    /// @dev Returns the amount of shares that can cover the rebalance shortfall and redemption obligations
-    function _sharesToCoverForRebalance(
-        VaultConnection storage _connection,
-        VaultRecord storage _record
-    ) internal view returns (uint256) {
-        return Math256.max(_rebalanceShortfallShares(_connection, _record), _record.redemptionShares);
     }
 
     function _addVault(address _vault, VaultConnection memory _connection, VaultRecord memory _record) internal {
