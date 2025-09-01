@@ -90,7 +90,7 @@ describe("Lido.sol:initialize", () => {
     });
 
     it("Does not bootstrap initial holder if total shares is not zero", async () => {
-      const totalSharesSlot = streccak("lido.StETH.totalShares");
+      const totalSharesSlot = streccak("lido.StETH.totalAndExternalShares");
       await setStorageAt(await lido.getAddress(), totalSharesSlot, 1n);
 
       await expect(lido.initialize(locator, eip712helperAddress, { value: initialValue }))

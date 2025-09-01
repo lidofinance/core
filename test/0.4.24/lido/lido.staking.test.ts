@@ -34,6 +34,7 @@ describe("Lido.sol:staking", () => {
     await acl.createPermission(user, lido, await lido.PAUSE_ROLE(), deployer);
 
     lido = lido.connect(user);
+    await lido.resume();
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));

@@ -8,7 +8,8 @@ import {IERC20} from "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 import {UnstructuredStorage} from "@aragon/os/contracts/common/UnstructuredStorage.sol";
 import {SafeMath} from "@aragon/os/contracts/lib/math/SafeMath.sol";
 import {Pausable} from "./utils/Pausable.sol";
-import {UnstructuredStorageUint128} from "./utils/UnstructuredStorageUint128.sol";
+import {UnstructuredStorageExt} from "./utils/UnstructuredStorageExt.sol";
+import {Math256} from "../common/lib/Math256.sol";
 
 /**
  * @title Interest-bearing ERC20-like token for Lido Liquid Stacking protocol.
@@ -50,7 +51,7 @@ import {UnstructuredStorageUint128} from "./utils/UnstructuredStorageUint128.sol
 contract StETH is IERC20, Pausable {
     using SafeMath for uint256;
     using UnstructuredStorage for bytes32;
-    using UnstructuredStorageUint128 for bytes32;
+    using UnstructuredStorageExt for bytes32;
 
     address constant internal INITIAL_TOKEN_HOLDER = 0xdead;
     uint256 constant internal INFINITE_ALLOWANCE = ~uint256(0);
@@ -84,12 +85,12 @@ contract StETH is IERC20, Pausable {
      * and error-prone to implement reference-type unstructured storage using Solidity v0.4;
      * see https://github.com/lidofinance/lido-dao/issues/181#issuecomment-736098834
      *
-     * keccak256("lido.StETH.totalShares")
+     * keccak256("lido.StETH.totalAndExternalShares")
      *
      * @dev Since version 3, high 128 bits can be used to store the external shares from Lido contract
      */
-    bytes32 internal constant TOTAL_SHARES_POSITION =
-        0xe3b4b636e601189b5f4c6742edf2538ac12bb61ed03e6da26949d69838fa447e;
+    bytes32 internal constant TOTAL_SHARES_POSITION_LOW128 =
+        0x6038150aecaa250d524370a0fdcdec13f2690e0723eaf277f41d7cae26b359e6;
 
     /**
       * @notice An executed shares transfer from `sender` to `recipient`.
@@ -333,18 +334,12 @@ contract StETH is IERC20, Pausable {
      * @dev The result is rounded up. So,
      *  for `shareRate >= 0.5`, `getSharesByPooledEth(getPooledEthBySharesRoundUp(1))` will be 1.
      */
-    function getPooledEthBySharesRoundUp(uint256 _sharesAmount) public view returns (uint256 etherAmount) {
+    function getPooledEthBySharesRoundUp(uint256 _sharesAmount) public view returns (uint256) {
         require(_sharesAmount < UINT128_MAX, "SHARES_TOO_LARGE");
         uint256 numeratorInEther = _getShareRateNumerator();
         uint256 denominatorInShares = _getShareRateDenominator();
 
-        etherAmount = (_sharesAmount
-            * numeratorInEther)
-            / denominatorInShares;
-
-        if (_sharesAmount * numeratorInEther != etherAmount * denominatorInShares) {
-            ++etherAmount;
-        }
+        return Math256.ceilDiv(_sharesAmount * numeratorInEther, denominatorInShares);
     }
 
     /**
@@ -471,7 +466,7 @@ contract StETH is IERC20, Pausable {
      * @return the total amount of shares in existence.
      */
     function _getTotalShares() internal view returns (uint256) {
-        return TOTAL_SHARES_POSITION.getLowUint128();
+        return TOTAL_SHARES_POSITION_LOW128.getLowUint128();
     }
 
     /**
@@ -512,14 +507,15 @@ contract StETH is IERC20, Pausable {
      *
      * Requirements:
      *
-     * - `_recipient` cannot be the zero address.
+     * - `_recipient` cannot be the zero address or StETH token contract itself
      * - the contract must not be paused.
      */
     function _mintShares(address _recipient, uint256 _sharesAmount) internal returns (uint256 newTotalShares) {
         require(_recipient != address(0), "MINT_TO_ZERO_ADDR");
+        require(_recipient != address(this), "MINT_TO_STETH_CONTRACT");
 
         newTotalShares = _getTotalShares().add(_sharesAmount);
-        TOTAL_SHARES_POSITION.setLowUint128(uint128(newTotalShares));
+        TOTAL_SHARES_POSITION_LOW128.setLowUint128(newTotalShares);
 
         shares[_recipient] = shares[_recipient].add(_sharesAmount);
 
@@ -547,24 +543,10 @@ contract StETH is IERC20, Pausable {
         uint256 accountShares = shares[_account];
         require(_sharesAmount <= accountShares, "BALANCE_EXCEEDED");
 
-        uint256 preRebaseTokenAmount = getPooledEthByShares(_sharesAmount);
-
         newTotalShares = _getTotalShares().sub(_sharesAmount);
-        TOTAL_SHARES_POSITION.setLowUint128(uint128(newTotalShares));
+        TOTAL_SHARES_POSITION_LOW128.setLowUint128(newTotalShares);
 
         shares[_account] = accountShares.sub(_sharesAmount);
-
-        uint256 postRebaseTokenAmount = getPooledEthByShares(_sharesAmount);
-
-        emit SharesBurnt(_account, preRebaseTokenAmount, postRebaseTokenAmount, _sharesAmount);
-
-        // Notice: we're not emitting a Transfer event to the zero address here since shares burn
-        // works by redistributing the amount of tokens corresponding to the burned shares between
-        // all other token holders. The total supply of the token doesn't change as the result.
-        // This is equivalent to performing a send from `address` to each other token holder address,
-        // but we cannot reflect this as it would require sending an unbounded number of events.
-
-        // We're emitting `SharesBurnt` event to provide an explicit rebase log record nonetheless.
     }
 
     /**
@@ -580,6 +562,15 @@ contract StETH is IERC20, Pausable {
      */
     function _emitTransferAfterMintingShares(address _to, uint256 _sharesAmount) internal {
         _emitTransferEvents(address(0), _to, getPooledEthByShares(_sharesAmount), _sharesAmount);
+    }
+
+    /**
+     * @dev Emits {SharesBurnt} event
+     */
+    function _emitSharesBurnt(
+        address _account, uint256 _preRebaseTokenAmount, uint256 _postRebaseTokenAmount, uint256 _sharesAmount
+    ) internal {
+        emit SharesBurnt(_account, _preRebaseTokenAmount, _postRebaseTokenAmount, _sharesAmount);
     }
 
     /**
