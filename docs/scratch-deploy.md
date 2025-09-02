@@ -223,7 +223,7 @@ This section describes part of the parameters and their values used during deplo
 ```python
 # Parameters related to "bunker mode"
 # See https://research.lido.fi/t/withdrawals-for-lido-on-ethereum-bunker-mode-design-and-implementation/3890/4
-# and https://snapshot.org/#/lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330
+# and https://snapshot.box/#/s:lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330
 # NB: BASE_REWARD_FACTOR: https://ethereum.github.io/consensus-specs/specs/phase0/beacon-chain/#rewards-and-penalties
 NORMALIZED_CL_REWARD_PER_EPOCH = 64
 NORMALIZED_CL_REWARD_MISTAKE_RATE_BP = 1000  # 10%
@@ -231,10 +231,10 @@ REBASE_CHECK_NEAREST_EPOCH_DISTANCE = 1
 REBASE_CHECK_DISTANT_EPOCH_DISTANCE = 23  # 10% of AO 225 epochs frame
 VALIDATOR_DELAYED_TIMEOUT_IN_SLOTS = 7200  # 1 day
 
-# See https://snapshot.org/#/lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330 for "Requirement not be considered Delinquent"
+# See https://snapshot.box/#/s:lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330 for "Requirement not be considered Delinquent"
 VALIDATOR_DELINQUENT_TIMEOUT_IN_SLOTS = 28800  # 4 days
 
-# See "B.3.I" of https://snapshot.org/#/lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330
+# See "B.3.I" of https://snapshot.box/#/s:lido-snapshot.eth/proposal/0xa4eb1220a15d46a1825d5a0f44de1b34644d4aa6bb95f910b86b29bb7654e330
 NODE_OPERATOR_NETWORK_PENETRATION_THRESHOLD_BP = 100  # 1% network penetration for a single NO
 
 # Time period of historical observations used for prediction of the rewards amount
