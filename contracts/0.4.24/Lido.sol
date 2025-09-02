@@ -624,7 +624,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             emit Unbuffered(depositsAmount);
             // emit DepositedValidatorsChanged(depositedValidators);
             // here should be counter for deposits that are not visible before ao report
-            //TODO:
+            //TODO: use deposits tracker here
         }
 
         /// @dev transfer ether to StakingRouter and make a deposit at the same time. All the ether

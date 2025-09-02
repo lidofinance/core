@@ -10,12 +10,14 @@ import {Math256} from "contracts/common/lib/Math256.sol";
 import {
     AccessControlEnumerableUpgradeable
 } from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {StorageSlot} from "@openzeppelin/contracts-v5.2/utils/StorageSlot.sol";
 
 import {IStakingModule} from "./interfaces/IStakingModule.sol";
 import {IStakingModuleV2} from "./interfaces/IStakingModuleV2.sol";
 import {BeaconChainDepositor, IDepositContract} from "./BeaconChainDepositor.sol";
 import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
 import {DepositsTempStorage} from "contracts/common/lib/DepositsTempStorage.sol";
+
 
 contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @dev Events
@@ -216,13 +218,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     // bytes32 internal constant LIDO_POSITION = keccak256("lido.StakingRouter.lido");
     // /// @dev Credentials to withdraw ETH on Consensus Layer side.
     // bytes32 internal constant WITHDRAWAL_CREDENTIALS_POSITION = keccak256("lido.StakingRouter.withdrawalCredentials");
-    // /// @dev 0x02 credentials to withdraw ETH on Consensus Layer side.
-    // bytes32 internal constant WITHDRAWAL_CREDENTIALS_02_POSITION =
-    //     keccak256("lido.StakingRouter.withdrawalCredentials02");
-    // /// @dev Total count of staking modules.
-    // bytes32 internal constant STAKING_MODULES_COUNT_POSITION = keccak256("lido.StakingRouter.stakingModulesCount");
-    // /// @dev Id of the last added staking module. This counter grow on staking modules adding.
-    // bytes32 internal constant LAST_STAKING_MODULE_ID_POSITION = keccak256("lido.StakingRouter.lastStakingModuleId");
+    /// @dev Total count of staking modules.
+    bytes32 internal constant STAKING_MODULES_COUNT_POSITION = keccak256("lido.StakingRouter.stakingModulesCount");
+    /// @dev Id of the last added staking module. This counter grow on staking modules adding.
+    bytes32 internal constant LAST_STAKING_MODULE_ID_POSITION = keccak256("lido.StakingRouter.lastStakingModuleId");
     /// @dev Mapping is used instead of array to allow to extend the StakingModule.
     bytes32 internal constant ROUTER_STORAGE_POSITION = keccak256("lido.StakingRouterStorage");
 
@@ -257,8 +256,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// Top-ups are not supported for 0x01.
     uint256 internal constant INITIAL_DEPOSIT_SIZE = 32 ether;
 
-    uint256 internal constant DEPOSIT_SIZE = 32 ether;
-    uint256 internal constant DEPOSIT_SIZE_02 = 2048 ether;
+    uint256 internal constant MAX_EFFECTIVE_BALANCE_01 = 32 ether;
+    uint256 internal constant MAX_EFFECTIVE_BALANCE_02 = 2048 ether;
 
     IDepositContract public immutable DEPOSIT_CONTRACT;
 
@@ -293,6 +292,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         RouterStorage storage rs = _getRouterStorage();
         rs.lido = _lido;
+
+        // TODO: maybe store withdrawalVault 
         rs.withdrawalCredentials = _withdrawalCredentials;
         rs.withdrawalCredentials02 = _withdrawalCredentials02;
 
@@ -335,11 +336,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         rs.lido = _lido;
         rs.withdrawalCredentials = _withdrawalCredentials;
         rs.withdrawalCredentials02 = _withdrawalCredentials02;
+        // TODO: maybe pass via method params 
+        rs.lastStakingModuleId = uint16(StorageSlot.getUint256Slot(LAST_STAKING_MODULE_ID_POSITION).value);
+        // TODO: maybe pass via method params
+        rs.stakingModulesCount = uint16(StorageSlot.getUint256Slot(STAKING_MODULES_COUNT_POSITION).value);
 
         emit WithdrawalCredentialsSet(_withdrawalCredentials, msg.sender);
         emit WithdrawalCredentials02Set(_withdrawalCredentials02, msg.sender);
-
-        // TODO: migrate deposits values
     }
 
     /// @notice Returns Lido contract address.
@@ -954,7 +957,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return digests Array of staking module digests.
     /// @dev WARNING: This method is not supposed to be used for onchain calls due to high gas costs
     /// for data aggregation.
-    /// TODO: Can be moved in separate external library
     function getStakingModuleDigests(
         uint256[] memory _stakingModuleIds
     ) public view returns (StakingModuleDigest[] memory digests) {
@@ -980,7 +982,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return Array of node operator digests.
     /// @dev WARNING: This method is not supposed to be used for onchain calls due to high gas costs
     /// for data aggregation.
-    /// TODO: Can be moved in separate external library
     function getAllNodeOperatorDigests(uint256 _stakingModuleId) external view returns (NodeOperatorDigest[] memory) {
         return
             getNodeOperatorDigests(
@@ -997,7 +998,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return Array of node operator digests.
     /// @dev WARNING: This method is not supposed to be used for onchain calls due to high gas costs
     /// for data aggregation.
-    /// TODO: Can be moved in separate external library
     function getNodeOperatorDigests(
         uint256 _stakingModuleId,
         uint256 _offset,
@@ -1103,9 +1103,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return Max deposits count per block for the staking module.
     function getStakingModuleMaxDepositsAmountPerBlock(uint256 _stakingModuleId) external view returns (uint256) {
         // TODO: maybe will be defined via staking module config
-        // DEPOSIT_SIZE here is old deposit value per validator
+        // MAX_EFFECTIVE_BALANCE_01 here is old deposit value per validator
         return (_getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId)).maxDepositsPerBlock *
-            DEPOSIT_SIZE);
+            MAX_EFFECTIVE_BALANCE_01);
     }
 
     /// @notice Returns active validators count for the staking module.
@@ -1149,6 +1149,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // TODO: is it correct?
         if (stakingModule.status != uint8(StakingModuleStatus.Active)) return 0;
 
+        // TODO: rename withdrawalCredentialsType
+        //
         if (stakingModule.withdrawalCredentialsType == NEW_WITHDRAWAL_CREDENTIALS_TYPE) {
             uint256 stakingModuleTargetEthAmount = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
             (uint256[] memory operators, uint256[] memory allocations) = IStakingModuleV2(
@@ -1185,11 +1187,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         require(
             stakingModule.withdrawalCredentialsType == LEGACY_WITHDRAWAL_CREDENTIALS_TYPE,
-            "This method is only supported for legace modules"
+            "This method is only supported for legacy modules"
         );
         uint256 stakingModuleTargetEthAmount = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
 
-        uint256 countKeys = stakingModuleTargetEthAmount / DEPOSIT_SIZE;
+        uint256 countKeys = stakingModuleTargetEthAmount / MAX_EFFECTIVE_BALANCE_01;
         if (stakingModule.status != uint8(StakingModuleStatus.Active)) return 0;
 
         (, , uint256 depositableValidatorsCount) = _getStakingModuleSummary(
@@ -1222,7 +1224,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
                     // if allocation 32 - 1
                     // if less than 32 - 0
                     // is it correct situation if allocation 32 for new type of keys?
-                    depositsCount = 1 + (allocation - initialDeposit) / DEPOSIT_SIZE_02;
+                    depositsCount = 1 + (allocation - initialDeposit) / MAX_EFFECTIVE_BALANCE_02;
                 }
 
                 counts[i] = depositsCount;
@@ -1507,39 +1509,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         }
     }
 
-    // TODO: This part about accounting was made just like and example of cleaning depositTracker eth counter in SR
-    // and should be replaced/changed in case inconsistency
-    // report contain also Effective balance of all validators per operator
-    // maybe in some tightly packed data
-    // Does it bring actual sr module balance too ?
-    struct AccountingOracleReport {
-        /// Actual balance of all validators in Lido
-        uint256 validatorsActualBalance;
-        /// Effective balance of all validators in Lido
-        uint256 validatorsEffectiveBalance;
-        /// Number of all active validators in Lido
-        uint256 activeValidators;
-        /// Effective balance of all validators per Staking Module
-        uint256 validatorsEffectiveBalanceStakingModule;
-        /// Number of all active validators per Staking Module
-        uint256 activeValidatorsStakingModule;
-    }
-
-    /// @notice Trigger on accounting report
-    function onAccountingOracleReport(
-        uint256 stakingModuleId,
-        AccountingOracleReport memory report,
-        uint256 refSlot
-    ) external {
-        // Here can clean  tracker
-        // AO has it is own tracker , that incremented by lido contract in case of deposits
-        // and used to check ao report data
-        // if data is correct, ao will notify SR and maybe other contracts about report
-        // SR will clean data in tracker
-        // AO brings report on refSlot, so data after refSlot is should be still stored in tracker
-        DepositsTracker.cleanAndGetDepositedEthBefore(_getStakingModuleTrackerPosition(stakingModuleId), refSlot); //and update range beginning
-    }
-
     /// @notice Set 0x01 credentials to withdraw ETH on Consensus Layer side.
     /// @param _withdrawalCredentials 0x01 withdrawal credentials field as defined in the Consensus Layer specs.
     /// @dev Note that setWithdrawalCredentials discards all unused deposits data as the signatures are invalidated.
@@ -1694,7 +1663,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     }
 
     // [depreacted method]
-    //  logic for legacy modules should be fetched
+    // logic for legacy modules should be fetched
     // function _getDepositsAllocation(
     //     uint256 _depositsToAllocate
     // )
