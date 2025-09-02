@@ -34,7 +34,7 @@ describe("StakingRouter.sol:module-management", () => {
     const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
     const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
       libraries: {
-        ["contracts/0.8.9/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
+        ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
         ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
         ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
       },

@@ -12,9 +12,9 @@ import {
 } from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {StorageSlot} from "@openzeppelin/contracts-v5.2/utils/StorageSlot.sol";
 
-import {IStakingModule} from "./interfaces/IStakingModule.sol";
-import {IStakingModuleV2} from "./interfaces/IStakingModuleV2.sol";
-import {BeaconChainDepositor, IDepositContract} from "./BeaconChainDepositor.sol";
+import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
+import {IStakingModuleV2} from "contracts/common/interfaces/IStakingModuleV2.sol";
+import {BeaconChainDepositor, IDepositContract} from "./lib/BeaconChainDepositor.sol";
 import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
 import {DepositsTempStorage} from "contracts/common/lib/DepositsTempStorage.sol";
 

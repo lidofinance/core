@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity >=0.8.9;
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity >=0.8.9 <0.9.0;
 
 struct KeyData {
     bytes pubkey;

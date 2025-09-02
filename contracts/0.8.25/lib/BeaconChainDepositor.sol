@@ -4,7 +4,7 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
-import {MemUtils} from "../common/lib/MemUtils.sol";
+import {MemUtils} from "contracts/common/lib/MemUtils.sol";
 
 interface IDepositContract {
     function get_deposit_root() external view returns (bytes32 rootHash);

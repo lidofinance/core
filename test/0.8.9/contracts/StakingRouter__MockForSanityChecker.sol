@@ -3,7 +3,7 @@
 
 pragma solidity 0.8.25;
 
-import {StakingRouter} from "contracts/0.8.9/StakingRouter.sol";
+import {StakingRouter} from "contracts/0.8.25/StakingRouter.sol";
 
 contract StakingRouter__MockForSanityChecker {
     mapping(uint256 => StakingRouter.StakingModule) private modules;
