@@ -174,11 +174,13 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the amount of ether that was accrued on the vault as Lido fees but not yet settled.
+     * @notice Returns the amount of shares to burn to restore vault healthiness or to fulfill redemptions and the
+     *         amount of outstanding Lido fees
+     * @return sharesToRebalance amount of shares to rebalance
+     * @return unsettledLidoFees amount of Lido fees to be settled
      */
-    function unsettledFeesValue() external view returns (uint256) {
-        VaultHub.VaultRecord memory record = VAULT_HUB.vaultRecord(address(_stakingVault()));
-        return record.cumulativeLidoFees - record.settledLidoFees;
+    function obligations() external view returns (uint256 sharesToRebalance, uint256 unsettledLidoFees) {
+        return VAULT_HUB.obligations(address(_stakingVault()));
     }
 
     /**
@@ -560,15 +562,6 @@ contract Dashboard is NodeOperatorFee {
      */
     function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external returns (bool) {
         return _changeTier(_tierId, _requestedShareLimit);
-    }
-
-    /**
-     * @notice Normalizes the vault by forcing a rebalance and settling lido fees
-     */
-    function normalizeVault() external {
-        address stakingVault = address(_stakingVault());
-        try VAULT_HUB.forceRebalance(stakingVault) {} catch {}
-        try VAULT_HUB.settleLidoFees(stakingVault) {} catch {}
     }
 
     // ==================== Internal Functions ====================

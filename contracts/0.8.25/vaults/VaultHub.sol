@@ -299,6 +299,20 @@ contract VaultHub is PausableUntilWithRoles {
         return _rebalanceShortfallShares(_vaultConnection(_vault), _vaultRecord(_vault));
     }
 
+    /// @notice returns the obligations of the vault: shares to rebalance to maintain healthiness or fulfill redemptions
+    ///         and amount of the outstanding Lido fees
+    /// @param _vault vault address
+    /// @return sharesToRebalance amount of shares to rebalance
+    /// @return unsettledLidoFees amount of Lido fees to be settled
+    /// @dev returns 0 if the vault is not connected
+    function obligations(address _vault) external view returns (uint256 sharesToRebalance, uint256 unsettledLidoFees) {
+        VaultConnection storage connection = _checkConnection(_vault);
+        VaultRecord storage record = _vaultRecord(_vault);
+
+        sharesToRebalance = _sharesToRebalance(connection, record);
+        unsettledLidoFees = _unsettledLidoFeesValue(record);
+    }
+
     /// @notice amount of bad debt to be internalized to become the protocol loss
     /// @return the number of shares to internalize as bad debt during the oracle report
     /// @dev the value is lagging increases that was done after the current refSlot to the next one
@@ -871,14 +885,14 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 availableBalance = Math256.min(_vault.balance, _totalValue(record));
         if (availableBalance == 0) revert NoFundsForForceRebalance(_vault);
 
-        uint256 sharesToRebalance = Math256.min(
-            Math256.max(_rebalanceShortfallShares(connection, record), record.redemptionShares),
+        uint256 sharesToForceRebalance = Math256.min(
+            _sharesToRebalance(connection, record),
             _getSharesByPooledEth(availableBalance)
         );
 
-        if (sharesToRebalance == 0) revert NoReasonForForceRebalance(_vault);
+        if (sharesToForceRebalance == 0) revert NoReasonForForceRebalance(_vault);
 
-        _rebalance(_vault, record, sharesToRebalance);
+        _rebalance(_vault, record, sharesToForceRebalance);
     }
 
     /// @notice Permissionless payout of unsettled Lido fees to treasury
@@ -1025,12 +1039,7 @@ contract VaultHub is PausableUntilWithRoles {
         emit VaultRebalanced(_vault, _shares, valueToRebalance);
     }
 
-    function _withdraw(
-        address _vault,
-        VaultRecord storage _record,
-        address _recipient,
-        uint256 _amount
-    ) internal {
+    function _withdraw(address _vault, VaultRecord storage _record, address _recipient, uint256 _amount) internal {
         uint256 totalValue_ = _totalValue(_record);
         if (_amount > totalValue_) {
             revert AmountExceedsTotalValue(_vault, totalValue_, _amount);
@@ -1207,10 +1216,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
-        uint256 sharesToCover = _rebalanceShortfallShares(_connection, _record);
+        uint256 sharesToCover = _sharesToRebalance(_connection, _record);
         if (sharesToCover == type(uint256).max) return type(uint256).max;
-
-        sharesToCover = Math256.max(sharesToCover, _record.redemptionShares);
 
         // no need to cover fees if they are less than the minimum beacon deposit
         uint256 unsettledLidoFees = _unsettledLidoFeesValue(_record);
@@ -1323,10 +1330,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice the amount of ether that can be instantly withdrawn from the vault based on the available balance,
     ///         locked value, vault redemption shares and unsettled Lido fees accrued on the vault
-    function _withdrawableValue(
-        address _vault,
-        VaultRecord storage _record
-    ) internal view returns (uint256) {
+    function _withdrawableValue(address _vault, VaultRecord storage _record) internal view returns (uint256) {
         uint256 availableBalance = Math256.min(_vault.balance, _totalValue(_record));
 
         // 1. We can't withdraw funds that can be used to fulfill redemptions
@@ -1380,6 +1384,13 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _unsettledLidoFeesValue(VaultRecord storage _record) internal view returns (uint256) {
         return _record.cumulativeLidoFees - _record.settledLidoFees;
+    }
+
+    function _sharesToRebalance(
+        VaultConnection storage _connection,
+        VaultRecord storage _record
+    ) internal view returns (uint256) {
+        return Math256.max(_rebalanceShortfallShares(_connection, _record), _record.redemptionShares);
     }
 
     function _storage() internal pure returns (Storage storage $) {

@@ -17,8 +17,6 @@ import {
 
 import { Snapshot } from "test/suite";
 
-const CONNECTION_DEPOSIT = ether("1");
-
 describe("Integration: Vault redemptions and fees obligations", () => {
   let ctx: ProtocolContext;
   let originalSnapshot: string;
@@ -684,93 +682,6 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
       expect(await vaultHub.locked(stakingVaultAddress)).to.equal(ether("1")); // connection deposit
       expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(ether("1"));
-    });
-  });
-
-  context("Normalization", () => {
-    let redemptionShares: bigint;
-    let redemptionValue: bigint;
-    let cumulativeLidoFees: bigint;
-
-    beforeEach(async () => {
-      redemptionShares = ether("2");
-      cumulativeLidoFees = ether("0.2");
-
-      redemptionValue = await lido.getPooledEthBySharesRoundUp(redemptionShares);
-
-      await dashboard.fund({ value: redemptionValue });
-      await dashboard.mintShares(stranger, redemptionShares);
-
-      await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n);
-
-      await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees });
-    });
-
-    it("Normalizes the vault by forcing a rebalance and settling lido fees", async () => {
-      const recordBefore = await vaultHub.vaultRecord(stakingVaultAddress);
-      expect(recordBefore.cumulativeLidoFees).to.equal(cumulativeLidoFees);
-      expect(recordBefore.settledLidoFees).to.equal(0n);
-
-      const totalValue = CONNECTION_DEPOSIT + redemptionValue;
-
-      expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(totalValue);
-      expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(redemptionShares);
-      expect(await vaultHub.locked(stakingVaultAddress)).to.equal(totalValue);
-
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
-
-      await expect(dashboard.normalizeVault())
-        .to.emit(vaultHub, "VaultRebalanced")
-        .withArgs(stakingVaultAddress, redemptionShares, redemptionValue)
-        .to.emit(vaultHub, "VaultRedemptionSharesUpdated")
-        .withArgs(stakingVaultAddress, 0n)
-        .to.emit(stakingVault, "BeaconChainDepositsResumed");
-
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
-
-      const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
-      expect(recordAfter.cumulativeLidoFees).to.equal(cumulativeLidoFees);
-      expect(recordAfter.settledLidoFees).to.equal(0n);
-      expect(recordAfter.redemptionShares).to.equal(0n);
-
-      expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(totalValue - redemptionValue);
-      expect(await vaultHub.liabilityShares(stakingVaultAddress)).to.equal(0n);
-      expect(await vaultHub.locked(stakingVaultAddress)).to.equal(totalValue); // need report to unlock
-
-      let funding = ether("0.1");
-      cumulativeLidoFees += funding; // new fees: 0.3 ether
-      await dashboard.fund({ value: funding });
-
-      await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees, waitForNextRefSlot: true });
-
-      await expect(dashboard.normalizeVault())
-        .to.emit(vaultHub, "LidoFeesSettled")
-        .withArgs(stakingVaultAddress, funding, cumulativeLidoFees, funding);
-
-      const recordAfterFirstNormalization = await vaultHub.vaultRecord(stakingVaultAddress);
-      expect(recordAfterFirstNormalization.cumulativeLidoFees).to.equal(cumulativeLidoFees);
-      expect(recordAfterFirstNormalization.settledLidoFees).to.equal(funding);
-
-      expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(CONNECTION_DEPOSIT);
-      expect(await vaultHub.locked(stakingVaultAddress)).to.equal(CONNECTION_DEPOSIT);
-
-      funding = ether("0.2");
-      await dashboard.fund({ value: funding });
-
-      await reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees, waitForNextRefSlot: true }); // still 0.3 ether
-
-      await expect(dashboard.normalizeVault())
-        .to.emit(vaultHub, "LidoFeesSettled")
-        .withArgs(stakingVaultAddress, funding, cumulativeLidoFees, cumulativeLidoFees);
-
-      const recordAfterSecondNormalization = await vaultHub.vaultRecord(stakingVaultAddress);
-      expect(recordAfterSecondNormalization.cumulativeLidoFees).to.equal(cumulativeLidoFees);
-      expect(recordAfterSecondNormalization.settledLidoFees).to.equal(cumulativeLidoFees);
-
-      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
-
-      expect(await vaultHub.totalValue(stakingVaultAddress)).to.equal(CONNECTION_DEPOSIT);
-      expect(await vaultHub.locked(stakingVaultAddress)).to.equal(CONNECTION_DEPOSIT);
     });
   });
 
