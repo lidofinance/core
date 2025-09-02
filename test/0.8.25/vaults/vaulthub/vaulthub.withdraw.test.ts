@@ -546,48 +546,193 @@ describe("VaultHub.sol:withdrawal", () => {
     });
 
     context("dynamic tests", () => {
+      type TestCase = {
+        totalValue: bigint;
+        balance: bigint;
+        cumulativeLidoFees: bigint;
+        liabilityShares: bigint;
+        liabilitySharesTarget: bigint;
+        expectedWithdrawable: bigint;
+        description?: string;
+      };
+
+      const name = (testCase: TestCase) =>
+        `totalValue: ${testCase.totalValue / ether("1")}` +
+        `, balance: ${testCase.balance / ether("1")}` +
+        `, fees: ${testCase.cumulativeLidoFees / ether("1")}` +
+        `, liability: ${testCase.liabilityShares / ether("1") + 1n}` + // + 1n because of the minimal reserve
+        `, redemptions: ${(testCase.liabilityShares - testCase.liabilitySharesTarget) / ether("1")}` +
+        ` => ${testCase.expectedWithdrawable}` +
+        (testCase.description ? ` (${testCase.description})` : "");
+
       const testCases = [
         {
-          name: "TV: 10, balance: 20, cumulativeLidoFees: 0, liabilityShares: 8, liabilitySharesTarget: 7, expectedWithdrawable: 3",
           totalValue: ether("10"),
           balance: ether("20"),
           cumulativeLidoFees: 0n,
           liabilityShares: ether("8"),
           liabilitySharesTarget: ether("7"),
           expectedWithdrawable: ether("1"),
+          description: "basic case - balance > total value",
         },
         {
-          name: "TV: 10, balance: 3, cumulativeLidoFees: 0, liabilityShares: 8, liabilitySharesTarget: 7, expectedWithdrawable: 2",
           totalValue: ether("10"),
           balance: ether("3"),
           cumulativeLidoFees: 0n,
           liabilityShares: ether("8"),
           liabilitySharesTarget: ether("7"),
           expectedWithdrawable: ether("1"),
+          description: "low balance",
         },
         {
-          name: "TV: 10, balance: 11, cumulativeLidoFees: 0, liabilityShares: 8, liabilitySharesTarget: 7, expectedWithdrawable: 2",
           totalValue: ether("10"),
           balance: ether("11"),
           cumulativeLidoFees: 0n,
           liabilityShares: ether("7"),
           liabilitySharesTarget: ether("6"),
           expectedWithdrawable: ether("2"),
+          description: "high balance",
         },
         {
-          name: "TV: 10, balance: 11, cumulativeLidoFees: 1, liabilityShares: 8, liabilitySharesTarget: 7, expectedWithdrawable: 2",
           totalValue: ether("10"),
           balance: ether("11"),
           cumulativeLidoFees: ether("1"),
           liabilityShares: ether("7"),
           liabilitySharesTarget: ether("6"),
           expectedWithdrawable: ether("1"),
+          description: "obligations (fees + redemptions)",
         },
-      ];
+        {
+          totalValue: ether("10"),
+          balance: ether("10"),
+          cumulativeLidoFees: 0n,
+          liabilityShares: 0n,
+          liabilitySharesTarget: 0n,
+          expectedWithdrawable: ether("9"),
+          description: "no liabilities (minimal reserve only)",
+        },
+        {
+          totalValue: ether("5"),
+          balance: ether("5"),
+          cumulativeLidoFees: 0n,
+          liabilityShares: ether("4"),
+          liabilitySharesTarget: 0n,
+          expectedWithdrawable: 0n,
+          description: "no unlocked amount",
+        },
+        {
+          totalValue: ether("10"),
+          balance: ether("10"),
+          cumulativeLidoFees: ether("8"),
+          liabilityShares: 0n,
+          liabilitySharesTarget: 0n,
+          expectedWithdrawable: ether("1"), // 10 - 8 - 1 (minimal reserve)
+          description: "high fees",
+        },
+        {
+          totalValue: ether("10"),
+          balance: ether("10"),
+          cumulativeLidoFees: ether("8"),
+          liabilityShares: ether("1"),
+          liabilitySharesTarget: ether("1"),
+          expectedWithdrawable: 0n,
+          description: "high fees + locked",
+        },
+        {
+          totalValue: ether("10"),
+          balance: ether("5"),
+          cumulativeLidoFees: ether("1"),
+          liabilityShares: ether("8"),
+          liabilitySharesTarget: ether("3"),
+          expectedWithdrawable: 0n,
+          description: "large redemptions",
+        },
+        {
+          totalValue: ether("10"),
+          balance: ether("5"),
+          cumulativeLidoFees: 0n,
+          liabilityShares: ether("8"),
+          liabilitySharesTarget: ether("3") + 1n,
+          expectedWithdrawable: 1n,
+          description: "large redemptions - 1n",
+        },
+        {
+          totalValue: ether("10"),
+          balance: ether("5"),
+          cumulativeLidoFees: ether("3"),
+          liabilityShares: ether("2"),
+          liabilitySharesTarget: 0n,
+          expectedWithdrawable: 0n,
+          description: "fees and redemptions = balance",
+        },
+        {
+          totalValue: ether("10"),
+          balance: ether("5"),
+          cumulativeLidoFees: ether("3") - 1n,
+          liabilityShares: ether("2"),
+          liabilitySharesTarget: 0n,
+          expectedWithdrawable: 1n,
+          description: "fees and redemptions < balance",
+        },
+        {
+          totalValue: ether("10"),
+          balance: ether("5"),
+          cumulativeLidoFees: ether("3") + 1n,
+          liabilityShares: ether("2"),
+          liabilitySharesTarget: 0n,
+          expectedWithdrawable: 0n,
+          description: "fees and redemptions > balance",
+        },
+        {
+          totalValue: ether("1"),
+          balance: ether("1"),
+          cumulativeLidoFees: 0n,
+          liabilityShares: 0n,
+          liabilitySharesTarget: 0n,
+          expectedWithdrawable: 0n,
+          description: "minimal balance",
+        },
+        {
+          totalValue: ether("2"),
+          balance: ether("2"),
+          cumulativeLidoFees: 1n,
+          liabilityShares: 0n,
+          liabilitySharesTarget: 0n,
+          expectedWithdrawable: ether("1") - 1n,
+          description: "minimal fees",
+        },
+        {
+          totalValue: ether("10"),
+          balance: 0n,
+          cumulativeLidoFees: 0n,
+          liabilityShares: ether("5"),
+          liabilitySharesTarget: ether("4"),
+          expectedWithdrawable: 0n,
+          description: "zero balance",
+        },
+        {
+          totalValue: 0n,
+          balance: ether("10"),
+          cumulativeLidoFees: 0n,
+          liabilityShares: 0n,
+          liabilitySharesTarget: 0n,
+          expectedWithdrawable: 0n,
+          description: "zero total value",
+        },
+        {
+          totalValue: ether("10"),
+          balance: ether("10"),
+          cumulativeLidoFees: 0n,
+          liabilityShares: ether("5"),
+          liabilitySharesTarget: ether("10"), // target > current
+          expectedWithdrawable: ether("4"),
+          description: "0 redemptions (target > current)",
+        },
+      ] as TestCase[];
 
       for (let i = 0; i < testCases.length; i++) {
         const testCase = testCases[i];
-        it(`dynamic test case ${i + 1} - ${testCase.name}`, async () => {
+        it(`dynamic test case ${i + 1}: ${name(testCase)}`, async () => {
           await connectedVault.connect(user).fund({ value: testCase.totalValue });
           await vaultsContext.reportVault({
             vault: connectedVault,
