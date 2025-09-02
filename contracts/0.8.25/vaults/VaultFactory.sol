@@ -25,6 +25,15 @@ contract VaultFactory {
     address public immutable DASHBOARD_IMPL;
 
     /**
+     * @notice mapping of verified vaults
+     * @dev The vault is verified only if it is deployed by this factory.
+     *      Only verified vaults can be connected to VaultHub.
+     *      This ensures that the vault storage has not been tampered with
+     *      before connecting to VaultHub.
+     */
+    mapping(address vault => bool isVerified) public vaults;
+
+    /**
      * @param _lidoLocator The address of the LidoLocator contract
      * @param _beacon The address of the Beacon contract for StakingVaults
      * @param _dashboardImpl The address of the Dashboard implementation contract
@@ -37,6 +46,29 @@ contract VaultFactory {
         LIDO_LOCATOR = _lidoLocator;
         BEACON = _beacon;
         DASHBOARD_IMPL = _dashboardImpl;
+    }
+
+    /**
+     * @notice Checks if a vault is verified, i.e. deployed by this factory
+     * @param _vault The address of the vault to check
+     * @return True if the vault is verified, false otherwise
+     */
+    function isVaultVerified(address _vault) external view returns (bool) {
+        return vaults[_vault];
+    }
+
+    /**
+     * @notice Creates a new StakingVault 
+     * @param _owner The address of the owner of the StakingVault
+     * @param _nodeOperator The address of the operator of the StakingVault
+     * @param _depositor The address of the depositor of the StakingVault
+     * @return vault The address of the created StakingVault
+     */
+    function createVault(address _owner, address _nodeOperator, address _depositor) external returns (IStakingVault vault) {
+        vault = IStakingVault(_deployVault());
+        vault.initialize(_owner, _nodeOperator, _depositor);
+
+        emit VaultCreated(address(vault));
     }
 
     /**
@@ -61,7 +93,7 @@ contract VaultFactory {
         if (msg.value < VaultHub(payable(locator.vaultHub())).CONNECT_DEPOSIT()) revert InsufficientFunds();
 
         // create the vault proxy
-        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+        vault = IStakingVault(_deployVault());
 
         // create the dashboard proxy
         bytes memory immutableArgs = abi.encode(address(vault));
@@ -105,7 +137,7 @@ contract VaultFactory {
         ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
 
         // create the vault proxy
-        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+        vault = IStakingVault(_deployVault());
 
         // create the dashboard proxy
         bytes memory immutableArgs = abi.encode(address(vault));
@@ -124,6 +156,11 @@ contract VaultFactory {
 
         emit VaultCreated(address(vault));
         emit DashboardCreated(address(dashboard), address(vault), _defaultAdmin);
+    }
+
+    function _deployVault() internal returns (address vault) {
+        vault = address(new PinnedBeaconProxy(BEACON, ""));
+        vaults[vault] = true;
     }
 
     /**
