@@ -126,13 +126,13 @@ describe("Integration: VaultHub", () => {
       expect(await vaultHub.locked(stakingVault)).to.be.equal(0n);
     });
 
-    it("Vault brings report and disconnects paying last fees", async () => {
+    it("Vault brings report and disconnects not paying last fees", async () => {
       const { vaultHub, locator } = ctx.contracts;
       const treasury = await locator.treasury();
 
       const treasuryBalance = await ethers.provider.getBalance(treasury);
 
-      await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: ether("1") }))
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { cumulativeLidoFees: 100n }))
         .to.emit(vaultHub, "VaultDisconnectCompleted")
         .withArgs(stakingVault);
 
@@ -140,7 +140,7 @@ describe("Integration: VaultHub", () => {
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
       expect(await vaultHub.locked(stakingVault)).to.be.equal(0n);
 
-      expect(await ethers.provider.getBalance(treasury)).to.be.equal(treasuryBalance + ether("1"));
+      expect(await ethers.provider.getBalance(treasury)).to.be.equal(treasuryBalance);
     });
   });
 
