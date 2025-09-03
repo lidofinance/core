@@ -1,4 +1,3 @@
-import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
 import { VaultHub } from "typechain-types";
@@ -59,13 +58,6 @@ export async function main() {
   ]);
   const beaconAddress = await beacon.getAddress();
 
-  // Deploy BeaconProxy to get bytecode and add it to whitelist
-  const vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beaconAddress, "0x"]);
-  await vaultBeaconProxy.waitForDeployment();
-
-  const vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
-  const vaultBeaconProxyCodeHash = keccak256(vaultBeaconProxyCode);
-
   // Deploy VaultHub
   const vaultHub_ = await deployBehindOssifiableProxy(Sk.vaultHub, "VaultHub", proxyContractsOwner, deployer, [
     locatorAddress,
@@ -81,15 +73,10 @@ export async function main() {
 
   // Grant VaultHub roles
   const vaultMasterRole = await vaultHub.VAULT_MASTER_ROLE();
-  const vaultCodehashRole = await vaultHub.VAULT_CODEHASH_SET_ROLE();
 
   await makeTx(vaultHub, "grantRole", [vaultMasterRole, deployer], { from: deployer });
-  await makeTx(vaultHub, "grantRole", [vaultCodehashRole, deployer], { from: deployer });
-
-  await makeTx(vaultHub, "setAllowedCodehash", [vaultBeaconProxyCodeHash, true], { from: deployer });
 
   await makeTx(vaultHub, "renounceRole", [vaultMasterRole, deployer], { from: deployer });
-  await makeTx(vaultHub, "renounceRole", [vaultCodehashRole, deployer], { from: deployer });
 
   // Deploy LazyOracle
   const lazyOracle_ = await deployBehindOssifiableProxy(Sk.lazyOracle, "LazyOracle", proxyContractsOwner, deployer, [
