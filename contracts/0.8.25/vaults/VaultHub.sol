@@ -51,7 +51,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice maximum number of stETH shares that can be minted by vault owner
         uint96 shareLimit;
         // ### 2nd slot
-        /// @notice index of the vault in the list of vaults. Indexes are guaranteed to be stable only if there was no deletions.
+        /// @notice index of the vault in the list of vaults. Indexes are not guaranteed to be stable.
         /// @dev vaultIndex is always greater than 0
         uint96 vaultIndex;
         /// @notice if true, vault is disconnected and fee is not accrued
@@ -88,7 +88,7 @@ contract VaultHub is PausableUntilWithRoles {
         // ### 5th slot
         /// @notice the minimal value that the reserve part of the locked can be
         uint128 minimalReserve;
-        /// @notice part of liability shares reserved to be burned as Lido core redemptions
+        /// @notice part of liability shares reserved to be burnt as Lido core redemptions
         uint128 redemptionShares;
         // ### 6th slot
         /// @notice cumulative value for Lido fees that accrued on the vault
@@ -250,7 +250,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return the amount of ether that can be locked in the vault given the current total value
     /// @dev returns 0 if the vault is not connected
     function maxLockableValue(address _vault) external view returns (uint256) {
-        return _totalValueWithoutUnsettledFees(_vaultRecord(_vault));
+        VaultRecord storage record = _vaultRecord(_vault);
+        return _totalValue(record) - _unsettledLidoFeesValue(record);
     }
 
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
@@ -381,8 +382,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault The address of the vault
     /// @param _liabilitySharesTarget maximum amount of liabilityShares that will be preserved, the rest will be
     ///         marked as redemptionShares. If value is greater than liabilityShares, redemptionShares are set to 0
-    /// @dev NB: Crisis mechanism triggered when Lido core protocol liquidity <= vault TVL. Forces emergency liquidity
-    ///         extraction from vaults to maintain withdrawal queue solvency during systemic stress events.
+    /// @dev NB: Mechanism to be triggered when Lido Core TVL <= stVaults TVL.
     function setLiabilitySharesTarget(address _vault, uint256 _liabilitySharesTarget) external onlyRole(REDEMPTION_MASTER_ROLE) {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
@@ -723,12 +723,14 @@ contract VaultHub is PausableUntilWithRoles {
 
         _requireFreshReport(_vault, record);
 
+        uint256 maxLockableValue_ = _totalValue(record) - _unsettledLidoFeesValue(record);
+
         _increaseLiability({
             _vault: _vault,
             _record: record,
             _amountOfShares: _amountOfShares,
             _reserveRatioBP: connection.reserveRatioBP,
-            _maxLockableValue: _totalValueWithoutUnsettledFees(record),
+            _maxLockableValue: maxLockableValue_,
             _shareLimit: connection.shareLimit,
             _overrideOperatorLimits: false
         });
@@ -835,11 +837,10 @@ contract VaultHub is PausableUntilWithRoles {
         if (minPartialAmountInGwei < type(uint256).max) {
             _requireFreshReport(_vault, record);
 
-            /// @dev NB: Disallow partial withdrawals when the vault is unhealthy or has uncovered obligations
-            ///          in order to prevent the vault owner from clogging the consensus layer withdrawal queue
-            ///          front-running and delaying the forceful validator exits required for rebalancing the vault,
-            ///          unless the requested amount of withdrawals is enough to recover the vault to healthy state and
-            ///          settle outstanding redemptions and Lido fees
+            /// @dev NB: Disallow partial withdrawals when the vault has uncovered obligations in order to prevent the
+            ///      vault owner from clogging the consensus layer withdrawal queue by front-running and delaying the
+            ///      forceful validator exits required for rebalancing the vault. Partial withdrawals only allowed if
+            ///      the requested amount of withdrawals is enough to cover the uncovered obligations.
             uint256 uncoveredObligations = _uncoveredObligations(_vault, connection, record);
             if (uncoveredObligations > 0 && minPartialAmountInGwei * 1e9 < uncoveredObligations) {
                 revert PartialValidatorWithdrawalNotAllowed();
@@ -849,13 +850,14 @@ contract VaultHub is PausableUntilWithRoles {
         _triggerVaultValidatorWithdrawals(_vault, msg.value, _pubkeys, _amountsInGwei, _refundRecipient);
     }
 
-    /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault is
-    ///         unhealthy or has redemptions over the threshold
+    /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault has
+    ///         uncovered obligations
     /// @param _vault address of the vault to exit validators from
     /// @param _pubkeys array of public keys of the validators to exit
     /// @param _refundRecipient address that will receive the refund for transaction costs
-    /// @dev    When the vault becomes unhealthy, trusted actor with the role can force its validators to exit the beacon chain
-    ///         This returns the vault's deposited ETH back to vault's balance and allows to rebalance the vault
+    /// @dev    In case the vault has uncovered obligations, trusted actor with the role can force its validators to
+    ///         exit the beacon chain. This returns the vault's deposited ETH back to vault's balance and allows to
+    ///         rebalance the vault.
     function forceValidatorExit(
         address _vault,
         bytes calldata _pubkeys,
@@ -874,9 +876,10 @@ contract VaultHub is PausableUntilWithRoles {
         emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
-    /// @notice Permissionless rebalance for unhealthy vaults or vaults with redemptions
+    /// @notice Permissionless rebalance for vaults with uncovered obligations
     /// @param _vault vault address
-    /// @dev rebalance all available amount of ether until the vault is healthy and redemptions are paid
+    /// @dev rebalance all available amount of ether on the vault to fullfill the vault's obligations: restore vault
+    ///      to healthy state and settle outstanding redemptions. Fees are not settled in this case.
     function forceRebalance(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
@@ -979,7 +982,7 @@ contract VaultHub is PausableUntilWithRoles {
         address _vault,
         VaultConnection storage _connection,
         VaultRecord storage _record,
-        bool _forceFeesSettlement
+        bool _forceFullFeesSettlement
     ) internal {
         _requireFreshReport(_vault, _record);
         uint256 liabilityShares_ = _record.liabilityShares;
@@ -987,11 +990,12 @@ contract VaultHub is PausableUntilWithRoles {
 
         uint256 unsettledLidoFees = _unsettledLidoFeesValue(_record);
         if (unsettledLidoFees > 0) {
-            uint256 withdrawable = Math256.min(unsettledLidoFees, _vault.balance);
-            if (_forceFeesSettlement && withdrawable < unsettledLidoFees) {
+            uint256 _vaultBalance = _vault.balance;
+            if (_vaultBalance < unsettledLidoFees && _forceFullFeesSettlement) {
                 revert NoUnsettledLidoFeesShouldBeLeft(_vault, unsettledLidoFees);
             }
 
+            uint256 withdrawable = Math256.min(unsettledLidoFees, _vaultBalance);
             _settleLidoFees(_vault, _record, _connection, withdrawable);
         }
 
@@ -1157,10 +1161,6 @@ contract VaultHub is PausableUntilWithRoles {
         Report memory report = _record.report;
         DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory inOutDelta = _record.inOutDelta;
         return uint256(int256(uint256(report.totalValue)) + inOutDelta.currentValue() - report.inOutDelta);
-    }
-
-    function _totalValueWithoutUnsettledFees(VaultRecord storage _record) internal view returns (uint256) {
-        return _totalValue(_record) - _unsettledLidoFeesValue(_record);
     }
 
     /// @param _liabilityShares amount of shares that the vault is minted
