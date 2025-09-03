@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, keccak256, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -107,7 +107,6 @@ describe("VaultHub.sol:forceExit", () => {
     vaultHub = await ethers.getContractAt("VaultHub", proxy, user);
 
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.VALIDATOR_EXIT_ROLE(), user);
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
@@ -116,12 +115,10 @@ describe("VaultHub.sol:forceExit", () => {
     const beacon = await ethers.deployContract("UpgradeableBeacon", [stakingVaultImpl, deployer]);
 
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [beacon]);
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultFactory });
 
     vault = await createVault(vaultFactory);
     vaultAddress = await vault.getAddress();
-
-    const codehash = keccak256(await ethers.provider.getCode(vaultAddress));
-    await vaultHub.connect(user).setAllowedCodehash(codehash, true);
 
     const connectDeposit = ether("1.0");
     await vault.connect(user).fund({ value: connectDeposit });

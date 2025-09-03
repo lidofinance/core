@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, keccak256 } from "ethers";
+import { ContractTransactionReceipt } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -95,18 +95,12 @@ describe("VaultHub.sol:forceRebalance", () => {
     vaultHub = vaultHubAdmin.connect(user);
 
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), user);
 
     // VaultFactory
     const impl = await ethers.deployContract("StakingVault", [depositContract]);
     const beacon = await ethers.deployContract("UpgradeableBeacon", [impl, user]);
     const dashboardImpl = await ethers.deployContract("Dashboard", [lido, wsteth, vaultHub, locator]);
     vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, dashboardImpl]);
-
-    const beaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beacon, "0x"]);
-    const beaconProxyCode = await ethers.provider.getCode(await beaconProxy.getAddress());
-    const beaconProxyCodeHash = keccak256(beaconProxyCode);
-    await vaultHub.connect(user).setAllowedCodehash(beaconProxyCodeHash, true);
 
     // Update LidoLocator with new contacts
     await updateLidoLocatorImplementation(await locator.getAddress(), {
