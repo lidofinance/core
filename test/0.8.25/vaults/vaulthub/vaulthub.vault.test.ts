@@ -287,7 +287,7 @@ describe("VaultHub.sol:owner-functions", () => {
 
       await expect(vaultHub.connect(vaultOwner).withdraw(vaultAddress, recipient, withdrawable + 1n))
         .to.be.revertedWithCustomError(vaultHub, "AmountExceedsWithdrawableValue")
-        .withArgs(withdrawable, withdrawable + 1n);
+        .withArgs(vaultAddress, withdrawable, withdrawable + 1n);
     });
 
     it("withdraws successfully", async () => {
@@ -613,6 +613,25 @@ describe("VaultHub.sol:owner-functions", () => {
         .withArgs(vaultAddress);
     });
 
+    it("reverts when vault is has redemption obligations", async () => {
+      await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
+      await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, ether("8.5"));
+
+      await vaultHub.connect(deployer).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), vaultOwner);
+      await vaultHub.connect(vaultOwner).setLiabilitySharesTarget(vaultAddress, 0n);
+
+      await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
+        .to.be.revertedWithCustomError(vaultHub, "HasRedemptionsCannotDeposit")
+        .withArgs(vaultAddress);
+    });
+
+    it("reverts when vault has unsettled lido fees over minimum beacon deposit", async () => {
+      await reportVault({ totalValue: ether("10"), cumulativeLidoFees: ether("10") });
+      await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
+        .to.be.revertedWithCustomError(vaultHub, "FeesTooHighCannotDeposit")
+        .withArgs(vaultAddress);
+    });
+
     it("reverts when called by non-owner", async () => {
       await expect(vaultHub.connect(stranger).resumeBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
@@ -649,6 +668,18 @@ describe("VaultHub.sol:owner-functions", () => {
   describe("triggerValidatorWithdrawals", () => {
     const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
     const FEE = ether("0.01");
+    const MAX_UINT256 = (1n << 256n) - 1n;
+    const MAX_UINT64 = (1n << 64n) - 1n;
+
+    function generateTriggerValidatorWithdrawalsData(pubkey: string, amount: bigint, refundTo: HardhatEthersSigner) {
+      const iface = new ethers.Interface(["function triggerValidatorWithdrawals(address,bytes,uint64[],address)"]);
+      const selector = iface.getFunction("triggerValidatorWithdrawals")?.selector;
+      const payloadArgs = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["address", "bytes", "uint256[]", "address"],
+        [vaultAddress, pubkey, [amount], refundTo.address],
+      );
+      return selector + payloadArgs.slice(2);
+    }
 
     it("triggers validator withdrawal", async () => {
       await expect(
@@ -684,6 +715,24 @@ describe("VaultHub.sol:owner-functions", () => {
           .connect(vaultOwner)
           .triggerValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [1n], recipient, { value: FEE }),
       ).to.be.revertedWithCustomError(vaultHub, "PartialValidatorWithdrawalNotAllowed");
+    });
+
+    it("reverts for uint64 overflow attack", async function () {
+      await reportVault({ totalValue: ether("10") });
+
+      const OVERFLOW256 = MAX_UINT256 - MAX_UINT64 + 1n;
+
+      const data = generateTriggerValidatorWithdrawalsData(SAMPLE_PUBKEY, OVERFLOW256, recipient);
+      await expect(vaultOwner.sendTransaction({ to: vaultHub, data, value: ether("1") })).to.be.reverted;
+    });
+
+    it("works for uint64 max value", async function () {
+      await reportVault({ totalValue: ether("10") });
+
+      const data = generateTriggerValidatorWithdrawalsData(SAMPLE_PUBKEY, MAX_UINT64, recipient);
+      await expect(vaultOwner.sendTransaction({ to: vaultHub, data, value: ether("1") }))
+        .to.emit(vault, "ValidatorWithdrawalsTriggered")
+        .withArgs(SAMPLE_PUBKEY, [MAX_UINT64], recipient);
     });
 
     it("reverts for partial withdrawals when vault is unhealthy and partial withdrawal is not enough to cover rebalance shortfall", async () => {

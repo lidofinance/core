@@ -25,3 +25,5 @@ export * from "./vaults";
 export * from "./operatorGrid";
 
 export * from "./share-rate";
+
+export * from "./operatorGrid";

@@ -3,6 +3,7 @@ import { ContractTransactionReceipt, keccak256, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   LazyOracle__MockForVaultHub,
@@ -190,6 +191,7 @@ describe("VaultHub.sol:forceExit", () => {
     await reportVault({});
     await vaultHub.mintShares(vaultAddress, user, ether("0.9"));
     await reportVault({ totalValue: ether("0.9") });
+    await setBalance(vaultAddress, ether("0.85"));
   };
 
   context("forceValidatorExit", () => {
@@ -232,7 +234,15 @@ describe("VaultHub.sol:forceExit", () => {
     context("unhealthy vault", () => {
       beforeEach(async () => await makeVaultUnhealthy());
 
-      it("initiates force validator withdrawal", async () => {
+      it("reverts if the value on the vault is not enough to cover rebalance", async () => {
+        await setBalance(vaultAddress, ether("0.9")); // 0.9 ETH is enough to cover rebalance
+
+        await expect(
+          vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }),
+        ).to.be.revertedWithCustomError(vaultHub, "ForcedValidatorExitNotAllowed");
+      });
+
+      it("initiates force validator withdrawal when the value on the vault is enough to cover rebalance", async () => {
         await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
           .to.emit(vaultHub, "ForcedValidatorExitTriggered")
           .withArgs(vaultAddress, SAMPLE_PUBKEY, feeRecipient);

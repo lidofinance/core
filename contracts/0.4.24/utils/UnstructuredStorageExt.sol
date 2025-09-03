@@ -9,7 +9,7 @@ pragma solidity 0.4.24;
 
 import {UnstructuredStorage} from "@aragon/os/contracts/apps/AragonApp.sol";
 
-library UnstructuredStorageUint128 {
+library UnstructuredStorageExt {
     using UnstructuredStorage for bytes32;
 
     uint256 constant internal UINT128_LOW_MASK = ~uint128(0);

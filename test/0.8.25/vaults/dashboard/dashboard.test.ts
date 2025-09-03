@@ -572,6 +572,40 @@ describe("Dashboard.sol", () => {
     });
   });
 
+  context("obligations views", () => {
+    before(async () => {
+      await hub.mock__setObligations(vault, 100n, 200n);
+    });
+
+    it("shows the correct obligations", async () => {
+      const obligations = await dashboard.obligations();
+
+      expect(obligations).to.deep.equal([100n, 200n]);
+    });
+
+    it("shows zeroes if vault is not connected", async () => {
+      await hub.deleteVaultConnection(vault);
+
+      const obligations = await dashboard.obligations();
+      expect(obligations).to.deep.equal([0n, 0n]);
+    });
+
+    it("shows the correct obligations shortfall", async () => {
+      const [sharesToRebalance, unsettledLidoFees] = await dashboard.obligations();
+      const rebalanceAmount = await steth.getPooledEthBySharesRoundUp(sharesToRebalance);
+
+      const obligationsShortfall = await dashboard.obligationsShortfall();
+      expect(obligationsShortfall).to.equal(rebalanceAmount + unsettledLidoFees);
+    });
+
+    it("shows the correct rebalance shortfall shares", async () => {
+      const [sharesToRebalance] = await dashboard.obligations();
+      const rebalanceShortfallShares = await dashboard.rebalanceShortfallShares();
+
+      expect(rebalanceShortfallShares).to.equal(sharesToRebalance);
+    });
+  });
+
   context("transferStVaultOwnership", () => {
     it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).transferVaultOwnership(vaultOwner)).to.be.revertedWithCustomError(

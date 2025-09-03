@@ -81,7 +81,6 @@ describe("StakingVault.sol", () => {
     expect(await stakingVault.version()).to.equal(1);
     expect(await stakingVault.getInitializedVersion()).to.equal(1);
     expect(await stakingVault.pendingOwner()).to.equal(ZeroAddress);
-    expect(await stakingVault.isOssified()).to.equal(false);
     expect(toChecksumAddress(await stakingVault.withdrawalCredentials())).to.equal(
       toChecksumAddress("0x02" + "00".repeat(11) + de0x(await stakingVault.getAddress())),
     );
@@ -158,7 +157,7 @@ describe("StakingVault.sol", () => {
     it("reverts on already ossified", async () => {
       await stakingVault.ossify();
 
-      await expect(stakingVault.ossify()).to.revertedWithCustomError(stakingVault, "VaultOssified");
+      await expect(stakingVault.ossify()).to.revertedWithCustomError(stakingVault, "AlreadyOssified");
     });
 
     it("ossifies the vault", async () => {

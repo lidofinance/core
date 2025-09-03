@@ -18,9 +18,9 @@ import {NodeOperatorFee} from "./NodeOperatorFee.sol";
 import {VaultHub} from "../VaultHub.sol";
 
 interface IWstETH is IERC20 {
-    function wrap(uint256) external returns (uint256);
+    function wrap(uint256 _stETHAmount) external returns (uint256);
 
-    function unwrap(uint256) external returns (uint256);
+    function unwrap(uint256 _wstETHAmount) external returns (uint256);
 }
 
 /**
@@ -82,6 +82,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Calls the parent's initializer and approves the max allowance for WSTETH for gas savings
      * @param _defaultAdmin The address of the default admin
      * @param _nodeOperatorManager The address of the node operator manager
+     * @param _nodeOperatorFeeRecipient The address of the node operator fee recipient
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry time in seconds
      */
@@ -173,15 +174,31 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the amount of ether that was accrued on the vault as Lido fees but not yet settled.
+     * @notice Returns the amount of shares to burn to restore vault healthiness or to fulfill redemptions and the
+     *         amount of outstanding Lido fees
+     * @return amount of shares to rebalance
+     * @return amount of Lido fees to be settled
      */
-    function unsettledFeesValue() external view returns (uint256) {
-        VaultHub.VaultRecord memory record = VAULT_HUB.vaultRecord(address(_stakingVault()));
-        return record.cumulativeLidoFees - record.settledLidoFees;
+    function obligations() external view returns (uint256, uint256) {
+        return VAULT_HUB.obligations(address(_stakingVault()));
     }
 
     /**
-     * @notice Returns tha amount of ether that is locked on the vault only as a reserve.
+     * @notice Returns the amount of ether shortfall to cover the outstanding obligations of the vault
+     */
+    function obligationsShortfall() external view returns (uint256) {
+        return VAULT_HUB.obligationsShortfall(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of shares to rebalance to restore vault healthiness or to fulfill redemptions
+     */
+    function rebalanceShortfallShares() external view returns (uint256) {
+        return VAULT_HUB.rebalanceShortfallShares(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of ether that is locked on the vault only as a reserve.
      * @dev There is no way to mint stETH for it (it includes connection deposit and slashing reserve)
      */
     function minimalReserve() public view returns (uint256) {
@@ -339,7 +356,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Mints stETH tokens backed by the vault to the recipient.
-     * !NB: this will revert with`VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
+     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
      * @param _recipient Address of the recipient
      * @param _amountOfStETH Amount of stETH to mint
      */
