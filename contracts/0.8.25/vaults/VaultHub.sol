@@ -336,7 +336,7 @@ contract VaultHub is PausableUntilWithRoles {
     function connectVault(address _vault) external whenResumed {
         _requireNotZero(_vault);
 
-        if (!IVaultFactory(LIDO_LOCATOR.vaultFactory()).isVaultVerified(_vault)) revert VaultNotVerified(_vault);
+        if (!IVaultFactory(LIDO_LOCATOR.vaultFactory()).deployedVaults(_vault)) revert VaultNotFactoryDeployed(_vault);
         IStakingVault vault_ = IStakingVault(_vault);
         if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
         if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
@@ -1708,5 +1708,5 @@ contract VaultHub is PausableUntilWithRoles {
     error PartialValidatorWithdrawalNotAllowed();
     error ForcedValidatorExitNotAllowed();
     error BadDebtSocializationNotAllowed();
-    error VaultNotVerified(address vault);
+    error VaultNotFactoryDeployed(address vault);
 }

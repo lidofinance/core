@@ -25,13 +25,12 @@ contract VaultFactory {
     address public immutable DASHBOARD_IMPL;
 
     /**
-     * @notice mapping of verified vaults
-     * @dev The vault is verified only if it is deployed by this factory.
-     *      Only verified vaults can be connected to VaultHub.
+     * @notice mapping of vaults deployed by this factory
+     * @dev Only the vaults deployed by this factory can be connected to VaultHub.
      *      This ensures that the vault storage has not been tampered with
      *      before connecting to VaultHub.
      */
-    mapping(address vault => bool isVerified) public vaults;
+    mapping(address vault => bool) public deployedVaults;
 
     /**
      * @param _lidoLocator The address of the LidoLocator contract
@@ -46,15 +45,6 @@ contract VaultFactory {
         LIDO_LOCATOR = _lidoLocator;
         BEACON = _beacon;
         DASHBOARD_IMPL = _dashboardImpl;
-    }
-
-    /**
-     * @notice Checks if a vault is verified, i.e. deployed by this factory
-     * @param _vault The address of the vault to check
-     * @return True if the vault is verified, false otherwise
-     */
-    function isVaultVerified(address _vault) external view returns (bool) {
-        return vaults[_vault];
     }
 
     /**
@@ -160,7 +150,7 @@ contract VaultFactory {
 
     function _deployVault() internal returns (address vault) {
         vault = address(new PinnedBeaconProxy(BEACON, ""));
-        vaults[vault] = true;
+        deployedVaults[vault] = true;
     }
 
     /**

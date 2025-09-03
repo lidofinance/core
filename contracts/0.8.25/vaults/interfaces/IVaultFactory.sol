@@ -5,5 +5,5 @@
 pragma solidity 0.8.25;
 
 interface IVaultFactory {
-    function isVaultVerified(address _vault) external view returns (bool);
+    function deployedVaults(address _vault) external view returns (bool);
 }
