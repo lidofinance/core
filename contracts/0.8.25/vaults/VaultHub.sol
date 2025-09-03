@@ -12,6 +12,7 @@ import {IHashConsensus} from "contracts/common/interfaces/IHashConsensus.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 import {IPinnedBeaconProxy} from "./interfaces/IPinnedBeaconProxy.sol";
+import {IVaultFactory} from "./interfaces/IVaultFactory.sol";
 
 import {OperatorGrid} from "./OperatorGrid.sol";
 import {LazyOracle} from "./LazyOracle.sol";
@@ -32,8 +33,6 @@ contract VaultHub is PausableUntilWithRoles {
     // -----------------------------
     /// @custom:storage-location erc7201:VaultHub
     struct Storage {
-        /// @notice vault proxy contract codehashes allowed for connecting
-        mapping(bytes32 codehash => bool allowed) codehashes;
         /// @notice accounting records for each vault
         mapping(address vault => VaultRecord) records;
         /// @notice connection parameters for each vault
@@ -117,10 +116,6 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev 0x479bc4a51d27fbdc8e51b5b1ebd3dcd58bd229090980bff226f8930587e69ce3
     bytes32 public immutable VAULT_MASTER_ROLE = keccak256("vaults.VaultHub.VaultMasterRole");
 
-    /// @notice role that allows to set allowed codehashes
-    /// @dev 0x712bc47e8f21e3271b5614025535450b46e67d6db1aeb3b0b1a9b76e7eaa7568
-    bytes32 public immutable VAULT_CODEHASH_SET_ROLE = keccak256("vaults.VaultHub.VaultCodehashSetRole");
-
     /// @notice role that allows to accrue Lido Core redemptions on the vault
     /// @dev 0x44f007e8cc2a08047a03d8d9c295057454942eb49ee3ced9c87e9b9406f21174
     bytes32 public immutable REDEMPTION_MASTER_ROLE = keccak256("vaults.VaultHub.RedemptionMasterRole");
@@ -147,9 +142,6 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 internal immutable MAX_FEE_BP = type(uint16).max;
     /// @dev special value for `disconnectTimestamp` storage means the vault is not marked for disconnect
     uint48 internal immutable DISCONNECT_NOT_INITIATED = type(uint48).max;
-
-    /// @notice codehash of the account with no code
-    bytes32 private immutable EMPTY_CODEHASH = keccak256("");
 
     /// @notice minimum amount of ether that is required for the beacon chain deposit
     /// @dev used as a threshold for the beacon chain deposits pause
@@ -340,25 +332,13 @@ contract VaultHub is PausableUntilWithRoles {
         return _storage().badDebtToInternalize.getValueForLastRefSlot(CONSENSUS_CONTRACT);
     }
 
-    /// @notice Set if a vault proxy codehash is allowed to be connected to the hub
-    /// @param _codehash vault proxy codehash
-    /// @param _allowed true to add, false to remove
-    /// @dev msg.sender must have VAULT_CODEHASH_SET_ROLE
-    function setAllowedCodehash(bytes32 _codehash, bool _allowed) external onlyRole(VAULT_CODEHASH_SET_ROLE) {
-        _requireNotZero(uint256(_codehash));
-        if (_codehash == EMPTY_CODEHASH) revert ZeroCodehash();
-
-        _storage().codehashes[_codehash] = _allowed;
-
-        emit AllowedCodehashUpdated(_codehash, _allowed);
-    }
-
     /// @notice connects a vault to the hub in permissionless way, get limits from the Operator Grid
     /// @param _vault vault address
     /// @dev vault should have transferred ownership to the VaultHub contract
     function connectVault(address _vault) external whenResumed {
         _requireNotZero(_vault);
 
+        if (!IVaultFactory(LIDO_LOCATOR.vaultFactory()).deployedVaults(_vault)) revert VaultNotFactoryDeployed(_vault);
         IStakingVault vault_ = IStakingVault(_vault);
         if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
         if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
@@ -958,9 +938,6 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection memory connection = _vaultConnection(_vault);
         if (connection.vaultIndex != 0) revert AlreadyConnected(_vault, connection.vaultIndex);
 
-        bytes32 codehash = address(_vault).codehash;
-        if (!_storage().codehashes[codehash]) revert CodehashNotAllowed(_vault, codehash);
-
         uint256 vaultBalance = _vault.balance;
         if (vaultBalance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, vaultBalance, CONNECT_DEPOSIT);
 
@@ -1526,8 +1503,6 @@ contract VaultHub is PausableUntilWithRoles {
     //           EVENTS
     // -----------------------------
 
-    event AllowedCodehashUpdated(bytes32 indexed codehash, bool allowed);
-
     event VaultConnected(
         address indexed vault,
         uint256 shareLimit,
@@ -1620,12 +1595,10 @@ contract VaultHub is PausableUntilWithRoles {
     error InsufficientValue(address vault, uint256 etherToLock, uint256 maxLockableValue);
     error NoLiabilitySharesShouldBeLeft(address vault, uint256 liabilityShares);
     error NoUnsettledLidoFeesShouldBeLeft(address vault, uint256 unsettledLidoFees);
-    error CodehashNotAllowed(address vault, bytes32 codehash);
     error VaultOssified(address vault);
     error VaultInsufficientBalance(address vault, uint256 currentBalance, uint256 expectedBalance);
     error VaultReportStale(address vault);
     error PDGNotDepositor(address vault);
-    error ZeroCodehash();
     error VaultHubNotPendingOwner(address vault);
     error HasRedemptionsCannotDeposit(address vault);
     error FeesTooHighCannotDeposit(address vault);
@@ -1634,4 +1607,5 @@ contract VaultHub is PausableUntilWithRoles {
     error PartialValidatorWithdrawalNotAllowed();
     error ForcedValidatorExitNotAllowed();
     error BadDebtSocializationNotAllowed();
+    error VaultNotFactoryDeployed(address vault);
 }

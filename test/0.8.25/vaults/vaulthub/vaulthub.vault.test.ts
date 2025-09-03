@@ -152,7 +152,6 @@ describe("VaultHub.sol:owner-functions", () => {
 
     // Grant roles
     await vaultHub.grantRole(await vaultHub.VAULT_MASTER_ROLE(), vaultOwner);
-    await vaultHub.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), vaultOwner);
 
     // Update locator
     await updateLidoLocatorImplementation(await locator.getAddress(), {
@@ -166,11 +165,11 @@ describe("VaultHub.sol:owner-functions", () => {
     const beacon = await ethers.deployContract("UpgradeableBeacon", [stakingVaultImpl, deployer]);
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [beacon]);
 
-    // Setup vault and allow codehash
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultFactory });
+
+    // Setup vault
     vault = await createVault(vaultFactory, vaultOwner);
     vaultAddress = await vault.getAddress();
-    const codehash = ethers.keccak256(await ethers.provider.getCode(vaultAddress));
-    await vaultHub.connect(vaultOwner).setAllowedCodehash(codehash, true);
 
     // Connect vault
     await vault.connect(vaultOwner).fund({ value: CONNECT_DEPOSIT });
