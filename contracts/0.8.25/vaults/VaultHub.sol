@@ -296,7 +296,8 @@ contract VaultHub is PausableUntilWithRoles {
     ///         ether for rebalancing to restore vault health or fulfill redemptions plus amount of Lido fees that are
     ///         forced to be settled (>= MIN_BEACON_DEPOSIT)
     /// @param _vault The address of the vault to check
-    /// @return shortfall The amount of ether required to cover all uncovered obligations
+    /// @return amount of ether required to cover all uncovered obligations or UINT256_MAX if it's impossible to cover
+    ///         obligations and make the vault healthy
     /// @dev returns 0 if the vault is not connected
     function obligationsShortfall(address _vault) external view returns (uint256) {
         VaultConnection storage connection = _checkConnection(_vault);
@@ -828,7 +829,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (minPartialAmountInGwei < type(uint256).max) {
             _requireFreshReport(_vault, record);
 
-            /// @dev NB: Disallow partial withdrawals when the vault has uncovered obligations in order to prevent the
+            /// @dev NB: Disallow partial withdrawals when the vault has obligations shortfall in order to prevent the
             ///      vault owner from clogging the consensus layer withdrawal queue by front-running and delaying the
             ///      forceful validator exits required for rebalancing the vault. Partial withdrawals only allowed if
             ///      the requested amount of withdrawals is enough to cover the uncovered obligations.
@@ -842,11 +843,11 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault has
-    ///         uncovered obligations
+    ///         obligations shortfall
     /// @param _vault address of the vault to exit validators from
     /// @param _pubkeys array of public keys of the validators to exit
     /// @param _refundRecipient address that will receive the refund for transaction costs
-    /// @dev    In case the vault has uncovered obligations, trusted actor with the role can force its validators to
+    /// @dev    In case the vault has obligations shortfall, trusted actor with the role can force its validators to
     ///         exit the beacon chain. This returns the vault's deposited ETH back to vault's balance and allows to
     ///         rebalance the vault.
     function forceValidatorExit(
@@ -867,7 +868,7 @@ contract VaultHub is PausableUntilWithRoles {
         emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
-    /// @notice Permissionless rebalance for vaults with uncovered obligations
+    /// @notice Permissionless rebalance for vaults with obligations shortfall
     /// @param _vault vault address
     /// @dev rebalance all available amount of ether on the vault to fullfill the vault's obligations: restore vault
     ///      to healthy state and settle outstanding redemptions. Fees are not settled in this case.
