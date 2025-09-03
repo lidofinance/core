@@ -1,6 +1,6 @@
 {
   "name": "lido-on-ethereum",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Lido on Ethereum is a liquid-staking protocol allowing anyone to earn staking rewards without locking ether or maintaining infrastructure",
   "license": "GPL-3.0-only",
   "engines": {

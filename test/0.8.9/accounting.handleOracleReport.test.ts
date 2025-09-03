@@ -98,7 +98,7 @@ describe("Accounting.sol:report", () => {
   }
 
   context("simulateOracleReport", () => {
-    it("should revert if the report is not valid", async () => {
+    it("should not revert if the report is not valid", async () => {
       const preTotalPooledEther = await lido.getTotalPooledEther();
       const preTotalShares = await lido.getTotalShares();
 
@@ -111,11 +111,10 @@ describe("Accounting.sol:report", () => {
       expect(simulated.sharesToBurnForWithdrawals).to.equal(0n);
       expect(simulated.totalSharesToBurn).to.equal(0n);
       expect(simulated.sharesToMintAsFees).to.equal(0n);
-      expect(simulated.rewardDistribution.recipients).to.deep.equal([]);
-      expect(simulated.rewardDistribution.moduleIds).to.deep.equal([]);
-      expect(simulated.rewardDistribution.modulesFees).to.deep.equal([]);
-      expect(simulated.rewardDistribution.totalFee).to.equal(0n);
-      expect(simulated.rewardDistribution.precisionPoints).to.equal(0n);
+      expect(simulated.feeDistribution.moduleFeeRecipients).to.deep.equal([]);
+      expect(simulated.feeDistribution.moduleIds).to.deep.equal([]);
+      expect(simulated.feeDistribution.moduleSharesToMint).to.deep.equal([]);
+      expect(simulated.feeDistribution.treasurySharesToMint).to.equal(0n);
       expect(simulated.principalClBalance).to.equal(0n);
       expect(simulated.postInternalShares).to.equal(preTotalShares);
       expect(simulated.postInternalEther).to.equal(preTotalPooledEther);
@@ -284,12 +283,10 @@ describe("Accounting.sol:report", () => {
       await expect(
         accounting.handleOracleReport(
           report({
-            clBalance: 1n, // made 1 wei of profit, trigers reward processing
+            clBalance: 1n, // made 1 wei of profit, triggers reward processing
           }),
         ),
-      )
-        .to.be.revertedWithCustomError(accounting, "UnequalArrayLengths")
-        .withArgs(1, 2);
+      ).to.be.revertedWithPanic(0x01); // assert
     });
 
     it("Reverts if the number of module ids does not match the number of module fees as returned from `StakingRouter.getStakingRewardsDistribution`", async () => {
@@ -315,12 +312,10 @@ describe("Accounting.sol:report", () => {
       await expect(
         accounting.handleOracleReport(
           report({
-            clBalance: 1n, // made 1 wei of profit, trigers reward processing
+            clBalance: 1n, // made 1 wei of profit, triggers reward processing
           }),
         ),
-      )
-        .to.be.revertedWithCustomError(accounting, "UnequalArrayLengths")
-        .withArgs(1, 2);
+      ).to.be.revertedWithPanic(0x01); // assert
     });
 
     it("Does not mint and transfer any shares if the total fee is zero as returned from `StakingRouter.getStakingRewardsDistribution`", async () => {

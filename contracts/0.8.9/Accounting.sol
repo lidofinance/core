@@ -61,7 +61,7 @@ contract Accounting {
         /// @notice number of stETH shares to mint as a protocol fee
         uint256 sharesToMintAsFees;
         /// @notice amount of NO fees to transfer to each module
-        StakingRewardsDistribution rewardDistribution;
+        FeeDistribution feeDistribution;
         /// @notice amount of CL ether that is not rewards earned during this report period
         /// the sum of CL balance on the previous report and the amount of fresh deposits since then
         uint256 principalClBalance;
@@ -79,15 +79,14 @@ contract Accounting {
         uint256 postTotalPooledEther;
     }
 
-    struct StakingRewardsDistribution {
-        address[] recipients;
+    /// @notice precalculated numbers of shares that should be minted as fee to NO
+    /// via StakingModules and to Lido protocol treasury
+    struct FeeDistribution {
+        address[] moduleFeeRecipients;
         uint256[] moduleIds;
-        uint96[] modulesFees;
-        uint96 totalFee;
-        uint256 precisionPoints;
+        uint256[] moduleSharesToMint;
+        uint256 treasurySharesToMint;
     }
-
-    error NotAuthorized(string operation, address addr);
 
     /// @notice deposit size in wei (for pre-maxEB accounting)
     uint256 private constant DEPOSIT_SIZE = 32 ether;
@@ -157,8 +156,6 @@ contract Accounting {
         update.preTotalShares = _pre.totalShares;
         update.preTotalPooledEther = _pre.totalPooledEther;
 
-        update.rewardDistribution = _getStakingRewardsDistribution(_contracts.stakingRouter);
-
         if (_withdrawalsShareRate != 0) {
             // Get the ether to lock for withdrawal queue and shares to move to Burner to finalize requests
             (update.etherToFinalizeWQ, update.sharesToFinalizeWQ) = _calculateWithdrawals(
@@ -204,13 +201,19 @@ contract Accounting {
             - update.etherToFinalizeWQ; // withdrawals
 
         // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
-        update.sharesToMintAsFees = _calculateLidoProtocolFeeShares(_report, update, postInternalSharesBeforeFees, update.postInternalEther);
+        (update.sharesToMintAsFees, update.feeDistribution) = _calculateProtocolFees(
+            _contracts.stakingRouter,
+            _report,
+             update,
+            postInternalSharesBeforeFees
+        );
 
         update.postInternalShares = postInternalSharesBeforeFees + update.sharesToMintAsFees + _pre.badDebtToInternalize;
         uint256 postExternalShares = _pre.externalShares - _pre.badDebtToInternalize; // can't underflow by design
 
         update.postTotalShares = update.postInternalShares + postExternalShares;
-        update.postTotalPooledEther = update.postInternalEther + postExternalShares * update.postInternalEther / update.postInternalShares;
+        update.postTotalPooledEther = update.postInternalEther
+            + postExternalShares * update.postInternalEther / update.postInternalShares;
     }
 
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
@@ -227,12 +230,53 @@ contract Accounting {
         }
     }
 
+    function _calculateProtocolFees(
+        StakingRouter _stakingRouter,
+        ReportValues calldata _report,
+        CalculatedValues memory _update,
+        uint256 _internalSharesBeforeFees
+    ) internal view returns (uint256 sharesToMintAsFees, FeeDistribution memory feeDistribution) {
+        (
+            address[] memory recipients,
+            uint256[] memory stakingModuleIds,
+            uint96[] memory stakingModuleFees,
+            uint96 totalFee,
+            uint256 precisionPoints
+        ) = _stakingRouter.getStakingRewardsDistribution();
+
+        assert(recipients.length == stakingModuleIds.length);
+        assert(stakingModuleIds.length == stakingModuleFees.length);
+
+        sharesToMintAsFees = _calculateTotalProtocolFeeShares(
+            _report,
+            _update,
+            _internalSharesBeforeFees,
+            totalFee,
+            precisionPoints
+        );
+
+        if (sharesToMintAsFees > 0) {
+            feeDistribution.moduleFeeRecipients = recipients;
+            feeDistribution.moduleIds = stakingModuleIds;
+
+            (
+                feeDistribution.moduleSharesToMint,
+                feeDistribution.treasurySharesToMint
+            ) = _calculateFeeDistribution(
+                stakingModuleFees,
+                totalFee,
+                sharesToMintAsFees
+            );
+        }
+    }
+
     /// @dev calculates shares that are minted as the protocol fees
-    function _calculateLidoProtocolFeeShares(
+    function _calculateTotalProtocolFeeShares(
         ReportValues calldata _report,
         CalculatedValues memory _update,
         uint256 _internalSharesBeforeFees,
-        uint256 _internalEther
+        uint256 _totalFee,
+        uint256 _feePrecisionPoints
     ) internal pure returns (uint256 sharesToMintAsFees) {
         // we are calculating the share rate equal to the post-rebase share rate
         // but with fees taken as ether deduction instead of minting shares
@@ -245,17 +289,39 @@ contract Accounting {
         // https://research.lido.fi/t/lip-12-on-chain-part-of-the-rewards-distribution-after-the-merge/1625
         if (unifiedClBalance > _update.principalClBalance) {
             uint256 totalRewards = unifiedClBalance - _update.principalClBalance + _update.elRewards;
-            uint256 totalFee = _update.rewardDistribution.totalFee;
-            uint256 precision = _update.rewardDistribution.precisionPoints;
             // amount of fees in ether
-            uint256 feeEther = (totalRewards * totalFee) / precision;
+            uint256 feeEther = (totalRewards * _totalFee) / _feePrecisionPoints;
             // but we won't pay fees in ether, so we need to calculate how many shares we need to mint as fees
             // using the share rate that takes fees into account
             // the share rate is the same as the post-rebase share rate
             // but with fees taken as ether deduction instead of minting shares
             // to learn the amount of shares we need to mint to compensate for this fee
-            sharesToMintAsFees = (feeEther * _internalSharesBeforeFees) / (_internalEther - feeEther);
+            sharesToMintAsFees = (feeEther * _internalSharesBeforeFees) / (_update.postInternalEther - feeEther);
         }
+    }
+
+    function _calculateFeeDistribution(
+        uint96[] memory stakingModuleFees,
+        uint96 _totalFee,
+        uint256 _totalSharesToMintAsFees
+    ) internal pure returns (uint256[] memory moduleSharesToMint, uint256 treasurySharesToMint) {
+        assert(_totalFee > 0);
+
+        uint256 length = stakingModuleFees.length;
+        moduleSharesToMint = new uint256[](length);
+
+        uint256 totalModuleFeeShares = 0;
+
+        for (uint256 i; i < stakingModuleFees.length; ++i) {
+            uint256 moduleFee = stakingModuleFees[i];
+            if (moduleFee > 0) {
+                uint256 moduleFeeShares = (_totalSharesToMintAsFees * moduleFee) / _totalFee;
+                totalModuleFeeShares += moduleFeeShares;
+                moduleSharesToMint[i] = moduleFeeShares;
+            }
+        }
+
+        treasurySharesToMint = _totalSharesToMintAsFees - totalModuleFeeShares;
     }
 
     /// @dev applies the precalculated changes to the protocol state
@@ -276,12 +342,7 @@ contract Accounting {
             ];
         }
 
-        LIDO.processClStateUpdate(
-            _report.timestamp,
-            _pre.clValidators,
-            _report.clValidators,
-            _report.clBalance
-        );
+        LIDO.processClStateUpdate(_report.timestamp, _pre.clValidators, _report.clValidators, _report.clBalance);
 
         if (_pre.badDebtToInternalize > 0) {
             _contracts.vaultHub.decreaseInternalizedBadDebt(_pre.badDebtToInternalize);
@@ -290,11 +351,6 @@ contract Accounting {
 
         if (_update.totalSharesToBurn > 0) {
             _contracts.burner.commitSharesToBurn(_update.totalSharesToBurn);
-        }
-
-        // Distribute protocol fee (treasury & node operators)
-        if (_update.sharesToMintAsFees > 0) {
-            _distributeFee(_contracts.stakingRouter, _update.rewardDistribution, _update.sharesToMintAsFees);
         }
 
         LIDO.collectRewardsAndProcessWithdrawals(
@@ -307,6 +363,15 @@ contract Accounting {
             _report.simulatedShareRate,
             _update.etherToFinalizeWQ
         );
+
+        if (_update.sharesToMintAsFees > 0) {
+            _distributeFee(_update.feeDistribution);
+            // important to have this callback last for modules to have updated state
+            _contracts.stakingRouter.reportRewardsMinted(
+                _update.feeDistribution.moduleIds,
+                _update.feeDistribution.moduleSharesToMint
+            );
+        }
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
 
@@ -366,6 +431,25 @@ contract Accounting {
         }
     }
 
+    /// @dev mints protocol fees to the treasury and node operators and calls back to stakingRouter
+    function _distributeFee(FeeDistribution memory _feeDistribution) internal {
+        address[] memory recipients = _feeDistribution.moduleFeeRecipients;
+        uint256[] memory sharesToMint = _feeDistribution.moduleSharesToMint;
+        uint256 length = recipients.length;
+
+        for (uint256 i; i < length; ++i) {
+            uint256 moduleShares = sharesToMint[i];
+            if (moduleShares > 0) {
+                LIDO.mintShares(recipients[i], moduleShares);
+            }
+        }
+
+        uint256 treasuryShares = _feeDistribution.treasurySharesToMint;
+        if (treasuryShares > 0) { // an edge case when all fees goes to modules
+            LIDO.mintShares(LIDO_LOCATOR.treasury(), treasuryShares);
+        }
+    }
+
     /// @dev Notify observer about the completed token rebase.
     function _notifyRebaseObserver(
         IPostTokenRebaseReceiver _postTokenRebaseReceiver,
@@ -384,50 +468,6 @@ contract Accounting {
                 _update.sharesToMintAsFees
             );
         }
-    }
-
-    /// @dev mints protocol fees to the treasury and node operators
-    function _distributeFee(
-        StakingRouter _stakingRouter,
-        StakingRewardsDistribution memory _rewardsDistribution,
-        uint256 _sharesToMintAsFees
-    ) internal {
-        (uint256[] memory moduleFees, uint256 totalModuleFees) = _mintModuleFees(
-            _rewardsDistribution.recipients,
-            _rewardsDistribution.modulesFees,
-            _rewardsDistribution.totalFee,
-            _sharesToMintAsFees
-        );
-
-        _mintTreasuryFees(_sharesToMintAsFees - totalModuleFees);
-
-        _stakingRouter.reportRewardsMinted(_rewardsDistribution.moduleIds, moduleFees);
-    }
-
-    /// @dev mint rewards to the StakingModule recipients
-    function _mintModuleFees(
-        address[] memory _recipients,
-        uint96[] memory _modulesFees,
-        uint256 _totalFee,
-        uint256 _totalFees
-    ) internal returns (uint256[] memory moduleFees, uint256 totalModuleFees) {
-        moduleFees = new uint256[](_recipients.length);
-
-        for (uint256 i; i < _recipients.length; ++i) {
-            if (_modulesFees[i] > 0) {
-                uint256 iModuleFees = (_totalFees * _modulesFees[i]) / _totalFee;
-                moduleFees[i] = iModuleFees;
-                LIDO.mintShares(_recipients[i], iModuleFees);
-                totalModuleFees = totalModuleFees + iModuleFees;
-            }
-        }
-    }
-
-    /// @dev mints treasury fees
-    function _mintTreasuryFees(uint256 _amount) internal {
-        address treasury = LIDO_LOCATOR.treasury();
-
-        LIDO.mintShares(treasury, _amount);
     }
 
     /// @dev loads the required contracts from the LidoLocator to the struct in the memory
@@ -450,24 +490,11 @@ contract Accounting {
                 WithdrawalQueue(withdrawalQueue),
                 IPostTokenRebaseReceiver(postTokenRebaseReceiver),
                 StakingRouter(payable(stakingRouter)),
-                IVaultHub(payable(vaultHub))
+                IVaultHub(vaultHub)
             );
     }
 
-    /// @dev loads the staking rewards distribution to the struct in the memory
-    function _getStakingRewardsDistribution(
-        StakingRouter _stakingRouter
-    ) internal view returns (StakingRewardsDistribution memory ret) {
-        (ret.recipients, ret.moduleIds, ret.modulesFees, ret.totalFee, ret.precisionPoints) = _stakingRouter
-            .getStakingRewardsDistribution();
-
-        if (ret.recipients.length != ret.modulesFees.length)
-            revert UnequalArrayLengths(ret.recipients.length, ret.modulesFees.length);
-        if (ret.moduleIds.length != ret.modulesFees.length)
-            revert UnequalArrayLengths(ret.moduleIds.length, ret.modulesFees.length);
-    }
-
-    error UnequalArrayLengths(uint256 firstArrayLength, uint256 secondArrayLength);
+    error NotAuthorized(string operation, address addr);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
     error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
 }
