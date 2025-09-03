@@ -300,6 +300,17 @@ contract VaultHub is PausableUntilWithRoles {
         return _rebalanceShortfallShares(_vaultConnection(_vault), _vaultRecord(_vault));
     }
 
+    /// @notice calculates the ether shortfall required to fully cover all outstanding obligations of a vault including:
+    ///         ether for rebalancing to restore vault health or fulfill redemptions plus amount of Lido fees that are
+    ///         forced to be settled (>= MIN_BEACON_DEPOSIT)
+    /// @param _vault The address of the vault to check
+    /// @return shortfall The amount of ether required to cover all uncovered obligations
+    /// @dev returns 0 if the vault is not connected
+    function obligationsShortfall(address _vault) external view returns (uint256) {
+        VaultConnection storage connection = _checkConnection(_vault);
+        return _obligationsShortfall(_vault, connection, _vaultRecord(_vault));
+    }
+
     /// @notice returns the obligations of the vault: shares to rebalance to maintain healthiness or fulfill redemptions
     ///         and amount of the outstanding Lido fees
     /// @param _vault vault address
@@ -841,8 +852,8 @@ contract VaultHub is PausableUntilWithRoles {
             ///      vault owner from clogging the consensus layer withdrawal queue by front-running and delaying the
             ///      forceful validator exits required for rebalancing the vault. Partial withdrawals only allowed if
             ///      the requested amount of withdrawals is enough to cover the uncovered obligations.
-            uint256 uncoveredObligations = _uncoveredObligations(_vault, connection, record);
-            if (uncoveredObligations > 0 && minPartialAmountInGwei * 1e9 < uncoveredObligations) {
+            uint256 shortfall = _obligationsShortfall(_vault, connection, record);
+            if (shortfall > 0 && minPartialAmountInGwei * 1e9 < shortfall) {
                 revert PartialValidatorWithdrawalNotAllowed();
             }
         }
@@ -867,8 +878,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 uncoveredObligations = _uncoveredObligations(_vault, connection, record);
-        if (uncoveredObligations == 0) revert ForcedValidatorExitNotAllowed();
+        uint256 shortfall = _obligationsShortfall(_vault, connection, record);
+        if (shortfall == 0) revert ForcedValidatorExitNotAllowed();
 
         uint64[] memory amountsInGwei = new uint64[](0);
         _triggerVaultValidatorWithdrawals(_vault, msg.value, _pubkeys, amountsInGwei, _refundRecipient);
@@ -1211,7 +1222,7 @@ contract VaultHub is PausableUntilWithRoles {
         return liability > _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
     }
 
-    function _uncoveredObligations(
+    function _obligationsShortfall(
         address _vault,
         VaultConnection storage _connection,
         VaultRecord storage _record
