@@ -77,6 +77,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   });
 
   it("VaultHub is pausable and resumable", async () => {
+    const { lido } = ctx.contracts;
+
     await vaultHub.connect(agent).grantRole(await vaultHub.PAUSE_ROLE(), pauser);
     await vaultHub.connect(agent).grantRole(await vaultHub.RESUME_ROLE(), pauser);
 
@@ -95,9 +97,12 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     expect(await vaultHub.isPaused()).to.equal(false);
 
     // check that minting is resumed
+    const lockIncrease = await lido.getPooledEthBySharesRoundUp(testSharesAmountWei);
+    expect(lockIncrease).to.be.closeTo(TEST_STETH_AMOUNT_WEI, 2n);
+
     await expect(dashboard.mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
       .to.emit(vaultHub, "MintedSharesOnVault")
-      .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + TEST_STETH_AMOUNT_WEI);
+      .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + lockIncrease);
   });
 
   context("stETH minting", () => {
@@ -105,6 +110,9 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const { lido } = ctx.contracts;
       // add some stETH to the vault to have totalValue
       await dashboard.fund({ value: ether("1") });
+
+      const lockIncrease = await lido.getPooledEthBySharesRoundUp(testSharesAmountWei);
+      expect(lockIncrease).to.be.closeTo(TEST_STETH_AMOUNT_WEI, 2n);
 
       await expect(dashboard.mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(lido, "Transfer")
@@ -114,7 +122,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
         .to.emit(lido, "ExternalSharesMinted")
         .withArgs(stranger, testSharesAmountWei)
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + TEST_STETH_AMOUNT_WEI);
+        .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + lockIncrease);
     });
 
     // TODO: can mint within share limits of the vault
@@ -130,9 +138,13 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const newLimit = await lido.getCurrentStakeLimit();
 
       await dashboard.fund({ value: newLimit + ether("2") }); // try to fund to go healthy
+
+      const lockIncrease = await lido.getPooledEthBySharesRoundUp(testSharesAmountWei);
+      expect(lockIncrease).to.be.closeTo(TEST_STETH_AMOUNT_WEI, 2n);
+
       await expect(dashboard.mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + TEST_STETH_AMOUNT_WEI);
+        .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + lockIncrease);
     });
   });
 
