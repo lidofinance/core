@@ -176,11 +176,25 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the amount of shares to burn to restore vault healthiness or to fulfill redemptions and the
      *         amount of outstanding Lido fees
-     * @return sharesToRebalance amount of shares to rebalance
-     * @return unsettledLidoFees amount of Lido fees to be settled
+     * @return amount of shares to rebalance
+     * @return amount of Lido fees to be settled
      */
-    function obligations() external view returns (uint256 sharesToRebalance, uint256 unsettledLidoFees) {
+    function obligations() external view returns (uint256, uint256) {
         return VAULT_HUB.obligations(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of ether shortfall to cover the outstanding obligations of the vault
+     */
+    function obligationsShortfall() external view returns (uint256) {
+        return VAULT_HUB.obligationsShortfall(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of shares to rebalance to restore vault healthiness or to fulfill redemptions
+     */
+    function rebalanceShortfallShares() external view returns (uint256) {
+        return VAULT_HUB.rebalanceShortfallShares(address(_stakingVault()));
     }
 
     /**
