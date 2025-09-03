@@ -322,7 +322,7 @@ contract Accounting {
         PreReportState memory _pre,
         CalculatedValues memory _update
     ) internal {
-        _checkAccountingOracleReport(_contracts, _report, _pre, _update);
+        _sanityChecks(_contracts, _report, _pre, _update);
 
         uint256 lastWithdrawalRequestToFinalize;
         if (_update.sharesToFinalizeWQ > 0) {
@@ -381,7 +381,7 @@ contract Accounting {
 
     /// @dev checks the provided oracle data internally and against the sanity checker contract
     /// reverts if a check fails
-    function _checkAccountingOracleReport(
+    function _sanityChecks(
         Contracts memory _contracts,
         ReportValues calldata _report,
         PreReportState memory _pre,
@@ -391,6 +391,9 @@ contract Accounting {
         if (_report.clValidators < _pre.clValidators || _report.clValidators > _pre.depositedValidators) {
             revert IncorrectReportValidators(_report.clValidators, _pre.clValidators, _pre.depositedValidators);
         }
+
+        // Oracle should consider this limitation
+        if (_update.postInternalShares == 0) revert InternalSharesCantBeZero();
 
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
             _report.timeElapsed,
@@ -404,20 +407,16 @@ contract Accounting {
         );
 
         if (_report.withdrawalFinalizationBatches.length > 0) {
-            _contracts.oracleReportSanityChecker.checkWithdrawalQueueOracleReport(
-                _report.withdrawalFinalizationBatches[_report.withdrawalFinalizationBatches.length - 1],
-                _report.timestamp
-            );
-        }
-
-        // Sanity check for the provided simulated share rate
-        if (_report.withdrawalFinalizationBatches.length != 0) {
             _contracts.oracleReportSanityChecker.checkSimulatedShareRate(
                 _update.postTotalPooledEther,
                 _update.postTotalShares,
                 _update.etherToFinalizeWQ,
                 _update.sharesToBurnForWithdrawals,
                 _report.simulatedShareRate
+            );
+            _contracts.oracleReportSanityChecker.checkWithdrawalQueueOracleReport(
+                _report.withdrawalFinalizationBatches[_report.withdrawalFinalizationBatches.length - 1],
+                _report.timestamp
             );
         }
     }
@@ -488,4 +487,5 @@ contract Accounting {
     error NotAuthorized(string operation, address addr);
     error IncorrectReportTimestamp(uint256 reportTimestamp, uint256 upperBoundTimestamp);
     error IncorrectReportValidators(uint256 reportValidators, uint256 minValidators, uint256 maxValidators);
+    error InternalSharesCantBeZero();
 }
