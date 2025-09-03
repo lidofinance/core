@@ -171,8 +171,8 @@ contract Accounting {
             update.sharesToBurnForWithdrawals,
             update.totalSharesToBurn // shares to burn from Burner balance
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
-            _pre.totalPooledEther,
-            _pre.totalShares,
+            _pre.totalPooledEther - _pre.externalEther,
+            _pre.totalShares - _pre.externalShares,
             update.principalClBalance,
             _report.clBalance,
             _report.withdrawalVaultBalance,
