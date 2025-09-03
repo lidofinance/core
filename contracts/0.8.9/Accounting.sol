@@ -110,7 +110,7 @@ contract Accounting {
     /// @param _report report values
     function simulateOracleReport(
         ReportValues calldata _report
-    ) public view returns (CalculatedValues memory update) {
+    ) external view returns (CalculatedValues memory update) {
         Contracts memory contracts = _loadOracleReportContracts();
         PreReportState memory pre = _snapshotPreReportState(contracts);
 
