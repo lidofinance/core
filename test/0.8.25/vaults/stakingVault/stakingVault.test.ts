@@ -25,6 +25,7 @@ import {
   MAX_UINT256,
   ONE_GWEI,
   proxify,
+  randomAddress,
   streccak,
 } from "lib";
 import { getPubkeys } from "lib/protocol";
@@ -511,6 +512,12 @@ describe("StakingVault.sol", () => {
       ).to.be.revertedWithCustomError(stakingVault, "InvalidPubkeysLength");
     });
 
+    it("reverts if the refund recipient is the zero address", async () => {
+      await expect(stakingVault.triggerValidatorWithdrawals(SAMPLE_PUBKEY, [], ZeroAddress, { value: 1n }))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_excessRefundRecipient");
+    });
+
     it("reverts if called by a non-owner", async () => {
       await expect(
         stakingVault.connect(stranger).triggerValidatorWithdrawals(SAMPLE_PUBKEY, [], vaultOwner, { value: 1n }),
@@ -595,27 +602,23 @@ describe("StakingVault.sol", () => {
         .withArgs(SAMPLE_PUBKEY, [amount], 0n, vaultOwner);
     });
 
-    it("requests a partial validator withdrawal and refunds the excess fee to the msg.sender if the refund recipient is the zero address", async () => {
+    it("requests a partial validator withdrawal and refunds the excess", async () => {
       const amount = ether("0.1");
       const overpaid = 100n;
-      const ownerBalanceBefore = await ethers.provider.getBalance(vaultOwner);
+      const recipient = await randomAddress();
 
       const tx = await stakingVault
         .connect(vaultOwner)
-        .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [amount], ZeroAddress, { value: baseFee + overpaid });
+        .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [amount], recipient, { value: baseFee + overpaid });
 
       await expect(tx)
         .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalsTriggered")
-        .withArgs(SAMPLE_PUBKEY, [amount], overpaid, vaultOwner);
+        .withArgs(SAMPLE_PUBKEY, [amount], overpaid, recipient);
 
-      const txReceipt = (await tx.wait()) as ContractTransactionReceipt;
-      const gasFee = txReceipt.gasPrice * txReceipt.cumulativeGasUsed;
-
-      const ownerBalanceAfter = await ethers.provider.getBalance(vaultOwner);
-
-      expect(ownerBalanceAfter).to.equal(ownerBalanceBefore - baseFee - gasFee); // overpaid is refunded back
+      const recipientBalance = await ethers.provider.getBalance(recipient);
+      expect(recipientBalance).to.equal(overpaid);
     });
 
     it("requests a multiple validator withdrawals", async () => {
