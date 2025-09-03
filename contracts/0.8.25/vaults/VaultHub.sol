@@ -1204,8 +1204,7 @@ contract VaultHub is PausableUntilWithRoles {
         return liability > _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
     }
 
-    function _obligationsShortfall(
-        address _vault,
+    function _obligationsValue(
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
@@ -1216,7 +1215,17 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 unsettledLidoFees = _unsettledLidoFeesValue(_record);
         uint256 feesToCover = unsettledLidoFees < MIN_BEACON_DEPOSIT ? 0 : unsettledLidoFees;
 
-        uint256 amountToCover = _getPooledEthBySharesRoundUp(sharesToCover) + feesToCover;
+        return _getPooledEthBySharesRoundUp(sharesToCover) + feesToCover;
+    }
+
+    function _obligationsShortfall(
+        address _vault,
+        VaultConnection storage _connection,
+        VaultRecord storage _record
+    ) internal view returns (uint256) {
+        uint256 amountToCover = _obligationsValue(_connection, _record);
+        if (amountToCover == type(uint256).max) return type(uint256).max;
+
         return amountToCover > _vault.balance ? amountToCover - _vault.balance : 0;
     }
 
@@ -1281,16 +1290,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection
     ) internal {
         IStakingVault vault_ = IStakingVault(_vault);
-
-        // automatically pause beacon chain deposits:
-        if (
-            // if vault has unsettled redemptions
-            _record.redemptionShares > 0 ||
-            // if vault has unsettled lido fees to avoid indefinitely deferred fees
-            _unsettledLidoFeesValue(_record) >= MIN_BEACON_DEPOSIT ||
-            // if vault is not healthy, to disallow pushing funds to beacon chain instead of rebalancing
-            !_isVaultHealthy(_connection, _record)
-        ) {
+        uint256 obligationsValue = _obligationsValue(_connection, _record);
+        if (obligationsValue > 0) {
             _pauseBeaconChainDepositsIfNotAlready(vault_);
         } else if (!_connection.isBeaconDepositsManuallyPaused) {
             _resumeBeaconChainDepositsIfNotAlready(vault_);
