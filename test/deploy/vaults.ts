@@ -57,9 +57,6 @@ async function createMockStakignVault(
   const events = findEvents(vaultCreationTx, "VaultCreated");
   const vaultCreatedEvent = events[0];
 
-  const deployedVaults = await factory.deployedVaults(vaultCreatedEvent.args.vault); // check that the vault is deployed
-  console.log("deployedVaults", deployedVaults);
-
   return ethers.getContractAt("StakingVault__MockForVaultHub", vaultCreatedEvent.args.vault);
 }
 
@@ -78,10 +75,6 @@ async function createMockStakingVaultAndConnect(
 
   await operatorGridMock.changeVaultTierParams(vault, { ...TIER_PARAMS, ...tierParams });
   await vault.connect(owner).transferOwnership(vaultHub);
-
-  const deployedVaults = await factory.deployedVaults(vault); // check that the vault is deployed
-  console.log("deployedVaults", deployedVaults);
-
   await vaultHub.connect(deployer).connectVault(vault);
 
   return vault;
