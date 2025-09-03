@@ -275,9 +275,15 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { lido, vaultHub } = ctx.contracts;
 
     // Calculate the max stETH that can be minted on the vault 101 with the given LTV
-    stakingVaultMaxMintingShares = await lido.getSharesByPooledEth(
-      (VAULT_DEPOSIT * mintableRatio) / TOTAL_BASIS_POINTS,
-    );
+    const funding = VAULT_DEPOSIT + VAULT_CONNECTION_DEPOSIT;
+    const maxMintableStETH = (funding * mintableRatio) / TOTAL_BASIS_POINTS;
+    stakingVaultMaxMintingShares = await lido.getSharesByPooledEth(maxMintableStETH);
+
+    const maxMintableShares = await dashboard.totalMintingCapacityShares();
+    expect(maxMintableShares).to.equal(stakingVaultMaxMintingShares);
+
+    const maxLockableValue = await vaultHub.maxLockableValue(stakingVaultAddress);
+    expect(maxLockableValue).to.equal(funding);
 
     log.debug("Staking Vault", {
       "Staking Vault Address": stakingVaultAddress,
@@ -289,23 +295,20 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     await reportVaultDataWithProof(ctx, stakingVault);
 
     // mint
-    const mintTx = await dashboard.connect(owner).mintShares(owner, stakingVaultMaxMintingShares);
-    const mintTxReceipt = (await mintTx.wait()) as ContractTransactionReceipt;
+    const lockedBefore = await vaultHub.locked(stakingVaultAddress);
+    expect(lockedBefore).to.equal(VAULT_CONNECTION_DEPOSIT); // minimal reserve
 
-    const mintEvents = ctx.getEvents(mintTxReceipt, "MintedSharesOnVault");
-    expect(mintEvents.length).to.equal(1n);
-    expect(mintEvents[0].args.vault).to.equal(stakingVaultAddress);
-    expect(mintEvents[0].args.amountOfShares).to.equal(stakingVaultMaxMintingShares);
+    await expect(dashboard.connect(owner).mintShares(owner, stakingVaultMaxMintingShares))
+      .to.emit(vaultHub, "MintedSharesOnVault")
+      .withArgs(stakingVaultAddress, stakingVaultMaxMintingShares, funding);
 
-    const lockedEther = await lido.getPooledEthBySharesRoundUp(stakingVaultMaxMintingShares);
-    const lockedAmount = (lockedEther * TOTAL_BASIS_POINTS) / mintableRatio;
-    expect(mintEvents[0].args.lockedAmount).to.equal(lockedAmount);
-
-    expect(await vaultHub.locked(stakingVaultAddress)).to.equal(lockedAmount);
+    const lockedAfter = await vaultHub.locked(stakingVaultAddress);
+    expect(lockedAfter).to.equal(funding);
+    expect(await dashboard.remainingMintingCapacityShares(0n)).to.equal(0n);
 
     log.debug("Staking Vault", {
       "Staking Vault Minted Shares": stakingVaultMaxMintingShares,
-      "Staking Vault Locked": VAULT_DEPOSIT,
+      "Staking Vault Locked": lockedAfter,
     });
   });
 

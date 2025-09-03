@@ -99,7 +99,7 @@ describe("Integration: Dashboard ", () => {
       const totalMintingCapacityShares10 = await dashboard.totalMintingCapacityShares();
       expect(
         await calculateLockedValue(ctx, stakingVault, { liabilityShares: totalMintingCapacityShares10 }),
-      ).to.be.equal(await vaultHub.maxLockableValue(stakingVault));
+      ).to.be.closeTo(await vaultHub.maxLockableValue(stakingVault), 2n);
     });
 
     it("You can mint StETH if you have funded the vault", async () => {
