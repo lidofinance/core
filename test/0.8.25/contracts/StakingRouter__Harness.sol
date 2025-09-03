@@ -4,11 +4,9 @@
 pragma solidity 0.8.25;
 
 import {StakingRouter} from "contracts/0.8.25/StakingRouter.sol";
-// import {UnstructuredStorage} from "contracts/0.8.9/lib/UnstructuredStorage.sol";
+import {DepositsTempStorage} from "contracts/common/lib/DepositsTempStorage.sol";
 
 contract StakingRouter__Harness is StakingRouter {
-    // using UnstructuredStorage for bytes32;
-
     constructor(
         address _depositContract,
         uint256 _secondsPerSlot,
@@ -23,9 +21,17 @@ contract StakingRouter__Harness is StakingRouter {
         return _getStakingModuleByIndex(_stakingModuleIndex);
     }
 
-    // function testing_setBaseVersion(uint256 version) external {
-    //     CONTRACT_VERSION_POSITION.setStorageUint256(version);
-    // }
+    /// @notice FOR TEST: write operators & counts into the router's transient storage.
+    function mock_storeTemp(uint256[] calldata operators, uint256[] calldata counts) external {
+        DepositsTempStorage.storeOperators(operators);
+        DepositsTempStorage.storeCounts(counts);
+    }
+
+    /// @notice FOR TEST: clear temp
+    function mock_clearTemp() external {
+        DepositsTempStorage.clearOperators();
+        DepositsTempStorage.clearCounts();
+    }
 
     function testing_setVersion(uint256 version) external {
         _getInitializableStorage_Mock()._initialized = uint64(version);

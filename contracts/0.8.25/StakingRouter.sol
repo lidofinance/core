@@ -1150,7 +1150,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (stakingModule.status != uint8(StakingModuleStatus.Active)) return 0;
 
         // TODO: rename withdrawalCredentialsType
-        //
         if (stakingModule.withdrawalCredentialsType == NEW_WITHDRAWAL_CREDENTIALS_TYPE) {
             uint256 stakingModuleTargetEthAmount = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
             (uint256[] memory operators, uint256[] memory allocations) = IStakingModuleV2(
@@ -1443,7 +1442,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         if (depositsValue == 0) return;
 
-        // on previous step should have exact amount of
+        // on previous step should calc exact amount of eth 
         if (depositsValue % INITIAL_DEPOSIT_SIZE != 0) revert DepositValueNotMultipleOfInitialDeposit();
 
         uint256 etherBalanceBeforeDeposits = address(this).balance;
@@ -1497,7 +1496,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (withdrawalCredentialsType == LEGACY_WITHDRAWAL_CREDENTIALS_TYPE) {
             return IStakingModule(stakingModuleAddress).obtainDepositData(depositsCount, depositCalldata);
         } else {
-            // TODO: clean temp storage after read
 
             (keys, signatures) = IStakingModuleV2(stakingModuleAddress).getOperatorAvailableKeys(
                 DepositsTempStorage.getOperators(),

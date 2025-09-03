@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.9;
+pragma solidity 0.8.25;
 
-import {IStakingModule} from "contracts/0.8.9/interfaces/IStakingModule.sol";
+import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
+import {IStakingModuleV2, KeyData} from "contracts/common/interfaces/IStakingModuleV2.sol";
 
-contract StakingModule__MockForStakingRouter is IStakingModule {
+contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModuleV2 {
     event Mock__TargetValidatorsLimitsUpdated(uint256 _nodeOperatorId, uint256 _targetLimitMode, uint256 _targetLimit);
     event Mock__RefundedValidatorsCountUpdated(uint256 _nodeOperatorId, uint256 _refundedValidatorsCount);
     event Mock__OnRewardsMinted(uint256 _totalShares);
@@ -24,6 +25,65 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         uint256 withdrawalRequestPaidFee,
         uint256 exitType
     );
+
+    // allocation by operators
+
+    uint256[] private modulesOperators__mocked;
+    uint256[] private modulesAllocations__mocked;
+
+    function mock_getAllocation(uint256[] memory operators, uint256[] memory allocations) external {
+        modulesOperators__mocked = operators;
+        modulesAllocations__mocked = allocations;
+    }
+
+    function getAllocation(
+        uint256 target
+    ) external view returns (uint256[] memory operators, uint256[] memory allocations) {
+        operators = modulesOperators__mocked;
+        allocations = modulesAllocations__mocked;
+    }
+
+    // data by keys for specific operators
+
+    function getOperatorAvailableKeys(
+        uint256[] memory operators,
+        uint256[] memory counts
+    ) external view returns (bytes memory publicKeys, bytes memory signatures) {
+        uint256 count;
+
+        for (uint256 i; i < counts.length; i++) {
+            count += counts[i];
+        }
+
+        publicKeys = new bytes(48 * count);
+        signatures = new bytes(96 * count);
+    }
+
+    bool private verifyKeys__mocked;
+
+    function mock_verifyKeys(bool value) external {
+        verifyKeys__mocked = value;
+    }
+
+    function verifyKeys(KeyData[] calldata data) external view returns (bool) {
+        return verifyKeys__mocked;
+    }
+
+    uint256[] private allocations__mocked;
+
+    function mock_getAllocationTopUp(uint256[] memory allocations) external {
+        allocations__mocked = allocations;
+    }
+
+    function getAllocation(
+        uint256 depositAmount,
+        uint256[] memory operators,
+        uint256[] memory topUpLimits
+    ) external view returns (uint256[] memory allocations) {
+        return allocations__mocked;
+    }
+
+    function depositedEth(uint256 operatorId, uint256 amount) external {}
 
     function getType() external view returns (bytes32) {
         return keccak256(abi.encodePacked("staking.module"));

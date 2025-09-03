@@ -15,7 +15,7 @@ interface IStakingModuleV2 {
     /// @notice Hook to notify module about deposit on operator
     /// @param operatorId - Id of operator
     /// @param amount - Eth deposit amount
-    function depositedEth(uint256 operatorId, uint256 amount) external view;
+    function depositedEth(uint256 operatorId, uint256 amount) external;
 
     // Flow of creation of validators
 
@@ -41,7 +41,7 @@ interface IStakingModuleV2 {
 
     /// @notice Check keys belong to operator of module
     /// @param data - validator data
-    function verifyKeys(KeyData[] calldata data) external returns (bool);
+    function verifyKeys(KeyData[] calldata data) external view returns (bool);
 
     /// @notice Get Eth allocation for operators based on available eth for deposits and current operator balances
     /// @param depositAmount - Value available for deposit in module

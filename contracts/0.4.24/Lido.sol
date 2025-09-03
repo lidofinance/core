@@ -41,7 +41,7 @@ interface IStakingRouter {
 
     function getStakingModuleMaxInitialDepositsAmount(
         uint256 _stakingModuleId,
-        uint256 _maxDepositsValuePerBlock
+        uint256 _depositableEth
     ) external view returns (uint256);
 }
 

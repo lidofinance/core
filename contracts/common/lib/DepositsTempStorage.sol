@@ -37,8 +37,7 @@ library DepositsTempStorage {
         assembly {
             tstore(base, mload(values))
         }
-
-        // stor each value
+ 
         unchecked {
             for (uint256 i = 0; i < values.length; ++i) {
                 bytes32 slot = bytes32(uint256(base) + 1 + i);
@@ -61,7 +60,7 @@ library DepositsTempStorage {
             for (uint256 i = 0; i < arrayLength; ++i) {
                 bytes32 slot = bytes32(uint256(base) + 1 + i);
                 assembly {
-                    mstore(add(values, mul(0x20, mul(0x20, i))), tload(slot))
+                    mstore(add(values, add(0x20, mul(0x20, i))), tload(slot))
                 }
             }
         }

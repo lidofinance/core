@@ -939,7 +939,6 @@ describe("StakingRouter.sol:module-sync", () => {
       ).not.to.emit(depositContract, "Deposited__MockEvent");
     });
 
-    // TODO: initially wrong test
     // it("Reverts if ether does correspond to the number of deposits", async () => {
     //   const deposits = 2n;
     //   const depositValue = ether("32.0");
