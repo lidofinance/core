@@ -68,7 +68,7 @@ describe("Integration: Vault with bad debt", () => {
     );
 
     // Indicates bad debt
-    expect(await vaultHub.rebalanceShortfall(stakingVault)).to.be.equal(MAX_UINT256);
+    expect(await vaultHub.rebalanceShortfallShares(stakingVault)).to.be.equal(MAX_UINT256);
 
     // Grant a role to the DAO agent
     await vaultHub.connect(await ctx.getSigner("agent")).grantRole(await vaultHub.BAD_DEBT_MASTER_ROLE(), daoAgent);

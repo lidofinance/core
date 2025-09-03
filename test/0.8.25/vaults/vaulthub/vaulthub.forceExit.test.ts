@@ -3,6 +3,7 @@ import { ContractTransactionReceipt, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   LazyOracle__MockForVaultHub,
@@ -145,7 +146,7 @@ describe("VaultHub.sol:forceExit", () => {
     targetVault,
     totalValue,
     inOutDelta,
-    lidoFees,
+    cumulativeLidoFees,
     liabilityShares,
     slashingReserve,
   }: {
@@ -154,19 +155,19 @@ describe("VaultHub.sol:forceExit", () => {
     totalValue?: bigint;
     inOutDelta?: bigint;
     liabilityShares?: bigint;
-    lidoFees?: bigint;
+    cumulativeLidoFees?: bigint;
     slashingReserve?: bigint;
   }) {
     targetVault = targetVault ?? vault;
     await lazyOracle.refreshReportTimestamp();
     const timestamp = await lazyOracle.latestReportTimestamp();
-
-    totalValue = totalValue ?? (await vaultHub.totalValue(targetVault));
     const record = await vaultHub.vaultRecord(targetVault);
     const activeIndex = record.inOutDelta[0].refSlot >= record.inOutDelta[1].refSlot ? 0 : 1;
+
+    totalValue = totalValue ?? (await vaultHub.totalValue(targetVault));
     inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
-    liabilityShares = liabilityShares ?? (await vaultHub.vaultRecord(targetVault)).liabilityShares;
-    lidoFees = lidoFees ?? (await vaultHub.vaultObligations(targetVault)).unsettledLidoFees;
+    liabilityShares = liabilityShares ?? record.liabilityShares;
+    cumulativeLidoFees = cumulativeLidoFees ?? record.cumulativeLidoFees;
     slashingReserve = slashingReserve ?? 0n;
 
     await lazyOracle.mock__report(
@@ -175,7 +176,7 @@ describe("VaultHub.sol:forceExit", () => {
       timestamp,
       totalValue,
       inOutDelta,
-      lidoFees,
+      cumulativeLidoFees,
       liabilityShares,
       slashingReserve,
     );
@@ -187,6 +188,7 @@ describe("VaultHub.sol:forceExit", () => {
     await reportVault({});
     await vaultHub.mintShares(vaultAddress, user, ether("0.9"));
     await reportVault({ totalValue: ether("0.9") });
+    await setBalance(vaultAddress, ether("0.85"));
   };
 
   context("forceValidatorExit", () => {
@@ -213,7 +215,14 @@ describe("VaultHub.sol:forceExit", () => {
         .withArgs(vaultAddress);
     });
 
+    it("reverts if vault report is stale", async () => {
+      await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }))
+        .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")
+        .withArgs(vaultAddress);
+    });
+
     it("reverts if called for a healthy vault", async () => {
+      await reportVault({ totalValue: ether("1") });
       await expect(
         vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: 1n }),
       ).to.be.revertedWithCustomError(vaultHub, "ForcedValidatorExitNotAllowed");
@@ -222,7 +231,15 @@ describe("VaultHub.sol:forceExit", () => {
     context("unhealthy vault", () => {
       beforeEach(async () => await makeVaultUnhealthy());
 
-      it("initiates force validator withdrawal", async () => {
+      it("reverts if the value on the vault is not enough to cover rebalance", async () => {
+        await setBalance(vaultAddress, ether("0.9")); // 0.9 ETH is enough to cover rebalance
+
+        await expect(
+          vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }),
+        ).to.be.revertedWithCustomError(vaultHub, "ForcedValidatorExitNotAllowed");
+      });
+
+      it("initiates force validator withdrawal when the value on the vault is enough to cover rebalance", async () => {
         await expect(vaultHub.forceValidatorExit(vaultAddress, SAMPLE_PUBKEY, feeRecipient, { value: FEE }))
           .to.emit(vaultHub, "ForcedValidatorExitTriggered")
           .withArgs(vaultAddress, SAMPLE_PUBKEY, feeRecipient);

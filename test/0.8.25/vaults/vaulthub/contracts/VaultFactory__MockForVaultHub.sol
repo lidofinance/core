@@ -7,7 +7,6 @@ import {PinnedBeaconProxy} from "contracts/0.8.25/vaults/PinnedBeaconProxy.sol";
 import {StakingVault__MockForVaultHub} from "./StakingVault__MockForVaultHub.sol";
 
 contract VaultFactory__MockForVaultHub {
-    event VaultCreated(address indexed vault);
     mapping(address vault => bool) public deployedVaults;
 
     address public immutable BEACON;
@@ -24,4 +23,6 @@ contract VaultFactory__MockForVaultHub {
 
         emit VaultCreated(address(vault));
     }
+
+    event VaultCreated(address indexed vault);
 }

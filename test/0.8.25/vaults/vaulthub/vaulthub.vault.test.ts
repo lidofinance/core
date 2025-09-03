@@ -3,6 +3,7 @@ import { ContractTransactionReceipt, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   ACL,
@@ -17,7 +18,7 @@ import {
 } from "typechain-types";
 
 import { ether, getCurrentBlockTimestamp } from "lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants";
+import { ONE_GWEI, TOTAL_BASIS_POINTS } from "lib/constants";
 import { findEvents } from "lib/event";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
@@ -62,27 +63,11 @@ describe("VaultHub.sol:owner-functions", () => {
     return ethers.getContractAt("StakingVault__MockForVaultHub", vaultCreatedEvent.args.vault, owner);
   }
 
-  async function createAndConnectVault(owner: HardhatEthersSigner, fundAmount: bigint = CONNECT_DEPOSIT) {
-    const newVault = await createVault(vaultFactory, owner);
-    await newVault.connect(owner).fund({ value: fundAmount });
-    await operatorGridMock.changeVaultTierParams(newVault, {
-      shareLimit: SHARE_LIMIT,
-      reserveRatioBP: RESERVE_RATIO_BP,
-      forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-      infraFeeBP: INFRA_FEE_BP,
-      liquidityFeeBP: LIQUIDITY_FEE_BP,
-      reservationFeeBP: RESERVATION_FEE_BP,
-    });
-    await newVault.connect(owner).transferOwnership(vaultHub);
-    await vaultHub.connect(owner).connectVault(newVault);
-    return newVault;
-  }
-
   async function reportVault({
     targetVault,
     totalValue,
     inOutDelta,
-    lidoFees,
+    cumulativeLidoFees,
     liabilityShares,
     slashingReserve,
   }: {
@@ -90,7 +75,7 @@ describe("VaultHub.sol:owner-functions", () => {
     totalValue?: bigint;
     inOutDelta?: bigint;
     liabilityShares?: bigint;
-    lidoFees?: bigint;
+    cumulativeLidoFees?: bigint;
     slashingReserve?: bigint;
   }) {
     targetVault = targetVault ?? vault;
@@ -102,8 +87,7 @@ describe("VaultHub.sol:owner-functions", () => {
     const activeIndex = record.inOutDelta[0].refSlot >= record.inOutDelta[1].refSlot ? 0 : 1;
     inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
     liabilityShares = liabilityShares ?? record.liabilityShares;
-    const obligations = await vaultHub.vaultObligations(targetVault);
-    lidoFees = lidoFees ?? obligations.settledLidoFees + obligations.unsettledLidoFees;
+    cumulativeLidoFees = cumulativeLidoFees ?? record.cumulativeLidoFees;
     slashingReserve = slashingReserve ?? 0n;
 
     await lazyOracle.mock__report(
@@ -112,7 +96,7 @@ describe("VaultHub.sol:owner-functions", () => {
       timestamp,
       totalValue,
       inOutDelta,
-      lidoFees,
+      cumulativeLidoFees,
       liabilityShares,
       slashingReserve,
     );
@@ -555,16 +539,6 @@ describe("VaultHub.sol:owner-functions", () => {
       );
     });
 
-    it("reverts when rebalancing more than total value", async () => {
-      const totalValue = await vaultHub.totalValue(vaultAddress);
-      const excessiveAmount = await lido.getSharesByPooledEth(totalValue + 1n);
-
-      await expect(vaultHub.connect(vaultOwner).rebalance(vaultAddress, excessiveAmount)).to.be.revertedWithCustomError(
-        vaultHub,
-        "RebalanceAmountExceedsTotalValue",
-      );
-    });
-
     it("rebalances vault successfully", async () => {
       const rebalanceAmount = ether("0.1");
       const liabilitySharesBefore = await vaultHub.liabilityShares(vaultAddress);
@@ -590,11 +564,13 @@ describe("VaultHub.sol:owner-functions", () => {
       expect(await vault.beaconChainDepositsPaused()).to.be.true;
     });
 
-    it("does not revert when already paused", async () => {
+    it("reverts when already paused", async () => {
       await vaultHub.connect(vaultOwner).pauseBeaconChainDeposits(vaultAddress);
 
-      // Should not revert on second call
-      await expect(vaultHub.connect(vaultOwner).pauseBeaconChainDeposits(vaultAddress)).to.not.be.reverted;
+      await expect(vaultHub.connect(vaultOwner).pauseBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "ResumedExpected",
+      );
     });
 
     it("reverts when called by non-owner", async () => {
@@ -636,27 +612,30 @@ describe("VaultHub.sol:owner-functions", () => {
         .withArgs(vaultAddress);
     });
 
+    it("reverts when vault is has redemption obligations", async () => {
+      await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
+      await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, ether("8.5"));
+
+      await vaultHub.connect(deployer).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), vaultOwner);
+      await vaultHub.connect(vaultOwner).setLiabilitySharesTarget(vaultAddress, 0n);
+
+      await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
+        .to.be.revertedWithCustomError(vaultHub, "HasRedemptionsCannotDeposit")
+        .withArgs(vaultAddress);
+    });
+
+    it("reverts when vault has unsettled lido fees over minimum beacon deposit", async () => {
+      await reportVault({ totalValue: ether("10"), cumulativeLidoFees: ether("10") });
+      await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
+        .to.be.revertedWithCustomError(vaultHub, "FeesTooHighCannotDeposit")
+        .withArgs(vaultAddress);
+    });
+
     it("reverts when called by non-owner", async () => {
       await expect(vaultHub.connect(stranger).resumeBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "NotAuthorized",
       );
-    });
-
-    it("settles obligations when resuming", async () => {
-      // Create unsettled fees by reporting cumulative fees
-      await reportVault({ lidoFees: ether("0.1") });
-
-      const obligationsBefore = await vaultHub.vaultObligations(vaultAddress);
-      expect(obligationsBefore.unsettledLidoFees).to.equal(ether("0.1"));
-
-      // Fund vault to pay fees
-      await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("1") });
-
-      await vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress);
-
-      const obligationsAfter = await vaultHub.vaultObligations(vaultAddress);
-      expect(obligationsAfter.unsettledLidoFees).to.equal(0n);
     });
   });
 
@@ -688,6 +667,18 @@ describe("VaultHub.sol:owner-functions", () => {
   describe("triggerValidatorWithdrawals", () => {
     const SAMPLE_PUBKEY = "0x" + "01".repeat(48);
     const FEE = ether("0.01");
+    const MAX_UINT256 = (1n << 256n) - 1n;
+    const MAX_UINT64 = (1n << 64n) - 1n;
+
+    function generateTriggerValidatorWithdrawalsData(pubkey: string, amount: bigint, refundTo: HardhatEthersSigner) {
+      const iface = new ethers.Interface(["function triggerValidatorWithdrawals(address,bytes,uint64[],address)"]);
+      const selector = iface.getFunction("triggerValidatorWithdrawals")?.selector;
+      const payloadArgs = ethers.AbiCoder.defaultAbiCoder().encode(
+        ["address", "bytes", "uint256[]", "address"],
+        [vaultAddress, pubkey, [amount], refundTo.address],
+      );
+      return selector + payloadArgs.slice(2);
+    }
 
     it("triggers validator withdrawal", async () => {
       await expect(
@@ -711,23 +702,96 @@ describe("VaultHub.sol:owner-functions", () => {
       ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
     });
 
-    it("reverts for partial withdrawals when vault is unhealthy", async () => {
+    it("reverts for partial withdrawals when vault is in bad debt", async () => {
+      // Make vault in bad debt
+      await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
+      await reportVault({ totalValue: ether("11") });
+      await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, ether("8.5"));
+      await reportVault({ totalValue: ether("8.5"), liabilityShares: ether("8.5") });
+
+      await expect(
+        vaultHub
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [1n], recipient, { value: FEE }),
+      ).to.be.revertedWithCustomError(vaultHub, "PartialValidatorWithdrawalNotAllowed");
+    });
+
+    it("reverts for uint64 overflow attack", async function () {
+      await reportVault({ totalValue: ether("10") });
+
+      const OVERFLOW256 = MAX_UINT256 - MAX_UINT64 + 1n;
+
+      const data = generateTriggerValidatorWithdrawalsData(SAMPLE_PUBKEY, OVERFLOW256, recipient);
+      await expect(vaultOwner.sendTransaction({ to: vaultHub, data, value: ether("1") })).to.be.reverted;
+    });
+
+    it("works for uint64 max value", async function () {
+      await reportVault({ totalValue: ether("10") });
+
+      const data = generateTriggerValidatorWithdrawalsData(SAMPLE_PUBKEY, MAX_UINT64, recipient);
+      await expect(vaultOwner.sendTransaction({ to: vaultHub, data, value: ether("1") }))
+        .to.emit(vault, "ValidatorWithdrawalsTriggered")
+        .withArgs(SAMPLE_PUBKEY, [MAX_UINT64], recipient);
+    });
+
+    it("reverts for partial withdrawals when vault is unhealthy and partial withdrawal is not enough to cover rebalance shortfall", async () => {
       // Make vault unhealthy
       await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
       await reportVault({ totalValue: ether("11") });
       await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, ether("8.5"));
-      // Report lower value to make vault unhealthy: 8.5 shares vs 8.5 total value = 100% > 82% threshold
-      await reportVault({ totalValue: ether("8.5"), liabilityShares: ether("8.5") });
+      await reportVault({ totalValue: ether("10"), liabilityShares: ether("8.5") });
+
+      expect(await vaultHub.isVaultHealthy(vaultAddress)).to.be.false;
+
+      await setBalance(vaultAddress, 0n); // simulate vault total value is on Beacon Chain
+
+      const rebalanceShortfallShares = await vaultHub.rebalanceShortfallShares(vaultAddress);
+      const rebalanceShortfallValue = await lido.getPooledEthBySharesRoundUp(rebalanceShortfallShares);
+      const amount = rebalanceShortfallValue / ONE_GWEI - 1n; // 1 gwei less than rebalance shortfall
 
       await expect(
-        vaultHub.connect(vaultOwner).triggerValidatorWithdrawals(
-          vaultAddress,
-          SAMPLE_PUBKEY,
-          [ether("16")], // Partial withdrawal
-          recipient,
-          { value: FEE },
-        ),
+        vaultHub
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [amount], recipient, { value: FEE }),
       ).to.be.revertedWithCustomError(vaultHub, "PartialValidatorWithdrawalNotAllowed");
+    });
+
+    it("allows partial withdrawals when vault is unhealthy and has enough balance to cover rebalance shortfall", async () => {
+      // Make vault unhealthy
+      await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
+      await reportVault({ totalValue: ether("11") });
+      await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, ether("8.5"));
+      await reportVault({ totalValue: ether("10"), liabilityShares: ether("8.5") });
+
+      expect(await vaultHub.isVaultHealthy(vaultAddress)).to.be.false;
+      await expect(
+        vaultHub
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [1n], recipient, { value: FEE }),
+      ).to.not.be.reverted;
+    });
+
+    it("allows partial withdrawals when vault is unhealthy and requested amount is enough to cover rebalance shortfall", async () => {
+      // Make vault unhealthy
+      await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
+      await reportVault({ totalValue: ether("11") });
+      await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, ether("8.5"));
+      await reportVault({ totalValue: ether("10"), liabilityShares: ether("8.5") });
+
+      expect(await vaultHub.isVaultHealthy(vaultAddress)).to.be.false;
+
+      await setBalance(vaultAddress, 0n); // simulate vault total value is on Beacon Chain
+
+      const rebalanceShortfallShares = await vaultHub.rebalanceShortfallShares(vaultAddress);
+      const rebalanceShortfallValue = await lido.getPooledEthBySharesRoundUp(rebalanceShortfallShares);
+      const amount = rebalanceShortfallValue / ONE_GWEI;
+
+      expect(await vaultHub.isVaultHealthy(vaultAddress)).to.be.false;
+      await expect(
+        vaultHub
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [amount], recipient, { value: FEE }),
+      ).to.not.be.reverted;
     });
 
     it("allows full withdrawals when vault is unhealthy", async () => {
@@ -744,6 +808,14 @@ describe("VaultHub.sol:owner-functions", () => {
           .connect(vaultOwner)
           .triggerValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [0n], recipient, { value: FEE }),
       ).to.not.be.reverted;
+    });
+
+    it("reverts when on partial withdrawal with stale report", async () => {
+      await expect(
+        vaultHub
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawals(vaultAddress, SAMPLE_PUBKEY, [1n], recipient, { value: FEE }),
+      ).to.be.revertedWithCustomError(vaultHub, "VaultReportStale");
     });
   });
 
@@ -779,66 +851,6 @@ describe("VaultHub.sol:owner-functions", () => {
 
       // New owner should be able to operate
       await expect(vaultHub.connect(newOwner).fund(vaultAddress, { value: ether("1") })).to.not.be.reverted;
-    });
-  });
-
-  describe("settleVaultObligations", () => {
-    it("settles obligations permissionlessly", async () => {
-      // Since the system automatically settles fees during reports,
-      // we'll test that the settleVaultObligations function works
-      // by verifying it can be called and emits the expected event
-      await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("1") });
-
-      // Report some fees (they will be auto-settled)
-      await reportVault({
-        totalValue: ether("2"),
-        lidoFees: ether("0.5"),
-      });
-
-      // The fees should now be settled
-      const obligationsBefore = await vaultHub.vaultObligations(vaultAddress);
-      expect(obligationsBefore.settledLidoFees).to.equal(ether("0.5"));
-      expect(obligationsBefore.unsettledLidoFees).to.equal(0n);
-
-      // Even though there are no unsettled fees, the function should still work without reverting
-      await expect(vaultHub.connect(stranger).settleVaultObligations(vaultAddress)).to.not.be.reverted;
-
-      // Obligations should remain the same
-      const obligationsAfter = await vaultHub.vaultObligations(vaultAddress);
-      expect(obligationsAfter.settledLidoFees).to.equal(ether("0.5"));
-      expect(obligationsAfter.unsettledLidoFees).to.equal(0n);
-    });
-
-    it("reverts when vault has zero balance", async () => {
-      // Create a vault and then manually drain its balance using the mock's withdraw function
-      const emptyVault = await createAndConnectVault(vaultOwner);
-
-      // First report to make vault ready
-      await reportVault({ targetVault: emptyVault });
-
-      // Manually drain the vault balance by calling the vault's withdraw function directly
-      // This simulates a vault that has had all its funds withdrawn
-      const vaultBalance = await ethers.provider.getBalance(emptyVault);
-      await emptyVault.connect(vaultOwner).withdraw(recipient, vaultBalance);
-
-      // Verify vault has zero balance
-      const finalBalance = await ethers.provider.getBalance(emptyVault);
-      expect(finalBalance).to.equal(0n);
-
-      await expect(vaultHub.connect(stranger).settleVaultObligations(emptyVault)).to.be.revertedWithCustomError(
-        vaultHub,
-        "ZeroBalance",
-      );
-    });
-
-    it("reverts when paused", async () => {
-      await vaultHub.connect(deployer).grantRole(await vaultHub.PAUSE_ROLE(), vaultOwner);
-      await vaultHub.connect(vaultOwner).pauseFor(1000n);
-
-      await expect(vaultHub.connect(stranger).settleVaultObligations(vaultAddress)).to.be.revertedWithCustomError(
-        vaultHub,
-        "ResumedExpected",
-      );
     });
   });
 

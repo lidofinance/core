@@ -13,7 +13,7 @@ contract IStETH {
 
     function burnExternalShares(uint256 _amountOfShares) external {}
 
-    function getSharesByPooledEthRoundedUp(uint256 _amountOfEther) external view returns (uint256) {}
+    function getPooledEthBySharesRoundUp(uint256 _amountOfShares) external view returns (uint256) {}
 }
 
 contract VaultHub__MockForDashboard {
@@ -30,9 +30,14 @@ contract VaultHub__MockForDashboard {
         LIDO_LOCATOR = _lidoLocator;
     }
 
+    struct Obligations {
+        uint256 sharesToRebalance;
+        uint256 unsettledLidoFees;
+    }
+
     mapping(address => VaultHub.VaultConnection) public vaultConnections;
     mapping(address => VaultHub.VaultRecord) public vaultRecords;
-    mapping(address => VaultHub.VaultObligations) public _vaultObligations;
+    mapping(address => Obligations) public mock__obligations;
 
     receive() external payable {}
 
@@ -46,14 +51,6 @@ contract VaultHub__MockForDashboard {
 
     function mock__setVaultRecord(address vault, VaultHub.VaultRecord memory record) external {
         vaultRecords[vault] = record;
-    }
-
-    function mock__setVaultObligations(address vault, VaultHub.VaultObligations memory obligations) external {
-        _vaultObligations[vault] = obligations;
-    }
-
-    function vaultObligations(address vault) external view returns (VaultHub.VaultObligations memory) {
-        return _vaultObligations[vault];
     }
 
     function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {
@@ -91,6 +88,7 @@ contract VaultHub__MockForDashboard {
     function deleteVaultConnection(address vault) external {
         delete vaultConnections[vault];
         delete vaultRecords[vault];
+        delete mock__obligations[vault];
     }
 
     function connectVault(address vault) external {
@@ -164,6 +162,28 @@ contract VaultHub__MockForDashboard {
 
     function mock__setSendWithdraw(bool _sendWithdraw) external {
         sendWithdraw = _sendWithdraw;
+    }
+
+    function mock__setObligations(address _vault, uint256 _sharesToRebalance, uint256 _unsettledLidoFees) external {
+        mock__obligations[_vault] = Obligations({
+            sharesToRebalance: _sharesToRebalance,
+            unsettledLidoFees: _unsettledLidoFees
+        });
+    }
+
+    function obligations(address _vault) external view returns (uint256, uint256) {
+        Obligations storage $ = mock__obligations[_vault];
+        return ($.sharesToRebalance, $.unsettledLidoFees);
+    }
+
+    function obligationsShortfall(address _vault) external view returns (uint256) {
+        Obligations storage $ = mock__obligations[_vault];
+        return steth.getPooledEthBySharesRoundUp($.sharesToRebalance) + $.unsettledLidoFees;
+    }
+
+    function rebalanceShortfallShares(address _vault) external view returns (uint256) {
+        Obligations storage $ = mock__obligations[_vault];
+        return $.sharesToRebalance;
     }
 
     function withdraw(address _vault, address _recipient, uint256 _amount) external {

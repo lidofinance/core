@@ -17,7 +17,6 @@ contract VaultHub__MockForLazyOracle {
     address[] public mock__vaults;
     mapping(address vault => VaultHub.VaultConnection connection) public mock__vaultConnections;
     mapping(address vault => VaultHub.VaultRecord record) public mock__vaultRecords;
-    mapping(address vault => VaultHub.VaultObligations obligations) public mock__vaultObligations;
 
     address public mock__lastReportedVault;
     uint256 public mock__lastReported_timestamp;
@@ -41,10 +40,6 @@ contract VaultHub__MockForLazyOracle {
 
     function mock__setVaultRecord(address vault, VaultHub.VaultRecord memory record) external {
         mock__vaultRecords[vault] = record;
-    }
-
-    function mock__setVaultObligations(address vault, VaultHub.VaultObligations memory obligations) external {
-        mock__vaultObligations[vault] = obligations;
     }
 
     function vaultsCount() external view returns (uint256) {
@@ -71,11 +66,7 @@ contract VaultHub__MockForLazyOracle {
         return mock__vaultRecords[vault];
     }
 
-    function vaultObligations(address vault) external view returns (VaultHub.VaultObligations memory) {
-        return mock__vaultObligations[vault];
-    }
-
-    function isReportFresh(address _vault) external returns (bool) {
+    function isReportFresh(address _vault) external view returns (bool) {
         return false;
     }
 

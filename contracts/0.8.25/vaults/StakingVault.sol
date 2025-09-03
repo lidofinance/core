@@ -335,7 +335,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      *         A general-purpose function for withdrawing ether from the beacon chain by the owner.
      *         If the amount of ether to withdraw is not specified, the full balance of the validator is withdrawn.
      * @param _pubkeys Concatenated validators public keys, each 48 bytes long
-     * @param _amounts Amounts of ether to withdraw. If array is empty or amount value is zero, triggers full withdrawals.
+     * @param _amountsInGwei Amounts of Gwei to withdraw. If array is empty or amount value is zero, triggers full withdrawals.
      * @param _excessRefundRecipient Address to receive any excess withdrawal fee
      * @dev    The caller must provide sufficient fee via msg.value to cover the withdrawal request costs
      * @dev    You can use `calculateValidatorWithdrawalFee` to calculate the fee but it's accurate only for the block
@@ -344,30 +344,28 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
-        uint64[] calldata _amounts,
+        uint64[] calldata _amountsInGwei,
         address _excessRefundRecipient
     ) external payable onlyOwner {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_pubkeys.length == 0) revert ZeroArgument("_pubkeys");
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
+        if (_excessRefundRecipient == address(0)) revert ZeroArgument("_excessRefundRecipient");
 
         // If amounts array is not empty, validate its length matches pubkeys
-        if (_amounts.length > 0 && _pubkeys.length / PUBLIC_KEY_LENGTH != _amounts.length) {
+        if (_amountsInGwei.length > 0 && _pubkeys.length / PUBLIC_KEY_LENGTH != _amountsInGwei.length) {
             revert PubkeyLengthDoesNotMatchAmountLength();
         }
-
-        // If the refund recipient is not set, use the sender as the refund recipient
-        if (_excessRefundRecipient == address(0)) _excessRefundRecipient = msg.sender;
 
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
         if (msg.value < totalFee) revert InsufficientValidatorWithdrawalFee(msg.value, totalFee);
 
         // If amounts array is empty, trigger full withdrawals, otherwise use amount-driven withdrawal types
-        if (_amounts.length == 0) {
+        if (_amountsInGwei.length == 0) {
             TriggerableWithdrawals.addFullWithdrawalRequests(_pubkeys, feePerRequest);
         } else {
-            TriggerableWithdrawals.addWithdrawalRequests(_pubkeys, _amounts, feePerRequest);
+            TriggerableWithdrawals.addWithdrawalRequests(_pubkeys, _amountsInGwei, feePerRequest);
         }
 
         uint256 excess = msg.value - totalFee;
@@ -376,7 +374,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
             if (!success) revert TransferFailed(_excessRefundRecipient, excess);
         }
 
-        emit ValidatorWithdrawalsTriggered(_pubkeys, _amounts, excess, _excessRefundRecipient);
+        emit ValidatorWithdrawalsTriggered(_pubkeys, _amountsInGwei, excess, _excessRefundRecipient);
     }
 
     /**
@@ -547,13 +545,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     /**
      * @notice Emitted when validator withdrawals are requested via EIP-7002
      * @param pubkeys Concatenated public keys of the validators to withdraw
-     * @param amounts Amounts of ether to withdraw per validator
+     * @param amountsInGwei Amounts of Gwei to withdraw per validator
      * @param refundRecipient Address to receive any excess withdrawal fee
      * @param excess Amount of excess fee refunded to recipient
      */
     event ValidatorWithdrawalsTriggered(
         bytes pubkeys,
-        uint64[] amounts,
+        uint64[] amountsInGwei,
         uint256 excess,
         address indexed refundRecipient
     );
