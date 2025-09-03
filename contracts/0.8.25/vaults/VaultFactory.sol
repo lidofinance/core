@@ -48,20 +48,6 @@ contract VaultFactory {
     }
 
     /**
-     * @notice Creates a new StakingVault 
-     * @param _owner The address of the owner of the StakingVault
-     * @param _nodeOperator The address of the operator of the StakingVault
-     * @param _depositor The address of the depositor of the StakingVault
-     * @return vault The address of the created StakingVault
-     */
-    function createVault(address _owner, address _nodeOperator, address _depositor) external returns (IStakingVault vault) {
-        vault = IStakingVault(_deployVault());
-        vault.initialize(_owner, _nodeOperator, _depositor);
-
-        emit VaultCreated(address(vault));
-    }
-
-    /**
      * @notice Creates a new StakingVault and Dashboard contracts
      * @param _defaultAdmin The address of the default admin of the Dashboard
      * @param _nodeOperator The address of the node operator of the StakingVault
