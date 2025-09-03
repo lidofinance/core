@@ -102,7 +102,7 @@ describe("Accounting.sol:report", () => {
       const preTotalPooledEther = await lido.getTotalPooledEther();
       const preTotalShares = await lido.getTotalShares();
 
-      const simulated = await accounting.simulateOracleReport(report(), 0n);
+      const simulated = await accounting.simulateOracleReport(report());
 
       expect(simulated.withdrawals).to.equal(0n);
       expect(simulated.elRewards).to.equal(0n);

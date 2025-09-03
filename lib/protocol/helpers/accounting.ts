@@ -5,6 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { AccountingOracle } from "typechain-types";
+import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting";
 
 import {
   advanceChainTime,
@@ -356,8 +357,7 @@ const simulateReport = async (
     "El Rewards Vault Balance": formatEther(elRewardsVaultBalance),
   });
 
-  const withdrawalShareRate = 0n;
-  const reportValues = {
+  const reportValues: ReportValuesStruct = {
     timestamp: reportTimestamp,
     timeElapsed: (await getReportTimeElapsed(ctx)).timeElapsed,
     clValidators: beaconValidators,
@@ -368,7 +368,7 @@ const simulateReport = async (
     withdrawalFinalizationBatches: [],
     simulatedShareRate: 10n ** 27n,
   };
-  const update = await accounting.simulateOracleReport(reportValues, withdrawalShareRate);
+  const update = await accounting.simulateOracleReport(reportValues);
   const { postTotalPooledEther, postTotalShares, withdrawals, elRewards } = update;
 
   log.debug("Simulation result", {

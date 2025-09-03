@@ -108,17 +108,13 @@ contract Accounting {
 
     /// @notice calculates all the state changes that is required to apply the report
     /// @param _report report values
-    /// @param _withdrawalShareRate maximum share rate used for withdrawal finalization
-    ///                             if _withdrawalShareRate == 0, no withdrawals are
-    ///                             simulated
     function simulateOracleReport(
-        ReportValues calldata _report,
-        uint256 _withdrawalShareRate
+        ReportValues calldata _report
     ) public view returns (CalculatedValues memory update) {
         Contracts memory contracts = _loadOracleReportContracts();
         PreReportState memory pre = _snapshotPreReportState(contracts);
 
-        return _simulateOracleReport(contracts, pre, _report, _withdrawalShareRate);
+        return _simulateOracleReport(contracts, pre, _report);
     }
 
     /// @notice Updates accounting stats, collects EL rewards and distributes collected rewards
@@ -130,7 +126,7 @@ contract Accounting {
 
         PreReportState memory pre = _snapshotPreReportState(contracts);
 
-        CalculatedValues memory update = _simulateOracleReport(contracts, pre, _report, _report.simulatedShareRate);
+        CalculatedValues memory update = _simulateOracleReport(contracts, pre, _report);
 
         _applyOracleReportContext(contracts, _report, pre, update);
     }
@@ -150,20 +146,16 @@ contract Accounting {
     function _simulateOracleReport(
         Contracts memory _contracts,
         PreReportState memory _pre,
-        ReportValues calldata _report,
-        uint256 _withdrawalsShareRate
+        ReportValues calldata _report
     ) internal view returns (CalculatedValues memory update) {
         update.preTotalShares = _pre.totalShares;
         update.preTotalPooledEther = _pre.totalPooledEther;
 
-        if (_withdrawalsShareRate != 0) {
-            // Get the ether to lock for withdrawal queue and shares to move to Burner to finalize requests
-            (update.etherToFinalizeWQ, update.sharesToFinalizeWQ) = _calculateWithdrawals(
-                _contracts,
-                _report,
-                _withdrawalsShareRate
-            );
-        }
+        // Get the ether to lock for withdrawal queue and shares to move to Burner to finalize requests
+        (update.etherToFinalizeWQ, update.sharesToFinalizeWQ) = _calculateWithdrawals(
+            _contracts,
+            _report
+        );
 
         // Principal CL balance is the sum of the current CL balance and
         // validator deposits during this report
@@ -219,13 +211,12 @@ contract Accounting {
     /// @dev return amount to lock on withdrawal queue and shares to burn depending on the finalization batch parameters
     function _calculateWithdrawals(
         Contracts memory _contracts,
-        ReportValues calldata _report,
-        uint256 _simulatedShareRate
+        ReportValues calldata _report
     ) internal view returns (uint256 etherToLock, uint256 sharesToBurn) {
         if (_report.withdrawalFinalizationBatches.length != 0 && !_contracts.withdrawalQueue.isPaused()) {
             (etherToLock, sharesToBurn) = _contracts.withdrawalQueue.prefinalize(
                 _report.withdrawalFinalizationBatches,
-                _simulatedShareRate
+                _report.simulatedShareRate
             );
         }
     }
