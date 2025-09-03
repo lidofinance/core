@@ -1,4 +1,4 @@
-import { ContractTransactionReceipt, keccak256 } from "ethers";
+import { ContractTransactionReceipt } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -57,10 +57,13 @@ async function createMockStakignVault(
   const events = findEvents(vaultCreationTx, "VaultCreated");
   const vaultCreatedEvent = events[0];
 
+  const deployedVaults = await factory.deployedVaults(vaultCreatedEvent.args.vault); // check that the vault is deployed
+  console.log("deployedVaults", deployedVaults);
+
   return ethers.getContractAt("StakingVault__MockForVaultHub", vaultCreatedEvent.args.vault);
 }
 
-async function createMockStakignVaultAndConnect(
+async function createMockStakingVaultAndConnect(
   factory: VaultFactory__MockForVaultHub,
   deployer: HardhatEthersSigner,
   owner: HardhatEthersSigner,
@@ -72,8 +75,13 @@ async function createMockStakignVaultAndConnect(
 ) {
   const vault = await createMockStakignVault(factory, owner, operator, predepositGuarantee);
   await vault.connect(owner).fund({ value: CONNECT_DEPOSIT });
+
   await operatorGridMock.changeVaultTierParams(vault, { ...TIER_PARAMS, ...tierParams });
   await vault.connect(owner).transferOwnership(vaultHub);
+
+  const deployedVaults = await factory.deployedVaults(vault); // check that the vault is deployed
+  console.log("deployedVaults", deployedVaults);
+
   await vaultHub.connect(deployer).connectVault(vault);
 
   return vault;
@@ -160,19 +168,19 @@ export async function deployVaults({ deployer, admin }: VaultsConfig) {
   await vaultHubAdmin.grantRole(await vaultHub.PAUSE_ROLE(), admin);
   await vaultHubAdmin.grantRole(await vaultHub.RESUME_ROLE(), admin);
   await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
-  await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), admin);
   await vaultHubAdmin.grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), admin);
-
-  await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 
   const stakingVaultImpl = await ethers.deployContract("StakingVault__MockForVaultHub", [depositContract]);
   const beacon = await ethers.deployContract("UpgradeableBeacon", [stakingVaultImpl, deployer]);
 
   const vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [beacon]);
-  const vault = await createMockStakignVault(vaultFactory, admin, admin, predepositGuarantee);
 
-  const codehash = keccak256(await ethers.provider.getCode(await vault.getAddress()));
-  await vaultHub.connect(admin).setAllowedCodehash(codehash, true);
+  await updateLidoLocatorImplementation(await locator.getAddress(), {
+    vaultHub,
+    predepositGuarantee,
+    operatorGrid,
+    vaultFactory,
+  });
 
   return {
     lido,
@@ -180,8 +188,8 @@ export async function deployVaults({ deployer, admin }: VaultsConfig) {
     lazyOracle,
     createMockStakignVault: (owner: HardhatEthersSigner, operator: HardhatEthersSigner) =>
       createMockStakignVault(vaultFactory, owner, operator, predepositGuarantee),
-    createMockStakignVaultAndConnect: (owner: HardhatEthersSigner, operator: HardhatEthersSigner) =>
-      createMockStakignVaultAndConnect(
+    createMockStakingVaultAndConnect: (owner: HardhatEthersSigner, operator: HardhatEthersSigner) =>
+      createMockStakingVaultAndConnect(
         vaultFactory,
         deployer,
         owner,

@@ -902,7 +902,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      *      postShareRateNoFees = postInternalEther * 1e27 / (postInternalShares - sharesMintedAsFees)
      *      GROSS_APR = SECONDS_IN_YEAR * (postShareRateNoFees - preShareRate) / preShareRate / timeElapsed
      *
-     *      to be ex
      */
     function emitTokenRebase(
         uint256 _reportTimestamp,

@@ -5,16 +5,12 @@
 pragma solidity 0.8.25;
 
 import {IAccessControl} from "@openzeppelin/contracts-v4.4/access/AccessControl.sol";
-import {PinnedBeaconProxy} from "../vaults/PinnedBeaconProxy.sol";
 
 interface IVaultHub {
-    function VAULT_CODEHASH_SET_ROLE() external view returns (bytes32);
     function VAULT_MASTER_ROLE() external view returns (bytes32);
     function REDEMPTION_MASTER_ROLE() external view returns (bytes32);
     function VALIDATOR_EXIT_ROLE() external view returns (bytes32);
     function BAD_DEBT_MASTER_ROLE() external view returns (bytes32);
-
-    function setAllowedCodehash(bytes32 _codehash, bool _allowed) external;
 }
 
 interface IPausableUntil {
@@ -115,14 +111,12 @@ contract V3TemporaryAdmin {
      * @notice Complete setup for all contracts - grants all roles and transfers admin to agent
      * @dev This is the main external function that should be called after deployment
      * @param _lidoLocatorImpl The new LidoLocator implementation address
-     * @param _beacon The UpgradeableBeacon address for computing codehash
      * @param _evmScriptExecutor The EVM script executor address from easyTrack
      * @param _vaultHubAdapter The vault hub adapter address from easyTrack
      */
-    function completeSetup(address _lidoLocatorImpl, address _beacon, address _evmScriptExecutor, address _vaultHubAdapter) external {
+    function completeSetup(address _lidoLocatorImpl, address _evmScriptExecutor, address _vaultHubAdapter) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
         if (_lidoLocatorImpl == address(0)) revert ZeroLidoLocator();
-        if (_beacon == address(0)) revert ZeroBeacon();
         if (_evmScriptExecutor == address(0)) revert ZeroEvmScriptExecutor();
         if (_vaultHubAdapter == address(0)) revert ZeroVaultHubAdapter();
 
@@ -136,34 +130,26 @@ contract V3TemporaryAdmin {
         _setupLazyOracle(locator.lazyOracle());
         _setupOperatorGrid(locator.operatorGrid(), _evmScriptExecutor);
         _setupBurner(locator.burner(), locator.accounting(), csmAccounting);
-        bytes32 codehash = _computeCodehash(_beacon);
-        _setupVaultHub(locator.vaultHub(), codehash, _evmScriptExecutor, _vaultHubAdapter);
+        _setupVaultHub(locator.vaultHub(), _evmScriptExecutor, _vaultHubAdapter);
     }
 
 
     /**
      * @notice Setup VaultHub with all required roles and transfer admin to agent
      * @param _vaultHub The VaultHub contract address
-     * @param _codehash The computed codehash for PinnedBeaconProxy
      * @param _evmScriptExecutor The EVM script executor address
      * @param _vaultHubAdapter The vault hub adapter address
      */
-    function _setupVaultHub(address _vaultHub, bytes32 _codehash, address _evmScriptExecutor, address _vaultHubAdapter) private {
+    function _setupVaultHub(address _vaultHub, address _evmScriptExecutor, address _vaultHubAdapter) private {
         // Get roles from the contract
         bytes32 pauseRole = IPausableUntil(_vaultHub).PAUSE_ROLE();
         bytes32 vaultMasterRole = IVaultHub(_vaultHub).VAULT_MASTER_ROLE();
-        bytes32 vaultCodehashSetRole = IVaultHub(_vaultHub).VAULT_CODEHASH_SET_ROLE();
         bytes32 redemptionMasterRole = IVaultHub(_vaultHub).REDEMPTION_MASTER_ROLE();
         bytes32 validatorExitRole = IVaultHub(_vaultHub).VALIDATOR_EXIT_ROLE();
         bytes32 badDebtMasterRole = IVaultHub(_vaultHub).BAD_DEBT_MASTER_ROLE();
 
-        IAccessControl(_vaultHub).grantRole(vaultCodehashSetRole, address(this));
-        IVaultHub(_vaultHub).setAllowedCodehash(_codehash, true /* _allowed */);
-        IAccessControl(_vaultHub).revokeRole(vaultCodehashSetRole, address(this));
-
         IAccessControl(_vaultHub).grantRole(pauseRole, GATE_SEAL);
 
-        IAccessControl(_vaultHub).grantRole(vaultCodehashSetRole, AGENT);
         IAccessControl(_vaultHub).grantRole(vaultMasterRole, AGENT);
         IAccessControl(_vaultHub).grantRole(redemptionMasterRole, AGENT);
 
@@ -227,26 +213,6 @@ contract V3TemporaryAdmin {
         _transferAdminToAgent(_burner);
     }
 
-    /**
-     * @notice Public function to compute the codehash of PinnedBeaconProxy using the beacon implementation
-     * @dev This function deploys a temporary proxy to get its runtime bytecode hash
-     * @param _beacon The UpgradeableBeacon address
-     * @return The keccak256 hash of the PinnedBeaconProxy bytecode
-     */
-    function computeCodehash(address _beacon) external returns (bytes32) {
-        return _computeCodehash(_beacon);
-    }
-
-    /**
-     * @notice Compute the codehash of PinnedBeaconProxy using the beacon implementation
-     * @param _beacon The UpgradeableBeacon address
-     * @return The keccak256 hash of the PinnedBeaconProxy bytecode
-     */
-    function _computeCodehash(address _beacon) private returns (bytes32) {
-        PinnedBeaconProxy tempProxy = new PinnedBeaconProxy(_beacon, "");
-        return keccak256(address(tempProxy).code);
-    }
-
     function _transferAdminToAgent(address _contract) private {
         IAccessControl(_contract).grantRole(DEFAULT_ADMIN_ROLE, AGENT);
         IAccessControl(_contract).renounceRole(DEFAULT_ADMIN_ROLE, address(this));
@@ -254,7 +220,6 @@ contract V3TemporaryAdmin {
 
     error ZeroAddress();
     error ZeroLidoLocator();
-    error ZeroBeacon();
     error ZeroStakingRouter();
     error ZeroEvmScriptExecutor();
     error ZeroVaultHubAdapter();
