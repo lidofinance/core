@@ -491,14 +491,14 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection,
         address vaultOwner, address nodeOperator, uint256 vaultTierId) = _getVaultContextForConnectedVault(_vault);
 
-        Tier storage tier = _getStorage().tiers[vaultTierId];
+        Tier storage tier_ = _getStorage().tiers[vaultTierId];
 
         if (
-            vaultConnection.reserveRatioBP == tier.reserveRatioBP &&
-            vaultConnection.forcedRebalanceThresholdBP == tier.forcedRebalanceThresholdBP &&
-            vaultConnection.infraFeeBP == tier.infraFeeBP &&
-            vaultConnection.liquidityFeeBP == tier.liquidityFeeBP &&
-            vaultConnection.reservationFeeBP == tier.reservationFeeBP
+            vaultConnection.reserveRatioBP == tier_.reserveRatioBP &&
+            vaultConnection.forcedRebalanceThresholdBP == tier_.forcedRebalanceThresholdBP &&
+            vaultConnection.infraFeeBP == tier_.infraFeeBP &&
+            vaultConnection.liquidityFeeBP == tier_.liquidityFeeBP &&
+            vaultConnection.reservationFeeBP == tier_.reservationFeeBP
         ) {
             revert VaultAlreadySyncedWithTier();
         }
@@ -509,11 +509,11 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         vaultHub.updateConnection(
             _vault,
             vaultConnection.shareLimit,
-            tier.reserveRatioBP,
-            tier.forcedRebalanceThresholdBP,
-            tier.infraFeeBP,
-            tier.liquidityFeeBP,
-            tier.reservationFeeBP
+            tier_.reserveRatioBP,
+            tier_.forcedRebalanceThresholdBP,
+            tier_.infraFeeBP,
+            tier_.liquidityFeeBP,
+            tier_.reservationFeeBP
         );
 
         return true;
