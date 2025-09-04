@@ -590,8 +590,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (!vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
 
         VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(_vault);
-        if (vaultConnection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
-
         vaultHub.updateConnection(
             _vault,
             vaultConnection.shareLimit,
@@ -880,6 +878,5 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     error VaultNotConnected();
     error VaultAlreadySyncedWithTier();
     error ShareLimitAlreadySet();
-    error VaultIsDisconnecting(address vault);
     error InvalidBasisPoints(uint256 valueBP, uint256 maxValueBP);
 }
