@@ -1024,7 +1024,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         _decreaseLiability(_vault, _record, _shares);
         _withdraw(_vault, _record, address(this), valueToRebalance);
-        _rebalanceExternalEtherToInternal(valueToRebalance);
+        _rebalanceExternalEtherToInternal(valueToRebalance, _shares);
 
         _updateBeaconChainDepositsPause(_vault, _record, _vaultConnection(_vault));
 
@@ -1421,8 +1421,8 @@ contract VaultHub is PausableUntilWithRoles {
         return LIDO.getPooledEthBySharesRoundUp(_shares);
     }
 
-    function _rebalanceExternalEtherToInternal(uint256 _ether) internal {
-        LIDO.rebalanceExternalEtherToInternal{value: _ether}();
+    function _rebalanceExternalEtherToInternal(uint256 _ether, uint256 _amountOfShares) internal {
+        LIDO.rebalanceExternalEtherToInternal{value: _ether}(_amountOfShares);
     }
 
     function _triggerVaultValidatorWithdrawals(
