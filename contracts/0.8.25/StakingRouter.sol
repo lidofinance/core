@@ -1228,8 +1228,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
                 counts[i] = depositsCount;
                 totalCount += depositsCount;
-
-                ++i;
             }
         }
     }

@@ -19,8 +19,6 @@ import { Snapshot } from "test/suite";
 describe("StakingRouter.sol:module-sync", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
-  //   let user: HardhatEthersSigner;
-  //   let lido: HardhatEthersSigner;
 
   let stakingRouter: StakingRouter;
 
@@ -142,8 +140,25 @@ describe("StakingRouter.sol:module-sync", () => {
       }
 
       expect(count).to.eq(5);
+
+      // here can check deposit tracker too
     });
   });
 
-  context("getStakingModuleMaxInitialDepositsAmount", () => {});
+  context("getStakingModuleMaxInitialDepositsAmount", () => {
+    it("", async () => {
+      // mock allocation that will return staking module of second type
+      // 2 keys + 2 keys + 0 + 1
+      await stakingModuleV2.mock_getAllocation([1, 2, 3, 4], [ether("4096"), ether("4000"), ether("31"), ether("32")]);
+
+      const depositableEth = ether("10242");
+      // _getTargetDepositsAllocation mocked currently to return the same amount it received
+      const moduleDepositEth = await stakingRouter.getStakingModuleMaxInitialDepositsAmount.staticCall(
+        moduleId,
+        depositableEth,
+      );
+
+      expect(moduleDepositEth).to.equal(ether("160"));
+    });
+  });
 });
