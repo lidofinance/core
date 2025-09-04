@@ -33,6 +33,7 @@ contract Accounting {
         IVaultHub vaultHub;
     }
 
+    /// @notice snapshot of the protocol state that may be changed during the report
     struct PreReportState {
         uint256 clValidators;
         uint256 clBalance;
@@ -47,9 +48,9 @@ contract Accounting {
     /// @notice precalculated values that is used to change the state of the protocol during the report
     struct CalculatedValues {
         /// @notice amount of ether to collect from WithdrawalsVault to the buffer
-        uint256 withdrawals;
+        uint256 withdrawalsVaultTransfer;
         /// @notice amount of ether to collect from ELRewardsVault to the buffer
-        uint256 elRewards;
+        uint256 elRewardsVaultTransfer;
         /// @notice amount of ether to transfer to WithdrawalQueue to finalize requests
         uint256 etherToFinalizeWQ;
         /// @notice number of stETH shares to transfer to Burner because of WQ finalization
@@ -91,9 +92,7 @@ contract Accounting {
     /// @notice deposit size in wei (for pre-maxEB accounting)
     uint256 private constant DEPOSIT_SIZE = 32 ether;
 
-    /// @notice Lido Locator contract
     ILidoLocator public immutable LIDO_LOCATOR;
-    /// @notice Lido contract
     ILido public immutable LIDO;
 
     /// @param _lidoLocator Lido Locator contract
@@ -107,27 +106,30 @@ contract Accounting {
     }
 
     /// @notice calculates all the state changes that is required to apply the report
+    /// This a initial part of Accounting Oracle flow:
+    /// 1. simulate the report without any WQ processing (withdrawalFinalizationBatches.length == 0)
+    /// 2. calculate `simulatedShareRate` (simulatedTotalPooledEther * 1e27 / simulatedTotalShares)
+    /// 3. calculate `withdrawalFinalizationBatches` (WithdrawalQueue.calculateFinalizationBatches) using this `simulatedShareRate`
+    /// 4. submit the report with provided `withdrawalFinalizationBatches` and `simulatedShareRate`
     /// @param _report report values
     function simulateOracleReport(
         ReportValues calldata _report
     ) external view returns (CalculatedValues memory update) {
         Contracts memory contracts = _loadOracleReportContracts();
+
         PreReportState memory pre = _snapshotPreReportState(contracts);
 
         return _simulateOracleReport(contracts, pre, _report);
     }
 
-    /// @notice Updates accounting stats, collects EL rewards and distributes collected rewards
-    ///        if beacon balance increased, performs withdrawal requests finalization
+    /// @notice Updates accounting states, collects and distributes rewards, performs withdrawal requests finalization
     /// @dev periodically called by the AccountingOracle contract
     function handleOracleReport(ReportValues calldata _report) external {
         Contracts memory contracts = _loadOracleReportContracts();
         if (msg.sender != contracts.accountingOracle) revert NotAuthorized("handleOracleReport", msg.sender);
 
         PreReportState memory pre = _snapshotPreReportState(contracts);
-
         CalculatedValues memory update = _simulateOracleReport(contracts, pre, _report);
-
         _applyOracleReportContext(contracts, _report, pre, update);
     }
 
@@ -142,7 +144,6 @@ contract Accounting {
     }
 
     /// @dev calculates all the state changes that is required to apply the report
-    /// @dev if _withdrawalsShareRate == 0, no withdrawals are simulated
     function _simulateOracleReport(
         Contracts memory _contracts,
         PreReportState memory _pre,
@@ -166,13 +167,13 @@ contract Accounting {
         // by leaving some ether to sit in EL rewards vault or withdrawals vault
         // and/or leaving some shares unburnt on Burner to be processed on future reports
         (
-            update.withdrawals,
-            update.elRewards,
+            update.withdrawalsVaultTransfer,
+            update.elRewardsVaultTransfer,
             update.sharesToBurnForWithdrawals,
             update.totalSharesToBurn // shares to burn from Burner balance
         ) = _contracts.oracleReportSanityChecker.smoothenTokenRebase(
-            _pre.totalPooledEther - _pre.externalEther,
-            _pre.totalShares - _pre.externalShares,
+            _pre.totalPooledEther - _pre.externalEther, // we need to change the base as shareRate is now calculated on
+            _pre.totalShares - _pre.externalShares,     // internal ether and shares, but inside it's still total
             update.principalClBalance,
             _report.clBalance,
             _report.withdrawalVaultBalance,
@@ -188,9 +189,9 @@ contract Accounting {
 
         update.postInternalEther =
             _pre.totalPooledEther - _pre.externalEther // internal ether before
-            + _report.clBalance + update.withdrawals - update.principalClBalance // total cl rewards (or penalty)
-            + update.elRewards // MEV and tips
-            - update.etherToFinalizeWQ; // withdrawals
+            + _report.clBalance + update.withdrawalsVaultTransfer - update.principalClBalance
+            + update.elRewardsVaultTransfer
+            - update.etherToFinalizeWQ;
 
         // Pre-calculate total amount of protocol fees as the amount of shares that will be minted to pay it
         (update.sharesToMintAsFees, update.feeDistribution) = _calculateProtocolFees(
@@ -221,6 +222,8 @@ contract Accounting {
         }
     }
 
+    /// @return sharesToMintAsFees total number of shares to be minted as Lido Core fee
+    /// @return feeDistribution the number of shares that is minted to each module or treasury
     function _calculateProtocolFees(
         StakingRouter _stakingRouter,
         ReportValues calldata _report,
@@ -273,13 +276,13 @@ contract Accounting {
         // but with fees taken as ether deduction instead of minting shares
         // to learn the amount of shares we need to mint to compensate for this fee
 
-        uint256 unifiedClBalance = _report.clBalance + _update.withdrawals;
+        uint256 unifiedClBalance = _report.clBalance + _update.withdrawalsVaultTransfer;
         // Don't mint/distribute any protocol fee on the non-profitable Lido oracle report
         // (when consensus layer balance delta is zero or negative).
         // See LIP-12 for details:
         // https://research.lido.fi/t/lip-12-on-chain-part-of-the-rewards-distribution-after-the-merge/1625
         if (unifiedClBalance > _update.principalClBalance) {
-            uint256 totalRewards = unifiedClBalance - _update.principalClBalance + _update.elRewards;
+            uint256 totalRewards = unifiedClBalance - _update.principalClBalance + _update.elRewardsVaultTransfer;
             // amount of fees in ether
             uint256 feeEther = (totalRewards * _totalFee) / _feePrecisionPoints;
             // but we won't pay fees in ether, so we need to calculate how many shares we need to mint as fees
@@ -348,8 +351,8 @@ contract Accounting {
             _report.timestamp,
             _report.clBalance,
             _update.principalClBalance,
-            _update.withdrawals,
-            _update.elRewards,
+            _update.withdrawalsVaultTransfer,
+            _update.elRewardsVaultTransfer,
             lastWithdrawalRequestToFinalize,
             _report.simulatedShareRate,
             _update.etherToFinalizeWQ
@@ -392,7 +395,8 @@ contract Accounting {
             revert IncorrectReportValidators(_report.clValidators, _pre.clValidators, _pre.depositedValidators);
         }
 
-        // Oracle should consider this limitation
+        // Oracle should consider this limitation:
+        // During the AO report the ether to finalize the WQ cannot be greater or equal to `simulatedPostInternalEther`
         if (_update.postInternalShares == 0) revert InternalSharesCantBeZero();
 
         _contracts.oracleReportSanityChecker.checkAccountingOracleReport(
@@ -408,8 +412,8 @@ contract Accounting {
 
         if (_report.withdrawalFinalizationBatches.length > 0) {
             _contracts.oracleReportSanityChecker.checkSimulatedShareRate(
-                _update.postTotalPooledEther,
-                _update.postTotalShares,
+                _update.postInternalEther,
+                _update.postInternalShares,
                 _update.etherToFinalizeWQ,
                 _update.sharesToBurnForWithdrawals,
                 _report.simulatedShareRate

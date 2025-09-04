@@ -369,20 +369,20 @@ const simulateReport = async (
     simulatedShareRate: 10n ** 27n,
   };
   const update = await accounting.simulateOracleReport(reportValues);
-  const { postTotalPooledEther, postTotalShares, withdrawals, elRewards } = update;
+  const { postTotalPooledEther, postTotalShares, withdrawalsVaultTransfer, elRewardsVaultTransfer } = update;
 
   log.debug("Simulation result", {
     "Post Total Pooled Ether": formatEther(postTotalPooledEther),
     "Post Total Shares": postTotalShares,
-    "Withdrawals": formatEther(withdrawals),
-    "El Rewards": formatEther(elRewards),
+    "Withdrawals": formatEther(withdrawalsVaultTransfer),
+    "El Rewards": formatEther(elRewardsVaultTransfer),
   });
 
   return {
     postTotalPooledEther,
     postTotalShares,
-    withdrawals,
-    elRewards,
+    withdrawals: withdrawalsVaultTransfer,
+    elRewards: elRewardsVaultTransfer,
   };
 };
 

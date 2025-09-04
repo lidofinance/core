@@ -104,8 +104,8 @@ describe("Accounting.sol:report", () => {
 
       const simulated = await accounting.simulateOracleReport(report());
 
-      expect(simulated.withdrawals).to.equal(0n);
-      expect(simulated.elRewards).to.equal(0n);
+      expect(simulated.withdrawalsVaultTransfer).to.equal(0n);
+      expect(simulated.elRewardsVaultTransfer).to.equal(0n);
       expect(simulated.etherToFinalizeWQ).to.equal(0n);
       expect(simulated.sharesToFinalizeWQ).to.equal(0n);
       expect(simulated.sharesToBurnForWithdrawals).to.equal(0n);
