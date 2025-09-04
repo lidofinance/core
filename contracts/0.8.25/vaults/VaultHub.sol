@@ -419,6 +419,17 @@ contract VaultHub is PausableUntilWithRoles {
             revert VaultMintingCapacityExceeded(_vault, totalValue_, liabilityShares_, _reserveRatioBP);
         }
 
+        // special event for the Oracle to track fee calculation
+        emit VaultFeesUpdated({
+            vault: _vault,
+            preInfraFeeBP: connection.infraFeeBP,
+            preLiquidityFeeBP: connection.liquidityFeeBP,
+            preReservationFeeBP: connection.reservationFeeBP,
+            infraFeeBP: _infraFeeBP,
+            liquidityFeeBP: _liquidityFeeBP,
+            reservationFeeBP: _reservationFeeBP
+        });
+
         connection.shareLimit = uint96(_shareLimit);
         connection.reserveRatioBP = uint16(_reserveRatioBP);
         connection.forcedRebalanceThresholdBP = uint16(_forcedRebalanceThresholdBP);
@@ -431,10 +442,7 @@ contract VaultHub is PausableUntilWithRoles {
             nodeOperator: _nodeOperator(_vault),
             shareLimit: _shareLimit,
             reserveRatioBP: _reserveRatioBP,
-            forcedRebalanceThresholdBP: _forcedRebalanceThresholdBP,
-            infraFeeBP: _infraFeeBP,
-            liquidityFeeBP: _liquidityFeeBP,
-            reservationFeeBP: _reservationFeeBP
+            forcedRebalanceThresholdBP: _forcedRebalanceThresholdBP
         });
     }
 
@@ -1449,6 +1457,7 @@ contract VaultHub is PausableUntilWithRoles {
     //           EVENTS
     // -----------------------------
 
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event VaultConnected(
         address indexed vault,
         uint256 shareLimit,
@@ -1464,7 +1473,15 @@ contract VaultHub is PausableUntilWithRoles {
         address indexed nodeOperator,
         uint256 shareLimit,
         uint256 reserveRatioBP,
-        uint256 forcedRebalanceThresholdBP,
+        uint256 forcedRebalanceThresholdBP
+    );
+
+    /// @dev Warning! used by Accounting Oracle to calculate fees
+    event VaultFeesUpdated(
+        address indexed vault,
+        uint256 preInfraFeeBP,
+        uint256 preLiquidityFeeBP,
+        uint256 preReservationFeeBP,
         uint256 infraFeeBP,
         uint256 liquidityFeeBP,
         uint256 reservationFeeBP
@@ -1482,8 +1499,11 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 reportSlashingReserve
     );
 
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares, uint256 lockedAmount);
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event VaultRebalanced(address indexed vault, uint256 sharesBurned, uint256 etherWithdrawn);
     event VaultInOutDeltaUpdated(address indexed vault, int256 inOutDelta);
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
@@ -1502,7 +1522,9 @@ contract VaultHub is PausableUntilWithRoles {
     event BeaconChainDepositsPausedByOwner(address indexed vault);
     event BeaconChainDepositsResumedByOwner(address indexed vault);
 
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event BadDebtSocialized(address indexed vaultDonor, address indexed vaultAcceptor, uint256 badDebtShares);
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event BadDebtWrittenOffToBeInternalized(address indexed vault, uint256 badDebtShares);
 
     // -----------------------------

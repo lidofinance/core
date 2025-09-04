@@ -927,12 +927,13 @@ describe("VaultHub.sol:hub", () => {
           ),
       )
         .to.emit(vaultHub, "VaultConnectionUpdated")
+        .withArgs(vaultAddress, nodeOperator, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP)
+        .and.to.emit(vaultHub, "VaultFeesUpdated")
         .withArgs(
           vaultAddress,
-          nodeOperator,
-          SHARE_LIMIT,
-          RESERVE_RATIO_BP,
-          FORCED_REBALANCE_THRESHOLD_BP,
+          oldConnection.infraFeeBP,
+          oldConnection.liquidityFeeBP,
+          oldConnection.reservationFeeBP,
           newInfraFeeBP,
           newLiquidityFeeBP,
           newReservationFeeBP,
