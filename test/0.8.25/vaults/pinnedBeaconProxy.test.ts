@@ -3,6 +3,7 @@ import { keccak256 } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setStorageAt } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   DepositContract__MockForBeaconChainDepositor,
@@ -53,11 +54,7 @@ describe("PinnedBeaconProxy.sol", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   async function ossify(proxy: PinnedBeaconProxy, pin: string) {
-    await ethers.provider.send("hardhat_setStorageAt", [
-      await proxy.getAddress(),
-      PINNED_BEACON_STORAGE_SLOT,
-      ethers.zeroPadValue(pin, 32),
-    ]);
+    await setStorageAt(await proxy.getAddress(), PINNED_BEACON_STORAGE_SLOT, pin);
   }
 
   async function resetOssify(proxy: PinnedBeaconProxy) {
@@ -145,6 +142,17 @@ describe("PinnedBeaconProxy.sol", () => {
       await beacon.connect(admin).upgradeTo(implNew);
       expect(await pinnedBeaconProxy.implementation()).to.equal(currentImpl);
       expect(await proxy2.implementation()).to.equal(await beacon.implementation());
+    });
+  });
+
+  describe("isOssified()", () => {
+    it("should return false when not ossified", async () => {
+      expect(await pinnedBeaconProxy.isOssified()).to.be.false;
+    });
+
+    it("should return true when ossified", async () => {
+      await ossify(pinnedBeaconProxy, randomAddress());
+      expect(await pinnedBeaconProxy.isOssified()).to.be.true;
     });
   });
 });

@@ -347,34 +347,9 @@ export async function main() {
   await makeTx(
     v3TemporaryAdminContract,
     "completeSetup",
-    [lidoLocatorImpl.address, beacon.address, evmScriptExecutorAddress, vaultHubAdapterAddress],
+    [lidoLocatorImpl.address, evmScriptExecutorAddress, vaultHubAdapterAddress],
     {
       from: deployer,
     },
   );
-
-  //
-  // Verify codehash computation: compare onchain vs offchain
-  //
-  log("Verifying codehash computation...");
-
-  // Compute codehash onchain using the exposed function (via static call to get return value)
-  const onchainCodehash = await v3TemporaryAdminContract.computeCodehash.staticCall(beacon.address);
-  log("Onchain codehash:", onchainCodehash);
-
-  // Compute codehash offchain by deploying a temporary PinnedBeaconProxy
-  const PinnedBeaconProxyFactory = await ethers.getContractFactory("PinnedBeaconProxy");
-  const tempProxy = await PinnedBeaconProxyFactory.deploy(beacon.address, "0x");
-  const tempProxyAddress = await tempProxy.getAddress();
-
-  // Get the deployed bytecode
-  const deployedCode = await ethers.provider.getCode(tempProxyAddress);
-  const offchainCodehash = ethers.keccak256(deployedCode);
-  log("Offchain codehash:", offchainCodehash);
-
-  // Verify they match
-  if (onchainCodehash !== offchainCodehash) {
-    throw new Error(`Codehash mismatch! Onchain: ${onchainCodehash}, Offchain: ${offchainCodehash}`);
-  }
-  log("✓ Codehash verification successful - onchain and offchain computations match");
 }

@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { ContractTransactionReceipt, formatEther, keccak256, ZeroAddress } from "ethers";
+import { ContractTransactionReceipt, formatEther, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -32,9 +32,7 @@ import {
 import { MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
-import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP, ZERO_HASH } from "test/suite";
-
-const ZERO_BYTES32 = "0x" + Buffer.from(ZERO_HASH).toString("hex");
+import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
 
 const TIER_PARAMS: TierParamsStruct = {
   shareLimit: ether("1"),
@@ -64,8 +62,6 @@ describe("VaultHub.sol:hub", () => {
   let operatorGrid: OperatorGrid;
   let operatorGridMock: OperatorGrid__MockForVaultHub;
   let proxy: OssifiableProxy;
-
-  let codehash: string;
 
   const SHARE_LIMIT = ether("100");
   const RESERVE_RATIO_BP = 10_00n;
@@ -104,7 +100,7 @@ describe("VaultHub.sol:hub", () => {
     vault,
     totalValue,
     inOutDelta,
-    lidoFees,
+    cumulativeLidoFees,
     liabilityShares,
     slashingReserve,
   }: {
@@ -113,18 +109,18 @@ describe("VaultHub.sol:hub", () => {
     totalValue?: bigint;
     inOutDelta?: bigint;
     liabilityShares?: bigint;
-    lidoFees?: bigint;
+    cumulativeLidoFees?: bigint;
     slashingReserve?: bigint;
   }) {
     await lazyOracle.refreshReportTimestamp();
     const timestamp = await lazyOracle.latestReportTimestamp();
-
-    totalValue = totalValue ?? (await vaultHub.totalValue(vault));
     const record = await vaultHub.vaultRecord(vault);
     const activeIndex = record.inOutDelta[0].refSlot >= record.inOutDelta[1].refSlot ? 0 : 1;
+
+    totalValue = totalValue ?? (await vaultHub.totalValue(vault));
     inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
-    liabilityShares = liabilityShares ?? (await vaultHub.vaultRecord(vault)).liabilityShares;
-    lidoFees = lidoFees ?? (await vaultHub.vaultObligations(vault)).unsettledLidoFees;
+    liabilityShares = liabilityShares ?? record.liabilityShares;
+    cumulativeLidoFees = cumulativeLidoFees ?? record.cumulativeLidoFees;
     slashingReserve = slashingReserve ?? 0n;
 
     await lazyOracle.mock__report(
@@ -133,7 +129,7 @@ describe("VaultHub.sol:hub", () => {
       timestamp,
       totalValue,
       inOutDelta,
-      lidoFees,
+      cumulativeLidoFees,
       liabilityShares,
       slashingReserve,
     );
@@ -218,7 +214,6 @@ describe("VaultHub.sol:hub", () => {
     await vaultHubAdmin.grantRole(await vaultHub.PAUSE_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.RESUME_ROLE(), user);
     await vaultHubAdmin.grantRole(await vaultHub.VAULT_MASTER_ROLE(), user);
-    await vaultHubAdmin.grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), user);
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
 
@@ -226,10 +221,8 @@ describe("VaultHub.sol:hub", () => {
     const beacon = await ethers.deployContract("UpgradeableBeacon", [stakingVaultImpl, deployer]);
 
     vaultFactory = await ethers.deployContract("VaultFactory__MockForVaultHub", [beacon]);
-    const vault = await createVault(vaultFactory);
 
-    codehash = keccak256(await ethers.provider.getCode(await vault.getAddress()));
-    await vaultHub.connect(user).setAllowedCodehash(codehash, true);
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultFactory });
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -245,36 +238,6 @@ describe("VaultHub.sol:hub", () => {
   context("initialState", () => {
     it("returns the initial state", async () => {
       expect(await vaultHub.vaultsCount()).to.equal(0);
-    });
-  });
-
-  context("addVaultProxyCodehash", () => {
-    it("reverts if called by non-VAULT_CODEHASH_SET_ROLE", async () => {
-      await expect(vaultHub.connect(stranger).setAllowedCodehash(ZERO_BYTES32, true))
-        .to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await vaultHub.VAULT_CODEHASH_SET_ROLE());
-    });
-
-    it("reverts if codehash is zero", async () => {
-      await expect(vaultHub.connect(user).setAllowedCodehash(ZERO_BYTES32, true)).to.be.revertedWithCustomError(
-        vaultHub,
-        "ZeroArgument",
-      );
-    });
-
-    it("reverts if the codehash is the keccak256 of empty string", async () => {
-      const emptyStringHash = keccak256("0x");
-      await expect(vaultHub.connect(user).setAllowedCodehash(emptyStringHash, true)).to.be.revertedWithCustomError(
-        vaultHub,
-        "ZeroCodehash",
-      );
-    });
-
-    it("adds the codehash", async () => {
-      const newCodehash = codehash.slice(0, -10) + "0000000000";
-      await expect(vaultHub.setAllowedCodehash(newCodehash, true))
-        .to.emit(vaultHub, "AllowedCodehashUpdated")
-        .withArgs(newCodehash, true);
     });
   });
 
@@ -359,24 +322,6 @@ describe("VaultHub.sol:hub", () => {
         [ether("1"), 0n, 0n],
         [0n, 0n, 0n],
       ]);
-    });
-  });
-
-  context("vaultObligations", () => {
-    it("returns zeroes if the vault is not connected", async () => {
-      const vault = await createVault(vaultFactory);
-      const obligations = await vaultHub.vaultObligations(vault);
-
-      expect(obligations).to.deep.equal([0n, 0n, 0n]);
-    });
-
-    it("returns the obligations if the vault is connected", async () => {
-      const { vault } = await createAndConnectVault(vaultFactory);
-      const unsettledLidoFees = 100n;
-      await lazyOracle.mock__report(vaultHub, vault, 0n, 0n, 0n, unsettledLidoFees, 0n, 0n);
-      const obligations = await vaultHub.vaultObligations(vault);
-
-      expect(obligations).to.deep.equal([0n, unsettledLidoFees, 0n]);
     });
   });
 
@@ -634,7 +579,7 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
-  context("rebalanceShortfall", () => {
+  context("rebalanceShortfallShares", () => {
     it("does not revert when vault address is correct", async () => {
       const { vault } = await createAndConnectVault(vaultFactory, {
         shareLimit: ether("100"), // just to bypass the share limit check
@@ -642,12 +587,12 @@ describe("VaultHub.sol:hub", () => {
         forcedRebalanceThresholdBP: 10_00n, // 10%
       });
 
-      await expect(vaultHub.rebalanceShortfall(vault)).not.to.be.reverted;
+      await expect(vaultHub.rebalanceShortfallShares(vault)).not.to.be.reverted;
     });
 
     it("does not revert when vault address is ZeroAddress", async () => {
       const zeroAddress = ethers.ZeroAddress;
-      await expect(vaultHub.rebalanceShortfall(zeroAddress)).not.to.be.reverted;
+      await expect(vaultHub.rebalanceShortfallShares(zeroAddress)).not.to.be.reverted;
     });
 
     it("returns 0 when stETH was not minted", async () => {
@@ -663,7 +608,7 @@ describe("VaultHub.sol:hub", () => {
       await lido.connect(whale).transfer(burner, ether("1"));
       await lido.connect(burner).burnShares(ether("1"));
 
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(ether("0"));
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(ether("0"));
     });
 
     it("returns 0 when minted small amount of stETH and vault is healthy", async () => {
@@ -684,7 +629,7 @@ describe("VaultHub.sol:hub", () => {
       await lido.connect(burner).burnShares(ether("1"));
 
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(true);
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(0n);
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(0n);
     });
 
     it("different cases when vault is healthy, unhealthy and minted > totalValue", async () => {
@@ -702,15 +647,15 @@ describe("VaultHub.sol:hub", () => {
 
       await reportVault({ vault, totalValue: ether("0.5") }); // at the threshold
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(true);
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(0n);
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(0n);
 
       await reportVault({ vault, totalValue: ether("0.5") - 1n }); // below the threshold
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(true);
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(0n);
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(0n);
 
       await reportVault({ vault, totalValue: 0n }); // minted > totalValue
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(false);
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(MAX_UINT256);
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(MAX_UINT256);
     });
 
     it("returns correct value for rebalance vault", async () => {
@@ -738,7 +683,7 @@ describe("VaultHub.sol:hub", () => {
       const record = await vaultHub.vaultRecord(vault);
       const sharesByTotalValue = await lido.getSharesByPooledEth(await vaultHub.totalValue(vault));
       const shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
-      expect(await vaultHub.rebalanceShortfall(vault)).to.equal(shortfall);
+      expect(await vaultHub.rebalanceShortfallShares(vault)).to.equal(shortfall);
     });
   });
 
@@ -750,35 +695,19 @@ describe("VaultHub.sol:hub", () => {
       await vault.connect(user).transferOwnership(vaultHub);
     });
 
+    it("reverts if vault is not factory deployed", async () => {
+      const randomVault = certainAddress("randomVault");
+      await expect(vaultHub.connect(user).connectVault(randomVault))
+        .to.be.revertedWithCustomError(vaultHub, "VaultNotFactoryDeployed")
+        .withArgs(randomVault);
+    });
+
     it("reverts if vault is already connected", async () => {
       const { vault: connectedVault } = await createAndConnectVault(vaultFactory);
 
       await expect(vaultHub.connect(user).connectVault(connectedVault))
         .to.be.revertedWithCustomError(vaultHub, "VaultHubNotPendingOwner")
         .withArgs(connectedVault);
-    });
-
-    it("reverts if proxy codehash is not added", async () => {
-      const stakingVaultImpl2 = await ethers.deployContract("StakingVault__MockForVaultHub", [depositContract]);
-      const beacon2 = await ethers.deployContract("UpgradeableBeacon", [stakingVaultImpl2, deployer]);
-
-      const vaultFactory2 = await ethers.deployContract("VaultFactory__MockForVaultHub", [beacon2]);
-
-      const vault2 = await createVault(vaultFactory2);
-      await operatorGridMock.changeVaultTierParams(await vault2.getAddress(), {
-        shareLimit: SHARE_LIMIT,
-        reserveRatioBP: RESERVE_RATIO_BP,
-        forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
-        infraFeeBP: INFRA_FEE_BP,
-        liquidityFeeBP: LIQUIDITY_FEE_BP,
-        reservationFeeBP: RESERVATION_FEE_BP,
-      });
-
-      await vault2.connect(user).transferOwnership(vaultHub);
-      await expect(vaultHub.connect(user).connectVault(vault2)).to.be.revertedWithCustomError(
-        vaultHub,
-        "CodehashNotAllowed",
-      );
     });
 
     it("connects the vault", async () => {

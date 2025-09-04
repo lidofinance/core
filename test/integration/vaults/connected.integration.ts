@@ -1,4 +1,5 @@
 import { expect } from "chai";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -76,6 +77,8 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
   });
 
   it("VaultHub is pausable and resumable", async () => {
+    const { lido } = ctx.contracts;
+
     await vaultHub.connect(agent).grantRole(await vaultHub.PAUSE_ROLE(), pauser);
     await vaultHub.connect(agent).grantRole(await vaultHub.RESUME_ROLE(), pauser);
 
@@ -94,19 +97,32 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
     expect(await vaultHub.isPaused()).to.equal(false);
 
     // check that minting is resumed
+    const lockIncrease = await lido.getPooledEthBySharesRoundUp(testSharesAmountWei);
+    expect(lockIncrease).to.be.closeTo(TEST_STETH_AMOUNT_WEI, 2n);
+
     await expect(dashboard.mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
       .to.emit(vaultHub, "MintedSharesOnVault")
-      .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + TEST_STETH_AMOUNT_WEI);
+      .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + lockIncrease);
   });
 
   context("stETH minting", () => {
     it("Allows minting stETH", async () => {
+      const { lido } = ctx.contracts;
       // add some stETH to the vault to have totalValue
       await dashboard.fund({ value: ether("1") });
 
+      const lockIncrease = await lido.getPooledEthBySharesRoundUp(testSharesAmountWei);
+      expect(lockIncrease).to.be.closeTo(TEST_STETH_AMOUNT_WEI, 2n);
+
       await expect(dashboard.mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
+        .to.emit(lido, "Transfer")
+        .withArgs(ZeroAddress, stranger, await lido.getPooledEthByShares(testSharesAmountWei))
+        .to.emit(lido, "TransferShares")
+        .withArgs(ZeroAddress, stranger, testSharesAmountWei)
+        .to.emit(lido, "ExternalSharesMinted")
+        .withArgs(stranger, testSharesAmountWei)
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + TEST_STETH_AMOUNT_WEI);
+        .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + lockIncrease);
     });
 
     // TODO: can mint within share limits of the vault
@@ -122,9 +138,13 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       const newLimit = await lido.getCurrentStakeLimit();
 
       await dashboard.fund({ value: newLimit + ether("2") }); // try to fund to go healthy
+
+      const lockIncrease = await lido.getPooledEthBySharesRoundUp(testSharesAmountWei);
+      expect(lockIncrease).to.be.closeTo(TEST_STETH_AMOUNT_WEI, 2n);
+
       await expect(dashboard.mintStETH(stranger, TEST_STETH_AMOUNT_WEI))
         .to.emit(vaultHub, "MintedSharesOnVault")
-        .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + TEST_STETH_AMOUNT_WEI);
+        .withArgs(stakingVault, testSharesAmountWei, CONNECT_DEPOSIT + lockIncrease);
     });
   });
 
@@ -137,9 +157,26 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await dashboard.mintStETH(owner, TEST_STETH_AMOUNT_WEI);
       await lido.connect(owner).approve(dashboard, TEST_STETH_AMOUNT_WEI);
 
-      await expect(dashboard.burnStETH(TEST_STETH_AMOUNT_WEI))
+      const stethAmount = await lido.getPooledEthByShares(testSharesAmountWei);
+
+      const tx = await dashboard.burnStETH(TEST_STETH_AMOUNT_WEI);
+
+      const receipt = await tx.wait();
+      const transfers = ctx.getEvents(receipt!, "Transfer");
+      expect(transfers.filter((t) => t.args?.to == ZeroAddress).length).to.equal(0);
+
+      const transferShares = ctx.getEvents(receipt!, "TransferShares");
+      expect(transferShares.filter((t) => t.args?.to == ZeroAddress).length).to.equal(0);
+
+      await expect(tx)
         .to.emit(vaultHub, "BurnedSharesOnVault")
-        .withArgs(stakingVault, testSharesAmountWei);
+        .withArgs(stakingVault, testSharesAmountWei)
+        .to.emit(lido, "Transfer")
+        .withArgs(owner, vaultHub, stethAmount)
+        .to.emit(lido, "TransferShares")
+        .withArgs(owner, vaultHub, testSharesAmountWei)
+        .to.emit(lido, "SharesBurnt")
+        .withArgs(vaultHub, stethAmount, stethAmount, testSharesAmountWei);
     });
 
     // Can burn steth from the lido v2 core protocol
@@ -198,8 +235,10 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
         .withArgs(vaultHub, etherToRebalance)
         .to.emit(vaultHub, "VaultInOutDeltaUpdated")
         .withArgs(stakingVault, ether("2") - etherToRebalance)
-        .to.emit(ctx.contracts.lido, "ExternalEtherTransferredToBuffer")
+        .to.emit(lido, "ExternalEtherTransferredToBuffer")
         .withArgs(etherToRebalance)
+        .to.emit(lido, "ExternalSharesBurnt")
+        .withArgs(sharesBurnt)
         .to.emit(vaultHub, "VaultRebalanced")
         .withArgs(stakingVault, sharesBurnt, etherToRebalance);
 

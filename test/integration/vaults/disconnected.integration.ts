@@ -203,47 +203,6 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       });
     });
 
-    describe("Ossification", () => {
-      it("Can ossify vault", async () => {
-        await expect(stakingVault.connect(owner).ossify()).to.emit(stakingVault, "PinnedImplementationUpdated");
-
-        expect(await stakingVault.isOssified()).to.equal(true);
-      });
-
-      describe("Ossified", () => {
-        beforeEach(async () => {
-          await stakingVault.connect(owner).ossify();
-        });
-
-        it("Can't ossify vault again", async () => {
-          await expect(stakingVault.connect(owner).ossify()).to.be.revertedWithCustomError(
-            stakingVault,
-            "VaultOssified",
-          );
-        });
-
-        it("Can withdraw the funds", async () => {
-          const balance = await ethers.provider.getBalance(stranger);
-          const amount = await ethers.provider.getBalance(stakingVault);
-
-          await expect(stakingVault.connect(owner).withdraw(stranger, amount))
-            .to.emit(stakingVault, "EtherWithdrawn")
-            .withArgs(stranger, amount);
-
-          expect(await ethers.provider.getBalance(stranger)).to.equal(balance + amount);
-        });
-
-        it("Can't reconnect the vault to the hub", async () => {
-          const { vaultHub } = ctx.contracts;
-          await stakingVault.connect(owner).transferOwnership(vaultHub);
-
-          await expect(vaultHub.connectVault(stakingVault))
-            .to.be.revertedWithCustomError(vaultHub, "VaultOssified")
-            .withArgs(stakingVault);
-        });
-      });
-    });
-
     describe("Validator exiting", () => {
       it("Can request validator exit", async () => {
         const keys = getPubkeys(2);

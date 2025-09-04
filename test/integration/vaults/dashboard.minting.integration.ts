@@ -85,7 +85,10 @@ describe("Integration: Dashboard ", () => {
       expect(await dashboard.totalMintingCapacityShares()).to.be.equal(0n);
       expect(await dashboard.remainingMintingCapacityShares(0n)).to.be.equal(0n);
 
-      await reportVaultDataWithProof(ctx, stakingVault, { accruedLidoFees: ether("1"), waitForNextRefSlot: true });
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        cumulativeLidoFees: ether("1"),
+        waitForNextRefSlot: true,
+      });
 
       expect(await dashboard.totalMintingCapacityShares()).to.be.equal(0n);
       expect(await dashboard.remainingMintingCapacityShares(0n)).to.be.equal(0n);
@@ -96,7 +99,7 @@ describe("Integration: Dashboard ", () => {
       const totalMintingCapacityShares10 = await dashboard.totalMintingCapacityShares();
       expect(
         await calculateLockedValue(ctx, stakingVault, { liabilityShares: totalMintingCapacityShares10 }),
-      ).to.be.equal(await vaultHub.maxLockableValue(stakingVault));
+      ).to.be.closeTo(await vaultHub.maxLockableValue(stakingVault), 2n);
     });
 
     it("You can mint StETH if you have funded the vault", async () => {

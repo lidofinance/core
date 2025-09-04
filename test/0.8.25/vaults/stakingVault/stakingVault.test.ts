@@ -23,7 +23,9 @@ import {
   generatePostDeposit,
   generateValidator,
   MAX_UINT256,
+  ONE_GWEI,
   proxify,
+  randomAddress,
   streccak,
 } from "lib";
 import { getPubkeys } from "lib/protocol";
@@ -80,7 +82,6 @@ describe("StakingVault.sol", () => {
     expect(await stakingVault.version()).to.equal(1);
     expect(await stakingVault.getInitializedVersion()).to.equal(1);
     expect(await stakingVault.pendingOwner()).to.equal(ZeroAddress);
-    expect(await stakingVault.isOssified()).to.equal(false);
     expect(toChecksumAddress(await stakingVault.withdrawalCredentials())).to.equal(
       toChecksumAddress("0x02" + "00".repeat(11) + de0x(await stakingVault.getAddress())),
     );
@@ -157,7 +158,7 @@ describe("StakingVault.sol", () => {
     it("reverts on already ossified", async () => {
       await stakingVault.ossify();
 
-      await expect(stakingVault.ossify()).to.revertedWithCustomError(stakingVault, "VaultOssified");
+      await expect(stakingVault.ossify()).to.revertedWithCustomError(stakingVault, "AlreadyOssified");
     });
 
     it("ossifies the vault", async () => {
@@ -511,6 +512,12 @@ describe("StakingVault.sol", () => {
       ).to.be.revertedWithCustomError(stakingVault, "InvalidPubkeysLength");
     });
 
+    it("reverts if the refund recipient is the zero address", async () => {
+      await expect(stakingVault.triggerValidatorWithdrawals(SAMPLE_PUBKEY, [], ZeroAddress, { value: 1n }))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_excessRefundRecipient");
+    });
+
     it("reverts if called by a non-owner", async () => {
       await expect(
         stakingVault.connect(stranger).triggerValidatorWithdrawals(SAMPLE_PUBKEY, [], vaultOwner, { value: 1n }),
@@ -595,27 +602,23 @@ describe("StakingVault.sol", () => {
         .withArgs(SAMPLE_PUBKEY, [amount], 0n, vaultOwner);
     });
 
-    it("requests a partial validator withdrawal and refunds the excess fee to the msg.sender if the refund recipient is the zero address", async () => {
+    it("requests a partial validator withdrawal and refunds the excess", async () => {
       const amount = ether("0.1");
       const overpaid = 100n;
-      const ownerBalanceBefore = await ethers.provider.getBalance(vaultOwner);
+      const recipient = await randomAddress();
 
       const tx = await stakingVault
         .connect(vaultOwner)
-        .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [amount], ZeroAddress, { value: baseFee + overpaid });
+        .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [amount], recipient, { value: baseFee + overpaid });
 
       await expect(tx)
         .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
         .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
         .to.emit(stakingVault, "ValidatorWithdrawalsTriggered")
-        .withArgs(SAMPLE_PUBKEY, [amount], overpaid, vaultOwner);
+        .withArgs(SAMPLE_PUBKEY, [amount], overpaid, recipient);
 
-      const txReceipt = (await tx.wait()) as ContractTransactionReceipt;
-      const gasFee = txReceipt.gasPrice * txReceipt.cumulativeGasUsed;
-
-      const ownerBalanceAfter = await ethers.provider.getBalance(vaultOwner);
-
-      expect(ownerBalanceAfter).to.equal(ownerBalanceBefore - baseFee - gasFee); // overpaid is refunded back
+      const recipientBalance = await ethers.provider.getBalance(recipient);
+      expect(recipientBalance).to.equal(overpaid);
     });
 
     it("requests a multiple validator withdrawals", async () => {
@@ -660,6 +663,33 @@ describe("StakingVault.sol", () => {
 
       const strangerBalanceAfter = await ethers.provider.getBalance(stranger);
       expect(strangerBalanceAfter).to.equal(strangerBalanceBefore + valueToRefund);
+    });
+
+    it("requests a bigger than uin64 in wei partial validator withdrawal", async () => {
+      let amount = ether("32");
+
+      // NB: the amount field is uin64 so only works for Gwei, and should not work with Wei
+      let gotError: boolean | undefined = undefined;
+      try {
+        await stakingVault
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [amount], vaultOwner, { value: baseFee });
+      } catch (error) {
+        gotError = !!error;
+      }
+      expect(gotError).to.be.true;
+
+      amount /= ONE_GWEI;
+
+      await expect(
+        stakingVault
+          .connect(vaultOwner)
+          .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [amount], vaultOwner, { value: baseFee }),
+      )
+        .to.emit(withdrawalRequestContract, "RequestAdded__Mock")
+        .withArgs(encodeEip7002Input(SAMPLE_PUBKEY, amount), baseFee)
+        .to.emit(stakingVault, "ValidatorWithdrawalsTriggered")
+        .withArgs(SAMPLE_PUBKEY, [amount], 0n, vaultOwner);
     });
   });
 

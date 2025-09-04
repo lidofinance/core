@@ -36,4 +36,6 @@ export {
   VaultRoleMethods,
 } from "./vaults";
 
+export { ensureSomeOddShareRate } from "./share-rate";
+
 export * from "./operatorGrid";
