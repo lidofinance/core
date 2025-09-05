@@ -27,6 +27,7 @@ import {
   certainAddress,
   days,
   deployEIP7002WithdrawalRequestContract,
+  DISCONNECT_NOT_INITIATED,
   EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
   ether,
   findEvents,
@@ -109,7 +110,7 @@ describe("Dashboard.sol", () => {
     owner: ZeroAddress,
     shareLimit: 100000n,
     vaultIndex: 1n,
-    pendingDisconnect: false,
+    disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
     reserveRatioBP: 1000n,
     forcedRebalanceThresholdBP: 800n,
     infraFeeBP: 1000n,
@@ -128,7 +129,7 @@ describe("Dashboard.sol", () => {
     settledLidoFees,
     redemptionShares,
     vaultBalance = 0n,
-    pendingDisconnect = false,
+    disconnectInitiatedTs = DISCONNECT_NOT_INITIATED,
     isConnected = true,
     owner = vaultOwner,
   }: Partial<
@@ -143,7 +144,7 @@ describe("Dashboard.sol", () => {
       ...connection,
       reserveRatioBP: reserveRatioBP ?? connection.reserveRatioBP,
       shareLimit: shareLimit ?? connection.shareLimit,
-      pendingDisconnect: pendingDisconnect ?? connection.pendingDisconnect,
+      disconnectInitiatedTs: disconnectInitiatedTs ?? connection.disconnectInitiatedTs,
       vaultIndex: isConnected ? connection.vaultIndex : 0n,
       owner: owner ?? connection.owner,
     });
@@ -525,21 +526,9 @@ describe("Dashboard.sol", () => {
     });
 
     context("withdrawableValue", () => {
-      it("returns 0 if pending disconnect", async () => {
-        await setup({ totalValue: ether("10"), vaultBalance: ether("1") });
-        expect(await dashboard.withdrawableValue()).to.equal(ether("1"));
-        await setup({ pendingDisconnect: true });
-        expect(await dashboard.withdrawableValue()).to.equal(0n);
-      });
-
       it("returns the trivial amount can withdraw ether", async () => {
         await setup({ totalValue: 0n, locked: 0n });
 
-        expect(await dashboard.withdrawableValue()).to.equal(0n);
-      });
-
-      it("returns 0 if pending disconnect", async () => {
-        await setup({ pendingDisconnect: true });
         expect(await dashboard.withdrawableValue()).to.equal(0n);
       });
 

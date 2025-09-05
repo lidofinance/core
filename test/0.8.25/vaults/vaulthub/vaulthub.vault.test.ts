@@ -913,7 +913,7 @@ describe("VaultHub.sol:owner-functions", () => {
       await vaultHub.connect(vaultOwner).voluntaryDisconnect(vaultAddress);
 
       // Complete disconnect
-      await lazyOracle.mock__report(vaultHub, vault, 0n, 0n, 0n, 0n, 0n, 0n);
+      await lazyOracle.mock__report(vaultHub, vault, await getCurrentBlockTimestamp(), 0n, 0n, 0n, 0n, 0n);
 
       // Reconnect
       await vault.connect(vaultOwner).acceptOwnership();

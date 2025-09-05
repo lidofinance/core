@@ -53,7 +53,7 @@ contract VaultHub__HarnessForReporting is VaultHub {
             address(0), // owner
             uint96(_shareLimit),
             uint96($.vaults.length),
-            false, // pendingDisconnect
+            DISCONNECT_NOT_INITIATED, // disconnectInitiatedTs
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
             uint16(_infraFeeBP),

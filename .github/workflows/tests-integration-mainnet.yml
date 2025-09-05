@@ -57,6 +57,5 @@ jobs:
       - name: Run integration tests
         run: yarn test:integration
         env:
-          LOG_LEVEL: debug
           RPC_URL: http://localhost:8555
           NETWORK_STATE_FILE: deployed-mainnet-upgrade.json
