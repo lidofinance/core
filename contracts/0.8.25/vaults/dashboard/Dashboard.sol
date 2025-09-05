@@ -206,21 +206,12 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the max total lockable amount of ether for the vault (excluding the Lido and node operator fees)
-     */
-    function maxLockableValue() public view returns (uint256) {
-        uint256 maxLockableValue_ = VAULT_HUB.maxLockableValue(address(_stakingVault()));
-        uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
-        return maxLockableValue_ > nodeOperatorFee ? maxLockableValue_ - nodeOperatorFee : 0;
-    }
-
-    /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() external view returns (uint256) {
         uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
 
-        return Math256.min(effectiveShareLimit, _mintableShares(maxLockableValue()));
+        return Math256.min(effectiveShareLimit, _mintableShares(-int256(nodeOperatorDisbursableFee())));
     }
 
     /**
@@ -231,7 +222,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) public view returns (uint256) {
         uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
-        uint256 vaultMintableSharesByRR = _mintableShares(maxLockableValue() + _etherToFund);
+        uint256 vaultMintableSharesByRR = _mintableShares(int256(_etherToFund));
         uint256 vaultLiabilityShares = liabilityShares();
 
         return Math256.min(
@@ -657,21 +648,8 @@ contract Dashboard is NodeOperatorFee {
         _burnShares(unwrappedShares);
     }
 
-    /// @notice Calculates the total number of shares that that is possible to mint on the vault
-    /// @param _maxLockableValue The amount of ether that is possible to lock on the vault
-    function _mintableShares(uint256 _maxLockableValue) internal view returns (uint256) {
-        uint256 mintableStETH = (_maxLockableValue * (TOTAL_BASIS_POINTS - reserveRatioBP())) / TOTAL_BASIS_POINTS;
-        uint256 minimalReserve_ = minimalReserve();
-
-        if (_maxLockableValue < minimalReserve_) {
-            return 0;
-        }
-
-        if (_maxLockableValue - mintableStETH < minimalReserve_) {
-            mintableStETH = _maxLockableValue - minimalReserve_;
-        }
-
-        return _getSharesByPooledEth(mintableStETH);
+    function _mintableShares(int256 _deltaValue) internal view returns (uint256) {
+        return VAULT_HUB.mintableShares(address(_stakingVault()), _deltaValue);
     }
 
     /// @notice Converts the given amount of stETH to shares

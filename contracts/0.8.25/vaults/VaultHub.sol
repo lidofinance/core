@@ -248,8 +248,16 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return the amount of ether that can be locked in the vault given the current total value
     /// @dev returns 0 if the vault is not connected
     function maxLockableValue(address _vault) external view returns (uint256) {
-        VaultRecord storage record = _vaultRecord(_vault);
-        return _totalValue(record) - _unsettledLidoFeesValue(record);
+        return _maxLockableValue(_vaultRecord(_vault));
+    }
+
+    /// @notice Calculates the total number of shares that that is possible to mint on the vault
+    /// @param _vault The address of the vault
+    /// @param _deltaValue The delta value to apply to the total value of the vault (may be negative)
+    /// @return the number of shares that can be minted
+    /// @dev returns 0 if the vault is not connected
+    function mintableShares(address _vault, int256 _deltaValue) external view returns (uint256) {
+        return _mintableShares(_vault, _deltaValue);
     }
 
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
@@ -575,7 +583,7 @@ contract VaultHub is PausableUntilWithRoles {
                 _amountOfShares: badDebtSharesToAccept,
                 _reserveRatioBP: acceptorConnection.reserveRatioBP,
                 // don't check any limits
-                _maxLockableValue: type(uint256).max,
+                _lockableValueLimit: type(uint256).max,
                 _shareLimit: type(uint256).max,
                 _overrideOperatorLimits: true
             });
@@ -720,14 +728,12 @@ contract VaultHub is PausableUntilWithRoles {
 
         _requireFreshReport(_vault, record);
 
-        uint256 maxLockableValue_ = _totalValue(record) - _unsettledLidoFeesValue(record);
-
         _increaseLiability({
             _vault: _vault,
             _record: record,
             _amountOfShares: _amountOfShares,
             _reserveRatioBP: connection.reserveRatioBP,
-            _maxLockableValue: maxLockableValue_,
+            _lockableValueLimit: _maxLockableValue(record),
             _shareLimit: connection.shareLimit,
             _overrideOperatorLimits: false
         });
@@ -1051,7 +1057,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage _record,
         uint256 _amountOfShares,
         uint256 _reserveRatioBP,
-        uint256 _maxLockableValue,
+        uint256 _lockableValueLimit,
         uint256 _shareLimit,
         bool _overrideOperatorLimits
     ) internal {
@@ -1062,8 +1068,8 @@ contract VaultHub is PausableUntilWithRoles {
 
         // Calculate the minimum ETH that needs to be locked in the vault to maintain the reserve ratio
         uint256 etherToLock = _locked(sharesAfterMint, _record.minimalReserve, _reserveRatioBP);
-        if (etherToLock > _maxLockableValue) {
-            revert InsufficientValue(_vault, etherToLock, _maxLockableValue);
+        if (etherToLock > _lockableValueLimit) {
+            revert InsufficientValue(_vault, etherToLock, _lockableValueLimit);
         }
 
         if (etherToLock > _record.locked) {
@@ -1344,6 +1350,35 @@ contract VaultHub is PausableUntilWithRoles {
         // 3. We can't withdraw funds that are used to settle Lido fees
         uint256 feesValue = _unsettledLidoFeesValue(_record);
         return withdrawable > feesValue ? withdrawable - feesValue : 0;
+    }
+
+    /// @notice Calculates the max lockable value of the vault
+    /// @param _record The record of the vault
+    /// @return the max lockable value of the vault
+    function _maxLockableValue(VaultRecord storage _record) internal view returns (uint256) {
+        uint256 totalValue_ = _totalValue(_record);
+        uint256 unsettledLidoFees_ = _unsettledLidoFeesValue(_record);
+        return totalValue_ > unsettledLidoFees_ ? totalValue_ - unsettledLidoFees_ : 0;
+    }
+
+    /// @notice Calculates the total number of shares that that is possible to mint on the vault
+    /// @param _vault The address of the vault
+    /// @param _deltaValue The delta value to apply to the total value of the vault (may be negative)
+    /// @return the number of shares that can be minted
+    /// @dev returns 0 if the vault is not connected
+    function _mintableShares(address _vault, int256 _deltaValue) internal view returns (uint256) {
+        VaultRecord storage record = _vaultRecord(_vault);
+        VaultConnection storage connection = _vaultConnection(_vault);
+
+        uint256 base = _maxLockableValue(record);
+        uint256 maxLockableValue = _deltaValue >= 0 ? base + uint256(_deltaValue) : base - uint256(-_deltaValue);
+
+        uint256 mintableStETH = (maxLockableValue * (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
+        uint256 minimalReserve_ = record.minimalReserve;
+
+        if (maxLockableValue < minimalReserve_) return 0;
+        if (maxLockableValue - mintableStETH < minimalReserve_) mintableStETH = maxLockableValue - minimalReserve_;
+        return _getSharesByPooledEth(mintableStETH);
     }
 
     function _unlocked(VaultRecord storage _record) internal view returns (uint256) {

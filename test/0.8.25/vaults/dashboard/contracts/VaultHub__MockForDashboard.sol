@@ -13,6 +13,8 @@ contract IStETH {
 
     function burnExternalShares(uint256 _amountOfShares) external {}
 
+    function getSharesByPooledEth(uint256 _amountOfStETH) external view returns (uint256) {}
+
     function getPooledEthBySharesRoundUp(uint256 _amountOfShares) external view returns (uint256) {}
 }
 
@@ -77,10 +79,6 @@ contract VaultHub__MockForDashboard {
 
     function latestReport(address _vault) external view returns (VaultHub.Report memory) {
         return vaultRecords[_vault].report;
-    }
-
-    function maxLockableValue(address _vault) external view returns (uint256) {
-        return vaultRecords[_vault].report.totalValue;
     }
 
     function withdrawableValue(address _vault) external view returns (uint256) {
@@ -168,6 +166,17 @@ contract VaultHub__MockForDashboard {
 
     function fund(address _vault) external payable {
         emit Mock__Funded(_vault, msg.value);
+    }
+
+    function mintableShares(address _vault, int256 _deltaValue) external view returns (uint256) {
+        uint256 base = vaultRecords[_vault].report.totalValue;
+        uint256 maxLockableValue = _deltaValue >= 0 ? base + uint256(_deltaValue) : base - uint256(-_deltaValue);
+        uint256 mintableStETH = (maxLockableValue * (BPS_BASE - vaultConnections[_vault].reserveRatioBP)) / BPS_BASE;
+        uint256 minimalReserve = vaultRecords[_vault].minimalReserve;
+
+        if (maxLockableValue < minimalReserve) return 0;
+        if (maxLockableValue - mintableStETH < minimalReserve) mintableStETH = maxLockableValue - minimalReserve;
+        return steth.getSharesByPooledEth(mintableStETH);
     }
 
     function mock__setSendWithdraw(bool _sendWithdraw) external {

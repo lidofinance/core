@@ -70,9 +70,9 @@ describe("LazyOracle.sol", () => {
 
   before(async () => {
     [deployer] = await ethers.getSigners();
-    vaultHub = await ethers.deployContract("VaultHub__MockForLazyOracle", []);
-    operatorGrid = await ethers.deployContract("OperatorGrid__MockForLazyOracle", []);
     lido = await ethers.deployContract("Lido__MockForLazyOracle", []);
+    vaultHub = await ethers.deployContract("VaultHub__MockForLazyOracle", [lido]);
+    operatorGrid = await ethers.deployContract("OperatorGrid__MockForLazyOracle", []);
 
     locator = await deployLidoLocator({
       vaultHub: vaultHub,
