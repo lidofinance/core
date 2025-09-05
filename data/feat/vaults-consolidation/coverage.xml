@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4796"  lines-covered="4616"  line-rate="0.9625"  branches-valid="2240"  branches-covered="2109"  branch-rate="0.9415"  timestamp="1757080589298" complexity="0" version="0.1">
+<coverage lines-valid="4796"  lines-covered="4616"  line-rate="0.9625"  branches-valid="2240"  branches-covered="2109"  branch-rate="0.9415"  timestamp="1757081085188" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2803,8 +2803,8 @@
 			<method name="_getConsolidationRequestFee"  hits="21"  signature="()V" >
 				<lines><line number="174"  hits="21" /></lines>
 			</method>
-			<method name="_copyPubkeysToMemory"  hits="1534"  signature="()V" >
-				<lines><line number="188"  hits="1534" /></lines>
+			<method name="_copyPubkeysToMemory"  hits="1780"  signature="()V" >
+				<lines><line number="188"  hits="1780" /></lines>
 			</method>
 			<method name="_consolidationCalldatas"  hits="11"  signature="()V" >
 				<lines><line number="203"  hits="11" /></lines>
@@ -2833,8 +2833,8 @@
 			<line number="99"  hits="12"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="101"  hits="10"  branch="false" />
 			<line number="103"  hits="10"  branch="false" />
-			<line number="104"  hits="760"  branch="false" />
-			<line number="105"  hits="760"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="104"  hits="821"  branch="false" />
+			<line number="105"  hits="821"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="106"  hits="1"  branch="false" />
 			<line number="110"  hits="9"  branch="false" />
 			<line number="111"  hits="9"  branch="true"  condition-coverage="100% (2/2)" />
@@ -2864,16 +2864,16 @@
 			<line number="181"  hits="20"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="182"  hits="4"  branch="false" />
 			<line number="185"  hits="16"  branch="false" />
-			<line number="194"  hits="1534"  branch="false" />
+			<line number="194"  hits="1780"  branch="false" />
 			<line number="208"  hits="11"  branch="false" />
 			<line number="210"  hits="11"  branch="false" />
 			<line number="211"  hits="11"  branch="false" />
 			<line number="212"  hits="32"  branch="false" />
 			<line number="214"  hits="32"  branch="false" />
-			<line number="215"  hits="767"  branch="false" />
-			<line number="217"  hits="767"  branch="false" />
-			<line number="218"  hits="767"  branch="false" />
-			<line number="220"  hits="767"  branch="false" />
+			<line number="215"  hits="890"  branch="false" />
+			<line number="217"  hits="890"  branch="false" />
+			<line number="218"  hits="890"  branch="false" />
+			<line number="220"  hits="890"  branch="false" />
 			<line number="224"  hits="11"  branch="false" />
 			<line number="231"  hits="16"  branch="false" />
 			<line number="232"  hits="16"  branch="false" />
