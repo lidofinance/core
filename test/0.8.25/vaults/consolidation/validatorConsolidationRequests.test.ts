@@ -6,7 +6,6 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   Dashboard__Mock,
-  DelegateCaller,
   EIP7251MaxEffectiveBalanceRequest__Mock,
   LidoLocator,
   ValidatorConsolidationRequests,
@@ -27,17 +26,14 @@ const KEY_LENGTH = 48;
 describe("ValidatorConsolidationRequests.sol", () => {
   let actor: HardhatEthersSigner;
   let receiver: HardhatEthersSigner;
-  let stakingVault: HardhatEthersSigner;
 
   let consolidationRequestPredeployed: EIP7251MaxEffectiveBalanceRequest__Mock;
-  let validatorConsolidationRequestsAddress: string;
   let validatorConsolidationRequests: ValidatorConsolidationRequests;
   let dashboard: Dashboard__Mock;
   let dashboardAddress: string;
   let originalState: string;
   let locator: LidoLocator;
   let vaultHub: VaultHub__MockForDashboard;
-  let delegateCaller: DelegateCaller;
 
   async function getConsolidationRequestPredeployedContractBalance(): Promise<bigint> {
     const contractAddress = await consolidationRequestPredeployed.getAddress();
@@ -45,7 +41,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
   }
 
   before(async () => {
-    [actor, receiver, stakingVault] = await ethers.getSigners();
+    [actor, receiver] = await ethers.getSigners();
 
     // Set a high balance for the actor account
     await setBalance(actor.address, ether("1000000"));
@@ -53,11 +49,11 @@ describe("ValidatorConsolidationRequests.sol", () => {
     dashboard = await ethers.deployContract("Dashboard__Mock");
     dashboardAddress = await dashboard.getAddress();
 
-    delegateCaller = await ethers.deployContract("DelegateCaller", [], { from: actor });
     consolidationRequestPredeployed = await deployEIP7251MaxEffectiveBalanceRequestContract(1n);
     vaultHub = await ethers.deployContract("VaultHub__MockForDashboard", [ethers.ZeroAddress, ethers.ZeroAddress]);
-    await vaultHub.mock__setVaultConnection(stakingVault.address, {
-      owner: dashboardAddress,
+
+    await dashboard.mock__setVaultConnection({
+      owner: actor.address,
       shareLimit: 0,
       vaultIndex: 1,
       pendingDisconnect: false,
@@ -73,9 +69,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       vaultHub: vaultHub,
     });
     validatorConsolidationRequests = await ethers.deployContract("ValidatorConsolidationRequests", [locator]);
-    validatorConsolidationRequestsAddress = await validatorConsolidationRequests.getAddress();
 
-    await dashboard.mock__setStakingVault(stakingVault.address);
     expect(await consolidationRequestPredeployed.getAddress()).to.equal(EIP7251_ADDRESS);
   });
 
@@ -90,10 +84,6 @@ describe("ValidatorConsolidationRequests.sol", () => {
   context("eip 7251 max effective balance request contract", () => {
     it("Should return the address of the EIP 7251 max effective balance request contract", async function () {
       expect(await validatorConsolidationRequests.CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS()).to.equal(EIP7251_ADDRESS);
-    });
-
-    it("Should THIS point to contract address", async function () {
-      expect(await validatorConsolidationRequests.THIS()).to.equal(validatorConsolidationRequestsAddress);
     });
   });
 
@@ -126,30 +116,24 @@ describe("ValidatorConsolidationRequests.sol", () => {
   context("add consolidation requests", () => {
     it("Should revert if empty parameters are provided", async function () {
       await expect(
-        delegateCaller.callDelegate(
-          validatorConsolidationRequestsAddress,
-          validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-            [],
-            [],
-            receiver.address,
-            stakingVault.address,
-            0,
-          ]),
+        validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+          [],
+          [],
+          receiver.address,
+          dashboardAddress,
+          0,
         ),
       )
         .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
         .withArgs("msg.value");
 
       await expect(
-        delegateCaller.callDelegate(
-          validatorConsolidationRequestsAddress,
-          validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-            [],
-            [],
-            receiver.address,
-            stakingVault.address,
-            0,
-          ]),
+        validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+          [],
+          [],
+          receiver.address,
+          dashboardAddress,
+          0,
           { value: 1n },
         ),
       )
@@ -157,15 +141,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
         .withArgs("sourcePubkeys");
 
       await expect(
-        delegateCaller.callDelegate(
-          validatorConsolidationRequestsAddress,
-          validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-            [EMPTY_PUBKEYS],
-            [],
-            receiver.address,
-            stakingVault.address,
-            0,
-          ]),
+        validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+          [EMPTY_PUBKEYS],
+          [],
+          receiver.address,
+          dashboardAddress,
+          0,
           { value: 1n },
         ),
       )
@@ -173,38 +154,22 @@ describe("ValidatorConsolidationRequests.sol", () => {
         .withArgs("targetPubkeys");
 
       await expect(
-        delegateCaller.callDelegate(
-          validatorConsolidationRequestsAddress,
-          validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-            [EMPTY_PUBKEYS],
-            [EMPTY_PUBKEYS],
-            receiver.address,
-            ethers.ZeroAddress,
-            0,
-          ]),
+        validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+          [EMPTY_PUBKEYS],
+          [EMPTY_PUBKEYS],
+          receiver.address,
+          ethers.ZeroAddress,
+          0,
           { value: 1n },
         ),
       )
         .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
-        .withArgs("stakingVault");
+        .withArgs("dashboard");
     });
   });
 
-  it("Should revert if called from non-delegatecall", async function () {
-    await expect(
-      validatorConsolidationRequests.addConsolidationRequests(
-        [EMPTY_PUBKEYS],
-        [EMPTY_PUBKEYS],
-        receiver.address,
-        stakingVault.address,
-        1n,
-        { value: 1n },
-      ),
-    ).to.be.revertedWithCustomError(validatorConsolidationRequests, "NotDelegateCall");
-  });
-
   it("Should revert if vault is not connected", async function () {
-    await vaultHub.mock__setVaultConnection(stakingVault.address, {
+    await dashboard.mock__setVaultConnection({
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 0,
@@ -218,20 +183,17 @@ describe("ValidatorConsolidationRequests.sol", () => {
     });
 
     await expect(
-      delegateCaller.callDelegate(
-        validatorConsolidationRequestsAddress,
-        validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-          [EMPTY_PUBKEYS],
-          [EMPTY_PUBKEYS],
-          receiver.address,
-          stakingVault.address,
-          1n,
-        ]),
+      validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+        [EMPTY_PUBKEYS],
+        [EMPTY_PUBKEYS],
+        receiver.address,
+        dashboardAddress,
+        1n,
         { value: 1n },
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
 
-    await vaultHub.mock__setVaultConnection(stakingVault.address, {
+    await dashboard.mock__setVaultConnection({
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 1,
@@ -245,15 +207,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
     });
 
     await expect(
-      delegateCaller.callDelegate(
-        validatorConsolidationRequestsAddress,
-        validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-          [EMPTY_PUBKEYS],
-          [EMPTY_PUBKEYS],
-          receiver.address,
-          stakingVault.address,
-          1n,
-        ]),
+      validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+        [EMPTY_PUBKEYS],
+        [EMPTY_PUBKEYS],
+        receiver.address,
+        dashboardAddress,
+        1n,
         { value: 1n },
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
@@ -261,15 +220,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
   it("Should revert if array lengths do not match", async function () {
     await expect(
-      delegateCaller.callDelegate(
-        validatorConsolidationRequestsAddress,
-        validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-          [EMPTY_PUBKEYS],
-          [EMPTY_PUBKEYS, EMPTY_PUBKEYS],
-          receiver.address,
-          stakingVault.address,
-          1n,
-        ]),
+      validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+        [EMPTY_PUBKEYS],
+        [EMPTY_PUBKEYS, EMPTY_PUBKEYS],
+        receiver.address,
+        dashboardAddress,
+        1n,
         { value: 1n },
       ),
     )
@@ -284,15 +240,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
     const insufficientFee = 2n;
     await expect(
-      delegateCaller.callDelegate(
-        validatorConsolidationRequestsAddress,
-        validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-          sourcePubkeys,
-          targetPubkeys,
-          receiver.address,
-          stakingVault.address,
-          adjustmentIncrease,
-        ]),
+      validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+        sourcePubkeys,
+        targetPubkeys,
+        receiver.address,
+        dashboardAddress,
+        adjustmentIncrease,
         { value: insufficientFee },
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "InsufficientValidatorConsolidationFee");
@@ -306,29 +259,23 @@ describe("ValidatorConsolidationRequests.sol", () => {
     const fee = await getFee();
 
     await expect(
-      delegateCaller.callDelegate(
-        validatorConsolidationRequestsAddress,
-        validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-          [invalidPubkeyHexString],
-          targetPubkeys,
-          receiver.address,
-          stakingVault.address,
-          adjustmentIncrease,
-        ]),
+      validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+        [invalidPubkeyHexString],
+        targetPubkeys,
+        receiver.address,
+        dashboardAddress,
+        adjustmentIncrease,
         { value: fee },
       ),
-    ).to.be.revertedWithCustomError(validatorConsolidationRequests, "MalformedPubkeysArray");
+    ).to.be.revertedWithCustomError(validatorConsolidationRequests, "MalformedSourcePubkeysArray");
 
     await expect(
-      delegateCaller.callDelegate(
-        validatorConsolidationRequestsAddress,
-        validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-          sourcePubkeys,
-          [invalidPubkeyHexString],
-          receiver.address,
-          stakingVault.address,
-          adjustmentIncrease,
-        ]),
+      validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+        sourcePubkeys,
+        [invalidPubkeyHexString],
+        receiver.address,
+        dashboardAddress,
+        adjustmentIncrease,
         { value: fee },
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "MalformedTargetPubkey");
@@ -344,18 +291,15 @@ describe("ValidatorConsolidationRequests.sol", () => {
     const fee = await getFee();
 
     await expect(
-      delegateCaller.callDelegate(
-        validatorConsolidationRequestsAddress,
-        validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-          sourcePubkeys,
-          targetPubkeys,
-          receiver.address,
-          stakingVault.address,
-          adjustmentIncrease,
-        ]),
+      validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+        sourcePubkeys,
+        targetPubkeys,
+        receiver.address,
+        dashboardAddress,
+        adjustmentIncrease,
         { value: fee },
       ),
-    ).to.be.revertedWithCustomError(validatorConsolidationRequests, "MalformedPubkeysArray");
+    ).to.be.revertedWithCustomError(validatorConsolidationRequests, "MalformedSourcePubkeysArray");
   });
 
   it("Should revert if addition fails at the consolidation request contract", async function () {
@@ -368,18 +312,15 @@ describe("ValidatorConsolidationRequests.sol", () => {
     await consolidationRequestPredeployed.mock__setFailOnAddRequest(true);
 
     await expect(
-      delegateCaller.callDelegate(
-        validatorConsolidationRequestsAddress,
-        validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-          sourcePubkeys,
-          targetPubkeys,
-          receiver.address,
-          stakingVault.address,
-          adjustmentIncrease,
-        ]),
+      validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+        sourcePubkeys,
+        targetPubkeys,
+        receiver.address,
+        dashboardAddress,
+        adjustmentIncrease,
         { value: fee },
       ),
-    ).to.be.revertedWithCustomError(validatorConsolidationRequests, "ConsolidationRequestAdditionFailed");
+    ).to.be.revertedWithCustomError(validatorConsolidationRequests, "ConsolidationRequestFailed");
   });
 
   it("Should revert when balance is less than total consolidation fee", async function () {
@@ -393,15 +334,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
     await setBalance(await validatorConsolidationRequests.getAddress(), balance);
 
     await expect(
-      delegateCaller.callDelegate(
-        validatorConsolidationRequestsAddress,
-        validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-          sourcePubkeys,
-          targetPubkeys,
-          receiver.address,
-          stakingVault.address,
-          adjustmentIncrease,
-        ]),
+      validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+        sourcePubkeys,
+        targetPubkeys,
+        receiver.address,
+        dashboardAddress,
+        adjustmentIncrease,
         { value: fee },
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "InsufficientValidatorConsolidationFee");
@@ -417,18 +355,15 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
     await testEIP7251Mock(
       () =>
-        delegateCaller.callDelegate(
-          validatorConsolidationRequestsAddress,
-          validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-            sourcePubkeys,
-            targetPubkeys,
-            receiver.address,
-            stakingVault.address,
-            adjustmentIncrease,
-          ]),
+        validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+          sourcePubkeys,
+          targetPubkeys,
+          receiver.address,
+          dashboardAddress,
+          adjustmentIncrease,
           { value: fee * BigInt(totalSourcePubkeysCount) },
         ),
-      await delegateCaller.getAddress(),
+      await validatorConsolidationRequests.getAddress(),
       sourcePubkeys,
       targetPubkeys,
       fee,
@@ -440,18 +375,15 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
     await testEIP7251Mock(
       () =>
-        delegateCaller.callDelegate(
-          validatorConsolidationRequestsAddress,
-          validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-            sourcePubkeys,
-            targetPubkeys,
-            receiver.address,
-            stakingVault.address,
-            adjustmentIncrease,
-          ]),
+        validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+          sourcePubkeys,
+          targetPubkeys,
+          receiver.address,
+          dashboardAddress,
+          adjustmentIncrease,
           { value: highFee * BigInt(totalSourcePubkeysCount) },
         ),
-      await delegateCaller.getAddress(),
+      await validatorConsolidationRequests.getAddress(),
       sourcePubkeys,
       targetPubkeys,
       highFee,
@@ -468,18 +400,15 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
     await testEIP7251Mock(
       () =>
-        delegateCaller.callDelegate(
-          validatorConsolidationRequestsAddress,
-          validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-            sourcePubkeys,
-            targetPubkeys,
-            receiver.address,
-            stakingVault.address,
-            adjustmentIncrease,
-          ]),
+        validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+          sourcePubkeys,
+          targetPubkeys,
+          receiver.address,
+          dashboardAddress,
+          adjustmentIncrease,
           { value: excessFee * BigInt(totalSourcePubkeysCount) },
         ),
-      await delegateCaller.getAddress(),
+      await validatorConsolidationRequests.getAddress(),
       sourcePubkeys,
       targetPubkeys,
       3n,
@@ -494,18 +423,15 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
     await testEIP7251Mock(
       () =>
-        delegateCaller.callDelegate(
-          validatorConsolidationRequestsAddress,
-          validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-            sourcePubkeys,
-            targetPubkeys,
-            receiver.address,
-            stakingVault.address,
-            adjustmentIncrease,
-          ]),
+        validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+          sourcePubkeys,
+          targetPubkeys,
+          receiver.address,
+          dashboardAddress,
+          adjustmentIncrease,
           { value: extremelyHighFee * BigInt(totalSourcePubkeysCount) },
         ),
-      await delegateCaller.getAddress(),
+      await validatorConsolidationRequests.getAddress(),
       sourcePubkeys,
       targetPubkeys,
       3n,
@@ -522,15 +448,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
     const expectedTotalConsolidationFee = fee * BigInt(totalSourcePubkeysCount);
     const initialBalance = await ethers.provider.getBalance(actor.address);
-    const tx = await delegateCaller.callDelegate(
-      validatorConsolidationRequestsAddress,
-      validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-        sourcePubkeys,
-        targetPubkeys,
-        receiver.address,
-        stakingVault.address,
-        adjustmentIncrease,
-      ]),
+    const tx = await validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+      sourcePubkeys,
+      targetPubkeys,
+      receiver.address,
+      dashboardAddress,
+      adjustmentIncrease,
       { value: expectedTotalConsolidationFee },
     );
     const receipt = await tx.wait();
@@ -555,15 +478,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
     await consolidationRequestPredeployed.mock__setFee(fee);
     const expectedTotalConsolidationFee = fee * BigInt(totalSourcePubkeysCount);
     const initialBalance = await getConsolidationRequestPredeployedContractBalance();
-    await delegateCaller.callDelegate(
-      validatorConsolidationRequestsAddress,
-      validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-        sourcePubkeys,
-        targetPubkeys,
-        receiver.address,
-        stakingVault.address,
-        adjustmentIncrease,
-      ]),
+    await validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+      sourcePubkeys,
+      targetPubkeys,
+      receiver.address,
+      dashboardAddress,
+      adjustmentIncrease,
       { value: expectedTotalConsolidationFee },
     );
     expect(await getConsolidationRequestPredeployedContractBalance()).to.equal(
@@ -580,15 +500,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
     await consolidationRequestPredeployed.mock__setFee(fee);
     const expectedTotalConsolidationFee = fee * BigInt(totalSourcePubkeysCount);
 
-    const tx = await delegateCaller.callDelegate(
-      validatorConsolidationRequestsAddress,
-      validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-        sourcePubkeys,
-        targetPubkeys,
-        receiver.address,
-        stakingVault.address,
-        adjustmentIncrease,
-      ]),
+    const tx = await validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+      sourcePubkeys,
+      targetPubkeys,
+      receiver.address,
+      dashboardAddress,
+      adjustmentIncrease,
       { value: expectedTotalConsolidationFee },
     );
     const receipt = await tx.wait();
@@ -621,15 +538,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
     const fee = 3n;
     await consolidationRequestPredeployed.mock__setFee(fee);
 
-    const tx = await delegateCaller.callDelegate(
-      validatorConsolidationRequestsAddress,
-      validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-        sourcePubkeys,
-        targetPubkeys,
-        receiver.address,
-        stakingVault.address,
-        0,
-      ]),
+    const tx = await validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+      sourcePubkeys,
+      targetPubkeys,
+      receiver.address,
+      dashboardAddress,
+      0,
       { value: fee * BigInt(totalSourcePubkeysCount) },
     );
     const receipt = await tx.wait();
@@ -646,15 +560,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
     const fee = 3n;
     await consolidationRequestPredeployed.mock__setFee(fee);
 
-    const tx = await delegateCaller.callDelegate(
-      validatorConsolidationRequestsAddress,
-      validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-        sourcePubkeys,
-        targetPubkeys,
-        receiver.address,
-        stakingVault.address,
-        adjustmentIncrease,
-      ]),
+    const tx = await validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+      sourcePubkeys,
+      targetPubkeys,
+      receiver.address,
+      dashboardAddress,
+      adjustmentIncrease,
       { value: fee * BigInt(totalSourcePubkeysCount) },
     );
     const receipt = await tx.wait();
@@ -662,5 +573,125 @@ describe("ValidatorConsolidationRequests.sol", () => {
     const events = findDashboardMockEvents(receipt!);
     expect(events.length).to.equal(1);
     expect(events[0].args._amount).to.equal(adjustmentIncrease);
+  });
+
+  context("get consolidation requests and adjustment increase encoded calls", () => {
+    it("Should revert if empty parameters are provided", async function () {
+      await expect(
+        validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+          [],
+          [],
+          dashboardAddress,
+          0,
+        ),
+      )
+        .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
+        .withArgs("sourcePubkeys");
+
+      await expect(
+        validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+          [EMPTY_PUBKEYS],
+          [],
+          dashboardAddress,
+          0,
+        ),
+      )
+        .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
+        .withArgs("targetPubkeys");
+
+      await expect(
+        validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+          [EMPTY_PUBKEYS],
+          [EMPTY_PUBKEYS],
+          ethers.ZeroAddress,
+          0,
+        ),
+      )
+        .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
+        .withArgs("dashboard");
+    });
+  });
+
+  it("getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls should revert if vault is not connected", async function () {
+    await dashboard.mock__setVaultConnection({
+      owner: actor.address,
+      shareLimit: 0,
+      vaultIndex: 0,
+      pendingDisconnect: false,
+      reserveRatioBP: 0,
+      forcedRebalanceThresholdBP: 0,
+      infraFeeBP: 0,
+      liquidityFeeBP: 0,
+      reservationFeeBP: 0,
+      isBeaconDepositsManuallyPaused: false,
+    });
+
+    await expect(
+      validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+        [EMPTY_PUBKEYS],
+        [EMPTY_PUBKEYS],
+        dashboardAddress,
+        1n,
+      ),
+    ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
+
+    await dashboard.mock__setVaultConnection({
+      owner: actor.address,
+      shareLimit: 0,
+      vaultIndex: 1,
+      pendingDisconnect: true,
+      reserveRatioBP: 0,
+      forcedRebalanceThresholdBP: 0,
+      infraFeeBP: 0,
+      liquidityFeeBP: 0,
+      reservationFeeBP: 0,
+      isBeaconDepositsManuallyPaused: false,
+    });
+
+    await expect(
+      validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+        [EMPTY_PUBKEYS],
+        [EMPTY_PUBKEYS],
+        dashboardAddress,
+        1n,
+      ),
+    ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
+  });
+
+  it("getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls should revert if array lengths do not match", async function () {
+    await expect(
+      validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+        [EMPTY_PUBKEYS],
+        [EMPTY_PUBKEYS, EMPTY_PUBKEYS],
+        dashboardAddress,
+        1n,
+      ),
+    )
+      .to.be.revertedWithCustomError(validatorConsolidationRequests, "MismatchingSourceAndTargetPubkeysCount")
+      .withArgs(1, 2);
+  });
+
+  it("Should get correct encoded calls for consolidation requests and adjustment increase", async function () {
+    const { sourcePubkeys, targetPubkeys, adjustmentIncrease } = generateConsolidationRequestPayload(1);
+    const { consolidationRequestEncodedCalls, adjustmentIncreaseEncodedCall } =
+      await validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+        sourcePubkeys,
+        targetPubkeys,
+        dashboardAddress,
+        adjustmentIncrease,
+      );
+    expect(consolidationRequestEncodedCalls[0].length).to.equal(2 + KEY_LENGTH * 2 + KEY_LENGTH * 2);
+    for (let i = 0; i < targetPubkeys.length; i++) {
+      const sourcePubkeysCount = sourcePubkeys[i].length / KEY_LENGTH;
+      for (let j = 0; j < sourcePubkeysCount; j++) {
+        const targetPubkey = targetPubkeys[i];
+        const sourcePubkey = sourcePubkeys[i].slice(j * KEY_LENGTH, (j + 1) * KEY_LENGTH);
+        const concatenatedKeys = ethers.hexlify(sourcePubkey) + ethers.hexlify(targetPubkey).slice(2);
+        expect(consolidationRequestEncodedCalls[i * sourcePubkeysCount + j]).to.equal(concatenatedKeys);
+      }
+    }
+    const iface = new ethers.Interface(["function increaseRewardsAdjustment(uint256)"]);
+    const calldata = iface.encodeFunctionData("increaseRewardsAdjustment", [adjustmentIncrease]);
+    expect(adjustmentIncreaseEncodedCall).to.equal(calldata);
   });
 });
