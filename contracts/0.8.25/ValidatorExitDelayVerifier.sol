@@ -60,7 +60,6 @@ struct ProvableBeaconBlockHeader {
 // A witness for a block header which root is accessible via `historical_summaries` field.
 struct HistoricalHeaderWitness {
     BeaconBlockHeader header;
-    GIndex rootGIndex; // The generalized index of the old block root in the historical_summaries.
     bytes32[] proof; // The Merkle proof for the old block header against the state's historical_summaries root.
 }
 
@@ -139,6 +138,7 @@ contract ValidatorExitDelayVerifier {
         uint256 eligibleExitRequestTimestamp
     );
     error InvalidCapellaSlot();
+    error HistoricalSummaryDoesNotExist();
 
     /**
      * @dev The previous and current forks can be essentially the same.
@@ -377,7 +377,7 @@ contract ValidatorExitDelayVerifier {
             ? deliveredTimestamp
             : earliestPossibleVoluntaryExitTimestamp;
 
-        if (referenceSlotTimestamp < eligibleExitRequestTimestamp) {
+        if (referenceSlotTimestamp <= eligibleExitRequestTimestamp) {
             revert ExitIsNotEligibleOnProvableBeaconBlock(referenceSlotTimestamp, eligibleExitRequestTimestamp);
         }
 
@@ -393,9 +393,14 @@ contract ValidatorExitDelayVerifier {
         uint64 recentSlot,
         uint64 targetSlot
     ) internal view returns (GIndex gI) {
-        uint256 targetSlotShifted = targetSlot - CAPELLA_SLOT;
-        uint256 summaryIndex = targetSlotShifted / SLOTS_PER_HISTORICAL_ROOT;
-        uint256 rootIndex = targetSlot % SLOTS_PER_HISTORICAL_ROOT;
+        uint64 targetSlotShifted = targetSlot - CAPELLA_SLOT;
+        uint64 summaryIndex = targetSlotShifted / SLOTS_PER_HISTORICAL_ROOT;
+        uint64 rootIndex = targetSlot % SLOTS_PER_HISTORICAL_ROOT;
+
+        uint64 summaryCreatedAtSlot = targetSlot - rootIndex + SLOTS_PER_HISTORICAL_ROOT;
+        if (summaryCreatedAtSlot > recentSlot) {
+            revert HistoricalSummaryDoesNotExist();
+        }
 
         gI = recentSlot < PIVOT_SLOT
             ? GI_FIRST_HISTORICAL_SUMMARY_PREV
@@ -403,7 +408,7 @@ contract ValidatorExitDelayVerifier {
 
         gI = gI.shr(summaryIndex); // historicalSummaries[summaryIndex]
         gI = gI.concat(
-            targetSlot < PIVOT_SLOT
+            summaryCreatedAtSlot < PIVOT_SLOT
                 ? GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV
                 : GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR
         ); // historicalSummaries[summaryIndex].blockRoots[0]

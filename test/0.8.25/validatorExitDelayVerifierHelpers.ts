@@ -80,7 +80,6 @@ export function toValidatorWitness(
 export function toHistoricalHeaderWitness(validatorStateProf: ValidatorStateProof): HistoricalHeaderWitnessStruct {
   return {
     header: validatorStateProf.beaconBlockHeader,
-    rootGIndex: validatorStateProf.historicalSummariesGI,
     proof: validatorStateProf.historicalRootProof,
   };
 }

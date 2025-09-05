@@ -5,10 +5,11 @@ import { ethers } from "hardhat";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
+import { LIMITER_PRECISION_BASE } from "lib/constants";
 import { finalizeWQViaSubmit, getProtocolContext, getReportTimeElapsed, ProtocolContext, report } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
-import { LIMITER_PRECISION_BASE, MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
+import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
 
 describe("Integration: Accounting", () => {
   let ctx: ProtocolContext;
@@ -166,7 +167,7 @@ describe("Integration: Accounting", () => {
     const totalSharesBefore = await lido.getTotalShares();
 
     // Report
-    const params = { clDiff: REBASE_AMOUNT, excludeVaultsBalances: true };
+    const params = { clDiff: REBASE_AMOUNT, excludeVaultsBalances: true, skipWithdrawals: true };
     const { reportTx } = (await report(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;

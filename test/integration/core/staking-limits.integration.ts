@@ -29,14 +29,22 @@ describe("Staking limits", () => {
 
     [stranger] = await ethers.getSigners();
 
-    await acl.grantPermission(agent, lido, await lido.PAUSE_ROLE());
-    await acl.grantPermission(agent, lido, await lido.RESUME_ROLE());
-    await acl.grantPermission(agent, lido, await lido.STAKING_CONTROL_ROLE());
-    await acl.grantPermission(agent, lido, await lido.STAKING_PAUSE_ROLE());
+    const lidoAddress = await lido.getAddress();
+    const agentAddress = await agent.getAddress();
+    await acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.PAUSE_ROLE());
+    await acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.RESUME_ROLE());
+    await acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.STAKING_CONTROL_ROLE());
+    await acl.connect(agent).grantPermission(agentAddress, lidoAddress, await lido.STAKING_PAUSE_ROLE());
   });
 
-  beforeEach(async () => (testSnapshot = await Snapshot.take()));
-  afterEach(async () => await Snapshot.restore(testSnapshot));
+  beforeEach(async () => {
+    testSnapshot = await Snapshot.take();
+  });
+
+  afterEach(async () => {
+    await Snapshot.restore(testSnapshot);
+  });
+
   after(async () => await Snapshot.restore(snapshot));
 
   it("Should have expected staking limit info", async () => {

@@ -6,12 +6,8 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { advanceChainTime, ether, findEventsWithInterfaces, hexToBytes, RewardDistributionState } from "lib";
 import { EXTRA_DATA_FORMAT_LIST, KeyType, prepareExtraData, setAnnualBalanceIncreaseLimit } from "lib/oracle";
-import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
-import {
-  OracleReportParams,
-  reportWithoutExtraData,
-  waitNextAvailableReportTime,
-} from "lib/protocol/helpers/accounting";
+import { getProtocolContext, OracleReportParams,ProtocolContext, report } from "lib/protocol";
+import { reportWithoutExtraData, waitNextAvailableReportTime } from "lib/protocol/helpers/accounting";
 import { NOR_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
@@ -20,9 +16,7 @@ const MODULE_ID = NOR_MODULE_ID;
 const NUM_NEWLY_EXITED_VALIDATORS = 1n;
 const MAINNET_NOR_ADDRESS = "0x55032650b14df07b85bf18a3a3ec8e0af2e028d5".toLowerCase();
 
-// TODO: update this test for the version with the triggerable exits (no stuck items thus there is
-//       only one extra data chunk)
-describe.skip("Integration: AccountingOracle extra data", () => {
+describe("Integration: AccountingOracle extra data", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
 
@@ -63,19 +57,18 @@ describe.skip("Integration: AccountingOracle extra data", () => {
       }
 
       const numNodeOperators = Math.min(10, Number(await ctx.contracts.nor.getNodeOperatorsCount()));
-
       exitedKeys = {
         moduleId: Number(MODULE_ID),
         nodeOpIds: [],
         keysCounts: [],
       };
-      for (let i = firstNodeOperatorInRange; i < firstNodeOperatorInRange + numNodeOperators; i++) {
+
+      // Add at least 2 node operators with exited validators to test chunking
+      for (let i = firstNodeOperatorInRange; i < firstNodeOperatorInRange + Math.min(2, numNodeOperators); i++) {
         const oldNumExited = await getExitedCount(BigInt(i));
-        const numExited = oldNumExited + (i === firstNodeOperatorInRange ? NUM_NEWLY_EXITED_VALIDATORS : 0n);
-        if (numExited !== oldNumExited) {
-          exitedKeys.nodeOpIds.push(Number(i));
-          exitedKeys.keysCounts.push(Number(numExited));
-        }
+        const numExited = oldNumExited + (i === firstNodeOperatorInRange ? NUM_NEWLY_EXITED_VALIDATORS : 1n);
+        exitedKeys.nodeOpIds.push(Number(i));
+        exitedKeys.keysCounts.push(Number(numExited));
       }
     }
   });
@@ -98,21 +91,31 @@ describe.skip("Integration: AccountingOracle extra data", () => {
 
   async function submitMainReport() {
     const { nor } = ctx.contracts;
+
+    // Split exitedKeys into two separate entries for different node operators to test chunking
+    const firstExitedKeys = {
+      moduleId: Number(MODULE_ID),
+      nodeOpIds: exitedKeys.nodeOpIds.length > 0 ? [exitedKeys.nodeOpIds[0]] : [],
+      keysCounts: exitedKeys.keysCounts.length > 0 ? [exitedKeys.keysCounts[0]] : [],
+    };
+
+    const secondExitedKeys = {
+      moduleId: Number(MODULE_ID),
+      nodeOpIds: exitedKeys.nodeOpIds.length > 1 ? [exitedKeys.nodeOpIds[1]] : [],
+      keysCounts: exitedKeys.keysCounts.length > 1 ? [exitedKeys.keysCounts[1]] : [],
+    };
+
     const extraData = prepareExtraData(
-      {
-        exitedKeys: [exitedKeys],
-      },
-      { maxItemsPerChunk: 1 },
+      { exitedKeys: [firstExitedKeys, secondExitedKeys] },
+      { maxItemsPerChunk: 1 }, // This will create 2 chunks from 2 items
     );
 
     const { totalExitedValidators } = await nor.getStakingModuleSummary();
 
-    return await reportWithoutExtraData(
-      ctx,
-      [totalExitedValidators + NUM_NEWLY_EXITED_VALIDATORS],
-      [NOR_MODULE_ID],
-      extraData,
-    );
+    // Add total exited validators for both entries
+    const totalNewExited = NUM_NEWLY_EXITED_VALIDATORS + 1n; // First operator has 1, second has 1
+
+    return await reportWithoutExtraData(ctx, [totalExitedValidators + totalNewExited], [NOR_MODULE_ID], extraData);
   }
 
   it("should accept report with multiple keys per node operator (single chunk)", async () => {
@@ -121,8 +124,9 @@ describe.skip("Integration: AccountingOracle extra data", () => {
     // Get initial summary
     const { totalExitedValidators } = await nor.getStakingModuleSummary();
 
+    // Use both node operators with exited keys for a single chunk test
     const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = prepareExtraData({
-      exitedKeys: [exitedKeys],
+      exitedKeys: [exitedKeys], // Use all exitedKeys in one chunk
     });
     expect(extraDataChunks.length).to.equal(1);
     expect(extraDataChunkHashes.length).to.equal(1);
@@ -134,7 +138,7 @@ describe.skip("Integration: AccountingOracle extra data", () => {
       extraDataHash: extraDataChunkHashes[0],
       extraDataItemsCount: BigInt(extraDataItemsCount),
       extraDataList: hexToBytes(extraDataChunks[0]),
-      numExitedValidatorsByStakingModule: [totalExitedValidators + NUM_NEWLY_EXITED_VALIDATORS],
+      numExitedValidatorsByStakingModule: [totalExitedValidators + NUM_NEWLY_EXITED_VALIDATORS + 1n], // Both operators
       stakingModuleIdsWithNewlyExitedValidators: [NOR_MODULE_ID],
     };
 
@@ -162,7 +166,7 @@ describe.skip("Integration: AccountingOracle extra data", () => {
     expect(extraDataSubmittedEvents[0].args.itemsCount).to.equal(extraDataItemsCount);
 
     expect((await nor.getStakingModuleSummary()).totalExitedValidators).to.equal(
-      numExitedBefore + NUM_NEWLY_EXITED_VALIDATORS,
+      numExitedBefore + NUM_NEWLY_EXITED_VALIDATORS + 1n, // Both operators
     );
   });
 
