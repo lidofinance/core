@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4663"  lines-covered="4454"  line-rate="0.9551999999999999"  branches-valid="2184"  branches-covered="2034"  branch-rate="0.9312999999999999"  timestamp="1756997640303" complexity="0" version="0.1">
+<coverage lines-valid="4663"  lines-covered="4457"  line-rate="0.9558"  branches-valid="2184"  branches-covered="2035"  branch-rate="0.9318000000000001"  timestamp="1757064388309" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -1722,9 +1722,9 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25"  line-rate="0.9722"  branch-rate="0.8976999999999999" >
+	<package name="0.8.25"  line-rate="0.9791"  branch-rate="0.9034" >
 	<classes>
-		<class name="StakingRouter.sol"  filename="contracts/0.8.25/StakingRouter.sol"  line-rate="0.9673"  branch-rate="0.9" >
+		<class name="StakingRouter.sol"  filename="contracts/0.8.25/StakingRouter.sol"  line-rate="0.9754999999999999"  branch-rate="0.9067000000000001" >
 		<methods>
 			<method name="constructor"  hits="24"  signature="()V" >
 				<lines><line number="264"  hits="24" /></lines>
@@ -1879,11 +1879,11 @@
 			<method name="_getOperatorAvailableKeys"  hits="1"  signature="()V" >
 				<lines><line number="1488"  hits="1" /></lines>
 			</method>
-			<method name="setWithdrawalCredentials"  hits="5"  signature="()V" >
-				<lines><line number="1514"  hits="5" /></lines>
+			<method name="setWithdrawalCredentials"  hits="4"  signature="()V" >
+				<lines><line number="1514"  hits="4" /></lines>
 			</method>
-			<method name="setWithdrawalCredentials02"  hits="0"  signature="()V" >
-				<lines><line number="1526"  hits="0" /></lines>
+			<method name="setWithdrawalCredentials02"  hits="1"  signature="()V" >
+				<lines><line number="1526"  hits="1" /></lines>
 			</method>
 			<method name="getWithdrawalCredentials"  hits="3"  signature="()V" >
 				<lines><line number="1534"  hits="3" /></lines>
@@ -2248,12 +2248,12 @@
 			<line number="1498"  hits="1"  branch="false" />
 			<line number="1503"  hits="1"  branch="false" />
 			<line number="1504"  hits="1"  branch="false" />
-			<line number="1515"  hits="5"  branch="false" />
-			<line number="1516"  hits="5"  branch="false" />
-			<line number="1517"  hits="4"  branch="false" />
-			<line number="1527"  hits="0"  branch="false" />
-			<line number="1528"  hits="0"  branch="false" />
-			<line number="1529"  hits="0"  branch="false" />
+			<line number="1515"  hits="4"  branch="false" />
+			<line number="1516"  hits="4"  branch="false" />
+			<line number="1517"  hits="3"  branch="false" />
+			<line number="1527"  hits="1"  branch="false" />
+			<line number="1528"  hits="1"  branch="false" />
+			<line number="1529"  hits="1"  branch="false" />
 			<line number="1535"  hits="3"  branch="false" />
 			<line number="1541"  hits="1"  branch="false" />
 			<line number="1545"  hits="5"  branch="false" />
