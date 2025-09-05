@@ -86,8 +86,9 @@ contract ValidatorConsolidationRequests {
             _refundRecipient = msg.sender;
         }
 
-        VaultHub.VaultConnection memory vaultConnection = Dashboard(payable(_dashboard)).vaultConnection();
-        if(vaultConnection.vaultIndex == 0 || vaultConnection.pendingDisconnect == true) {
+        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        address stakingVault = address(Dashboard(payable(_dashboard)).stakingVault());
+        if(!vaultHub.isVaultConnected(stakingVault) || vaultHub.isPendingDisconnect(stakingVault)) {
             revert VaultNotConnected();
         }
 
@@ -146,8 +147,9 @@ contract ValidatorConsolidationRequests {
         if (_dashboard == address(0)) revert ZeroArgument("dashboard");
         if (_sourcePubkeys.length != _targetPubkeys.length) revert MismatchingSourceAndTargetPubkeysCount(_sourcePubkeys.length, _targetPubkeys.length);
         
-        VaultHub.VaultConnection memory vaultConnection = Dashboard(payable(_dashboard)).vaultConnection();
-        if(vaultConnection.vaultIndex == 0 || vaultConnection.pendingDisconnect == true) {
+        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        address stakingVault = address(Dashboard(payable(_dashboard)).stakingVault());
+        if(!vaultHub.isVaultConnected(stakingVault) || vaultHub.isPendingDisconnect(stakingVault)) {
             revert VaultNotConnected();
         }
 

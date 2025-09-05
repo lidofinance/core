@@ -162,24 +162,39 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the total value of the vault in ether.
      */
-    function totalValue() public view returns (uint256) {
+    function totalValue() external view returns (uint256) {
         return VAULT_HUB.totalValue(address(_stakingVault()));
-    }
-
-    /**
-     * @notice Returns the overall unsettled obligations of the vault in ether
-     * @dev includes the node operator fee
-     */
-    function unsettledObligations() external view returns (uint256) {
-        VaultHub.VaultObligations memory obligations = VAULT_HUB.vaultObligations(address(_stakingVault()));
-        return uint256(obligations.unsettledLidoFees) + uint256(obligations.redemptions) + nodeOperatorDisbursableFee();
     }
 
     /**
      * @notice Returns the locked amount of ether for the vault
      */
-    function locked() public view returns (uint256) {
+    function locked() external view returns (uint256) {
         return VAULT_HUB.locked(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of shares to burn to restore vault healthiness or to fulfill redemptions and the
+     *         amount of outstanding Lido fees
+     * @return sharesToRebalance amount of shares to rebalance
+     * @return unsettledLidoFees amount of Lido fees to be settled
+     */
+    function obligations() external view returns (uint256 sharesToRebalance, uint256 unsettledLidoFees) {
+        (sharesToRebalance, unsettledLidoFees) = VAULT_HUB.obligations(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of ether shortfall to cover the outstanding obligations of the vault
+     */
+    function obligationsShortfall() external view returns (uint256) {
+        return VAULT_HUB.obligationsShortfall(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of shares to rebalance to restore vault healthiness or to fulfill redemptions
+     */
+    function rebalanceShortfallShares() external view returns (uint256) {
+        return VAULT_HUB.rebalanceShortfallShares(address(_stakingVault()));
     }
 
     /**
@@ -230,9 +245,6 @@ contract Dashboard is NodeOperatorFee {
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for fees and obligations.
      */
     function withdrawableValue() public view returns (uint256) {
-        // On pending disconnect, the vault does not allow any withdrawals, so need to return 0 here
-        if (VAULT_HUB.vaultConnection(address(_stakingVault())).pendingDisconnect) return 0;
-
         uint256 withdrawable = VAULT_HUB.withdrawableValue(address(_stakingVault()));
         uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
 
@@ -344,7 +356,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Mints stETH tokens backed by the vault to the recipient.
-     * !NB: this will revert with`VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
+     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
      * @param _recipient Address of the recipient
      * @param _amountOfStETH Amount of stETH to mint
      */
@@ -541,19 +553,19 @@ contract Dashboard is NodeOperatorFee {
      * @notice Initiates a withdrawal from validator(s) on the beacon chain using EIP-7002 triggerable withdrawals
      *         Both partial withdrawals (disabled for if vault is unhealthy) and full validator exits are supported.
      * @param _pubkeys Concatenated validator public keys (48 bytes each).
-     * @param _amounts Withdrawal amounts in wei for each validator key and must match _pubkeys length.
-     *         Set amount to 0 for a full validator exit.
-     *         For partial withdrawals, amounts will be trimmed to keep MIN_ACTIVATION_BALANCE on the validator to avoid deactivation
+     * @param _amountsInGwei Withdrawal amounts in Gwei for each validator key. Must match _pubkeys length.
+     *         Set amount to 0 for a full validator exit. For partial withdrawals, amounts may be trimmed to keep
+     *         MIN_ACTIVATION_BALANCE on the validator to avoid deactivation.
      * @param _refundRecipient Address to receive any fee refunds, if zero, refunds go to msg.sender.
      * @dev    A withdrawal fee must be paid via msg.value.
      *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee for the current block.
      */
     function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
-        uint64[] calldata _amounts,
+        uint64[] calldata _amountsInGwei,
         address _refundRecipient
     ) external payable {
-        _triggerValidatorWithdrawals(_pubkeys, _amounts, _refundRecipient);
+        _triggerValidatorWithdrawals(_pubkeys, _amountsInGwei, _refundRecipient);
     }
 
     /**

@@ -187,7 +187,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     /// @notice returns the quarantine info for the vault
     /// @param _vault the address of the vault
-    // @dev returns zeroed structure if there is no active quarantine
+    /// @dev returns zeroed structure if there is no active quarantine
     function vaultQuarantine(address _vault) external view returns (QuarantineInfo memory) {
         Quarantine storage q = _storage().vaultQuarantines[_vault];
         if (q.pendingTotalValueIncrease == 0) {
@@ -241,7 +241,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 connection.infraFeeBP,
                 connection.liquidityFeeBP,
                 connection.reservationFeeBP,
-                connection.pendingDisconnect
+                vaultHub.isPendingDisconnect(vaultAddress)
             );
         }
         return batch;
@@ -351,7 +351,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     {
         VaultHub vaultHub = _vaultHub();
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
-        VaultHub.VaultObligations memory obligations = vaultHub.vaultObligations(_vault); // TODO - take from record
 
         // 0. Check if the report is already fresh enough
         if (uint48(_reportTimestamp) <= record.report.timestamp) {
@@ -371,10 +370,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         }
 
         // 4. Sanity check for cumulative Lido fees
-        uint256 previousCumulativeLidoFees = obligations.settledLidoFees + obligations.unsettledLidoFees;
+        uint256 previousCumulativeLidoFees = record.cumulativeLidoFees;
         if (previousCumulativeLidoFees > _cumulativeLidoFees) {
             revert CumulativeLidoFeesTooLow(_cumulativeLidoFees, previousCumulativeLidoFees);
         }
+
         uint256 maxLidoFees = (_storage().vaultsDataTimestamp - record.report.timestamp) * uint256(_storage().maxLidoFeeRatePerSecond);
         if (_cumulativeLidoFees - previousCumulativeLidoFees > maxLidoFees) {
             revert CumulativeLidoFeesTooLarge(_cumulativeLidoFees - previousCumulativeLidoFees, maxLidoFees);

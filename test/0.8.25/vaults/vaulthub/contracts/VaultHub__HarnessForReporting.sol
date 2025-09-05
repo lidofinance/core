@@ -53,7 +53,7 @@ contract VaultHub__HarnessForReporting is VaultHub {
             address(0), // owner
             uint96(_shareLimit),
             uint96($.vaults.length),
-            false, // pendingDisconnect
+            DISCONNECT_NOT_INITIATED, // disconnectInitiatedTs
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
             uint16(_infraFeeBP),
@@ -71,7 +71,10 @@ contract VaultHub__HarnessForReporting is VaultHub {
                 DoubleRefSlotCache.Int104WithCache({value: 0, valueOnRefSlot: 0, refSlot: 0}),
                 DoubleRefSlotCache.Int104WithCache({value: 0, valueOnRefSlot: 0, refSlot: 0})
             ],
-            minimalReserve: 0
+            minimalReserve: 0,
+            redemptionShares: 0,
+            cumulativeLidoFees: 0,
+            settledLidoFees: 0
         });
 
         $.records[_vault] = record;

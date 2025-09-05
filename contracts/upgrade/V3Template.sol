@@ -236,7 +236,6 @@ contract V3Template is V3Addresses {
         // VaultHub
         _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
         _assertSingleOZRoleHolder(VAULT_HUB, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_CODEHASH_SET_ROLE(), AGENT);
 
         _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT, VAULT_HUB_ADAPTER);
         _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE(), AGENT, EVM_SCRIPT_EXECUTOR);

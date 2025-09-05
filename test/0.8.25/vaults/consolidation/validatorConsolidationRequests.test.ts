@@ -12,7 +12,7 @@ import {
   VaultHub__MockForDashboard,
 } from "typechain-types";
 
-import { deployEIP7251MaxEffectiveBalanceRequestContract, EIP7251_ADDRESS, ether } from "lib";
+import { deployEIP7251MaxEffectiveBalanceRequestContract, DISCONNECT_NOT_INITIATED, EIP7251_ADDRESS, ether } from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -20,7 +20,7 @@ import { Snapshot } from "test/suite";
 import { generateConsolidationRequestPayload } from "./consolidationHelper";
 import { findDashboardMockEvents, findEIP7251MockEvents, testEIP7251Mock } from "./eip7251Mock";
 
-const EMPTY_PUBKEYS = "0x";
+const PUBKEY = "0x800276cfb86f1c08a1e7238c76a9ca45d5528d2072e51500b343266203d5d7794e6fc848ce7948e9c81960f71f821b42";
 const KEY_LENGTH = 48;
 
 describe("ValidatorConsolidationRequests.sol", () => {
@@ -34,6 +34,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
   let originalState: string;
   let locator: LidoLocator;
   let vaultHub: VaultHub__MockForDashboard;
+  let stakingVault: HardhatEthersSigner;
 
   async function getConsolidationRequestPredeployedContractBalance(): Promise<bigint> {
     const contractAddress = await consolidationRequestPredeployed.getAddress();
@@ -41,7 +42,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
   }
 
   before(async () => {
-    [actor, receiver] = await ethers.getSigners();
+    [actor, receiver, stakingVault] = await ethers.getSigners();
 
     // Set a high balance for the actor account
     await setBalance(actor.address, ether("1000000"));
@@ -52,11 +53,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
     consolidationRequestPredeployed = await deployEIP7251MaxEffectiveBalanceRequestContract(1n);
     vaultHub = await ethers.deployContract("VaultHub__MockForDashboard", [ethers.ZeroAddress, ethers.ZeroAddress]);
 
-    await dashboard.mock__setVaultConnection({
+    await dashboard.mock__setStakingVault(stakingVault);
+    await vaultHub.mock__setVaultConnection(stakingVault, {
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 1,
-      pendingDisconnect: false,
+      disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
       reserveRatioBP: 0,
       forcedRebalanceThresholdBP: 0,
       infraFeeBP: 0,
@@ -64,6 +66,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       reservationFeeBP: 0,
       isBeaconDepositsManuallyPaused: false,
     });
+    await vaultHub.mock__setPendingDisconnect(false);
 
     locator = await deployLidoLocator({
       vaultHub: vaultHub,
@@ -102,7 +105,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     });
 
     ["0x", "0x01", "0x" + "0".repeat(61) + "1", "0x" + "0".repeat(65) + "1"].forEach((unexpectedFee) => {
-      it(`Shoud revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
+      it(`Should revert if unexpected fee value ${unexpectedFee} is returned`, async function () {
         await consolidationRequestPredeployed.mock__setFeeRaw(unexpectedFee);
 
         await expect(validatorConsolidationRequests.getConsolidationRequestFee()).to.be.revertedWithCustomError(
@@ -142,7 +145,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
       await expect(
         validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
-          [EMPTY_PUBKEYS],
+          [PUBKEY],
           [],
           receiver.address,
           dashboardAddress,
@@ -155,8 +158,8 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
       await expect(
         validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
-          [EMPTY_PUBKEYS],
-          [EMPTY_PUBKEYS],
+          [PUBKEY],
+          [PUBKEY],
           receiver.address,
           ethers.ZeroAddress,
           0,
@@ -169,11 +172,11 @@ describe("ValidatorConsolidationRequests.sol", () => {
   });
 
   it("Should revert if vault is not connected", async function () {
-    await dashboard.mock__setVaultConnection({
+    await vaultHub.mock__setVaultConnection(stakingVault, {
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 0,
-      pendingDisconnect: false,
+      disconnectInitiatedTs: 1n,
       reserveRatioBP: 0,
       forcedRebalanceThresholdBP: 0,
       infraFeeBP: 0,
@@ -181,11 +184,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
       reservationFeeBP: 0,
       isBeaconDepositsManuallyPaused: false,
     });
+    await vaultHub.mock__setPendingDisconnect(false);
 
     await expect(
       validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
-        [EMPTY_PUBKEYS],
-        [EMPTY_PUBKEYS],
+        [PUBKEY],
+        [PUBKEY],
         receiver.address,
         dashboardAddress,
         1n,
@@ -193,11 +197,11 @@ describe("ValidatorConsolidationRequests.sol", () => {
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
 
-    await dashboard.mock__setVaultConnection({
+    await vaultHub.mock__setVaultConnection(stakingVault, {
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 1,
-      pendingDisconnect: true,
+      disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
       reserveRatioBP: 0,
       forcedRebalanceThresholdBP: 0,
       infraFeeBP: 0,
@@ -205,11 +209,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
       reservationFeeBP: 0,
       isBeaconDepositsManuallyPaused: false,
     });
+    await vaultHub.mock__setPendingDisconnect(true);
 
     await expect(
       validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
-        [EMPTY_PUBKEYS],
-        [EMPTY_PUBKEYS],
+        [PUBKEY],
+        [PUBKEY],
         receiver.address,
         dashboardAddress,
         1n,
@@ -221,8 +226,8 @@ describe("ValidatorConsolidationRequests.sol", () => {
   it("Should revert if array lengths do not match", async function () {
     await expect(
       validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
-        [EMPTY_PUBKEYS],
-        [EMPTY_PUBKEYS, EMPTY_PUBKEYS],
+        [PUBKEY],
+        [PUBKEY, PUBKEY],
         receiver.address,
         dashboardAddress,
         1n,
@@ -282,10 +287,10 @@ describe("ValidatorConsolidationRequests.sol", () => {
   });
 
   it("Should revert if last pubkey not 48 bytes", async function () {
-    const validPubey =
+    const validPubkey =
       "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f";
     const invalidPubkey = "1234";
-    const sourcePubkeys = [`0x${validPubey}${invalidPubkey}`];
+    const sourcePubkeys = [`0x${validPubkey}${invalidPubkey}`];
     const { targetPubkeys, adjustmentIncrease } = generateConsolidationRequestPayload(1);
 
     const fee = await getFee();
@@ -513,11 +518,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
     const events = findEIP7251MockEvents(receipt!);
     expect(events.length).to.equal(totalSourcePubkeysCount);
 
+    let k = 0;
     for (let i = 0; i < requestCount; i++) {
       const pubkeysCount = Math.floor(sourcePubkeys[i].length / KEY_LENGTH);
       for (let j = 0; j < pubkeysCount; j++) {
         const expectedSourcePubkey = sourcePubkeys[i].slice(j * KEY_LENGTH, (j + 1) * KEY_LENGTH);
-        const encodedRequest = events[i * pubkeysCount + j].args[0];
+        const encodedRequest = events[k].args[0];
 
         expect(encodedRequest.length).to.equal(2 + KEY_LENGTH * 2 + KEY_LENGTH * 2);
 
@@ -527,6 +533,8 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
         const targetPubkeyFromEvent = "0x" + encodedRequest.slice(KEY_LENGTH * 2 + 2, KEY_LENGTH * 4 + 2);
         expect(targetPubkeyFromEvent).to.equal(ethers.hexlify(targetPubkeys[i]));
+
+        k++;
       }
     }
   });
@@ -590,7 +598,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
       await expect(
         validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
-          [EMPTY_PUBKEYS],
+          [PUBKEY],
           [],
           dashboardAddress,
           0,
@@ -601,8 +609,8 @@ describe("ValidatorConsolidationRequests.sol", () => {
 
       await expect(
         validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
-          [EMPTY_PUBKEYS],
-          [EMPTY_PUBKEYS],
+          [PUBKEY],
+          [PUBKEY],
           ethers.ZeroAddress,
           0,
         ),
@@ -613,11 +621,11 @@ describe("ValidatorConsolidationRequests.sol", () => {
   });
 
   it("getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls should revert if vault is not connected", async function () {
-    await dashboard.mock__setVaultConnection({
+    await vaultHub.mock__setVaultConnection(stakingVault, {
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 0,
-      pendingDisconnect: false,
+      disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
       reserveRatioBP: 0,
       forcedRebalanceThresholdBP: 0,
       infraFeeBP: 0,
@@ -625,21 +633,22 @@ describe("ValidatorConsolidationRequests.sol", () => {
       reservationFeeBP: 0,
       isBeaconDepositsManuallyPaused: false,
     });
+    await vaultHub.mock__setPendingDisconnect(false);
 
     await expect(
       validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
-        [EMPTY_PUBKEYS],
-        [EMPTY_PUBKEYS],
+        [PUBKEY],
+        [PUBKEY],
         dashboardAddress,
         1n,
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
 
-    await dashboard.mock__setVaultConnection({
+    await vaultHub.mock__setVaultConnection(stakingVault, {
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 1,
-      pendingDisconnect: true,
+      disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
       reserveRatioBP: 0,
       forcedRebalanceThresholdBP: 0,
       infraFeeBP: 0,
@@ -647,11 +656,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
       reservationFeeBP: 0,
       isBeaconDepositsManuallyPaused: false,
     });
+    await vaultHub.mock__setPendingDisconnect(true);
 
     await expect(
       validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
-        [EMPTY_PUBKEYS],
-        [EMPTY_PUBKEYS],
+        [PUBKEY],
+        [PUBKEY],
         dashboardAddress,
         1n,
       ),
@@ -661,8 +671,8 @@ describe("ValidatorConsolidationRequests.sol", () => {
   it("getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls should revert if array lengths do not match", async function () {
     await expect(
       validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
-        [EMPTY_PUBKEYS],
-        [EMPTY_PUBKEYS, EMPTY_PUBKEYS],
+        [PUBKEY],
+        [PUBKEY, PUBKEY],
         dashboardAddress,
         1n,
       ),
@@ -681,13 +691,15 @@ describe("ValidatorConsolidationRequests.sol", () => {
         adjustmentIncrease,
       );
     expect(consolidationRequestEncodedCalls[0].length).to.equal(2 + KEY_LENGTH * 2 + KEY_LENGTH * 2);
+    let k = 0;
     for (let i = 0; i < targetPubkeys.length; i++) {
       const sourcePubkeysCount = sourcePubkeys[i].length / KEY_LENGTH;
       for (let j = 0; j < sourcePubkeysCount; j++) {
         const targetPubkey = targetPubkeys[i];
         const sourcePubkey = sourcePubkeys[i].slice(j * KEY_LENGTH, (j + 1) * KEY_LENGTH);
         const concatenatedKeys = ethers.hexlify(sourcePubkey) + ethers.hexlify(targetPubkey).slice(2);
-        expect(consolidationRequestEncodedCalls[i * sourcePubkeysCount + j]).to.equal(concatenatedKeys);
+        expect(consolidationRequestEncodedCalls[k]).to.equal(concatenatedKeys);
+        k++;
       }
     }
     const iface = new ethers.Interface(["function increaseRewardsAdjustment(uint256)"]);

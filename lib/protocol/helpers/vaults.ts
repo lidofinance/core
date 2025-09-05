@@ -93,7 +93,7 @@ export async function createVaultWithDashboard(
   stakingVaultFactory: VaultFactory & { address: string },
   owner: HardhatEthersSigner,
   nodeOperator: HardhatEthersSigner,
-  nodeOperatorManager: HardhatEthersSigner,
+  nodeOperatorManager: HardhatEthersSigner = nodeOperator,
   roleAssignments: Permissions.RoleAssignmentStruct[] = [],
   fee = VAULT_NODE_OPERATOR_FEE,
   confirmExpiry = DEFAULT_CONFIRM_EXPIRY,
@@ -218,7 +218,7 @@ export async function setupLidoForVaults(ctx: ProtocolContext) {
 export type VaultReportItem = {
   vault: string;
   totalValue: bigint;
-  accruedLidoFees: bigint;
+  cumulativeLidoFees: bigint;
   liabilityShares: bigint;
   slashingReserve: bigint;
 };
@@ -234,7 +234,7 @@ export function createVaultsReportTree(vaultReports: VaultReportItem[]): Standar
     vaultReports.map((vaultReport) => [
       vaultReport.vault,
       vaultReport.totalValue,
-      vaultReport.accruedLidoFees,
+      vaultReport.cumulativeLidoFees,
       vaultReport.liabilityShares,
       vaultReport.slashingReserve,
     ]),
@@ -257,7 +257,7 @@ export async function reportVaultDataWithProof(
   const vaultReport: VaultReportItem = {
     vault: await stakingVault.getAddress(),
     totalValue: params.totalValue ?? (await vaultHub.totalValue(stakingVault)),
-    accruedLidoFees: params.accruedLidoFees ?? 0n,
+    cumulativeLidoFees: params.cumulativeLidoFees ?? 0n,
     liabilityShares: params.liabilityShares ?? (await vaultHub.liabilityShares(stakingVault)),
     slashingReserve: params.slashingReserve ?? 0n,
   };
@@ -281,7 +281,7 @@ export async function reportVaultDataWithProof(
   return await lazyOracle.updateVaultData(
     await stakingVault.getAddress(),
     vaultReport.totalValue,
-    vaultReport.accruedLidoFees,
+    vaultReport.cumulativeLidoFees,
     vaultReport.liabilityShares,
     vaultReport.slashingReserve,
     reportTree.getProof(0),

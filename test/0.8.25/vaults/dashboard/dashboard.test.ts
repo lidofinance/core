@@ -27,6 +27,7 @@ import {
   certainAddress,
   days,
   deployEIP7002WithdrawalRequestContract,
+  DISCONNECT_NOT_INITIATED,
   EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
   ether,
   findEvents,
@@ -100,13 +101,16 @@ describe("Dashboard.sol", () => {
       },
     ],
     minimalReserve: 0n,
+    redemptionShares: 0n,
+    cumulativeLidoFees: 0n,
+    settledLidoFees: 0n,
   };
 
   const connection: Readonly<VaultHub.VaultConnectionStruct> = {
     owner: ZeroAddress,
     shareLimit: 100000n,
     vaultIndex: 1n,
-    pendingDisconnect: false,
+    disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
     reserveRatioBP: 1000n,
     forcedRebalanceThresholdBP: 800n,
     infraFeeBP: 1000n,
@@ -115,30 +119,23 @@ describe("Dashboard.sol", () => {
     isBeaconDepositsManuallyPaused: false,
   };
 
-  const obligations: Readonly<VaultHub.VaultObligationsStruct> = {
-    unsettledLidoFees: 0n,
-    redemptions: 0n,
-    settledLidoFees: 0n,
-  };
-
   const setup = async ({
     reserveRatioBP,
     shareLimit,
     totalValue,
     liabilityShares,
     locked,
-    unsettledLidoFees,
+    cumulativeLidoFees,
     settledLidoFees,
-    redemptions,
+    redemptionShares,
     vaultBalance = 0n,
-    pendingDisconnect = false,
+    disconnectInitiatedTs = DISCONNECT_NOT_INITIATED,
     isConnected = true,
     owner = vaultOwner,
   }: Partial<
     VaultHub.VaultRecordStruct &
       VaultHub.VaultConnectionStruct &
-      VaultHub.ReportStruct &
-      VaultHub.VaultObligationsStruct & {
+      VaultHub.ReportStruct & {
         vaultBalance?: bigint;
         isConnected?: boolean;
       }
@@ -147,7 +144,7 @@ describe("Dashboard.sol", () => {
       ...connection,
       reserveRatioBP: reserveRatioBP ?? connection.reserveRatioBP,
       shareLimit: shareLimit ?? connection.shareLimit,
-      pendingDisconnect: pendingDisconnect ?? connection.pendingDisconnect,
+      disconnectInitiatedTs: disconnectInitiatedTs ?? connection.disconnectInitiatedTs,
       vaultIndex: isConnected ? connection.vaultIndex : 0n,
       owner: owner ?? connection.owner,
     });
@@ -157,13 +154,9 @@ describe("Dashboard.sol", () => {
       report: { ...record.report, totalValue: totalValue ?? record.report.totalValue },
       liabilityShares: liabilityShares ?? record.liabilityShares,
       locked: locked ?? record.locked,
-    });
-
-    await hub.mock__setVaultObligations(vault, {
-      ...obligations,
-      unsettledLidoFees: unsettledLidoFees ?? obligations.unsettledLidoFees,
-      settledLidoFees: settledLidoFees ?? obligations.settledLidoFees,
-      redemptions: redemptions ?? obligations.redemptions,
+      cumulativeLidoFees: cumulativeLidoFees ?? record.cumulativeLidoFees,
+      settledLidoFees: settledLidoFees ?? record.settledLidoFees,
+      redemptionShares: redemptionShares ?? record.redemptionShares,
     });
 
     if (vaultBalance > 0n) {
@@ -451,19 +444,6 @@ describe("Dashboard.sol", () => {
       // todo: add node operator fee tests
     });
 
-    context("unsettledObligations", () => {
-      it("returns 0 if no unsettled obligations", async () => {
-        await setup({
-          totalValue: 0n,
-          liabilityShares: 0n,
-          unsettledLidoFees: 0n,
-          redemptions: 0n,
-          settledLidoFees: 0n,
-        });
-        expect(await dashboard.unsettledObligations()).to.equal(0n);
-      });
-    });
-
     context("remainingMintingCapacityShares", () => {
       it("0 remaining capacity if no total value and no liability shares", async () => {
         await setup({ totalValue: 0n, liabilityShares: 0n });
@@ -546,21 +526,9 @@ describe("Dashboard.sol", () => {
     });
 
     context("withdrawableValue", () => {
-      it("returns 0 if pending disconnect", async () => {
-        await setup({ totalValue: ether("10"), vaultBalance: ether("1") });
-        expect(await dashboard.withdrawableValue()).to.equal(ether("1"));
-        await setup({ pendingDisconnect: true });
-        expect(await dashboard.withdrawableValue()).to.equal(0n);
-      });
-
       it("returns the trivial amount can withdraw ether", async () => {
         await setup({ totalValue: 0n, locked: 0n });
 
-        expect(await dashboard.withdrawableValue()).to.equal(0n);
-      });
-
-      it("returns 0 if pending disconnect", async () => {
-        await setup({ pendingDisconnect: true });
         expect(await dashboard.withdrawableValue()).to.equal(0n);
       });
 
@@ -601,6 +569,40 @@ describe("Dashboard.sol", () => {
 
         expect(await dashboard.withdrawableValue()).to.equal(0n);
       });
+    });
+  });
+
+  context("obligations views", () => {
+    before(async () => {
+      await hub.mock__setObligations(vault, 100n, 200n);
+    });
+
+    it("shows the correct obligations", async () => {
+      const obligations = await dashboard.obligations();
+
+      expect(obligations).to.deep.equal([100n, 200n]);
+    });
+
+    it("shows zeroes if vault is not connected", async () => {
+      await hub.deleteVaultConnection(vault);
+
+      const obligations = await dashboard.obligations();
+      expect(obligations).to.deep.equal([0n, 0n]);
+    });
+
+    it("shows the correct obligations shortfall", async () => {
+      const [sharesToRebalance, unsettledLidoFees] = await dashboard.obligations();
+      const rebalanceAmount = await steth.getPooledEthBySharesRoundUp(sharesToRebalance);
+
+      const obligationsShortfall = await dashboard.obligationsShortfall();
+      expect(obligationsShortfall).to.equal(rebalanceAmount + unsettledLidoFees);
+    });
+
+    it("shows the correct rebalance shortfall shares", async () => {
+      const [sharesToRebalance] = await dashboard.obligations();
+      const rebalanceShortfallShares = await dashboard.rebalanceShortfallShares();
+
+      expect(rebalanceShortfallShares).to.equal(sharesToRebalance);
     });
   });
 

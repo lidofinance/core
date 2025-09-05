@@ -65,13 +65,10 @@ describe("Integration: ValidatorConsolidationRequests", () => {
 
     const tx = await delegateCaller.callDelegate(
       validatorConsolidationRequests.address,
-      validatorConsolidationRequests.interface.encodeFunctionData("addConsolidationRequests", [
-        sourcePubkeys,
-        targetPubkeys,
-        stranger.address,
-        stakingVaultAddress,
-        payload.adjustmentIncrease,
-      ]),
+      validatorConsolidationRequests.interface.encodeFunctionData(
+        "addConsolidationRequestsAndIncreaseRewardsAdjustment",
+        [sourcePubkeys, targetPubkeys, stranger.address, stakingVaultAddress, payload.adjustmentIncrease],
+      ),
       { value: totalFee },
     );
     const receipt = (await tx.wait()) as ContractTransactionReceipt;
