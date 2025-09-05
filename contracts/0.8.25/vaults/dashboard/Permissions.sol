@@ -102,10 +102,10 @@ abstract contract Permissions is AccessControlConfirmable {
         keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
 
     /**
-     * @dev Permission for requesting change of tier on the OperatorGrid.
+     * @dev Permission for vault configuration operations on the OperatorGrid (tier changes, tier sync, share limit updates).
      */
-    /// @dev 0x655996ffb2e08cf642b4ce5cc56668761aed116cdfcb21f71ff9fe7fbcbd450e
-    bytes32 public constant CHANGE_TIER_ROLE = keccak256("vaults.Permissions.ChangeTier");
+    /// @dev 0x25482e7dc9e29f6da5bd70b6d19d17bbf44021da51ba0664a9f430c94a09c674
+    bytes32 public constant VAULT_CONFIGURATION_ROLE = keccak256("vaults.Permissions.VaultConfiguration");
 
     /**
      * @notice Address of the implementation contract
@@ -353,16 +353,33 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the CHANGE_TIER_ROLE and requests a change of the tier on the OperatorGrid.
+     * @dev Checks the VAULT_CONFIGURATION_ROLE and requests a change of the tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
-     * @return bool Whether the tier change was confirmed.
+     * @return bool Whether the tier change was executed.
      */
     function _changeTier(
         uint256 _tierId,
         uint256 _requestedShareLimit
-    ) internal onlyRoleMemberOrAdmin(CHANGE_TIER_ROLE) returns (bool) {
+    ) internal onlyRoleMemberOrAdmin(VAULT_CONFIGURATION_ROLE) returns (bool) {
         return _operatorGrid().changeTier(address(_stakingVault()), _tierId, _requestedShareLimit);
+    }
+
+    /**
+     * @dev Checks the VAULT_CONFIGURATION_ROLE and requests a sync of the tier on the OperatorGrid.
+     * @return bool Whether the tier sync was executed.
+     */
+    function _syncTier() internal onlyRoleMemberOrAdmin(VAULT_CONFIGURATION_ROLE) returns (bool) {
+        return _operatorGrid().syncTier(address(_stakingVault()));
+    }
+
+    /**
+     * @dev Checks the VAULT_CONFIGURATION_ROLE and updates the share limit on the OperatorGrid.
+     * @param _requestedShareLimit The requested share limit.
+     * @return bool Whether the share limit update was executed.
+     */
+    function _updateVaultShareLimit(uint256 _requestedShareLimit) internal onlyRoleMemberOrAdmin(VAULT_CONFIGURATION_ROLE) returns (bool) {
+        return _operatorGrid().updateVaultShareLimit(address(_stakingVault()), _requestedShareLimit);
     }
 
     /**

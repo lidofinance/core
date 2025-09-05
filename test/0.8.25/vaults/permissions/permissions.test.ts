@@ -199,7 +199,7 @@ describe("Permissions", () => {
       await checkSoleMember(validatorExitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
       await checkSoleMember(validatorWithdrawalTriggerer, await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await checkSoleMember(disconnecter, await permissions.VOLUNTARY_DISCONNECT_ROLE());
-      await checkSoleMember(tierChanger, await permissions.CHANGE_TIER_ROLE());
+      await checkSoleMember(tierChanger, await permissions.VAULT_CONFIGURATION_ROLE());
     });
   });
 
@@ -932,8 +932,8 @@ describe("Permissions", () => {
 
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
-      expect(await permissions.hasRole(await permissions.CHANGE_TIER_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.CHANGE_TIER_ROLE())).to.equal(
+      expect(await permissions.hasRole(await permissions.VAULT_CONFIGURATION_ROLE(), defaultAdmin)).to.be.false;
+      expect(await permissions.getRoleAdmin(await permissions.VAULT_CONFIGURATION_ROLE())).to.equal(
         await permissions.DEFAULT_ADMIN_ROLE(),
       );
 
@@ -943,11 +943,11 @@ describe("Permissions", () => {
     });
 
     it("reverts if the caller is not a member of the request tier change role", async () => {
-      expect(await permissions.hasRole(await permissions.CHANGE_TIER_ROLE(), stranger)).to.be.false;
+      expect(await permissions.hasRole(await permissions.VAULT_CONFIGURATION_ROLE(), stranger)).to.be.false;
 
       await expect(permissions.connect(stranger).changeTier(1, ether("1")))
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.CHANGE_TIER_ROLE());
+        .withArgs(stranger, await permissions.VAULT_CONFIGURATION_ROLE());
     });
   });
 
