@@ -439,7 +439,7 @@ contract Accounting {
         }
 
         uint256 treasuryShares = _feeDistribution.treasurySharesToMint;
-        if (treasuryShares > 0) { // an edge case when all fees goes to modules
+        if (treasuryShares > 0) { // zero is an edge case when all fees goes to modules
             LIDO.mintShares(LIDO_LOCATOR.treasury(), treasuryShares);
         }
     }

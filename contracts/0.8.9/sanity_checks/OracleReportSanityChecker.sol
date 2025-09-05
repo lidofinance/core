@@ -385,9 +385,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Sets the initial slashing and penalties Amountficients
-    /// @param _initialSlashingAmountPWei - initial slashing Amountficient (in PWei)
-    /// @param _inactivityPenaltiesAmountPWei - penalties Amountficient (in PWei)
+    /// @notice Sets the initial slashing and penalties amounts
+    /// @param _initialSlashingAmountPWei - initial slashing amount (in PWei)
+    /// @param _inactivityPenaltiesAmountPWei - penalties amount (in PWei)
     function setInitialSlashingAndPenaltiesAmount(uint256 _initialSlashingAmountPWei, uint256 _inactivityPenaltiesAmountPWei)
         external
         onlyRole(INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE)
@@ -400,8 +400,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
     ///     rewards vault during Lido's oracle report processing
-    /// @param _preTotalPooledEther total amount of ETH controlled by the protocol
-    /// @param _preTotalShares total amount of minted stETH shares
+    /// @param _preInternalEther amount of internal ETH controlled by the protocol before the report
+    /// @param _preInternalShares number of internal shares before the report
     /// @param _preCLBalance sum of all Lido validators' balances on the Consensus Layer before the
     ///     current oracle report
     /// @param _postCLBalance sum of all Lido validators' balances on the Consensus Layer after the
@@ -416,8 +416,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @return sharesFromWQToBurn amount of shares from Burner that should be burned due to WQ finalization
     /// @return sharesToBurn amount to be burnt (accounting for withdrawals finalization)
     function smoothenTokenRebase(
-        uint256 _preTotalPooledEther,
-        uint256 _preTotalShares,
+        uint256 _preInternalEther,
+        uint256 _preInternalShares,
         uint256 _preCLBalance,
         uint256 _postCLBalance,
         uint256 _withdrawalVaultBalance,
@@ -433,8 +433,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ) {
         TokenRebaseLimiterData memory tokenRebaseLimiter = PositiveTokenRebaseLimiter.initLimiterState(
             getMaxPositiveTokenRebase(),
-            _preTotalPooledEther,
-            _preTotalShares
+            _preInternalEther,
+            _preInternalShares
         );
 
         if (_postCLBalance < _preCLBalance) {
@@ -583,14 +583,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     }
 
     /// @notice Applies sanity checks to the simulated share rate for withdrawal requests finalization
-    /// @param _postTotalPooledEther total pooled ether after report applied
-    /// @param _postTotalShares total shares after report applied
+    /// @param _postInternalEther total pooled ether after report applied
+    /// @param _postInternalShares total shares after report applied
     /// @param _etherToFinalizeWQ ether locked on withdrawal queue for the current oracle report
     /// @param _sharesToBurnForWithdrawals shares burnt due to withdrawals finalization
     /// @param _simulatedShareRate share rate provided with the oracle report (simulated via off-chain "eth_call")
     function checkSimulatedShareRate(
-        uint256 _postTotalPooledEther,
-        uint256 _postTotalShares,
+        uint256 _postInternalEther,
+        uint256 _postInternalShares,
         uint256 _etherToFinalizeWQ,
         uint256 _sharesToBurnForWithdrawals,
         uint256 _simulatedShareRate
@@ -602,8 +602,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         // virtually return burnt just finalized withdrawals shares back to `_postTotalShares`
         _checkSimulatedShareRate(
             limitsList,
-            _postTotalPooledEther + _etherToFinalizeWQ,
-            _postTotalShares + _sharesToBurnForWithdrawals,
+            _postInternalEther + _etherToFinalizeWQ,
+            _postInternalShares + _sharesToBurnForWithdrawals,
             _simulatedShareRate
         );
     }
@@ -791,18 +791,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     function _checkSimulatedShareRate(
         LimitsList memory _limitsList,
-        uint256 _noWithdrawalsPostTotalPooledEther,
-        uint256 _noWithdrawalsPostTotalShares,
+        uint256 _noWithdrawalsPostInternalEther,
+        uint256 _noWithdrawalsPostInternalShares,
         uint256 _simulatedShareRate
     ) internal pure {
+        assert(_noWithdrawalsPostInternalEther != 0);
         uint256 actualShareRate = (
-            _noWithdrawalsPostTotalPooledEther * SHARE_RATE_PRECISION_E27
-        ) / _noWithdrawalsPostTotalShares;
-
-        if (actualShareRate == 0) {
-            // can't finalize anything if the actual share rate is zero
-            revert ActualShareRateIsZero();
-        }
+            _noWithdrawalsPostInternalEther * SHARE_RATE_PRECISION_E27
+        ) / _noWithdrawalsPostInternalShares;
 
         // the simulated share rate can be either higher or lower than the actual one
         // in case of new user-submitted ether & minted `stETH` between the oracle reference slot
@@ -922,7 +918,6 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectNumberOfExitRequestsPerReport(uint256 maxRequestsCount);
     error IncorrectExitedValidators(uint256 exitedValidatorsLimit);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
-    error ActualShareRateIsZero();
     error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);
     error TooManyItemsPerExtraDataTransaction(uint256 maxItemsCount, uint256 receivedItemsCount);
     error ExitedValidatorsLimitExceeded(uint256 limitPerDay, uint256 exitedPerDay);
