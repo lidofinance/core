@@ -12,7 +12,15 @@ import {
   VaultHub__MockForLazyOracle,
 } from "typechain-types";
 
-import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate, randomAddress } from "lib";
+import {
+  advanceChainTime,
+  days,
+  DISCONNECT_NOT_INITIATED,
+  ether,
+  getCurrentBlockTimestamp,
+  impersonate,
+  randomAddress,
+} from "lib";
 import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
 
 import { deployLidoLocator } from "test/deploy";
@@ -114,7 +122,7 @@ describe("LazyOracle.sol", () => {
         owner: randomAddress(),
         shareLimit: 1000n,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         reserveRatioBP: 10000,
         forcedRebalanceThresholdBP: 10000,
         infraFeeBP: 10000,

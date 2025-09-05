@@ -288,8 +288,7 @@ describe("Integration: Actions with vault connected to VaultHub", () => {
       await expect(dashboard.voluntaryDisconnect())
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(stakingVault);
-      const connection = await vaultHub.vaultConnection(stakingVault);
-      expect(connection.pendingDisconnect).to.be.true;
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
       await advanceChainTime(days(1n));
       await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: TEST_STETH_AMOUNT_WEI }))
         .to.emit(vaultHub, "VaultDisconnectCompleted")

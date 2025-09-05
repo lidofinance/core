@@ -19,6 +19,7 @@ import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/Operat
 
 import {
   certainAddress,
+  DISCONNECT_NOT_INITIATED,
   ether,
   GENESIS_FORK_VERSION,
   getNextBlockTimestamp,
@@ -138,7 +139,7 @@ describe("OperatorGrid.sol", () => {
       owner: vaultOwner,
       vaultIndex: 1,
       isBeaconDepositsManuallyPaused: false,
-      pendingDisconnect: false,
+      disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
     });
     await vaultHub.mock__setVaultConnection(vault_NO1_V2, {
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
@@ -150,7 +151,7 @@ describe("OperatorGrid.sol", () => {
       owner: vaultOwner,
       vaultIndex: 2,
       isBeaconDepositsManuallyPaused: false,
-      pendingDisconnect: false,
+      disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
     });
     await vaultHub.mock__setVaultConnection(vault_NO2_V1, {
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
@@ -162,7 +163,7 @@ describe("OperatorGrid.sol", () => {
       owner: vaultOwner,
       vaultIndex: 3,
       isBeaconDepositsManuallyPaused: false,
-      pendingDisconnect: false,
+      disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
     });
     await vaultHub.mock__setVaultConnection(vault_NO2_V2, {
       shareLimit: DEFAULT_TIER_SHARE_LIMIT,
@@ -174,7 +175,7 @@ describe("OperatorGrid.sol", () => {
       owner: vaultOwner,
       vaultIndex: 4,
       isBeaconDepositsManuallyPaused: false,
-      pendingDisconnect: false,
+      disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
     });
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, predepositGuarantee, operatorGrid });
@@ -776,7 +777,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         isBeaconDepositsManuallyPaused: false,
       });
 
@@ -819,7 +820,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         isBeaconDepositsManuallyPaused: false,
       });
 
@@ -862,7 +863,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         isBeaconDepositsManuallyPaused: false,
       });
       //and update tier sharesMinted
@@ -907,7 +908,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         isBeaconDepositsManuallyPaused: false,
       });
 
@@ -1023,7 +1024,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: reservationFee,
         owner: vaultOwner,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         isBeaconDepositsManuallyPaused: false,
       });
 
@@ -1233,7 +1234,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         isBeaconDepositsManuallyPaused: false,
       });
 
@@ -1455,7 +1456,7 @@ describe("OperatorGrid.sol", () => {
           reservationFeeBP: reservationFee,
           owner: vaultOwner,
           vaultIndex: 1,
-          pendingDisconnect: false,
+          disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
           isBeaconDepositsManuallyPaused: false,
         });
 
@@ -1592,7 +1593,7 @@ describe("OperatorGrid.sol", () => {
           reservationFeeBP: reservationFee,
           owner: vaultOwner,
           vaultIndex: 1,
-          pendingDisconnect: false,
+          disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
           isBeaconDepositsManuallyPaused: false,
         });
       });
@@ -1758,7 +1759,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         shareLimit: shareLimit,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         reserveRatioBP: 2000,
         forcedRebalanceThresholdBP: 1800,
         infraFeeBP: 500,
@@ -1861,7 +1862,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         isBeaconDepositsManuallyPaused: false,
       });
 
@@ -1904,7 +1905,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         isBeaconDepositsManuallyPaused: false,
       });
 
@@ -1944,7 +1945,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         isBeaconDepositsManuallyPaused: false,
       });
 
@@ -1994,7 +1995,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         isBeaconDepositsManuallyPaused: false,
       });
 
@@ -2048,7 +2049,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: 100,
         owner: vaultOwner,
         vaultIndex: 1,
-        pendingDisconnect: false,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
         isBeaconDepositsManuallyPaused: false,
       });
 
