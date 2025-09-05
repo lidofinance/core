@@ -112,7 +112,7 @@ contract VaultHub is PausableUntilWithRoles {
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_LOCATION = 0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
 
-    /// @notice role that allows to connect vaults to the hub
+    /// @notice role that allows to disconnect vaults from the hub
     /// @dev 0x479bc4a51d27fbdc8e51b5b1ebd3dcd58bd229090980bff226f8930587e69ce3
     bytes32 public immutable VAULT_MASTER_ROLE = keccak256("vaults.VaultHub.VaultMasterRole");
 
@@ -138,8 +138,6 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 internal immutable TOTAL_BASIS_POINTS = 100_00;
     /// @notice length of the validator pubkey in bytes
     uint256 internal immutable PUBLIC_KEY_LENGTH = 48;
-    /// @dev max value for fees in basis points - it's about 650%
-    uint256 internal immutable MAX_FEE_BP = type(uint16).max;
     /// @dev special value for `disconnectTimestamp` storage means the vault is not marked for disconnect
     uint48 internal immutable DISCONNECT_NOT_INITIATED = type(uint48).max;
 
@@ -164,7 +162,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _maxRelativeShareLimitBP Maximum share limit relative to TVL in basis points
     constructor(ILidoLocator _locator, ILido _lido, IHashConsensus _consensusContract, uint256 _maxRelativeShareLimitBP) {
         _requireNotZero(_maxRelativeShareLimitBP);
-        _requireLessThanBP(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
+        if (_maxRelativeShareLimitBP > TOTAL_BASIS_POINTS) revert InvalidBasisPoints(_maxRelativeShareLimitBP, TOTAL_BASIS_POINTS);
 
         MAX_RELATIVE_SHARE_LIMIT_BP = _maxRelativeShareLimitBP;
 
@@ -396,22 +394,6 @@ contract VaultHub is PausableUntilWithRoles {
         emit VaultRedemptionSharesUpdated(_vault, record.redemptionShares);
     }
 
-    /// @notice updates fees for the vault
-    /// @param _vault vault address
-    /// @param _infraFeeBP new infra fee in basis points
-    /// @param _liquidityFeeBP new liquidity fee in basis points
-    /// @param _reservationFeeBP new reservation fee in basis points
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
-    function updateVaultFees(
-        address _vault,
-        uint256 _infraFeeBP,
-        uint256 _liquidityFeeBP,
-        uint256 _reservationFeeBP
-    ) external onlyRole(VAULT_MASTER_ROLE) {
-        VaultConnection storage connection = _checkConnection(_vault);
-        _updateVaultFees(_vault, connection, _infraFeeBP, _liquidityFeeBP, _reservationFeeBP);
-    }
-
     /// @notice updates the vault's connection parameters
     /// @dev Reverts if the vault is not healthy as of latest report
     /// @param _vault vault address
@@ -436,6 +418,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
+        _requireFreshReport(_vault, record);
+
         uint256 totalValue_ = _totalValue(record);
         uint256 liabilityShares_ = record.liabilityShares;
 
@@ -443,13 +427,27 @@ contract VaultHub is PausableUntilWithRoles {
             revert VaultMintingCapacityExceeded(_vault, totalValue_, liabilityShares_, _reserveRatioBP);
         }
 
+        // special event for the Oracle to track fee calculation
+        emit VaultFeesUpdated({
+            vault: _vault,
+            preInfraFeeBP: connection.infraFeeBP,
+            preLiquidityFeeBP: connection.liquidityFeeBP,
+            preReservationFeeBP: connection.reservationFeeBP,
+            infraFeeBP: _infraFeeBP,
+            liquidityFeeBP: _liquidityFeeBP,
+            reservationFeeBP: _reservationFeeBP
+        });
+
         connection.shareLimit = uint96(_shareLimit);
         connection.reserveRatioBP = uint16(_reserveRatioBP);
         connection.forcedRebalanceThresholdBP = uint16(_forcedRebalanceThresholdBP);
-        _updateVaultFees(_vault, connection, _infraFeeBP, _liquidityFeeBP, _reservationFeeBP);
+        connection.infraFeeBP = uint16(_infraFeeBP);
+        connection.liquidityFeeBP = uint16(_liquidityFeeBP);
+        connection.reservationFeeBP = uint16(_reservationFeeBP);
 
         emit VaultConnectionUpdated({
             vault: _vault,
+            nodeOperator: _nodeOperator(_vault),
             shareLimit: _shareLimit,
             reserveRatioBP: _reserveRatioBP,
             forcedRebalanceThresholdBP: _forcedRebalanceThresholdBP
@@ -877,7 +875,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Permissionless rebalance for vaults with obligations shortfall
     /// @param _vault vault address
-    /// @dev rebalance all available amount of ether on the vault to fullfill the vault's obligations: restore vault
+    /// @dev rebalance all available amount of ether on the vault to fulfill the vault's obligations: restore vault
     ///      to healthy state and settle outstanding redemptions. Fees are not settled in this case.
     function forceRebalance(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
@@ -1354,36 +1352,6 @@ contract VaultHub is PausableUntilWithRoles {
         return totalValue_ > locked_ ? totalValue_ - locked_ : 0;
     }
 
-    function _updateVaultFees(
-        address _vault,
-        VaultConnection storage _connection,
-        uint256 _infraFeeBP,
-        uint256 _liquidityFeeBP,
-        uint256 _reservationFeeBP
-    ) internal {
-        _requireLessThanBP(_infraFeeBP, MAX_FEE_BP);
-        _requireLessThanBP(_liquidityFeeBP, MAX_FEE_BP);
-        _requireLessThanBP(_reservationFeeBP, MAX_FEE_BP);
-
-        uint16 preInfraFeeBP = _connection.infraFeeBP;
-        uint16 preLiquidityFeeBP = _connection.liquidityFeeBP;
-        uint16 preReservationFeeBP = _connection.reservationFeeBP;
-
-        _connection.infraFeeBP = uint16(_infraFeeBP);
-        _connection.liquidityFeeBP = uint16(_liquidityFeeBP);
-        _connection.reservationFeeBP = uint16(_reservationFeeBP);
-
-        emit VaultFeesUpdated({
-            vault: _vault,
-            preInfraFeeBP: preInfraFeeBP,
-            preLiquidityFeeBP: preLiquidityFeeBP,
-            preReservationFeeBP: preReservationFeeBP,
-            infraFeeBP: _infraFeeBP,
-            liquidityFeeBP: _liquidityFeeBP,
-            reservationFeeBP: _reservationFeeBP
-        });
-    }
-
     function _unsettledLidoFeesValue(VaultRecord storage _record) internal view returns (uint256) {
         return _record.cumulativeLidoFees - _record.settledLidoFees;
     }
@@ -1468,10 +1436,6 @@ contract VaultHub is PausableUntilWithRoles {
         if (msg.sender != _sender) revert NotAuthorized();
     }
 
-    function _requireLessThanBP(uint256 _valueBP, uint256 _maxValueBP) internal pure {
-        if (_valueBP > _maxValueBP) revert InvalidBasisPoints(_valueBP, _maxValueBP);
-    }
-
     function _requireSaneShareLimit(uint256 _shareLimit) internal view {
         uint256 maxSaneShareLimit = (LIDO.getTotalShares() * MAX_RELATIVE_SHARE_LIMIT_BP) / TOTAL_BASIS_POINTS;
         if (_shareLimit > maxSaneShareLimit) revert ShareLimitTooHigh(_shareLimit, maxSaneShareLimit);
@@ -1505,6 +1469,7 @@ contract VaultHub is PausableUntilWithRoles {
     //           EVENTS
     // -----------------------------
 
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event VaultConnected(
         address indexed vault,
         uint256 shareLimit,
@@ -1517,10 +1482,13 @@ contract VaultHub is PausableUntilWithRoles {
 
     event VaultConnectionUpdated(
         address indexed vault,
+        address indexed nodeOperator,
         uint256 shareLimit,
         uint256 reserveRatioBP,
         uint256 forcedRebalanceThresholdBP
     );
+
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event VaultFeesUpdated(
         address indexed vault,
         uint256 preInfraFeeBP,
@@ -1543,8 +1511,11 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 reportSlashingReserve
     );
 
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event MintedSharesOnVault(address indexed vault, uint256 amountOfShares, uint256 lockedAmount);
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event BurnedSharesOnVault(address indexed vault, uint256 amountOfShares);
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event VaultRebalanced(address indexed vault, uint256 sharesBurned, uint256 etherWithdrawn);
     event VaultInOutDeltaUpdated(address indexed vault, int256 inOutDelta);
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
@@ -1563,7 +1534,9 @@ contract VaultHub is PausableUntilWithRoles {
     event BeaconChainDepositsPausedByOwner(address indexed vault);
     event BeaconChainDepositsResumedByOwner(address indexed vault);
 
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event BadDebtSocialized(address indexed vaultDonor, address indexed vaultAcceptor, uint256 badDebtShares);
+    /// @dev Warning! used by Accounting Oracle to calculate fees
     event BadDebtWrittenOffToBeInternalized(address indexed vault, uint256 badDebtShares);
 
     // -----------------------------

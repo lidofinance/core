@@ -29,7 +29,7 @@ import {
   getCurrentBlockTimestamp,
   impersonate,
 } from "lib";
-import { DISCONNECT_NOT_INITIATED, MAX_FEE_BP, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
+import { DISCONNECT_NOT_INITIATED, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
@@ -883,81 +883,6 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
-  context("updateVaultFees", () => {
-    let vault: StakingVault__MockForVaultHub;
-
-    before(async () => {
-      const { vault: _vault } = await createAndConnectVault(vaultFactory);
-      vault = _vault;
-    });
-
-    it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
-      await expect(
-        vaultHub.connect(stranger).updateVaultFees(vault, INFRA_FEE_BP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
-      ).to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount");
-    });
-
-    it("reverts if vault address is zero", async () => {
-      await expect(
-        vaultHub.connect(user).updateVaultFees(ZeroAddress, INFRA_FEE_BP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
-      ).to.be.revertedWithCustomError(vaultHub, "ZeroAddress");
-    });
-
-    it("reverts if infra fee is too high", async () => {
-      const tooHighInfraFeeBP = MAX_FEE_BP + 1n;
-
-      await expect(
-        vaultHub.connect(user).updateVaultFees(vault, tooHighInfraFeeBP, LIQUIDITY_FEE_BP, RESERVATION_FEE_BP),
-      )
-        .to.be.revertedWithCustomError(vaultHub, "InvalidBasisPoints")
-        .withArgs(tooHighInfraFeeBP, MAX_FEE_BP);
-    });
-
-    it("reverts if liquidity fee is too high", async () => {
-      const tooHighLiquidityFeeBP = MAX_FEE_BP + 1n;
-
-      await expect(
-        vaultHub.connect(user).updateVaultFees(vault, INFRA_FEE_BP, tooHighLiquidityFeeBP, RESERVATION_FEE_BP),
-      )
-        .to.be.revertedWithCustomError(vaultHub, "InvalidBasisPoints")
-        .withArgs(tooHighLiquidityFeeBP, MAX_FEE_BP);
-    });
-
-    it("reverts if reservation fee is too high", async () => {
-      const tooHighReservationFeeBP = MAX_FEE_BP + 1n;
-
-      await expect(
-        vaultHub.connect(user).updateVaultFees(vault, INFRA_FEE_BP, LIQUIDITY_FEE_BP, tooHighReservationFeeBP),
-      )
-        .to.be.revertedWithCustomError(vaultHub, "InvalidBasisPoints")
-        .withArgs(tooHighReservationFeeBP, MAX_FEE_BP);
-    });
-
-    it("updates the vault fees", async () => {
-      const newInfraFeeBP = INFRA_FEE_BP * 2n;
-      const newLiquidityFeeBP = LIQUIDITY_FEE_BP * 2n;
-      const newReservationFeeBP = RESERVATION_FEE_BP * 2n;
-
-      const connectionBefore = await vaultHub.vaultConnection(vault);
-      await expect(vaultHub.connect(user).updateVaultFees(vault, newInfraFeeBP, newLiquidityFeeBP, newReservationFeeBP))
-        .to.emit(vaultHub, "VaultFeesUpdated")
-        .withArgs(
-          vault,
-          connectionBefore.infraFeeBP,
-          connectionBefore.liquidityFeeBP,
-          connectionBefore.reservationFeeBP,
-          newInfraFeeBP,
-          newLiquidityFeeBP,
-          newReservationFeeBP,
-        );
-
-      const connection = await vaultHub.vaultConnection(vault);
-      expect(connection.infraFeeBP).to.equal(newInfraFeeBP);
-      expect(connection.liquidityFeeBP).to.equal(newLiquidityFeeBP);
-      expect(connection.reservationFeeBP).to.equal(newReservationFeeBP);
-    });
-  });
-
   context("updateConnection", () => {
     it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
       const { vault } = await createAndConnectVault(vaultFactory);
@@ -979,12 +904,15 @@ describe("VaultHub.sol:hub", () => {
     it("update connection parameters", async () => {
       const { vault } = await createAndConnectVault(vaultFactory);
       const vaultAddress = await vault.getAddress();
+      const nodeOperator = await vault.nodeOperator();
       const operatorGridSigner = await impersonate(await operatorGridMock.getAddress(), ether("1"));
 
       const oldConnection = await vaultHub.vaultConnection(vaultAddress);
       const newInfraFeeBP = oldConnection.infraFeeBP + 10n;
       const newLiquidityFeeBP = oldConnection.liquidityFeeBP + 11n;
       const newReservationFeeBP = oldConnection.reservationFeeBP + 12n;
+
+      await reportVault({ vault });
 
       await expect(
         vaultHub
@@ -1000,8 +928,8 @@ describe("VaultHub.sol:hub", () => {
           ),
       )
         .to.emit(vaultHub, "VaultConnectionUpdated")
-        .withArgs(vaultAddress, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP)
-        .to.emit(vaultHub, "VaultFeesUpdated")
+        .withArgs(vaultAddress, nodeOperator, SHARE_LIMIT, RESERVE_RATIO_BP, FORCED_REBALANCE_THRESHOLD_BP)
+        .and.to.emit(vaultHub, "VaultFeesUpdated")
         .withArgs(
           vaultAddress,
           oldConnection.infraFeeBP,

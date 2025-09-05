@@ -146,7 +146,7 @@ contract VaultFactory__MockPermissions {
             _permissionsConfig.validatorWithdrawalTriggerer
         );
         permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
-        permissions.grantRole(permissions.CHANGE_TIER_ROLE(), _permissionsConfig.tierChanger);
+        permissions.grantRole(permissions.VAULT_CONFIGURATION_ROLE(), _permissionsConfig.tierChanger);
     }
 
     event VaultCreated(address indexed owner, address indexed vault);
