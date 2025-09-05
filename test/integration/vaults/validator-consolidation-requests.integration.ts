@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, StakingVault } from "typechain-types";
+import { Dashboard } from "typechain-types";
 
 import { EIP7251_ADDRESS } from "lib";
 import { createVaultWithDashboard, getProtocolContext, ProtocolContext } from "lib/protocol";
@@ -23,7 +23,6 @@ describe("Integration: ValidatorConsolidationRequests", () => {
   let stranger: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let dashboard: Dashboard;
-  let stakingVault: StakingVault;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -31,7 +30,7 @@ describe("Integration: ValidatorConsolidationRequests", () => {
 
     [owner, stranger, nodeOperator] = await ethers.getSigners();
 
-    ({ dashboard, stakingVault } = await createVaultWithDashboard(
+    ({ dashboard } = await createVaultWithDashboard(
       ctx,
       ctx.contracts.stakingVaultFactory,
       owner,
@@ -53,7 +52,7 @@ describe("Integration: ValidatorConsolidationRequests", () => {
 
     const delegateCaller = await ethers.deployContract("DelegateCaller", [], { from: owner });
     const delegateCallerAddress = await delegateCaller.getAddress();
-    const stakingVaultAddress = await stakingVault.getAddress();
+    const dashboardAddress = await dashboard.getAddress();
 
     // send empty tx to EIP7251 to get fee per request
     const feeForRequest = BigInt(await ethers.provider.call({ to: EIP7251_ADDRESS, data: "0x" }));
@@ -67,7 +66,7 @@ describe("Integration: ValidatorConsolidationRequests", () => {
       validatorConsolidationRequests.address,
       validatorConsolidationRequests.interface.encodeFunctionData(
         "addConsolidationRequestsAndIncreaseRewardsAdjustment",
-        [sourcePubkeys, targetPubkeys, stranger.address, stakingVaultAddress, payload.adjustmentIncrease],
+        [sourcePubkeys, targetPubkeys, stranger.address, dashboardAddress, payload.adjustmentIncrease],
       ),
       { value: totalFee },
     );
