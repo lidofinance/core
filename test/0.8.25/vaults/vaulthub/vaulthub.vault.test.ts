@@ -17,7 +17,7 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { ether, getCurrentBlockTimestamp } from "lib";
+import { ether, getCurrentBlockTimestamp, impersonate } from "lib";
 import { ONE_GWEI, TOTAL_BASIS_POINTS } from "lib/constants";
 import { findEvents } from "lib/event";
 
@@ -38,6 +38,7 @@ describe("VaultHub.sol:owner-functions", () => {
   let newOwner: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
   let recipient: HardhatEthersSigner;
+  let accounting: HardhatEthersSigner;
 
   let vaultHub: VaultHub;
   let vaultFactory: VaultFactory__MockForVaultHub;
@@ -122,6 +123,7 @@ describe("VaultHub.sol:owner-functions", () => {
     }));
 
     locator = await ethers.getContractAt("LidoLocator", await lido.getLidoLocator(), deployer);
+    accounting = await impersonate(await locator.accounting(), ether("100.0"));
 
     // Setup ACL permissions
     await acl.createPermission(vaultOwner, lido, await lido.RESUME_ROLE(), deployer);
@@ -549,6 +551,31 @@ describe("VaultHub.sol:owner-functions", () => {
 
       const liabilitySharesAfter = await vaultHub.liabilityShares(vaultAddress);
       expect(liabilitySharesBefore - liabilitySharesAfter).to.equal(rebalanceAmount);
+    });
+
+    it("rebalance with share rate < 1", async () => {
+      const totalPooledEther = await lido.getTotalPooledEther();
+      const totalShares = await lido.getTotalShares();
+
+      if (totalPooledEther >= totalShares) {
+        const sharesToMint = totalPooledEther - totalShares + ether("1");
+        await lido.connect(accounting).mintShares(stranger, sharesToMint);
+      }
+
+      const externalSharesBeforeRebalance = await lido.getExternalShares();
+      const liabilitySharesBeforeRebalance = await vaultHub.liabilityShares(vaultAddress);
+      expect(externalSharesBeforeRebalance).to.equal(liabilitySharesBeforeRebalance);
+
+      const rebalanceAmountShares = ether("0.1");
+      const eth = (rebalanceAmountShares * totalPooledEther - 1n) / totalShares + 1n; // roundUp
+      await expect(vaultHub.connect(vaultOwner).rebalance(vaultAddress, rebalanceAmountShares))
+        .to.emit(vaultHub, "VaultRebalanced")
+        .withArgs(vaultAddress, rebalanceAmountShares, eth);
+
+      const externalSharesAfterRebalance = await lido.getExternalShares();
+      const liabilitySharesAfterRebalance = await vaultHub.liabilityShares(vaultAddress);
+
+      expect(externalSharesAfterRebalance).to.equal(liabilitySharesAfterRebalance);
     });
   });
 

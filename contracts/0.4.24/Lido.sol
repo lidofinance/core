@@ -751,10 +751,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _auth(_vaultHub());
         _whenNotStopped();
 
-        uint256 calculatedAmountOfShares = getSharesByPooledEth(msg.value);
-        if (calculatedAmountOfShares != _amountOfShares + (_getTotalShares() - 1) / _getTotalPooledEther()) {
-            revert("INVALID_AMOUNT_OF_SHARES");
+        if (msg.value < Math256.ceilDiv(_amountOfShares *  _getTotalPooledEther(), _getTotalShares())) {
+            revert("INSUFFICIENT_ETHER");
         }
+
         uint256 externalShares = _getExternalShares();
 
         if (externalShares < _amountOfShares) revert("EXT_SHARES_TOO_SMALL");
