@@ -566,8 +566,11 @@ describe("VaultHub.sol:owner-functions", () => {
       const liabilitySharesBeforeRebalance = await vaultHub.liabilityShares(vaultAddress);
       expect(externalSharesBeforeRebalance).to.equal(liabilitySharesBeforeRebalance);
 
+      const totalPooledEtherAfterMint = await lido.getTotalPooledEther();
+      const totalSharesAfterMint = await lido.getTotalShares();
+
       const rebalanceAmountShares = ether("0.1");
-      const eth = (rebalanceAmountShares * totalPooledEther - 1n) / totalShares + 1n; // roundUp
+      const eth = (rebalanceAmountShares * totalPooledEtherAfterMint - 1n) / totalSharesAfterMint + 1n; // roundUp
       await expect(vaultHub.connect(vaultOwner).rebalance(vaultAddress, rebalanceAmountShares))
         .to.emit(vaultHub, "VaultRebalanced")
         .withArgs(vaultAddress, rebalanceAmountShares, eth);
