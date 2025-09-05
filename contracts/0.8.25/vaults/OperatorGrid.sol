@@ -582,9 +582,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     ) external onlyRole(REGISTRY_ROLE) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
-        _requireLessThanBP(_infraFeeBP, MAX_FEE_BP);
-        _requireLessThanBP(_liquidityFeeBP, MAX_FEE_BP);
-        _requireLessThanBP(_reservationFeeBP, MAX_FEE_BP);
+        _requireLessOrEqToBP(_infraFeeBP, MAX_FEE_BP);
+        _requireLessOrEqToBP(_liquidityFeeBP, MAX_FEE_BP);
+        _requireLessOrEqToBP(_reservationFeeBP, MAX_FEE_BP);
 
         VaultHub vaultHub = _vaultHub();
         if (!vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
@@ -819,7 +819,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         vaultTierId = _getStorage().vaultTier[_vault];
     }
 
-    function _requireLessThanBP(uint256 _valueBP, uint256 _maxValueBP) internal pure {
+    function _requireLessOrEqToBP(uint256 _valueBP, uint256 _maxValueBP) internal pure {
         if (_valueBP > _maxValueBP) revert InvalidBasisPoints(_valueBP, _maxValueBP);
     }
 

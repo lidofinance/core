@@ -868,7 +868,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Permissionless rebalance for vaults with obligations shortfall
     /// @param _vault vault address
-    /// @dev rebalance all available amount of ether on the vault to fullfill the vault's obligations: restore vault
+    /// @dev rebalance all available amount of ether on the vault to fulfill the vault's obligations: restore vault
     ///      to healthy state and settle outstanding redemptions. Fees are not settled in this case.
     function forceRebalance(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
