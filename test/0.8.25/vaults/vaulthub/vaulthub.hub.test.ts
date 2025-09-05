@@ -29,7 +29,7 @@ import {
   getCurrentBlockTimestamp,
   impersonate,
 } from "lib";
-import { MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
+import { DISCONNECT_NOT_INITIATED, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
@@ -271,7 +271,7 @@ describe("VaultHub.sol:hub", () => {
       expect(connection.vaultIndex).to.equal(ZeroAddress);
       expect(connection.owner).to.equal(ZeroAddress);
       expect(connection.shareLimit).to.equal(0n);
-      expect(connection.pendingDisconnect).to.equal(false);
+      expect(connection.disconnectInitiatedTs).to.equal(0n);
       expect(connection.reserveRatioBP).to.equal(0n);
       expect(connection.forcedRebalanceThresholdBP).to.equal(0n);
       expect(connection.infraFeeBP).to.equal(0n);
@@ -285,7 +285,7 @@ describe("VaultHub.sol:hub", () => {
       const connection = await vaultHub.vaultConnection(vault);
       expect(connection.vaultIndex).to.equal(await vaultHub.vaultsCount());
       expect(connection.owner).to.equal(user);
-      expect(connection.pendingDisconnect).to.equal(false);
+      expect(connection.disconnectInitiatedTs).to.equal(DISCONNECT_NOT_INITIATED);
       expect(connection.shareLimit).to.equal(TIER_PARAMS.shareLimit);
       expect(connection.reserveRatioBP).to.equal(TIER_PARAMS.reserveRatioBP);
       expect(connection.forcedRebalanceThresholdBP).to.equal(TIER_PARAMS.forcedRebalanceThresholdBP);
@@ -715,7 +715,8 @@ describe("VaultHub.sol:hub", () => {
 
       const connection = await vaultHub.vaultConnection(vault);
       expect(connection.vaultIndex).to.equal(0n);
-      expect(connection.pendingDisconnect).to.be.false;
+      expect(await vaultHub.isPendingDisconnect(vault)).to.be.false;
+      expect(await vaultHub.isVaultConnected(vault)).to.be.false;
 
       await vault.connect(user).fund({ value: ether("1") });
 
@@ -744,7 +745,7 @@ describe("VaultHub.sol:hub", () => {
 
       const connectionAfter = await vaultHub.vaultConnection(_vault);
       expect(connectionAfter.vaultIndex).to.equal(vaultCountBefore + 1n);
-      expect(connectionAfter.pendingDisconnect).to.be.false;
+      expect(connectionAfter.disconnectInitiatedTs).to.be.equal(DISCONNECT_NOT_INITIATED);
     });
 
     it("allows to connect the vault with 0 share limit", async () => {
@@ -986,8 +987,7 @@ describe("VaultHub.sol:hub", () => {
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vault);
 
-      const vaultSocket = await vaultHub.vaultConnection(vault);
-      expect(vaultSocket.pendingDisconnect).to.be.true;
+      expect(await vaultHub.isPendingDisconnect(vault)).to.be.true;
     });
 
     it("clean quarantine after disconnect", async () => {
@@ -997,12 +997,12 @@ describe("VaultHub.sol:hub", () => {
         .withArgs(vault);
 
       let vaultSocket = await vaultHub.vaultConnection(vault);
-      expect(vaultSocket.pendingDisconnect).to.be.true;
+      expect(await vaultHub.isPendingDisconnect(vault)).to.be.true;
 
       await lazyOracle.mock__setIsVaultQuarantined(vault, true);
       expect(await lazyOracle.isVaultQuarantined(vault)).to.equal(true);
 
-      await expect(lazyOracle.mock__report(vaultHub, vault, 0n, 0n, 0n, 0n, 0n, 0n))
+      await expect(lazyOracle.mock__report(vaultHub, vault, await getCurrentBlockTimestamp(), 0n, 0n, 0n, 0n, 0n))
         .to.emit(vaultHub, "VaultDisconnectCompleted")
         .withArgs(vault);
 
@@ -1069,8 +1069,7 @@ describe("VaultHub.sol:hub", () => {
         .to.emit(vaultHub, "VaultDisconnectInitiated")
         .withArgs(vaultAddress);
 
-      const vaultSocket = await vaultHub.vaultConnection(vaultAddress);
-      expect(vaultSocket.pendingDisconnect).to.be.true;
+      expect(await vaultHub.isPendingDisconnect(vaultAddress)).to.be.true;
     });
   });
 

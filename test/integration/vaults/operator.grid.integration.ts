@@ -395,8 +395,8 @@ describe("Integration: OperatorGrid", () => {
       await dashboard.connect(owner).voluntaryDisconnect();
 
       // Verify disconnect is pending
-      const connection = await vaultHub.vaultConnection(stakingVault);
-      expect(connection.pendingDisconnect).to.be.true;
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
+      expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
 
       // Vault should still be jailed during disconnect process
       expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;

@@ -54,7 +54,7 @@ contract VaultHub is PausableUntilWithRoles {
         /// @dev vaultIndex is always greater than 0
         uint96 vaultIndex;
         /// @notice if true, vault is disconnected and fee is not accrued
-        bool pendingDisconnect;
+        uint48 disconnectInitiatedTs;
         /// @notice share of ether that is locked on the vault as an additional reserve
         /// e.g RR=30% means that for 1stETH minted 1/(1-0.3)=1.428571428571428571 ETH is locked on the vault
         uint16 reserveRatioBP;
@@ -68,7 +68,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 reservationFeeBP;
         /// @notice if true, vault owner manually paused the beacon chain deposits
         bool isBeaconDepositsManuallyPaused;
-        /// 64 bits gap
+        /// 24 bits gap
     }
 
     struct VaultRecord {
@@ -138,6 +138,8 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 internal immutable TOTAL_BASIS_POINTS = 100_00;
     /// @notice length of the validator pubkey in bytes
     uint256 internal immutable PUBLIC_KEY_LENGTH = 48;
+    /// @dev special value for `disconnectTimestamp` storage means the vault is not marked for disconnect
+    uint48 internal immutable DISCONNECT_NOT_INITIATED = type(uint48).max;
 
     /// @notice minimum amount of ether that is required for the beacon chain deposit
     /// @dev used as a threshold for the beacon chain deposits pause
@@ -214,9 +216,15 @@ contract VaultHub is PausableUntilWithRoles {
         return _vaultRecord(_vault);
     }
 
-    /// @return true if the vault is connected to the hub
+    /// @return true if the vault is connected to the hub or pending to be disconnected
     function isVaultConnected(address _vault) external view returns (bool) {
         return _vaultConnection(_vault).vaultIndex != 0;
+    }
+
+    /// @return true if vault is pending for disconnect, false if vault is connected or disconnected
+    /// @dev disconnect can be performed by applying the report for the period when it was initiated
+    function isPendingDisconnect(address _vault) external view returns (bool) {
+        return _isPendingDisconnect(_vaultConnection(_vault));
     }
 
     /// @return total value of the vault
@@ -247,7 +255,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
     /// @dev returns 0 if the vault is not connected or disconnect pending
     function withdrawableValue(address _vault) external view returns (uint256) {
-        if (_vaultConnection(_vault).pendingDisconnect) return 0;
+        if (_isPendingDisconnect(_vaultConnection(_vault))) return 0;
 
         return _withdrawableValue(_vault, _vaultRecord(_vault));
     }
@@ -478,10 +486,9 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultConnection storage connection = _vaultConnection(_vault);
         _requireConnected(connection, _vault);
-
         VaultRecord storage record = _vaultRecord(_vault);
 
-        if (connection.pendingDisconnect) {
+        if (connection.disconnectInitiatedTs <= _reportTimestamp) {
             if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
                 IStakingVault(_vault).transferOwnership(connection.owner);
                 _deleteVault(_vault, connection);
@@ -490,7 +497,7 @@ contract VaultHub is PausableUntilWithRoles {
                 return;
             } else {
                 // we abort the disconnect process as there is a slashing conflict yet to be resolved
-                connection.pendingDisconnect = false;
+                connection.disconnectInitiatedTs = DISCONNECT_NOT_INITIATED;
                 emit VaultDisconnectAborted(_vault, _reportSlashingReserve);
             }
         }
@@ -953,7 +960,7 @@ contract VaultHub is PausableUntilWithRoles {
             owner: IStakingVault(_vault).owner(),
             shareLimit: uint96(_shareLimit),
             vaultIndex: uint96(_storage().vaults.length),
-            pendingDisconnect: false,
+            disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
             reserveRatioBP: uint16(_reserveRatioBP),
             forcedRebalanceThresholdBP: uint16(_forcedRebalanceThresholdBP),
             infraFeeBP: uint16(_infraFeeBP),
@@ -972,6 +979,7 @@ contract VaultHub is PausableUntilWithRoles {
         bool _forceFullFeesSettlement
     ) internal {
         _requireFreshReport(_vault, _record);
+
         uint256 liabilityShares_ = _record.liabilityShares;
         if (liabilityShares_ > 0) revert NoLiabilitySharesShouldBeLeft(_vault, liabilityShares_);
 
@@ -986,10 +994,7 @@ contract VaultHub is PausableUntilWithRoles {
             _settleLidoFees(_vault, _record, _connection, withdrawable);
         }
 
-        _record.locked = 0; // unlock the connection deposit to allow fees settlement
-        _connection.pendingDisconnect = true;
-
-        _operatorGrid().resetVaultTier(_vault);
+        _connection.disconnectInitiatedTs = uint48(block.timestamp);
     }
 
     function _applyVaultReport(
@@ -1244,6 +1249,7 @@ contract VaultHub is PausableUntilWithRoles {
         delete $.records[_vault];
 
         _lazyOracle().removeVaultQuarantine(_vault);
+        _operatorGrid().resetVaultTier(_vault);
     }
 
     function _checkConnectionAndOwner(address _vault) internal view returns (VaultConnection storage connection) {
@@ -1251,12 +1257,18 @@ contract VaultHub is PausableUntilWithRoles {
         _requireSender(connection.owner);
     }
 
+    function _isPendingDisconnect(VaultConnection storage _connection) internal view returns (bool) {
+        uint256 disconnectionTs = _connection.disconnectInitiatedTs;
+        return disconnectionTs != 0 // vault is disconnected
+            && disconnectionTs != DISCONNECT_NOT_INITIATED; // vault in connected but not pending for disconnect
+    }
+
     function _checkConnection(address _vault) internal view returns (VaultConnection storage) {
         _requireNotZero(_vault);
 
         VaultConnection storage connection = _vaultConnection(_vault);
         _requireConnected(connection, _vault);
-        if (connection.pendingDisconnect) revert VaultIsDisconnecting(_vault);
+        if (_isPendingDisconnect(connection)) revert VaultIsDisconnecting(_vault);
 
         return connection;
     }
