@@ -68,7 +68,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 reservationFeeBP;
         /// @notice if true, vault owner manually paused the beacon chain deposits
         bool isBeaconDepositsManuallyPaused;
-        /// 24 bits gap
+        /// 56 bits gap
     }
 
     struct VaultRecord {
@@ -76,9 +76,9 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice latest report for the vault
         Report report;
         // ### 2nd slot
-        /// @notice amount of ether that is locked from withdrawal on the vault
-        /// consists of ether that back minted stETH plus reserve determined by reserve ratio and minimal reserve
-        uint128 locked;
+        /// @notice max number of shares that was minted by the vault in current Oracle period
+        /// (used to calculate the locked value on the vault)
+        uint96 maxLiabilityShares;
         /// @notice liability shares of the vault
         uint96 liabilityShares;
         // ### 3rd and 4th slots
@@ -242,7 +242,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return locked amount of ether for the vault
     /// @dev returns 0 if the vault is not connected
     function locked(address _vault) external view returns (uint256) {
-        return _vaultRecord(_vault).locked;
+        return _locked(_vaultConnection(_vault), _vaultRecord(_vault));
     }
 
     /// @return the amount of ether that can be locked in the vault given the current total value
@@ -255,9 +255,10 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
     /// @dev returns 0 if the vault is not connected or disconnect pending
     function withdrawableValue(address _vault) external view returns (uint256) {
-        if (_isPendingDisconnect(_vaultConnection(_vault))) return 0;
+        VaultConnection storage connection = _vaultConnection(_vault);
+        if (_isPendingDisconnect(connection)) return 0;
 
-        return _withdrawableValue(_vault, _vaultRecord(_vault));
+        return _withdrawableValue(_vault, connection, _vaultRecord(_vault));
     }
 
     /// @return the amount of Lido fees that currently can be settled.
@@ -266,7 +267,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev returns 0 if the vault is not connected
     function settleableLidoFeesValue(address _vault) external view returns (uint256) {
         VaultRecord storage record = _vaultRecord(_vault);
-        return _settleableLidoFeesValue(_vault, record, _unsettledLidoFeesValue(record));
+        return _settleableLidoFeesValue(_vault, _vaultConnection(_vault), record, _unsettledLidoFeesValue(record));
     }
 
     /// @return latest report for the vault
@@ -490,6 +491,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (connection.disconnectInitiatedTs <= _reportTimestamp) {
             if (_reportSlashingReserve == 0 && record.liabilityShares == 0) {
+                // liabilityShares can increase if badDebt was socialized to this vault
                 IStakingVault(_vault).transferOwnership(connection.owner);
                 _deleteVault(_vault, connection);
 
@@ -504,7 +506,6 @@ contract VaultHub is PausableUntilWithRoles {
 
         _applyVaultReport(
             record,
-            connection,
             _reportTimestamp,
             _reportTotalValue,
             _reportInOutDelta,
@@ -683,12 +684,12 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _ether amount of ether to withdraw
     /// @dev msg.sender should be vault's owner
     function withdraw(address _vault, address _recipient, uint256 _ether) external whenResumed {
-        _checkConnectionAndOwner(_vault);
+        VaultConnection storage connection = _checkConnectionAndOwner(_vault);
 
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 withdrawable = _withdrawableValue(_vault, record);
+        uint256 withdrawable = _withdrawableValue(_vault, connection, record);
         if (_ether > withdrawable) {
             revert AmountExceedsWithdrawableValue(_vault, withdrawable, _ether);
         }
@@ -720,21 +721,19 @@ contract VaultHub is PausableUntilWithRoles {
 
         _requireFreshReport(_vault, record);
 
-        uint256 maxLockableValue_ = _totalValue(record) - _unsettledLidoFeesValue(record);
-
         _increaseLiability({
             _vault: _vault,
             _record: record,
             _amountOfShares: _amountOfShares,
             _reserveRatioBP: connection.reserveRatioBP,
-            _maxLockableValue: maxLockableValue_,
+            _maxLockableValue: _totalValue(record) - _unsettledLidoFeesValue(record),
             _shareLimit: connection.shareLimit,
             _overrideOperatorLimits: false
         });
 
         LIDO.mintExternalShares(_recipient, _amountOfShares);
 
-        emit MintedSharesOnVault(_vault, _amountOfShares, record.locked);
+        emit MintedSharesOnVault(_vault, _amountOfShares, _locked(connection, record));
     }
 
     /// @notice burn steth shares from the balance of the VaultHub contract
@@ -905,7 +904,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 unsettledLidoFees = _unsettledLidoFeesValue(record);
         if (unsettledLidoFees == 0) revert NoUnsettledLidoFeesToSettle(_vault);
 
-        uint256 valueToSettle = _settleableLidoFeesValue(_vault, record, unsettledLidoFees);
+        uint256 valueToSettle = _settleableLidoFeesValue(_vault, connection, record, unsettledLidoFees);
         if (valueToSettle == 0) revert NoFundsToSettleLidoFees(_vault, unsettledLidoFees);
 
         _settleLidoFees(_vault, record, connection, valueToSettle);
@@ -947,9 +946,9 @@ contract VaultHub is PausableUntilWithRoles {
                 inOutDelta: int104(int256(vaultBalance)),
                 timestamp: uint48(block.timestamp)
             }),
-            locked: uint128(CONNECT_DEPOSIT),
+            maxLiabilityShares: 0,
             liabilityShares: 0,
-            inOutDelta: DoubleRefSlotCache.InitializeInt104DoubleCache(int104(int256(vaultBalance))),
+            inOutDelta: DoubleRefSlotCache.initializeInt104DoubleCache(int104(int256(vaultBalance))),
             minimalReserve: uint128(CONNECT_DEPOSIT),
             redemptionShares: 0,
             cumulativeLidoFees: 0,
@@ -999,7 +998,6 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _applyVaultReport(
         VaultRecord storage _record,
-        VaultConnection storage _connection,
         uint256 _reportTimestamp,
         uint256 _reportTotalValue,
         int256 _reportInOutDelta,
@@ -1007,15 +1005,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _reportLiabilityShares,
         uint256 _reportSlashingReserve
     ) internal {
-        uint256 minimalReserve = Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve);
-
         _record.cumulativeLidoFees = uint128(_reportCumulativeLidoFees);
-        _record.minimalReserve = uint128(minimalReserve);
-        _record.locked = uint128(_locked({
-            _liabilityShares: Math256.max(_record.liabilityShares, _reportLiabilityShares), // better way to track liability?
-            _minimalReserve: minimalReserve,
-            _reserveRatioBP: _connection.reserveRatioBP
-        }));
+        _record.minimalReserve = uint128(Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve));
+        _record.maxLiabilityShares = uint96(Math256.max(_record.liabilityShares, _reportLiabilityShares)); // better way to track locked?
         _record.report = Report({
             totalValue: uint104(_reportTotalValue),
             inOutDelta: int104(_reportInOutDelta),
@@ -1066,8 +1058,8 @@ contract VaultHub is PausableUntilWithRoles {
             revert InsufficientValue(_vault, etherToLock, _maxLockableValue);
         }
 
-        if (etherToLock > _record.locked) {
-            _record.locked = uint128(etherToLock);
+        if (sharesAfterMint > _record.maxLiabilityShares) {
+            _record.maxLiabilityShares = uint96(sharesAfterMint);
         }
 
         _record.liabilityShares = uint96(sharesAfterMint);
@@ -1153,6 +1145,13 @@ contract VaultHub is PausableUntilWithRoles {
         Report memory report = _record.report;
         DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory inOutDelta = _record.inOutDelta;
         return uint256(int256(uint256(report.totalValue)) + inOutDelta.currentValue() - report.inOutDelta);
+    }
+
+    function _locked(
+        VaultConnection storage _connection,
+        VaultRecord storage _record
+    ) internal view returns (uint256) {
+        return _locked(_record.maxLiabilityShares, _record.minimalReserve, _connection.reserveRatioBP);
     }
 
     /// @param _liabilityShares amount of shares that the vault is minted
@@ -1321,16 +1320,21 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev    this amount already accounts locked value
     function _settleableLidoFeesValue(
         address _vault,
+        VaultConnection storage _connection,
         VaultRecord storage _record,
         uint256 _feesToSettle
     ) internal view returns (uint256) {
-        uint256 unlocked = _unlocked(_record);
+        uint256 unlocked = _unlocked(_connection, _record);
         return Math256.min(Math256.min(unlocked, _vault.balance), _feesToSettle);
     }
 
     /// @notice the amount of ether that can be instantly withdrawn from the vault based on the available balance,
     ///         locked value, vault redemption shares and unsettled Lido fees accrued on the vault
-    function _withdrawableValue(address _vault, VaultRecord storage _record) internal view returns (uint256) {
+    function _withdrawableValue(
+        address _vault,
+        VaultConnection storage _connection,
+        VaultRecord storage _record
+    ) internal view returns (uint256) {
         uint256 availableBalance = Math256.min(_vault.balance, _totalValue(_record));
 
         // 1. We can't withdraw funds that can be used to fulfill redemptions
@@ -1339,16 +1343,19 @@ contract VaultHub is PausableUntilWithRoles {
         availableBalance -= redemptionValue;
 
         // 2. We must account vaults locked value when calculating the withdrawable amount
-        uint256 withdrawable = Math256.min(availableBalance, _unlocked(_record));
+        uint256 withdrawable = Math256.min(availableBalance, _unlocked(_connection, _record));
 
         // 3. We can't withdraw funds that are used to settle Lido fees
         uint256 feesValue = _unsettledLidoFeesValue(_record);
         return withdrawable > feesValue ? withdrawable - feesValue : 0;
     }
 
-    function _unlocked(VaultRecord storage _record) internal view returns (uint256) {
+    function _unlocked(
+        VaultConnection storage _connection,
+        VaultRecord storage _record
+    ) internal view returns (uint256) {
         uint256 totalValue_ = _totalValue(_record);
-        uint256 locked_ = _record.locked;
+        uint256 locked_ = _locked(_connection, _record);
         return totalValue_ > locked_ ? totalValue_ - locked_ : 0;
     }
 

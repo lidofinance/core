@@ -73,7 +73,9 @@ library DoubleRefSlotCache {
     /// @notice Initializes the cache with the given value
     /// @param _value the value to initialize the cache with
     /// @return the initialized cache
-    function InitializeInt104DoubleCache(int104 _value) internal pure returns (Int104WithCache[DOUBLE_CACHE_LENGTH] memory) {
+    function initializeInt104DoubleCache(
+        int104 _value
+    ) internal pure returns (Int104WithCache[DOUBLE_CACHE_LENGTH] memory) {
         return [
             Int104WithCache({
                 value: _value,

@@ -87,7 +87,7 @@ describe("Dashboard.sol", () => {
       timestamp: 2122n,
     },
     liabilityShares: 555n,
-    locked: 1000n,
+    maxLiabilityShares: 1000n,
     inOutDelta: [
       {
         value: 1000n,
@@ -124,7 +124,7 @@ describe("Dashboard.sol", () => {
     shareLimit,
     totalValue,
     liabilityShares,
-    locked,
+    maxLiabilityShares,
     cumulativeLidoFees,
     settledLidoFees,
     redemptionShares,
@@ -153,7 +153,7 @@ describe("Dashboard.sol", () => {
       ...record,
       report: { ...record.report, totalValue: totalValue ?? record.report.totalValue },
       liabilityShares: liabilityShares ?? record.liabilityShares,
-      locked: locked ?? record.locked,
+      maxLiabilityShares: maxLiabilityShares ?? record.maxLiabilityShares,
       cumulativeLidoFees: cumulativeLidoFees ?? record.cumulativeLidoFees,
       settledLidoFees: settledLidoFees ?? record.settledLidoFees,
       redemptionShares: redemptionShares ?? record.redemptionShares,
@@ -345,7 +345,7 @@ describe("Dashboard.sol", () => {
 
     it("locked", async () => {
       const locked = await dashboard.locked();
-      expect(locked).to.equal(record.locked);
+      expect(locked).to.equal(await hub.locked(vault));
     });
 
     it("totalValue", async () => {
@@ -473,7 +473,7 @@ describe("Dashboard.sol", () => {
         );
       });
 
-      it("remaining capacity is 0 if liability shares is maxxed out", async () => {
+      it("remaining capacity is 0 if liability shares is maxed out", async () => {
         const totalValue = 1000n;
         const liability = (totalValue * (BP_BASE - getBigInt(connection.reserveRatioBP))) / BP_BASE;
         const liabilityShares = await steth.getSharesByPooledEth(liability);
@@ -527,7 +527,7 @@ describe("Dashboard.sol", () => {
 
     context("withdrawableValue", () => {
       it("returns the trivial amount can withdraw ether", async () => {
-        await setup({ totalValue: 0n, locked: 0n });
+        await setup({ totalValue: 0n, maxLiabilityShares: 0n });
 
         expect(await dashboard.withdrawableValue()).to.equal(0n);
       });
@@ -535,39 +535,39 @@ describe("Dashboard.sol", () => {
       it("returns totalValue if balance > totalValue and locked = 0", async () => {
         await setBalance(await vault.getAddress(), ether("100"));
         const amount = ether("1");
-        await setup({ totalValue: amount, locked: 0n });
+        await setup({ totalValue: amount, maxLiabilityShares: 0n });
 
-        expect(await dashboard.withdrawableValue()).to.equal(amount);
+        expect(await dashboard.withdrawableValue()).to.equal(await hub.withdrawableValue(vault));
       });
 
       it("returns totalValue - locked if balance > totalValue and locked > 0", async () => {
         await setBalance(await vault.getAddress(), ether("100"));
         const amount = ether("1");
-        await setup({ totalValue: amount, locked: amount / 2n });
+        await setup({ totalValue: amount, maxLiabilityShares: amount / 2n });
 
-        expect(await dashboard.withdrawableValue()).to.equal(amount / 2n);
+        expect(await dashboard.withdrawableValue()).to.equal(await hub.withdrawableValue(vault));
       });
 
       it("returns balance if balance < totalValue and locked = 0", async () => {
         const amount = ether("1");
         await setBalance(await vault.getAddress(), amount - 1n);
-        await setup({ totalValue: amount, locked: 0n });
-        expect(await dashboard.withdrawableValue()).to.equal(amount - 1n);
+        await setup({ totalValue: amount, maxLiabilityShares: 0n });
+        expect(await dashboard.withdrawableValue()).to.equal(await hub.withdrawableValue(vault));
       });
 
       it("returns balance if balance < totalValue and locked <= (totalValue - balance)", async () => {
         const amount = ether("1");
         await setBalance(await vault.getAddress(), amount - 2n);
-        await setup({ totalValue: amount, locked: 1n });
-        expect(await dashboard.withdrawableValue()).to.equal(amount - 2n);
+        await setup({ totalValue: amount, maxLiabilityShares: 1n });
+        expect(await dashboard.withdrawableValue()).to.equal(await hub.withdrawableValue(vault));
       });
 
       it("returns 0 if no balance, even if totalValue > locked", async () => {
         await setBalance(await vault.getAddress(), 0n);
         const amount = ether("1");
-        await setup({ totalValue: amount, locked: amount / 2n });
+        await setup({ totalValue: amount, maxLiabilityShares: amount / 2n });
 
-        expect(await dashboard.withdrawableValue()).to.equal(0n);
+        expect(await dashboard.withdrawableValue()).to.equal(await hub.withdrawableValue(vault));
       });
     });
   });
@@ -717,7 +717,7 @@ describe("Dashboard.sol", () => {
 
   context("withdraw", () => {
     beforeEach(async () => {
-      await setup({ totalValue: ether("1"), locked: 0n });
+      await setup({ totalValue: ether("1"), maxLiabilityShares: 0n });
       await setBalance(await vault.getAddress(), ether("1"));
     });
 
@@ -983,7 +983,7 @@ describe("Dashboard.sol", () => {
           // steth value actually used by wsteth inside the contract
           const weiStethDown = await steth.getPooledEthByShares(weiShare);
           // this share amount that is returned from wsteth on unwrap
-          // because wsteth eats 1 share due to "rounding" (being a hungry-hungry wei gobler)
+          // because wsteth eats 1 share due to "rounding" (being a hungry-hungry wei gobbler)
           const weiShareDown = await steth.getSharesByPooledEth(weiStethDown);
           // steth value occurring only in events when rounding down from weiShareDown
           const weiStethDownDown = await steth.getPooledEthByShares(weiShareDown);
@@ -1338,7 +1338,7 @@ describe("Dashboard.sol", () => {
     ];
 
     it("reverts if the total amount exceeds the withdrawable value", async () => {
-      await setup({ totalValue: ether("10"), locked: 0n, vaultBalance: ether("0.9") });
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
 
       await expect(dashboard.unguaranteedDepositToBeaconChain(deposits))
         .to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable")
@@ -1346,7 +1346,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if the caller does not have the role", async () => {
-      await setup({ totalValue: ether("10"), locked: 0n, vaultBalance: ether("1") });
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("1") });
 
       await expect(dashboard.connect(stranger).unguaranteedDepositToBeaconChain(deposits))
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
@@ -1354,7 +1354,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("performs unguaranteed deposit", async () => {
-      await setup({ totalValue: ether("10"), locked: 0n, vaultBalance: ether("1") });
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("1") });
       await setBalance(await hub.getAddress(), ether("100"));
       await hub.mock__setSendWithdraw(true);
 
