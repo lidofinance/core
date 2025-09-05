@@ -1524,7 +1524,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function setWithdrawalCredentials02(
         bytes32 _withdrawalCredentials
     ) external onlyRole(MANAGE_WITHDRAWAL_CREDENTIALS_ROLE) {
-        _getRouterStorage().withdrawalCredentials = _withdrawalCredentials;
+        _getRouterStorage().withdrawalCredentials02 = _withdrawalCredentials;
         _notifyStakingModulesOfWithdrawalCredentialsChange();
         emit WithdrawalCredentials02Set(_withdrawalCredentials, msg.sender);
     }

@@ -16,7 +16,7 @@ import { ether, proxify } from "lib";
 
 import { Snapshot } from "test/suite";
 
-describe("StakingRouter.sol:module-sync", () => {
+describe("StakingRouter.sol:keys-02-type", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
 
@@ -102,8 +102,8 @@ describe("StakingRouter.sol:module-sync", () => {
     const newWithdrawalCredentials = hexlify(randomBytes(32));
 
     // set withdrawal credentials for 0x02 type
-    await expect(stakingRouter.setWithdrawalCredentials(newWithdrawalCredentials))
-      .to.emit(stakingRouter, "WithdrawalCredentialsSet")
+    await expect(stakingRouter.setWithdrawalCredentials02(newWithdrawalCredentials))
+      .to.emit(stakingRouter, "WithdrawalCredentials02Set")
       .withArgs(newWithdrawalCredentials, admin.address)
       .and.to.emit(stakingModuleV2, "Mock__WithdrawalCredentialsChanged");
 
