@@ -18,7 +18,6 @@ import {BeaconChainDepositor, IDepositContract} from "./lib/BeaconChainDepositor
 import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
 import {DepositsTempStorage} from "contracts/common/lib/DepositsTempStorage.sol";
 
-
 contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @dev Events
     event StakingModuleAdded(uint256 indexed stakingModuleId, address stakingModule, string name, address createdBy);
@@ -293,7 +292,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         RouterStorage storage rs = _getRouterStorage();
         rs.lido = _lido;
 
-        // TODO: maybe store withdrawalVault 
+        // TODO: maybe store withdrawalVault
         rs.withdrawalCredentials = _withdrawalCredentials;
         rs.withdrawalCredentials02 = _withdrawalCredentials02;
 
@@ -336,7 +335,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         rs.lido = _lido;
         rs.withdrawalCredentials = _withdrawalCredentials;
         rs.withdrawalCredentials02 = _withdrawalCredentials02;
-        // TODO: maybe pass via method params 
+        // TODO: maybe pass via method params
         rs.lastStakingModuleId = uint16(StorageSlot.getUint256Slot(LAST_STAKING_MODULE_ID_POSITION).value);
         // TODO: maybe pass via method params
         rs.stakingModulesCount = uint16(StorageSlot.getUint256Slot(STAKING_MODULES_COUNT_POSITION).value);
@@ -364,6 +363,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (_stakingModuleAddress == address(0)) revert ZeroAddressStakingModule();
         if (bytes(_name).length == 0 || bytes(_name).length > MAX_STAKING_MODULE_NAME_LENGTH)
             revert StakingModuleWrongName();
+
+        if (
+            _stakingModuleConfig.withdrawalCredentialsType != NEW_WITHDRAWAL_CREDENTIALS_TYPE &&
+            _stakingModuleConfig.withdrawalCredentialsType != LEGACY_WITHDRAWAL_CREDENTIALS_TYPE
+        ) revert WrongWithdrawalCredentialsType();
 
         uint256 newStakingModuleIndex = getStakingModulesCount();
 
@@ -463,6 +467,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             revert InvalidMinDepositBlockDistance();
         }
         if (_maxDepositsPerBlock > type(uint64).max) revert InvalidMaxDepositPerBlockValue();
+        if (
+            _withdrawalCredentialsType != NEW_WITHDRAWAL_CREDENTIALS_TYPE &&
+            _withdrawalCredentialsType != LEGACY_WITHDRAWAL_CREDENTIALS_TYPE
+        ) revert WrongWithdrawalCredentialsType();
 
         stakingModule.stakeShareLimit = uint16(_stakeShareLimit);
         stakingModule.priorityExitShareThreshold = uint16(_priorityExitShareThreshold);
@@ -470,7 +478,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         stakingModule.stakingModuleFee = uint16(_stakingModuleFee);
         stakingModule.maxDepositsPerBlock = uint64(_maxDepositsPerBlock);
         stakingModule.minDepositBlockDistance = uint64(_minDepositBlockDistance);
-        // TODO: add check on type
         stakingModule.withdrawalCredentialsType = uint8(_withdrawalCredentialsType);
 
         emit StakingModuleShareLimitSet(_stakingModuleId, _stakeShareLimit, _priorityExitShareThreshold, msg.sender);
@@ -1440,7 +1447,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         if (depositsValue == 0) return;
 
-        // on previous step should calc exact amount of eth 
+        // on previous step should calc exact amount of eth
         if (depositsValue % INITIAL_DEPOSIT_SIZE != 0) revert DepositValueNotMultipleOfInitialDeposit();
 
         uint256 etherBalanceBeforeDeposits = address(this).balance;
@@ -1494,7 +1501,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (withdrawalCredentialsType == LEGACY_WITHDRAWAL_CREDENTIALS_TYPE) {
             return IStakingModule(stakingModuleAddress).obtainDepositData(depositsCount, depositCalldata);
         } else {
-
             (keys, signatures) = IStakingModuleV2(stakingModuleAddress).getOperatorAvailableKeys(
                 DepositsTempStorage.getOperators(),
                 DepositsTempStorage.getCounts()
