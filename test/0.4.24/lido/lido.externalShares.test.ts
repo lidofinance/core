@@ -385,7 +385,7 @@ describe("Lido.sol:externalShares", () => {
         lido.connect(vaultHubSigner).rebalanceExternalEtherToInternal(amountOfShares, {
           value: etherToRebalance - 1n, // less than required
         }),
-      ).to.be.revertedWith("INSUFFICIENT_ETHER");
+      ).to.be.revertedWith("VALUE_SHARES_MISMATCH");
     });
   });
 

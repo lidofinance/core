@@ -741,6 +741,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @notice Transfer ether to the buffer decreasing the number of external shares in the same time
+     * @param _amountOfShares Amount of external shares to burn
      * @dev it's an equivalent of using `submit` and then `burnExternalShares`
      * but without any limits or pauses
      *
@@ -751,8 +752,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _auth(_vaultHub());
         _whenNotStopped();
 
-        if (msg.value < Math256.ceilDiv(_amountOfShares *  _getTotalPooledEther(), _getTotalShares())) {
-            revert("INSUFFICIENT_ETHER");
+        if (msg.value != getPooledEthBySharesRoundUp(_amountOfShares)) {
+            revert("VALUE_SHARES_MISMATCH");
         }
 
         uint256 externalShares = _getExternalShares();

@@ -568,6 +568,7 @@ describe("VaultHub.sol:owner-functions", () => {
 
       const totalPooledEtherAfterMint = await lido.getTotalPooledEther();
       const totalSharesAfterMint = await lido.getTotalShares();
+      expect(totalPooledEtherAfterMint).to.lessThan(totalSharesAfterMint);
 
       const rebalanceAmountShares = ether("0.1");
       const eth = (rebalanceAmountShares * totalPooledEtherAfterMint - 1n) / totalSharesAfterMint + 1n; // roundUp
