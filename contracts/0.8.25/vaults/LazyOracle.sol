@@ -8,7 +8,6 @@ import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/Merkl
 
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
-import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
@@ -530,14 +529,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     function _mintableStETH(address _vault) internal view returns (uint256) {
         VaultHub vaultHub = _vaultHub();
-        uint256 maxLockableValue = vaultHub.maxLockableValue(_vault);
-        uint256 reserveRatioBP = vaultHub.vaultConnection(_vault).reserveRatioBP;
-        uint256 mintableStETHByRR = maxLockableValue * (TOTAL_BASIS_POINTS - reserveRatioBP) / TOTAL_BASIS_POINTS;
-
-        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(_vault);
-        uint256 mintableStEthByShareLimit = ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(effectiveShareLimit);
-
-        return Math256.min(mintableStETHByRR, mintableStEthByShareLimit);
+        uint256 mintableShares = vaultHub.totalMintingCapacityShares(_vault, 0 /* zero eth delta */);
+        return _getPooledEthBySharesRoundUp(mintableShares);
     }
 
     function _storage() internal pure returns (Storage storage $) {
@@ -552,6 +545,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     function _operatorGrid() internal view returns (OperatorGrid) {
         return OperatorGrid(LIDO_LOCATOR.operatorGrid());
+    }
+
+    function _getPooledEthBySharesRoundUp(uint256 _shares) internal view returns (uint256) {
+        return ILido(LIDO_LOCATOR.lido()).getPooledEthBySharesRoundUp(_shares);
     }
 
     event VaultsReportDataUpdated(uint256 indexed timestamp, uint256 indexed refSlot, bytes32 indexed root, string cid);

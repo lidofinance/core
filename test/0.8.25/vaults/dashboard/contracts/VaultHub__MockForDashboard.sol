@@ -8,24 +8,32 @@ import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.so
 import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 contract IStETH {
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {}
 
     function burnExternalShares(uint256 _amountOfShares) external {}
 
+    function getSharesByPooledEth(uint256 _amountOfStETH) external view returns (uint256) {}
+
     function getPooledEthBySharesRoundUp(uint256 _amountOfShares) external view returns (uint256) {}
+}
+
+contract IOperatorGrid {
+    function effectiveShareLimit(address _vault) external view returns (uint256) {}
 }
 
 contract VaultHub__MockForDashboard {
     uint256 internal constant BPS_BASE = 100_00;
     IStETH public immutable steth;
-    address public immutable LIDO_LOCATOR;
+    ILidoLocator public immutable LIDO_LOCATOR;
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
     uint64 public latestReportDataTimestamp;
     bool public sendWithdraw = false;
 
-    constructor(IStETH _steth, address _lidoLocator) {
+    constructor(IStETH _steth, ILidoLocator _lidoLocator) {
         steth = _steth;
         LIDO_LOCATOR = _lidoLocator;
     }
@@ -77,10 +85,6 @@ contract VaultHub__MockForDashboard {
 
     function latestReport(address _vault) external view returns (VaultHub.Report memory) {
         return vaultRecords[_vault].report;
-    }
-
-    function maxLockableValue(address _vault) external view returns (uint256) {
-        return vaultRecords[_vault].report.totalValue;
     }
 
     function withdrawableValue(address _vault) external view returns (uint256) {
@@ -168,6 +172,18 @@ contract VaultHub__MockForDashboard {
 
     function fund(address _vault) external payable {
         emit Mock__Funded(_vault, msg.value);
+    }
+
+    function totalMintingCapacityShares(address _vault, int256 _deltaValue) external view returns (uint256) {
+        uint256 base = vaultRecords[_vault].report.totalValue;
+        uint256 maxLockableValue = _deltaValue >= 0 ? base + uint256(_deltaValue) : base - uint256(-_deltaValue);
+        uint256 mintableStETH = (maxLockableValue * (BPS_BASE - vaultConnections[_vault].reserveRatioBP)) / BPS_BASE;
+        uint256 minimalReserve = vaultRecords[_vault].minimalReserve;
+
+        if (maxLockableValue < minimalReserve) return 0;
+        if (maxLockableValue - mintableStETH < minimalReserve) mintableStETH = maxLockableValue - minimalReserve;
+        uint256 shares = steth.getSharesByPooledEth(mintableStETH);
+        return Math256.min(shares, IOperatorGrid(LIDO_LOCATOR.operatorGrid()).effectiveShareLimit(_vault));
     }
 
     function mock__setSendWithdraw(bool _sendWithdraw) external {

@@ -23,7 +23,7 @@ import {
 } from "lib";
 import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
 
-import { deployLidoLocator } from "test/deploy";
+import { deployLidoLocator, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, ZERO_BYTES32 } from "test/suite";
 
 const QUARANTINE_PERIOD = days(3n);
@@ -70,15 +70,15 @@ describe("LazyOracle.sol", () => {
 
   before(async () => {
     [deployer] = await ethers.getSigners();
-    vaultHub = await ethers.deployContract("VaultHub__MockForLazyOracle", []);
-    operatorGrid = await ethers.deployContract("OperatorGrid__MockForLazyOracle", []);
-    lido = await ethers.deployContract("Lido__MockForLazyOracle", []);
 
-    locator = await deployLidoLocator({
-      vaultHub: vaultHub,
-      operatorGrid: operatorGrid,
-      lido: lido,
-    });
+    locator = await deployLidoLocator();
+
+    lido = await ethers.deployContract("Lido__MockForLazyOracle", []);
+    vaultHub = await ethers.deployContract("VaultHub__MockForLazyOracle", [lido, locator]);
+    operatorGrid = await ethers.deployContract("OperatorGrid__MockForLazyOracle", []);
+
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, operatorGrid, lido });
+
     const lazyOracleImpl = await ethers.deployContract("LazyOracle", [locator]);
 
     const proxy = await ethers.deployContract(

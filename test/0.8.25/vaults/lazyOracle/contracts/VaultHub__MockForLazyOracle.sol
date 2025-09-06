@@ -4,15 +4,28 @@
 pragma solidity >=0.8.0;
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {ILido} from "contracts/common/interfaces/ILido.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
+import {Math256} from "contracts/common/lib/Math256.sol";
+
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
+
+contract IStETH {
+    function getSharesByPooledEth(uint256 _amountOfStETH) external view returns (uint256) {}
+}
+
+contract IOperatorGrid {
+    function effectiveShareLimit(address _vault) external view returns (uint256) {}
+}
 
 contract VaultHub__MockForLazyOracle {
     using DoubleRefSlotCache for DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH];
 
     uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
+    uint256 public constant BPS_BASE = 100_00;
+
+    IStETH public immutable steth;
+    ILidoLocator public immutable LIDO_LOCATOR;
 
     address[] public mock__vaults;
     mapping(address vault => VaultHub.VaultConnection connection) public mock__vaultConnections;
@@ -26,7 +39,10 @@ contract VaultHub__MockForLazyOracle {
     uint256 public mock__lastReported_liabilityShares;
     uint256 public mock__lastReported_slashingReserve;
 
-    constructor() {
+    constructor(IStETH _steth, ILidoLocator _lidoLocator) {
+        steth = _steth;
+        LIDO_LOCATOR = _lidoLocator;
+
         mock__vaults.push(address(0));
     }
 
@@ -58,10 +74,6 @@ contract VaultHub__MockForLazyOracle {
         return mock__vaultConnections[vault];
     }
 
-    function maxLockableValue(address) external pure returns (uint256) {
-        return 1000000000000000000;
-    }
-
     function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {
         return mock__vaultRecords[vault];
     }
@@ -72,6 +84,19 @@ contract VaultHub__MockForLazyOracle {
 
     function isPendingDisconnect(address) external pure returns (bool) {
         return false;
+    }
+
+    function totalMintingCapacityShares(address _vault, int256 _deltaValue) external view returns (uint256) {
+        uint256 base = mock__vaultRecords[_vault].report.totalValue;
+        uint256 maxLockableValue = _deltaValue >= 0 ? base + uint256(_deltaValue) : base - uint256(-_deltaValue);
+        uint256 reserveRatioBP = mock__vaultConnections[_vault].reserveRatioBP;
+        uint256 mintableStETH = (maxLockableValue * (BPS_BASE - reserveRatioBP)) / BPS_BASE;
+        uint256 minimalReserve = mock__vaultRecords[_vault].minimalReserve;
+
+        if (maxLockableValue < minimalReserve) return 0;
+        if (maxLockableValue - mintableStETH < minimalReserve) mintableStETH = maxLockableValue - minimalReserve;
+        uint256 shares = steth.getSharesByPooledEth(mintableStETH);
+        return Math256.min(shares, IOperatorGrid(LIDO_LOCATOR.operatorGrid()).effectiveShareLimit(_vault));
     }
 
     function applyVaultReport(
