@@ -251,7 +251,7 @@ contract VaultHub is PausableUntilWithRoles {
         return _maxLockableValue(_vaultRecord(_vault));
     }
 
-    /// @notice Calculates the total number of shares that that is possible to mint on the vault
+    /// @notice Calculates the total number of shares that is possible to mint on the vault
     /// @param _vault The address of the vault
     /// @param _deltaValue The delta value to apply to the total value of the vault (may be negative)
     /// @return the number of shares that can be minted
@@ -1361,7 +1361,7 @@ contract VaultHub is PausableUntilWithRoles {
         return totalValue_ > unsettledLidoFees_ ? totalValue_ - unsettledLidoFees_ : 0;
     }
 
-    /// @notice Calculates the total number of shares that that is possible to mint on the vault
+    /// @notice Calculates the total number of shares that is possible to mint on the vault
     /// @param _vault The address of the vault
     /// @param _deltaValue The delta value to apply to the total value of the vault (may be negative)
     /// @return the number of shares that can be minted

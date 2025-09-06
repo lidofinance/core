@@ -206,6 +206,16 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Returns the max total lockable amount of ether for the vault (excluding the Lido and node operator fees)
+     */
+    function maxLockableValue() external view returns (uint256) {
+        uint256 maxLockableValue_ = VAULT_HUB.maxLockableValue(address(_stakingVault()));
+        uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
+
+        return maxLockableValue_ > nodeOperatorFee ? maxLockableValue_ - nodeOperatorFee : 0;
+    }
+
+    /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() external view returns (uint256) {
@@ -222,7 +232,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) public view returns (uint256) {
         uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
-        uint256 vaultMintableSharesByRR = _mintableShares(int256(_etherToFund));
+        uint256 vaultMintableSharesByRR = _mintableShares(int256(_etherToFund) - int256(nodeOperatorDisbursableFee()));
         uint256 vaultLiabilityShares = liabilityShares();
 
         return Math256.min(
@@ -648,6 +658,8 @@ contract Dashboard is NodeOperatorFee {
         _burnShares(unwrappedShares);
     }
 
+    /// @notice Calculates the total number of shares that is possible to mint on the vault
+    /// @dev the delta value is the amount of ether to add or subtract from the total value of the vault
     function _mintableShares(int256 _deltaValue) internal view returns (uint256) {
         return VAULT_HUB.mintableShares(address(_stakingVault()), _deltaValue);
     }
