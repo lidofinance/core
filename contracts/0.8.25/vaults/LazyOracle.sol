@@ -8,7 +8,6 @@ import {MerkleProof} from "@openzeppelin/contracts-v5.2/utils/cryptography/Merkl
 
 import {AccessControlEnumerableUpgradeable} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 
-import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
@@ -530,13 +529,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     function _mintableStETH(address _vault) internal view returns (uint256) {
         VaultHub vaultHub = _vaultHub();
-        uint256 mintableShares = vaultHub.mintableShares(_vault, 0);
-        uint256 mintableStETHByReserveRatio = _getPooledEthBySharesRoundUp(mintableShares);
-
-        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(_vault);
-        uint256 mintableStEthByShareLimit = _getPooledEthBySharesRoundUp(effectiveShareLimit);
-
-        return Math256.min(mintableStETHByReserveRatio, mintableStEthByShareLimit);
+        uint256 mintableShares = vaultHub.totalMintingCapacityShares(_vault, 0);
+        return _getPooledEthBySharesRoundUp(mintableShares);
     }
 
     function _storage() internal pure returns (Storage storage $) {

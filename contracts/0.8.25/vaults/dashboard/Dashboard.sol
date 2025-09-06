@@ -8,7 +8,6 @@ import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC2
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
-import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILido as IStETH} from "contracts/common/interfaces/ILido.sol";
 import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
 
@@ -219,9 +218,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() external view returns (uint256) {
-        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
-
-        return Math256.min(effectiveShareLimit, _mintableShares(-int256(nodeOperatorDisbursableFee())));
+        return _totalMintingCapacityShares(-int256(nodeOperatorDisbursableFee()));
     }
 
     /**
@@ -231,14 +228,13 @@ contract Dashboard is NodeOperatorFee {
      * @return the number of shares that can be minted using additional ether
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) public view returns (uint256) {
-        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
-        uint256 vaultMintableSharesByRR = _mintableShares(int256(_etherToFund) - int256(nodeOperatorDisbursableFee()));
+        int256 deltaValue = int256(_etherToFund) - int256(nodeOperatorDisbursableFee());
+        uint256 vaultTotalMintingCapacityShares = _totalMintingCapacityShares(deltaValue);
         uint256 vaultLiabilityShares = liabilityShares();
 
-        return Math256.min(
-            effectiveShareLimit > vaultLiabilityShares ? effectiveShareLimit - vaultLiabilityShares : 0,
-            vaultMintableSharesByRR > vaultLiabilityShares ? vaultMintableSharesByRR - vaultLiabilityShares : 0
-        );
+        if (vaultTotalMintingCapacityShares <= vaultLiabilityShares) return 0;
+
+        return vaultTotalMintingCapacityShares - vaultLiabilityShares;
     }
 
     /**
@@ -660,8 +656,8 @@ contract Dashboard is NodeOperatorFee {
 
     /// @notice Calculates the total number of shares that is possible to mint on the vault
     /// @dev the delta value is the amount of ether to add or subtract from the total value of the vault
-    function _mintableShares(int256 _deltaValue) internal view returns (uint256) {
-        return VAULT_HUB.mintableShares(address(_stakingVault()), _deltaValue);
+    function _totalMintingCapacityShares(int256 _deltaValue) internal view returns (uint256) {
+        return VAULT_HUB.totalMintingCapacityShares(address(_stakingVault()), _deltaValue);
     }
 
     /// @notice Converts the given amount of stETH to shares

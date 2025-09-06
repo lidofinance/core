@@ -4,6 +4,8 @@
 // See contracts/COMPILERS.md
 pragma solidity 0.8.25;
 
+import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
+
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ILido} from "contracts/common/interfaces/ILido.sol";
@@ -256,8 +258,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _deltaValue The delta value to apply to the total value of the vault (may be negative)
     /// @return the number of shares that can be minted
     /// @dev returns 0 if the vault is not connected
-    function mintableShares(address _vault, int256 _deltaValue) external view returns (uint256) {
-        return _mintableShares(_vault, _deltaValue);
+    function totalMintingCapacityShares(address _vault, int256 _deltaValue) external view returns (uint256) {
+        return _totalMintingCapacityShares(_vault, _deltaValue);
     }
 
     /// @return the amount of ether that can be instantly withdrawn from the staking vault
@@ -1158,7 +1160,7 @@ contract VaultHub is PausableUntilWithRoles {
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
         Report memory report = _record.report;
         DoubleRefSlotCache.Int104WithCache[DOUBLE_CACHE_LENGTH] memory inOutDelta = _record.inOutDelta;
-        return uint256(int256(uint256(report.totalValue)) + inOutDelta.currentValue() - report.inOutDelta);
+        return SafeCast.toUint256(int256(uint256(report.totalValue)) + inOutDelta.currentValue() - report.inOutDelta);
     }
 
     /// @param _liabilityShares amount of shares that the vault is minted
@@ -1361,24 +1363,33 @@ contract VaultHub is PausableUntilWithRoles {
         return totalValue_ > unsettledLidoFees_ ? totalValue_ - unsettledLidoFees_ : 0;
     }
 
-    /// @notice Calculates the total number of shares that is possible to mint on the vault
+    /// @notice Calculates the total number of shares that is possible to mint on the vault taking into account
+    ///         minimal reserve, reserve ratio and the operator grid share limit
     /// @param _vault The address of the vault
     /// @param _deltaValue The delta value to apply to the total value of the vault (may be negative)
     /// @return the number of shares that can be minted
     /// @dev returns 0 if the vault is not connected
-    function _mintableShares(address _vault, int256 _deltaValue) internal view returns (uint256) {
+    function _totalMintingCapacityShares(address _vault, int256 _deltaValue) internal view returns (uint256) {
         VaultRecord storage record = _vaultRecord(_vault);
         VaultConnection storage connection = _vaultConnection(_vault);
 
+        uint256 maxLockableValue_;
         uint256 base = _maxLockableValue(record);
-        uint256 maxLockableValue = _deltaValue >= 0 ? base + uint256(_deltaValue) : base - uint256(-_deltaValue);
+        if (_deltaValue >= 0) {
+            maxLockableValue_ = base + uint256(_deltaValue);
+        } else {
+            uint256 deltaValue = uint256(-_deltaValue);
+            if (base < deltaValue) return 0;
+            maxLockableValue_ = base - deltaValue;
+        }
 
-        uint256 mintableStETH = (maxLockableValue * (TOTAL_BASIS_POINTS - connection.reserveRatioBP)) / TOTAL_BASIS_POINTS;
         uint256 minimalReserve_ = record.minimalReserve;
+        if (maxLockableValue_ < minimalReserve_) return 0;
 
-        if (maxLockableValue < minimalReserve_) return 0;
-        if (maxLockableValue - mintableStETH < minimalReserve_) mintableStETH = maxLockableValue - minimalReserve_;
-        return _getSharesByPooledEth(mintableStETH);
+        uint256 reserve = Math256.ceilDiv(maxLockableValue_ * connection.reserveRatioBP, TOTAL_BASIS_POINTS);
+
+        uint256 capacityShares = _getSharesByPooledEth(maxLockableValue_ - Math256.max(reserve, minimalReserve_));
+        return Math256.min(capacityShares, _operatorGrid().effectiveShareLimit(_vault));
     }
 
     function _unlocked(VaultRecord storage _record) internal view returns (uint256) {
