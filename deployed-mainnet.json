@@ -306,6 +306,13 @@
     "contract": "contracts/0.8.9/LidoExecutionLayerRewardsVault.sol",
     "deployTx": "0xd72cf25e4a5fe3677b6f9b2ae13771e02ad66f8d2419f333bb8bde3147bd4294"
   },
+  "gateSeal": {
+    "address": "0xf9C9fDB4A5D2AA1D836D5370AB9b28BC1847e178",
+    "factoryAddress": "0x6c82877cac5a7a739f16ca0a89c0a328b8764a24",
+    "sealDuration": 950400,
+    "expiryTimestamp": 1772323200,
+    "sealingCommittee": "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C"
+  },
   "hashConsensusForAccountingOracle": {
     "address": "0xD624B08C83bAECF0807Dd2c6880C3154a5F0B288",
     "contract": "contracts/0.8.9/oracle/HashConsensus.sol",
