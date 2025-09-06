@@ -133,7 +133,9 @@ describe("Integration: LazyOracle", () => {
       const record = await vaultHub.vaultRecord(stakingVault);
       expect(record.report.totalValue).to.equal(ether("1"));
       expect(record.minimalReserve).to.equal(slashingReserveArg);
-      expect(record.locked).to.equal(slashingReserveArg + (await lido.getPooledEthBySharesRoundUp(liabilitySharesArg)));
+      expect(await vaultHub.locked(stakingVault)).to.equal(
+        slashingReserveArg + (await lido.getPooledEthBySharesRoundUp(liabilitySharesArg)),
+      );
 
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
     });

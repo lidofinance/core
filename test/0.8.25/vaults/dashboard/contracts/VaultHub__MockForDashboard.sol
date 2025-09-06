@@ -67,8 +67,8 @@ contract VaultHub__MockForDashboard {
         return vaultRecords[vault].report.totalValue;
     }
 
-    function locked(address vault) external view returns (uint256) {
-        return vaultRecords[vault].locked;
+    function locked(address vault) public view returns (uint256) {
+        return steth.getPooledEthBySharesRoundUp(vaultRecords[vault].maxLiabilityShares);
     }
 
     function liabilityShares(address _vault) external view returns (uint256) {
@@ -84,7 +84,7 @@ contract VaultHub__MockForDashboard {
     }
 
     function withdrawableValue(address _vault) external view returns (uint256) {
-        return Math256.min(vaultRecords[_vault].report.totalValue - vaultRecords[_vault].locked, _vault.balance);
+        return Math256.min(vaultRecords[_vault].report.totalValue - locked(_vault), _vault.balance);
     }
 
     function disconnect(address vault) external {
