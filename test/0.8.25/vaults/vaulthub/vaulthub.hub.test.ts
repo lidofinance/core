@@ -143,8 +143,8 @@ describe("VaultHub.sol:hub", () => {
         inOutDelta: formatEther(record.report.inOutDelta),
         timestamp: record.report.timestamp,
       },
-      locked: formatEther(record.locked),
-      shares: formatEther(record.liabilityShares),
+      maxLiabilityShares: formatEther(record.maxLiabilityShares),
+      liabilityShares: formatEther(record.liabilityShares),
       inOutDelta: {
         value: formatEther(record.inOutDelta[0].value),
         valueOnRefSlot: formatEther(record.inOutDelta[0].valueOnRefSlot),
@@ -302,7 +302,7 @@ describe("VaultHub.sol:hub", () => {
       const record = await vaultHub.vaultRecord(vault);
 
       expect(record.report).to.deep.equal([0n, 0n, 0n]);
-      expect(record.locked).to.equal(0n);
+      expect(await vaultHub.locked(vault)).to.equal(0n);
       expect(record.liabilityShares).to.equal(0n);
       expect(record.inOutDelta).to.deep.equal([
         [0n, 0n, 0n],
@@ -316,7 +316,7 @@ describe("VaultHub.sol:hub", () => {
 
       const timestamp = await getCurrentBlockTimestamp();
       expect(record.report).to.deep.equal([ether("1"), ether("1"), timestamp]);
-      expect(record.locked).to.equal(ether("1"));
+      expect(await vaultHub.locked(vault)).to.equal(ether("1"));
       expect(record.liabilityShares).to.equal(0n);
       expect(record.inOutDelta).to.deep.equal([
         [ether("1"), 0n, 0n],
@@ -517,7 +517,7 @@ describe("VaultHub.sol:hub", () => {
       // update locked
       await reportVault({ vault });
 
-      const lockedEth = (await vaultHub.vaultRecord(vault)).locked;
+      const lockedEth = await vaultHub.locked(vault);
 
       await reportVault({ vault, totalValue: lockedEth });
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(true);

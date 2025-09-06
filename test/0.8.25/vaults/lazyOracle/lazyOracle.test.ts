@@ -39,7 +39,7 @@ const record: Readonly<VaultHub.VaultRecordStruct> = {
     timestamp: 2122n,
   },
   liabilityShares: 0n,
-  locked: VAULT_TOTAL_VALUE,
+  maxLiabilityShares: 0n,
   inOutDelta: [
     {
       value: VAULT_TOTAL_VALUE,
@@ -137,7 +137,7 @@ describe("LazyOracle.sol", () => {
           inOutDelta: 2000000000000000000n,
           timestamp: 1000000000n,
         },
-        locked: 3n,
+        maxLiabilityShares: 4n,
         liabilityShares: 4n,
         inOutDelta: [
           {
@@ -306,7 +306,7 @@ describe("LazyOracle.sol", () => {
       await expect(lazyOracle.connect(accountingAddress).updateReportData(0, 0n, ethers.ZeroHash, "")).to.not.reverted;
     });
 
-    it("returns lastest report data correctly", async () => {
+    it("returns latest report data correctly", async () => {
       const accountingAddress = await impersonate(await locator.accountingOracle(), ether("1"));
       const reportTimestamp = await getCurrentBlockTimestamp();
       const refSlot = 42n;

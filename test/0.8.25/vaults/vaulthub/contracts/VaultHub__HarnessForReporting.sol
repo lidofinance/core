@@ -65,7 +65,7 @@ contract VaultHub__HarnessForReporting is VaultHub {
 
         VaultHub.VaultRecord memory record = VaultHub.VaultRecord({
             report: VaultHub.Report(0, 0, 0),
-            locked: 0,
+            maxLiabilityShares: 0,
             liabilityShares: uint96(_shareLimit),
             inOutDelta: [
                 DoubleRefSlotCache.Int104WithCache({value: 0, valueOnRefSlot: 0, refSlot: 0}),
