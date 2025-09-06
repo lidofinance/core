@@ -68,7 +68,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 reservationFeeBP;
         /// @notice if true, vault owner manually paused the beacon chain deposits
         bool isBeaconDepositsManuallyPaused;
-        /// 56 bits gap
+        /// 24 bits gap
     }
 
     struct VaultRecord {
@@ -721,12 +721,14 @@ contract VaultHub is PausableUntilWithRoles {
 
         _requireFreshReport(_vault, record);
 
+        uint256 maxLockableValue_ = _totalValue(record) - _unsettledLidoFeesValue(record);
+
         _increaseLiability({
             _vault: _vault,
             _record: record,
             _amountOfShares: _amountOfShares,
             _reserveRatioBP: connection.reserveRatioBP,
-            _maxLockableValue: _totalValue(record) - _unsettledLidoFeesValue(record),
+            _maxLockableValue: maxLockableValue_,
             _shareLimit: connection.shareLimit,
             _overrideOperatorLimits: false
         });
