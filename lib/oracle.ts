@@ -43,6 +43,7 @@ export const DEFAULT_REPORT_FIELDS: OracleReport = {
   elRewardsVaultBalance: 0n,
   sharesRequestedToBurn: 0n,
   withdrawalFinalizationBatches: [],
+  simulatedShareRate: 10n ** 27n,
   isBunkerMode: false,
   vaultsDataTreeRoot: ethers.ZeroHash,
   vaultsDataTreeCid: "",
@@ -63,6 +64,7 @@ export function getReportDataItems(r: OracleReport) {
     r.elRewardsVaultBalance,
     r.sharesRequestedToBurn,
     r.withdrawalFinalizationBatches,
+    r.simulatedShareRate,
     r.isBunkerMode,
     r.vaultsDataTreeRoot,
     r.vaultsDataTreeCid,
@@ -75,7 +77,7 @@ export function getReportDataItems(r: OracleReport) {
 export function calcReportDataHash(reportItems: ReportAsArray) {
   const data = ethers.AbiCoder.defaultAbiCoder().encode(
     [
-      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], bool, bytes32, string, uint256, bytes32, uint256)",
+      "(uint256, uint256, uint256, uint256, uint256[], uint256[], uint256, uint256, uint256, uint256[], uint256, bool, bytes32, string, uint256, bytes32, uint256)",
     ],
     [reportItems],
   );

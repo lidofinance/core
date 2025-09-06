@@ -572,10 +572,41 @@ contract Dashboard is NodeOperatorFee {
      * @notice Requests a change of tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
-     * @return bool Whether the tier change was confirmed.
+     * @return bool Whether the tier change was executed.
+     * @dev Tier change confirmation logic:
+     *      - Both vault owner (via this function) AND node operator confirmations are always required
+     *      - First call returns false (pending), second call with both confirmations completes the tier change
+     *      - Confirmations expire after the configured period (default: 1 day)
      */
     function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external returns (bool) {
         return _changeTier(_tierId, _requestedShareLimit);
+    }
+
+    /**
+     * @notice Requests a sync of tier on the OperatorGrid.
+     * @return bool Whether the tier sync was executed.
+     * @dev Tier sync confirmation logic:
+     *      - Both vault owner (via this function) AND node operator confirmations are required
+     *      - First call returns false (pending), second call with both confirmations completes the sync
+     *      - Confirmations expire after the configured period (default: 1 day)
+     */
+    function syncTier() external returns (bool) {
+        return _syncTier();
+    }
+
+    /**
+     * @notice Requests a change of share limit on the OperatorGrid.
+     * @param _requestedShareLimit The requested share limit.
+     * @return bool Whether the share limit change was executed.
+     * @dev Share limit update confirmation logic:
+     *      - Default tier (0): Only vault owner confirmation required (via this function)
+     *      - Non-default tier + decreasing limit: Only vault owner confirmation required (via this function)
+     *      - Non-default tier + increasing limit: Both vault owner (via this function) AND node operator confirmations required
+     *        - First call returns false (pending), second call with node operator confirmation completes the update
+     *        - Confirmations expire after the configured period (default: 1 day)
+     */
+    function updateShareLimit(uint256 _requestedShareLimit) external returns (bool) {
+        return _updateVaultShareLimit(_requestedShareLimit);
     }
 
     // ==================== Internal Functions ====================

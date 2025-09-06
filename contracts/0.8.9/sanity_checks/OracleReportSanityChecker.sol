@@ -63,6 +63,11 @@ struct LimitsList {
     /// @dev Represented in the Basis Points (100% == 10_000)
     uint256 annualBalanceIncreaseBPLimit;
 
+    /// @notice The max deviation of the provided `simulatedShareRate`
+    ///     and the actual one within the currently processing oracle report
+    /// @dev Represented in the Basis Points (100% == 10_000)
+    uint256 simulatedShareRateDeviationBPLimit;
+
     /// @notice The max number of exit requests allowed in report to ValidatorsExitBusOracle
     uint256 maxValidatorExitRequestsPerReport;
 
@@ -102,7 +107,7 @@ struct LimitsListPacked {
     uint16 exitedValidatorsPerDayLimit;
     uint16 appearedValidatorsPerDayLimit;
     uint16 annualBalanceIncreaseBPLimit;
-    uint16 simulatedShareRateDeviationBPLimit_deprecated;
+    uint16 simulatedShareRateDeviationBPLimit;
     uint16 maxValidatorExitRequestsPerReport;
     uint16 maxItemsPerExtraDataTransaction;
     uint16 maxNodeOperatorsPerExtraDataItem;
@@ -291,6 +296,17 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _updateLimits(limitsList);
     }
 
+    /// @notice Sets the new value for the simulatedShareRateDeviationBPLimit
+    /// @param _simulatedShareRateDeviationBPLimit new simulatedShareRateDeviationBPLimit value
+    function setSimulatedShareRateDeviationBPLimit(uint256 _simulatedShareRateDeviationBPLimit)
+        external
+        onlyRole(SHARE_RATE_DEVIATION_LIMIT_MANAGER_ROLE)
+    {
+        LimitsList memory limitsList = _limits.unpack();
+        limitsList.simulatedShareRateDeviationBPLimit = _simulatedShareRateDeviationBPLimit;
+        _updateLimits(limitsList);
+    }
+
     /// @notice Sets the new value for the maxValidatorExitRequestsPerReport
     /// @param _maxValidatorExitRequestsPerReport new maxValidatorExitRequestsPerReport value
     function setMaxExitRequestsPerOracleReport(uint256 _maxValidatorExitRequestsPerReport)
@@ -369,9 +385,9 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    /// @notice Sets the initial slashing and penalties Amountficients
-    /// @param _initialSlashingAmountPWei - initial slashing Amountficient (in PWei)
-    /// @param _inactivityPenaltiesAmountPWei - penalties Amountficient (in PWei)
+    /// @notice Sets the initial slashing and penalties amounts
+    /// @param _initialSlashingAmountPWei - initial slashing amount (in PWei)
+    /// @param _inactivityPenaltiesAmountPWei - penalties amount (in PWei)
     function setInitialSlashingAndPenaltiesAmount(uint256 _initialSlashingAmountPWei, uint256 _inactivityPenaltiesAmountPWei)
         external
         onlyRole(INITIAL_SLASHING_AND_PENALTIES_MANAGER_ROLE)
@@ -384,8 +400,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
 
     /// @notice Returns the allowed ETH amount that might be taken from the withdrawal vault and EL
     ///     rewards vault during Lido's oracle report processing
-    /// @param _preTotalPooledEther total amount of ETH controlled by the protocol
-    /// @param _preTotalShares total amount of minted stETH shares
+    /// @param _preInternalEther amount of internal ETH controlled by the protocol before the report
+    /// @param _preInternalShares number of internal shares before the report
     /// @param _preCLBalance sum of all Lido validators' balances on the Consensus Layer before the
     ///     current oracle report
     /// @param _postCLBalance sum of all Lido validators' balances on the Consensus Layer after the
@@ -400,8 +416,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     /// @return sharesFromWQToBurn amount of shares from Burner that should be burned due to WQ finalization
     /// @return sharesToBurn amount to be burnt (accounting for withdrawals finalization)
     function smoothenTokenRebase(
-        uint256 _preTotalPooledEther,
-        uint256 _preTotalShares,
+        uint256 _preInternalEther,
+        uint256 _preInternalShares,
         uint256 _preCLBalance,
         uint256 _postCLBalance,
         uint256 _withdrawalVaultBalance,
@@ -417,8 +433,8 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     ) {
         TokenRebaseLimiterData memory tokenRebaseLimiter = PositiveTokenRebaseLimiter.initLimiterState(
             getMaxPositiveTokenRebase(),
-            _preTotalPooledEther,
-            _preTotalShares
+            _preInternalEther,
+            _preInternalShares
         );
 
         if (_postCLBalance < _preCLBalance) {
@@ -564,6 +580,32 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         address withdrawalQueue = LIDO_LOCATOR.withdrawalQueue();
 
         _checkLastFinalizableId(limitsList, withdrawalQueue, _lastFinalizableRequestId, _reportTimestamp);
+    }
+
+    /// @notice Applies sanity checks to the simulated share rate for withdrawal requests finalization
+    /// @param _postInternalEther total pooled ether after report applied
+    /// @param _postInternalShares total shares after report applied
+    /// @param _etherToFinalizeWQ ether locked on withdrawal queue for the current oracle report
+    /// @param _sharesToBurnForWithdrawals shares burnt due to withdrawals finalization
+    /// @param _simulatedShareRate share rate provided with the oracle report (simulated via off-chain "eth_call")
+    function checkSimulatedShareRate(
+        uint256 _postInternalEther,
+        uint256 _postInternalShares,
+        uint256 _etherToFinalizeWQ,
+        uint256 _sharesToBurnForWithdrawals,
+        uint256 _simulatedShareRate
+    ) external view {
+        LimitsList memory limitsList = _limits.unpack();
+
+        // Pretending that withdrawals were not processed
+        // virtually return locked ether back to `_postTotalPooledEther`
+        // virtually return burnt just finalized withdrawals shares back to `_postTotalShares`
+        _checkSimulatedShareRate(
+            limitsList,
+            _postInternalEther + _etherToFinalizeWQ,
+            _postInternalShares + _sharesToBurnForWithdrawals,
+            _simulatedShareRate
+        );
     }
 
     function _checkWithdrawalVaultBalance(
@@ -747,6 +789,51 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
             revert IncorrectRequestFinalization(statuses[0].timestamp);
     }
 
+    function _checkSimulatedShareRate(
+        LimitsList memory _limitsList,
+        uint256 _noWithdrawalsPostInternalEther,
+        uint256 _noWithdrawalsPostInternalShares,
+        uint256 _simulatedShareRate
+    ) internal pure {
+        assert(_noWithdrawalsPostInternalEther != 0);
+        uint256 actualShareRate = (
+            _noWithdrawalsPostInternalEther * SHARE_RATE_PRECISION_E27
+        ) / _noWithdrawalsPostInternalShares;
+
+        // the simulated share rate can be either higher or lower than the actual one
+        // in case of new user-submitted ether & minted `stETH` between the oracle reference slot
+        // and the actual report delivery slot
+        //
+        // it happens because the oracle daemon snapshots rewards or losses at the reference slot,
+        // and then calculates simulated share rate, but if new ether was submitted together with minting new `stETH`
+        // after the reference slot passed, the oracle daemon still submits the same amount of rewards or losses,
+        // which now is applicable to more 'shareholders', lowering the impact per a single share
+        // (i.e, changing the actual share rate)
+        //
+        // simulated share rate ≤ actual share rate can be for a negative token rebase
+        // simulated share rate ≥ actual share rate can be for a positive token rebase
+        //
+        // Given that:
+        // 1) CL one-off balance decrease ≤ token rebase ≤ max positive token rebase
+        // 2) user-submitted ether & minted `stETH` don't exceed the current staking rate limit
+        // (see Lido.getCurrentStakeLimit())
+        //
+        // can conclude that `simulatedShareRateDeviationBPLimit` (L) should be set as follows:
+        // L = (2 * SRL) * max(CLD, MPR),
+        // where:
+        // - CLD is consensus layer one-off balance decrease (as BP),
+        // - MPR is max positive token rebase (as BP),
+        // - SRL is staking rate limit normalized by TVL (`maxStakeLimit / totalPooledEther`)
+        //   totalPooledEther should be chosen as a reasonable lower bound of the protocol TVL
+        //
+        uint256 simulatedShareDiff = Math256.absDiff(actualShareRate, _simulatedShareRate);
+        uint256 simulatedShareDeviation = (MAX_BASIS_POINTS * simulatedShareDiff) / actualShareRate;
+
+        if (simulatedShareDeviation > _limitsList.simulatedShareRateDeviationBPLimit) {
+            revert IncorrectSimulatedShareRate(_simulatedShareRate, actualShareRate);
+        }
+    }
+
     function _updateLimits(LimitsList memory _newLimitsList) internal {
         LimitsList memory _oldLimitsList = _limits.unpack();
         if (_oldLimitsList.exitedValidatorsPerDayLimit != _newLimitsList.exitedValidatorsPerDayLimit) {
@@ -760,6 +847,10 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         if (_oldLimitsList.annualBalanceIncreaseBPLimit != _newLimitsList.annualBalanceIncreaseBPLimit) {
             _checkLimitValue(_newLimitsList.annualBalanceIncreaseBPLimit, 0, MAX_BASIS_POINTS);
             emit AnnualBalanceIncreaseBPLimitSet(_newLimitsList.annualBalanceIncreaseBPLimit);
+        }
+        if (_oldLimitsList.simulatedShareRateDeviationBPLimit != _newLimitsList.simulatedShareRateDeviationBPLimit) {
+            _checkLimitValue(_newLimitsList.simulatedShareRateDeviationBPLimit, 0, MAX_BASIS_POINTS);
+            emit SimulatedShareRateDeviationBPLimitSet(_newLimitsList.simulatedShareRateDeviationBPLimit);
         }
         if (_oldLimitsList.maxValidatorExitRequestsPerReport != _newLimitsList.maxValidatorExitRequestsPerReport) {
             _checkLimitValue(_newLimitsList.maxValidatorExitRequestsPerReport, 0, type(uint16).max);
@@ -806,6 +897,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     event AppearedValidatorsPerDayLimitSet(uint256 appearedValidatorsPerDayLimit);
     event SecondOpinionOracleChanged(ISecondOpinionOracle indexed secondOpinionOracle);
     event AnnualBalanceIncreaseBPLimitSet(uint256 annualBalanceIncreaseBPLimit);
+    event SimulatedShareRateDeviationBPLimitSet(uint256 simulatedShareRateDeviationBPLimit);
     event MaxPositiveTokenRebaseSet(uint256 maxPositiveTokenRebase);
     event MaxValidatorExitRequestsPerReportSet(uint256 maxValidatorExitRequestsPerReport);
     event MaxItemsPerExtraDataTransactionSet(uint256 maxItemsPerExtraDataTransaction);
@@ -826,7 +918,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
     error IncorrectNumberOfExitRequestsPerReport(uint256 maxRequestsCount);
     error IncorrectExitedValidators(uint256 exitedValidatorsLimit);
     error IncorrectRequestFinalization(uint256 requestCreationBlock);
-    error ActualShareRateIsZero();
+    error IncorrectSimulatedShareRate(uint256 simulatedShareRate, uint256 actualShareRate);
     error TooManyItemsPerExtraDataTransaction(uint256 maxItemsCount, uint256 receivedItemsCount);
     error ExitedValidatorsLimitExceeded(uint256 limitPerDay, uint256 exitedPerDay);
     error TooManyNodeOpsPerExtraDataItem(uint256 itemIndex, uint256 nodeOpsCount);
@@ -846,6 +938,7 @@ library LimitsListPacker {
         res.exitedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.exitedValidatorsPerDayLimit);
         res.appearedValidatorsPerDayLimit = SafeCast.toUint16(_limitsList.appearedValidatorsPerDayLimit);
         res.annualBalanceIncreaseBPLimit = _toBasisPoints(_limitsList.annualBalanceIncreaseBPLimit);
+        res.simulatedShareRateDeviationBPLimit = _toBasisPoints(_limitsList.simulatedShareRateDeviationBPLimit);
         res.requestTimestampMargin = SafeCast.toUint32(_limitsList.requestTimestampMargin);
         res.maxPositiveTokenRebase = SafeCast.toUint64(_limitsList.maxPositiveTokenRebase);
         res.maxValidatorExitRequestsPerReport = SafeCast.toUint16(_limitsList.maxValidatorExitRequestsPerReport);
@@ -869,6 +962,7 @@ library LimitsListUnpacker {
         res.exitedValidatorsPerDayLimit = _limitsList.exitedValidatorsPerDayLimit;
         res.appearedValidatorsPerDayLimit = _limitsList.appearedValidatorsPerDayLimit;
         res.annualBalanceIncreaseBPLimit = _limitsList.annualBalanceIncreaseBPLimit;
+        res.simulatedShareRateDeviationBPLimit = _limitsList.simulatedShareRateDeviationBPLimit;
         res.requestTimestampMargin = _limitsList.requestTimestampMargin;
         res.maxPositiveTokenRebase = _limitsList.maxPositiveTokenRebase;
         res.maxValidatorExitRequestsPerReport = _limitsList.maxValidatorExitRequestsPerReport;

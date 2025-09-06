@@ -371,8 +371,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _vault address of the vault
     /// @param _requestedTierId id of the tier
     /// @param _requestedShareLimit share limit to set
-    /// @return bool Whether the tier change was confirmed.
-    /// @dev Requires vault to be connected to VaultHub for successful tier change.
+    /// @return bool Whether the tier change was executed.
+    /// @dev Requires vault to be connected to VaultHub to finalize tier change.
+    /// @dev Both vault owner and node operator confirmations are required.
     /*
 
     Legend:
@@ -481,6 +482,78 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         return true;
     }
 
+    /// @notice Syncs vault tier with current tier params
+    /// @param _vault address of the vault
+    /// @return bool Whether the sync was executed.
+    /// @dev Requires vault to be connected to VaultHub.
+    /// @dev Both vault owner and node operator confirmations are required.
+    function syncTier(address _vault) external returns (bool) {
+        (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection,
+        address vaultOwner, address nodeOperator, uint256 vaultTierId) = _getVaultContextForConnectedVault(_vault);
+
+        Tier storage tier_ = _getStorage().tiers[vaultTierId];
+
+        if (
+            vaultConnection.reserveRatioBP == tier_.reserveRatioBP &&
+            vaultConnection.forcedRebalanceThresholdBP == tier_.forcedRebalanceThresholdBP &&
+            vaultConnection.infraFeeBP == tier_.infraFeeBP &&
+            vaultConnection.liquidityFeeBP == tier_.liquidityFeeBP &&
+            vaultConnection.reservationFeeBP == tier_.reservationFeeBP
+        ) {
+            revert VaultAlreadySyncedWithTier();
+        }
+
+        // store the caller's confirmation; only proceed if the required number of confirmations is met.
+        if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
+
+        vaultHub.updateConnection(
+            _vault,
+            vaultConnection.shareLimit,
+            tier_.reserveRatioBP,
+            tier_.forcedRebalanceThresholdBP,
+            tier_.infraFeeBP,
+            tier_.liquidityFeeBP,
+            tier_.reservationFeeBP
+        );
+
+        return true;
+    }
+
+    /// @notice Update vault share limit
+    /// @param _vault address of the vault
+    /// @param _requestedShareLimit share limit to set
+    /// @return bool Whether the update was executed.
+    /// @dev Requires vault to be connected to VaultHub.
+    function updateVaultShareLimit(address _vault, uint256 _requestedShareLimit) external returns (bool) {
+        (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection,
+        address vaultOwner, address nodeOperator, uint256 vaultTierId) = _getVaultContextForConnectedVault(_vault);
+
+        uint256 tierShareLimit = _getStorage().tiers[vaultTierId].shareLimit;
+
+        if (_requestedShareLimit > tierShareLimit) revert RequestedShareLimitTooHigh(_requestedShareLimit, tierShareLimit);
+        if (_requestedShareLimit == vaultConnection.shareLimit) revert ShareLimitAlreadySet();
+
+        // nodeOperator confirmation is only needed if vault is not in the default tier and requested shareLimit is more than current one
+        if (vaultTierId == DEFAULT_TIER_ID || _requestedShareLimit <= vaultConnection.shareLimit) {
+            if (msg.sender != vaultOwner) return false;
+        } else {
+            // store the caller's confirmation; only proceed if the required number of confirmations is met.
+            if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
+        }
+
+        vaultHub.updateConnection(
+            _vault,
+            _requestedShareLimit,
+            vaultConnection.reserveRatioBP,
+            vaultConnection.forcedRebalanceThresholdBP,
+            vaultConnection.infraFeeBP,
+            vaultConnection.liquidityFeeBP,
+            vaultConnection.reservationFeeBP
+        );
+
+        return true;
+    }
+
     /// @notice Reset vault's tier to default
     /// @param _vault address of the vault
     /// @dev Requires vault's liabilityShares to be zero before resetting the tier
@@ -494,6 +567,38 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
 
             emit TierChanged(_vault, DEFAULT_TIER_ID, $.tiers[DEFAULT_TIER_ID].shareLimit);
         }
+    }
+
+    /// @notice updates fees for the vault
+    /// @param _vault vault address
+    /// @param _infraFeeBP new infra fee in basis points
+    /// @param _liquidityFeeBP new liquidity fee in basis points
+    /// @param _reservationFeeBP new reservation fee in basis points
+    function updateVaultFees(
+        address _vault,
+        uint256 _infraFeeBP,
+        uint256 _liquidityFeeBP,
+        uint256 _reservationFeeBP
+    ) external onlyRole(REGISTRY_ROLE) {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+
+        _requireLessOrEqToBP(_infraFeeBP, MAX_FEE_BP);
+        _requireLessOrEqToBP(_liquidityFeeBP, MAX_FEE_BP);
+        _requireLessOrEqToBP(_reservationFeeBP, MAX_FEE_BP);
+
+        VaultHub vaultHub = _vaultHub();
+        if (!vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
+
+        VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(_vault);
+        vaultHub.updateConnection(
+            _vault,
+            vaultConnection.shareLimit,
+            vaultConnection.reserveRatioBP,
+            vaultConnection.forcedRebalanceThresholdBP,
+            _infraFeeBP,
+            _liquidityFeeBP,
+            _reservationFeeBP
+        );
     }
 
    // -----------------------------
@@ -564,7 +669,6 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @notice Updates if the vault is in jail
     /// @param _vault vault address
     /// @param _isInJail true if the vault is in jail, false otherwise
-    /// @dev msg.sender must have VAULT_MASTER_ROLE
     function setVaultJailStatus(address _vault, bool _isInJail) external onlyRole(REGISTRY_ROLE) {
         if (_vault == address(0)) revert ZeroArgument("_vault");
 
@@ -696,6 +800,29 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         }
     }
 
+    function _getVaultContextForConnectedVault(address _vault) internal view returns (
+        VaultHub vaultHub,
+        VaultHub.VaultConnection memory vaultConnection,
+        address vaultOwner,
+        address nodeOperator,
+        uint256 vaultTierId
+    ) {
+        if (_vault == address(0)) revert ZeroArgument("_vault");
+
+        vaultHub = _vaultHub();
+        if (!vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
+
+        vaultConnection = vaultHub.vaultConnection(_vault);
+        vaultOwner = vaultConnection.owner;
+        nodeOperator = IStakingVault(_vault).nodeOperator();
+
+        vaultTierId = _getStorage().vaultTier[_vault];
+    }
+
+    function _requireLessOrEqToBP(uint256 _valueBP, uint256 _maxValueBP) internal pure {
+        if (_valueBP > _maxValueBP) revert InvalidBasisPoints(_valueBP, _maxValueBP);
+    }
+
     // -----------------------------
     //            EVENTS
     // -----------------------------
@@ -748,4 +875,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     error ReservationFeeTooHigh(uint256 tierId, uint256 reservationFeeBP, uint256 maxReservationFeeBP);
     error ArrayLengthMismatch();
     error RequestedShareLimitTooHigh(uint256 requestedShareLimit, uint256 tierShareLimit);
+    error VaultNotConnected();
+    error VaultAlreadySyncedWithTier();
+    error ShareLimitAlreadySet();
+    error InvalidBasisPoints(uint256 valueBP, uint256 maxValueBP);
 }

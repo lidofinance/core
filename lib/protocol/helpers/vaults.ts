@@ -93,7 +93,7 @@ export async function createVaultWithDashboard(
   stakingVaultFactory: VaultFactory & { address: string },
   owner: HardhatEthersSigner,
   nodeOperator: HardhatEthersSigner,
-  nodeOperatorManager: HardhatEthersSigner,
+  nodeOperatorManager: HardhatEthersSigner = nodeOperator,
   roleAssignments: Permissions.RoleAssignmentStruct[] = [],
   fee = VAULT_NODE_OPERATOR_FEE,
   confirmExpiry = DEFAULT_CONFIRM_EXPIRY,
@@ -146,7 +146,7 @@ export const getRoleMethods = (dashboard: Dashboard): VaultRoleMethods => {
     disconnecter: dashboard.VOLUNTARY_DISCONNECT_ROLE(),
     unknownValidatorProver: dashboard.PDG_PROVE_VALIDATOR_ROLE(),
     unguaranteedBeaconChainDepositor: dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
-    tierChanger: dashboard.CHANGE_TIER_ROLE(),
+    tierChanger: dashboard.VAULT_CONFIGURATION_ROLE(),
     nodeOperatorRewardAdjuster: dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
     assetRecoverer: dashboard.RECOVER_ASSETS_ROLE(),
   };

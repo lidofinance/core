@@ -21,12 +21,11 @@ describe("AccountingOracle.sol:upgrade", () => {
     });
 
     // TODO: test version increment because finalizeUpgrade_v3 should be called on a v2 contract
-    it.skip("successfully updates contract and consensus versions", async () => {
+    it("successfully updates contract and consensus versions", async () => {
       // Get initial versions
       const initialContractVersion = await oracle.getContractVersion();
       const initialConsensusVersion = await oracle.getConsensusVersion();
 
-      console.log("version", await oracle.getContractVersion());
       await oracle.connect(admin).finalizeUpgrade_v3(NEW_CONSENSUS_VERSION);
 
       const newContractVersion = await oracle.getContractVersion();
