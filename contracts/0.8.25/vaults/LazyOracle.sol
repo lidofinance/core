@@ -529,7 +529,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     function _mintableStETH(address _vault) internal view returns (uint256) {
         VaultHub vaultHub = _vaultHub();
-        uint256 mintableShares = vaultHub.totalMintingCapacityShares(_vault, 0);
+        uint256 mintableShares = vaultHub.totalMintingCapacityShares(_vault, 0 /* zero eth delta */);
         return _getPooledEthBySharesRoundUp(mintableShares);
     }
 

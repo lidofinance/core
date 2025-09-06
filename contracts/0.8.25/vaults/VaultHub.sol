@@ -1373,18 +1373,17 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         VaultConnection storage connection = _vaultConnection(_vault);
 
-        uint256 maxLockableValue_;
-        uint256 base = _maxLockableValue(record);
+        uint256 maxLockableValue_ = _maxLockableValue(record);
         if (_deltaValue >= 0) {
-            maxLockableValue_ = base + uint256(_deltaValue);
+            maxLockableValue_ += uint256(_deltaValue);
         } else {
-            uint256 deltaValue = uint256(-_deltaValue);
-            if (base < deltaValue) return 0;
-            maxLockableValue_ = base - deltaValue;
+            uint256 negDeltaValue = uint256(-_deltaValue);
+            if (maxLockableValue_ < negDeltaValue) return 0;
+            maxLockableValue_ -= negDeltaValue;
         }
 
         uint256 minimalReserve_ = record.minimalReserve;
-        if (maxLockableValue_ < minimalReserve_) return 0;
+        if (maxLockableValue_ <= minimalReserve_) return 0;
 
         uint256 reserve = Math256.ceilDiv(maxLockableValue_ * connection.reserveRatioBP, TOTAL_BASIS_POINTS);
 
