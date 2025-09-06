@@ -4,13 +4,18 @@
 pragma solidity >=0.8.0;
 
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {ILido} from "contracts/common/interfaces/ILido.sol";
-import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
+import {Math256} from "contracts/common/lib/Math256.sol";
+
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
 
 contract IStETH {
     function getSharesByPooledEth(uint256 _amountOfStETH) external view returns (uint256) {}
+}
+
+contract IOperatorGrid {
+    function effectiveShareLimit(address _vault) external view returns (uint256) {}
 }
 
 contract VaultHub__MockForLazyOracle {
@@ -20,6 +25,7 @@ contract VaultHub__MockForLazyOracle {
     uint256 public constant BPS_BASE = 100_00;
 
     IStETH public immutable steth;
+    ILidoLocator public immutable LIDO_LOCATOR;
 
     address[] public mock__vaults;
     mapping(address vault => VaultHub.VaultConnection connection) public mock__vaultConnections;
@@ -33,8 +39,9 @@ contract VaultHub__MockForLazyOracle {
     uint256 public mock__lastReported_liabilityShares;
     uint256 public mock__lastReported_slashingReserve;
 
-    constructor(IStETH _steth) {
+    constructor(IStETH _steth, ILidoLocator _lidoLocator) {
         steth = _steth;
+        LIDO_LOCATOR = _lidoLocator;
 
         mock__vaults.push(address(0));
     }
@@ -79,7 +86,7 @@ contract VaultHub__MockForLazyOracle {
         return false;
     }
 
-    function mintableShares(address _vault, int256 _deltaValue) external view returns (uint256) {
+    function totalMintingCapacityShares(address _vault, int256 _deltaValue) external view returns (uint256) {
         uint256 base = mock__vaultRecords[_vault].report.totalValue;
         uint256 maxLockableValue = _deltaValue >= 0 ? base + uint256(_deltaValue) : base - uint256(-_deltaValue);
         uint256 reserveRatioBP = mock__vaultConnections[_vault].reserveRatioBP;
@@ -88,7 +95,8 @@ contract VaultHub__MockForLazyOracle {
 
         if (maxLockableValue < minimalReserve) return 0;
         if (maxLockableValue - mintableStETH < minimalReserve) mintableStETH = maxLockableValue - minimalReserve;
-        return steth.getSharesByPooledEth(mintableStETH);
+        uint256 shares = steth.getSharesByPooledEth(mintableStETH);
+        return Math256.min(shares, IOperatorGrid(LIDO_LOCATOR.operatorGrid()).effectiveShareLimit(_vault));
     }
 
     function applyVaultReport(
