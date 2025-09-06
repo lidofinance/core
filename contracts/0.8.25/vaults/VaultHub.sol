@@ -115,32 +115,26 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice role that allows to disconnect vaults from the hub
     /// @dev 0x479bc4a51d27fbdc8e51b5b1ebd3dcd58bd229090980bff226f8930587e69ce3
     bytes32 public immutable VAULT_MASTER_ROLE = keccak256("vaults.VaultHub.VaultMasterRole");
-
     /// @notice role that allows to accrue Lido Core redemptions on the vault
     /// @dev 0x44f007e8cc2a08047a03d8d9c295057454942eb49ee3ced9c87e9b9406f21174
     bytes32 public immutable REDEMPTION_MASTER_ROLE = keccak256("vaults.VaultHub.RedemptionMasterRole");
-
     /// @notice role that allows to trigger validator exits under extreme conditions
     /// @dev 0x2159c5943234d9f3a7225b9a743ea06e4a0d0ba5ed82889e867759a8a9eb7883
     bytes32 public immutable VALIDATOR_EXIT_ROLE = keccak256("vaults.VaultHub.ValidatorExitRole");
-
     /// @notice role that allows to bail out vaults with bad debt
     /// @dev 0xa85bab4b576ca359fa6ae02ab8744b5c85c7e7ed4d7e0bca7b5b64580ac5d17d
     bytes32 public immutable BAD_DEBT_MASTER_ROLE = keccak256("vaults.VaultHub.BadDebtMasterRole");
 
     /// @notice amount of ETH that is locked on the vault on connect and can be withdrawn on disconnect only
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
-
     /// @notice The time delta for report freshness check
     uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
-
     /// @dev basis points base
     uint256 internal immutable TOTAL_BASIS_POINTS = 100_00;
     /// @notice length of the validator pubkey in bytes
     uint256 internal immutable PUBLIC_KEY_LENGTH = 48;
     /// @dev special value for `disconnectTimestamp` storage means the vault is not marked for disconnect
     uint48 internal immutable DISCONNECT_NOT_INITIATED = type(uint48).max;
-
     /// @notice minimum amount of ether that is required for the beacon chain deposit
     /// @dev used as a threshold for the beacon chain deposits pause
     uint256 internal immutable MIN_BEACON_DEPOSIT = 1 ether;
