@@ -197,17 +197,20 @@ describe("Scenario: Protocol Happy Path", () => {
   it("Should deposit to staking modules", async () => {
     const { lido, withdrawalQueue, stakingRouter, depositSecurityModule } = ctx.contracts;
 
-    const withdrawalsUninitializedStETH = await withdrawalQueue.unfinalizedStETH();
+    await lido.connect(stEthHolder).submit(ZeroAddress, { value: ether("3200") });
+
+    const withdrawalsUnfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
     const depositableEther = await lido.getDepositableEther();
+
     const bufferedEtherBeforeDeposit = await lido.getBufferedEther();
 
-    const expectedDepositableEther = bufferedEtherBeforeDeposit - withdrawalsUninitializedStETH;
+    const expectedDepositableEther = bufferedEtherBeforeDeposit - withdrawalsUnfinalizedStETH;
 
     expect(depositableEther).to.equal(expectedDepositableEther, "Depositable ether");
 
     log.debug("Depositable ether", {
       "Buffered ether": ethers.formatEther(bufferedEtherBeforeDeposit),
-      "Withdrawals uninitialized stETH": ethers.formatEther(withdrawalsUninitializedStETH),
+      "Withdrawals unfinalized stETH": ethers.formatEther(withdrawalsUnfinalizedStETH),
       "Depositable ether": ethers.formatEther(depositableEther),
     });
 
@@ -232,7 +235,7 @@ describe("Scenario: Protocol Happy Path", () => {
       expectedBufferedEtherAfterDeposit -= unbufferedAmount;
     }
 
-    expect(depositCount).to.be.gt(0n, "Deposits");
+    expect(depositCount).to.be.gt(0n, "No deposits applied");
 
     const bufferedEtherAfterDeposit = await lido.getBufferedEther();
     expect(bufferedEtherAfterDeposit).to.equal(expectedBufferedEtherAfterDeposit, "Buffered ether after deposit");

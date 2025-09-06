@@ -125,8 +125,7 @@ contract V3Template is V3Addresses {
     /// @param _params Params required to initialize the addresses contract
     constructor(V3AddressesParams memory _params) V3Addresses(_params) {
         contractsWithBurnerAllowances.push(WITHDRAWAL_QUEUE);
-        // NB: NOR allowance is set to 0 in TW upgrade
-        contractsWithBurnerAllowances.push(SIMPLE_DVT);
+        // NB: NOR and SIMPLE_DVT allowances are set to 0 in TW upgrade, so they are not migrated
         contractsWithBurnerAllowances.push(CSM_ACCOUNTING);
     }
 
@@ -183,6 +182,9 @@ contract V3Template is V3Addresses {
         }
         if (ILidoWithFinalizeUpgrade(LIDO).allowance(NODE_OPERATORS_REGISTRY, OLD_BURNER) != 0) {
             revert IncorrectBurnerAllowance(NODE_OPERATORS_REGISTRY, OLD_BURNER);
+        }
+        if (ILidoWithFinalizeUpgrade(LIDO).allowance(SIMPLE_DVT, OLD_BURNER) != 0) {
+            revert IncorrectBurnerAllowance(SIMPLE_DVT, OLD_BURNER);
         }
 
         if (!IBurner(BURNER).isMigrationAllowed()) revert BurnerMigrationNotAllowed();

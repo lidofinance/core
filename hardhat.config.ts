@@ -117,12 +117,38 @@ const config: HardhatUserConfig = {
           browserURL: process.env.LOCAL_DEVNET_EXPLORER_URL ?? "",
         },
       },
+      {
+        network: "holesky",
+        chainId: 17000,
+        urls: {
+          apiURL: "https://api-holesky.etherscan.io/api",
+          browserURL: "https://holesky.etherscan.io/",
+        },
+      },
+      {
+        network: "sepolia",
+        chainId: 11155111,
+        urls: {
+          apiURL: "https://api-sepolia.etherscan.io/api",
+          browserURL: "https://sepolia.etherscan.io/",
+        },
+      },
+      {
+        network: "hoodi",
+        chainId: 560048,
+        urls: {
+          apiURL: "https://api-hoodi.etherscan.io/api",
+          browserURL: "https://hoodi.etherscan.io/",
+        },
+      },
     ],
-    apiKey: process.env.LOCAL_DEVNET_EXPLORER_API_URL
-      ? {
-          "local-devnet": "local-devnet",
-        }
-      : process.env.ETHERSCAN_API_KEY || "",
+    apiKey: {
+      "mainnet": process.env.ETHERSCAN_API_KEY || "",
+      "sepolia": process.env.ETHERSCAN_API_KEY || "",
+      "holesky": process.env.ETHERSCAN_API_KEY || "",
+      "hoodi": process.env.ETHERSCAN_API_KEY || "",
+      "local-devnet": process.env.LOCAL_DEVNET_EXPLORER_API_URL ? "local-devnet" : "",
+    },
   },
   solidity: {
     compilers: [
