@@ -220,6 +220,7 @@ export type VaultReportItem = {
   totalValue: bigint;
   cumulativeLidoFees: bigint;
   liabilityShares: bigint;
+  maxLiabilityShares: bigint;
   slashingReserve: bigint;
 };
 
@@ -236,9 +237,10 @@ export function createVaultsReportTree(vaultReports: VaultReportItem[]): Standar
       vaultReport.totalValue,
       vaultReport.cumulativeLidoFees,
       vaultReport.liabilityShares,
+      vaultReport.maxLiabilityShares,
       vaultReport.slashingReserve,
     ]),
-    ["address", "uint256", "uint256", "uint256", "uint256"],
+    ["address", "uint256", "uint256", "uint256", "uint256", "uint256"],
   );
 }
 
@@ -259,6 +261,7 @@ export async function reportVaultDataWithProof(
     totalValue: params.totalValue ?? (await vaultHub.totalValue(stakingVault)),
     cumulativeLidoFees: params.cumulativeLidoFees ?? 0n,
     liabilityShares: params.liabilityShares ?? (await vaultHub.liabilityShares(stakingVault)),
+    maxLiabilityShares: params.maxLiabilityShares ?? (await vaultHub.vaultRecord(stakingVault)).maxLiabilityShares,
     slashingReserve: params.slashingReserve ?? 0n,
   };
 
@@ -283,6 +286,7 @@ export async function reportVaultDataWithProof(
     vaultReport.totalValue,
     vaultReport.cumulativeLidoFees,
     vaultReport.liabilityShares,
+    vaultReport.maxLiabilityShares,
     vaultReport.slashingReserve,
     reportTree.getProof(0),
   );

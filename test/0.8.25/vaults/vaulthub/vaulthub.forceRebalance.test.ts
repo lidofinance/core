@@ -35,7 +35,7 @@ describe("VaultHub.sol:forceRebalance", () => {
     vaultHub = vaultsContext.vaultHub;
     lido = vaultsContext.lido;
 
-    disconnectedVault = await vaultsContext.createMockStakignVault(user, user);
+    disconnectedVault = await vaultsContext.createMockStakingVault(user, user);
     vault = await vaultsContext.createMockStakingVaultAndConnect(user, user);
 
     vaultAddress = await vault.getAddress();

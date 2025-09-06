@@ -465,7 +465,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _reportTotalValue the total value of the vault
     /// @param _reportInOutDelta the inOutDelta of the vault
     /// @param _reportCumulativeLidoFees the cumulative Lido fees of the vault
-    /// @param _reportLiabilityShares the liabilityShares of the vault
+    /// @param _reportLiabilityShares the liabilityShares of the vault on refSlot
+    /// @param _reportMaxLiabilityShares the maxLiabilityShares of the vault on refSlot
     /// @param _reportSlashingReserve the slashingReserve of the vault
     /// @dev NB: LazyOracle sanity checks already verify that the fee can only increase
     function applyVaultReport(
@@ -475,6 +476,7 @@ contract VaultHub is PausableUntilWithRoles {
         int256 _reportInOutDelta,
         uint256 _reportCumulativeLidoFees,
         uint256 _reportLiabilityShares,
+        uint256 _reportMaxLiabilityShares,
         uint256 _reportSlashingReserve
     ) external whenResumed {
         _requireSender(address(_lazyOracle()));
@@ -505,6 +507,7 @@ contract VaultHub is PausableUntilWithRoles {
             _reportInOutDelta,
             _reportCumulativeLidoFees,
             _reportLiabilityShares,
+            _reportMaxLiabilityShares,
             _reportSlashingReserve
         );
 
@@ -515,6 +518,7 @@ contract VaultHub is PausableUntilWithRoles {
             reportInOutDelta: _reportInOutDelta,
             reportCumulativeLidoFees: _reportCumulativeLidoFees,
             reportLiabilityShares: _reportLiabilityShares,
+            reportMaxLiabilityShares: _reportMaxLiabilityShares,
             reportSlashingReserve: _reportSlashingReserve
         });
 
@@ -999,11 +1003,25 @@ contract VaultHub is PausableUntilWithRoles {
         int256 _reportInOutDelta,
         uint256 _reportCumulativeLidoFees,
         uint256 _reportLiabilityShares,
+        uint256 _reportMaxLiabilityShares,
         uint256 _reportSlashingReserve
     ) internal {
         _record.cumulativeLidoFees = uint128(_reportCumulativeLidoFees);
         _record.minimalReserve = uint128(Math256.max(CONNECT_DEPOSIT, _reportSlashingReserve));
-        _record.maxLiabilityShares = uint96(Math256.max(_record.liabilityShares, _reportLiabilityShares)); // better way to track locked?
+
+        // We want to prevent 1 tx looping here:
+        // 1. bring ETH (TV+)
+        // 2. mint stETH (locked+)
+        // 3. burn stETH
+        // 4. bring the last report (locked-)
+        // 5. withdraw ETH(TV-)
+
+        // current maxLiabilityShares will be greater than the report one
+        // if any stETH is minted on funds added after the refslot
+        // in that case we don't unlock it
+        if (_record.maxLiabilityShares == _reportMaxLiabilityShares) {
+            _record.maxLiabilityShares = uint96(Math256.max(_record.liabilityShares, _reportLiabilityShares));
+        }
         _record.report = Report({
             totalValue: uint104(_reportTotalValue),
             inOutDelta: int104(_reportInOutDelta),
@@ -1511,6 +1529,7 @@ contract VaultHub is PausableUntilWithRoles {
         int256 reportInOutDelta,
         uint256 reportCumulativeLidoFees,
         uint256 reportLiabilityShares,
+        uint256 reportMaxLiabilityShares,
         uint256 reportSlashingReserve
     );
 
