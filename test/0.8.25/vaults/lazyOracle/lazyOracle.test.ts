@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   LazyOracle,
@@ -59,7 +59,7 @@ const record: Readonly<VaultHub.VaultRecordStruct> = {
 };
 
 describe("LazyOracle.sol", () => {
-  let deployer: SignerWithAddress;
+  let deployer: HardhatEthersSigner;
   let locator: LidoLocator;
   let vaultHub: VaultHub__MockForLazyOracle;
   let operatorGrid: OperatorGrid__MockForLazyOracle;
@@ -323,8 +323,7 @@ describe("LazyOracle.sol", () => {
   });
 
   context("updateVaultData", () => {
-    const TEST_PROOF = ["0xd129d34738564e7a38fa20b209e965b5fa6036268546a0d58bbe5806b2469c2e"];
-    const TEST_ROOT = "0x4d7731e031705b521abbc5848458dc64ab85c2c3262be16f57bf5ea82a82178a";
+    const TEST_ROOT = "0x3869d508f9cdd73a6df264124036d8a7421651eb9097eb5952f00c5472858178";
 
     it("reverts on invalid proof", async () => {
       const accountingAddress = await impersonate(await locator.accountingOracle(), ether("1"));
@@ -338,7 +337,8 @@ describe("LazyOracle.sol", () => {
           10000000n,
           0n,
           0n,
-          TEST_PROOF,
+          0n,
+          ["0x0000000000000000000000000000000000000000000000000000000000000000"],
         ),
       ).to.be.revertedWithCustomError(lazyOracle, "InvalidProof");
     });
@@ -350,6 +350,7 @@ describe("LazyOracle.sol", () => {
           totalValue: 33000000000000000000n,
           cumulativeLidoFees: 0n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
@@ -357,6 +358,7 @@ describe("LazyOracle.sol", () => {
           totalValue: 3100000000000000000n,
           cumulativeLidoFees: 0n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 510300000000000000n,
         },
         {
@@ -364,6 +366,7 @@ describe("LazyOracle.sol", () => {
           totalValue: 2580000000000012501n,
           cumulativeLidoFees: 580000000000012501n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 1449900000000010001n,
         },
         {
@@ -371,6 +374,7 @@ describe("LazyOracle.sol", () => {
           totalValue: 1000000000000000000n,
           cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
@@ -378,6 +382,7 @@ describe("LazyOracle.sol", () => {
           totalValue: 1030000000000000000n,
           cumulativeLidoFees: 1030000000000000000n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 400000000000000000n,
         },
         {
@@ -385,6 +390,7 @@ describe("LazyOracle.sol", () => {
           totalValue: 1000000000000000000n,
           cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
@@ -392,6 +398,7 @@ describe("LazyOracle.sol", () => {
           totalValue: 2000000000000000000n,
           cumulativeLidoFees: 2000000000000000000n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 100000000000000000n,
         },
         {
@@ -399,6 +406,7 @@ describe("LazyOracle.sol", () => {
           totalValue: 1000000000000000000n,
           cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 300000000000000000n,
         },
         {
@@ -406,6 +414,7 @@ describe("LazyOracle.sol", () => {
           totalValue: 1000000000000000000n,
           cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 0n,
         },
         {
@@ -413,6 +422,7 @@ describe("LazyOracle.sol", () => {
           totalValue: 1000000000000000000n,
           cumulativeLidoFees: 1000000000000000000n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 0n,
         },
       ];
@@ -432,6 +442,7 @@ describe("LazyOracle.sol", () => {
           vaultReport.totalValue,
           vaultReport.cumulativeLidoFees,
           vaultReport.liabilityShares,
+          vaultReport.maxLiabilityShares,
           vaultReport.slashingReserve,
           tree.getProof(index),
         );
@@ -439,17 +450,11 @@ describe("LazyOracle.sol", () => {
         expect(await vaultHub.mock__lastReported_timestamp()).to.equal(timestamp);
         expect(await vaultHub.mock__lastReported_cumulativeLidoFees()).to.equal(vaultReport.cumulativeLidoFees);
         expect(await vaultHub.mock__lastReported_liabilityShares()).to.equal(vaultReport.liabilityShares);
+        expect(await vaultHub.mock__lastReported_maxLiabilityShares()).to.equal(vaultReport.maxLiabilityShares);
         expect(await vaultHub.mock__lastReported_slashingReserve()).to.equal(vaultReport.slashingReserve);
       }
 
-      expect(tree.root).to.equal("0x14a968ec37647b2086e05d9c19762eb528736cc3618fb99101ec4adb27f63c26");
-      const proof = tree.getProof(1);
-      expect(proof).to.deep.equal([
-        "0x05d2e4cb42d7a2fc8347e6f6157e039b62f6380d2fcf545520db8029e6b541cc",
-        "0x3027050bbe118641c9dab8adb053cc2071b29f78f9edfbc678c4f525f2fbe1de",
-        "0x1b0d29f502033ef4f86abb47a8efa9f0d26dd92de90cd4e721282d60d85d0e9b",
-        "0x033aa9c0ad17d6c5e220abc83c91fb35f89ad0bc3fff9ca80b0160d813a7394b",
-      ]);
+      expect(tree.root).to.equal("0x128234cde49ed5d13a97d8a08bd2d42c4101cc5bf8ac56022d5d0db3d5dff383");
     });
 
     it("calculates merkle tree the same way as off-chain implementation", async () => {
@@ -459,6 +464,7 @@ describe("LazyOracle.sol", () => {
           totalValue: 2500000000000000000n,
           cumulativeLidoFees: 2500000000000000000n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 1n,
         },
         {
@@ -466,14 +472,13 @@ describe("LazyOracle.sol", () => {
           totalValue: 99170000769726969624n,
           cumulativeLidoFees: 33000000000000000000n,
           liabilityShares: 0n,
+          maxLiabilityShares: 0n,
           slashingReserve: 0n,
         },
       ];
 
       const tree = createVaultsReportTree(values);
       expect(tree.root).to.equal(TEST_ROOT);
-      const proof = tree.getProof(1);
-      expect(proof).to.deep.equal(TEST_PROOF);
     });
   });
 
@@ -487,6 +492,7 @@ describe("LazyOracle.sol", () => {
         totalValue: VAULT_TOTAL_VALUE + maxRewardValue,
         cumulativeLidoFees: 0n,
         liabilityShares: 0n,
+        maxLiabilityShares: 0n,
         slashingReserve: 0n,
       };
 
@@ -504,6 +510,7 @@ describe("LazyOracle.sol", () => {
         vaultReport.totalValue,
         vaultReport.cumulativeLidoFees,
         vaultReport.liabilityShares,
+        vaultReport.maxLiabilityShares,
         vaultReport.slashingReserve,
         tree.getProof(0),
       );
@@ -518,6 +525,7 @@ describe("LazyOracle.sol", () => {
         totalValue: VAULT_TOTAL_VALUE + maxRewardValue + 1n,
         cumulativeLidoFees: 0n,
         liabilityShares: 0n,
+        maxLiabilityShares: 0n,
         slashingReserve: 0n,
       };
 
@@ -531,6 +539,7 @@ describe("LazyOracle.sol", () => {
         vaultReport2.totalValue,
         vaultReport2.cumulativeLidoFees,
         vaultReport2.liabilityShares,
+        vaultReport2.maxLiabilityShares,
         vaultReport2.slashingReserve,
         tree2.getProof(0),
       );
@@ -549,6 +558,7 @@ describe("LazyOracle.sol", () => {
         totalValue: ether("250"),
         cumulativeLidoFees: 0n,
         liabilityShares: 0n,
+        maxLiabilityShares: 0n,
         slashingReserve: 0n,
       };
 
@@ -567,6 +577,7 @@ describe("LazyOracle.sol", () => {
           vaultReport.totalValue,
           vaultReport.cumulativeLidoFees,
           vaultReport.liabilityShares,
+          vaultReport.maxLiabilityShares,
           vaultReport.slashingReserve,
           tree.getProof(0),
         ),
@@ -587,6 +598,7 @@ describe("LazyOracle.sol", () => {
         totalValue: ether("340"),
         cumulativeLidoFees: 0n,
         liabilityShares: 0n,
+        maxLiabilityShares: 0n,
         slashingReserve: 0n,
       };
 
@@ -601,6 +613,7 @@ describe("LazyOracle.sol", () => {
         vaultReport2.totalValue,
         vaultReport2.cumulativeLidoFees,
         vaultReport2.liabilityShares,
+        vaultReport2.maxLiabilityShares,
         vaultReport2.slashingReserve,
         tree2.getProof(0),
       );
@@ -618,6 +631,7 @@ describe("LazyOracle.sol", () => {
         totalValue: ether("340"),
         cumulativeLidoFees: 0n,
         liabilityShares: 0n,
+        maxLiabilityShares: 0n,
         slashingReserve: 0n,
       };
 
@@ -633,6 +647,7 @@ describe("LazyOracle.sol", () => {
           vaultReport3.totalValue,
           vaultReport3.cumulativeLidoFees,
           vaultReport3.liabilityShares,
+          vaultReport3.maxLiabilityShares,
           vaultReport3.slashingReserve,
           tree3.getProof(0),
         ),
@@ -652,6 +667,7 @@ describe("LazyOracle.sol", () => {
         totalValue: ether("340"),
         cumulativeLidoFees: 0n,
         liabilityShares: 0n,
+        maxLiabilityShares: 0n,
         slashingReserve: 0n,
       };
 
@@ -667,6 +683,7 @@ describe("LazyOracle.sol", () => {
           vaultReport4.totalValue,
           vaultReport4.cumulativeLidoFees,
           vaultReport4.liabilityShares,
+          vaultReport4.maxLiabilityShares,
           vaultReport4.slashingReserve,
           tree4.getProof(0),
         ),
@@ -688,6 +705,7 @@ describe("LazyOracle.sol", () => {
         totalValue: ether("250"),
         cumulativeLidoFees: 0n,
         liabilityShares: 0n,
+        maxLiabilityShares: 0n,
         slashingReserve: 0n,
       };
 
@@ -706,6 +724,7 @@ describe("LazyOracle.sol", () => {
           vaultReport.totalValue,
           vaultReport.cumulativeLidoFees,
           vaultReport.liabilityShares,
+          vaultReport.maxLiabilityShares,
           vaultReport.slashingReserve,
           tree.getProof(0),
         ),
@@ -726,6 +745,7 @@ describe("LazyOracle.sol", () => {
         totalValue: ether("101"),
         cumulativeLidoFees: 0n,
         liabilityShares: 0n,
+        maxLiabilityShares: 0n,
         slashingReserve: 0n,
       };
 
@@ -741,6 +761,7 @@ describe("LazyOracle.sol", () => {
           vaultReport2.totalValue,
           vaultReport2.cumulativeLidoFees,
           vaultReport2.liabilityShares,
+          vaultReport2.maxLiabilityShares,
           vaultReport2.slashingReserve,
           tree3.getProof(0),
         ),
@@ -762,6 +783,7 @@ describe("LazyOracle.sol", () => {
         totalValue: ether("250"),
         cumulativeLidoFees: ether("100"),
         liabilityShares: 0n,
+        maxLiabilityShares: 0n,
         slashingReserve: 0n,
       };
 
@@ -799,6 +821,7 @@ describe("LazyOracle.sol", () => {
           vaultReport.totalValue,
           vaultReport.cumulativeLidoFees,
           vaultReport.liabilityShares,
+          vaultReport.maxLiabilityShares,
           vaultReport.slashingReserve,
           tree.getProof(0),
         ),
@@ -817,6 +840,7 @@ describe("LazyOracle.sol", () => {
           vaultReport.totalValue,
           vaultReport.cumulativeLidoFees,
           vaultReport.liabilityShares,
+          vaultReport.maxLiabilityShares,
           vaultReport.slashingReserve,
           tree.getProof(0),
         ),
@@ -841,6 +865,7 @@ describe("LazyOracle.sol", () => {
         totalValue: ether("250"),
         cumulativeLidoFees: 0n,
         liabilityShares: 0n,
+        maxLiabilityShares: 0n,
         slashingReserve: 0n,
       };
 
@@ -857,6 +882,7 @@ describe("LazyOracle.sol", () => {
         vaultReport.totalValue,
         vaultReport.cumulativeLidoFees,
         vaultReport.liabilityShares,
+        vaultReport.maxLiabilityShares,
         vaultReport.slashingReserve,
         tree.getProof(0),
       );

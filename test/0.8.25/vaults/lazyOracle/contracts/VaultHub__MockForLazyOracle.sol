@@ -37,6 +37,7 @@ contract VaultHub__MockForLazyOracle {
     int256 public mock__lastReported_inOutDelta;
     uint256 public mock__lastReported_cumulativeLidoFees;
     uint256 public mock__lastReported_liabilityShares;
+    uint256 public mock__lastReported_maxLiabilityShares;
     uint256 public mock__lastReported_slashingReserve;
 
     constructor(IStETH _steth, ILidoLocator _lidoLocator) {
@@ -106,6 +107,7 @@ contract VaultHub__MockForLazyOracle {
         int256 _reportInOutDelta,
         uint256 _reportCumulativeLidoFees,
         uint256 _reportLiabilityShares,
+        uint256 _reportMaxLiabilityShares,
         uint256 _reportSlashingReserve
     ) external {
         mock__lastReportedVault = _vault;
@@ -113,6 +115,7 @@ contract VaultHub__MockForLazyOracle {
         mock__lastReported_totalValue = _reportTotalValue;
         mock__lastReported_inOutDelta = _reportInOutDelta;
         mock__lastReported_cumulativeLidoFees = _reportCumulativeLidoFees;
+        mock__lastReported_maxLiabilityShares = _reportMaxLiabilityShares;
         mock__lastReported_liabilityShares = _reportLiabilityShares;
         mock__lastReported_slashingReserve = _reportSlashingReserve;
 

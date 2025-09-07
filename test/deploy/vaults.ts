@@ -35,6 +35,7 @@ interface ReportParams {
   totalValue?: bigint;
   inOutDelta?: bigint;
   liabilityShares?: bigint;
+  maxLiabilityShares?: bigint;
   cumulativeLidoFees?: bigint;
   slashingReserve?: bigint;
 }
@@ -44,7 +45,7 @@ interface VaultsConfig {
   admin: HardhatEthersSigner;
 }
 
-async function createMockStakignVault(
+async function createMockStakingVault(
   factory: VaultFactory__MockForVaultHub,
   owner: HardhatEthersSigner,
   operator: HardhatEthersSigner,
@@ -70,7 +71,7 @@ async function createMockStakingVaultAndConnect(
   vaultHub: VaultHub,
   tierParams?: Partial<TierParamsStruct>,
 ) {
-  const vault = await createMockStakignVault(factory, owner, operator, predepositGuarantee);
+  const vault = await createMockStakingVault(factory, owner, operator, predepositGuarantee);
   await vault.connect(owner).fund({ value: CONNECT_DEPOSIT });
 
   await operatorGridMock.changeVaultTierParams(vault, { ...TIER_PARAMS, ...tierParams });
@@ -83,7 +84,15 @@ async function createMockStakingVaultAndConnect(
 async function reportVault(
   lazyOracle: LazyOracle__MockForVaultHub,
   vaultHub: VaultHub,
-  { vault, totalValue, inOutDelta, cumulativeLidoFees, liabilityShares, slashingReserve }: ReportParams,
+  {
+    vault,
+    totalValue,
+    inOutDelta,
+    cumulativeLidoFees,
+    liabilityShares,
+    maxLiabilityShares,
+    slashingReserve,
+  }: ReportParams,
 ) {
   await lazyOracle.refreshReportTimestamp();
   const timestamp = await lazyOracle.latestReportTimestamp();
@@ -100,6 +109,7 @@ async function reportVault(
     inOutDelta ?? record.inOutDelta[activeIndex].value,
     cumulativeLidoFees ?? record.cumulativeLidoFees,
     liabilityShares ?? record.liabilityShares,
+    maxLiabilityShares ?? record.maxLiabilityShares,
     slashingReserve ?? 0n,
   );
 }
@@ -179,8 +189,8 @@ export async function deployVaults({ deployer, admin }: VaultsConfig) {
     lido,
     vaultHub,
     lazyOracle,
-    createMockStakignVault: (owner: HardhatEthersSigner, operator: HardhatEthersSigner) =>
-      createMockStakignVault(vaultFactory, owner, operator, predepositGuarantee),
+    createMockStakingVault: (owner: HardhatEthersSigner, operator: HardhatEthersSigner) =>
+      createMockStakingVault(vaultFactory, owner, operator, predepositGuarantee),
     createMockStakingVaultAndConnect: (owner: HardhatEthersSigner, operator: HardhatEthersSigner) =>
       createMockStakingVaultAndConnect(
         vaultFactory,

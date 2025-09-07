@@ -70,6 +70,7 @@ describe("VaultHub.sol:owner-functions", () => {
     inOutDelta,
     cumulativeLidoFees,
     liabilityShares,
+    maxLiabilityShares,
     slashingReserve,
   }: {
     targetVault?: StakingVault__MockForVaultHub;
@@ -77,6 +78,7 @@ describe("VaultHub.sol:owner-functions", () => {
     inOutDelta?: bigint;
     liabilityShares?: bigint;
     cumulativeLidoFees?: bigint;
+    maxLiabilityShares?: bigint;
     slashingReserve?: bigint;
   }) {
     targetVault = targetVault ?? vault;
@@ -89,6 +91,7 @@ describe("VaultHub.sol:owner-functions", () => {
     inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
     liabilityShares = liabilityShares ?? record.liabilityShares;
     cumulativeLidoFees = cumulativeLidoFees ?? record.cumulativeLidoFees;
+    maxLiabilityShares = maxLiabilityShares ?? record.maxLiabilityShares;
     slashingReserve = slashingReserve ?? 0n;
 
     await lazyOracle.mock__report(
@@ -99,6 +102,7 @@ describe("VaultHub.sol:owner-functions", () => {
       inOutDelta,
       cumulativeLidoFees,
       liabilityShares,
+      maxLiabilityShares,
       slashingReserve,
     );
   }
@@ -917,7 +921,7 @@ describe("VaultHub.sol:owner-functions", () => {
       await vaultHub.connect(vaultOwner).voluntaryDisconnect(vaultAddress);
 
       // Complete disconnect
-      await lazyOracle.mock__report(vaultHub, vault, await getCurrentBlockTimestamp(), 0n, 0n, 0n, 0n, 0n);
+      await lazyOracle.mock__report(vaultHub, vault, await getCurrentBlockTimestamp(), 0n, 0n, 0n, 0n, 0n, 0n);
 
       // Reconnect
       await vault.connect(vaultOwner).acceptOwnership();

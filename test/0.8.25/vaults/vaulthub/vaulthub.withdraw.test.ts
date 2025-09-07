@@ -36,7 +36,7 @@ describe("VaultHub.sol:withdrawal", () => {
     vaultHub = vaultsContext.vaultHub;
     lido = vaultsContext.lido;
 
-    disconnectedVault = await vaultsContext.createMockStakignVault(user, user);
+    disconnectedVault = await vaultsContext.createMockStakingVault(user, user);
     connectedVault = await vaultsContext.createMockStakingVaultAndConnect(user, user);
 
     await vaultHub.connect(deployer).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), redemptionMaster);

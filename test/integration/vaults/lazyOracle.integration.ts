@@ -14,7 +14,7 @@ import {
   reportVaultDataWithProof,
   setupLidoForVaults,
 } from "lib/protocol";
-import { createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
+import { calculateLockedValue, createVaultsReportTree, VaultReportItem } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
 
@@ -82,11 +82,12 @@ describe("Integration: LazyOracle", () => {
       await advanceChainTime(days(2n));
       expect(await vaultHub.isReportFresh(stakingVault)).to.equal(false);
 
-      const { locator, hashConsensus, lido } = ctx.contracts;
+      const { locator, hashConsensus } = ctx.contracts;
 
       const totalValueArg = ether("1");
       const cumulativeLidoFeesArg = ether("0.1");
       const liabilitySharesArg = 13000n;
+      const maxLiabilitySharesArg = 13001n;
       const slashingReserveArg = ether("1.5");
       const reportTimestampArg = await getCurrentBlockTimestamp();
       const reportRefSlotArg = (await hashConsensus.getCurrentFrame()).refSlot;
@@ -96,6 +97,7 @@ describe("Integration: LazyOracle", () => {
         totalValue: totalValueArg,
         cumulativeLidoFees: cumulativeLidoFeesArg,
         liabilityShares: liabilitySharesArg,
+        maxLiabilityShares: maxLiabilitySharesArg,
         slashingReserve: slashingReserveArg,
       };
       const reportTree = createVaultsReportTree([vaultReport]);
@@ -115,6 +117,7 @@ describe("Integration: LazyOracle", () => {
           totalValueArg,
           cumulativeLidoFeesArg,
           liabilitySharesArg,
+          maxLiabilitySharesArg,
           slashingReserveArg,
           reportTree.getProof(0),
         ),
@@ -127,17 +130,26 @@ describe("Integration: LazyOracle", () => {
           ether("1"),
           cumulativeLidoFeesArg,
           liabilitySharesArg,
+          maxLiabilitySharesArg,
           slashingReserveArg,
         );
 
+      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
+
       const record = await vaultHub.vaultRecord(stakingVault);
       expect(record.report.totalValue).to.equal(ether("1"));
+      expect(record.report.inOutDelta).to.equal(ether("1"));
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("1"));
+      expect(record.report.timestamp).to.equal(reportTimestampArg);
       expect(record.minimalReserve).to.equal(slashingReserveArg);
+      expect(record.maxLiabilityShares).to.equal(0n);
       expect(await vaultHub.locked(stakingVault)).to.equal(
-        slashingReserveArg + (await lido.getPooledEthBySharesRoundUp(liabilitySharesArg)),
+        await calculateLockedValue(ctx, stakingVault, {
+          liabilityShares: 0n,
+          minimalReserve: slashingReserveArg,
+          reserveRatioBP: (await vaultHub.vaultConnection(stakingVault)).reserveRatioBP,
+        }),
       );
-
-      expect(await vaultHub.isReportFresh(stakingVault)).to.equal(true);
     });
   });
 

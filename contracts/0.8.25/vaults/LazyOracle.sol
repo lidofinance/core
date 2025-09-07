@@ -109,6 +109,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
+        uint256 maxLiabilityShares;
         uint256 mintableStETH;
         uint96 shareLimit;
         uint16 reserveRatioBP;
@@ -233,6 +234,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                 record.inOutDelta.currentValue(),
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
+                record.maxLiabilityShares,
                 _mintableStETH(vaultAddress),
                 connection.shareLimit,
                 connection.reserveRatioBP,
@@ -291,6 +293,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint256 _totalValue,
         uint256 _cumulativeLidoFees,
         uint256 _liabilityShares,
+        uint256 _maxLiabilityShares,
         uint256 _slashingReserve,
         bytes32[] calldata _proof
     ) external {
@@ -302,6 +305,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
                         _totalValue,
                         _cumulativeLidoFees,
                         _liabilityShares,
+                        _maxLiabilityShares,
                         _slashingReserve
                     )
                 )
@@ -310,16 +314,24 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         if (!MerkleProof.verify(_proof, _storage().vaultsDataTreeRoot, leaf)) revert InvalidProof();
 
         uint256 vaultsDataTimestamp = _storage().vaultsDataTimestamp;
-        int256 inOutDelta;
-        (_totalValue, inOutDelta) = _handleSanityChecks(_vault, _totalValue, _storage().vaultsDataRefSlot, vaultsDataTimestamp, _cumulativeLidoFees);
+        (uint256 checkedTotalValue, int256 inOutDelta) = _handleSanityChecks(
+            _vault,
+            _totalValue,
+            _storage().vaultsDataRefSlot,
+            vaultsDataTimestamp,
+            _cumulativeLidoFees,
+            _liabilityShares,
+            _maxLiabilityShares
+        );
 
         _vaultHub().applyVaultReport(
             _vault,
             vaultsDataTimestamp,
-            _totalValue,
+            checkedTotalValue,
             inOutDelta,
             _cumulativeLidoFees,
             _liabilityShares,
+            _maxLiabilityShares,
             _slashingReserve
         );
     }
@@ -344,10 +356,15 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @param _cumulativeLidoFees the cumulative Lido fees accrued on the vault (nominated in ether)
     /// @return totalValueWithoutQuarantine the smoothed total value of the vault after sanity checks
     /// @return inOutDeltaOnRefSlot the inOutDelta in the refSlot
-    function _handleSanityChecks(address _vault, uint256 _totalValue, uint48 _reportRefSlot, uint256 _reportTimestamp, uint256 _cumulativeLidoFees)
-        internal
-        returns (uint256 totalValueWithoutQuarantine, int256 inOutDeltaOnRefSlot)
-    {
+    function _handleSanityChecks(
+        address _vault,
+        uint256 _totalValue,
+        uint48 _reportRefSlot,
+        uint256 _reportTimestamp,
+        uint256 _cumulativeLidoFees,
+        uint256 _liabilityShares,
+        uint256 _maxLiabilityShares
+    ) internal returns (uint256 totalValueWithoutQuarantine, int256 inOutDeltaOnRefSlot) {
         VaultHub vaultHub = _vaultHub();
         VaultHub.VaultRecord memory record = vaultHub.vaultRecord(_vault);
 
@@ -377,6 +394,11 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         uint256 maxLidoFees = (_storage().vaultsDataTimestamp - record.report.timestamp) * uint256(_storage().maxLidoFeeRatePerSecond);
         if (_cumulativeLidoFees - previousCumulativeLidoFees > maxLidoFees) {
             revert CumulativeLidoFeesTooLarge(_cumulativeLidoFees - previousCumulativeLidoFees, maxLidoFees);
+        }
+
+        // 5. _maxLiabilityShares is greater or equal than _liabilityShares and current `maxLiabilityShares`
+        if (_maxLiabilityShares < _liabilityShares || _maxLiabilityShares < record.maxLiabilityShares) {
+            revert InvalidMaxLiabilityShares();
         }
     }
 
@@ -568,4 +590,5 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     error QuarantinePeriodTooLarge(uint256 quarantinePeriod, uint256 maxQuarantinePeriod);
     error MaxRewardRatioTooLarge(uint256 rewardRatio, uint256 maxRewardRatio);
     error MaxLidoFeeRatePerSecondTooLarge(uint256 feeRate, uint256 maxFeeRate);
+    error InvalidMaxLiabilityShares();
 }
