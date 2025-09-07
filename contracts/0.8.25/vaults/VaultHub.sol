@@ -1018,7 +1018,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         // current maxLiabilityShares will be greater than the report one
         // if any stETH is minted on funds added after the refslot
-        // in that case we don't unlock it
+        // in that case we don't update it (preventing unlock)
         if (_record.maxLiabilityShares == _reportMaxLiabilityShares) {
             _record.maxLiabilityShares = uint96(Math256.max(_record.liabilityShares, _reportLiabilityShares));
         }
