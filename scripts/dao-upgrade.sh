@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e +u
+set -e
 set -o pipefail
 
 # Check for required environment variables
@@ -21,4 +21,4 @@ yarn compile
 # Generic migration steps file
 export STEPS_FILE=upgrade/steps.json
 
-yarn hardhat --network $NETWORK run --no-compile scripts/utils/migrate.ts
+yarn hardhat --network "$NETWORK" run --no-compile scripts/utils/migrate.ts
