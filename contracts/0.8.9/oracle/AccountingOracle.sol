@@ -6,6 +6,7 @@ pragma solidity 0.8.9;
 
 import {SafeCast} from "@openzeppelin/contracts-v4.4/utils/math/SafeCast.sol";
 
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 
@@ -16,35 +17,6 @@ import {BaseOracle} from "./BaseOracle.sol";
 
 interface IReportReceiver {
     function handleOracleReport(ReportValues memory values) external;
-}
-
-interface ILidoLocator {
-    function accounting() external view returns(address);
-    function lazyOracle() external view returns(address);
-    function oracleReportSanityChecker() external view returns(address);
-    function stakingRouter() external view returns(address);
-    function withdrawalQueue() external view returns(address); // TODO: remove
-}
-
-interface ILegacyOracle {
-    // only called before the migration
-
-    function getBeaconSpec() external view returns (
-        uint64 epochsPerFrame,
-        uint64 slotsPerEpoch,
-        uint64 secondsPerSlot,
-        uint64 genesisTime
-    );
-
-    function getLastCompletedEpochId() external view returns (uint256);
-
-    // only called after the migration
-
-    function handleConsensusLayerReport(
-        uint256 _refSlot,
-        uint256 _clBalance,
-        uint256 _clValidators
-    ) external;
 }
 
 interface IOracleReportSanityChecker {
