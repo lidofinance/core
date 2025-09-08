@@ -100,5 +100,109 @@ describe("DepositTracker.sol", () => {
         );
       });
     });
+
+    context("getDepositedEth", () => {
+      it("returns 0 when no entries", async () => {
+        const r = await depositTracker.getDepositedEth.staticCall(1234);
+        expect(r).to.equal(0);
+        const cursor = await depositTracker.getIndexOfLastRead.staticCall();
+        // still sentinel
+
+        // should be max uint128
+        expect(cursor).to.equal(0);
+      });
+
+      it("includes exact _slot and advances cursor", async () => {
+        await depositTracker.insertSlotDeposit(1000, 5);
+        await depositTracker.insertSlotDeposit(1001, 7);
+        await depositTracker.insertSlotDeposit(1003, 3);
+
+        // cursor sentinel after first insert
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(ethers.MaxUint256);
+
+        // peek value (no state change), then execute and wait (state change)
+        expect(await depositTracker.getDepositedEth.staticCall(1000)).to.equal(5);
+        await (await depositTracker.getDepositedEth(1000)).wait();
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(0);
+
+        expect(await depositTracker.getDepositedEth.staticCall(1001)).to.equal(7);
+        await (await depositTracker.getDepositedEth(1001)).wait();
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(1);
+
+        expect(await depositTracker.getDepositedEth.staticCall(10_000)).to.equal(3);
+        await (await depositTracker.getDepositedEth(10_000)).wait();
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(2);
+
+        // nothing left
+        expect(await depositTracker.getDepositedEth.staticCall(10_000)).to.equal(0);
+        await (await depositTracker.getDepositedEth(10_000)).wait();
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(2);
+      });
+
+      it("sums up to but not beyond _slot (inclusive)", async () => {
+        await depositTracker.insertSlotDeposit(10, 1);
+        await depositTracker.insertSlotDeposit(20, 2);
+        await depositTracker.insertSlotDeposit(30, 3);
+
+        // include 10 and 20 (<= 25), cursor -> 1
+        expect(await depositTracker.getDepositedEth.staticCall(25)).to.equal(3);
+        await (await depositTracker.getDepositedEth(25)).wait();
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(1);
+
+        // same bound again -> nothing new, cursor unchanged
+        expect(await depositTracker.getDepositedEth.staticCall(25)).to.equal(0);
+        await (await depositTracker.getDepositedEth(25)).wait();
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(1);
+
+        // now include 30, cursor -> 2
+        expect(await depositTracker.getDepositedEth.staticCall(30)).to.equal(3);
+        await (await depositTracker.getDepositedEth(30)).wait();
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(2);
+      });
+
+      it("aggregated same-slot deposit is counted once and included", async () => {
+        await depositTracker.insertSlotDeposit(1000, 5);
+        await depositTracker.insertSlotDeposit(1000, 7); // aggregates to 12
+
+        // peek (no state change)
+        expect(await depositTracker.getDepositedEth.staticCall(1000)).to.equal(12);
+
+        // advance (state change)
+        await (await depositTracker.getDepositedEth(1000)).wait();
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(0);
+      });
+
+      it("reverts with SlotOutOfRange if _slot is behind the cursor slot", async () => {
+        await depositTracker.insertSlotDeposit(10, 1);
+        await depositTracker.insertSlotDeposit(20, 2);
+        await depositTracker.insertSlotDeposit(30, 3);
+
+        // consume everything (cursor -> 2 at slot 30)
+        expect(await depositTracker.getDepositedEth.staticCall(30)).to.equal(6);
+        await (await depositTracker.getDepositedEth(30)).wait();
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(2);
+
+        // now ask for a smaller slot than cursor's slot -> revert (stateful)
+        await expect(depositTracker.getDepositedEth(15)).to.be.revertedWithCustomError(
+          depositTrackerLib,
+          "SlotOutOfRange",
+        );
+      });
+
+      it("returns 0 if cursor is already at the last element", async () => {
+        await depositTracker.insertSlotDeposit(1, 10);
+        await depositTracker.insertSlotDeposit(2, 20);
+
+        // consume all (cursor -> 1)
+        expect(await depositTracker.getDepositedEth.staticCall(2)).to.equal(30);
+        await (await depositTracker.getDepositedEth(2)).wait();
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(1);
+
+        // any further reads return 0
+        expect(await depositTracker.getDepositedEth.staticCall(999_999)).to.equal(0);
+        await (await depositTracker.getDepositedEth(999_999)).wait();
+        expect(await depositTracker.getIndexOfLastRead()).to.equal(1);
+      });
+    });
   });
 });

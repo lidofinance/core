@@ -117,6 +117,9 @@ library DepositsTracker {
             if (state.indexOfLastRead >= depositsEntryAmount)
                 revert InvalidCursor(state.indexOfLastRead, depositsEntryAmount);
 
+            SlotDeposit memory leftBoundDeposit = state.slotsDeposits[state.indexOfLastRead].unpack();
+            if (leftBoundDeposit.slot > _slot) revert SlotOutOfRange(leftBoundDeposit.slot, _slot);
+
             if (state.indexOfLastRead == depositsEntryAmount - 1) return 0;
 
             startIndex = state.indexOfLastRead + 1;
@@ -124,9 +127,6 @@ library DepositsTracker {
             // maybe use here state.indexOfLastRead
             // SlotDeposit memory leftBoundDeposit = state.slotsDeposits[startIndex].unpack();
             // if (leftBoundDeposit.slot > _slot) revert SlotOutOfRange(leftBoundDeposit.slot, _slot);
-
-            SlotDeposit memory leftBoundDeposit = state.slotsDeposits[state.indexOfLastRead].unpack();
-            if (leftBoundDeposit.slot > _slot) revert SlotOutOfRange(leftBoundDeposit.slot, _slot);
 
             leftBoundCumulativeSum = state.cumulative[state.indexOfLastRead];
         }

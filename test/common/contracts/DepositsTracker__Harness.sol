@@ -31,14 +31,13 @@ contract DepositsTracker__Harness {
         DepositsTracker.insertSlotDeposit(TEST_POSITION, slot, amount);
     }
 
-    // function getDepositedEthBefore(uint256 slot) external view returns (uint256) {
-    //     return DepositsTracker.getDepositedEthBefore(TEST_POSITION, slot);
-    // }
+    function getDepositedEth(uint256 slot) external returns (uint256) {
+        return DepositsTracker.getDepositedEth(TEST_POSITION, slot);
+    }
 
-    // function cleanAndGetDepositedEthBefore(uint256 slot) external returns (uint256) {
-    //     return DepositsTracker.cleanAndGetDepositedEthBefore(TEST_POSITION, slot);
-    // }
-
+    function getIndexOfLastRead() external view returns (uint256) {
+        return _getDataStorage(TEST_POSITION).indexOfLastRead;
+    }
     // helpers
 
     function getTotalAmount() external view returns (uint256 total) {
