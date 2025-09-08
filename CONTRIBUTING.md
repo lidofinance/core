@@ -47,7 +47,7 @@ the [Lido Research Forum](https://research.lido.fi/).
 
 - [Node.js](https://nodejs.org/en) version 20 (LTS) with `corepack` enabled
 - [Yarn](https://yarnpkg.com/) installed via corepack (see below)
-- [Foundry](https://book.getfoundry.sh/) latest available version
+- [Foundry](https://getfoundry.sh/) latest available version
 
 > [!TIP]
 > On macOS with Homebrew, it is recommended to install Node.js using [`n`](https://github.com/tj/n) or
