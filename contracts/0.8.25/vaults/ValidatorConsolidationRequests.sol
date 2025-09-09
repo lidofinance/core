@@ -8,14 +8,15 @@ import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {Dashboard} from "contracts/0.8.25/vaults/dashboard/Dashboard.sol";
 import {NodeOperatorFee} from "contracts/0.8.25/vaults/dashboard/NodeOperatorFee.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
  /**
  * @title ValidatorConsolidationRequests
  * @author kovalgek
- * @notice Contract that facilitates EIP-7251 validator consolidation into staking vaults
- *         and updates node-operator rewards adjustment. Designed for use with Vault CLI 
- *         tooling, supporting delegated (EIP-7702) and batched (EIP-5792) execution flows.
- *         This contract is strictly for a node operator rewards adjustment role only.
+ * @notice Contract for consolidating validators into staking vaults (EIP-7251)
+ *         and adjusting rewards. Built to work with Vault CLI tooling and to
+ *         support delegation (EIP-7702) and batched execution (EIP-5792).
+ *         Intended only for use by the node operator in the rewards adjustment role.
  */
 contract ValidatorConsolidationRequests {
     /// @notice EIP-7251 consolidation requests contract address.
@@ -23,6 +24,7 @@ contract ValidatorConsolidationRequests {
 
     uint256 internal constant PUBLIC_KEY_LENGTH = 48;
     uint256 internal constant CONSOLIDATION_REQUEST_CALLDATA_LENGTH = PUBLIC_KEY_LENGTH * 2;
+    uint256 internal constant MINIMUM_VALIDATOR_BALANCE = 16 ether;
 
     /// @notice Lido Locator contract.
     ILidoLocator public immutable LIDO_LOCATOR;
@@ -37,13 +39,13 @@ contract ValidatorConsolidationRequests {
      * @notice Return the encoded calls for EIP-7251 consolidation requests and the rewards adjustment increase.
      * 
      * Use case:
-     * - Your withdrawal credentials is EOA or multisig, and you want to consolidate balances 
-     *   of currently running validators into staking vaults. Call this method to obtain the encoded
-     *   calls for consolidation requests and the rewards adjustment increase.
-     *   Later, you can submit these call data using EIP-5792.
-     * - Rewards adjustment calldata can only be executed by an account with the
-     *   `NODE_OPERATOR_REWARDS_ADJUST_ROLE`, which the node operator may grant
-     *   to the withdrawal credentials account.
+     * - If your withdrawal credentials are an EOA or multisig and you want to
+     *   consolidate validator balances into staking vaults, call this method to
+     *   generate the encoded consolidation and rewards-adjustment calls.
+     *   These calls can later be submitted via EIP-5792.
+     * - Rewards adjustment calls can only be executed by an account with the
+     *   `NODE_OPERATOR_REWARDS_ADJUST_ROLE`. The node operator may grant this
+     *   role to the withdrawal credentials account.
      * 
      * Recommendations:
      * - It is recommended to call this function via the Vault CLI. It performs pre-checks of
@@ -81,7 +83,16 @@ contract ValidatorConsolidationRequests {
             revert VaultNotConnected();
         }
 
+        if(_dashboard != IStakingVault(stakingVault).owner()) {
+            revert DashboardNotOwnerOfStakingVault();
+        }
+
         uint256 consolidationRequestsCount = _validatePubkeysAndCountConsolidationRequests(_sourcePubkeys, _targetPubkeys);
+
+        if(_allSourceValidatorBalancesWei != 0 && _allSourceValidatorBalancesWei < consolidationRequestsCount * MINIMUM_VALIDATOR_BALANCE) {
+            revert InvalidAllSourceValidatorBalancesWei();
+        }
+
         consolidationRequestEncodedCalls = _consolidationCalldatas(_sourcePubkeys, _targetPubkeys, consolidationRequestsCount);
 
         if(_allSourceValidatorBalancesWei > 0) {
@@ -95,9 +106,9 @@ contract ValidatorConsolidationRequests {
      * @notice Submit EIP-7251 consolidation requests and immediately increase the node operator rewards adjustment.
      *
      * Use case:
-     * - Your withdrawal credentials is EOA and you want to consolidate balances of currently 
-     *   running validators into staking vaults. Authorize this contract for your EOA using an 
-     *   EIP-7702 transaction and call this function.
+     * - If your withdrawal credentials are an EOA and you want to consolidate
+     *   validator balances into staking vaults, first authorize this contract
+     *   with an EIP-7702 transaction, then call this function.
      *
      * Recommendations:
      * - It is recommended to call this function via the Vault CLI. It performs pre-checks of
@@ -162,19 +173,26 @@ contract ValidatorConsolidationRequests {
             revert VaultNotConnected();
         }
 
+        if(_dashboard != IStakingVault(stakingVault).owner()) {
+            revert DashboardNotOwnerOfStakingVault();
+        }
+
         uint256 consolidationRequestsCount = _validatePubkeysAndCountConsolidationRequests(_sourcePubkeys, _targetPubkeys);
+
+        if(_allSourceValidatorBalancesWei != 0 && _allSourceValidatorBalancesWei < consolidationRequestsCount * MINIMUM_VALIDATOR_BALANCE) {
+            revert InvalidAllSourceValidatorBalancesWei();
+        }
 
         uint256 feePerRequest = _getConsolidationRequestFee();
         uint256 totalFee = consolidationRequestsCount * feePerRequest;
         if (msg.value < totalFee) revert InsufficientValidatorConsolidationFee(msg.value, totalFee);
 
-        bytes[] memory consolidationRequestEncodedCalls = _consolidationCalldatas(_sourcePubkeys, _targetPubkeys, consolidationRequestsCount);
-
-        for (uint256 i = 0; i < consolidationRequestEncodedCalls.length; i++) {
-            (bool success, ) = CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS.call{value: feePerRequest}(consolidationRequestEncodedCalls[i]);
-            if (!success) {
-                revert ConsolidationRequestFailed(consolidationRequestEncodedCalls[i]);
-            }
+        for (uint256 i = 0; i < _sourcePubkeys.length; i++) {
+            _processConsolidationRequest(
+                _sourcePubkeys[i],
+                _targetPubkeys[i],
+                feePerRequest
+            );
         }
 
         uint256 excess = msg.value - totalFee;
@@ -233,24 +251,32 @@ contract ValidatorConsolidationRequests {
         bytes[] calldata _sourcePubkeys,
         bytes[] calldata _targetPubkeys,
         uint256 _consolidationRequestsCount
-    ) private pure returns (bytes[] memory) {
-        bytes[] memory consolidationRequestEncodedCalls = new bytes[](_consolidationRequestsCount);
+    ) private pure returns (bytes[] memory consolidationRequestEncodedCalls) {
+        consolidationRequestEncodedCalls = new bytes[](_consolidationRequestsCount);
 
         uint256 k = 0;
         for (uint256 i = 0; i < _sourcePubkeys.length; i++) {
             uint256 sourcePubkeysCount = _sourcePubkeys[i].length / PUBLIC_KEY_LENGTH;
             
             for (uint256 j = 0; j < sourcePubkeysCount; j++) {
-                consolidationRequestEncodedCalls[k] = new bytes(CONSOLIDATION_REQUEST_CALLDATA_LENGTH);
-
-                _copyPubkeysToMemory(consolidationRequestEncodedCalls[k], 0, _sourcePubkeys[i], j);
-                _copyPubkeysToMemory(consolidationRequestEncodedCalls[k], 1, _targetPubkeys[i], 0);
-
+                uint256 offset = j * PUBLIC_KEY_LENGTH;
+                uint256 end = offset + PUBLIC_KEY_LENGTH;
+                
+                consolidationRequestEncodedCalls[k] = bytes.concat(_sourcePubkeys[i][offset : end], _targetPubkeys[i]);
                 unchecked { k++; }
             }
         }
+    }
 
-        return consolidationRequestEncodedCalls;
+    function _validateAndCountPubkeysInBatch(bytes calldata _pubkeys) private pure returns (uint256) {
+        if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) {
+            revert MalformedSourcePubkeysArray();
+        }
+        uint256 keysCount = _pubkeys.length / PUBLIC_KEY_LENGTH;
+        if (keysCount == 0) {
+            revert NoConsolidationRequests();
+        }
+        return keysCount;
     }
 
     function _validatePubkeysAndCountConsolidationRequests(
@@ -262,18 +288,28 @@ contract ValidatorConsolidationRequests {
             if (_targetPubkeys[i].length != PUBLIC_KEY_LENGTH) {
                 revert MalformedTargetPubkey();
             }
-            if (_sourcePubkeys[i].length % PUBLIC_KEY_LENGTH != 0) {
-                revert MalformedSourcePubkeysArray();
-            }
-
-            uint256 keysCount = _sourcePubkeys[i].length / PUBLIC_KEY_LENGTH;
-            if (keysCount == 0) {
-                revert NoConsolidationRequests();
-            }
-
-            consolidationRequestsCount += keysCount;
+            consolidationRequestsCount += _validateAndCountPubkeysInBatch(_sourcePubkeys[i]);
         }
         return consolidationRequestsCount;
+    }
+
+    function _processConsolidationRequest(
+        bytes calldata _sourcePubkeys,
+        bytes calldata _targetPubkey,
+        uint256 _feePerRequest
+    ) private {
+        bytes memory callData = new bytes(CONSOLIDATION_REQUEST_CALLDATA_LENGTH);
+
+        uint256 sourcePubkeysCount = _validateAndCountPubkeysInBatch(_sourcePubkeys);
+        for (uint256 j = 0; j < sourcePubkeysCount; j++) {
+            _copyPubkeysToMemory(callData, 0, _sourcePubkeys, j);
+            _copyPubkeysToMemory(callData, 1, _targetPubkey, 0);
+
+            (bool success, ) = CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS.call{value: _feePerRequest}(callData);
+            if (!success) {
+                revert ConsolidationRequestFailed(callData);
+            }
+        }
     }
 
     /**
@@ -299,10 +335,13 @@ contract ValidatorConsolidationRequests {
     error MalformedTargetPubkey();
     error MismatchingSourceAndTargetPubkeysCount(uint256 sourcePubkeysCount, uint256 targetPubkeysCount);
     error VaultNotConnected();
+    error DashboardNotOwnerOfStakingVault();
     error NoConsolidationRequests();
+    error InvalidAllSourceValidatorBalancesWei();
     error InsufficientValidatorConsolidationFee(uint256 provided, uint256 required);
     error ConsolidationFeeReadFailed();
     error ConsolidationFeeInvalidData();
     error ConsolidationFeeRefundFailed(address recipient, uint256 amount);
     error ConsolidationRequestFailed(bytes callData);
+    error ConsolidationRequestAdditionFailed(bytes callData);
 }
