@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { access, constants as fsPromisesConstants } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { network as hardhatNetwork } from "hardhat";
+import { readScratchParameters, scratchParametersToDeploymentState } from "scripts/utils/scratch";
 
 const NETWORK_STATE_FILE_PREFIX = "deployed-";
 const NETWORK_STATE_FILE_DIR = ".";
@@ -67,6 +67,7 @@ export enum Sk {
   vestingParams = "vestingParams",
   withdrawalVault = "withdrawalVault",
   gateSeal = "gateSeal",
+  gateSealTW = "gateSealTW",
   stakingRouter = "stakingRouter",
   burner = "burner",
   executionLayerRewardsVault = "executionLayerRewardsVault",
@@ -106,6 +107,7 @@ export enum Sk {
   operatorGrid = "operatorGrid",
   validatorConsolidationRequests = "validatorConsolidationRequests",
   lazyOracle = "lazyOracle",
+  v3TemporaryAdmin = "v3TemporaryAdmin",
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
@@ -185,7 +187,6 @@ export function readNetworkState({
   deployer?: string;
   networkStateFile?: string;
 } = {}) {
-  const networkChainId = hardhatNetwork.config.chainId;
   const fileName = _getStateFileFileName(networkStateFile);
   const state = _readStateFile(fileName);
 
@@ -195,6 +196,7 @@ export function readNetworkState({
   }
 
   // Validate the chainId
+  const networkChainId = hardhatNetwork.config.chainId;
   if (state[Sk.chainSpec].chainId && networkChainId !== parseInt(state[Sk.chainSpec].chainId)) {
     throw new Error(
       `The chainId: ${networkChainId} does not match the one (${state[Sk.chainSpec].chainId}) in the state file!`,
@@ -232,20 +234,12 @@ export function incrementGasUsed(increment: bigint | number, useStateFile = true
   persistNetworkState(state);
 }
 
-export async function resetStateFile(networkName: string = hardhatNetwork.name): Promise<void> {
-  const fileName = _getFileName(NETWORK_STATE_FILE_DIR, networkName);
-  try {
-    await access(fileName, fsPromisesConstants.R_OK | fsPromisesConstants.W_OK);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      throw new Error(`No network state file ${fileName}: ${(error as Error).message}`);
-    }
-    // If file does not exist, create it with default values
-  } finally {
-    const templateFileName = _getFileName("scripts/defaults", "testnet-defaults", "");
-    const templateData = readFileSync(templateFileName, "utf8");
-    writeFileSync(fileName, templateData, { encoding: "utf8", flag: "w" });
-  }
+export async function resetStateFileFromDeployParams(): Promise<void> {
+  const fileName = _getStateFileFileName();
+  const scratchParams = readScratchParameters();
+  const initialState = scratchParametersToDeploymentState(scratchParams);
+  const data = JSON.stringify(_sortKeysAlphabetically(initialState), null, 2);
+  writeFileSync(fileName, `${data}\n`, { encoding: "utf8", flag: "w" });
 }
 
 export function persistNetworkState(state: DeploymentState): void {

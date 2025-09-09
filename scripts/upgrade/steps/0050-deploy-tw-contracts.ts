@@ -19,6 +19,12 @@ import {
 import { getAddress } from "lib/state-file";
 
 const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
+import {
+  CAPELLA_SLOT,
+  FIRST_SUPPORTED_SLOT,
+  PIVOT_SLOT,
+  SLOTS_PER_HISTORICAL_ROOT,
+} from "scripts/scratch/steps/0083-deploy-core";
 
 dotenv.config({ path: join(__dirname, "../../.env") });
 
@@ -51,8 +57,8 @@ export async function main() {
 
   const state = readNetworkState();
   const parameters = readUpgradeParameters();
-  const validatorExitDelayVerifierParams = parameters[Sk.validatorExitDelayVerifier].deployParameters;
-  const triggerableWithdrawalsGatewayParams = parameters[Sk.triggerableWithdrawalsGateway].deployParameters;
+  const validatorExitDelayVerifierParams = parameters.validatorExitDelayVerifier;
+  const triggerableWithdrawalsGatewayParams = parameters.triggerableWithdrawalsGateway;
   persistNetworkState(state);
 
   const chainSpec = state[Sk.chainSpec];
@@ -90,7 +96,7 @@ export async function main() {
   // Staking Router
   //
 
-  const DEPOSIT_CONTRACT_ADDRESS = parameters[Sk.chainSpec].depositContract;
+  const DEPOSIT_CONTRACT_ADDRESS = parameters.chainSpec.depositContract;
   log(`Deposit contract address: ${DEPOSIT_CONTRACT_ADDRESS}`);
   const stakingRouterAddress = await deployImplementation(
     Sk.stakingRouter,
@@ -117,20 +123,34 @@ export async function main() {
   // Deploy ValidatorExitDelayVerifier
   //
 
-  await deployWithoutProxy(Sk.validatorExitDelayVerifier, "ValidatorExitDelayVerifier", deployer, [
+  const validatorExitDelayVerifierCtorArgs = [
     locator.address,
-    validatorExitDelayVerifierParams.gIFirstValidatorPrev,
-    validatorExitDelayVerifierParams.gIFirstValidatorCurr,
-    validatorExitDelayVerifierParams.gIHistoricalSummariesPrev,
-    validatorExitDelayVerifierParams.gIHistoricalSummariesCurr,
-    validatorExitDelayVerifierParams.firstSupportedSlot,
-    validatorExitDelayVerifierParams.pivotSlot,
-    chainSpec.slotsPerEpoch,
-    chainSpec.secondsPerSlot,
-    genesisTime,
+    {
+      gIFirstValidatorPrev: validatorExitDelayVerifierParams.gIFirstValidatorPrev,
+      gIFirstValidatorCurr: validatorExitDelayVerifierParams.gIFirstValidatorCurr,
+      gIFirstHistoricalSummaryPrev: validatorExitDelayVerifierParams.gIFirstHistoricalSummaryPrev,
+      gIFirstHistoricalSummaryCurr: validatorExitDelayVerifierParams.gIFirstHistoricalSummaryCurr,
+      gIFirstBlockRootInSummaryPrev: validatorExitDelayVerifierParams.gIFirstBlockRootInSummaryPrev,
+      gIFirstBlockRootInSummaryCurr: validatorExitDelayVerifierParams.gIFirstBlockRootInSummaryCurr,
+    },
+    FIRST_SUPPORTED_SLOT, // uint64 firstSupportedSlot,
+    PIVOT_SLOT, // uint64 pivotSlot,
+    // TODO: update this to the actual Capella slot for e2e testing in mainnet-fork
+    CAPELLA_SLOT, // uint64 capellaSlot,
+    SLOTS_PER_HISTORICAL_ROOT, // uint64 slotsPerHistoricalRoot,
+    chainSpec.slotsPerEpoch, // uint32 slotsPerEpoch,
+    chainSpec.secondsPerSlot, // uint32 secondsPerSlot,
+    // parseInt(getEnvVariable("GENESIS_TIME")), // uint64 genesisTime,
+    chainSpec.genesisTime,
     // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
-    validatorExitDelayVerifierParams.shardCommitteePeriodInSeconds,
-  ]);
+    2 ** 8 * 32 * 12, // uint32 shardCommitteePeriodInSeconds
+  ];
+  await deployWithoutProxy(
+    Sk.validatorExitDelayVerifier,
+    "ValidatorExitDelayVerifier",
+    deployer,
+    validatorExitDelayVerifierCtorArgs,
+  );
 
   //
   // Deploy Triggerable Withdrawals Gateway

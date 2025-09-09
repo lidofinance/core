@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { advanceChainTime, batch, ether, impersonate, log, updateBalance } from "lib";
 import {
-  finalizeWithdrawalQueue,
+  finalizeWQViaElVault,
   getProtocolContext,
   norSdvtEnsureOperators,
   OracleReportParams,
@@ -64,7 +64,7 @@ describe("Scenario: Protocol Happy Path", () => {
     const stEthHolderBalance = await lido.balanceOf(stEthHolder.address);
     expect(stEthHolderBalance).to.approximately(stEthHolderAmount, 10n, "stETH balance increased");
 
-    await finalizeWithdrawalQueue(ctx);
+    await finalizeWQViaElVault(ctx);
 
     const lastFinalizedRequestId = await withdrawalQueue.getLastFinalizedRequestId();
     const lastRequestId = await withdrawalQueue.getLastRequestId();
@@ -197,17 +197,20 @@ describe("Scenario: Protocol Happy Path", () => {
   it("Should deposit to staking modules", async () => {
     const { lido, withdrawalQueue, stakingRouter, depositSecurityModule } = ctx.contracts;
 
-    const withdrawalsUninitializedStETH = await withdrawalQueue.unfinalizedStETH();
+    await lido.connect(stEthHolder).submit(ZeroAddress, { value: ether("3200") });
+
+    const withdrawalsUnfinalizedStETH = await withdrawalQueue.unfinalizedStETH();
     const depositableEther = await lido.getDepositableEther();
+
     const bufferedEtherBeforeDeposit = await lido.getBufferedEther();
 
-    const expectedDepositableEther = bufferedEtherBeforeDeposit - withdrawalsUninitializedStETH;
+    const expectedDepositableEther = bufferedEtherBeforeDeposit - withdrawalsUnfinalizedStETH;
 
     expect(depositableEther).to.equal(expectedDepositableEther, "Depositable ether");
 
     log.debug("Depositable ether", {
       "Buffered ether": ethers.formatEther(bufferedEtherBeforeDeposit),
-      "Withdrawals uninitialized stETH": ethers.formatEther(withdrawalsUninitializedStETH),
+      "Withdrawals unfinalized stETH": ethers.formatEther(withdrawalsUnfinalizedStETH),
       "Depositable ether": ethers.formatEther(depositableEther),
     });
 
@@ -232,7 +235,7 @@ describe("Scenario: Protocol Happy Path", () => {
       expectedBufferedEtherAfterDeposit -= unbufferedAmount;
     }
 
-    expect(depositCount).to.be.gt(0n, "Deposits");
+    expect(depositCount).to.be.gt(0n, "No deposits applied");
 
     const bufferedEtherAfterDeposit = await lido.getBufferedEther();
     expect(bufferedEtherAfterDeposit).to.equal(expectedBufferedEtherAfterDeposit, "Buffered ether after deposit");
@@ -312,8 +315,13 @@ describe("Scenario: Protocol Happy Path", () => {
     expect(tokenRebasedEvent).not.to.be.undefined;
 
     const transferEvents = ctx.getEvents(reportTxReceipt, "Transfer");
+    const transferSharesEvents = ctx.getEvents(reportTxReceipt, "TransferShares");
 
-    let toBurnerTransfer, toNorTransfer, toSdvtTransfer, toTreasuryTransfer: LogDescriptionExtended | undefined;
+    let toBurnerTransfer,
+      toNorTransfer,
+      toSdvtTransfer,
+      toTreasuryTransfer,
+      toTreasuryTransferShares: LogDescriptionExtended | undefined;
     let numExpectedTransferEvents = 3;
     if (wereWithdrawalsFinalized) {
       numExpectedTransferEvents += 1;
@@ -323,9 +331,11 @@ describe("Scenario: Protocol Happy Path", () => {
     }
     if (ctx.flags.withCSM) {
       toTreasuryTransfer = transferEvents[numExpectedTransferEvents];
+      toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents];
       numExpectedTransferEvents += 2;
     } else {
       toTreasuryTransfer = transferEvents[numExpectedTransferEvents - 1];
+      toTreasuryTransferShares = transferSharesEvents[numExpectedTransferEvents - 1];
     }
 
     expect(transferEvents.length).to.equal(numExpectedTransferEvents, "Transfer events count");
@@ -363,11 +373,16 @@ describe("Scenario: Protocol Happy Path", () => {
       },
       "Transfer to Treasury",
     );
-
-    const treasurySharesMinted = await lido.getSharesByPooledEth(toTreasuryTransfer.args.value);
+    expect(toTreasuryTransferShares?.args.toObject()).to.include(
+      {
+        from: ZeroAddress,
+        to: treasuryAddress,
+      },
+      "Transfer shares to Treasury",
+    );
 
     expect(treasuryBalanceAfterRebase).to.be.approximately(
-      treasuryBalanceBeforeRebase + treasurySharesMinted,
+      treasuryBalanceBeforeRebase + toTreasuryTransferShares.args.sharesValue,
       10n,
       "Treasury balance after rebase",
     );

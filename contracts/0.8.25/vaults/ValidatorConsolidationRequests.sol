@@ -107,7 +107,7 @@ contract ValidatorConsolidationRequests {
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
         VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(_stakingVault);
 
-        if(vaultConnection.vaultIndex == 0 || vaultConnection.pendingDisconnect == true) {
+        if(vaultConnection.vaultIndex == 0 || vaultHub.isPendingDisconnect(_stakingVault)) {
             revert VaultNotConnected();
         }
 

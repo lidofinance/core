@@ -74,12 +74,11 @@ library ExitLimitUtils {
     ) internal pure returns (ExitRequestLimitData memory) {
         if (_data.maxExitRequestsLimit < newExitRequestLimit) revert LimitExceeded();
 
-        uint256 secondsPassed = timestamp - _data.prevTimestamp;
-        uint256 framesPassed = secondsPassed / _data.frameDurationInSec;
-        uint32 passedTime = uint32(framesPassed) * _data.frameDurationInSec;
+        uint256 passedTime = timestamp - _data.prevTimestamp;
+        passedTime -= passedTime % _data.frameDurationInSec;
 
         _data.prevExitRequestsLimit = uint32(newExitRequestLimit);
-        _data.prevTimestamp += passedTime;
+        _data.prevTimestamp += uint32(passedTime);
 
         return _data;
     }
@@ -96,18 +95,23 @@ library ExitLimitUtils {
         if (exitsPerFrame > maxExitRequestsLimit) revert TooLargeExitsPerFrame();
         if (frameDurationInSec == 0) revert ZeroFrameDuration();
 
-        _data.exitsPerFrame = uint32(exitsPerFrame);
-        _data.frameDurationInSec = uint32(frameDurationInSec);
-
-        if (
-            // new maxExitRequestsLimit is smaller than prev remaining limit
-            maxExitRequestsLimit < _data.prevExitRequestsLimit ||
-            // previously exits were unlimited
-            _data.maxExitRequestsLimit == 0
-        ) {
+        if (_data.maxExitRequestsLimit == 0) {
+            // no limit was set before, set the new limit
             _data.prevExitRequestsLimit = uint32(maxExitRequestsLimit);
+        } else {
+            uint256 currentLimit = calculateCurrentExitLimit(_data, timestamp);
+            // update current limit proportionally as `newLimit - exitsUsed`
+            // where `exitsUsed` is relative to the previous limit
+            uint32 exitsUsed = _data.maxExitRequestsLimit - uint32(currentLimit);
+            if (exitsUsed >= maxExitRequestsLimit) {
+                _data.prevExitRequestsLimit = 0;
+            } else {
+                _data.prevExitRequestsLimit = uint32(maxExitRequestsLimit - exitsUsed);
+            }
         }
 
+        _data.exitsPerFrame = uint32(exitsPerFrame);
+        _data.frameDurationInSec = uint32(frameDurationInSec);
         _data.maxExitRequestsLimit = uint32(maxExitRequestsLimit);
         _data.prevTimestamp = uint32(timestamp);
 

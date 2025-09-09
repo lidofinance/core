@@ -25,6 +25,14 @@ contract VaultFactory {
     address public immutable DASHBOARD_IMPL;
 
     /**
+     * @notice mapping of vaults deployed by this factory
+     * @dev Only the vaults deployed by this factory can be connected to VaultHub.
+     *      This ensures that the vault storage has not been tampered with
+     *      before connecting to VaultHub.
+     */
+    mapping(address vault => bool) public deployedVaults;
+
+    /**
      * @param _lidoLocator The address of the LidoLocator contract
      * @param _beacon The address of the Beacon contract for StakingVaults
      * @param _dashboardImpl The address of the Dashboard implementation contract
@@ -61,7 +69,7 @@ contract VaultFactory {
         if (msg.value < VaultHub(payable(locator.vaultHub())).CONNECT_DEPOSIT()) revert InsufficientFunds();
 
         // create the vault proxy
-        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+        vault = IStakingVault(_deployVault());
 
         // create the dashboard proxy
         bytes memory immutableArgs = abi.encode(address(vault));
@@ -71,7 +79,7 @@ contract VaultFactory {
         vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
-        dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
@@ -101,11 +109,11 @@ contract VaultFactory {
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry,
         Permissions.RoleAssignment[] calldata _roleAssignments
-    ) external payable returns (IStakingVault vault, Dashboard dashboard) {
+    ) external returns (IStakingVault vault, Dashboard dashboard) {
         ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
 
         // create the vault proxy
-        vault = IStakingVault(address(new PinnedBeaconProxy(BEACON, "")));
+        vault = IStakingVault(_deployVault());
 
         // create the dashboard proxy
         bytes memory immutableArgs = abi.encode(address(vault));
@@ -115,7 +123,7 @@ contract VaultFactory {
         vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the _defaultAdmin as the default admin, grant optional node operator managed roles
-        dashboard.initialize(_defaultAdmin, address(this), _nodeOperatorFeeBP, _confirmExpiry);
+        dashboard.initialize(_defaultAdmin, address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
@@ -124,6 +132,11 @@ contract VaultFactory {
 
         emit VaultCreated(address(vault));
         emit DashboardCreated(address(dashboard), address(vault), _defaultAdmin);
+    }
+
+    function _deployVault() internal returns (address vault) {
+        vault = address(new PinnedBeaconProxy(BEACON, ""));
+        deployedVaults[vault] = true;
     }
 
     /**

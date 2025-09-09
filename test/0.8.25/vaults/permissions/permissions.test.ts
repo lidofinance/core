@@ -191,7 +191,6 @@ describe("Permissions", () => {
       await checkSoleMember(rebalancer, await permissions.REBALANCE_ROLE());
       await checkSoleMember(depositPauser, await permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE());
       await checkSoleMember(depositResumer, await permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE());
-      await checkSoleMember(pdgCompensator, await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE());
       await checkSoleMember(unknownValidatorProver, await permissions.PDG_PROVE_VALIDATOR_ROLE());
       await checkSoleMember(
         unguaranteedBeaconChainDepositor,
@@ -200,7 +199,7 @@ describe("Permissions", () => {
       await checkSoleMember(validatorExitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
       await checkSoleMember(validatorWithdrawalTriggerer, await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await checkSoleMember(disconnecter, await permissions.VOLUNTARY_DISCONNECT_ROLE());
-      await checkSoleMember(tierChanger, await permissions.CHANGE_TIER_ROLE());
+      await checkSoleMember(tierChanger, await permissions.VAULT_CONFIGURATION_ROLE());
     });
   });
 
@@ -794,36 +793,6 @@ describe("Permissions", () => {
     });
   });
 
-  context("compensateDisprovenPredepositFromPDG()", () => {
-    const pubkeys = "0x" + "beef".repeat(24);
-
-    it("compensates the disproven predeposit from PDG", async () => {
-      await expect(permissions.connect(pdgCompensator).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
-        .to.emit(vaultHub, "Mock__CompensateDisprovenPredepositFromPDG")
-        .withArgs(stakingVault, pubkeys, stranger);
-    });
-
-    it("can be called by the admin of the role", async () => {
-      // does not have the explicit role but is the role admin
-      expect(await permissions.hasRole(await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE())).to.equal(
-        await permissions.DEFAULT_ADMIN_ROLE(),
-      );
-
-      await expect(permissions.connect(defaultAdmin).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
-        .to.emit(vaultHub, "Mock__CompensateDisprovenPredepositFromPDG")
-        .withArgs(stakingVault, pubkeys, stranger);
-    });
-
-    it("reverts if the caller is not a member of the compensate disproven predeposit role", async () => {
-      expect(await permissions.hasRole(await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE(), stranger)).to.be.false;
-
-      await expect(permissions.connect(stranger).compensateDisprovenPredepositFromPDG(pubkeys, stranger))
-        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE());
-    });
-  });
-
   context("transferOwnership()", () => {
     it("transfers the ownership of the StakingVault", async () => {
       await expect(permissions.connect(defaultAdmin).transferOwnership(stranger))
@@ -963,8 +932,8 @@ describe("Permissions", () => {
 
     it("can be called by the admin of the role", async () => {
       // does not have the explicit role but is the role admin
-      expect(await permissions.hasRole(await permissions.CHANGE_TIER_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.CHANGE_TIER_ROLE())).to.equal(
+      expect(await permissions.hasRole(await permissions.VAULT_CONFIGURATION_ROLE(), defaultAdmin)).to.be.false;
+      expect(await permissions.getRoleAdmin(await permissions.VAULT_CONFIGURATION_ROLE())).to.equal(
         await permissions.DEFAULT_ADMIN_ROLE(),
       );
 
@@ -974,11 +943,11 @@ describe("Permissions", () => {
     });
 
     it("reverts if the caller is not a member of the request tier change role", async () => {
-      expect(await permissions.hasRole(await permissions.CHANGE_TIER_ROLE(), stranger)).to.be.false;
+      expect(await permissions.hasRole(await permissions.VAULT_CONFIGURATION_ROLE(), stranger)).to.be.false;
 
       await expect(permissions.connect(stranger).changeTier(1, ether("1")))
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.CHANGE_TIER_ROLE());
+        .withArgs(stranger, await permissions.VAULT_CONFIGURATION_ROLE());
     });
   });
 

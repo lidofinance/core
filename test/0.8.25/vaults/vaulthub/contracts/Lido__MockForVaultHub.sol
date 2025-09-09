@@ -30,7 +30,7 @@ contract Lido__MockForVaultHub {
     }
 
     function burnExternalShares(address from, uint256 amount) public {
-        emit Mock__ExternalSharesBurned(from, amount);
+        emit Mock__ExternalSharesBurnt(from, amount);
     }
 
     function rebalanceExternalEtherToInternal() public payable {
@@ -38,6 +38,6 @@ contract Lido__MockForVaultHub {
     }
 
     event Mock__ExternalSharesMinted(address indexed to, uint256 amount);
-    event Mock__ExternalSharesBurned(address indexed from, uint256 amount);
+    event Mock__ExternalSharesBurnt(address indexed from, uint256 amount);
     event Mock__RebalanceExternalEtherToInternal(uint256 amount);
 }

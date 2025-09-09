@@ -6,7 +6,7 @@ pragma solidity >=0.8.0;
 contract OperatorGrid__MockForLazyOracle {
     constructor() {}
 
-    function effectiveShareLimit(address) external view returns (uint256) {
+    function effectiveShareLimit(address) external pure returns (uint256) {
         return 1000000000000000000;
     }
 }

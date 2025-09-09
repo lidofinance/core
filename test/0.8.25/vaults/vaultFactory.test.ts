@@ -1,11 +1,10 @@
 import { expect } from "chai";
-import { keccak256, ZeroAddress } from "ethers";
+import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
-  BeaconProxy,
   Dashboard,
   DepositContract__MockForBeaconChainDepositor,
   LazyOracle__MockForNodeOperatorFee,
@@ -57,9 +56,6 @@ describe("VaultFactory.sol", () => {
   let lazyOracle: LazyOracle__MockForNodeOperatorFee;
   let predepositGuarantee: PredepositGuarantee__HarnessForFactory;
 
-  let vaultBeaconProxy: BeaconProxy;
-  let vaultBeaconProxyCode: string;
-  let vaultProxyCodeHash: string;
   let originalState: string;
 
   before(async () => {
@@ -126,10 +122,6 @@ describe("VaultFactory.sol", () => {
     //beacon
     beacon = await ethers.deployContract("UpgradeableBeacon", [implOld, admin]);
 
-    vaultBeaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beacon, "0x"]);
-    vaultBeaconProxyCode = await ethers.provider.getCode(await vaultBeaconProxy.getAddress());
-    vaultProxyCodeHash = keccak256(vaultBeaconProxyCode);
-
     dashboard = await ethers.deployContract("Dashboard", [steth, wsteth, vaultHub, locator], { from: deployer });
     vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, dashboard], {
       from: deployer,
@@ -137,10 +129,8 @@ describe("VaultFactory.sol", () => {
 
     //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
     await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
-    //add VAULT_CODEHASH_SET_ROLE role to allow admin to add factory and vault implementation to the hub
-    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_CODEHASH_SET_ROLE(), admin);
 
-    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, operatorGrid });
+    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, operatorGrid, vaultFactory });
 
     //the initialize() function cannot be called on a contract
     await expect(implOld.initialize(stranger, operator, predepositGuarantee)).to.revertedWithCustomError(
@@ -207,7 +197,6 @@ describe("VaultFactory.sol", () => {
     });
 
     it("works with empty `params`", async () => {
-      await vaultHub.connect(admin).setAllowedCodehash(vaultProxyCodeHash, true);
       const {
         tx,
         vault,
@@ -219,6 +208,8 @@ describe("VaultFactory.sol", () => {
         },
       ]);
 
+      expect(await vaultFactory.deployedVaults(vault)).to.be.true;
+
       await expect(tx).to.emit(vaultFactory, "VaultCreated").withArgs(vault);
 
       await expect(tx).to.emit(vaultFactory, "DashboardCreated").withArgs(dashboard_, vault, vaultOwner1);
@@ -229,7 +220,6 @@ describe("VaultFactory.sol", () => {
     });
 
     it("check `version()`", async () => {
-      await vaultHub.connect(admin).setAllowedCodehash(vaultProxyCodeHash, true);
       const { vault } = await createVaultProxy(
         vaultOwner1,
         vaultFactory,
@@ -240,6 +230,7 @@ describe("VaultFactory.sol", () => {
         days(7n),
         [],
       );
+      expect(await vaultFactory.deployedVaults(vault)).to.be.true;
       expect(await vault.version()).to.eq(1);
     });
   });
@@ -248,14 +239,6 @@ describe("VaultFactory.sol", () => {
     it("connect ", async () => {
       const vaultsBefore = await vaultHub.vaultsCount();
       expect(vaultsBefore).to.eq(0);
-
-      //attempting to create and connect a vault without adding a proxy bytecode to the allowed list
-      await expect(
-        createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), []),
-      ).to.revertedWithCustomError(vaultHub, "CodehashNotAllowed");
-
-      //add proxy code hash to whitelist
-      await vaultHub.connect(admin).setAllowedCodehash(vaultProxyCodeHash, true);
 
       //create vaults
       const {
@@ -350,7 +333,6 @@ describe("VaultFactory.sol", () => {
 
   context("After upgrade", () => {
     it("exists vaults - init not works, finalize works ", async () => {
-      await vaultHub.connect(admin).setAllowedCodehash(vaultProxyCodeHash, true);
       const { vault: vault1 } = await createVaultProxy(
         vaultOwner1,
         vaultFactory,
@@ -376,7 +358,6 @@ describe("VaultFactory.sol", () => {
     it("new vaults - init works, finalize not works ", async () => {
       await beacon.connect(admin).upgradeTo(implNew);
 
-      await vaultHub.connect(admin).setAllowedCodehash(vaultProxyCodeHash, true);
       const { vault: vault2 } = await createVaultProxy(
         vaultOwner1,
         vaultFactory,
@@ -403,7 +384,7 @@ describe("VaultFactory.sol", () => {
 
   context("createVaultWithDashboardWithoutConnectingToVaultHub", () => {
     it("works with roles assigned to node operator", async () => {
-      const { vault } = await createVaultProxyWithoutConnectingToVaultHub(
+      const { vault, dashboard: _dashboard } = await createVaultProxyWithoutConnectingToVaultHub(
         vaultOwner1,
         vaultFactory,
         vaultOwner1,
@@ -419,14 +400,18 @@ describe("VaultFactory.sol", () => {
         ],
       );
 
-      const vaultConnection = await vaultHub.vaultConnection(vault);
+      expect(await vaultFactory.deployedVaults(vault)).to.be.true;
 
-      expect(await dashboard.getAddress()).to.not.eq(vaultConnection.owner);
-      expect(vaultConnection.vaultIndex).to.eq(0);
+      // new instance of dashboard
+      const newDashboard = await ethers.getContractAt("Dashboard", await _dashboard.getAddress());
+      expect(await newDashboard.nodeOperatorFeeRecipient()).to.eq(operator.address);
+
+      const vaultConnection = await vaultHub.vaultConnection(vault);
+      expect(vaultConnection.vaultIndex).to.eq(0); // vault is not connected to the vaultHub
     });
 
     it("works with empty roles", async () => {
-      const { vault } = await createVaultProxyWithoutConnectingToVaultHub(
+      const { vault, dashboard: _dashboard } = await createVaultProxyWithoutConnectingToVaultHub(
         vaultOwner1,
         vaultFactory,
         vaultOwner1,
@@ -437,9 +422,13 @@ describe("VaultFactory.sol", () => {
         [],
       );
 
-      const vaultConnection = await vaultHub.vaultConnection(vault);
+      expect(await vaultFactory.deployedVaults(vault)).to.be.true;
 
-      expect(await dashboard.getAddress()).to.not.eq(vaultConnection.owner);
+      // new instance of dashboard
+      const newDashboard = await ethers.getContractAt("Dashboard", await _dashboard.getAddress());
+      expect(await newDashboard.nodeOperatorFeeRecipient()).to.eq(operator.address);
+
+      const vaultConnection = await vaultHub.vaultConnection(vault);
       expect(vaultConnection.vaultIndex).to.eq(0);
     });
 

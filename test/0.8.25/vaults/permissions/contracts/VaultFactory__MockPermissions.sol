@@ -135,7 +135,6 @@ contract VaultFactory__MockPermissions {
         permissions.grantRole(permissions.REBALANCE_ROLE(), _permissionsConfig.rebalancer);
         permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
         permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
-        permissions.grantRole(permissions.PDG_COMPENSATE_PREDEPOSIT_ROLE(), _permissionsConfig.pdgCompensator);
         permissions.grantRole(permissions.PDG_PROVE_VALIDATOR_ROLE(), _permissionsConfig.unknownValidatorProver);
         permissions.grantRole(
             permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
@@ -147,7 +146,7 @@ contract VaultFactory__MockPermissions {
             _permissionsConfig.validatorWithdrawalTriggerer
         );
         permissions.grantRole(permissions.VOLUNTARY_DISCONNECT_ROLE(), _permissionsConfig.disconnecter);
-        permissions.grantRole(permissions.CHANGE_TIER_ROLE(), _permissionsConfig.tierChanger);
+        permissions.grantRole(permissions.VAULT_CONFIGURATION_ROLE(), _permissionsConfig.tierChanger);
     }
 
     event VaultCreated(address indexed owner, address indexed vault);
