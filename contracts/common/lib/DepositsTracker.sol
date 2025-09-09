@@ -9,8 +9,6 @@ pragma solidity >=0.8.9 <0.9.0;
 struct DepositedEthState {
     /// tightly packed deposit data ordered from older to newer by slot
     uint256[] slotsDeposits;
-    /// total sum after each slotsDeposits[i] entry; slotsDeposits.length == cumulative.length
-    // uint256[] cumulative;
     /// Index of the last read
     uint256 cursor;
 }
@@ -19,9 +17,6 @@ struct DepositedEthState {
 struct SlotDeposit {
     /// Ethereum slot
     uint64 slot;
-    /// Can be limited by value that can be deposited in one block
-    /// dependence on use case in one slot can be more than one deposit
-    // uint128 depositedEth;
     /// cumulative sum up to and including this slot
     uint192 cumulativeEth;
 }
@@ -69,12 +64,9 @@ library DepositsTracker {
 
         uint256 depositsEntryAmount = state.slotsDeposits.length;
 
-        // SlotDeposit memory currentDeposit = SlotDeposit(uint64(currentSlot), uint128(depositAmount));
-
         if (depositsEntryAmount == 0) {
             state.slotsDeposits.push(SlotDeposit(uint64(currentSlot), uint192(depositAmount)).pack());
-            // state.cumulative.push(depositAmount);
-            // state.totalAmount += depositAmount;
+
             state.cursor = type(uint256).max;
             return;
         }
@@ -84,28 +76,17 @@ library DepositsTracker {
 
         // if last tracked deposit's slot newer than currentSlot, than such attempt should be reverted
         if (lastDeposit.slot > currentSlot) {
-            // TODO: maybe WrongSlotsOrder || WrongSlotsOrderSorting
             revert SlotOutOfOrder(lastDeposit.slot, currentSlot);
         }
 
         // if it is the same block, increase amount
         if (lastDeposit.slot == currentSlot) {
-            // uint256 newCumulative = uint256(lastDeposit.cumulativeEth) + depositAmount;
-
             lastDeposit.cumulativeEth += uint192(depositAmount);
             state.slotsDeposits[depositsEntryAmount - 1] = lastDeposit.pack();
-            // state.cumulative[depositsEntryAmount - 1] += depositAmount;
-            // state.totalAmount += depositAmount;
+
             return;
         }
 
-        //if it is a new block, store new SlotDeposit value
-        // state.slotsDeposits.push(SlotDeposit(uint64(currentSlot), uint128(depositAmount)).pack());
-        // state.totalAmount += depositAmount;
-        // state.cumulative.push(state.cumulative[depositsEntryAmount - 1] + depositAmount);
-
-        // uint256 appendedCumulative = uint256(lastDeposit.cumulativeEth) + depositAmount;
-        // if (appendedCumulative > type(uint192).max) revert DepositAmountTooLarge(depositAmount);
         state.slotsDeposits.push(
             SlotDeposit(uint64(currentSlot), lastDeposit.cumulativeEth + uint192(depositAmount)).pack()
         );
@@ -139,25 +120,20 @@ library DepositsTracker {
 
             startIndex = state.cursor;
 
-            // maybe use here state.cursor
-            // SlotDeposit memory leftBoundDeposit = state.slotsDeposits[startIndex].unpack();
-            // if (leftBoundDeposit.slot > _slot) revert SlotOutOfRange(leftBoundDeposit.slot, _slot);
-
             leftBoundCumulativeSum = leftBoundDeposit.cumulativeEth;
         }
 
         uint256 endIndex = type(uint256).max;
         for (uint256 i = startIndex; i < depositsEntryAmount; ) {
             SlotDeposit memory d = state.slotsDeposits[i].unpack();
-            if (d.slot > _slot) break; // inclusive upper bound: include deposits at _slot
+            if (d.slot > _slot) break;
 
-            endIndex = i; // track last included index
+            endIndex = i;
             unchecked {
                 ++i;
             }
         }
 
-        // nothing matched
         if (endIndex == type(uint256).max) return 0;
 
         uint256 rightCumulative = state.slotsDeposits[endIndex].unpack().cumulativeEth;
@@ -185,19 +161,6 @@ library DepositsTracker {
             return;
         }
 
-        // Cursor checks
-        // if (state.cursor >= depositsEntryAmount) revert InvalidCursor(state.cursor, depositsEntryAmount);
-        // if depositsEntryAmount != 0 we suppose state.cursor != type(uint256).max
-
-        // if (state.cursor == type(uint256).max) revert InvalidCursor(state.cursor, depositsEntryAmount);
-
-        // _slot checks
-        // SlotDeposit memory cursorSlotDeposit = state.slotsDeposits[state.cursor].unpack();
-        // if (_slot < cursorSlotDeposit.slot) revert SlotOutOfRange(cursorSlotDeposit.slot, _slot);
-        // if (_cumulativeSum < cursorSlotDeposit.cumulativeEth)
-        // revert InvalidCumulativeSum(_cumulativeSum, cursorSlotDeposit.cumulativeEth);
-
-        // uint256 startIndex = state.cursor;
         uint256 startIndex = 0;
 
         if (state.cursor != type(uint256).max) {
@@ -205,10 +168,8 @@ library DepositsTracker {
 
             SlotDeposit memory cursorSlotDeposit = state.slotsDeposits[state.cursor].unpack();
 
-            // only move to the right by slot
             if (_slot < cursorSlotDeposit.slot) revert SlotOutOfRange(cursorSlotDeposit.slot, _slot);
 
-            // cumulative must not go backwards
             if (_cumulativeSum < cursorSlotDeposit.cumulativeEth)
                 revert InvalidCumulativeSum(_cumulativeSum, cursorSlotDeposit.cumulativeEth);
 
@@ -220,7 +181,6 @@ library DepositsTracker {
             if (d.slot > _slot) break;
 
             if (d.cumulativeEth == _cumulativeSum) {
-                // we found slot we need
                 state.cursor = i;
                 return;
             }
