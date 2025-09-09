@@ -7,19 +7,19 @@ import { setBalance, time } from "@nomicfoundation/hardhat-network-helpers";
 import { Lido, WithdrawalQueueERC721 } from "typechain-types";
 
 import { ether, findEventsWithInterfaces } from "lib";
-import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { finalizeWQViaSubmit, getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { finalizeWQViaElVault } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
 
 describe("Integration: Withdrawal edge cases", () => {
   let ctx: ProtocolContext;
-  let holder: HardhatEthersSigner;
-  let stranger: HardhatEthersSigner;
-  let lido: Lido;
-  let wq: WithdrawalQueueERC721;
-
   let snapshot: string;
   let originalState: string;
+
+  let holder: HardhatEthersSigner;
+  let lido: Lido;
+  let wq: WithdrawalQueueERC721;
 
   before(async () => {
     ctx = await getProtocolContext();
@@ -28,27 +28,18 @@ describe("Integration: Withdrawal edge cases", () => {
 
     snapshot = await Snapshot.take();
 
-    [stranger, holder] = await ethers.getSigners();
+    [, holder] = await ethers.getSigners();
     await setBalance(holder.address, ether("1000000"));
+
+    await finalizeWQViaSubmit(ctx);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
-
   afterEach(async () => await Snapshot.restore(originalState));
-
   after(async () => await Snapshot.restore(snapshot));
 
-  async function finalizePendingRequests() {
-    // Finalize any pending requests first
-    while ((await wq.getLastRequestId()) !== (await wq.getLastFinalizedRequestId())) {
-      await report(ctx, { excludeVaultsBalances: true });
-      // Stake more ETH to increase buffer
-      await lido.connect(stranger).submit(ethers.ZeroAddress, { value: ether("10000") });
-    }
-  }
-
   it("Should handle bunker mode with multiple batches", async () => {
-    await finalizePendingRequests();
+    await finalizeWQViaElVault(ctx);
 
     const amount = ether("100");
     const withdrawalAmount = ether("10");
@@ -116,7 +107,7 @@ describe("Integration: Withdrawal edge cases", () => {
   });
 
   it("should handle missed oracle report", async () => {
-    await finalizePendingRequests();
+    await finalizeWQViaElVault(ctx);
 
     const amount = ether("100");
 
@@ -164,7 +155,7 @@ describe("Integration: Withdrawal edge cases", () => {
   });
 
   it("should handle several rebases correctly", async () => {
-    await finalizePendingRequests();
+    await finalizeWQViaElVault(ctx);
 
     const amount = ether("100");
     const withdrawalAmount = ether("10");

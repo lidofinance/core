@@ -11,7 +11,7 @@ import { AccessControlEnumerable } from "../utils/access/AccessControlEnumerable
 import { IReportAsyncProcessor } from "./HashConsensus.sol";
 
 
-interface IConsensusContract {
+interface IHashConsensus {
     function getIsMember(address addr) external view returns (bool);
 
     function getCurrentFrame() external view returns (
@@ -25,7 +25,11 @@ interface IConsensusContract {
         uint256 genesisTime
     );
 
-    function getFrameConfig() external view returns (uint256 initialEpoch, uint256 epochsPerFrame);
+    function getFrameConfig() external view returns (
+        uint256 initialEpoch,
+        uint256 epochsPerFrame,
+        uint256 fastLaneLengthSlots
+    );
 
     function getInitialRefSlot() external view returns (uint256);
 }
@@ -268,7 +272,7 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
     ///
     function _isConsensusMember(address addr) internal view returns (bool) {
         address consensus = CONSENSUS_CONTRACT_POSITION.getStorageAddress();
-        return IConsensusContract(consensus).getIsMember(addr);
+        return IHashConsensus(consensus).getIsMember(addr);
     }
 
     /// @notice Called when the oracle gets a new consensus report from the HashConsensus contract.
@@ -352,7 +356,7 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
     ///
     function _getCurrentRefSlot() internal view returns (uint256) {
         address consensusContract = CONSENSUS_CONTRACT_POSITION.getStorageAddress();
-        (uint256 refSlot, ) = IConsensusContract(consensusContract).getCurrentFrame();
+        (uint256 refSlot, ) = IHashConsensus(consensusContract).getCurrentFrame();
         return refSlot;
     }
 
@@ -373,12 +377,12 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
         address prevAddr = CONSENSUS_CONTRACT_POSITION.getStorageAddress();
         if (addr == prevAddr) revert AddressCannotBeSame();
 
-        (, uint256 secondsPerSlot, uint256 genesisTime) = IConsensusContract(addr).getChainConfig();
+        (, uint256 secondsPerSlot, uint256 genesisTime) = IHashConsensus(addr).getChainConfig();
         if (secondsPerSlot != SECONDS_PER_SLOT || genesisTime != GENESIS_TIME) {
             revert UnexpectedChainConfig();
         }
 
-        uint256 initialRefSlot = IConsensusContract(addr).getInitialRefSlot();
+        uint256 initialRefSlot = IHashConsensus(addr).getInitialRefSlot();
         if (initialRefSlot < lastProcessingRefSlot) {
             revert InitialRefSlotCannotBeLessThanProcessingOne(initialRefSlot, lastProcessingRefSlot);
         }

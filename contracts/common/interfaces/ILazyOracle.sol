@@ -10,7 +10,8 @@ pragma solidity >=0.5.0;
  */
 interface ILazyOracle {
     function updateReportData(
-        uint256 _timestamp,
+        uint256 _vaultsDataTimestamp,
+        uint256 _vaultsDataRefSlot,
         bytes32 _vaultsDataTreeRoot,
         string memory _vaultsDataReportCid
     ) external;

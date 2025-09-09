@@ -8,10 +8,15 @@ jobs:
     name: Hardhat / Mainnet
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      NODE_OPTIONS: --max_old_space_size=7200
+      SKIP_GAS_REPORT: true
+      SKIP_CONTRACT_SIZE: true
+      SKIP_INTERFACES_CHECK: true
 
     services:
       hardhat-node:
-        image: ghcr.io/lidofinance/hardhat-node:2.24.3
+        image: ghcr.io/lidofinance/hardhat-node:2.26.0
         ports:
           - 8555:8545
         env:
@@ -52,6 +57,6 @@ jobs:
       - name: Run integration tests
         run: yarn test:integration
         env:
-          LOG_LEVEL: debug
           RPC_URL: http://localhost:8555
+          LOG_LEVEL: debug
           NETWORK_STATE_FILE: deployed-mainnet-upgrade.json
