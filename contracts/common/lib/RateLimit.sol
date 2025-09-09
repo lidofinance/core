@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.9;
+
+/* See contracts/COMPILERS.md */
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity >=0.8.9 <0.9.0;
 
 struct LimitData {
     uint32 maxLimit; // Maximum limit
