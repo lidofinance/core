@@ -71,6 +71,8 @@ task("verify:deployed", "Verifies deployed contracts based on state file")
   });
 
 async function verifyContract(contract: DeployedContract, hre: HardhatRuntimeEnvironment) {
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
   if (!contract.contract) {
     log.warning("Skipping contract without contract name:", contract);
     return;

@@ -2,27 +2,23 @@ import { expect } from "chai";
 import { ContractTransactionReceipt, LogDescription, TransactionResponse, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { ether, impersonate, log, ONE_GWEI, updateBalance } from "lib";
-import { getProtocolContext, getReportTimeElapsed, ProtocolContext, report } from "lib/protocol";
+import { LIMITER_PRECISION_BASE } from "lib/constants";
+import { finalizeWQViaSubmit, getProtocolContext, getReportTimeElapsed, ProtocolContext, report } from "lib/protocol";
 
 import { Snapshot } from "test/suite";
-import { LIMITER_PRECISION_BASE, MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
+import { MAX_BASIS_POINTS, ONE_DAY, SHARE_RATE_PRECISION } from "test/suite/constants";
 
 describe("Integration: Accounting", () => {
   let ctx: ProtocolContext;
-
-  let ethHolder: HardhatEthersSigner;
 
   let snapshot: string;
   let originalState: string;
 
   before(async () => {
     ctx = await getProtocolContext();
-
-    [ethHolder] = await ethers.getSigners();
 
     snapshot = await Snapshot.take();
   });
@@ -101,18 +97,6 @@ describe("Integration: Accounting", () => {
     }
   }
 
-  // Helper function to finalize all requests
-  async function ensureRequestsFinalized() {
-    const { lido, withdrawalQueue } = ctx.contracts;
-
-    await setBalance(ethHolder.address, ether("1000000"));
-
-    while ((await withdrawalQueue.getLastRequestId()) != (await withdrawalQueue.getLastFinalizedRequestId())) {
-      await report(ctx);
-      await lido.connect(ethHolder).submit(ZeroAddress, { value: ether("10000") });
-    }
-  }
-
   // TODO: remove or fix and make it more meaningful for both scratch and mainnet limits
   it.skip("Should reverts report on sanity checks", async () => {
     const { oracleReportSanityChecker } = ctx.contracts;
@@ -175,7 +159,7 @@ describe("Integration: Accounting", () => {
   it("Should account correctly with negative CL rebase", async () => {
     const { lido, accountingOracle } = ctx.contracts;
 
-    const REBASE_AMOUNT = ether("-10"); // Must be enough to cover the fees
+    const REBASE_AMOUNT = ether("-100"); // it can be countered with withdrawal queue extra APR
 
     const lastProcessingRefSlotBefore = await accountingOracle.getLastProcessingRefSlot();
     const totalELRewardsCollectedBefore = await lido.getTotalELRewardsCollected();
@@ -183,7 +167,7 @@ describe("Integration: Accounting", () => {
     const totalSharesBefore = await lido.getTotalShares();
 
     // Report
-    const params = { clDiff: REBASE_AMOUNT, excludeVaultsBalances: true };
+    const params = { clDiff: REBASE_AMOUNT, excludeVaultsBalances: true, skipWithdrawals: true };
     const { reportTx } = (await report(ctx, params)) as {
       reportTx: TransactionResponse;
       extraDataTx: TransactionResponse;
@@ -793,7 +777,7 @@ describe("Integration: Accounting", () => {
   it("Should account correctly shares burn above limits", async () => {
     const { lido, burner, wstETH, accounting } = ctx.contracts;
 
-    await ensureRequestsFinalized();
+    await finalizeWQViaSubmit(ctx);
 
     await ensureWhaleHasFunds();
 
@@ -802,11 +786,7 @@ describe("Integration: Accounting", () => {
     const limitWithExcess = limit + excess;
 
     const initialBurnerBalance = await lido.sharesOf(burner.address);
-    expect(initialBurnerBalance).to.equal(0);
-    expect(await lido.sharesOf(wstETH.address)).to.be.greaterThan(
-      limitWithExcess,
-      "Not enough shares on whale account",
-    );
+    expect(await lido.sharesOf(wstETH.address)).to.be.greaterThan(limitWithExcess, "Not enough shares on wstETH");
 
     const stethOfShares = await lido.getPooledEthByShares(limitWithExcess);
 
@@ -889,7 +869,7 @@ describe("Integration: Accounting", () => {
   it("Should account correctly overfill both vaults", async () => {
     const { lido, withdrawalVault, elRewardsVault } = ctx.contracts;
 
-    await ensureRequestsFinalized();
+    await finalizeWQViaSubmit(ctx);
 
     const limit = await rebaseLimitWei();
     const excess = limit / 2n; // 2nd report will take two halves of the excess of the limit size

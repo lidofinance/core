@@ -10,9 +10,10 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 import {ILazyOracle} from "contracts/common/interfaces/ILazyOracle.sol";
 
-import {UnstructuredStorage} from "contracts/0.8.9/lib/UnstructuredStorage.sol";
+import {UnstructuredStorage} from "../lib/UnstructuredStorage.sol";
 
 import {BaseOracle} from "./BaseOracle.sol";
+
 
 interface IReportReceiver {
     function handleOracleReport(ReportValues memory values) external;
@@ -27,21 +28,21 @@ interface IOracleReportSanityChecker {
 
 interface IStakingRouter {
     function updateExitedValidatorsCountByStakingModule(
-        uint256[] calldata moduleIds,
-        uint256[] calldata exitedValidatorsCounts
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _exitedValidatorsCounts
     ) external returns (uint256);
 
     function reportStakingModuleExitedValidatorsCountByNodeOperator(
-        uint256 stakingModuleId,
-        bytes calldata nodeOperatorIds,
-        bytes calldata exitedValidatorsCounts
+        uint256 _stakingModuleId,
+        bytes calldata _nodeOperatorIds,
+        bytes calldata _exitedValidatorsCounts
     ) external;
 
     function onValidatorsCountsByNodeOperatorReportingFinished() external;
 }
 
 interface IWithdrawalQueue {
-    function onOracleReport(bool isBunkerMode, uint256 prevReportTimestamp, uint256 currentReportTimestamp) external;
+    function onOracleReport(bool _isBunkerModeNow, uint256 _bunkerStartTimestamp, uint256 _currentReportTimestamp) external;
 }
 
 contract AccountingOracle is BaseOracle {
@@ -181,6 +182,11 @@ contract AccountingOracle is BaseOracle {
         /// WithdrawalQueue.calculateFinalizationBatches. Empty array means that no withdrawal
         /// requests should be finalized.
         uint256[] withdrawalFinalizationBatches;
+        /// @dev The share/ETH rate with the 10^27 precision (i.e. the price of one stETH share
+        /// in ETH where one ETH is denominated as 10^27) that would be effective as the result of
+        /// applying this oracle report at the reference slot, with withdrawalFinalizationBatches
+        /// set to empty array and simulatedShareRate set to 0.
+        uint256 simulatedShareRate;
         /// @dev Whether, based on the state observed at the reference slot, the protocol should
         /// be in the bunker mode.
         bool isBunkerMode;
@@ -484,12 +490,14 @@ contract AccountingOracle is BaseOracle {
                 data.withdrawalVaultBalance,
                 data.elRewardsVaultBalance,
                 data.sharesRequestedToBurn,
-                data.withdrawalFinalizationBatches
+                data.withdrawalFinalizationBatches,
+                data.simulatedShareRate
             )
         );
 
         ILazyOracle(LOCATOR.lazyOracle()).updateReportData(
             GENESIS_TIME + data.refSlot * SECONDS_PER_SLOT,
+            data.refSlot,
             data.vaultsDataTreeRoot,
             data.vaultsDataTreeCid
         );

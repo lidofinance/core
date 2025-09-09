@@ -8,7 +8,6 @@ import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC2
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
 
-import {Math256} from "contracts/common/lib/Math256.sol";
 import {ILido as IStETH} from "contracts/common/interfaces/ILido.sol";
 import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
 
@@ -18,9 +17,9 @@ import {NodeOperatorFee} from "./NodeOperatorFee.sol";
 import {VaultHub} from "../VaultHub.sol";
 
 interface IWstETH is IERC20 {
-    function wrap(uint256) external returns (uint256);
+    function wrap(uint256 _stETHAmount) external returns (uint256);
 
-    function unwrap(uint256) external returns (uint256);
+    function unwrap(uint256 _wstETHAmount) external returns (uint256);
 }
 
 /**
@@ -31,6 +30,7 @@ interface IWstETH is IERC20 {
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
 contract Dashboard is NodeOperatorFee {
+    /// @dev 0xa38b301640bddfd3e6a9d2a11d13551d53ef81526347ff09d798738fcc5a49d4
     bytes32 public constant RECOVER_ASSETS_ROLE = keccak256("vaults.Dashboard.RecoverAssets");
 
     /**
@@ -81,16 +81,18 @@ contract Dashboard is NodeOperatorFee {
      * @notice Calls the parent's initializer and approves the max allowance for WSTETH for gas savings
      * @param _defaultAdmin The address of the default admin
      * @param _nodeOperatorManager The address of the node operator manager
+     * @param _nodeOperatorFeeRecipient The address of the node operator fee recipient
      * @param _nodeOperatorFeeBP The node operator fee in basis points
      * @param _confirmExpiry The confirmation expiry time in seconds
      */
     function initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
+        address _nodeOperatorFeeRecipient,
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry
     ) external {
-        super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeRecipient, _nodeOperatorFeeBP, _confirmExpiry);
 
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
@@ -159,42 +161,64 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Returns the total value of the vault in ether.
      */
-    function totalValue() public view returns (uint256) {
+    function totalValue() external view returns (uint256) {
         return VAULT_HUB.totalValue(address(_stakingVault()));
-    }
-
-    /**
-     * @notice Returns the overall unsettled obligations of the vault in ether
-     * @dev includes the node operator fee
-     */
-    function unsettledObligations() external view returns (uint256) {
-        VaultHub.VaultObligations memory obligations = VAULT_HUB.vaultObligations(address(_stakingVault()));
-        return uint256(obligations.unsettledLidoFees) + uint256(obligations.redemptions) + nodeOperatorDisbursableFee();
     }
 
     /**
      * @notice Returns the locked amount of ether for the vault
      */
-    function locked() public view returns (uint256) {
+    function locked() external view returns (uint256) {
         return VAULT_HUB.locked(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of shares to burn to restore vault healthiness or to fulfill redemptions and the
+     *         amount of outstanding Lido fees
+     * @return sharesToRebalance amount of shares to rebalance
+     * @return unsettledLidoFees amount of Lido fees to be settled
+     */
+    function obligations() external view returns (uint256 sharesToRebalance, uint256 unsettledLidoFees) {
+        (sharesToRebalance, unsettledLidoFees) = VAULT_HUB.obligations(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of ether shortfall to cover the outstanding obligations of the vault
+     */
+    function obligationsShortfall() external view returns (uint256) {
+        return VAULT_HUB.obligationsShortfall(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of shares to rebalance to restore vault healthiness or to fulfill redemptions
+     */
+    function rebalanceShortfallShares() external view returns (uint256) {
+        return VAULT_HUB.rebalanceShortfallShares(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of ether that is locked on the vault only as a reserve.
+     * @dev There is no way to mint stETH for it (it includes connection deposit and slashing reserve)
+     */
+    function minimalReserve() public view returns (uint256) {
+        return VAULT_HUB.vaultRecord(address(_stakingVault())).minimalReserve;
     }
 
     /**
      * @notice Returns the max total lockable amount of ether for the vault (excluding the Lido and node operator fees)
      */
-    function maxLockableValue() public view returns (uint256) {
+    function maxLockableValue() external view returns (uint256) {
         uint256 maxLockableValue_ = VAULT_HUB.maxLockableValue(address(_stakingVault()));
         uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
+
         return maxLockableValue_ > nodeOperatorFee ? maxLockableValue_ - nodeOperatorFee : 0;
     }
 
     /**
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
-    function totalMintingCapacityShares() public view returns (uint256) {
-        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
-
-        return Math256.min(effectiveShareLimit, _mintableShares(maxLockableValue()));
+    function totalMintingCapacityShares() external view returns (uint256) {
+        return _totalMintingCapacityShares(-int256(nodeOperatorDisbursableFee()));
     }
 
     /**
@@ -204,14 +228,13 @@ contract Dashboard is NodeOperatorFee {
      * @return the number of shares that can be minted using additional ether
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) public view returns (uint256) {
-        uint256 effectiveShareLimit = _operatorGrid().effectiveShareLimit(address(_stakingVault()));
-        uint256 vaultMintableSharesByRR = _mintableShares(maxLockableValue() + _etherToFund);
+        int256 deltaValue = int256(_etherToFund) - int256(nodeOperatorDisbursableFee());
+        uint256 vaultTotalMintingCapacityShares = _totalMintingCapacityShares(deltaValue);
         uint256 vaultLiabilityShares = liabilityShares();
 
-        return Math256.min(
-            effectiveShareLimit > vaultLiabilityShares ? effectiveShareLimit - vaultLiabilityShares : 0,
-            vaultMintableSharesByRR > vaultLiabilityShares ? vaultMintableSharesByRR - vaultLiabilityShares : 0
-        );
+        if (vaultTotalMintingCapacityShares <= vaultLiabilityShares) return 0;
+
+        return vaultTotalMintingCapacityShares - vaultLiabilityShares;
     }
 
     /**
@@ -219,9 +242,6 @@ contract Dashboard is NodeOperatorFee {
      * @dev This is the amount of ether that is not locked in the StakingVault and not reserved for fees and obligations.
      */
     function withdrawableValue() public view returns (uint256) {
-        // On pending disconnect, the vault does not allow any withdrawals, so need to return 0 here
-        if (VAULT_HUB.vaultConnection(address(_stakingVault())).pendingDisconnect) return 0;
-
         uint256 withdrawable = VAULT_HUB.withdrawableValue(address(_stakingVault()));
         uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
 
@@ -333,7 +353,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Mints stETH tokens backed by the vault to the recipient.
-     * !NB: this will revert with`VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
+     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
      * @param _recipient Address of the recipient
      * @param _amountOfStETH Amount of stETH to mint
      */
@@ -457,20 +477,6 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Compensates ether of disproven validator's predeposit from PDG to the recipient.
-     *         Can be called if validator which was predeposited via `PDG.predeposit` with vault funds
-     *         was frontrun by NO's with non-vault WC (effectively NO's stealing the predeposit) and then
-     *         proof of the validator's invalidity has been provided via `PDG.proveInvalidValidatorWC`.
-     * @param _pubkey of validator that was proven invalid in PDG
-     * @param _recipient address to receive the `PDG.PREDEPOSIT_AMOUNT`
-     * @dev PDG will revert if _recipient is vault address, use fund() instead to return ether to vault
-     * @dev requires the caller to have the `PDG_COMPENSATE_PREDEPOSIT_ROLE`
-     */
-    function compensateDisprovenPredepositFromPDG(bytes calldata _pubkey, address _recipient) external {
-        _compensateDisprovenPredepositFromPDG(_pubkey, _recipient);
-    }
-
-    /**
      * @notice Recovers ERC20 tokens or ether from the dashboard contract to sender
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
      * @param _recipient Address of the recovery recipient
@@ -544,29 +550,60 @@ contract Dashboard is NodeOperatorFee {
      * @notice Initiates a withdrawal from validator(s) on the beacon chain using EIP-7002 triggerable withdrawals
      *         Both partial withdrawals (disabled for if vault is unhealthy) and full validator exits are supported.
      * @param _pubkeys Concatenated validator public keys (48 bytes each).
-     * @param _amounts Withdrawal amounts in wei for each validator key and must match _pubkeys length.
-     *         Set amount to 0 for a full validator exit.
-     *         For partial withdrawals, amounts will be trimmed to keep MIN_ACTIVATION_BALANCE on the validator to avoid deactivation
+     * @param _amountsInGwei Withdrawal amounts in Gwei for each validator key. Must match _pubkeys length.
+     *         Set amount to 0 for a full validator exit. For partial withdrawals, amounts may be trimmed to keep
+     *         MIN_ACTIVATION_BALANCE on the validator to avoid deactivation.
      * @param _refundRecipient Address to receive any fee refunds, if zero, refunds go to msg.sender.
      * @dev    A withdrawal fee must be paid via msg.value.
      *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee for the current block.
      */
     function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
-        uint64[] calldata _amounts,
+        uint64[] calldata _amountsInGwei,
         address _refundRecipient
     ) external payable {
-        _triggerValidatorWithdrawals(_pubkeys, _amounts, _refundRecipient);
+        _triggerValidatorWithdrawals(_pubkeys, _amountsInGwei, _refundRecipient);
     }
 
     /**
      * @notice Requests a change of tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
-     * @return bool Whether the tier change was confirmed.
+     * @return bool Whether the tier change was executed.
+     * @dev Tier change confirmation logic:
+     *      - Both vault owner (via this function) AND node operator confirmations are always required
+     *      - First call returns false (pending), second call with both confirmations completes the tier change
+     *      - Confirmations expire after the configured period (default: 1 day)
      */
     function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external returns (bool) {
         return _changeTier(_tierId, _requestedShareLimit);
+    }
+
+    /**
+     * @notice Requests a sync of tier on the OperatorGrid.
+     * @return bool Whether the tier sync was executed.
+     * @dev Tier sync confirmation logic:
+     *      - Both vault owner (via this function) AND node operator confirmations are required
+     *      - First call returns false (pending), second call with both confirmations completes the sync
+     *      - Confirmations expire after the configured period (default: 1 day)
+     */
+    function syncTier() external returns (bool) {
+        return _syncTier();
+    }
+
+    /**
+     * @notice Requests a change of share limit on the OperatorGrid.
+     * @param _requestedShareLimit The requested share limit.
+     * @return bool Whether the share limit change was executed.
+     * @dev Share limit update confirmation logic:
+     *      - Default tier (0): Only vault owner confirmation required (via this function)
+     *      - Non-default tier + decreasing limit: Only vault owner confirmation required (via this function)
+     *      - Non-default tier + increasing limit: Both vault owner (via this function) AND node operator confirmations required
+     *        - First call returns false (pending), second call with node operator confirmation completes the update
+     *        - Confirmations expire after the configured period (default: 1 day)
+     */
+    function updateShareLimit(uint256 _requestedShareLimit) external returns (bool) {
+        return _updateVaultShareLimit(_requestedShareLimit);
     }
 
     // ==================== Internal Functions ====================
@@ -617,11 +654,10 @@ contract Dashboard is NodeOperatorFee {
         _burnShares(unwrappedShares);
     }
 
-    /// @notice Calculates the total number of shares that can be minted by the vault
-    /// @param _ether The amount of ether to consider for minting
-    function _mintableShares(uint256 _ether) internal view returns (uint256) {
-        uint256 mintableStETH = (_ether * (TOTAL_BASIS_POINTS - reserveRatioBP())) / TOTAL_BASIS_POINTS;
-        return _getSharesByPooledEth(mintableStETH);
+    /// @notice Calculates the total number of shares that is possible to mint on the vault
+    /// @dev the delta value is the amount of ether to add or subtract from the total value of the vault
+    function _totalMintingCapacityShares(int256 _deltaValue) internal view returns (uint256) {
+        return VAULT_HUB.totalMintingCapacityShares(address(_stakingVault()), _deltaValue);
     }
 
     /// @notice Converts the given amount of stETH to shares

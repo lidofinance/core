@@ -9,7 +9,7 @@ import { BASE_CONSENSUS_VERSION } from "lib";
 import { deployHashConsensus, HASH_1, HASH_2, ZERO_HASH } from "test/deploy";
 import { Snapshot } from "test/suite";
 
-const CONSENSUS_VERSION_NEW = 3n;
+const CONSENSUS_VERSION_NEW = 4n;
 
 describe("HashConsensus.sol:submitReport", function () {
   let admin: Signer;

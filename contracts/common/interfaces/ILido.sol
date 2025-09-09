@@ -22,7 +22,7 @@ interface ILido is IERC20, IVersioned {
 
     function transferShares(address, uint256) external returns (uint256);
 
-    function rebalanceExternalEtherToInternal() external payable;
+    function rebalanceExternalEtherToInternal(uint256 _amountOfShares) external payable;
 
     function getTotalPooledEther() external view returns (uint256);
 

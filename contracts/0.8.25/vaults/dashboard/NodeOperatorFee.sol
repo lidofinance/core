@@ -35,11 +35,13 @@ contract NodeOperatorFee is Permissions {
      * - confirms the transfer of the StakingVault ownership;
      * - sets the node operator fee recipient.
      */
+    /// @dev 0x59783a4ae82167eefad593739a5430c1d9e896a16c35f1e5285ddd0c0980885c
     bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.NodeOperatorFee.NodeOperatorManagerRole");
 
     /**
      * @notice Adjusts rewards to allow fee correction during side deposits or consolidations
      */
+    /// @dev 0xe0b9915a7819e810f29b50730662441fec3443eb363b7e7c90c77fada416f276
     bytes32 public constant NODE_OPERATOR_REWARDS_ADJUST_ROLE = keccak256("vaults.NodeOperatorFee.RewardsAdjustRole");
 
     /**
@@ -92,6 +94,7 @@ contract NodeOperatorFee is Permissions {
     function _initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
+        address _nodeOperatorFeeRecipient,
         uint256 _nodeOperatorFeeRate,
         uint256 _confirmExpiry
     ) internal {
@@ -99,9 +102,8 @@ contract NodeOperatorFee is Permissions {
 
         super._initialize(_defaultAdmin, _confirmExpiry);
 
-        _validateNodeOperatorFeeRate(_nodeOperatorFeeRate);
         _setNodeOperatorFeeRate(_nodeOperatorFeeRate);
-        _setNodeOperatorFeeRecipient(_nodeOperatorManager);
+        _setNodeOperatorFeeRecipient(_nodeOperatorFeeRecipient);
 
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
@@ -157,7 +159,7 @@ contract NodeOperatorFee is Permissions {
         int256 adjustment = _toSignedClamped(rewardsAdjustment.amount);
 
         // the total increase/decrease of the vault value during the fee period
-        int256 growth = int112(periodEnd.totalValue) - int112(periodStart.totalValue) -
+        int256 growth = int104(periodEnd.totalValue) - int104(periodStart.totalValue) -
                         (periodEnd.inOutDelta - periodStart.inOutDelta);
 
         // the actual rewards that are subject to the fee
@@ -183,8 +185,7 @@ contract NodeOperatorFee is Permissions {
         if (rewardsAdjustment.amount != 0) _setRewardsAdjustment(0);
         feePeriodStartReport = latestReport();
 
-        VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
-        emit NodeOperatorFeeDisbursed(msg.sender, fee);
+        _disburseNodeOperatorFee(fee);
     }
 
     /**
@@ -207,9 +208,6 @@ contract NodeOperatorFee is Permissions {
         // If the vault is quarantined, the total value is reduced and may not reflect the adjustment
         if (_lazyOracle().vaultQuarantine(address(_stakingVault())).isActive) revert VaultQuarantined();
 
-        // Validate fee rate before collecting confirmations
-        _validateNodeOperatorFeeRate(_newNodeOperatorFeeRate);
-
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
@@ -222,10 +220,7 @@ contract NodeOperatorFee is Permissions {
 
         _setNodeOperatorFeeRate(_newNodeOperatorFeeRate);
 
-        if (fee > 0) {
-            VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
-            emit NodeOperatorFeeDisbursed(msg.sender, fee);
-        }
+        if (fee > 0) _disburseNodeOperatorFee(fee);
 
         return true;
     }
@@ -291,7 +286,7 @@ contract NodeOperatorFee is Permissions {
     }
 
     function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
-        _validateNodeOperatorFeeRate(_newNodeOperatorFeeRate);
+        if (_newNodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
 
         uint256 oldNodeOperatorFeeRate = nodeOperatorFeeRate;
         nodeOperatorFeeRate = _newNodeOperatorFeeRate;
@@ -323,17 +318,14 @@ contract NodeOperatorFee is Permissions {
         emit RewardsAdjustmentSet(_newAdjustment, oldAdjustment);
     }
 
+    function _disburseNodeOperatorFee(uint256 _fee) internal {
+        VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, _fee);
+        emit NodeOperatorFeeDisbursed(msg.sender, _fee);
+    }
+
     function _toSignedClamped(uint128 _adjustment) internal pure returns (int128) {
         if (_adjustment > uint128(type(int128).max)) return type(int128).max;
         return int128(_adjustment);
-    }
-
-    /**
-     * @notice Validates that the node operator fee rate is within acceptable bounds
-     * @param _nodeOperatorFeeRate The fee rate to validate
-     */
-    function _validateNodeOperatorFeeRate(uint256 _nodeOperatorFeeRate) internal pure {
-        if (_nodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
     }
 
     function _lazyOracle() internal view returns (LazyOracle) {

@@ -6,6 +6,7 @@ pragma solidity 0.8.25;
 
 // import {MinFirstAllocationStrategy} from "contracts/common/lib/MinFirstAllocationStrategy.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
+import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 
 import {
     AccessControlEnumerableUpgradeable
@@ -1150,7 +1151,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function getStakingModuleMaxInitialDepositsAmount(
         uint256 _stakingModuleId,
         uint256 _depositableEth
-    ) public returns (uint256) {
+    ) external returns (uint256) {
         StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
 
         // TODO: is it correct?
@@ -1175,7 +1176,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
             return totalCount * INITIAL_DEPOSIT_SIZE;
         } else if (stakingModule.withdrawalCredentialsType == LEGACY_WITHDRAWAL_CREDENTIALS_TYPE) {
-            uint256 count = getStakingModuleMaxDepositsCount(_stakingModuleId, _depositableEth);
+            uint256 count = _getStakingModuleMaxDepositsCount(_stakingModuleId, _depositableEth);
 
             return count * INITIAL_DEPOSIT_SIZE;
         } else {
@@ -1188,13 +1189,21 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function getStakingModuleMaxDepositsCount(
         uint256 _stakingModuleId,
         uint256 _depositableEth
-    ) public view returns (uint256) {
+    ) external view returns (uint256) {
+        return _getStakingModuleMaxDepositsCount(_stakingModuleId, _depositableEth);
+    }
+
+    function _getStakingModuleMaxDepositsCount(
+        uint256 _stakingModuleId,
+        uint256 _depositableEth
+    ) internal view returns (uint256) {
         StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
 
-        require(
-            stakingModule.withdrawalCredentialsType == LEGACY_WITHDRAWAL_CREDENTIALS_TYPE,
-            "This method is only supported for legacy modules"
-        );
+        // TODO:
+        // require(
+        //     stakingModule.withdrawalCredentialsType == LEGACY_WITHDRAWAL_CREDENTIALS_TYPE,
+        //     "This method is only supported for legacy modules"
+        // );
         uint256 stakingModuleTargetEthAmount = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
 
         uint256 countKeys = stakingModuleTargetEthAmount / MAX_EFFECTIVE_BALANCE_01;
@@ -1205,6 +1214,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         );
         return Math256.min(depositableValidatorsCount, countKeys);
     }
+
+
 
     function _getNewDepositsCount02(
         uint256 stakingModuleTargetEthAmount,
@@ -1654,10 +1665,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     }
 
     /// @notice Allocation for module based on target share
-    /// @param stakingModuleId - Id of staking module
     /// @param  _depositsToAllocate - Eth amount that can be deposited in module
     function _getTargetDepositsAllocation(
-        uint256 stakingModuleId,
+        uint256 /* stakingModuleId */,
         uint256 _depositsToAllocate
     ) internal view returns (uint256 allocation) {
         // TODO: implementation based on Share Limits allocation strategy tbd

@@ -27,6 +27,9 @@ interface IWithdrawalVaultProxy {
 
 interface IOracleContract {
     function setConsensusVersion(uint256 _version) external;
+}
+
+interface IValidatorExitBusOracle {
     function finalizeUpgrade_v2(
         uint256 _maxValidatorsPerReport,
         uint256 _maxExitRequestsLimit,
@@ -40,7 +43,7 @@ interface IWithdrawalVault {
 }
 
 interface INodeOperatorsRegistry {
-    function finalizeUpgrade_v4(uint256 _exitDeadlineInSec) external;
+    function finalizeUpgrade_v4(uint256 _exitDeadlineThresholdInSeconds) external;
 }
 
 interface IOracleDaemonConfig {
@@ -62,32 +65,27 @@ contract TWVoteScript is OmnibusBase {
         address withdrawal_vault;
         address withdrawal_vault_impl;
         address accounting_oracle;
-        address accounting_oracle_impl;
         address staking_router;
         address staking_router_impl;
         address validator_exit_verifier;
         address node_operators_registry;
         address node_operators_registry_impl;
+        address simple_dvt;
         address oracle_daemon_config;
-        address nor_app_repo;
-        address sdvt_app_repo;
+
         // Other parameters
         bytes32 node_operators_registry_app_id;
-        bytes32 sdvt_app_id;
-        uint16[3] nor_version;
-        uint16[3] sdvt_version;
+        bytes32 simple_dvt_app_id;
         uint256 vebo_consensus_version;
         uint256 ao_consensus_version;
         uint256 nor_exit_deadline_in_sec;
         uint256 exit_events_lookback_window_in_slots;
-        bytes nor_content_uri;
-        bytes sdvt_content_uri;
     }
 
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 21;
+    uint256 public constant VOTE_ITEMS_COUNT = 22;
     address public constant MAINNET_ACL = 0x9895F0F17cc1d1891b6f18ee0b483B6f221b37Bb;
     address public constant MAINNET_KERNEL = 0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc;
 
@@ -101,35 +99,9 @@ contract TWVoteScript is OmnibusBase {
     }
 
     function getVotingVoteItems() public view override returns (VoteItem[] memory voteItems) {
-        uint256 numVotingVoteItems = 2;
+        uint256 numVotingVoteItems = 0;
         voteItems = new VoteItem[](numVotingVoteItems);
         uint256 index = 0;
-
-        // TODO: remove these two items as Repo contract are deprecated and no update is needed
-
-        // Publish new NodeOperatorsRegistry implementation in NodeOperatorsRegistry app APM repo
-        voteItems[index++] = VoteItem({
-            description: "Publish new NodeOperatorsRegistry implementation in NodeOperatorsRegistry app APM repo",
-            call: _votingCall(
-                params.nor_app_repo,
-                abi.encodeCall(
-                    IRepo.newVersion,
-                    (params.nor_version, params.node_operators_registry_impl, params.nor_content_uri)
-                )
-            )
-        });
-
-        // Publish new NodeOperatorsRegistry implementation in SimpleDVT app APM repo
-        voteItems[index++] = VoteItem({
-            description: "Publish new NodeOperatorsRegistry implementation in SimpleDVT app APM repo",
-            call: _votingCall(
-                params.sdvt_app_repo,
-                abi.encodeCall(
-                    IRepo.newVersion,
-                    (params.sdvt_version, params.node_operators_registry_impl, params.nor_content_uri)
-                )
-            )
-        });
 
         assert(index == numVotingVoteItems);
     }
@@ -165,7 +137,7 @@ contract TWVoteScript is OmnibusBase {
             call: _forwardCall(
                 params.agent,
                 params.validators_exit_bus_oracle,
-                abi.encodeCall(IOracleContract.finalizeUpgrade_v2, (600, 13000, 1, 48))
+                abi.encodeCall(IValidatorExitBusOracle.finalizeUpgrade_v2, (600, 13000, 1, 48))
             )
         });
 
@@ -329,10 +301,34 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 18. Grant CONFIG_MANAGER_ROLE role to the AGENT
+        // 18. Update SimpleDVT implementation
+        voteItems[index++] = VoteItem({
+            description: "18. Update SimpleDVT implementation",
+            call: _forwardCall(
+                params.agent,
+                MAINNET_KERNEL,
+                abi.encodeWithSignature("setApp(bytes32,bytes32,address)",
+                    IKernel(MAINNET_KERNEL).APP_BASES_NAMESPACE(),
+                    params.simple_dvt_app_id,
+                    params.node_operators_registry_impl
+                )
+            )
+        });
+
+        // 19. Call finalizeUpgrade_v4 on SimpleDVT
+        voteItems[index++] = VoteItem({
+            description: "20. Call finalizeUpgrade_v4 on SimpleDVT",
+            call: _forwardCall(
+                params.agent,
+                params.simple_dvt,
+                abi.encodeCall(INodeOperatorsRegistry.finalizeUpgrade_v4, (params.nor_exit_deadline_in_sec))
+            )
+        });
+
+        // 20. Grant CONFIG_MANAGER_ROLE role to the AGENT
         bytes32 configManagerRole = keccak256("CONFIG_MANAGER_ROLE");
         voteItems[index++] = VoteItem({
-            description: "18. Grant CONFIG_MANAGER_ROLE role to the AGENT",
+            description: "21. Grant CONFIG_MANAGER_ROLE role to the AGENT",
             call: _forwardCall(
                 params.agent,
                 params.oracle_daemon_config,
@@ -370,31 +366,13 @@ contract TWVoteScript is OmnibusBase {
             )
         });
 
-        // 22. Add EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS variable to OracleDaemonConfig
+        // 24. Add EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS variable to OracleDaemonConfig
         voteItems[index++] = VoteItem({
-            description: "22. Add EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS variable to OracleDaemonConfig",
+            description: "25. Add EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS variable to OracleDaemonConfig",
             call: _forwardCall(
                 params.agent,
                 params.oracle_daemon_config,
-                abi.encodeCall(
-                    IOracleDaemonConfig.set,
-                    ("EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS", abi.encode(params.exit_events_lookback_window_in_slots))
-                )
-            )
-        });
-
-        // 24. Update SimpleDVT implementation
-        voteItems[index++] = VoteItem({
-            description: "24. Update SimpleDVT implementation",
-            call: _forwardCall(
-                params.agent,
-                MAINNET_KERNEL,
-                abi.encodeWithSignature(
-                    "setApp(bytes32,bytes32,address)",
-                    IKernel(MAINNET_KERNEL).APP_BASES_NAMESPACE(),
-                    params.sdvt_app_id,
-                    params.node_operators_registry_impl
-                )
+                abi.encodeCall(IOracleDaemonConfig.set, ("EXIT_EVENTS_LOOKBACK_WINDOW_IN_SLOTS", abi.encode(params.exit_events_lookback_window_in_slots)))
             )
         });
 
@@ -402,17 +380,13 @@ contract TWVoteScript is OmnibusBase {
     }
 
     // Debug helper function
-    function getDebugParams()
-        external
-        view
-        returns (
-            address agent,
-            address lido_locator,
-            address validators_exit_bus_oracle,
-            address withdrawal_vault,
-            bytes32 node_operators_registry_app_id
-        )
-    {
+    function getDebugParams() external view returns (
+        address agent,
+        address lido_locator,
+        address validators_exit_bus_oracle,
+        address withdrawal_vault,
+        bytes32 node_operators_registry_app_id
+    ) {
         return (
             params.agent,
             params.lido_locator,

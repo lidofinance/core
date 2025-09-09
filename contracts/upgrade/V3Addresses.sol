@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {IAccessControlEnumerable} from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
+import {IAccessControlEnumerable as IAccessControlEnumerableV5 } from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
+
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
-interface IStakingRouter is IAccessControlEnumerable {
+interface IStakingRouter is IAccessControlEnumerableV5  {
     struct StakingModule {
         uint24 id;
         address stakingModuleAddress;
@@ -19,6 +20,7 @@ interface IStakingRouter is IAccessControlEnumerable {
         uint16 priorityExitShareThreshold;
         uint64 maxDepositsPerBlock;
         uint64 minDepositBlockDistance;
+        uint8 withdrawalCredentialsType;
     }
 
     function getStakingModules() external view returns (StakingModule[] memory res);
@@ -50,6 +52,11 @@ contract V3Addresses {
         address upgradeableBeacon;
         address stakingVaultImpl;
         address dashboardImpl;
+        address gateSealForVaults;
+
+        // EasyTrack addresses
+        address evmScriptExecutor;
+        address vaultHubAdapter;
 
         // Existing proxies and contracts
         address kernel;
@@ -96,6 +103,13 @@ contract V3Addresses {
     address public immutable UPGRADEABLE_BEACON;
     address public immutable STAKING_VAULT_IMPL;
     address public immutable DASHBOARD_IMPL;
+    address public immutable GATE_SEAL;
+
+    //
+    // -------- EasyTrack addresses --------
+    //
+    address public immutable EVM_SCRIPT_EXECUTOR;
+    address public immutable VAULT_HUB_ADAPTER;
 
     //
     // -------- Unchanged contracts --------
@@ -141,6 +155,9 @@ contract V3Addresses {
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;
+        GATE_SEAL = params.gateSealForVaults;
+        EVM_SCRIPT_EXECUTOR = params.evmScriptExecutor;
+        VAULT_HUB_ADAPTER = params.vaultHubAdapter;
 
         //
         // Discovered via other contracts

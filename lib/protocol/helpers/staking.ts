@@ -107,6 +107,20 @@ export const removeStakingLimit = async (ctx: ProtocolContext) => {
   await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
 };
 
+export const setStakingLimit = async (
+  ctx: ProtocolContext,
+  maxStakeLimit: bigint,
+  stakeLimitIncreasePerBlock: bigint,
+) => {
+  const { lido, acl } = ctx.contracts;
+  const agentSigner = await ctx.getSigner("agent");
+  const role = await lido.STAKING_CONTROL_ROLE();
+  const agentAddress = await agentSigner.getAddress();
+  await acl.connect(agentSigner).grantPermission(agentAddress, lido.address, role);
+  await lido.connect(agentSigner).setStakingLimit(maxStakeLimit, stakeLimitIncreasePerBlock);
+  await acl.connect(agentSigner).revokePermission(agentAddress, lido.address, role);
+};
+
 export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId: bigint, depositsCount: bigint) => {
   const { lido, depositSecurityModule, withdrawalQueue, stakingRouter } = ctx.contracts;
 

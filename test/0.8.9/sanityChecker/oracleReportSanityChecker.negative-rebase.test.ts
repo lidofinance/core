@@ -32,6 +32,7 @@ describe("OracleReportSanityChecker.sol:negative-rebase", () => {
     exitedValidatorsPerDayLimit: 50n,
     appearedValidatorsPerDayLimit: 75n,
     annualBalanceIncreaseBPLimit: 10_00n, // 10%
+    simulatedShareRateDeviationBPLimit: 2_00n, // 2%
     maxValidatorExitRequestsPerReport: 2000n,
     maxItemsPerExtraDataTransaction: 15n,
     maxNodeOperatorsPerExtraDataItem: 16n,

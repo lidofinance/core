@@ -61,3 +61,7 @@ export const ONE_GWEI = 1_000_000_000n;
 export const TOTAL_BASIS_POINTS = 100_00n;
 
 export const MAX_FEE_BP = 65_535n;
+export const MAX_RESERVE_RATIO_BP = 99_99n;
+export const LIMITER_PRECISION_BASE = 10n ** 9n;
+
+export const DISCONNECT_NOT_INITIATED = 2n ** 48n - 1n;
