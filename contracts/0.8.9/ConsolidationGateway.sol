@@ -5,7 +5,7 @@ pragma solidity 0.8.9;
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 import {AccessControlEnumerable} from "./utils/access/AccessControlEnumerable.sol";
-import {LimitData, RateLimitStorage, RateLimit} from "./lib/RateLimit.sol";
+import {LimitData, RateLimitStorage, RateLimit} from "../common/lib/RateLimit.sol";
 import {PausableUntil} from "./utils/PausableUntil.sol";
 
 interface IWithdrawalVault {
