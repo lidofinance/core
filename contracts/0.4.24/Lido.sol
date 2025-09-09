@@ -705,9 +705,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         require(_amountOfShares <= _getMaxMintableExternalShares(), "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
-        uint256 stethAmount = getPooledEthByShares(_amountOfShares);
         StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
         if (stakeLimitData.isStakingLimitSet()) {
+            uint256 stethAmount = getPooledEthByShares(_amountOfShares);
             _decreaseStakingLimit(stakeLimitData, stethAmount);
         }
 
