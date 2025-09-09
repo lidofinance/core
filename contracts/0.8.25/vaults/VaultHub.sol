@@ -889,7 +889,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 availableBalance = Math256.min(_vault.balance, _totalValue(record));
+        uint256 availableBalance = Math256.min(_availableBalance(_vault), _totalValue(record));
         if (availableBalance == 0) revert NoFundsForForceRebalance(_vault);
 
         uint256 sharesToForceRebalance = Math256.min(
@@ -944,7 +944,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection memory connection = _vaultConnection(_vault);
         if (connection.vaultIndex != 0) revert AlreadyConnected(_vault, connection.vaultIndex);
 
-        uint256 vaultBalance = _vault.balance;
+        uint256 vaultBalance = _availableBalance(_vault);
         if (vaultBalance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, vaultBalance, CONNECT_DEPOSIT);
 
         // Connecting a new vault with totalValue == balance
@@ -992,7 +992,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         uint256 unsettledLidoFees = _unsettledLidoFeesValue(_record);
         if (unsettledLidoFees > 0) {
-            uint256 _vaultBalance = _vault.balance;
+            uint256 _vaultBalance = _availableBalance(_vault);
             if (_vaultBalance < unsettledLidoFees && _forceFullFeesSettlement) {
                 revert NoUnsettledLidoFeesShouldBeLeft(_vault, unsettledLidoFees);
             }
@@ -1246,7 +1246,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 amountToCover = _obligationsValue(_connection, _record);
         if (amountToCover == type(uint256).max) return type(uint256).max;
 
-        return amountToCover > _vault.balance ? amountToCover - _vault.balance : 0;
+        uint256 balance = _availableBalance(_vault);
+
+        return amountToCover > balance ? amountToCover - balance : 0;
     }
 
     function _addVault(address _vault, VaultConnection memory _connection, VaultRecord memory _record) internal {
@@ -1347,7 +1349,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _feesToSettle
     ) internal view returns (uint256) {
         uint256 unlocked = _unlocked(_connection, _record);
-        return Math256.min(Math256.min(unlocked, _vault.balance), _feesToSettle);
+        return Math256.min(Math256.min(unlocked, _availableBalance(_vault)), _feesToSettle);
     }
 
     /// @notice the amount of ether that can be instantly withdrawn from the vault based on the available balance,
@@ -1357,7 +1359,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
-        uint256 availableBalance = Math256.min(_vault.balance, _totalValue(_record));
+        uint256 availableBalance = Math256.min(_availableBalance(_vault), _totalValue(_record));
 
         // 1. We can't withdraw funds that can be used to fulfill redemptions
         uint256 redemptionValue = _getPooledEthBySharesRoundUp(_record.redemptionShares);
@@ -1488,6 +1490,10 @@ contract VaultHub is PausableUntilWithRoles {
 
     function _nodeOperator(address _vault) internal view returns (address) {
         return IStakingVault(_vault).nodeOperator();
+    }
+
+    function _availableBalance(address _vault) internal view returns (uint256) {
+        return IStakingVault(_vault).availableBalance();
     }
 
     function _requireNotZero(uint256 _value) internal pure {

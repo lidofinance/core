@@ -105,6 +105,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /// @notice amount of ether that is predeposited with each validator
     uint128 public constant PREDEPOSIT_AMOUNT = 1 ether;
 
+    uint256 public constant ACTIVATION_DEPOSIT_AMOUNT = 31 ether;
+
     /**
      * @notice computed DEPOSIT_DOMAIN for current chain
      * @dev changes between chains and testnets depending on GENESIS_FORK_VERSION
@@ -377,6 +379,9 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         if (unlocked < totalDepositAmount) revert NotEnoughUnlocked(unlocked, totalDepositAmount);
 
+        // stashing 31 ETH to be able to activate the validator as it gets proved
+        _stakingVault.stash(ACTIVATION_DEPOSIT_AMOUNT * uint128(_deposits.length));
+
         for (uint256 i = 0; i < _deposits.length; i++) {
             IStakingVault.Deposit calldata _deposit = _deposits[i];
 
@@ -421,11 +426,14 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         }
 
         // WC will be sanity checked in `_processPositiveProof()`
-        bytes32 withdrawalCredentials = validator.stakingVault.withdrawalCredentials();
+        IStakingVault vault = validator.stakingVault;
+        bytes32 withdrawalCredentials = vault.withdrawalCredentials();
 
         _validatePubKeyWCProof(_witness, withdrawalCredentials);
 
         _processPositiveProof(_witness.pubkey, validator, withdrawalCredentials);
+
+        _activateTheValidator(vault, _witness.pubkey, withdrawalCredentials);
     }
 
     /**
@@ -563,13 +571,16 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         // immediately compensate the staking vault
         validator.stage = ValidatorStage.COMPENSATED;
-        
+
         address nodeOperator = validator.nodeOperator;
 
         // reduces total&locked NO balance
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[nodeOperator];
         balance.total -= PREDEPOSIT_AMOUNT;
         balance.locked -= PREDEPOSIT_AMOUNT;
+
+        // unlocking the stashed amount as we are not activating this validator
+        stakingVault.unstash(ACTIVATION_DEPOSIT_AMOUNT);
 
         // transfer the compensation directly to the vault
         (bool success, ) = address(stakingVault).call{value: PREDEPOSIT_AMOUNT}("");
@@ -598,6 +609,38 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         emit BalanceUnlocked(validator.nodeOperator, balance.total, balance.locked);
         emit ValidatorProven(_pubkey, validator.nodeOperator, address(validator.stakingVault), _withdrawalCredentials);
+    }
+
+    function _activateTheValidator(
+        IStakingVault _stakingVault,
+        bytes calldata _pubkey,
+        bytes32 _wc
+    ) internal {
+        _stakingVault.unstash(ACTIVATION_DEPOSIT_AMOUNT);
+
+        IStakingVault.Deposit memory deposit = IStakingVault.Deposit({
+            pubkey: _pubkey,
+            signature: "",
+            amount: ACTIVATION_DEPOSIT_AMOUNT,
+            depositDataRoot: _depositDataRoot31ETHWithNoSig(_pubkey, _wc)
+        });
+
+        IStakingVault.Deposit[] memory deposits = new IStakingVault.Deposit[](1);
+        deposits[0] = deposit;
+
+        _stakingVault.depositToBeaconChain(deposits);
+    }
+
+    function _depositDataRoot31ETHWithNoSig(bytes calldata _pubkey, bytes32 _wc) internal returns (bytes32){
+        bytes32 pubkeyRoot = sha256(bytes.concat(_pubkey, bytes16(0)));
+        // sha256(sha256(0x0)|sha256(0x0))
+        bytes32 zeroSignatureRoot = 0x2eeb74a6177f588d80c0c752b99556902ddf9682d0b906f5aa2adbaf8466a4e9;
+        // to_little_endian_64(ACTIVATION_DEPOSIT_AMOUNT)|bytes24(0)
+        bytes32 amountLE64ZeroPadded = 0x00001c45c11f36ae000000000000000000000000000000000000000000000000;
+        return sha256(bytes.concat(
+            sha256(bytes.concat(pubkeyRoot, _wc)),
+            sha256(bytes.concat(amountLE64ZeroPadded, zeroSignatureRoot))
+        ));
     }
 
     function _topUpNodeOperatorBalance(address _nodeOperator) internal onlyGuarantorOf(_nodeOperator) {

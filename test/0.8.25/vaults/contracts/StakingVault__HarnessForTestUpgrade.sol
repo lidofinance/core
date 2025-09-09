@@ -159,4 +159,10 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, Ownable2StepUpgra
     function transferOwnership(address _newOwner) public override(IStakingVault, Ownable2StepUpgradeable) {
         Ownable2StepUpgradeable.transferOwnership(_newOwner);
     }
+
+    function availableBalance() external view override returns (uint256) {}
+
+    function stash(uint256 _ether) external override {}
+
+    function unstash(uint256 _ether) external override {}
 }

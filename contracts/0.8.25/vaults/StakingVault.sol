@@ -80,9 +80,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @dev ERC-7201: Namespaced Storage Layout
      */
     struct Storage {
+        // 1st slot
         address nodeOperator;
+        // 2nd slot
         address depositor;
         bool beaconChainDepositsPaused;
+        // 3rd slot
+        uint256 stash;
     }
 
     /*
@@ -192,6 +196,10 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         return _numberOfKeys * TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
+    function availableBalance() public view returns (uint256) {
+        return address(this).balance - _storage().stash;
+    }
+
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
@@ -222,7 +230,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     function withdraw(address _recipient, uint256 _ether) external onlyOwner {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_ether == 0) revert ZeroArgument("_ether");
-        if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance, _ether);
+        if (_ether > availableBalance()) revert InsufficientBalance(availableBalance(), _ether);
 
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
@@ -273,20 +281,17 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Performs deposits to the beacon chain
      * @param _deposits Array of validator deposits
      */
-    function depositToBeaconChain(Deposit[] calldata _deposits) external {
-        if (_deposits.length == 0) revert ZeroArgument("_deposits");
-        Storage storage $ = _storage();
-        if ($.beaconChainDepositsPaused) revert BeaconChainDepositsOnPause();
-        if (msg.sender != $.depositor) revert SenderNotDepositor();
-
+    function depositToBeaconChain(Deposit[] calldata _deposits) external onlyDepositorIfNotPaused {
         uint256 numberOfDeposits = _deposits.length;
+        if (numberOfDeposits == 0) revert ZeroArgument("_deposits");
 
         uint256 totalAmount;
         for (uint256 i = 0; i < numberOfDeposits; i++) {
             totalAmount += _deposits[i].amount;
         }
 
-        if (totalAmount > address(this).balance) revert InsufficientBalance(address(this).balance, totalAmount);
+        uint256 balance = availableBalance();
+        if (totalAmount > balance) revert InsufficientBalance(balance, totalAmount);
 
         bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
 
@@ -302,6 +307,26 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         }
 
         emit DepositedToBeaconChain(numberOfDeposits, totalAmount);
+    }
+
+    function stash(uint256 _ether) external onlyDepositorIfNotPaused {
+        uint256 balance = availableBalance();
+        if (balance < _ether) revert InsufficientBalance(balance, _ether);
+
+        uint256 newStashed = _storage().stash + _ether;
+        _storage().stash = newStashed;
+
+        emit EtherStashed(_ether, newStashed);
+    }
+
+    function unstash(uint256 _ether) external onlyDepositorIfNotPaused {
+        uint256 stashed = _storage().stash;
+        if (stashed < _ether) revert InsufficientStash(stashed, _ether);
+
+        uint256 newStashed = stashed - _ether;
+        _storage().stash = newStashed;
+
+        emit EtherUnstashed(_ether, newStashed);
     }
 
     /*
@@ -483,6 +508,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         emit DepositorSet(previousDepositor, _depositor);
     }
 
+    modifier onlyDepositorIfNotPaused {
+        Storage storage $ = _storage();
+        if (_storage().depositor != msg.sender) revert SenderNotDepositor();
+        if (_storage().beaconChainDepositsPaused) revert BeaconChainDepositsOnPause();
+        _;
+    }
+
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
@@ -568,6 +600,16 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address indexed refundRecipient
     );
 
+    event EtherStashed(
+        uint256 etherStashed,
+        uint256 stashSize
+    );
+
+    event EtherUnstashed(
+        uint256 etherUnstashed,
+        uint256 stashSize
+    );
+
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
@@ -588,6 +630,8 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _required Amount of ether required
      */
     error InsufficientBalance(uint256 _balance, uint256 _required);
+
+    error InsufficientStash(uint256 _stash, uint256 _requested);
 
     /**
      * @notice Thrown when the transfer of ether to a recipient fails

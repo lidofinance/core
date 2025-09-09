@@ -55,4 +55,8 @@ interface IStakingVault {
     function ejectValidators(bytes calldata _pubkeys, address _refundRecipient) external payable;
     function setDepositor(address _depositor) external;
     function ossify() external;
+
+    function availableBalance() external view returns (uint256);
+    function stash(uint256 _ether) external;
+    function unstash(uint256 _ether) external;
 }

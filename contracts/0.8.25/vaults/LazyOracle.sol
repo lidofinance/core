@@ -230,7 +230,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             VaultHub.VaultRecord memory record = vaultHub.vaultRecord(vaultAddress);
             batch[i] = VaultInfo(
                 vaultAddress,
-                address(vault).balance,
+                address(vault).balance, // we need full balance for the report not only available one
                 record.inOutDelta.currentValue(),
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
