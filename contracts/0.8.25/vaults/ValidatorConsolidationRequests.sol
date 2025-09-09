@@ -16,7 +16,7 @@ import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.so
  * @notice Contract for consolidating validators into staking vaults (EIP-7251)
  *         and adjusting rewards. Built to work with Vault CLI tooling and to
  *         support delegation (EIP-7702) and batched execution (EIP-5792).
- *         Intended only for use by the node operator in the rewards adjustment role.
+ *         This contract is strictly for a node operator rewards adjustment role only.
  */
 contract ValidatorConsolidationRequests {
     /// @notice EIP-7251 consolidation requests contract address.
