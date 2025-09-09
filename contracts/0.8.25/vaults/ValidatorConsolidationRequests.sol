@@ -9,9 +9,13 @@ import {Dashboard} from "contracts/0.8.25/vaults/dashboard/Dashboard.sol";
 import {NodeOperatorFee} from "contracts/0.8.25/vaults/dashboard/NodeOperatorFee.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
-/**
- * @title A contract for EIP-7251: Increase the MAX_EFFECTIVE_BALANCE.
- * Allow validators to have larger effective balances, while maintaining the 32 ETH lower bound.
+ /**
+ * @title ValidatorConsolidationRequests
+ * @author kovalgek
+ * @notice Contract that facilitates EIP-7251 validator consolidation into staking vaults
+ *         and updates node-operator rewards adjustment. Designed for use with Vault CLI 
+ *         tooling, supporting delegated (EIP-7702) and batched (EIP-5792) execution flows.
+ *         This contract is strictly for a node operator rewards adjustment role only.
  */
 contract ValidatorConsolidationRequests {
     /// @notice EIP-7251 consolidation requests contract address.
@@ -30,8 +34,75 @@ contract ValidatorConsolidationRequests {
     }
 
     /**
-     * @notice Send EIP-7251 consolidation requests for the specified public keys.
-     *      Each request instructs a validator to consolidate its stake to the target validator.
+     * @notice Return the encoded calls for EIP-7251 consolidation requests and the rewards adjustment increase.
+     * 
+     * Use case:
+     * - Your withdrawal credentials is EOA or multisig, and you want to consolidate balances 
+     *   of currently running validators into staking vaults. Call this method to obtain the encoded
+     *   calls for consolidation requests and the rewards adjustment increase.
+     *   Later, you can submit these call data using EIP-5792.
+     * - Rewards adjustment calldata can only be executed by an account with the
+     *   `NODE_OPERATOR_REWARDS_ADJUST_ROLE`, which the node operator may grant
+     *   to the withdrawal credentials account.
+     * 
+     * Recommendations:
+     * - It is recommended to call this function via the Vault CLI. It performs pre-checks of
+     *   source and target validator states, verifies their withdrawal credential prefixes,
+     *   calculates current validator balances, generates the request calldata using this method,
+     *   and then submits these call data in batched transactions via EIP-5792.
+     *
+     * @param _sourcePubkeys An array of tightly packed arrays of 48-byte public keys corresponding to validators requesting consolidation.
+     *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
+     *
+     * @param _targetPubkeys An array of 48-byte public keys corresponding to validators to consolidate to.
+     *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
+     *
+     * @param _dashboard The address of the dashboard contract.
+     * @param _allSourceValidatorBalancesWei The total balance (in wei) of all source validators,
+     *        used to increase the rewards adjustment. This accounts for non-rewards ether on the
+     *        Consensus Layer to ensure correct fee calculation.
+     * @return adjustmentIncreaseEncodedCall The encoded call to increase the rewards adjustment.
+     * @return consolidationRequestEncodedCalls The encoded calls for the consolidation requests.
+     */
+    function getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+        bytes[] calldata _sourcePubkeys,
+        bytes[] calldata _targetPubkeys,
+        address _dashboard,
+        uint256 _allSourceValidatorBalancesWei
+    ) external view returns (bytes memory adjustmentIncreaseEncodedCall, bytes[] memory consolidationRequestEncodedCalls) {
+        if (_sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
+        if (_targetPubkeys.length == 0) revert ZeroArgument("targetPubkeys");
+        if (_dashboard == address(0)) revert ZeroArgument("dashboard");
+        if (_sourcePubkeys.length != _targetPubkeys.length) revert MismatchingSourceAndTargetPubkeysCount(_sourcePubkeys.length, _targetPubkeys.length);
+        
+        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
+        address stakingVault = address(Dashboard(payable(_dashboard)).stakingVault());
+        if(!vaultHub.isVaultConnected(stakingVault) || vaultHub.isPendingDisconnect(stakingVault)) {
+            revert VaultNotConnected();
+        }
+
+        uint256 consolidationRequestsCount = _validatePubkeysAndCountConsolidationRequests(_sourcePubkeys, _targetPubkeys);
+        consolidationRequestEncodedCalls = _consolidationCalldatas(_sourcePubkeys, _targetPubkeys, consolidationRequestsCount);
+
+        if(_allSourceValidatorBalancesWei > 0) {
+            adjustmentIncreaseEncodedCall = abi.encodeWithSelector(NodeOperatorFee.increaseRewardsAdjustment.selector, _allSourceValidatorBalancesWei);
+        }
+
+        return (adjustmentIncreaseEncodedCall, consolidationRequestEncodedCalls);
+    }
+
+    /**
+     * @notice Submit EIP-7251 consolidation requests and immediately increase the node operator rewards adjustment.
+     *
+     * Use case:
+     * - Your withdrawal credentials is EOA and you want to consolidate balances of currently 
+     *   running validators into staking vaults. Authorize this contract for your EOA using an 
+     *   EIP-7702 transaction and call this function.
+     *
+     * Recommendations:
+     * - It is recommended to call this function via the Vault CLI. It performs pre-checks of
+     *   source and target validator states, their withdrawal credential prefixes, calculates
+     *   current validator balances, and revokes the authorization after execution.
      *
      * Requirements:
      *  - The caller must have the `NODE_OPERATOR_REWARDS_ADJUST_ROLE` to perform reward adjustment.
@@ -42,9 +113,6 @@ contract ValidatorConsolidationRequests {
      *    any excess will be refunded to the `_refundRecipient` address.
      *  - The `_sourcePubkeys` and `_targetPubkeys` must be valid and belong to registered validators.
      *  - `_adjustmentIncrease` must match the total balance of source validators on the Consensus Layer.
-     *
-     * Execution Flows:
-     *  This function designed to be called by Vault-CLI using EIP-7702 delegation.
      *
      * Notes:
      *  Consolidation requests are asynchronous and handled on the Consensus Layer. The function optimistically
@@ -66,14 +134,16 @@ contract ValidatorConsolidationRequests {
      *
      * @param _refundRecipient The address to refund the excess consolidation fee to.
      * @param _dashboard The address of the dashboard contract.
-     * @param _adjustmentIncrease The sum of the balances of the source validators to increase the rewards adjustment by.
+     * @param _allSourceValidatorBalancesWei The total balance (in wei) of all source validators,
+     *        used to increase the rewards adjustment. This accounts for non-rewards ether on the
+     *        Consensus Layer to ensure correct fee calculation.
      */
     function addConsolidationRequestsAndIncreaseRewardsAdjustment(
         bytes[] calldata _sourcePubkeys,
         bytes[] calldata _targetPubkeys,
         address _refundRecipient,
         address _dashboard,
-        uint256 _adjustmentIncrease
+        uint256 _allSourceValidatorBalancesWei
     ) external payable {
         if (msg.value == 0) revert ZeroArgument("msg.value");
         if (_sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
@@ -115,52 +185,11 @@ contract ValidatorConsolidationRequests {
             }
         }
 
-        if(_adjustmentIncrease > 0) {
-            Dashboard(payable(_dashboard)).increaseRewardsAdjustment(_adjustmentIncrease);
+        if(_allSourceValidatorBalancesWei > 0) {
+            Dashboard(payable(_dashboard)).increaseRewardsAdjustment(_allSourceValidatorBalancesWei);
         }
 
-        emit ConsolidationRequestsAndRewardsAdjustmentIncreased(msg.sender, _sourcePubkeys, _targetPubkeys, _refundRecipient, excess, _adjustmentIncrease);
-    }
-
-    /**
-     * @notice Returns the encoded calls for EIP-7251 consolidation requests and the rewards adjustment increase.
-     * This is part of the Vault-CLI flow that validates input parameters and creates calldatas for consolidation requests and reward adjustment increases.
-     * Later, the Vault-CLI sends these calldatas using EIP-5792
-     *
-     * @param _sourcePubkeys An array of tightly packed arrays of 48-byte public keys corresponding to validators requesting consolidation.
-     *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
-     *
-     * @param _targetPubkeys An array of 48-byte public keys corresponding to validators to consolidate to.
-     *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
-     *
-     * @param _dashboard The address of the dashboard contract.
-     * @param _adjustmentIncrease The sum of the balances of the source validators to increase the rewards adjustment by.
-     */
-    function getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
-        bytes[] calldata _sourcePubkeys,
-        bytes[] calldata _targetPubkeys,
-        address _dashboard,
-        uint256 _adjustmentIncrease
-    ) external view returns (bytes[] memory consolidationRequestEncodedCalls, bytes memory adjustmentIncreaseEncodedCall) {
-        if (_sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
-        if (_targetPubkeys.length == 0) revert ZeroArgument("targetPubkeys");
-        if (_dashboard == address(0)) revert ZeroArgument("dashboard");
-        if (_sourcePubkeys.length != _targetPubkeys.length) revert MismatchingSourceAndTargetPubkeysCount(_sourcePubkeys.length, _targetPubkeys.length);
-        
-        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
-        address stakingVault = address(Dashboard(payable(_dashboard)).stakingVault());
-        if(!vaultHub.isVaultConnected(stakingVault) || vaultHub.isPendingDisconnect(stakingVault)) {
-            revert VaultNotConnected();
-        }
-
-        uint256 consolidationRequestsCount = _validatePubkeysAndCountConsolidationRequests(_sourcePubkeys, _targetPubkeys);
-        consolidationRequestEncodedCalls = _consolidationCalldatas(_sourcePubkeys, _targetPubkeys, consolidationRequestsCount);
-
-        if(_adjustmentIncrease > 0) {
-            adjustmentIncreaseEncodedCall = abi.encodeWithSelector(NodeOperatorFee.increaseRewardsAdjustment.selector, _adjustmentIncrease);
-        }
-
-        return (consolidationRequestEncodedCalls, adjustmentIncreaseEncodedCall);
+        emit ConsolidationRequestsAndRewardsAdjustmentIncreased(msg.sender, _sourcePubkeys, _targetPubkeys, _refundRecipient, excess, _allSourceValidatorBalancesWei);
     }
 
     /**
