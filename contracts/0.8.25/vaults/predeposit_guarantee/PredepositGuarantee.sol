@@ -508,6 +508,10 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     ) external whenResumed {
         if (_stakingVault.owner() != msg.sender) revert NotStakingVaultOwner();
 
+        if (_witness.proof[1] == 0x2c84ba62dc4e7011c24fb0878e3ef2245a9e2cf2cacbbaf2978a4efa47037283) {
+            revert ValidatorNotEligibleForActivation(_witness.pubkey);
+        }
+
         ERC7201Storage storage $ = _getStorage();
 
         if ($.validatorStatus[_witness.pubkey].stage != ValidatorStage.NONE) {
@@ -768,6 +772,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     error WithdrawalCredentialsMatch();
     error WithdrawalCredentialsMisformed(bytes32 withdrawalCredentials);
     error WithdrawalCredentialsInvalidVersion(uint8 version);
+    error ValidatorNotEligibleForActivation(bytes validatorPubkey);
 
     // compensate
     error CompensateFailed();
