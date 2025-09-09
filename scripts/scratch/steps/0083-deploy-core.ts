@@ -37,7 +37,6 @@ export async function main() {
   const hashConsensusForAccountingParams = state[Sk.hashConsensusForAccountingOracle].deployParameters;
   const hashConsensusForExitBusParams = state[Sk.hashConsensusForValidatorsExitBusOracle].deployParameters;
   const withdrawalQueueERC721Params = state[Sk.withdrawalQueueERC721].deployParameters;
-  const minFirstAllocationStrategyAddress = state[Sk.minFirstAllocationStrategy].address;
   const validatorExitDelayVerifierParams = state[Sk.validatorExitDelayVerifier].deployParameters;
 
   const proxyContractsOwner = deployer;
@@ -149,16 +148,30 @@ export async function main() {
   // Deploy StakingRouter
   //
 
+  // deploy deposit tracker
+
+  const depositsTracker = await deployWithoutProxy(Sk.depositsTracker, "DepositsTracker", deployer);
+
+  // deploy temporary storage
+  const depositsTempStorage = await deployWithoutProxy(Sk.depositsTempStorage, "DepositsTempStorage", deployer);
+
+  // deploy beacon chain depositor
+  const beaconChainDepositor = await deployWithoutProxy(Sk.beaconChainDepositor, "BeaconChainDepositor", deployer);
+
   const stakingRouter_ = await deployBehindOssifiableProxy(
     Sk.stakingRouter,
     "StakingRouter",
     proxyContractsOwner,
     deployer,
-    [depositContract],
+    [depositContract, chainSpec.secondsPerSlot, chainSpec.genesisTime],
     null,
     true,
     {
-      libraries: { MinFirstAllocationStrategy: minFirstAllocationStrategyAddress },
+      libraries: {
+        DepositsTracker: depositsTracker.address,
+        BeaconChainDepositor: beaconChainDepositor.address,
+        DepositsTempStorage: depositsTempStorage.address,
+      },
     },
   );
   const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
