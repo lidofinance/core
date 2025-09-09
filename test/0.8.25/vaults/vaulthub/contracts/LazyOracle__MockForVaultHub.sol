@@ -36,6 +36,7 @@ contract LazyOracle__MockForVaultHub {
         int256 _reportInOutDelta,
         uint256 _reportCumulativeLidoFees,
         uint256 _reportLiabilityShares,
+        uint256 _reportMaxLiabilityShares,
         uint256 _reportSlashingReserve
     ) external {
         _vaultHub.applyVaultReport(
@@ -45,6 +46,7 @@ contract LazyOracle__MockForVaultHub {
             _reportInOutDelta,
             _reportCumulativeLidoFees,
             _reportLiabilityShares,
+            _reportMaxLiabilityShares,
             _reportSlashingReserve
         );
     }

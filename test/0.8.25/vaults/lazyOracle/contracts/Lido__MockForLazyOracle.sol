@@ -9,4 +9,8 @@ contract Lido__MockForLazyOracle {
     function getPooledEthBySharesRoundUp(uint256 value) external pure returns (uint256) {
         return value;
     }
+
+    function getSharesByPooledEth(uint256 value) external pure returns (uint256) {
+        return value;
+    }
 }

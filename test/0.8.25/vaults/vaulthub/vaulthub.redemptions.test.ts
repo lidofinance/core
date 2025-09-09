@@ -31,7 +31,7 @@ describe("VaultHub.sol:redemptions", () => {
     vaultsContext = await deployVaults({ deployer, admin: user });
     vaultHub = vaultsContext.vaultHub;
 
-    disconnectedVault = await vaultsContext.createMockStakignVault(user, user);
+    disconnectedVault = await vaultsContext.createMockStakingVault(user, user);
     connectedVault = await vaultsContext.createMockStakingVaultAndConnect(user, user);
 
     await vaultHub.connect(deployer).grantRole(await vaultHub.REDEMPTION_MASTER_ROLE(), redemptionMaster);

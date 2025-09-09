@@ -1,8 +1,7 @@
 import { ZeroAddress } from "ethers";
 
 import { advanceChainTime, certainAddress, ether, impersonate, log } from "lib";
-
-import { LIMITER_PRECISION_BASE } from "test/suite/constants";
+import { LIMITER_PRECISION_BASE } from "lib/constants";
 
 import { ProtocolContext } from "../types";
 

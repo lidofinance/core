@@ -8,6 +8,7 @@ import { Lido, WithdrawalQueueERC721 } from "typechain-types";
 
 import { ether, findEventsWithInterfaces } from "lib";
 import { finalizeWQViaSubmit, getProtocolContext, ProtocolContext, report } from "lib/protocol";
+import { finalizeWQViaElVault } from "lib/protocol/helpers";
 
 import { Snapshot } from "test/suite";
 
@@ -38,6 +39,8 @@ describe("Integration: Withdrawal edge cases", () => {
   after(async () => await Snapshot.restore(snapshot));
 
   it("Should handle bunker mode with multiple batches", async () => {
+    await finalizeWQViaElVault(ctx);
+
     const amount = ether("100");
     const withdrawalAmount = ether("10");
 
@@ -46,10 +49,13 @@ describe("Integration: Withdrawal edge cases", () => {
     await lido.connect(holder).approve(wq.target, amount);
     await lido.connect(holder).submit(ethers.ZeroAddress, { value: amount });
 
+    const stethInitialBalance = await lido.balanceOf(holder.address);
+
     await report(ctx, { clDiff: ether("-1"), excludeVaultsBalances: true });
 
     const stethFirstNegativeReportBalance = await lido.balanceOf(holder.address);
 
+    expect(stethInitialBalance).to.be.gt(stethFirstNegativeReportBalance);
     expect(await wq.isBunkerModeActive()).to.be.true;
 
     // First withdrawal request
@@ -101,6 +107,8 @@ describe("Integration: Withdrawal edge cases", () => {
   });
 
   it("should handle missed oracle report", async () => {
+    await finalizeWQViaElVault(ctx);
+
     const amount = ether("100");
 
     expect(await lido.balanceOf(holder.address)).to.equal(0);
@@ -147,6 +155,8 @@ describe("Integration: Withdrawal edge cases", () => {
   });
 
   it("should handle several rebases correctly", async () => {
+    await finalizeWQViaElVault(ctx);
+
     const amount = ether("100");
     const withdrawalAmount = ether("10");
 

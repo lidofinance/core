@@ -166,12 +166,14 @@ describe("Integration: VaultHub", () => {
     it("Vault can't disconnect if it initiated disconnect this frame of the oracle", async () => {
       const { vaultHub, lido } = ctx.contracts;
 
-      await dashboard.fund({ value: ether("1.5") });
-      await dashboard.mintShares(owner, ether("1"));
+      const funding = ether("1.5");
+      const shares = await lido.getSharesByPooledEth(funding);
+      await dashboard.fund({ value: funding });
+      await dashboard.mintShares(owner, shares);
       const { reportTimestamp, reportRefSlot } = await waitNextAvailableReportTime(ctx);
 
-      await lido.connect(owner).approve(dashboard, ether("1.5"));
-      await dashboard.burnShares(ether("1"));
+      await lido.connect(owner).approve(dashboard, funding);
+      await dashboard.burnShares(shares);
 
       // vault slashes and hastily disconnects
       await dashboard.voluntaryDisconnect();
@@ -179,7 +181,7 @@ describe("Integration: VaultHub", () => {
 
       await expect(
         reportVaultDataWithProof(ctx, stakingVault, {
-          liabilityShares: ether("1"),
+          liabilityShares: shares,
           // report data does not contain slashing reserve because oracle has not seen it yet
           reportTimestamp,
           reportRefSlot,
