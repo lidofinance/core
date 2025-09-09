@@ -214,6 +214,13 @@ describe("Lido.sol:externalShares", () => {
           "MINT_TO_STETH_CONTRACT",
         );
       });
+
+      it("if minting would exceed staking limit", async () => {
+        await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+        await lido.setStakingLimit(10n, 1n);
+
+        await expect(lido.connect(vaultHubSigner).mintExternalShares(whale, 11n)).to.be.revertedWith("STAKE_LIMIT");
+      });
     });
 
     it("Mints shares correctly and emits events", async () => {
@@ -263,6 +270,40 @@ describe("Lido.sol:externalShares", () => {
       const externalEther = await lido.getExternalEther();
       expect(externalEther).to.equal(initiallyMintedEther + etherToMint);
     });
+
+    it("Decreases staking limit when minting", async () => {
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+      await lido.setStakingLimit(ether("150"), ether("1"));
+
+      const stakingLimitBefore = await lido.getCurrentStakeLimit();
+      expect(stakingLimitBefore).to.equal(ether("150"));
+
+      const sharesToMint = ether("1");
+      const amountToMint = await lido.getPooledEthByShares(sharesToMint);
+      await lido.connect(vaultHubSigner).mintExternalShares(whale, sharesToMint);
+
+      const stakingLimitAfter = await lido.getCurrentStakeLimit();
+      expect(stakingLimitAfter).to.equal(stakingLimitBefore - amountToMint);
+    });
+
+    it("Can decrease staking limit to 0", async () => {
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+      await lido.setStakingLimit(10n, 0n); // 0 per block increase to make sure limit is 0 after external shares mint
+
+      const stakingLimitBefore = await lido.getCurrentStakeLimit();
+      expect(stakingLimitBefore).to.equal(10n);
+
+      const amountToMint = 10n;
+      const sharesToMint = await lido.getSharesByPooledEth(amountToMint);
+      const expectedAmountToMint = await lido.getPooledEthByShares(sharesToMint);
+
+      const difference = amountToMint - expectedAmountToMint;
+      await lido.submit(ZeroAddress, { value: difference }); // to make staking limit 0 after external shares mint
+      await lido.connect(vaultHubSigner).mintExternalShares(whale, sharesToMint);
+
+      const stakingLimitAfter = await lido.getCurrentStakeLimit();
+      expect(stakingLimitAfter).to.equal(0);
+    });
   });
 
   context("burnExternalShares", () => {
@@ -302,7 +343,7 @@ describe("Lido.sol:externalShares", () => {
       await lido.setMaxExternalRatioBP(maxExternalRatioBP);
       const amountToMint = await lido.getMaxMintableExternalShares();
 
-      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner.address, amountToMint);
+      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, amountToMint);
 
       // Now burn them
       const stethAmount = await lido.getPooledEthByShares(amountToMint);
@@ -322,8 +363,8 @@ describe("Lido.sol:externalShares", () => {
       await lido.setMaxExternalRatioBP(maxExternalRatioBP);
 
       // Multiple mints
-      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner.address, 100n);
-      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner.address, 200n);
+      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, 100n);
+      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, 200n);
 
       // Burn partial amount
       await lido.connect(vaultHubSigner).burnExternalShares(150n);
@@ -332,6 +373,35 @@ describe("Lido.sol:externalShares", () => {
       // Burn remaining
       await lido.connect(vaultHubSigner).burnExternalShares(150n);
       expect(await lido.getExternalShares()).to.equal(0n);
+    });
+
+    it("Increases staking limit when burning", async () => {
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+      await lido.setStakingLimit(10n, 1n);
+
+      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, 1n);
+
+      expect(await lido.getCurrentStakeLimit()).to.equal(9n);
+
+      await lido.connect(vaultHubSigner).burnExternalShares(1n);
+      expect(await lido.getCurrentStakeLimit()).to.equal(10n);
+    });
+
+    it("Restores staking limit to max when burning more", async () => {
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, 5n);
+
+      await lido.setStakingLimit(10n, 1n);
+      expect(await lido.getCurrentStakeLimit()).to.equal(10n);
+
+      const sharesToMint = 5n;
+      const amountToMint = await lido.getPooledEthByShares(sharesToMint);
+      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, sharesToMint);
+
+      expect(await lido.getCurrentStakeLimit()).to.equal(10n - amountToMint);
+
+      await lido.connect(vaultHubSigner).burnExternalShares(10n);
+      expect(await lido.getCurrentStakeLimit()).to.equal(10n);
     });
   });
 
@@ -360,7 +430,7 @@ describe("Lido.sol:externalShares", () => {
       await lido.setMaxExternalRatioBP(maxExternalRatioBP);
 
       const amountToMint = await lido.getMaxMintableExternalShares();
-      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner.address, amountToMint);
+      await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, amountToMint);
 
       const bufferedEtherBefore = await lido.getBufferedEther();
 

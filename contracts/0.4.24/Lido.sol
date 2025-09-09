@@ -705,6 +705,12 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         require(_amountOfShares <= _getMaxMintableExternalShares(), "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
+        uint256 stethAmount = getPooledEthByShares(_amountOfShares);
+        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
+        if (stakeLimitData.isStakingLimitSet()) {
+            _decreaseStakingLimit(stakeLimitData, stethAmount);
+        }
+
         _setExternalShares(_getExternalShares() + _amountOfShares);
 
         _mintShares(_recipient, _amountOfShares);
@@ -731,6 +737,10 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _burnShares(msg.sender, _amountOfShares);
 
         uint256 stethAmount = getPooledEthByShares(_amountOfShares);
+        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
+        if (stakeLimitData.isStakingLimitSet()) {
+            _increaseStakingLimit(stakeLimitData, stethAmount);
+        }
 
         // Historically, Lido contract does not emit Transfer to zero address events
         // for burning but emits SharesBurnt instead, so it's kept here for compatibility
@@ -1012,13 +1022,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         require(!stakeLimitData.isStakingPaused(), "STAKING_PAUSED");
 
         if (stakeLimitData.isStakingLimitSet()) {
-            uint256 currentStakeLimit = stakeLimitData.calculateCurrentStakeLimit();
-
-            require(msg.value <= currentStakeLimit, "STAKE_LIMIT");
-
-            STAKING_STATE_POSITION.setStorageStakeLimitStruct(
-                stakeLimitData.updatePrevStakeLimit(currentStakeLimit - msg.value)
-            );
+            _decreaseStakingLimit(stakeLimitData, msg.value);
         }
 
         uint256 sharesAmount = getSharesByPooledEth(msg.value);
@@ -1129,6 +1133,24 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         }
 
         return _stakeLimitData.calculateCurrentStakeLimit();
+    }
+
+    function _decreaseStakingLimit(StakeLimitState.Data memory _stakeLimitData, uint256 _amount) internal {
+        uint256 currentStakeLimit = _stakeLimitData.calculateCurrentStakeLimit();
+        require(_amount <= currentStakeLimit, "STAKE_LIMIT");
+
+        STAKING_STATE_POSITION.setStorageStakeLimitStruct(
+            _stakeLimitData.updatePrevStakeLimit(currentStakeLimit - _amount)
+        );
+    }
+
+    function _increaseStakingLimit(StakeLimitState.Data memory _stakeLimitData, uint256 _amount) internal {
+        uint256 newStakeLimit = _stakeLimitData.calculateCurrentStakeLimit() + _amount;
+        uint256 maxStakeLimit = _stakeLimitData.maxStakeLimit;
+
+        STAKING_STATE_POSITION.setStorageStakeLimitStruct(
+            _stakeLimitData.updatePrevStakeLimit(newStakeLimit > maxStakeLimit ? maxStakeLimit : newStakeLimit)
+        );
     }
 
     /// @dev Bytecode size-efficient analog of the `auth(_role)` modifier

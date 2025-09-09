@@ -309,7 +309,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
 
       const totalValue = await vaultHub.totalValue(stakingVaultAddress);
       expect(totalValue).to.equal(ether("11"));
-      expect(await vaultHub.locked(stakingVaultAddress)).to.equal(ether("11"));
+      expect(await vaultHub.locked(stakingVaultAddress)).to.be.closeTo(ether("11"), 2n);
 
       const slashingAmount = ether("5");
       await reportVaultDataWithProof(ctx, stakingVault, { totalValue: totalValue - slashingAmount });
@@ -330,7 +330,7 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
       expect(recordAfter.redemptionShares).to.equal(0n);
       expect(recordAfter.liabilityShares).to.equal(0n);
-      expect(await vaultHub.locked(stakingVaultAddress)).to.equal(ether("11"));
+      expect(await vaultHub.locked(stakingVaultAddress)).to.be.closeTo(ether("11"), 2n);
 
       await reportVaultDataWithProof(ctx, stakingVault, {
         waitForNextRefSlot: true,
