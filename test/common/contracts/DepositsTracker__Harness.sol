@@ -10,8 +10,8 @@ import {
 } from "contracts/common/lib/DepositsTracker.sol";
 
 contract SlotDepositPacking__Harness {
-    function pack(uint64 slot, uint128 amount) external pure returns (uint256) {
-        return SlotDepositPacking.pack(SlotDeposit(slot, amount));
+    function pack(uint64 slot, uint192 cumulative) external pure returns (uint256) {
+        return SlotDepositPacking.pack(SlotDeposit(slot, cumulative));
     }
 
     function unpack(uint256 value) external pure returns (SlotDeposit memory slotDeposit) {
@@ -31,46 +31,38 @@ contract DepositsTracker__Harness {
         DepositsTracker.insertSlotDeposit(TEST_POSITION, slot, amount);
     }
 
-    function getDepositedEth(uint256 slot) external returns (uint256) {
-        return DepositsTracker.getDepositedEth(TEST_POSITION, slot);
+    function getDepositedEthUpToSlot(uint256 slot) external view returns (uint256) {
+        return DepositsTracker.getDepositedEthUpToSlot(TEST_POSITION, slot);
     }
 
-    function getIndexOfLastRead() external view returns (uint256) {
-        return _getDataStorage(TEST_POSITION).indexOfLastRead;
+    function moveCursorToSlot(uint256 slot, uint256 cumulative) external {
+        DepositsTracker.moveCursorToSlot(TEST_POSITION, slot, cumulative);
     }
+
     // helpers
 
-    function getTotalAmount() external view returns (uint256 total) {
-        return _getDataStorage(TEST_POSITION).totalAmount;
+    function getCursor() external view returns (uint256) {
+        return _getDataStorage(TEST_POSITION).cursor;
     }
 
     function getSlotsDepositsRaw() external view returns (uint256[] memory arr) {
         return _getDataStorage(TEST_POSITION).slotsDeposits;
     }
 
-    function getSlotsDepositsUnpacked() external view returns (uint64[] memory slots, uint128[] memory amounts) {
+    function getSlotsDepositsUnpacked() external view returns (uint64[] memory slots, uint192[] memory cumulatives) {
         DepositedEthState storage s = _getDataStorage(TEST_POSITION);
         uint256 len = s.slotsDeposits.length;
         slots = new uint64[](len);
-        amounts = new uint128[](len);
+        cumulatives = new uint192[](len);
         for (uint256 i = 0; i < len; ) {
             SlotDeposit memory d = s.slotsDeposits[i].unpack();
             slots[i] = d.slot;
-            amounts[i] = d.depositedEth;
+            cumulatives[i] = d.cumulativeEth;
             unchecked {
                 ++i;
             }
         }
     }
-
-    // Internal reader to the same storage slot
-    // function _readState() private view returns (DepositedEthState storage s, uint256 total, uint256[] storage arr) {
-    //     bytes32 pos = TEST_POSITION;
-    //     assembly {
-    //         s.slot := pos
-    //     }
-    //     return (s, s.totalAmount, s.slotsDeposits);
-    // }
 
     function _getDataStorage(bytes32 _position) private pure returns (DepositedEthState storage $) {
         assembly {
