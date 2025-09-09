@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4689"  lines-covered="4412"  line-rate="0.9409000000000001"  branches-valid="2214"  branches-covered="2022"  branch-rate="0.9133"  timestamp="1757426549904" complexity="0" version="0.1">
+<coverage lines-valid="4658"  lines-covered="4412"  line-rate="0.9472"  branches-valid="2194"  branches-covered="2022"  branch-rate="0.9216"  timestamp="1757429008069" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -6459,7 +6459,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.9.lib"  line-rate="0.6556000000000001"  branch-rate="0.6613" >
+	<package name="0.8.9.lib"  line-rate="1"  branch-rate="0.9762000000000001" >
 	<classes>
 		<class name="ExitLimitUtils.sol"  filename="contracts/0.8.9/lib/ExitLimitUtils.sol"  line-rate="1"  branch-rate="0.95" >
 		<methods>
@@ -6582,64 +6582,6 @@
 			<line number="168"  hits="38"  branch="false" />
 			<line number="169"  hits="38"  branch="false" />
 			<line number="172"  hits="38"  branch="false" />
-		</lines>
-		</class>
-		<class name="RateLimit.sol"  filename="contracts/0.8.9/lib/RateLimit.sol"  line-rate="0"  branch-rate="0" >
-		<methods>
-			<method name="getStorageLimit"  hits="0"  signature="()V" >
-				<lines><line number="18"  hits="0" /></lines>
-			</method>
-			<method name="setStorageLimit"  hits="0"  signature="()V" >
-				<lines><line number="22"  hits="0" /></lines>
-			</method>
-			<method name="_getDataStorage"  hits="0"  signature="()V" >
-				<lines><line number="26"  hits="0" /></lines>
-			</method>
-			<method name="calculateCurrentLimit"  hits="0"  signature="()V" >
-				<lines><line number="50"  hits="0" /></lines>
-			</method>
-			<method name="updatePrevLimit"  hits="0"  signature="()V" >
-				<lines><line number="71"  hits="0" /></lines>
-			</method>
-			<method name="setLimits"  hits="0"  signature="()V" >
-				<lines><line number="88"  hits="0" /></lines>
-			</method>
-			<method name="isLimitSet"  hits="0"  signature="()V" >
-				<lines><line number="118"  hits="0" /></lines>
-			</method>
-		</methods>
-		<lines>
-			<line number="19"  hits="0"  branch="false" />
-			<line number="23"  hits="0"  branch="false" />
-			<line number="27"  hits="0"  branch="false" />
-			<line number="54"  hits="0"  branch="false" />
-			<line number="56"  hits="0"  branch="true"  condition-coverage="0% (0/4)" />
-			<line number="57"  hits="0"  branch="false" />
-			<line number="60"  hits="0"  branch="false" />
-			<line number="61"  hits="0"  branch="false" />
-			<line number="63"  hits="0"  branch="false" />
-			<line number="64"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="65"  hits="0"  branch="false" />
-			<line number="68"  hits="0"  branch="false" />
-			<line number="76"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="78"  hits="0"  branch="false" />
-			<line number="79"  hits="0"  branch="false" />
-			<line number="80"  hits="0"  branch="false" />
-			<line number="82"  hits="0"  branch="false" />
-			<line number="83"  hits="0"  branch="false" />
-			<line number="85"  hits="0"  branch="false" />
-			<line number="95"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="96"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="97"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="98"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="100"  hits="0"  branch="false" />
-			<line number="101"  hits="0"  branch="false" />
-			<line number="103"  hits="0"  branch="true"  condition-coverage="0% (0/2)" />
-			<line number="109"  hits="0"  branch="false" />
-			<line number="112"  hits="0"  branch="false" />
-			<line number="113"  hits="0"  branch="false" />
-			<line number="115"  hits="0"  branch="false" />
-			<line number="119"  hits="0"  branch="false" />
 		</lines>
 		</class>
 		<class name="UnstructuredRefStorage.sol"  filename="contracts/0.8.9/lib/UnstructuredRefStorage.sol"  line-rate="1"  branch-rate="1" >
