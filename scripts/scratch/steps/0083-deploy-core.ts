@@ -1,6 +1,6 @@
 import { ethers } from "hardhat";
 
-import { StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
+import { ConsolidationGateway, StakingRouter, TriggerableWithdrawalsGateway } from "typechain-types";
 
 import { getContractPath, loadContract } from "lib/contract";
 import {
@@ -307,6 +307,31 @@ export async function main() {
   );
 
   //
+  // Deploy Consolidation Gateway
+  //
+
+  const consolidationGateway_ = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
+    admin,
+    locator.address,
+    // ToDo: Replace dummy parameters with real ones
+    1000, // maxConsolidationRequestsLimit,
+    100, // consolidationsPerFrame,
+    300, // frameDurationInSec
+  ]);
+
+  const consolidationGateway = await loadContract<ConsolidationGateway>(
+    "ConsolidationGateway",
+    consolidationGateway_.address,
+  );
+  // ToDo: Grant ADD_CONSOLIDATION_REQUEST_ROLE to MessageBus address
+  // await makeTx(
+  //   consolidationGateway,
+  //   "grantRole",
+  //   [await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE(), "MessageBusAddress...."],
+  //   { from: deployer },
+  // );
+
+  //
   // Deploy ValidatorExitDelayVerifier
   //
 
@@ -333,6 +358,7 @@ export async function main() {
     lidoAddress,
     treasuryAddress,
     triggerableWithdrawalsGateway.address,
+    consolidationGateway.address,
   ]);
 
   await makeTx(withdrawalsManagerProxy, "proxy_upgradeTo", [withdrawalVaultImpl.address, "0x"], { from: deployer });
