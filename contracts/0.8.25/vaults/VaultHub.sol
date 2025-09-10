@@ -713,7 +713,10 @@ contract VaultHub is PausableUntilWithRoles {
         _requireNotZero(_shares);
         _checkConnectionAndOwner(_vault);
 
-        _rebalance(_vault, _vaultRecord(_vault), _shares);
+        VaultRecord storage record = _vaultRecord(_vault);
+        _requireFreshReport(_vault, record);
+
+        _rebalance(_vault, record, _shares);
     }
 
     /// @notice mint StETH shares backed by vault external balance to the receiver address

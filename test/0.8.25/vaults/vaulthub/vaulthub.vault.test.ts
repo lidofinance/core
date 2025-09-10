@@ -521,6 +521,15 @@ describe("VaultHub.sol:owner-functions", () => {
       await reportVault({ totalValue: ether("10.5"), liabilityShares: ether("8.5") });
     });
 
+    it("reverts when report is stale", async () => {
+      await lazyOracle.setLatestReportTimestamp((await getCurrentBlockTimestamp()) - 3n * 24n * 60n * 60n);
+
+      await expect(vaultHub.connect(vaultOwner).rebalance(vaultAddress, ether("1"))).to.be.revertedWithCustomError(
+        vaultHub,
+        "VaultReportStale",
+      );
+    });
+
     it("reverts when paused", async () => {
       await vaultHub.connect(deployer).grantRole(await vaultHub.PAUSE_ROLE(), vaultOwner);
       await vaultHub.connect(vaultOwner).pauseFor(1000n);
