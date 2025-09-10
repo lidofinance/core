@@ -311,7 +311,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         external
         reinitializer(4)
     {
-        // TODO: here is problem, that last version of
+        // TODO: here is problem, that old version check lost
         __AccessControlEnumerable_init();
 
         RouterStorage storage rs = _getRouterStorage();
