@@ -44,3 +44,29 @@ jobs:
 
       - name: Run typescript types check
         run: yarn typecheck
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Run format check
+        run: yarn format
+
+  validate-configs:
+    name: Validate Configs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Validate configurations
+        run: yarn validate:configs

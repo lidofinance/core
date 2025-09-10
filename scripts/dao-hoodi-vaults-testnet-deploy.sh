@@ -5,7 +5,7 @@ set -o pipefail
 # Check for required environment variables
 export NETWORK=hoodi
 export NETWORK_STATE_FILE="deployed-${NETWORK}-vaults-testnet.json"
-export NETWORK_STATE_DEFAULTS_FILE="vaults-testnet-defaults.json"
+export SCRATCH_DEPLOY_CONFIG="scripts/scratch/deploy-params-testnet.toml"
 
 export GAS_PRIORITY_FEE=2
 # https://github.com/eth-clients/hoodi?tab=readme-ov-file#metadata
@@ -17,7 +17,6 @@ export GENESIS_FORK_VERSION=0x10000910
 export DEPOSIT_CONTRACT=0x00000000219ab540356cBB839Cbe05303d7705Fa
 
 rm -f "${NETWORK_STATE_FILE}"
-cp "scripts/defaults/${NETWORK_STATE_DEFAULTS_FILE}" "${NETWORK_STATE_FILE}"
 
 # Compile contracts
 yarn compile

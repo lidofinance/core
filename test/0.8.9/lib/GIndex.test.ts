@@ -28,10 +28,6 @@ class GIndexWrapper {
     return await this.contract.isRoot(gIndex);
   }
 
-  async isParentOf(lhs: string, rhs: string): Promise<boolean> {
-    return await this.contract.isParentOf(lhs, rhs);
-  }
-
   async index(gIndex: string): Promise<bigint> {
     return await this.contract.index(gIndex);
   }
@@ -109,60 +105,6 @@ describe("GIndex", () => {
     expect(await gIndex.isRoot(await gIndex.pack(maxUint248, 255))).to.be.false;
   });
 
-  it("test_isParentOf_Truthy", async () => {
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2048, 0))).to.be.true;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2049, 0))).to.be.true;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 9), await gIndex.pack(2048, 0))).to.be.true;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 9), await gIndex.pack(2049, 0))).to.be.true;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2048, 9))).to.be.true;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2049, 9))).to.be.true;
-    expect(await gIndex.isParentOf(await gIndex.pack(1023, 0), await gIndex.pack(4094, 0))).to.be.true;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(4098, 0))).to.be.true;
-  });
-
-  it("testFuzz_ROOT_isParentOfAnyChild", async () => {
-    for (let i = 0; i < 20; i++) {
-      const randomIndex = (BigInt(ethers.hexlify(randomBytes(30))) % BigInt(2) ** BigInt(240)) + BigInt(2);
-      const randomGIndex = await gIndex.wrap(zeroPadValue(ethers.toBeHex(randomIndex), 32));
-
-      expect(await gIndex.isParentOf(ROOT, randomGIndex)).to.be.true;
-    }
-  });
-
-  it("testFuzz_isParentOf_LessThanAnchor", async () => {
-    for (let i = 0; i < 10; i++) {
-      // Create two random indices where lhs > rhs
-      const lhsIndex = (BigInt(ethers.hexlify(randomBytes(30))) % BigInt(2) ** BigInt(240)) + BigInt(100);
-      const rhsIndex = lhsIndex - BigInt(1);
-
-      const lhs = await gIndex.wrap(zeroPadValue(ethers.toBeHex(lhsIndex), 32));
-      const rhs = await gIndex.wrap(zeroPadValue(ethers.toBeHex(rhsIndex), 32));
-
-      expect(await gIndex.isParentOf(lhs, rhs)).to.be.false;
-    }
-  });
-
-  it("test_isParentOf_OffTheBranch", async () => {
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2050, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2051, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2047, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2046, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 9), await gIndex.pack(2050, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 9), await gIndex.pack(2051, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 9), await gIndex.pack(2047, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 9), await gIndex.pack(2046, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2050, 9))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2051, 9))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2047, 9))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(2046, 9))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1023, 0), await gIndex.pack(2048, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1023, 0), await gIndex.pack(2049, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1023, 9), await gIndex.pack(2048, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1023, 9), await gIndex.pack(2049, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1023, 0), await gIndex.pack(4098, 0))).to.be.false;
-    expect(await gIndex.isParentOf(await gIndex.pack(1024, 0), await gIndex.pack(4094, 0))).to.be.false;
-  });
-
   it("test_concat", async () => {
     expect(await gIndex.unwrap(await gIndex.concat(await gIndex.pack(2, 99), await gIndex.pack(3, 99)))).to.equal(
       await gIndex.unwrap(await gIndex.pack(5, 99)),
@@ -237,39 +179,6 @@ describe("GIndex", () => {
         await gIndex.unwrap(randomGIndex),
         "`concat` with a root should return right-hand side value",
       );
-    }
-  });
-
-  it("testFuzz_concat_isParentOf", async () => {
-    for (let i = 0; i < 10; i++) {
-      // Create two random indices
-      const lhsIndex = (BigInt(ethers.hexlify(randomBytes(30))) % BigInt(2) ** BigInt(100)) + BigInt(1);
-      let rhsIndex = (BigInt(ethers.hexlify(randomBytes(30))) % BigInt(2) ** BigInt(100)) + BigInt(1);
-
-      // Make sure rhs is not 1 (root)
-      if (rhsIndex <= 1n) {
-        rhsIndex = 2n;
-      }
-
-      const lhs = await gIndex.wrap(zeroPadValue(ethers.toBeHex(lhsIndex), 32));
-      const rhs = await gIndex.wrap(zeroPadValue(ethers.toBeHex(rhsIndex), 32));
-
-      // Skip if the concatenation would overflow
-      const lhsBits = await gIndex.fls(lhsIndex);
-      const rhsBits = await gIndex.fls(rhsIndex);
-
-      if (lhsBits + 1n + rhsBits >= 248n) {
-        continue;
-      }
-
-      const concatenated = await gIndex.concat(lhs, rhs);
-
-      // Verify lhs is parent of lhs.concat(rhs)
-      expect(await gIndex.isParentOf(lhs, concatenated)).to.be.true;
-
-      // Verify lhs.concat(rhs) is NOT parent of lhs or rhs
-      expect(await gIndex.isParentOf(concatenated, lhs)).to.be.false;
-      expect(await gIndex.isParentOf(concatenated, rhs)).to.be.false;
     }
   });
 

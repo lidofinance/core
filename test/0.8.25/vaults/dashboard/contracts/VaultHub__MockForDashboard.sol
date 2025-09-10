@@ -8,36 +8,55 @@ import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.so
 import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepositGuarantee.sol";
 import {Math256} from "contracts/common/lib/Math256.sol";
 
+import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
+
 contract IStETH {
     function mintExternalShares(address _receiver, uint256 _amountOfShares) external {}
 
     function burnExternalShares(uint256 _amountOfShares) external {}
 
-    function getSharesByPooledEthRoundedUp(uint256 _amountOfEther) external view returns (uint256) {}
+    function getSharesByPooledEth(uint256 _amountOfStETH) external view returns (uint256) {}
+
+    function getPooledEthBySharesRoundUp(uint256 _amountOfShares) external view returns (uint256) {}
+}
+
+contract IOperatorGrid {
+    function effectiveShareLimit(address _vault) external view returns (uint256) {}
 }
 
 contract VaultHub__MockForDashboard {
     uint256 internal constant BPS_BASE = 100_00;
     IStETH public immutable steth;
-    address public immutable LIDO_LOCATOR;
+    ILidoLocator public immutable LIDO_LOCATOR;
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
     uint64 public latestReportDataTimestamp;
     bool public sendWithdraw = false;
 
-    constructor(IStETH _steth, address _lidoLocator) {
+    constructor(IStETH _steth, ILidoLocator _lidoLocator) {
         steth = _steth;
         LIDO_LOCATOR = _lidoLocator;
     }
 
+    struct Obligations {
+        uint256 sharesToRebalance;
+        uint256 unsettledLidoFees;
+    }
+
     mapping(address => VaultHub.VaultConnection) public vaultConnections;
     mapping(address => VaultHub.VaultRecord) public vaultRecords;
-    mapping(address => VaultHub.VaultObligations) public _vaultObligations;
+    mapping(address => Obligations) public mock__obligations;
+
+    bool allVaultPendingDisconnect;
 
     receive() external payable {}
 
     function mock__setVaultConnection(address vault, VaultHub.VaultConnection memory connection) external {
         vaultConnections[vault] = connection;
+    }
+
+    function mock__setPendingDisconnect(bool _allVaultPendingDisconnect) external {
+        allVaultPendingDisconnect = _allVaultPendingDisconnect;
     }
 
     function vaultConnection(address vault) external view returns (VaultHub.VaultConnection memory) {
@@ -48,14 +67,6 @@ contract VaultHub__MockForDashboard {
         vaultRecords[vault] = record;
     }
 
-    function mock__setVaultObligations(address vault, VaultHub.VaultObligations memory obligations) external {
-        _vaultObligations[vault] = obligations;
-    }
-
-    function vaultObligations(address vault) external view returns (VaultHub.VaultObligations memory) {
-        return _vaultObligations[vault];
-    }
-
     function vaultRecord(address vault) external view returns (VaultHub.VaultRecord memory) {
         return vaultRecords[vault];
     }
@@ -64,8 +75,8 @@ contract VaultHub__MockForDashboard {
         return vaultRecords[vault].report.totalValue;
     }
 
-    function locked(address vault) external view returns (uint256) {
-        return vaultRecords[vault].locked;
+    function locked(address vault) public view returns (uint256) {
+        return steth.getPooledEthBySharesRoundUp(vaultRecords[vault].maxLiabilityShares);
     }
 
     function liabilityShares(address _vault) external view returns (uint256) {
@@ -76,12 +87,8 @@ contract VaultHub__MockForDashboard {
         return vaultRecords[_vault].report;
     }
 
-    function maxLockableValue(address _vault) external view returns (uint256) {
-        return vaultRecords[_vault].report.totalValue;
-    }
-
     function withdrawableValue(address _vault) external view returns (uint256) {
-        return Math256.min(vaultRecords[_vault].report.totalValue - vaultRecords[_vault].locked, _vault.balance);
+        return Math256.min(vaultRecords[_vault].report.totalValue - locked(_vault), _vault.balance);
     }
 
     function disconnect(address vault) external {
@@ -91,6 +98,11 @@ contract VaultHub__MockForDashboard {
     function deleteVaultConnection(address vault) external {
         delete vaultConnections[vault];
         delete vaultRecords[vault];
+        delete mock__obligations[vault];
+    }
+
+    function isPendingDisconnect(address) external view returns (bool) {
+        return allVaultPendingDisconnect;
     }
 
     function connectVault(address vault) external {
@@ -98,7 +110,7 @@ contract VaultHub__MockForDashboard {
             owner: IStakingVault(vault).owner(),
             shareLimit: 1,
             vaultIndex: 2,
-            pendingDisconnect: false,
+            disconnectInitiatedTs: type(uint48).max,
             reserveRatioBP: 500,
             forcedRebalanceThresholdBP: 100,
             infraFeeBP: 100,
@@ -162,8 +174,42 @@ contract VaultHub__MockForDashboard {
         emit Mock__Funded(_vault, msg.value);
     }
 
+    function totalMintingCapacityShares(address _vault, int256 _deltaValue) external view returns (uint256) {
+        uint256 base = vaultRecords[_vault].report.totalValue;
+        uint256 maxLockableValue = _deltaValue >= 0 ? base + uint256(_deltaValue) : base - uint256(-_deltaValue);
+        uint256 mintableStETH = (maxLockableValue * (BPS_BASE - vaultConnections[_vault].reserveRatioBP)) / BPS_BASE;
+        uint256 minimalReserve = vaultRecords[_vault].minimalReserve;
+
+        if (maxLockableValue < minimalReserve) return 0;
+        if (maxLockableValue - mintableStETH < minimalReserve) mintableStETH = maxLockableValue - minimalReserve;
+        uint256 shares = steth.getSharesByPooledEth(mintableStETH);
+        return Math256.min(shares, IOperatorGrid(LIDO_LOCATOR.operatorGrid()).effectiveShareLimit(_vault));
+    }
+
     function mock__setSendWithdraw(bool _sendWithdraw) external {
         sendWithdraw = _sendWithdraw;
+    }
+
+    function mock__setObligations(address _vault, uint256 _sharesToRebalance, uint256 _unsettledLidoFees) external {
+        mock__obligations[_vault] = Obligations({
+            sharesToRebalance: _sharesToRebalance,
+            unsettledLidoFees: _unsettledLidoFees
+        });
+    }
+
+    function obligations(address _vault) external view returns (uint256, uint256) {
+        Obligations storage $ = mock__obligations[_vault];
+        return ($.sharesToRebalance, $.unsettledLidoFees);
+    }
+
+    function obligationsShortfall(address _vault) external view returns (uint256) {
+        Obligations storage $ = mock__obligations[_vault];
+        return steth.getPooledEthBySharesRoundUp($.sharesToRebalance) + $.unsettledLidoFees;
+    }
+
+    function rebalanceShortfallShares(address _vault) external view returns (uint256) {
+        Obligations storage $ = mock__obligations[_vault];
+        return $.sharesToRebalance;
     }
 
     function withdraw(address _vault, address _recipient, uint256 _amount) external {
@@ -200,20 +246,12 @@ contract VaultHub__MockForDashboard {
         uint256 _shareLimit,
         uint256 _reserveRatioBP,
         uint256 _forcedRebalanceThresholdBP,
-        uint256 _infraFeeBP,
-        uint256 _liquidityFeeBP,
-        uint256 _reservationFeeBP
+        uint256,
+        uint256,
+        uint256
     ) external {
         if (!isVaultConnected(_vault)) revert NotConnectedToHub(_vault);
-        emit Mock__VaultConnectionUpdated(
-            _vault,
-            _shareLimit,
-            _reserveRatioBP,
-            _forcedRebalanceThresholdBP,
-            _infraFeeBP,
-            _liquidityFeeBP,
-            _reservationFeeBP
-        );
+        emit Mock__VaultConnectionUpdated(_vault, _shareLimit, _reserveRatioBP, _forcedRebalanceThresholdBP);
     }
 
     event Mock__ValidatorExitRequested(address vault, bytes pubkeys);
@@ -234,10 +272,7 @@ contract VaultHub__MockForDashboard {
         address vault,
         uint256 shareLimit,
         uint256 reserveRatioBP,
-        uint256 forcedRebalanceThresholdBP,
-        uint256 infraFeeBP,
-        uint256 liquidityFeeBP,
-        uint256 reservationFeeBP
+        uint256 forcedRebalanceThresholdBP
     );
 
     error ZeroArgument(string argument);

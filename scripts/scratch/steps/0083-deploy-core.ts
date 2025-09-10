@@ -14,16 +14,15 @@ import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 import { en0x } from "lib/string";
 
+import { ACTIVE_VALIDATOR_PROOF } from "test/0.8.25/validatorState";
+
 const ZERO_LAST_PROCESSING_REF_SLOT = 0;
 
-function getEnvVariable(name: string, defaultValue?: string): string {
-  const value = process.env[name] ?? defaultValue;
-  if (value === undefined) {
-    throw new Error(`Environment variable ${name} is required`);
-  }
-  log(`${name} = ${value}`);
-  return value;
-}
+// These exports are kept for compatibility with other modules that might import them
+export const FIRST_SUPPORTED_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+export const PIVOT_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+export const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+export const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -335,20 +334,31 @@ export async function main() {
   // Deploy ValidatorExitDelayVerifier
   //
 
-  await deployWithoutProxy(Sk.validatorExitDelayVerifier, "ValidatorExitDelayVerifier", deployer, [
+  const validatorExitDelayVerifierCtorArgs = [
     locator.address,
-    validatorExitDelayVerifierParams.gIFirstValidatorPrev,
-    validatorExitDelayVerifierParams.gIFirstValidatorCurr,
-    validatorExitDelayVerifierParams.gIHistoricalSummariesPrev,
-    validatorExitDelayVerifierParams.gIHistoricalSummariesCurr,
+    {
+      gIFirstValidatorPrev: validatorExitDelayVerifierParams.gIFirstValidatorPrev,
+      gIFirstValidatorCurr: validatorExitDelayVerifierParams.gIFirstValidatorCurr,
+      gIFirstHistoricalSummaryPrev: validatorExitDelayVerifierParams.gIFirstHistoricalSummaryPrev,
+      gIFirstHistoricalSummaryCurr: validatorExitDelayVerifierParams.gIFirstHistoricalSummaryCurr,
+      gIFirstBlockRootInSummaryPrev: validatorExitDelayVerifierParams.gIFirstBlockRootInSummaryPrev,
+      gIFirstBlockRootInSummaryCurr: validatorExitDelayVerifierParams.gIFirstBlockRootInSummaryCurr,
+    },
     validatorExitDelayVerifierParams.firstSupportedSlot,
     validatorExitDelayVerifierParams.pivotSlot,
+    validatorExitDelayVerifierParams.capellaSlot,
+    validatorExitDelayVerifierParams.slotsPerHistoricalRoot,
     chainSpec.slotsPerEpoch,
     chainSpec.secondsPerSlot,
-    parseInt(getEnvVariable("GENESIS_TIME")), // uint64 genesisTime,
-    // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
+    chainSpec.genesisTime,
     validatorExitDelayVerifierParams.shardCommitteePeriodInSeconds,
-  ]);
+  ];
+  await deployWithoutProxy(
+    Sk.validatorExitDelayVerifier,
+    "ValidatorExitDelayVerifier",
+    deployer,
+    validatorExitDelayVerifierCtorArgs,
+  );
 
   //
   // Deploy WithdrawalVault
@@ -389,6 +399,7 @@ export async function main() {
       sanityCheckerParams.exitedValidatorsPerDayLimit,
       sanityCheckerParams.appearedValidatorsPerDayLimit,
       sanityCheckerParams.annualBalanceIncreaseBPLimit,
+      sanityCheckerParams.simulatedShareRateDeviationBPLimit,
       sanityCheckerParams.maxValidatorExitRequestsPerReport,
       sanityCheckerParams.maxItemsPerExtraDataTransaction,
       sanityCheckerParams.maxNodeOperatorsPerExtraDataItem,
