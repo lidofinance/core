@@ -589,6 +589,8 @@ contract VaultHub is PausableUntilWithRoles {
                 _overrideOperatorLimits: true
             });
 
+            _updateBeaconChainDepositsPause(_vaultAcceptor, acceptorRecord, acceptorConnection);
+
             emit BadDebtSocialized(_badDebtVault, _vaultAcceptor, badDebtSharesToAccept);
         }
 
