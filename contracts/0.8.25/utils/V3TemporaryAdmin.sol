@@ -13,7 +13,7 @@ interface IVaultHub {
     function BAD_DEBT_MASTER_ROLE() external view returns (bytes32);
 }
 
-interface IPausableUntilWithRoles {
+interface IPausableUntil {
     function PAUSE_ROLE() external view returns (bytes32);
 }
 
@@ -146,7 +146,7 @@ contract V3TemporaryAdmin {
      */
     function _setupVaultHub(address _vaultHub, address _evmScriptExecutor, address _vaultHubAdapter) private {
         // Get roles from the contract
-        bytes32 pauseRole = IPausableUntilWithRoles(_vaultHub).PAUSE_ROLE();
+        bytes32 pauseRole = IPausableUntil(_vaultHub).PAUSE_ROLE();
         bytes32 vaultMasterRole = IVaultHub(_vaultHub).VAULT_MASTER_ROLE();
         bytes32 redemptionMasterRole = IVaultHub(_vaultHub).REDEMPTION_MASTER_ROLE();
         bytes32 validatorExitRole = IVaultHub(_vaultHub).VALIDATOR_EXIT_ROLE();
@@ -171,7 +171,7 @@ contract V3TemporaryAdmin {
      * @param _predepositGuarantee The PredepositGuarantee contract address
      */
     function _setupPredepositGuarantee(address _predepositGuarantee) private {
-        bytes32 pauseRole = IPausableUntilWithRoles(_predepositGuarantee).PAUSE_ROLE();
+        bytes32 pauseRole = IPausableUntil(_predepositGuarantee).PAUSE_ROLE();
         IAccessControl(_predepositGuarantee).grantRole(pauseRole, GATE_SEAL);
         _transferAdminToAgent(_predepositGuarantee);
     }

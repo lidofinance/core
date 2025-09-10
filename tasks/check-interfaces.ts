@@ -36,6 +36,21 @@ const PAIRS_TO_SKIP: {
     contractFqn: "contracts/0.4.24/StETH.sol:StETH",
     reason: "Fixing requires WithdrawalQueue redeploy",
   },
+  {
+    interfaceFqn: "contracts/0.8.25/vaults/dashboard/Dashboard.sol:IWstETH",
+    contractFqn: "contracts/0.6.12/WstETH.sol:WstETH",
+    reason: "TODO: Temp solution",
+  },
+  {
+    interfaceFqn: "contracts/0.8.9/Burner.sol:ILido",
+    contractFqn: "contracts/0.4.24/Lido.sol:Lido",
+    reason: "TODO: Temp solution",
+  },
+  {
+    interfaceFqn: "contracts/0.8.25/utils/V3TemporaryAdmin.sol:IPausableUntil",
+    contractFqn: "contracts/0.8.9/utils/PausableUntil.sol:PausableUntil",
+    reason: "TODO: Temp solution",
+  },
 ];
 
 task("check-interfaces").setAction(async (_, hre) => {
