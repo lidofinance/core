@@ -41,6 +41,7 @@ library BitMask16 {
     }
 
     function countBits(uint16 m) internal pure returns (uint8 count) {
+        // forge-lint: disable-start(unsafe-typecast)
         unchecked {
             m = m - ((m >> 1) & 0x5555); // 0b0101010101010101
             m = (m & 0x3333) + ((m >> 2) & 0x3333); // group 2 bits, 0b0011001100110011
@@ -48,5 +49,6 @@ library BitMask16 {
             m = m + (m >> 8); // sum all nibbles
             count = uint8(m & 0x001F); // max 16 bits → 5 bits are enough (0..16)
         }
+        // forge-lint: disable-end(unsafe-typecast)
     }
 }

@@ -3,11 +3,13 @@ pragma solidity ^0.8.25;
 
 import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
-import {Packed16} from "./Packed16.sol";
-import {BitMask16} from "./BitMask16.sol";
+import {Packed16} from "../Packed16.sol";
+import {BitMask16} from "../BitMask16.sol";
+import "./STASTypes.sol" as T;
+import "./STASErrors.sol" as E;
 
 /**
- * @title Share Target Allocation Strategy (STAS)
+ * @title Share Target Allocation T.Strategy (STAS)
  * @author KRogLA
  * @notice A library for calculating and managing weight distributions among entities based on their metric values
  * @dev Provides functionality for allocating shares to entities according to configurable strategies and metrics
@@ -17,85 +19,53 @@ library STASCore {
     using Packed16 for uint256;
     using BitMask16 for uint16;
 
-    struct Metric {
-        uint16 defaultWeight; // default weight for the metric in strategies
-    }
-
-    struct Strategy {
-        // todo extend to Q32.32 precision?
-        uint256 packedWeights; // packed weights for all metrics, 16x uint16
-        uint256 sumWeights;
-        // todo reduce to packed 8x uint32 into 2 uint256?
-        uint256[16] sumX;
-    }
-
-    struct Entity {
-        uint256 packedMetricValues; // packed params 16x uint16 in one uint256
-    }
-
-    struct STASStorage {
-        uint16 enabledMetricsBitMask;
-        uint16 enabledStrategiesBitMask;
-        mapping(uint256 => Metric) metrics; // mapping of metrics to their states
-        mapping(uint256 => Strategy) strategies; // mapping of strategies to their states
-        mapping(uint256 => Entity) entities; // id => Entity
-        EnumerableSet.UintSet entityIds; // set of entity IDs
-    }
-
     uint8 public constant MAX_METRICS = 16;
     uint8 public constant MAX_STRATEGIES = 16;
 
     // resulted shares precision
-    uint8 internal constant S_FRAC = 32; // Q32.32
-    uint256 internal constant S_SCALE = uint256(1) << S_FRAC; // 2^32
+    uint8 public constant S_FRAC = 32; // Q32.32
+    uint256 public constant S_SCALE = uint256(1) << S_FRAC; // 2^32
 
     event UpdatedEntities(uint256 updateCount);
     event UpdatedStrategyWeights(uint256 strategyId, uint256 updatesCount);
 
-    error NotFound();
-    error NotEnabled();
-    error AlreadyExists();
-    error OutOfBounds();
-    error LengthMismatch();
-    error NoData();
-
-    function getAStorage(bytes32 _position) public pure returns (ASStorage storage) {
+    function getSTAStorage(bytes32 _position) public pure returns (T.STASStorage storage) {
         return _getStorage(_position);
     }
 
-    function enableStrategy(ASStorage storage $, uint8 sId) public {
+    function enableStrategy(T.STASStorage storage $, uint8 sId) public {
         uint16 mask = $.enabledStrategiesBitMask;
-        if (mask.isBitSet(sId)) revert AlreadyExists();
+        if (mask.isBitSet(sId)) revert E.AlreadyExists();
 
         $.enabledStrategiesBitMask = mask.setBit(sId);
 
         // initializing with zeros, weights should be set later
         uint256[16] memory sumX;
-        $.strategies[sId] = Strategy({packedWeights: 0, sumWeights: 0, sumX: sumX});
+        $.strategies[sId] = T.Strategy({packedWeights: 0, sumWeights: 0, sumX: sumX});
     }
 
-    function disableStrategy(ASStorage storage $, uint8 sId) public {
+    function disableStrategy(T.STASStorage storage $, uint8 sId) public {
         uint16 mask = $.enabledStrategiesBitMask;
-        if (!mask.isBitSet(sId)) revert NotEnabled();
+        if (!mask.isBitSet(sId)) revert E.NotEnabled();
 
         // reset strategy storage
         delete $.strategies[sId];
         $.enabledStrategiesBitMask = mask.clearBit(sId);
     }
 
-    function enableMetric(ASStorage storage $, uint8 mId, uint16 defaultWeight) public returns (uint256 updCnt) {
+    function enableMetric(T.STASStorage storage $, uint8 mId, uint16 defaultWeight) public returns (uint256 updCnt) {
         uint16 mask = $.enabledMetricsBitMask;
-        if (mask.isBitSet(mId)) revert AlreadyExists(); // skip non-enabled metrics
+        if (mask.isBitSet(mId)) revert E.AlreadyExists(); // skip non-enabled metrics
 
         $.enabledMetricsBitMask = mask.setBit(mId);
-        $.metrics[mId] = Metric({defaultWeight: defaultWeight});
+        $.metrics[mId] = T.Metric({defaultWeight: defaultWeight});
 
         updCnt = _setWeightsAllStrategies($, mId, defaultWeight);
     }
 
-    function disableMetric(ASStorage storage $, uint8 mId) public returns (uint256 updCnt) {
+    function disableMetric(T.STASStorage storage $, uint8 mId) public returns (uint256 updCnt) {
         uint16 mask = $.enabledMetricsBitMask;
-        if (!mask.isBitSet(mId)) revert NotEnabled(); // skip non-enabled metrics
+        if (!mask.isBitSet(mId)) revert E.NotEnabled(); // skip non-enabled metrics
 
         updCnt = _setWeightsAllStrategies($, mId, 0);
 
@@ -103,17 +73,17 @@ library STASCore {
         delete $.metrics[mId];
     }
 
-    function addEntity(ASStorage storage $, uint256 eId) public {
+    function addEntity(T.STASStorage storage $, uint256 eId) public {
         uint256[] memory eIds = new uint256[](1);
         eIds[0] = eId;
         _addEntities($, eIds);
     }
 
-    function addEntities(ASStorage storage $, uint256[] memory eIds) public {
+    function addEntities(T.STASStorage storage $, uint256[] memory eIds) public {
         _addEntities($, eIds);
     }
 
-    function addEntities(ASStorage storage $, uint256[] memory eIds, uint8[] memory mIds, uint16[][] memory newVals)
+    function addEntities(T.STASStorage storage $, uint256[] memory eIds, uint8[] memory mIds, uint16[][] memory newVals)
         public
         returns (uint256 updCnt)
     {
@@ -124,9 +94,9 @@ library STASCore {
         }
     }
 
-    function removeEntities(ASStorage storage $, uint256[] memory eIds) public returns (uint256 updCnt) {
+    function removeEntities(T.STASStorage storage $, uint256[] memory eIds) public returns (uint256 updCnt) {
         uint256 n = eIds.length;
-        if (n == 0) revert NotFound();
+        if (n == 0) revert E.NotFound();
 
         uint16 mask = $.enabledMetricsBitMask;
         uint8[] memory mIds = mask.bitsToValues();
@@ -136,7 +106,7 @@ library STASCore {
         for (uint256 i; i < n; ++i) {
             uint256 eId = eIds[i];
             if (!$.entityIds.remove(eId)) {
-                revert NotFound();
+                revert E.NotFound();
             }
 
             uint256 slot = $.entities[eId].packedMetricValues;
@@ -150,7 +120,7 @@ library STASCore {
         updCnt = _applyUpdate($, eIds, mIds, delVals);
     }
 
-    function setWeights(ASStorage storage $, uint8 sId, uint8[] memory mIds, uint16[] memory newWeights)
+    function setWeights(T.STASStorage storage $, uint8 sId, uint8[] memory mIds, uint16[] memory newWeights)
         public
         returns (uint256 updCnt)
     {
@@ -159,13 +129,13 @@ library STASCore {
         _checkBounds(mCnt, MAX_METRICS);
 
         uint16 mask = $.enabledStrategiesBitMask;
-        if (!mask.isBitSet(sId)) revert NotEnabled(); // skip non-enabled strategies
+        if (!mask.isBitSet(sId)) revert E.NotEnabled(); // skip non-enabled strategies
 
         updCnt = _setWeights($, sId, mIds, newWeights);
     }
 
     function batchUpdate(
-        STASStorage storage $,
+        T.STASStorage storage $,
         uint256[] memory eIds,
         uint8[] memory mIds,
         uint16[][] memory newVals // индексы+значения per id/per cat
@@ -174,63 +144,67 @@ library STASCore {
         updCnt = _applyUpdate($, eIds, mIds, newVals);
     }
 
-    function _getEntityRaw(ASStorage storage $, uint256 eId) public view returns (Entity memory) {
+    function _getEntityRaw(T.STASStorage storage $, uint256 eId) public view returns (T.Entity memory) {
         return $.entities[eId];
     }
 
-    function _getStrategyRaw(ASStorage storage $, uint256 sId) public view returns (Strategy memory) {
+    function _getStrategyRaw(T.STASStorage storage $, uint256 sId) public view returns (T.Strategy memory) {
         return $.strategies[sId];
     }
 
-    function _getMetricRaw(ASStorage storage $, uint256 mId) public view returns (Metric memory) {
+    function _getMetricRaw(T.STASStorage storage $, uint256 mId) public view returns (T.Metric memory) {
         return $.metrics[mId];
     }
 
-    function getMetricValues(ASStorage storage $, uint256 eId) public view returns (uint16[] memory) {
+    function getMetricValues(T.STASStorage storage $, uint256 eId) public view returns (uint16[] memory) {
         _checkEntity($, eId);
 
         uint256 pVals = $.entities[eId].packedMetricValues;
         return pVals.unpack16();
     }
 
-    function getWeights(ASStorage storage $, uint8 sId)
+    function getWeights(T.STASStorage storage $, uint8 sId)
         public
         view
         returns (uint16[] memory weights, uint256 sumWeights)
     {
         uint16 mask = $.enabledStrategiesBitMask;
-        if (!mask.isBitSet(sId)) revert NotEnabled(); // skip non-enabled strategies
+        if (!mask.isBitSet(sId)) revert E.NotEnabled(); // skip non-enabled strategies
 
         uint256 pW = $.strategies[sId].packedWeights;
         return (pW.unpack16(), $.strategies[sId].sumWeights);
     }
 
-    function getEnabledStrategies(ASStorage storage $) public view returns (uint8[] memory) {
+    function getEnabledStrategies(T.STASStorage storage $) public view returns (uint8[] memory) {
         uint16 mask = $.enabledStrategiesBitMask;
         return mask.bitsToValues();
     }
 
-    function getEnabledMetrics(ASStorage storage $) public view returns (uint8[] memory) {
+    function getEnabledMetrics(T.STASStorage storage $) public view returns (uint8[] memory) {
         uint16 mask = $.enabledMetricsBitMask;
         return mask.bitsToValues();
     }
 
-    function getEntities(ASStorage storage $) public view returns (uint256[] memory) {
+    function getEntities(T.STASStorage storage $) public view returns (uint256[] memory) {
         return $.entityIds.values();
     }
 
-    function shareOf(ASStorage storage $, uint256 eId, uint8 sId) public view returns (uint256) {
+    function shareOf(T.STASStorage storage $, uint256 eId, uint8 sId) public view returns (uint256) {
         uint16 mask = $.enabledStrategiesBitMask;
-        if (!mask.isBitSet(sId)) revert NotEnabled(); // skip non-enabled strategies
+        if (!mask.isBitSet(sId)) revert E.NotEnabled(); // skip non-enabled strategies
 
         _checkEntity($, eId);
         return _calculateShare($, eId, sId);
     }
 
-    function sharesOf(ASStorage storage $, uint256[] memory eIds, uint8 sId) public view returns (uint256[] memory) {
+    function sharesOf(T.STASStorage storage $, uint256[] memory eIds, uint8 sId)
+        public
+        view
+        returns (uint256[] memory)
+    {
         uint256[] memory shares = new uint256[](eIds.length);
         uint16 mask = $.enabledStrategiesBitMask;
-        if (!mask.isBitSet(sId)) revert NotEnabled(); // skip non-enabled strategies
+        if (!mask.isBitSet(sId)) revert E.NotEnabled(); // skip non-enabled strategies
 
         for (uint256 i = 0; i < eIds.length; i++) {
             uint256 eId = eIds[i];
@@ -240,27 +214,27 @@ library STASCore {
         return shares;
     }
 
-    // function _shareOf(ASStorage storage $, uint256 eId, uint8 sId) internal view returns (uint256) {
+    // function _shareOf(T.STASStorage storage $, uint256 eId, uint8 sId) internal view returns (uint256) {
     //     _checkEntity($, eId);
     //     uint16 mask = $.enabledStrategiesBitMask;
-    //     if (!mask.isBitSet(sId)) revert NotEnabled(); // skip non-enabled strategies
+    //     if (!mask.isBitSet(sId)) revert E.NotEnabled(); // skip non-enabled strategies
     //     return _calculateShare($, eId, sId);
     // }
 
-    function _addEntities(ASStorage storage $, uint256[] memory eIds) private {
+    function _addEntities(T.STASStorage storage $, uint256[] memory eIds) private {
         uint256 n = eIds.length;
-        if (n == 0) revert NoData();
+        if (n == 0) revert E.NoData();
 
         for (uint256 i; i < n; ++i) {
             uint256 eId = eIds[i];
             if (!$.entityIds.add(eId)) {
-                revert AlreadyExists();
+                revert E.AlreadyExists();
             }
-            $.entities[eId] = Entity({packedMetricValues: 0});
+            $.entities[eId] = T.Entity({packedMetricValues: 0});
         }
     }
 
-    function _setWeightsAllStrategies(ASStorage storage $, uint8 mId, uint16 newWeight)
+    function _setWeightsAllStrategies(T.STASStorage storage $, uint8 mId, uint16 newWeight)
         private
         returns (uint256 updCnt)
     {
@@ -270,21 +244,22 @@ library STASCore {
         uint16[] memory newWeights = new uint16[](1);
         newWeights[0] = newWeight;
 
-        for (uint256 i; i < MAX_STRATEGIES; ++i) {
-            if (!mask.isBitSet(uint8(i))) continue; // skip non-enabled strategies
-            updCnt += _setWeights($, uint8(i), mIds, newWeights);
+        for (uint8 i; i < MAX_STRATEGIES; ++i) {
+            if (!mask.isBitSet(i)) continue; // skip non-enabled strategies
+            updCnt += _setWeights($, i, mIds, newWeights);
         }
     }
 
-    function _setWeights(ASStorage storage $, uint8 sId, uint8[] memory mIds, uint16[] memory newWeights)
+    function _setWeights(T.STASStorage storage $, uint8 sId, uint8[] memory mIds, uint16[] memory newWeights)
         private
         returns (uint256 updCnt)
     {
-        Strategy storage ss = $.strategies[sId];
+        T.Strategy storage ss = $.strategies[sId];
         // get old weights/sum
         uint256 pW = ss.packedWeights;
         int256 dSum;
         uint16 mask = $.enabledMetricsBitMask;
+        // forge-lint: disable-start(unsafe-typecast)
         unchecked {
             for (uint8 k; k < mIds.length; ++k) {
                 uint8 mId = mIds[k];
@@ -307,13 +282,14 @@ library STASCore {
             if (dSum > 0) sW += uint256(dSum);
             else sW -= uint256(-dSum);
         }
+        // forge-lint: disable-end(unsafe-typecast)
         ss.packedWeights = pW;
         ss.sumWeights = sW;
         emit UpdatedStrategyWeights(sId, updCnt);
     }
 
     function _applyUpdate(
-        STASStorage storage $,
+        T.STASStorage storage $,
         uint256[] memory eIds,
         uint8[] memory mIds,
         uint16[][] memory newVals // или компактнее: индексы+значения per id
@@ -327,7 +303,8 @@ library STASCore {
 
         // дельты сумм по параметрам
         int256[] memory dSum = new int256[](mCnt);
-
+        uint16 mask = $.enabledMetricsBitMask;
+        // forge-lint: disable-start(unsafe-typecast)
         unchecked {
             for (uint256 i; i < n; ++i) {
                 uint256 eId = eIds[i];
@@ -337,8 +314,6 @@ library STASCore {
                 uint256 pVals = $.entities[eId].packedMetricValues;
                 uint256 pValsNew = pVals;
 
-                //TODO input mIds -> bitmask?
-                uint16 mask = $.enabledMetricsBitMask;
                 for (uint256 k; k < mCnt; ++k) {
                     // if (mask[i][k] == 0) continue;
                     uint8 mId = mIds[k];
@@ -360,10 +335,10 @@ library STASCore {
             }
         }
 
-        uint16 mask = $.enabledStrategiesBitMask;
+        mask = $.enabledStrategiesBitMask;
         for (uint256 i; i < MAX_STRATEGIES; ++i) {
             if (!mask.isBitSet(uint8(i))) continue; // skip non-enabled strategies
-            Strategy storage ss = $.strategies[i];
+            T.Strategy storage ss = $.strategies[i];
             // update sumX[k]
             for (uint256 k; k < mCnt; ++k) {
                 int256 dx = dSum[k];
@@ -373,11 +348,12 @@ library STASCore {
                 else ss.sumX[mId] -= uint256(-dx); // no overflow, due to dx = Σ(new-old)
             }
         }
+        // forge-lint: disable-end(unsafe-typecast)
         emit UpdatedEntities(updCnt);
     }
 
     function _applyUpdate2(
-        STASStorage storage $,
+        T.STASStorage storage $,
         uint256[] memory eIds,
         uint8[] memory mIds,
         uint16[][] memory newVals // или компактнее: индексы+значения per id
@@ -394,7 +370,7 @@ library STASCore {
         // дельты сумм по параметрам
         int256[] memory dSum = new int256[](mCnt);
         uint16 mask = $.enabledMetricsBitMask;
-
+        // forge-lint: disable-start(unsafe-typecast)
         unchecked {
             for (uint256 i; i < n; ++i) {
                 uint256 eId = eIds[i];
@@ -426,7 +402,7 @@ library STASCore {
         mask = $.enabledStrategiesBitMask;
         for (uint256 i; i < MAX_STRATEGIES; ++i) {
             if (!mask.isBitSet(uint8(i))) continue; // skip non-enabled strategies
-            Strategy storage ss = $.strategies[i];
+            T.Strategy storage ss = $.strategies[i];
             // update sumX[k]
             for (uint256 k; k < mCnt; ++k) {
                 int256 dx = dSum[k];
@@ -436,11 +412,12 @@ library STASCore {
                 else ss.sumX[mId] -= uint256(-dx); // no overflow, due to dx = Σ(new-old)
             }
         }
+        // forge-lint: disable-end(unsafe-typecast)
         emit UpdatedEntities(updCnt);
     }
 
-    function _calculateShare(ASStorage storage $, uint256 eId, uint8 sId) private view returns (uint256) {
-        Strategy storage ss = $.strategies[sId];
+    function _calculateShare(T.STASStorage storage $, uint256 eId, uint8 sId) private view returns (uint256) {
+        T.Strategy storage ss = $.strategies[sId];
 
         uint256 sW = ss.sumWeights;
         if (sW == 0) return 0;
@@ -465,32 +442,32 @@ library STASCore {
         return (acc << S_FRAC) / sW; // Q32.32
     }
 
-    function _checkEntity(ASStorage storage $, uint256 eId) private view {
+    function _checkEntity(T.STASStorage storage $, uint256 eId) private view {
         if (!$.entityIds.contains(eId)) {
-            revert NotFound();
+            revert E.NotFound();
         }
     }
 
     function _checkIdBounds(uint256 value, uint256 max) private pure {
         if (value >= max) {
-            revert OutOfBounds();
+            revert E.OutOfBounds();
         }
     }
 
     function _checkBounds(uint256 value, uint256 max) private pure {
         if (value > max) {
-            revert OutOfBounds();
+            revert E.OutOfBounds();
         }
     }
 
     function _checkLength(uint256 l1, uint256 l2) private pure {
         if (l1 != l2) {
-            revert LengthMismatch();
+            revert E.LengthMismatch();
         }
     }
 
     /// @dev Returns the storage slot for the given position.
-    function _getStorage(bytes32 _position) private pure returns (ASStorage storage $) {
+    function _getStorage(bytes32 _position) private pure returns (T.STASStorage storage $) {
         assembly ("memory-safe") {
             $.slot := _position
         }
