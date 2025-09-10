@@ -92,4 +92,77 @@ describe("Integration: VaultHub ", () => {
         );
     });
   });
+
+  describe("Minting vs Staking Limit", () => {
+    beforeEach(async () => {
+      await dashboard.connect(owner).fund({ value: ether("10") });
+    });
+
+    it("Minting should decrease staking limit", async () => {
+      const { lido } = ctx.contracts;
+
+      const stakingLimitInfoBefore = await lido.getStakeLimitFullInfo();
+      const stakeLimitIncPerBlock =
+        stakingLimitInfoBefore.maxStakeLimit / stakingLimitInfoBefore.maxStakeLimitGrowthBlocks;
+
+      const sharesToMint = ether("1");
+      const amountToMint = await lido.getPooledEthByShares(sharesToMint);
+      await vaultHub.mintShares(stakingVault, owner, sharesToMint);
+
+      const stakingLimitInfoAfter = await lido.getStakeLimitFullInfo();
+      expect(stakingLimitInfoAfter.currentStakeLimit).to.equal(
+        stakingLimitInfoBefore.currentStakeLimit + stakeLimitIncPerBlock - amountToMint,
+      );
+    });
+
+    it("Burning should increase staking limit", async () => {
+      const { lido } = ctx.contracts;
+
+      const shares = ether("1");
+
+      await vaultHub.mintShares(stakingVault, vaultHub, shares);
+
+      const stakingLimitInfoBefore = await lido.getStakeLimitFullInfo();
+      const stakeLimitIncPerBlock =
+        stakingLimitInfoBefore.maxStakeLimit / stakingLimitInfoBefore.maxStakeLimitGrowthBlocks;
+
+      const amountToBurn = await lido.getPooledEthByShares(shares);
+      await vaultHub.burnShares(stakingVault, shares);
+
+      const stakingLimitInfoAfter = await lido.getStakeLimitFullInfo();
+      expect(stakingLimitInfoAfter.currentStakeLimit).to.equal(
+        stakingLimitInfoBefore.currentStakeLimit + amountToBurn + stakeLimitIncPerBlock,
+      );
+    });
+
+    it("Minting and burning should not change staking limit", async () => {
+      const { lido } = ctx.contracts;
+
+      const shares = ether("1");
+      const stakingLimitInfoBefore = await lido.getStakeLimitFullInfo();
+      const maxStakeLimit = stakingLimitInfoBefore.maxStakeLimit;
+      const maxStakeLimitGrowthBlocks = stakingLimitInfoBefore.maxStakeLimitGrowthBlocks;
+      const stakeLimitIncPerBlock = maxStakeLimit / maxStakeLimitGrowthBlocks;
+
+      let isMaxStakeLimit = false; // because of growth per block limit may eventually reach max stake limit
+      for (let i = 0n; i < 500n; i++) {
+        const stakingLimitBefore = await lido.getCurrentStakeLimit();
+
+        await vaultHub.mintShares(stakingVault, vaultHub, shares + i);
+        await vaultHub.burnShares(stakingVault, shares + i);
+
+        const stakingLimitAfter = await lido.getCurrentStakeLimit();
+        if (stakingLimitAfter === maxStakeLimit) isMaxStakeLimit = true;
+
+        expect(stakingLimitAfter).to.equal(
+          isMaxStakeLimit ? maxStakeLimit : stakingLimitBefore + stakeLimitIncPerBlock * 2n, // 2 blocks: mint and burn
+        );
+      }
+
+      const stakingLimitInfoAfter = await lido.getStakeLimitFullInfo();
+      expect(stakingLimitInfoAfter.currentStakeLimit).to.equal(
+        isMaxStakeLimit ? maxStakeLimit : stakingLimitInfoBefore.currentStakeLimit,
+      );
+    });
+  });
 });

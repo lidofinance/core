@@ -705,15 +705,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         require(_amountOfShares <= _getMaxMintableExternalShares(), "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
-        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
-        if (stakeLimitData.isStakingLimitSet()) {
-            uint256 stethAmount = getPooledEthByShares(_amountOfShares);
-            _decreaseStakingLimit(stakeLimitData, stethAmount);
-        }
+        _decreaseStakingLimit(getPooledEthByShares(_amountOfShares));
 
         _setExternalShares(_getExternalShares() + _amountOfShares);
-
         _mintShares(_recipient, _amountOfShares);
+
         _emitTransferAfterMintingShares(_recipient, _amountOfShares);
 
         emit ExternalSharesMinted(_recipient, _amountOfShares);
@@ -733,14 +729,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         if (externalShares < _amountOfShares) revert("EXT_SHARES_TOO_SMALL");
         _setExternalShares(externalShares - _amountOfShares);
-
         _burnShares(msg.sender, _amountOfShares);
 
+        // Increase staking limit
         uint256 stethAmount = getPooledEthByShares(_amountOfShares);
-        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
-        if (stakeLimitData.isStakingLimitSet()) {
-            _increaseStakingLimit(stakeLimitData, stethAmount);
-        }
+        _increaseStakingLimit(stethAmount);
 
         // Historically, Lido contract does not emit Transfer to zero address events
         // for burning but emits SharesBurnt instead, so it's kept here for compatibility
@@ -1016,14 +1009,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function _submit(address _referral) internal returns (uint256) {
         require(msg.value != 0, "ZERO_DEPOSIT");
 
-        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
-        // There is an invariant that protocol pause also implies staking pause.
-        // Thus, no need to check protocol pause explicitly.
-        require(!stakeLimitData.isStakingPaused(), "STAKING_PAUSED");
-
-        if (stakeLimitData.isStakingLimitSet()) {
-            _decreaseStakingLimit(stakeLimitData, msg.value);
-        }
+        _decreaseStakingLimit(msg.value);
 
         uint256 sharesAmount = getSharesByPooledEth(msg.value);
 
@@ -1135,22 +1121,32 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         return _stakeLimitData.calculateCurrentStakeLimit();
     }
 
-    function _decreaseStakingLimit(StakeLimitState.Data memory _stakeLimitData, uint256 _amount) internal {
-        uint256 currentStakeLimit = _stakeLimitData.calculateCurrentStakeLimit();
-        require(_amount <= currentStakeLimit, "STAKE_LIMIT");
+    function _decreaseStakingLimit(uint256 _amount) internal {
+        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
+        // There is an invariant that protocol pause also implies staking pause.
+        // Thus, no need to check protocol pause explicitly.
+        require(!stakeLimitData.isStakingPaused(), "STAKING_PAUSED");
 
-        STAKING_STATE_POSITION.setStorageStakeLimitStruct(
-            _stakeLimitData.updatePrevStakeLimit(currentStakeLimit - _amount)
-        );
+        if (stakeLimitData.isStakingLimitSet()) {
+            uint256 currentStakeLimit = stakeLimitData.calculateCurrentStakeLimit();
+            require(_amount <= currentStakeLimit, "STAKE_LIMIT");
+
+            STAKING_STATE_POSITION.setStorageStakeLimitStruct(
+                stakeLimitData.updatePrevStakeLimit(currentStakeLimit - _amount)
+            );
+        }
     }
 
-    function _increaseStakingLimit(StakeLimitState.Data memory _stakeLimitData, uint256 _amount) internal {
-        uint256 newStakeLimit = _stakeLimitData.calculateCurrentStakeLimit() + _amount;
-        uint256 maxStakeLimit = _stakeLimitData.maxStakeLimit;
+    function _increaseStakingLimit(uint256 _amount) internal {
+        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
+        if (stakeLimitData.isStakingLimitSet()) {
+            uint256 newStakeLimit = stakeLimitData.calculateCurrentStakeLimit() + _amount;
+            uint256 maxStakeLimit = stakeLimitData.maxStakeLimit;
 
-        STAKING_STATE_POSITION.setStorageStakeLimitStruct(
-            _stakeLimitData.updatePrevStakeLimit(newStakeLimit > maxStakeLimit ? maxStakeLimit : newStakeLimit)
-        );
+            STAKING_STATE_POSITION.setStorageStakeLimitStruct(
+                stakeLimitData.updatePrevStakeLimit(newStakeLimit > maxStakeLimit ? maxStakeLimit : newStakeLimit)
+            );
+        }
     }
 
     /// @dev Bytecode size-efficient analog of the `auth(_role)` modifier

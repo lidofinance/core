@@ -32,6 +32,7 @@ describe("Lido.sol:externalShares", () => {
     ({ lido, acl } = await deployLidoDao({ rootAccount: deployer, initialized: true }));
 
     await acl.createPermission(user, lido, await lido.STAKING_CONTROL_ROLE(), deployer);
+    await acl.createPermission(user, lido, await lido.STAKING_PAUSE_ROLE(), deployer);
     await acl.createPermission(user, lido, await lido.RESUME_ROLE(), deployer);
     await acl.createPermission(user, lido, await lido.PAUSE_ROLE(), deployer);
 
@@ -220,6 +221,14 @@ describe("Lido.sol:externalShares", () => {
         await lido.setStakingLimit(10n, 1n);
 
         await expect(lido.connect(vaultHubSigner).mintExternalShares(whale, 11n)).to.be.revertedWith("STAKE_LIMIT");
+      });
+
+      it("reverts if staking is paused", async () => {
+        await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+        await lido.setStakingLimit(10n, 1n);
+        await lido.pauseStaking();
+
+        await expect(lido.connect(vaultHubSigner).mintExternalShares(whale, 11n)).to.be.revertedWith("STAKING_PAUSED");
       });
     });
 
@@ -474,6 +483,22 @@ describe("Lido.sol:externalShares", () => {
       expect(await lido.getExternalEther()).to.equal(0n);
       expect(await lido.getExternalShares()).to.equal(0n);
       expect(await lido.sharesOf(vaultHubSigner)).to.equal(0n);
+    });
+
+    it("Can mint and burn external shares without limit change after multiple loops", async () => {
+      await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+      await lido.setStakingLimit(1000n, 1n);
+
+      for (let i = 1n; i <= 500n; i++) {
+        const stakingLimitBefore = await lido.getCurrentStakeLimit();
+        expect(stakingLimitBefore).to.equal(1000n);
+
+        await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, i);
+        await lido.connect(vaultHubSigner).burnExternalShares(i);
+
+        const stakingLimitAfter = await lido.getCurrentStakeLimit();
+        expect(stakingLimitAfter).to.equal(stakingLimitBefore);
+      }
     });
   });
 
