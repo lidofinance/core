@@ -8,9 +8,8 @@ pragma solidity 0.8.25;
 import {Math256} from "contracts/common/lib/Math256.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 
-import {
-    AccessControlEnumerableUpgradeable
-} from "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
+import {AccessControlEnumerableUpgradeable} from
+    "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {StorageSlot} from "@openzeppelin/contracts-v5.2/utils/StorageSlot.sol";
 
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
@@ -23,31 +22,20 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @dev Events
     event StakingModuleAdded(uint256 indexed stakingModuleId, address stakingModule, string name, address createdBy);
     event StakingModuleShareLimitSet(
-        uint256 indexed stakingModuleId,
-        uint256 stakeShareLimit,
-        uint256 priorityExitShareThreshold,
-        address setBy
+        uint256 indexed stakingModuleId, uint256 stakeShareLimit, uint256 priorityExitShareThreshold, address setBy
     );
     event StakingModuleFeesSet(
-        uint256 indexed stakingModuleId,
-        uint256 stakingModuleFee,
-        uint256 treasuryFee,
-        address setBy
+        uint256 indexed stakingModuleId, uint256 stakingModuleFee, uint256 treasuryFee, address setBy
     );
     event StakingModuleStatusSet(uint256 indexed stakingModuleId, StakingModuleStatus status, address setBy);
     event StakingModuleExitedValidatorsIncompleteReporting(
-        uint256 indexed stakingModuleId,
-        uint256 unreportedExitedValidatorsCount
+        uint256 indexed stakingModuleId, uint256 unreportedExitedValidatorsCount
     );
     event StakingModuleMaxDepositsPerBlockSet(
-        uint256 indexed stakingModuleId,
-        uint256 maxDepositsPerBlock,
-        address setBy
+        uint256 indexed stakingModuleId, uint256 maxDepositsPerBlock, address setBy
     );
     event StakingModuleMinDepositBlockDistanceSet(
-        uint256 indexed stakingModuleId,
-        uint256 minDepositBlockDistance,
-        address setBy
+        uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
     );
     event WithdrawalCredentialsSet(bytes32 withdrawalCredentials, address setBy);
     event WithdrawalCredentials02Set(bytes32 withdrawalCredentials02, address setBy);
@@ -59,9 +47,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
 
     event StakingModuleExitNotificationFailed(
-        uint256 indexed stakingModuleId,
-        uint256 indexed nodeOperatorId,
-        bytes _publicKey
+        uint256 indexed stakingModuleId, uint256 indexed nodeOperatorId, bytes _publicKey
     );
 
     /// @dev Errors
@@ -76,8 +62,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error InvalidReportData(uint256 code);
     error ExitedValidatorsCountCannotDecrease();
     error ReportedExitedValidatorsExceedDeposited(
-        uint256 reportedExitedValidatorsCount,
-        uint256 depositedValidatorsCount
+        uint256 reportedExitedValidatorsCount, uint256 depositedValidatorsCount
     );
     error StakingModulesLimitExceeded();
     error StakingModuleUnregistered();
@@ -85,12 +70,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error StakingModuleStatusTheSame();
     error StakingModuleWrongName();
     error UnexpectedCurrentValidatorsCount(
-        uint256 currentModuleExitedValidatorsCount,
-        uint256 currentNodeOpExitedValidatorsCount
+        uint256 currentModuleExitedValidatorsCount, uint256 currentNodeOpExitedValidatorsCount
     );
     error UnexpectedFinalExitedValidatorsCount(
-        uint256 newModuleTotalExitedValidatorsCount,
-        uint256 newModuleTotalExitedValidatorsCountInStakingRouter
+        uint256 newModuleTotalExitedValidatorsCount, uint256 newModuleTotalExitedValidatorsCountInStakingRouter
     );
     error InvalidDepositsValue(uint256 etherValue, uint256 depositsCount);
     error StakingModuleAddressExists();
@@ -109,6 +92,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         Active, // deposits and rewards allowed
         DepositsPaused, // deposits NOT allowed, rewards allowed
         Stopped // deposits and rewards NOT allowed
+
     }
 
     /// @notice Configuration parameters for a staking module.
@@ -197,6 +181,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 nodeOperatorId;
         bytes pubkey;
     }
+
     struct RouterStorage {
         bytes32 withdrawalCredentials;
         bytes32 withdrawalCredentials02;
@@ -278,12 +263,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _withdrawalCredentials 0x01 credentials to withdraw ETH on Consensus Layer side.
     /// @param _withdrawalCredentials02 0x02 Credentials to withdraw ETH on Consensus Layer side
     /// @dev Proxy initialization method.
-    function initialize(
-        address _admin,
-        address _lido,
-        bytes32 _withdrawalCredentials,
-        bytes32 _withdrawalCredentials02
-    ) external reinitializer(4) {
+    function initialize(address _admin, address _lido, bytes32 _withdrawalCredentials, bytes32 _withdrawalCredentials02)
+        external
+        reinitializer(4)
+    {
         if (_admin == address(0)) revert ZeroAddressAdmin();
         if (_lido == address(0)) revert ZeroAddressLido();
 
@@ -324,11 +307,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     /// @notice A function to migrade upgrade to v4 (from v3) and use Openzeppelin versioning.
     /// @param _withdrawalCredentials02 0x02 Credentials to withdraw ETH on Consensus Layer side
-    function migrateUpgrade_v4(
-        address _lido,
-        bytes32 _withdrawalCredentials,
-        bytes32 _withdrawalCredentials02
-    ) external reinitializer(4) {
+    function migrateUpgrade_v4(address _lido, bytes32 _withdrawalCredentials, bytes32 _withdrawalCredentials02)
+        external
+        reinitializer(4)
+    {
         // TODO: here is problem, that last version of
         __AccessControlEnumerable_init();
 
@@ -362,21 +344,23 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         StakingModuleConfig calldata _stakingModuleConfig
     ) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
         if (_stakingModuleAddress == address(0)) revert ZeroAddressStakingModule();
-        if (bytes(_name).length == 0 || bytes(_name).length > MAX_STAKING_MODULE_NAME_LENGTH)
+        if (bytes(_name).length == 0 || bytes(_name).length > MAX_STAKING_MODULE_NAME_LENGTH) {
             revert StakingModuleWrongName();
+        }
 
         if (
-            _stakingModuleConfig.withdrawalCredentialsType != NEW_WITHDRAWAL_CREDENTIALS_TYPE &&
-            _stakingModuleConfig.withdrawalCredentialsType != LEGACY_WITHDRAWAL_CREDENTIALS_TYPE
+            _stakingModuleConfig.withdrawalCredentialsType != NEW_WITHDRAWAL_CREDENTIALS_TYPE
+                && _stakingModuleConfig.withdrawalCredentialsType != LEGACY_WITHDRAWAL_CREDENTIALS_TYPE
         ) revert WrongWithdrawalCredentialsType();
 
         uint256 newStakingModuleIndex = getStakingModulesCount();
 
         if (newStakingModuleIndex >= MAX_STAKING_MODULES_COUNT) revert StakingModulesLimitExceeded();
 
-        for (uint256 i; i < newStakingModuleIndex; ) {
-            if (_stakingModuleAddress == _getStakingModuleByIndex(i).stakingModuleAddress)
+        for (uint256 i; i < newStakingModuleIndex;) {
+            if (_stakingModuleAddress == _getStakingModuleByIndex(i).stakingModuleAddress) {
                 revert StakingModuleAddressExists();
+            }
 
             unchecked {
                 ++i;
@@ -469,8 +453,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         }
         if (_maxDepositsPerBlock > type(uint64).max) revert InvalidMaxDepositPerBlockValue();
         if (
-            _withdrawalCredentialsType != NEW_WITHDRAWAL_CREDENTIALS_TYPE &&
-            _withdrawalCredentialsType != LEGACY_WITHDRAWAL_CREDENTIALS_TYPE
+            _withdrawalCredentialsType != NEW_WITHDRAWAL_CREDENTIALS_TYPE
+                && _withdrawalCredentialsType != LEGACY_WITHDRAWAL_CREDENTIALS_TYPE
         ) revert WrongWithdrawalCredentialsType();
 
         stakingModule.stakeShareLimit = uint16(_stakeShareLimit);
@@ -500,9 +484,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 _targetLimit
     ) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
         _getIStakingModuleById(_stakingModuleId).updateTargetValidatorsLimits(
-            _nodeOperatorId,
-            _targetLimitMode,
-            _targetLimit
+            _nodeOperatorId, _targetLimitMode, _targetLimit
         );
     }
 
@@ -510,17 +492,16 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _stakingModuleIds Ids of the staking modules.
     /// @param _totalShares Total shares minted for the staking modules.
     /// @dev The function is restricted to the `REPORT_REWARDS_MINTED_ROLE` role.
-    function reportRewardsMinted(
-        uint256[] calldata _stakingModuleIds,
-        uint256[] calldata _totalShares
-    ) external onlyRole(REPORT_REWARDS_MINTED_ROLE) {
+    function reportRewardsMinted(uint256[] calldata _stakingModuleIds, uint256[] calldata _totalShares)
+        external
+        onlyRole(REPORT_REWARDS_MINTED_ROLE)
+    {
         _validateEqualArrayLengths(_stakingModuleIds.length, _totalShares.length);
 
-        for (uint256 i = 0; i < _stakingModuleIds.length; ) {
+        for (uint256 i = 0; i < _stakingModuleIds.length;) {
             if (_totalShares[i] > 0) {
-                try _getIStakingModuleById(_stakingModuleIds[i]).onRewardsMinted(_totalShares[i]) {} catch (
-                    bytes memory lowLevelRevertData
-                ) {
+                try _getIStakingModuleById(_stakingModuleIds[i]).onRewardsMinted(_totalShares[i]) {}
+                catch (bytes memory lowLevelRevertData) {
                     /// @dev This check is required to prevent incorrect gas estimation of the method.
                     ///      Without it, Ethereum nodes that use binary search for gas estimation may
                     ///      return an invalid value when the onRewardsMinted() reverts because of the
@@ -579,7 +560,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         uint256 newlyExitedValidatorsCount;
 
-        for (uint256 i = 0; i < _stakingModuleIds.length; ) {
+        for (uint256 i = 0; i < _stakingModuleIds.length;) {
             uint256 stakingModuleId = _stakingModuleIds[i];
             StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(stakingModuleId));
 
@@ -588,13 +569,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
                 revert ExitedValidatorsCountCannotDecrease();
             }
 
-            (
-                uint256 totalExitedValidators,
-                uint256 totalDepositedValidators,
-
-            ) = /* uint256 depositableValidatorsCount */ _getStakingModuleSummary(
-                    IStakingModule(stakingModule.stakingModuleAddress)
-                );
+            (uint256 totalExitedValidators, uint256 totalDepositedValidators,) = /* uint256 depositableValidatorsCount */
+                _getStakingModuleSummary(IStakingModule(stakingModule.stakingModuleAddress));
 
             if (_exitedValidatorsCounts[i] > totalDepositedValidators) {
                 revert ReportedExitedValidatorsExceedDeposited(_exitedValidatorsCounts[i], totalDepositedValidators);
@@ -605,8 +581,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             if (totalExitedValidators < prevReportedExitedValidatorsCount) {
                 // not all of the exited validators were async reported to the module
                 emit StakingModuleExitedValidatorsIncompleteReporting(
-                    stakingModuleId,
-                    prevReportedExitedValidatorsCount - totalExitedValidators
+                    stakingModuleId, prevReportedExitedValidatorsCount - totalExitedValidators
                 );
             }
 
@@ -673,9 +648,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bool _triggerUpdateFinish,
         ValidatorsCountsCorrection memory _correction
     ) external onlyRole(UNSAFE_SET_EXITED_VALIDATORS_ROLE) {
-        StakingModule storage stakingModuleState = _getStakingModuleByIndex(
-            _getStakingModuleIndexById(_stakingModuleId)
-        );
+        StakingModule storage stakingModuleState =
+            _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
         IStakingModule stakingModule = IStakingModule(stakingModuleState.stakingModuleAddress);
 
         (
@@ -684,15 +658,19 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             ,
             ,
             ,
-            /* uint256 targetLimitMode */ /* uint256 targetValidatorsCount */ /* uint256 stuckValidatorsCount, */ /* uint256 refundedValidatorsCount */ /* uint256 stuckPenaltyEndTimestamp */ uint256 totalExitedValidators,
+            /* uint256 targetLimitMode */
+            /* uint256 targetValidatorsCount */
+            /* uint256 stuckValidatorsCount, */
+            /* uint256 refundedValidatorsCount */
+            /* uint256 stuckPenaltyEndTimestamp */
+            uint256 totalExitedValidators,
             ,
-
-        ) = /* uint256 totalDepositedValidators */ /* uint256 depositableValidatorsCount */ stakingModule
-                .getNodeOperatorSummary(_nodeOperatorId);
+        ) = /* uint256 totalDepositedValidators */ /* uint256 depositableValidatorsCount */
+            stakingModule.getNodeOperatorSummary(_nodeOperatorId);
 
         if (
-            _correction.currentModuleExitedValidatorsCount != stakingModuleState.exitedValidatorsCount ||
-            _correction.currentNodeOperatorExitedValidatorsCount != totalExitedValidators
+            _correction.currentModuleExitedValidatorsCount != stakingModuleState.exitedValidatorsCount
+                || _correction.currentNodeOperatorExitedValidatorsCount != totalExitedValidators
         ) {
             revert UnexpectedCurrentValidatorsCount(stakingModuleState.exitedValidatorsCount, totalExitedValidators);
         }
@@ -701,22 +679,19 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         stakingModule.unsafeUpdateValidatorsCount(_nodeOperatorId, _correction.newNodeOperatorExitedValidatorsCount);
 
-        (uint256 moduleTotalExitedValidators, uint256 moduleTotalDepositedValidators, ) = _getStakingModuleSummary(
-            stakingModule
-        );
+        (uint256 moduleTotalExitedValidators, uint256 moduleTotalDepositedValidators,) =
+            _getStakingModuleSummary(stakingModule);
 
         if (_correction.newModuleExitedValidatorsCount > moduleTotalDepositedValidators) {
             revert ReportedExitedValidatorsExceedDeposited(
-                _correction.newModuleExitedValidatorsCount,
-                moduleTotalDepositedValidators
+                _correction.newModuleExitedValidatorsCount, moduleTotalDepositedValidators
             );
         }
 
         if (_triggerUpdateFinish) {
             if (moduleTotalExitedValidators != _correction.newModuleExitedValidatorsCount) {
                 revert UnexpectedFinalExitedValidatorsCount(
-                    moduleTotalExitedValidators,
-                    _correction.newModuleExitedValidatorsCount
+                    moduleTotalExitedValidators, _correction.newModuleExitedValidatorsCount
                 );
             }
 
@@ -738,16 +713,15 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         StakingModule storage stakingModule;
         IStakingModule moduleContract;
 
-        for (uint256 i; i < stakingModulesCount; ) {
+        for (uint256 i; i < stakingModulesCount;) {
             stakingModule = _getStakingModuleByIndex(i);
             moduleContract = IStakingModule(stakingModule.stakingModuleAddress);
 
-            (uint256 exitedValidatorsCount, , ) = _getStakingModuleSummary(moduleContract);
+            (uint256 exitedValidatorsCount,,) = _getStakingModuleSummary(moduleContract);
             if (exitedValidatorsCount == stakingModule.exitedValidatorsCount) {
                 // oracle finished updating exited validators for all node ops
-                try moduleContract.onExitedAndStuckValidatorsCountsUpdated() {} catch (
-                    bytes memory lowLevelRevertData
-                ) {
+                try moduleContract.onExitedAndStuckValidatorsCountsUpdated() {}
+                catch (bytes memory lowLevelRevertData) {
                     /// @dev This check is required to prevent incorrect gas estimation of the method.
                     ///      Without it, Ethereum nodes that use binary search for gas estimation may
                     ///      return an invalid value when the onExitedAndStuckValidatorsCountsUpdated()
@@ -778,8 +752,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     ) external onlyRole(STAKING_MODULE_UNVETTING_ROLE) {
         _checkValidatorsByNodeOperatorReportData(_nodeOperatorIds, _vettedSigningKeysCounts);
         _getIStakingModuleById(_stakingModuleId).decreaseVettedSigningKeysCount(
-            _nodeOperatorIds,
-            _vettedSigningKeysCounts
+            _nodeOperatorIds, _vettedSigningKeysCounts
         );
     }
 
@@ -788,7 +761,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function getStakingModules() external view returns (StakingModule[] memory res) {
         uint256 stakingModulesCount = getStakingModulesCount();
         res = new StakingModule[](stakingModulesCount);
-        for (uint256 i; i < stakingModulesCount; ) {
+        for (uint256 i; i < stakingModulesCount;) {
             res[i] = _getStakingModuleByIndex(i);
 
             unchecked {
@@ -802,7 +775,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function getStakingModuleIds() public view returns (uint256[] memory stakingModuleIds) {
         uint256 stakingModulesCount = getStakingModulesCount();
         stakingModuleIds = new uint256[](stakingModulesCount);
-        for (uint256 i; i < stakingModulesCount; ) {
+        for (uint256 i; i < stakingModulesCount;) {
             stakingModuleIds[i] = _getStakingModuleByIndex(i).id;
 
             unchecked {
@@ -885,25 +858,25 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @notice Returns all-validators summary in the staking module.
     /// @param _stakingModuleId Id of the staking module to return summary for.
     /// @return summary Staking module summary.
-    function getStakingModuleSummary(
-        uint256 _stakingModuleId
-    ) public view returns (StakingModuleSummary memory summary) {
+    function getStakingModuleSummary(uint256 _stakingModuleId)
+        public
+        view
+        returns (StakingModuleSummary memory summary)
+    {
         IStakingModule stakingModule = IStakingModule(getStakingModule(_stakingModuleId).stakingModuleAddress);
-        (
-            summary.totalExitedValidators,
-            summary.totalDepositedValidators,
-            summary.depositableValidatorsCount
-        ) = _getStakingModuleSummary(stakingModule);
+        (summary.totalExitedValidators, summary.totalDepositedValidators, summary.depositableValidatorsCount) =
+            _getStakingModuleSummary(stakingModule);
     }
 
     /// @notice Returns node operator summary from the staking module.
     /// @param _stakingModuleId Id of the staking module where node operator is onboarded.
     /// @param _nodeOperatorId Id of the node operator to return summary for.
     /// @return summary Node operator summary.
-    function getNodeOperatorSummary(
-        uint256 _stakingModuleId,
-        uint256 _nodeOperatorId
-    ) public view returns (NodeOperatorSummary memory summary) {
+    function getNodeOperatorSummary(uint256 _stakingModuleId, uint256 _nodeOperatorId)
+        public
+        view
+        returns (NodeOperatorSummary memory summary)
+    {
         IStakingModule stakingModule = IStakingModule(getStakingModule(_stakingModuleId).stakingModuleAddress);
         /// @dev using intermediate variables below due to "Stack too deep" error in case of
         /// assigning directly into the NodeOperatorSummary struct
@@ -913,7 +886,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             ,
             ,
             ,
-            /* uint256 stuckValidatorsCount */ /* uint256 refundedValidatorsCount */ /* uint256 stuckPenaltyEndTimestamp */ uint256 totalExitedValidators,
+            /* uint256 stuckValidatorsCount */
+            /* uint256 refundedValidatorsCount */
+            /* uint256 stuckPenaltyEndTimestamp */
+            uint256 totalExitedValidators,
             uint256 totalDepositedValidators,
             uint256 depositableValidatorsCount
         ) = stakingModule.getNodeOperatorSummary(_nodeOperatorId);
@@ -965,11 +941,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return digests Array of staking module digests.
     /// @dev WARNING: This method is not supposed to be used for onchain calls due to high gas costs
     /// for data aggregation.
-    function getStakingModuleDigests(
-        uint256[] memory _stakingModuleIds
-    ) public view returns (StakingModuleDigest[] memory digests) {
+    function getStakingModuleDigests(uint256[] memory _stakingModuleIds)
+        public
+        view
+        returns (StakingModuleDigest[] memory digests)
+    {
         digests = new StakingModuleDigest[](_stakingModuleIds.length);
-        for (uint256 i = 0; i < _stakingModuleIds.length; ) {
+        for (uint256 i = 0; i < _stakingModuleIds.length;) {
             StakingModule memory stakingModuleState = getStakingModule(_stakingModuleIds[i]);
             IStakingModule stakingModule = IStakingModule(stakingModuleState.stakingModuleAddress);
             digests[i] = StakingModuleDigest({
@@ -991,12 +969,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @dev WARNING: This method is not supposed to be used for onchain calls due to high gas costs
     /// for data aggregation.
     function getAllNodeOperatorDigests(uint256 _stakingModuleId) external view returns (NodeOperatorDigest[] memory) {
-        return
-            getNodeOperatorDigests(
-                _stakingModuleId,
-                0,
-                _getIStakingModuleById(_stakingModuleId).getNodeOperatorsCount()
-            );
+        return getNodeOperatorDigests(
+            _stakingModuleId, 0, _getIStakingModuleById(_stakingModuleId).getNodeOperatorsCount()
+        );
     }
 
     /// @notice Returns node operator digest for passed node operator ids in the given staking module.
@@ -1006,16 +981,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return Array of node operator digests.
     /// @dev WARNING: This method is not supposed to be used for onchain calls due to high gas costs
     /// for data aggregation.
-    function getNodeOperatorDigests(
-        uint256 _stakingModuleId,
-        uint256 _offset,
-        uint256 _limit
-    ) public view returns (NodeOperatorDigest[] memory) {
-        return
-            getNodeOperatorDigests(
-                _stakingModuleId,
-                _getIStakingModuleById(_stakingModuleId).getNodeOperatorIds(_offset, _limit)
-            );
+    function getNodeOperatorDigests(uint256 _stakingModuleId, uint256 _offset, uint256 _limit)
+        public
+        view
+        returns (NodeOperatorDigest[] memory)
+    {
+        return getNodeOperatorDigests(
+            _stakingModuleId, _getIStakingModuleById(_stakingModuleId).getNodeOperatorIds(_offset, _limit)
+        );
     }
 
     /// @notice Returns node operator digest for a slice of node operators registered in the given
@@ -1025,13 +998,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return digests Array of node operator digests.
     /// @dev WARNING: This method is not supposed to be used for onchain calls due to high gas costs
     /// for data aggregation.
-    function getNodeOperatorDigests(
-        uint256 _stakingModuleId,
-        uint256[] memory _nodeOperatorIds
-    ) public view returns (NodeOperatorDigest[] memory digests) {
+    function getNodeOperatorDigests(uint256 _stakingModuleId, uint256[] memory _nodeOperatorIds)
+        public
+        view
+        returns (NodeOperatorDigest[] memory digests)
+    {
         IStakingModule stakingModule = _getIStakingModuleById(_stakingModuleId);
         digests = new NodeOperatorDigest[](_nodeOperatorIds.length);
-        for (uint256 i = 0; i < _nodeOperatorIds.length; ) {
+        for (uint256 i = 0; i < _nodeOperatorIds.length;) {
             digests[i] = NodeOperatorDigest({
                 id: _nodeOperatorIds[i],
                 isActive: stakingModule.getNodeOperatorIsActive(_nodeOperatorIds[i]),
@@ -1048,10 +1022,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _stakingModuleId Id of the staking module to be updated.
     /// @param _status New status of the staking module.
     /// @dev The function is restricted to the `STAKING_MODULE_MANAGE_ROLE` role.
-    function setStakingModuleStatus(
-        uint256 _stakingModuleId,
-        StakingModuleStatus _status
-    ) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
+    function setStakingModuleStatus(uint256 _stakingModuleId, StakingModuleStatus _status)
+        external
+        onlyRole(STAKING_MODULE_MANAGE_ROLE)
+    {
         StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
         if (StakingModuleStatus(stakingModule.status) == _status) revert StakingModuleStatusTheSame();
         _setStakingModuleStatus(stakingModule, _status);
@@ -1112,28 +1086,26 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function getStakingModuleMaxDepositsAmountPerBlock(uint256 _stakingModuleId) external view returns (uint256) {
         // TODO: maybe will be defined via staking module config
         // MAX_EFFECTIVE_BALANCE_01 here is old deposit value per validator
-        return (_getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId)).maxDepositsPerBlock *
-            MAX_EFFECTIVE_BALANCE_01);
+        return (
+            _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId)).maxDepositsPerBlock
+                * MAX_EFFECTIVE_BALANCE_01
+        );
     }
 
     /// @notice Returns active validators count for the staking module.
     /// @param _stakingModuleId Id of the staking module.
     /// @return activeValidatorsCount Active validators count for the staking module.
-    function getStakingModuleActiveValidatorsCount(
-        uint256 _stakingModuleId
-    ) external view returns (uint256 activeValidatorsCount) {
+    function getStakingModuleActiveValidatorsCount(uint256 _stakingModuleId)
+        external
+        view
+        returns (uint256 activeValidatorsCount)
+    {
         StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
-        (
-            uint256 totalExitedValidators,
-            uint256 totalDepositedValidators,
-
-        ) = /* uint256 depositableValidatorsCount */ _getStakingModuleSummary(
-                IStakingModule(stakingModule.stakingModuleAddress)
-            );
+        (uint256 totalExitedValidators, uint256 totalDepositedValidators,) = /* uint256 depositableValidatorsCount */
+            _getStakingModuleSummary(IStakingModule(stakingModule.stakingModuleAddress));
 
         activeValidatorsCount =
-            totalDepositedValidators -
-            Math256.max(stakingModule.exitedValidatorsCount, totalExitedValidators);
+            totalDepositedValidators - Math256.max(stakingModule.exitedValidatorsCount, totalExitedValidators);
     }
 
     /// @notice Returns withdrawal credentials type
@@ -1148,10 +1120,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _stakingModuleId Id of the staking module to be deposited.
     /// @param _depositableEth Max amount of ether that might be used for deposits count calculation.
     /// @return Max amount of Eth that can be deposited using the given staking module.
-    function getStakingModuleMaxInitialDepositsAmount(
-        uint256 _stakingModuleId,
-        uint256 _depositableEth
-    ) external returns (uint256) {
+    function getStakingModuleMaxInitialDepositsAmount(uint256 _stakingModuleId, uint256 _depositableEth)
+        external
+        returns (uint256)
+    {
         StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
 
         // TODO: is it correct?
@@ -1160,15 +1132,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // TODO: rename withdrawalCredentialsType
         if (stakingModule.withdrawalCredentialsType == NEW_WITHDRAWAL_CREDENTIALS_TYPE) {
             uint256 stakingModuleTargetEthAmount = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
-            (uint256[] memory operators, uint256[] memory allocations) = IStakingModuleV2(
-                stakingModule.stakingModuleAddress
-            ).getAllocation(stakingModuleTargetEthAmount);
+            (uint256[] memory operators, uint256[] memory allocations) =
+                IStakingModuleV2(stakingModule.stakingModuleAddress).getAllocation(stakingModuleTargetEthAmount);
 
-            (uint256 totalCount, uint256[] memory counts) = _getNewDepositsCount02(
-                stakingModuleTargetEthAmount,
-                allocations,
-                INITIAL_DEPOSIT_SIZE
-            );
+            (uint256 totalCount, uint256[] memory counts) =
+                _getNewDepositsCount02(stakingModuleTargetEthAmount, allocations, INITIAL_DEPOSIT_SIZE);
 
             // this will be read and clean in deposit method
             DepositsTempStorage.storeOperators(operators);
@@ -1186,17 +1154,19 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     /// @notice DEPRECATED: use getStakingModuleMaxInitialDepositsAmount
     /// This method only for the legacy modules
-    function getStakingModuleMaxDepositsCount(
-        uint256 _stakingModuleId,
-        uint256 _depositableEth
-    ) external view returns (uint256) {
+    function getStakingModuleMaxDepositsCount(uint256 _stakingModuleId, uint256 _depositableEth)
+        external
+        view
+        returns (uint256)
+    {
         return _getStakingModuleMaxDepositsCount(_stakingModuleId, _depositableEth);
     }
 
-    function _getStakingModuleMaxDepositsCount(
-        uint256 _stakingModuleId,
-        uint256 _depositableEth
-    ) internal view returns (uint256) {
+    function _getStakingModuleMaxDepositsCount(uint256 _stakingModuleId, uint256 _depositableEth)
+        internal
+        view
+        returns (uint256)
+    {
         StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
 
         // TODO:
@@ -1209,13 +1179,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 countKeys = stakingModuleTargetEthAmount / MAX_EFFECTIVE_BALANCE_01;
         if (stakingModule.status != uint8(StakingModuleStatus.Active)) return 0;
 
-        (, , uint256 depositableValidatorsCount) = _getStakingModuleSummary(
-            IStakingModule(stakingModule.stakingModuleAddress)
-        );
+        (,, uint256 depositableValidatorsCount) =
+            _getStakingModuleSummary(IStakingModule(stakingModule.stakingModuleAddress));
         return Math256.min(depositableValidatorsCount, countKeys);
     }
-
-
 
     function _getNewDepositsCount02(
         uint256 stakingModuleTargetEthAmount,
@@ -1261,8 +1228,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     {
         uint96[] memory moduleFees;
         uint96 totalFee;
-        (, , moduleFees, totalFee, basePrecision) = getStakingRewardsDistribution();
-        for (uint256 i; i < moduleFees.length; ) {
+        (,, moduleFees, totalFee, basePrecision) = getStakingRewardsDistribution();
+        for (uint256 i; i < moduleFees.length;) {
             modulesFee += moduleFees[i];
 
             unchecked {
@@ -1300,10 +1267,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return _computeDistribution(stakingModulesCache, totalActiveValidators);
     }
 
-    function _computeDistribution(
-        StakingModuleCache[] memory stakingModulesCache,
-        uint256 totalActiveValidators
-    )
+    function _computeDistribution(StakingModuleCache[] memory stakingModulesCache, uint256 totalActiveValidators)
         internal
         pure
         returns (
@@ -1323,7 +1287,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         uint256 rewardedStakingModulesCount = 0;
 
-        for (uint256 i; i < stakingModulesCount; ) {
+        for (uint256 i; i < stakingModulesCount;) {
             /// @dev Skip staking modules which have no active validators.
             if (stakingModulesCache[i].activeValidatorsCount > 0) {
                 ModuleShare memory share = _computeModuleShare(stakingModulesCache[i], totalActiveValidators);
@@ -1372,17 +1336,17 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint96 treasuryFee;
     }
 
-    function _computeModuleShare(
-        StakingModuleCache memory stakingModule,
-        uint256 totalActiveValidators
-    ) internal pure returns (ModuleShare memory share) {
+    function _computeModuleShare(StakingModuleCache memory stakingModule, uint256 totalActiveValidators)
+        internal
+        pure
+        returns (ModuleShare memory share)
+    {
         share.stakingModuleId = stakingModule.stakingModuleId;
-        uint256 stakingModuleValidatorsShare = ((stakingModule.activeValidatorsCount * FEE_PRECISION_POINTS) /
-            totalActiveValidators);
+        uint256 stakingModuleValidatorsShare =
+            ((stakingModule.activeValidatorsCount * FEE_PRECISION_POINTS) / totalActiveValidators);
         share.recipient = address(stakingModule.stakingModuleAddress);
-        share.stakingModuleFee = uint96(
-            (stakingModuleValidatorsShare * stakingModule.stakingModuleFee) / TOTAL_BASIS_POINTS
-        );
+        share.stakingModuleFee =
+            uint96((stakingModuleValidatorsShare * stakingModule.stakingModuleFee) / TOTAL_BASIS_POINTS);
         // TODO: rename
         share.treasuryFee = uint96((stakingModuleValidatorsShare * stakingModule.treasuryFee) / TOTAL_BASIS_POINTS);
     }
@@ -1392,7 +1356,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return totalFee Total fee to mint for each staking module and treasury in reduced, 1e4 precision.
     function getTotalFeeE4Precision() external view returns (uint16 totalFee) {
         /// @dev The logic is placed here but in Lido contract to save Lido bytecode.
-        (, , , uint96 totalFeeInHighPrecision, uint256 precision) = getStakingRewardsDistribution();
+        (,,, uint96 totalFeeInHighPrecision, uint256 precision) = getStakingRewardsDistribution();
         // Here we rely on (totalFeeInHighPrecision <= precision).
         totalFee = _toE4Precision(totalFeeInHighPrecision, precision);
     }
@@ -1407,11 +1371,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         returns (uint16 modulesFee, uint16 treasuryFee)
     {
         /// @dev The logic is placed here but in Lido contract to save Lido bytecode.
-        (
-            uint256 modulesFeeHighPrecision,
-            uint256 treasuryFeeHighPrecision,
-            uint256 precision
-        ) = getStakingFeeAggregateDistribution();
+        (uint256 modulesFeeHighPrecision, uint256 treasuryFeeHighPrecision, uint256 precision) =
+            getStakingFeeAggregateDistribution();
         // Here we rely on ({modules,treasury}FeeHighPrecision <= precision).
         modulesFee = _toE4Precision(modulesFeeHighPrecision, precision);
         treasuryFee = _toE4Precision(treasuryFeeHighPrecision, precision);
@@ -1421,9 +1382,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _depositsCount The maximum number of deposits to be allocated.
     /// @return allocated Number of deposits allocated to the staking modules.
     /// @return allocations Array of new deposits allocation to the staking modules.
-    function getDepositsAllocation(
-        uint256 _depositsCount
-    ) external view returns (uint256 allocated, uint256[] memory allocations) {
+    function getDepositsAllocation(uint256 _depositsCount)
+        external
+        view
+        returns (uint256 allocated, uint256[] memory allocations)
+    {
         // (allocated, allocations, ) = _getDepositsAllocation(_depositsCount);
     }
 
@@ -1465,12 +1428,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         uint256 depositsCount = depositsValue / INITIAL_DEPOSIT_SIZE;
 
-        (bytes memory publicKeysBatch, bytes memory signaturesBatch) = _getOperatorAvailableKeys(
-            withdrawalCredentialsType,
-            stakingModuleAddress,
-            depositsCount,
-            _depositCalldata
-        );
+        (bytes memory publicKeysBatch, bytes memory signaturesBatch) =
+            _getOperatorAvailableKeys(withdrawalCredentialsType, stakingModuleAddress, depositsCount, _depositCalldata);
 
         // TODO: maybe some checks of  module's answer
 
@@ -1490,9 +1449,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // TODO: here depositsValue  in wei, check type
         // TODO: maybe tracker should be stored in AO and AO will use it
         DepositsTracker.insertSlotDeposit(
-            _getStakingModuleTrackerPosition(_stakingModuleId),
-            _getCurrentSlot(),
-            depositsValue
+            _getStakingModuleTrackerPosition(_stakingModuleId), _getCurrentSlot(), depositsValue
         );
 
         // TODO: notify module about deposits
@@ -1513,8 +1470,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             return IStakingModule(stakingModuleAddress).obtainDepositData(depositsCount, depositCalldata);
         } else {
             (keys, signatures) = IStakingModuleV2(stakingModuleAddress).getOperatorAvailableKeys(
-                DepositsTempStorage.getOperators(),
-                DepositsTempStorage.getCounts()
+                DepositsTempStorage.getOperators(), DepositsTempStorage.getCounts()
             );
 
             DepositsTempStorage.clearOperators();
@@ -1526,9 +1482,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _withdrawalCredentials 0x01 withdrawal credentials field as defined in the Consensus Layer specs.
     /// @dev Note that setWithdrawalCredentials discards all unused deposits data as the signatures are invalidated.
     /// @dev The function is restricted to the `MANAGE_WITHDRAWAL_CREDENTIALS_ROLE` role.
-    function setWithdrawalCredentials(
-        bytes32 _withdrawalCredentials
-    ) external onlyRole(MANAGE_WITHDRAWAL_CREDENTIALS_ROLE) {
+    function setWithdrawalCredentials(bytes32 _withdrawalCredentials)
+        external
+        onlyRole(MANAGE_WITHDRAWAL_CREDENTIALS_ROLE)
+    {
         _getRouterStorage().withdrawalCredentials = _withdrawalCredentials;
         _notifyStakingModulesOfWithdrawalCredentialsChange();
         emit WithdrawalCredentialsSet(_withdrawalCredentials, msg.sender);
@@ -1538,9 +1495,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _withdrawalCredentials 0x02 withdrawal credentials field as defined in the Consensus Layer specs.
     /// @dev Note that setWithdrawalCredentials discards all unused deposits data as the signatures are invalidated.
     /// @dev The function is restricted to the `MANAGE_WITHDRAWAL_CREDENTIALS_ROLE` role.
-    function setWithdrawalCredentials02(
-        bytes32 _withdrawalCredentials
-    ) external onlyRole(MANAGE_WITHDRAWAL_CREDENTIALS_ROLE) {
+    function setWithdrawalCredentials02(bytes32 _withdrawalCredentials)
+        external
+        onlyRole(MANAGE_WITHDRAWAL_CREDENTIALS_ROLE)
+    {
         _getRouterStorage().withdrawalCredentials02 = _withdrawalCredentials;
         _notifyStakingModulesOfWithdrawalCredentialsChange();
         emit WithdrawalCredentials02Set(_withdrawalCredentials, msg.sender);
@@ -1560,16 +1518,15 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     function _notifyStakingModulesOfWithdrawalCredentialsChange() internal {
         uint256 stakingModulesCount = getStakingModulesCount();
-        for (uint256 i; i < stakingModulesCount; ) {
+        for (uint256 i; i < stakingModulesCount;) {
             StakingModule storage stakingModule = _getStakingModuleByIndex(i);
 
             unchecked {
                 ++i;
             }
 
-            try IStakingModule(stakingModule.stakingModuleAddress).onWithdrawalCredentialsChanged() {} catch (
-                bytes memory lowLevelRevertData
-            ) {
+            try IStakingModule(stakingModule.stakingModuleAddress).onWithdrawalCredentialsChanged() {}
+            catch (bytes memory lowLevelRevertData) {
                 if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
                 _setStakingModuleStatus(stakingModule, StakingModuleStatus.DepositsPaused);
                 emit WithdrawalsCredentialsChangeFailed(stakingModule.id, lowLevelRevertData);
@@ -1577,10 +1534,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         }
     }
 
-    function _checkValidatorsByNodeOperatorReportData(
-        bytes calldata _nodeOperatorIds,
-        bytes calldata _validatorsCounts
-    ) internal pure {
+    function _checkValidatorsByNodeOperatorReportData(bytes calldata _nodeOperatorIds, bytes calldata _validatorsCounts)
+        internal
+        pure
+    {
         if (_nodeOperatorIds.length % 8 != 0 || _validatorsCounts.length % 16 != 0) {
             revert InvalidReportData(3);
         }
@@ -1617,7 +1574,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     {
         uint256 stakingModulesCount = getStakingModulesCount();
         stakingModulesCache = new StakingModuleCache[](stakingModulesCount);
-        for (uint256 i; i < stakingModulesCount; ) {
+        for (uint256 i; i < stakingModulesCount;) {
             stakingModulesCache[i] = _loadStakingModulesCacheItem(i);
             totalActiveValidators += stakingModulesCache[i].activeValidatorsCount;
 
@@ -1627,9 +1584,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         }
     }
 
-    function _loadStakingModulesCacheItem(
-        uint256 _stakingModuleIndex
-    ) internal view returns (StakingModuleCache memory cacheItem) {
+    function _loadStakingModulesCacheItem(uint256 _stakingModuleIndex)
+        internal
+        view
+        returns (StakingModuleCache memory cacheItem)
+    {
         StakingModule storage stakingModuleData = _getStakingModuleByIndex(_stakingModuleIndex);
 
         cacheItem.stakingModuleAddress = stakingModuleData.stakingModuleAddress;
@@ -1639,21 +1598,16 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         cacheItem.stakeShareLimit = stakingModuleData.stakeShareLimit;
         cacheItem.status = StakingModuleStatus(stakingModuleData.status);
 
-        (
-            uint256 totalExitedValidators,
-            uint256 totalDepositedValidators,
-            uint256 depositableValidatorsCount
-        ) = _getStakingModuleSummary(IStakingModule(cacheItem.stakingModuleAddress));
+        (uint256 totalExitedValidators, uint256 totalDepositedValidators, uint256 depositableValidatorsCount) =
+            _getStakingModuleSummary(IStakingModule(cacheItem.stakingModuleAddress));
 
-        cacheItem.availableValidatorsCount = cacheItem.status == StakingModuleStatus.Active
-            ? depositableValidatorsCount
-            : 0;
+        cacheItem.availableValidatorsCount =
+            cacheItem.status == StakingModuleStatus.Active ? depositableValidatorsCount : 0;
 
         // The module might not receive all exited validators data yet => we need to replacing
         // the exitedValidatorsCount with the one that the staking router is aware of.
         cacheItem.activeValidatorsCount =
-            totalDepositedValidators -
-            Math256.max(totalExitedValidators, stakingModuleData.exitedValidatorsCount);
+            totalDepositedValidators - Math256.max(totalExitedValidators, stakingModuleData.exitedValidatorsCount);
     }
 
     function _setStakingModuleStatus(StakingModule storage _stakingModule, StakingModuleStatus _status) internal {
@@ -1666,10 +1620,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     /// @notice Allocation for module based on target share
     /// @param  _depositsToAllocate - Eth amount that can be deposited in module
-    function _getTargetDepositsAllocation(
-        uint256 /* stakingModuleId */,
-        uint256 _depositsToAllocate
-    ) internal view returns (uint256 allocation) {
+    function _getTargetDepositsAllocation(uint256, /* stakingModuleId */ uint256 _depositsToAllocate)
+        internal
+        view
+        returns (uint256 allocation)
+    {
         // TODO: implementation based on Share Limits allocation strategy tbd
         return _depositsToAllocate;
     }
@@ -1810,10 +1765,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 _eligibleToExitInSec
     ) external onlyRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE) {
         _getIStakingModuleById(_stakingModuleId).reportValidatorExitDelay(
-            _nodeOperatorId,
-            _proofSlotTimestamp,
-            _publicKey,
-            _eligibleToExitInSec
+            _nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec
         );
     }
 
@@ -1836,14 +1788,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         for (uint256 i = 0; i < validatorExitData.length; ++i) {
             data = validatorExitData[i];
 
-            try
-                _getIStakingModuleById(data.stakingModuleId).onValidatorExitTriggered(
-                    data.nodeOperatorId,
-                    data.pubkey,
-                    _withdrawalRequestPaidFee,
-                    _exitType
-                )
-            {} catch (bytes memory lowLevelRevertData) {
+            try _getIStakingModuleById(data.stakingModuleId).onValidatorExitTriggered(
+                data.nodeOperatorId, data.pubkey, _withdrawalRequestPaidFee, _exitType
+            ) {} catch (bytes memory lowLevelRevertData) {
                 /// @dev This check is required to prevent incorrect gas estimation of the method.
                 ///      Without it, Ethereum nodes that use binary search for gas estimation may
                 ///      return an invalid value when the onValidatorExitTriggered()

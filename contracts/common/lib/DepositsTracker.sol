@@ -97,10 +97,11 @@ library DepositsTracker {
     /// @param _depositedEthStatePosition - slot in storage
     /// @param _slot - Upper bound slot
     /// @dev this method will use cursor for start reading data
-    function getDepositedEthUpToSlot(
-        bytes32 _depositedEthStatePosition,
-        uint256 _slot
-    ) public view returns (uint256 total) {
+    function getDepositedEthUpToSlot(bytes32 _depositedEthStatePosition, uint256 _slot)
+        public
+        view
+        returns (uint256 total)
+    {
         DepositedEthState storage state = _getDataStorage(_depositedEthStatePosition);
         uint256 depositsEntryAmount = state.slotsDeposits.length;
         if (depositsEntryAmount == 0) return 0;
@@ -124,7 +125,7 @@ library DepositsTracker {
         }
 
         uint256 endIndex = type(uint256).max;
-        for (uint256 i = startIndex; i < depositsEntryAmount; ) {
+        for (uint256 i = startIndex; i < depositsEntryAmount;) {
             SlotDeposit memory d = state.slotsDeposits[i].unpack();
             if (d.slot > _slot) break;
 
@@ -170,13 +171,14 @@ library DepositsTracker {
 
             if (_slot < cursorSlotDeposit.slot) revert SlotOutOfRange(cursorSlotDeposit.slot, _slot);
 
-            if (_cumulativeSum < cursorSlotDeposit.cumulativeEth)
+            if (_cumulativeSum < cursorSlotDeposit.cumulativeEth) {
                 revert InvalidCumulativeSum(_cumulativeSum, cursorSlotDeposit.cumulativeEth);
+            }
 
             startIndex = state.cursor;
         }
 
-        for (uint256 i = startIndex; i < depositsEntryAmount; ) {
+        for (uint256 i = startIndex; i < depositsEntryAmount;) {
             SlotDeposit memory d = state.slotsDeposits[i].unpack();
             if (d.slot > _slot) break;
 
