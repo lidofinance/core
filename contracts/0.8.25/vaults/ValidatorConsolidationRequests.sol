@@ -8,7 +8,6 @@ import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {Dashboard} from "contracts/0.8.25/vaults/dashboard/Dashboard.sol";
 import {NodeOperatorFee} from "contracts/0.8.25/vaults/dashboard/NodeOperatorFee.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
-import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
  /**
  * @title ValidatorConsolidationRequests
@@ -16,7 +15,10 @@ import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.so
  * @notice Contract for consolidating validators into staking vaults (EIP-7251)
  *         and adjusting rewards. Built to work with Vault CLI tooling and to
  *         support delegation (EIP-7702) and batched execution (EIP-5792).
- *         This contract is strictly for a node operator rewards adjustment role only.
+ *
+ *         This contract is strictly for an account that: 
+ *           - has its address as withdrawal credentials for pubkeys to consolidate from
+ *           - has the `NODE_OPERATOR_REWARDS_ADJUST_ROLE` role assigned in Dashboard.
  */
 contract ValidatorConsolidationRequests {
     /// @notice EIP-7251 consolidation requests contract address.
@@ -48,10 +50,11 @@ contract ValidatorConsolidationRequests {
      *   role to the withdrawal credentials account.
      * 
      * Recommendations:
-     * - It is recommended to call this function via the Vault CLI. It performs pre-checks of
-     *   source and target validator states, verifies their withdrawal credential prefixes,
-     *   calculates current validator balances, generates the request calldata using this method,
-     *   and then submits these call data in batched transactions via EIP-5792.
+     * - It is recommended to call this function via the Vault CLI using WalletConnect signing.
+     *   It performs pre-checks of source and target validator states, verifies their withdrawal
+     *   credential prefixes, calculates current validator balances, generates the request
+     *   calldata using this method, and then submits these call data in batched transactions
+     *   via EIP-5792.
      *
      * @param _sourcePubkeys An array of tightly packed arrays of 48-byte public keys corresponding to validators requesting consolidation.
      *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
@@ -60,10 +63,23 @@ contract ValidatorConsolidationRequests {
      *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
      *
      * @param _dashboard The address of the dashboard contract.
-     * @param _allSourceValidatorBalancesWei The total balance (in wei) of all source validators,
-     *        used to increase the rewards adjustment. This accounts for non-rewards ether on the
-     *        Consensus Layer to ensure correct fee calculation.
-     * @return adjustmentIncreaseEncodedCall The encoded call to increase the rewards adjustment.
+     * @param _allSourceValidatorBalancesWei The total balance (in wei) of all source validators.
+     *        This value is used to adjust the rewards amount before charging the node operator fee.
+     *
+     *        Node operator fee is applied only on rewards, which are defined as
+     *        "all external ether that appeared in the vault on top of the initially deposited one".
+     *        Without this adjustment, consolidated validator balances would incorrectly
+     *        be included in the rewards base, which would lead to overcharging.
+     *
+     *        By passing the sum of all source validator balances, you ensure that these
+     *        balances are excluded from the reward calculation, and the node operator fee
+     *        is charged only on the actual rewards.
+     *
+     *        ⚠️ Note: this is not a precise method. It does not account for the future
+     *        rewards that the consolidated validators may earn after this call, so in some
+     *        setups additional correction may be required.
+     * @return adjustmentIncreaseEncodedCall The encoded call to increase the rewards adjustment
+     *        (or empty if zero adjustment passed).
      * @return consolidationRequestEncodedCalls The encoded calls for the consolidation requests.
      */
     function getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
@@ -83,7 +99,8 @@ contract ValidatorConsolidationRequests {
             revert VaultNotConnected();
         }
 
-        if(_dashboard != IStakingVault(stakingVault).owner()) {
+        VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(stakingVault);
+        if(_dashboard != vaultConnection.owner) {
             revert DashboardNotOwnerOfStakingVault();
         }
 
@@ -109,6 +126,7 @@ contract ValidatorConsolidationRequests {
      * - If your withdrawal credentials are an EOA and you want to consolidate
      *   validator balances into staking vaults, first authorize this contract
      *   with an EIP-7702 transaction, then call this function.
+     * - This function can also be invoked via delegatecall for advanced use cases.
      *
      * Recommendations:
      * - It is recommended to call this function via the Vault CLI. It performs pre-checks of
@@ -145,9 +163,21 @@ contract ValidatorConsolidationRequests {
      *
      * @param _refundRecipient The address to refund the excess consolidation fee to.
      * @param _dashboard The address of the dashboard contract.
-     * @param _allSourceValidatorBalancesWei The total balance (in wei) of all source validators,
-     *        used to increase the rewards adjustment. This accounts for non-rewards ether on the
-     *        Consensus Layer to ensure correct fee calculation.
+     * @param _allSourceValidatorBalancesWei The total balance (in wei) of all source validators.
+     *        This value is used to adjust the rewards amount before charging the node operator fee.
+     *
+     *        Node operator fee is applied only on rewards, which are defined as
+     *        "all external ether that appeared in the vault on top of the initially deposited one".
+     *        Without this adjustment, consolidated validator balances would incorrectly
+     *        be included in the rewards base, which would lead to overcharging.
+     *
+     *        By passing the sum of all source validator balances, you ensure that these
+     *        balances are excluded from the reward calculation, and the node operator fee
+     *        is charged only on the actual rewards.
+     *
+     *        ⚠️ Note: this is not a precise method. It does not account for the future
+     *        rewards that the consolidated validators may earn after this call, so in some
+     *        setups additional correction may be required.
      */
     function addConsolidationRequestsAndIncreaseRewardsAdjustment(
         bytes[] calldata _sourcePubkeys,
@@ -173,7 +203,8 @@ contract ValidatorConsolidationRequests {
             revert VaultNotConnected();
         }
 
-        if(_dashboard != IStakingVault(stakingVault).owner()) {
+        VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(stakingVault);
+        if(_dashboard != vaultConnection.owner) {
             revert DashboardNotOwnerOfStakingVault();
         }
 
@@ -300,7 +331,7 @@ contract ValidatorConsolidationRequests {
     ) private {
         bytes memory callData = new bytes(CONSOLIDATION_REQUEST_CALLDATA_LENGTH);
 
-        uint256 sourcePubkeysCount = _validateAndCountPubkeysInBatch(_sourcePubkeys);
+        uint256 sourcePubkeysCount = _sourcePubkeys.length / PUBLIC_KEY_LENGTH;
         for (uint256 j = 0; j < sourcePubkeysCount; j++) {
             _copyPubkeysToMemory(callData, 0, _sourcePubkeys, j);
             _copyPubkeysToMemory(callData, 1, _targetPubkey, 0);

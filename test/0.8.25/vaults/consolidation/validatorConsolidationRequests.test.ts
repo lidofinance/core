@@ -8,7 +8,6 @@ import {
   Dashboard__Mock,
   EIP7251MaxEffectiveBalanceRequest__Mock,
   LidoLocator,
-  StakingVault__MockForConsolidations,
   ValidatorConsolidationRequests,
   VaultHub__MockForDashboard,
 } from "typechain-types";
@@ -35,8 +34,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
   let originalState: string;
   let locator: LidoLocator;
   let vaultHub: VaultHub__MockForDashboard;
-  let stakingVault: StakingVault__MockForConsolidations;
-  let stakingVaultAddress: string;
+  let stakingVault: HardhatEthersSigner;
 
   async function getConsolidationRequestPredeployedContractBalance(): Promise<bigint> {
     const contractAddress = await consolidationRequestPredeployed.getAddress();
@@ -44,7 +42,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
   }
 
   before(async () => {
-    [actor, receiver] = await ethers.getSigners();
+    [actor, receiver, stakingVault] = await ethers.getSigners();
 
     // Set a high balance for the actor account
     await setBalance(actor.address, ether("1000000"));
@@ -55,13 +53,9 @@ describe("ValidatorConsolidationRequests.sol", () => {
     consolidationRequestPredeployed = await deployEIP7251MaxEffectiveBalanceRequestContract(1n);
     vaultHub = await ethers.deployContract("VaultHub__MockForDashboard", [ethers.ZeroAddress, ethers.ZeroAddress]);
 
-    stakingVault = await ethers.deployContract("StakingVault__MockForConsolidations");
-    stakingVaultAddress = await stakingVault.getAddress();
-    await stakingVault.mock__setOwner(dashboardAddress);
-
-    await dashboard.mock__setStakingVault(stakingVaultAddress);
-    await vaultHub.mock__setVaultConnection(stakingVaultAddress, {
-      owner: actor.address,
+    await dashboard.mock__setStakingVault(stakingVault);
+    await vaultHub.mock__setVaultConnection(stakingVault, {
+      owner: dashboardAddress,
       shareLimit: 0,
       vaultIndex: 1,
       disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
@@ -178,8 +172,9 @@ describe("ValidatorConsolidationRequests.sol", () => {
   });
 
   it("Should revert if vault is not connected", async function () {
+    // index is 0
     await vaultHub.mock__setVaultConnection(stakingVault, {
-      owner: actor.address,
+      owner: dashboardAddress,
       shareLimit: 0,
       vaultIndex: 0,
       disconnectInitiatedTs: 1n,
@@ -203,8 +198,9 @@ describe("ValidatorConsolidationRequests.sol", () => {
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
 
+    // pending disconnect is true
     await vaultHub.mock__setVaultConnection(stakingVault, {
-      owner: actor.address,
+      owner: dashboardAddress,
       shareLimit: 0,
       vaultIndex: 1,
       disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
@@ -228,9 +224,8 @@ describe("ValidatorConsolidationRequests.sol", () => {
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
 
-    await stakingVault.mock__setOwner(actor.address);
-
-    await vaultHub.mock__setVaultConnection(stakingVaultAddress, {
+    // owner is not the dashboard
+    await vaultHub.mock__setVaultConnection(stakingVault, {
       owner: actor.address,
       shareLimit: 0,
       vaultIndex: 1,
@@ -673,8 +668,9 @@ describe("ValidatorConsolidationRequests.sol", () => {
   });
 
   it("getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls should revert if vault is not connected", async function () {
+    // index is 0
     await vaultHub.mock__setVaultConnection(stakingVault, {
-      owner: actor.address,
+      owner: dashboardAddress,
       shareLimit: 0,
       vaultIndex: 0,
       disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
@@ -696,8 +692,9 @@ describe("ValidatorConsolidationRequests.sol", () => {
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
 
+    // pending disconnect is true
     await vaultHub.mock__setVaultConnection(stakingVault, {
-      owner: actor.address,
+      owner: dashboardAddress,
       shareLimit: 0,
       vaultIndex: 1,
       disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
@@ -719,6 +716,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
       ),
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "VaultNotConnected");
 
+    // owner is not the dashboard
     await vaultHub.mock__setVaultConnection(stakingVault, {
       owner: actor.address,
       shareLimit: 0,
@@ -732,7 +730,6 @@ describe("ValidatorConsolidationRequests.sol", () => {
       isBeaconDepositsManuallyPaused: false,
     });
     await vaultHub.mock__setPendingDisconnect(false);
-    await stakingVault.mock__setOwner(actor.address);
 
     await expect(
       validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(

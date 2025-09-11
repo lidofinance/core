@@ -20,7 +20,7 @@ describe("Integration: ValidatorConsolidationRequests", () => {
   let originalSnapshot: string;
 
   let owner: HardhatEthersSigner;
-  let stranger: HardhatEthersSigner;
+  let refundRecipient: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let dashboard: Dashboard;
 
@@ -28,7 +28,7 @@ describe("Integration: ValidatorConsolidationRequests", () => {
     ctx = await getProtocolContext();
     originalSnapshot = await Snapshot.take();
 
-    [owner, stranger, nodeOperator] = await ethers.getSigners();
+    [owner, refundRecipient, nodeOperator] = await ethers.getSigners();
 
     ({ dashboard } = await createVaultWithDashboard(
       ctx,
@@ -44,14 +44,12 @@ describe("Integration: ValidatorConsolidationRequests", () => {
   afterEach(async () => await Snapshot.restore(snapshot));
   after(async () => await Snapshot.restore(originalSnapshot));
 
-  it("Consolidates validators by calling max effective balance increaser through contract using delegatecall", async () => {
+  it("Consolidates validators by calling addConsolidationRequestsAndIncreaseRewardsAdjustment", async () => {
     const { validatorConsolidationRequests } = ctx.contracts;
 
     const payload = generateConsolidationRequestPayload(1);
     const { sourcePubkeys, targetPubkeys } = payload;
 
-    const delegateCaller = await ethers.deployContract("DelegateCaller", [], { from: owner });
-    const delegateCallerAddress = await delegateCaller.getAddress();
     const dashboardAddress = await dashboard.getAddress();
 
     // send empty tx to EIP7251 to get fee per request
@@ -60,14 +58,14 @@ describe("Integration: ValidatorConsolidationRequests", () => {
 
     await dashboard
       .connect(nodeOperator)
-      .grantRole(await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), delegateCallerAddress);
+      .grantRole(await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), validatorConsolidationRequests);
 
-    const tx = await delegateCaller.callDelegate(
-      validatorConsolidationRequests.address,
-      validatorConsolidationRequests.interface.encodeFunctionData(
-        "addConsolidationRequestsAndIncreaseRewardsAdjustment",
-        [sourcePubkeys, targetPubkeys, stranger.address, dashboardAddress, payload.adjustmentIncrease],
-      ),
+    const tx = await validatorConsolidationRequests.addConsolidationRequestsAndIncreaseRewardsAdjustment(
+      sourcePubkeys,
+      targetPubkeys,
+      refundRecipient.address,
+      dashboardAddress,
+      payload.adjustmentIncrease,
       { value: totalFee },
     );
     const receipt = (await tx.wait()) as ContractTransactionReceipt;
@@ -86,7 +84,11 @@ describe("Integration: ValidatorConsolidationRequests", () => {
         const pubkeysCount = Math.floor(sourcePubkeys[i].length / KEY_LENGTH);
         for (let j = 0; j < pubkeysCount; j++) {
           const expectedSourcePubkey = sourcePubkeys[i].slice(j * KEY_LENGTH, (j + 1) * KEY_LENGTH);
-          const result = ethers.concat([delegateCallerAddress, expectedSourcePubkey, targetPubkeys[i]]);
+          const result = ethers.concat([
+            validatorConsolidationRequests.address,
+            expectedSourcePubkey,
+            targetPubkeys[i],
+          ]);
           expect(eip7251Events[i * pubkeysCount + j].data).to.equal(result);
         }
       }
