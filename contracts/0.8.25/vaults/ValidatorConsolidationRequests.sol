@@ -14,7 +14,7 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
  * @author kovalgek
  * @notice Contract for consolidating validators into staking vaults (EIP-7251)
  *         and adjusting rewards. Built to work with Vault CLI tooling and to
- *         support delegation (EIP-7702) and batched execution (EIP-5792).
+ *         support batched execution (EIP-5792).
  *
  *         This contract is strictly for an account that: 
  *           - has its address as withdrawal credentials for pubkeys to consolidate from
@@ -79,7 +79,7 @@ contract ValidatorConsolidationRequests {
      *        rewards that the consolidated validators may earn after this call, so in some
      *        setups additional correction may be required.
      * @return adjustmentIncreaseEncodedCall The encoded call to increase the rewards adjustment
-     *        (or empty if zero adjustment passed).
+     *        (or empty if zero sum of source validator balances passed).
      * @return consolidationRequestEncodedCalls The encoded calls for the consolidation requests.
      */
     function getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
@@ -115,130 +115,6 @@ contract ValidatorConsolidationRequests {
         if(_allSourceValidatorBalancesWei > 0) {
             adjustmentIncreaseEncodedCall = abi.encodeWithSelector(NodeOperatorFee.increaseRewardsAdjustment.selector, _allSourceValidatorBalancesWei);
         }
-
-        return (adjustmentIncreaseEncodedCall, consolidationRequestEncodedCalls);
-    }
-
-    /**
-     * @notice Submit EIP-7251 consolidation requests and immediately increase the node operator rewards adjustment.
-     *
-     * Use case:
-     * - If your withdrawal credentials are an EOA and you want to consolidate
-     *   validator balances into staking vaults, first authorize this contract
-     *   with an EIP-7702 transaction, then call this function.
-     * - This function can also be invoked via delegatecall for advanced use cases.
-     *
-     * Recommendations:
-     * - It is recommended to call this function via the Vault CLI. It performs pre-checks of
-     *   source and target validator states, their withdrawal credential prefixes, calculates
-     *   current validator balances, and revokes the authorization after execution.
-     *
-     * Requirements:
-     *  - The caller must have the `NODE_OPERATOR_REWARDS_ADJUST_ROLE` to perform reward adjustment.
-     *  - The vault into which consolidation occurs must be connected to the vault hub.
-     *  - The function must be called with a non-zero msg.value that is sufficient to cover all consolidation fees.
-     *  - The required amount can be obtained by calling `getConsolidationRequestFee()`, but note that this value is only
-     *    valid for the current block and may change. It is therefore advised to provide a slightly higher amount;
-     *    any excess will be refunded to the `_refundRecipient` address.
-     *  - The `_sourcePubkeys` and `_targetPubkeys` must be valid and belong to registered validators.
-     *  - `_adjustmentIncrease` must match the total balance of source validators on the Consensus Layer.
-     *
-     * Notes:
-     *  Consolidation requests are asynchronous and handled on the Consensus Layer. The function optimistically
-     *  assumes that the consolidation will succeed and immediately increases the node operator's reward adjustment
-     *  via the Dashboard contract. However, if the consolidation fails, the function does not take
-     *  responsibility for rolling back the adjustment. It is the responsibility of the Node Operator and Vault Owner to call
-     *  `setRewardsAdjustment` on the Dashboard contract to correct the adjustment value in such cases.
-     *
-     *  Additionally, this function assumes that the provided source and target pubkeys are valid, and that the reward
-     *  adjustment value is appropriate. Because of this, it is highly recommended to use the `Vault CLI` tool to interact
-     *  with this function. `Vault CLI` performs pre-checks to ensure the correctness of public keys and the adjustment value,
-     *  and also monitors post-execution state on the CL to verify that the consolidation was successful.
-     *
-     * @param _sourcePubkeys An array of tightly packed arrays of 48-byte public keys corresponding to validators requesting consolidation.
-     *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
-     *
-     * @param _targetPubkeys An array of 48-byte public keys corresponding to validators to consolidate to.
-     *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
-     *
-     * @param _refundRecipient The address to refund the excess consolidation fee to.
-     * @param _dashboard The address of the dashboard contract.
-     * @param _allSourceValidatorBalancesWei The total balance (in wei) of all source validators.
-     *        This value is used to adjust the rewards amount before charging the node operator fee.
-     *
-     *        Node operator fee is applied only on rewards, which are defined as
-     *        "all external ether that appeared in the vault on top of the initially deposited one".
-     *        Without this adjustment, consolidated validator balances would incorrectly
-     *        be included in the rewards base, which would lead to overcharging.
-     *
-     *        By passing the sum of all source validator balances, you ensure that these
-     *        balances are excluded from the reward calculation, and the node operator fee
-     *        is charged only on the actual rewards.
-     *
-     *        ⚠️ Note: this is not a precise method. It does not account for the future
-     *        rewards that the consolidated validators may earn after this call, so in some
-     *        setups additional correction may be required.
-     */
-    function addConsolidationRequestsAndIncreaseRewardsAdjustment(
-        bytes[] calldata _sourcePubkeys,
-        bytes[] calldata _targetPubkeys,
-        address _refundRecipient,
-        address _dashboard,
-        uint256 _allSourceValidatorBalancesWei
-    ) external payable {
-        if (msg.value == 0) revert ZeroArgument("msg.value");
-        if (_sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
-        if (_targetPubkeys.length == 0) revert ZeroArgument("targetPubkeys");
-        if (_dashboard == address(0)) revert ZeroArgument("dashboard");
-        if (_sourcePubkeys.length != _targetPubkeys.length) revert MismatchingSourceAndTargetPubkeysCount(_sourcePubkeys.length, _targetPubkeys.length);
-        
-        // If the refund recipient is not set, use the sender as the refund recipient
-        if (_refundRecipient == address(0)) {
-            _refundRecipient = msg.sender;
-        }
-
-        VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
-        address stakingVault = address(Dashboard(payable(_dashboard)).stakingVault());
-        if(!vaultHub.isVaultConnected(stakingVault) || vaultHub.isPendingDisconnect(stakingVault)) {
-            revert VaultNotConnected();
-        }
-
-        VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(stakingVault);
-        if(_dashboard != vaultConnection.owner) {
-            revert DashboardNotOwnerOfStakingVault();
-        }
-
-        uint256 consolidationRequestsCount = _validatePubkeysAndCountConsolidationRequests(_sourcePubkeys, _targetPubkeys);
-
-        if(_allSourceValidatorBalancesWei != 0 && _allSourceValidatorBalancesWei < consolidationRequestsCount * MINIMUM_VALIDATOR_BALANCE) {
-            revert InvalidAllSourceValidatorBalancesWei();
-        }
-
-        uint256 feePerRequest = _getConsolidationRequestFee();
-        uint256 totalFee = consolidationRequestsCount * feePerRequest;
-        if (msg.value < totalFee) revert InsufficientValidatorConsolidationFee(msg.value, totalFee);
-
-        for (uint256 i = 0; i < _sourcePubkeys.length; i++) {
-            _processConsolidationRequest(
-                _sourcePubkeys[i],
-                _targetPubkeys[i],
-                feePerRequest
-            );
-        }
-
-        uint256 excess = msg.value - totalFee;
-        if (excess > 0) {
-            (bool success, ) = _refundRecipient.call{value: excess}("");
-            if (!success) {
-                revert ConsolidationFeeRefundFailed(_refundRecipient, excess);
-            }
-        }
-
-        if(_allSourceValidatorBalancesWei > 0) {
-            Dashboard(payable(_dashboard)).increaseRewardsAdjustment(_allSourceValidatorBalancesWei);
-        }
-
-        emit ConsolidationRequestsAndRewardsAdjustmentIncreased(msg.sender, _sourcePubkeys, _targetPubkeys, _refundRecipient, excess, _allSourceValidatorBalancesWei);
     }
 
     /**
@@ -261,21 +137,6 @@ contract ValidatorConsolidationRequests {
         }
 
         return abi.decode(feeData, (uint256));
-    }
-
-    function _copyPubkeysToMemory(
-        bytes memory _target,
-        uint256 _targetIndex,
-        bytes calldata _source,
-        uint256 _sourceIndex
-    ) private pure {
-        assembly {
-            calldatacopy(
-                add(_target, add(32, mul(_targetIndex, PUBLIC_KEY_LENGTH))),
-                add(_source.offset, mul(_sourceIndex, PUBLIC_KEY_LENGTH)),
-                PUBLIC_KEY_LENGTH
-            )
-        }
     }
 
     function _consolidationCalldatas(
@@ -324,43 +185,6 @@ contract ValidatorConsolidationRequests {
         return consolidationRequestsCount;
     }
 
-    function _processConsolidationRequest(
-        bytes calldata _sourcePubkeys,
-        bytes calldata _targetPubkey,
-        uint256 _feePerRequest
-    ) private {
-        bytes memory callData = new bytes(CONSOLIDATION_REQUEST_CALLDATA_LENGTH);
-
-        uint256 sourcePubkeysCount = _sourcePubkeys.length / PUBLIC_KEY_LENGTH;
-        for (uint256 j = 0; j < sourcePubkeysCount; j++) {
-            _copyPubkeysToMemory(callData, 0, _sourcePubkeys, j);
-            _copyPubkeysToMemory(callData, 1, _targetPubkey, 0);
-
-            (bool success, ) = CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS.call{value: _feePerRequest}(callData);
-            if (!success) {
-                revert ConsolidationRequestFailed(callData);
-            }
-        }
-    }
-
-    /**
-     * @notice Emitted when the consolidation requests are added
-     * @param sender The address of the sender
-     * @param sourcePubkeys The source pubkeys
-     * @param targetPubkeys The target pubkeys
-     * @param refundRecipient The address of the refund recipient
-     * @param excess The excess consolidation fee
-     * @param adjustmentIncrease The adjustment increase amount
-     */
-    event ConsolidationRequestsAndRewardsAdjustmentIncreased(
-        address indexed sender,
-        bytes[] sourcePubkeys,
-        bytes[] targetPubkeys,
-        address indexed refundRecipient,
-        uint256 excess,
-        uint256 adjustmentIncrease
-    );
-
     error ZeroArgument(string argName);
     error MalformedSourcePubkeysArray();
     error MalformedTargetPubkey();
@@ -369,10 +193,6 @@ contract ValidatorConsolidationRequests {
     error DashboardNotOwnerOfStakingVault();
     error NoConsolidationRequests();
     error InvalidAllSourceValidatorBalancesWei();
-    error InsufficientValidatorConsolidationFee(uint256 provided, uint256 required);
     error ConsolidationFeeReadFailed();
     error ConsolidationFeeInvalidData();
-    error ConsolidationFeeRefundFailed(address recipient, uint256 amount);
-    error ConsolidationRequestFailed(bytes callData);
-    error ConsolidationRequestAdditionFailed(bytes callData);
 }
