@@ -13,6 +13,7 @@ const NOR_STAKING_MODULE_MODULE_FEE_BP = 500; // 5%
 const NOR_STAKING_MODULE_TREASURY_FEE_BP = 500; // 5%
 const NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 150;
 const NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
+const NOR_WITHDRAWAL_CREDENTIAL_TYPE = 1;
 
 const SDVT_STAKING_MODULE_TARGET_SHARE_BP = 400; // 4%
 const SDVT_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP = 10000; // 100%
@@ -20,6 +21,7 @@ const SDVT_STAKING_MODULE_MODULE_FEE_BP = 800; // 8%
 const SDVT_STAKING_MODULE_TREASURY_FEE_BP = 200; // 2%
 const SDVT_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 150;
 const SDVT_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
+const SDVT_WITHDRAWAL_CREDENTIAL_TYPE = 1;
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -38,12 +40,15 @@ export async function main() {
     [
       state.nodeOperatorsRegistry.deployParameters.stakingModuleName,
       state[Sk.appNodeOperatorsRegistry].proxy.address,
-      NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP,
-      NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
-      NOR_STAKING_MODULE_MODULE_FEE_BP,
-      NOR_STAKING_MODULE_TREASURY_FEE_BP,
-      NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
-      NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
+      {
+        stakeShareLimit: NOR_STAKING_MODULE_STAKE_SHARE_LIMIT_BP,
+        priorityExitShareThreshold: NOR_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
+        stakingModuleFee: NOR_STAKING_MODULE_MODULE_FEE_BP,
+        treasuryFee: NOR_STAKING_MODULE_TREASURY_FEE_BP,
+        maxDepositsPerBlock: NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
+        minDepositBlockDistance: NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
+        withdrawalCredentialsType: NOR_WITHDRAWAL_CREDENTIAL_TYPE,
+      },
     ],
     { from: deployer },
   );
@@ -55,12 +60,15 @@ export async function main() {
     [
       state.simpleDvt.deployParameters.stakingModuleName,
       state[Sk.appSimpleDvt].proxy.address,
-      SDVT_STAKING_MODULE_TARGET_SHARE_BP,
-      SDVT_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
-      SDVT_STAKING_MODULE_MODULE_FEE_BP,
-      SDVT_STAKING_MODULE_TREASURY_FEE_BP,
-      SDVT_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
-      SDVT_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
+      {
+        stakeShareLimit: SDVT_STAKING_MODULE_TARGET_SHARE_BP,
+        priorityExitShareThreshold: SDVT_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP,
+        stakingModuleFee: SDVT_STAKING_MODULE_MODULE_FEE_BP,
+        treasuryFee: SDVT_STAKING_MODULE_TREASURY_FEE_BP,
+        maxDepositsPerBlock: SDVT_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
+        minDepositBlockDistance: SDVT_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
+        withdrawalCredentialsType: SDVT_WITHDRAWAL_CREDENTIAL_TYPE,
+      },
     ],
     { from: deployer },
   );

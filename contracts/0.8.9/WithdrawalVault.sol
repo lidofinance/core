@@ -82,6 +82,14 @@ contract WithdrawalVault is Versioned, WithdrawalVaultEIP7685 {
         _initializeContractVersionTo(3);
     }
 
+    // TODO: remove later, added because of TWVote contract
+    /// @notice Finalizes upgrade to v2 (from v1). Can be called only once.
+    function finalizeUpgrade_v2() external {
+        // Finalization for v1 --> v2
+        _checkContractVersion(1);
+        _updateContractVersion(2);
+    }
+
     /// @notice Finalizes upgrade to v3 (from v2). Can be called only once.
     function finalizeUpgrade_v3() external {
         // Finalization for v2 --> v3

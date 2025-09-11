@@ -21,11 +21,11 @@ interface IBurnerMigration {
 }
 
 interface IStakingRouter {
-    function deposit(uint256 _depositsCount, uint256 _stakingModuleId, bytes _depositCalldata) external payable;
+    function deposit(uint256 _stakingModuleId, bytes _depositCalldata) external payable;
 
     function getStakingModuleMaxDepositsCount(
         uint256 _stakingModuleId,
-        uint256 _maxDepositsValue
+        uint256 _depositableEth
     ) external view returns (uint256);
 
     function getTotalFeeE4Precision() external view returns (uint16 totalFee);
@@ -34,7 +34,15 @@ interface IStakingRouter {
 
     function getWithdrawalCredentials() external view returns (bytes32);
 
-    function getStakingFeeAggregateDistributionE4Precision() external view returns (uint16 modulesFee, uint16 treasuryFee);
+    function getStakingFeeAggregateDistributionE4Precision()
+        external
+        view
+        returns (uint16 modulesFee, uint16 treasuryFee);
+
+    function getStakingModuleMaxInitialDepositsAmount(
+        uint256 _stakingModuleId,
+        uint256 _depositableEth
+    ) external returns (uint256);
 }
 
 interface IWithdrawalQueue {
@@ -623,40 +631,38 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @notice Invoke a deposit call to the Staking Router contract and update buffered counters
-     * @param _maxDepositsCount max deposits count
+     * @param _maxDepositsAmountPerBlock max deposits amount per block
      * @param _stakingModuleId id of the staking module to be deposited
      * @param _depositCalldata module calldata
      */
-    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes _depositCalldata) external {
+    function deposit(uint256 _maxDepositsAmountPerBlock, uint256 _stakingModuleId, bytes _depositCalldata) external {
+        // TODO: get rid of _maxDepositsAmountPerBlock
         ILidoLocator locator = _getLidoLocator();
 
         require(msg.sender == locator.depositSecurityModule(), "APP_AUTH_DSM_FAILED");
         require(canDeposit(), "CAN_NOT_DEPOSIT");
 
         IStakingRouter stakingRouter = _stakingRouter(locator);
-        uint256 depositsCount = Math256.min(
-            _maxDepositsCount,
-            stakingRouter.getStakingModuleMaxDepositsCount(_stakingModuleId, getDepositableEther())
+        uint256 depositsAmount = stakingRouter.getStakingModuleMaxInitialDepositsAmount(
+            _stakingModuleId,
+            Math256.min(_maxDepositsAmountPerBlock, getDepositableEther())
         );
 
-        uint256 depositsValue;
-        if (depositsCount > 0) {
-            depositsValue = depositsCount.mul(DEPOSIT_SIZE);
+        if (depositsAmount > 0) {
             /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
             ///     even if the StakingRouter is a trusted contract.
 
-            (uint256 bufferedEther, uint256 depositedValidators) = _getBufferedEtherAndDepositedValidators();
-            depositedValidators = depositedValidators.add(depositsCount);
-
-            _setBufferedEtherAndDepositedValidators(bufferedEther.sub(depositsValue), depositedValidators);
-            emit Unbuffered(depositsValue);
-            emit DepositedValidatorsChanged(depositedValidators);
+            _setBufferedEther(_getBufferedEther().sub(depositsAmount));
+            emit Unbuffered(depositsAmount);
+            // emit DepositedValidatorsChanged(depositedValidators);
+            // here should be counter for deposits that are not visible before ao report
+            //TODO: use deposits tracker here
         }
 
         /// @dev transfer ether to StakingRouter and make a deposit at the same time. All the ether
         ///     sent to StakingRouter is counted as deposited. If StakingRouter can't deposit all
         ///     passed ether it MUST revert the whole transaction (never happens in normal circumstances)
-        stakingRouter.deposit.value(depositsValue)(depositsCount, _stakingModuleId, _depositCalldata);
+        stakingRouter.deposit.value(depositsAmount)(_stakingModuleId, _depositCalldata);
     }
 
     /**
@@ -945,7 +951,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     ////////////////////////////////////////////////////////////////////////////
 
     /**
-     * @notice DEPRECATED: Returns current withdrawal credentials of deposited validators
+     * @notice DEPRECATED: Returns current 0x01 withdrawal credentials of deposited validators
      * @dev DEPRECATED: use StakingRouter.getWithdrawalCredentials() instead
      */
     function getWithdrawalCredentials() external view returns (bytes32) {
@@ -1044,9 +1050,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         // i.e. submitted to the official Deposit contract but not yet visible in the CL state.
         uint256 transientEther = (depositedValidators - clValidators) * DEPOSIT_SIZE;
 
-        return bufferedEther
-            .add(clBalance)
-            .add(transientEther);
+        return bufferedEther.add(clBalance).add(transientEther);
     }
 
     /// @dev Calculate the amount of ether controlled by external entities
@@ -1099,9 +1103,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         if (totalShares * maxRatioBP <= externalShares * TOTAL_BASIS_POINTS) return 0;
 
-        return
-            (totalShares * maxRatioBP - externalShares * TOTAL_BASIS_POINTS) /
-            (TOTAL_BASIS_POINTS - maxRatioBP);
+        return (totalShares * maxRatioBP - externalShares * TOTAL_BASIS_POINTS) / (TOTAL_BASIS_POINTS - maxRatioBP);
     }
 
     function _pauseStaking() internal {

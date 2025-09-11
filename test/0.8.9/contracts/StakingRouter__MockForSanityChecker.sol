@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 // for testing purposes only
 
-pragma solidity 0.8.9;
+pragma solidity 0.8.25;
 
-import {StakingRouter} from "contracts/0.8.9/StakingRouter.sol";
+import {StakingRouter} from "contracts/0.8.25/StakingRouter.sol";
 
 contract StakingRouter__MockForSanityChecker {
     mapping(uint256 => StakingRouter.StakingModule) private modules;
@@ -26,7 +26,8 @@ contract StakingRouter__MockForSanityChecker {
             exitedValidators,
             0,
             0,
-            0
+            0,
+            1
         );
         modules[moduleId] = module;
         moduleIds.push(moduleId);

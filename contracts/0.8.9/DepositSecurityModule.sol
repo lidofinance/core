@@ -7,7 +7,7 @@ pragma solidity 0.8.9;
 import {ECDSA} from "../common/lib/ECDSA.sol";
 
 interface ILido {
-    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
+    function deposit(uint256 _maxDepositsAmountPerBlock, uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
     function canDeposit() external view returns (bool);
 }
 
@@ -27,6 +27,7 @@ interface IStakingRouter {
         bytes calldata _nodeOperatorIds,
         bytes calldata _vettedSigningKeysCounts
     ) external;
+    function getStakingModuleMaxDepositsAmountPerBlock(uint256 _stakingModuleId) external view returns (uint256);
 }
 
 /**
@@ -424,13 +425,7 @@ contract DepositSecurityModule {
         bool isDepositDistancePassed = _isMinDepositDistancePassed(stakingModuleId);
         bool isLidoCanDeposit = LIDO.canDeposit();
 
-        return (
-            !isDepositsPaused
-            && isModuleActive
-            && quorum > 0
-            && isDepositDistancePassed
-            && isLidoCanDeposit
-        );
+        return (!isDepositsPaused && isModuleActive && quorum > 0 && isDepositDistancePassed && isLidoCanDeposit);
     }
 
     /**
@@ -462,7 +457,9 @@ contract DepositSecurityModule {
         /// guardian to react and pause deposits to all modules.
         uint256 lastDepositToModuleBlock = STAKING_ROUTER.getStakingModuleLastDepositBlock(stakingModuleId);
         uint256 minDepositBlockDistance = STAKING_ROUTER.getStakingModuleMinDepositBlockDistance(stakingModuleId);
-        uint256 maxLastDepositBlock = lastDepositToModuleBlock >= lastDepositBlock ? lastDepositToModuleBlock : lastDepositBlock;
+        uint256 maxLastDepositBlock = lastDepositToModuleBlock >= lastDepositBlock
+            ? lastDepositToModuleBlock
+            : lastDepositBlock;
         return block.number - maxLastDepositBlock >= minDepositBlockDistance;
     }
 
@@ -516,8 +513,9 @@ contract DepositSecurityModule {
 
         _verifyAttestSignatures(depositRoot, blockNumber, blockHash, stakingModuleId, nonce, sortedGuardianSignatures);
 
-        uint256 maxDepositsPerBlock = STAKING_ROUTER.getStakingModuleMaxDepositsPerBlock(stakingModuleId);
-        LIDO.deposit(maxDepositsPerBlock, stakingModuleId, depositCalldata);
+        uint256 maxDepositsAmount = STAKING_ROUTER.getStakingModuleMaxDepositsAmountPerBlock(stakingModuleId);
+
+        LIDO.deposit(maxDepositsAmount, stakingModuleId, depositCalldata);
 
         _setLastDepositBlock(block.number);
     }

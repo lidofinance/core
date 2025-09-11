@@ -17,18 +17,30 @@ describe("StakingRouter.sol:module-management", () => {
 
   let stakingRouter: StakingRouter;
 
+  const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials02 = hexlify(randomBytes(32));
+
+  const SECONDS_PER_SLOT = 12n;
+  const GENESIS_TIME = 1606824023;
+  const WITHDRAWAL_CREDENTIALS_TYPE_01 = 1n;
+
   beforeEach(async () => {
     [deployer, admin, user] = await ethers.getSigners();
 
     const depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter", {
+
+    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
+    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
+    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
+    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
       libraries: {
-        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+        ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
+        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
+        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
       },
     });
 
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
+    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
 
     [stakingRouter] = await proxify({ impl, admin });
 
@@ -36,7 +48,8 @@ describe("StakingRouter.sol:module-management", () => {
     await stakingRouter.initialize(
       admin,
       certainAddress("test:staking-router-modules:lido"), // mock lido address
-      hexlify(randomBytes(32)), // mock withdrawal credentials
+      withdrawalCredentials,
+      withdrawalCredentials02,
     );
 
     // grant roles
@@ -53,37 +66,47 @@ describe("StakingRouter.sol:module-management", () => {
     const MAX_DEPOSITS_PER_BLOCK = 150n;
     const MIN_DEPOSIT_BLOCK_DISTANCE = 25n;
 
+    const stakingModuleConfig = {
+      /// @notice Maximum stake share that can be allocated to a module, in BP.
+      /// @dev Must be less than or equal to TOTAL_BASIS_POINTS (10_000 BP = 100%).
+      stakeShareLimit: STAKE_SHARE_LIMIT,
+      /// @notice Module's share threshold, upon crossing which, exits of validators from the module will be prioritized, in BP.
+      /// @dev Must be less than or equal to TOTAL_BASIS_POINTS (10_000 BP = 100%) and
+      ///      greater than or equal to `stakeShareLimit`.
+      priorityExitShareThreshold: PRIORITY_EXIT_SHARE_THRESHOLD,
+      /// @notice Part of the fee taken from staking rewards that goes to the staking module, in BP.
+      /// @dev Together with `treasuryFee`, must not exceed TOTAL_BASIS_POINTS.
+      stakingModuleFee: MODULE_FEE,
+      /// @notice Part of the fee taken from staking rewards that goes to the treasury, in BP.
+      /// @dev Together with `stakingModuleFee`, must not exceed TOTAL_BASIS_POINTS.
+      treasuryFee: TREASURY_FEE,
+      /// @notice The maximum number of validators that can be deposited in a single block.
+      /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
+      ///      Value must not exceed type(uint64).max.
+      maxDepositsPerBlock: MAX_DEPOSITS_PER_BLOCK,
+      /// @notice The minimum distance between deposits in blocks.
+      /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
+      ///      Value must be > 0 and ≤ type(uint64).max.
+      minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
+      /// @notice The type of withdrawal credentials for creation of validators.
+      /// @dev 1 = 0x01 withdrawals, 2 = 0x02 withdrawals.
+      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+    };
+
     it("Reverts if the caller does not have the role", async () => {
-      await expect(
-        stakingRouter
-          .connect(user)
-          .addStakingModule(
-            NAME,
-            ADDRESS,
-            STAKE_SHARE_LIMIT,
-            PRIORITY_EXIT_SHARE_THRESHOLD,
-            MODULE_FEE,
-            TREASURY_FEE,
-            MAX_DEPOSITS_PER_BLOCK,
-            MIN_DEPOSIT_BLOCK_DISTANCE,
-          ),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
+      await expect(stakingRouter.connect(user).addStakingModule(NAME, ADDRESS, stakingModuleConfig))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
     });
 
     it("Reverts if the target share is greater than 100%", async () => {
       const STAKE_SHARE_LIMIT_OVER_100 = 100_01;
 
       await expect(
-        stakingRouter.addStakingModule(
-          NAME,
-          ADDRESS,
-          STAKE_SHARE_LIMIT_OVER_100,
-          PRIORITY_EXIT_SHARE_THRESHOLD,
-          MODULE_FEE,
-          TREASURY_FEE,
-          MAX_DEPOSITS_PER_BLOCK,
-          MIN_DEPOSIT_BLOCK_DISTANCE,
-        ),
+        stakingRouter.addStakingModule(NAME, ADDRESS, {
+          ...stakingModuleConfig,
+          stakeShareLimit: STAKE_SHARE_LIMIT_OVER_100,
+        }),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidStakeShareLimit");
     });
 
@@ -91,46 +114,25 @@ describe("StakingRouter.sol:module-management", () => {
       const MODULE_FEE_INVALID = 100_01n - TREASURY_FEE;
 
       await expect(
-        stakingRouter.addStakingModule(
-          NAME,
-          ADDRESS,
-          STAKE_SHARE_LIMIT,
-          PRIORITY_EXIT_SHARE_THRESHOLD,
-          MODULE_FEE_INVALID,
-          TREASURY_FEE,
-          MAX_DEPOSITS_PER_BLOCK,
-          MIN_DEPOSIT_BLOCK_DISTANCE,
-        ),
+        stakingRouter.addStakingModule(NAME, ADDRESS, {
+          ...stakingModuleConfig,
+          stakingModuleFee: MODULE_FEE_INVALID,
+        }),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
 
       const TREASURY_FEE_INVALID = 100_01n - MODULE_FEE;
 
       await expect(
-        stakingRouter.addStakingModule(
-          NAME,
-          ADDRESS,
-          STAKE_SHARE_LIMIT,
-          PRIORITY_EXIT_SHARE_THRESHOLD,
-          MODULE_FEE,
-          TREASURY_FEE_INVALID,
-          MAX_DEPOSITS_PER_BLOCK,
-          MIN_DEPOSIT_BLOCK_DISTANCE,
-        ),
+        stakingRouter.addStakingModule(NAME, ADDRESS, {
+          ...stakingModuleConfig,
+          treasuryFee: TREASURY_FEE_INVALID,
+        }),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
     });
 
     it("Reverts if the staking module address is zero address", async () => {
       await expect(
-        stakingRouter.addStakingModule(
-          NAME,
-          ZeroAddress,
-          STAKE_SHARE_LIMIT,
-          PRIORITY_EXIT_SHARE_THRESHOLD,
-          MODULE_FEE,
-          TREASURY_FEE,
-          MAX_DEPOSITS_PER_BLOCK,
-          MIN_DEPOSIT_BLOCK_DISTANCE,
-        ),
+        stakingRouter.addStakingModule(NAME, ZeroAddress, stakingModuleConfig),
       ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddressStakingModule");
     });
 
@@ -138,16 +140,7 @@ describe("StakingRouter.sol:module-management", () => {
       const NAME_EMPTY_STRING = "";
 
       await expect(
-        stakingRouter.addStakingModule(
-          NAME_EMPTY_STRING,
-          ADDRESS,
-          STAKE_SHARE_LIMIT,
-          PRIORITY_EXIT_SHARE_THRESHOLD,
-          MODULE_FEE,
-          TREASURY_FEE,
-          MAX_DEPOSITS_PER_BLOCK,
-          MIN_DEPOSIT_BLOCK_DISTANCE,
-        ),
+        stakingRouter.addStakingModule(NAME_EMPTY_STRING, ADDRESS, stakingModuleConfig),
       ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleWrongName");
     });
 
@@ -156,93 +149,53 @@ describe("StakingRouter.sol:module-management", () => {
       const NAME_TOO_LONG = randomString(Number(MAX_STAKING_MODULE_NAME_LENGTH + 1n));
 
       await expect(
-        stakingRouter.addStakingModule(
-          NAME_TOO_LONG,
-          ADDRESS,
-          STAKE_SHARE_LIMIT,
-          PRIORITY_EXIT_SHARE_THRESHOLD,
-          MODULE_FEE,
-          TREASURY_FEE,
-          MAX_DEPOSITS_PER_BLOCK,
-          MIN_DEPOSIT_BLOCK_DISTANCE,
-        ),
+        stakingRouter.addStakingModule(NAME_TOO_LONG, ADDRESS, stakingModuleConfig),
       ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleWrongName");
     });
 
     it("Reverts if the max number of staking modules is reached", async () => {
       const MAX_STAKING_MODULES_COUNT = await stakingRouter.MAX_STAKING_MODULES_COUNT();
 
+      const moduleConfig = {
+        stakeShareLimit: 100,
+        priorityExitShareThreshold: 100,
+        stakingModuleFee: 100,
+        treasuryFee: 100,
+        maxDepositsPerBlock: MAX_DEPOSITS_PER_BLOCK,
+        minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
+        withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+      };
+
       for (let i = 0; i < MAX_STAKING_MODULES_COUNT; i++) {
         await stakingRouter.addStakingModule(
           randomString(8),
           certainAddress(`test:staking-router:staking-module-${i}`),
-          1_00,
-          1_00,
-          1_00,
-          1_00,
-          MAX_DEPOSITS_PER_BLOCK,
-          MIN_DEPOSIT_BLOCK_DISTANCE,
+          moduleConfig,
         );
       }
 
       expect(await stakingRouter.getStakingModulesCount()).to.equal(MAX_STAKING_MODULES_COUNT);
 
-      await expect(
-        stakingRouter.addStakingModule(
-          NAME,
-          ADDRESS,
-          STAKE_SHARE_LIMIT,
-          PRIORITY_EXIT_SHARE_THRESHOLD,
-          MODULE_FEE,
-          TREASURY_FEE,
-          MAX_DEPOSITS_PER_BLOCK,
-          MIN_DEPOSIT_BLOCK_DISTANCE,
-        ),
-      ).to.be.revertedWithCustomError(stakingRouter, "StakingModulesLimitExceeded");
+      await expect(stakingRouter.addStakingModule(NAME, ADDRESS, stakingModuleConfig)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "StakingModulesLimitExceeded",
+      );
     });
 
     it("Reverts if adding a module with the same address", async () => {
-      await stakingRouter.addStakingModule(
-        NAME,
-        ADDRESS,
-        STAKE_SHARE_LIMIT,
-        PRIORITY_EXIT_SHARE_THRESHOLD,
-        MODULE_FEE,
-        TREASURY_FEE,
-        MAX_DEPOSITS_PER_BLOCK,
-        MIN_DEPOSIT_BLOCK_DISTANCE,
-      );
+      await stakingRouter.addStakingModule(NAME, ADDRESS, stakingModuleConfig);
 
-      await expect(
-        stakingRouter.addStakingModule(
-          NAME,
-          ADDRESS,
-          STAKE_SHARE_LIMIT,
-          PRIORITY_EXIT_SHARE_THRESHOLD,
-          MODULE_FEE,
-          TREASURY_FEE,
-          MAX_DEPOSITS_PER_BLOCK,
-          MIN_DEPOSIT_BLOCK_DISTANCE,
-        ),
-      ).to.be.revertedWithCustomError(stakingRouter, "StakingModuleAddressExists");
+      await expect(stakingRouter.addStakingModule(NAME, ADDRESS, stakingModuleConfig)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "StakingModuleAddressExists",
+      );
     });
 
     it("Adds the module to stakingRouter and emits events", async () => {
       const stakingModuleId = (await stakingRouter.getStakingModulesCount()) + 1n;
       const moduleAddedBlock = await getNextBlock();
 
-      await expect(
-        stakingRouter.addStakingModule(
-          NAME,
-          ADDRESS,
-          STAKE_SHARE_LIMIT,
-          PRIORITY_EXIT_SHARE_THRESHOLD,
-          MODULE_FEE,
-          TREASURY_FEE,
-          MAX_DEPOSITS_PER_BLOCK,
-          MIN_DEPOSIT_BLOCK_DISTANCE,
-        ),
-      )
+      await expect(stakingRouter.addStakingModule(NAME, ADDRESS, stakingModuleConfig))
         .to.be.emit(stakingRouter, "StakingRouterETHDeposited")
         .withArgs(stakingModuleId, 0)
         .and.to.be.emit(stakingRouter, "StakingModuleAdded")
@@ -266,6 +219,7 @@ describe("StakingRouter.sol:module-management", () => {
         PRIORITY_EXIT_SHARE_THRESHOLD,
         MAX_DEPOSITS_PER_BLOCK,
         MIN_DEPOSIT_BLOCK_DISTANCE,
+        WITHDRAWAL_CREDENTIALS_TYPE_01,
       ]);
     });
   });
@@ -291,17 +245,18 @@ describe("StakingRouter.sol:module-management", () => {
     const NEW_MAX_DEPOSITS_PER_BLOCK = 100n;
     const NEW_MIN_DEPOSIT_BLOCK_DISTANCE = 20n;
 
+    const stakingModuleConfig = {
+      stakeShareLimit: STAKE_SHARE_LIMIT,
+      priorityExitShareThreshold: PRIORITY_EXIT_SHARE_THRESHOLD,
+      stakingModuleFee: MODULE_FEE,
+      treasuryFee: TREASURY_FEE,
+      maxDepositsPerBlock: MAX_DEPOSITS_PER_BLOCK,
+      minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
+      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+    };
+
     beforeEach(async () => {
-      await stakingRouter.addStakingModule(
-        NAME,
-        ADDRESS,
-        STAKE_SHARE_LIMIT,
-        PRIORITY_EXIT_SHARE_THRESHOLD,
-        MODULE_FEE,
-        TREASURY_FEE,
-        MAX_DEPOSITS_PER_BLOCK,
-        MIN_DEPOSIT_BLOCK_DISTANCE,
-      );
+      await stakingRouter.addStakingModule(NAME, ADDRESS, stakingModuleConfig);
       ID = await stakingRouter.getStakingModulesCount();
     });
 
@@ -317,8 +272,11 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_TREASURY_FEE,
           NEW_MAX_DEPOSITS_PER_BLOCK,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
+          WITHDRAWAL_CREDENTIALS_TYPE_01,
         ),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
     });
 
     it("Reverts if the new target share is greater than 100%", async () => {
@@ -332,6 +290,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_TREASURY_FEE,
           NEW_MAX_DEPOSITS_PER_BLOCK,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
+          WITHDRAWAL_CREDENTIALS_TYPE_01,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidStakeShareLimit");
     });
@@ -347,6 +306,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_TREASURY_FEE,
           NEW_MAX_DEPOSITS_PER_BLOCK,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
+          WITHDRAWAL_CREDENTIALS_TYPE_01,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidPriorityExitShareThreshold");
     });
@@ -363,6 +323,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_TREASURY_FEE,
           NEW_MAX_DEPOSITS_PER_BLOCK,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
+          WITHDRAWAL_CREDENTIALS_TYPE_01,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidPriorityExitShareThreshold");
     });
@@ -377,6 +338,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_TREASURY_FEE,
           NEW_MAX_DEPOSITS_PER_BLOCK,
           0n,
+          WITHDRAWAL_CREDENTIALS_TYPE_01,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidMinDepositBlockDistance");
     });
@@ -390,6 +352,7 @@ describe("StakingRouter.sol:module-management", () => {
         NEW_TREASURY_FEE,
         NEW_MAX_DEPOSITS_PER_BLOCK,
         UINT64_MAX,
+        WITHDRAWAL_CREDENTIALS_TYPE_01,
       );
 
       expect((await stakingRouter.getStakingModule(ID)).minDepositBlockDistance).to.be.equal(UINT64_MAX);
@@ -403,6 +366,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_TREASURY_FEE,
           NEW_MAX_DEPOSITS_PER_BLOCK,
           UINT64_MAX + 1n,
+          WITHDRAWAL_CREDENTIALS_TYPE_01,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidMinDepositBlockDistance");
     });
@@ -416,6 +380,7 @@ describe("StakingRouter.sol:module-management", () => {
         NEW_TREASURY_FEE,
         UINT64_MAX,
         NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
+        WITHDRAWAL_CREDENTIALS_TYPE_01,
       );
 
       expect((await stakingRouter.getStakingModule(ID)).maxDepositsPerBlock).to.be.equal(UINT64_MAX);
@@ -429,6 +394,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_TREASURY_FEE,
           UINT64_MAX + 1n,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
+          WITHDRAWAL_CREDENTIALS_TYPE_01,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidMaxDepositPerBlockValue");
     });
@@ -445,6 +411,7 @@ describe("StakingRouter.sol:module-management", () => {
           TREASURY_FEE,
           MAX_DEPOSITS_PER_BLOCK,
           MIN_DEPOSIT_BLOCK_DISTANCE,
+          WITHDRAWAL_CREDENTIALS_TYPE_01,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
 
@@ -458,6 +425,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_TREASURY_FEE_INVALID,
           MAX_DEPOSITS_PER_BLOCK,
           MIN_DEPOSIT_BLOCK_DISTANCE,
+          WITHDRAWAL_CREDENTIALS_TYPE_01,
         ),
       ).to.be.revertedWithCustomError(stakingRouter, "InvalidFeeSum");
     });
@@ -472,6 +440,7 @@ describe("StakingRouter.sol:module-management", () => {
           NEW_TREASURY_FEE,
           NEW_MAX_DEPOSITS_PER_BLOCK,
           NEW_MIN_DEPOSIT_BLOCK_DISTANCE,
+          WITHDRAWAL_CREDENTIALS_TYPE_01,
         ),
       )
         .to.be.emit(stakingRouter, "StakingModuleShareLimitSet")

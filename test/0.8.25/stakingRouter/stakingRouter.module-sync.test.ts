@@ -39,29 +39,36 @@ describe("StakingRouter.sol:module-sync", () => {
   const maxDepositsPerBlock = 150n;
   const minDepositBlockDistance = 25n;
 
+  const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials02 = hexlify(randomBytes(32));
+
+  const SECONDS_PER_SLOT = 12n;
+  const GENESIS_TIME = 1606824023;
+  const WITHDRAWAL_CREDENTIALS_TYPE_01 = 1n;
+
   let originalState: string;
 
   before(async () => {
     [deployer, admin, user, lido] = await ethers.getSigners();
 
     depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const allocLib = await ethers.deployContract("MinFirstAllocationStrategy", deployer);
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter", {
+    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
+    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
+    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
+    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
       libraries: {
-        ["contracts/common/lib/MinFirstAllocationStrategy.sol:MinFirstAllocationStrategy"]: await allocLib.getAddress(),
+        ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
+        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
+        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
       },
     });
 
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract);
+    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
 
     [stakingRouter] = await proxify({ impl, admin });
 
     // initialize staking router
-    await stakingRouter.initialize(
-      admin,
-      lido,
-      hexlify(randomBytes(32)), // mock withdrawal credentials
-    );
+    await stakingRouter.initialize(admin, lido, withdrawalCredentials, withdrawalCredentials02);
 
     // grant roles
 
@@ -81,16 +88,17 @@ describe("StakingRouter.sol:module-sync", () => {
     lastDepositAt = timestamp;
     lastDepositBlock = number;
 
-    await stakingRouter.addStakingModule(
-      name,
-      stakingModuleAddress,
+    const stakingModuleConfig = {
       stakeShareLimit,
       priorityExitShareThreshold,
       stakingModuleFee,
       treasuryFee,
       maxDepositsPerBlock,
       minDepositBlockDistance,
-    );
+      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+    };
+
+    await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);
 
     moduleId = await stakingRouter.getStakingModulesCount();
   });
@@ -108,6 +116,7 @@ describe("StakingRouter.sol:module-sync", () => {
       bigint,
       number,
       string,
+      bigint,
       bigint,
       bigint,
       bigint,
@@ -156,6 +165,7 @@ describe("StakingRouter.sol:module-sync", () => {
         priorityExitShareThreshold,
         maxDepositsPerBlock,
         minDepositBlockDistance,
+        WITHDRAWAL_CREDENTIALS_TYPE_01,
       ];
 
       // mocking module state
@@ -300,9 +310,9 @@ describe("StakingRouter.sol:module-sync", () => {
 
   context("setWithdrawalCredentials", () => {
     it("Reverts if the caller does not have the role", async () => {
-      await expect(
-        stakingRouter.connect(user).setWithdrawalCredentials(hexlify(randomBytes(32))),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE());
+      await expect(stakingRouter.connect(user).setWithdrawalCredentials(hexlify(randomBytes(32))))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE());
     });
 
     it("Set new withdrawal credentials and informs modules", async () => {
@@ -342,6 +352,50 @@ describe("StakingRouter.sol:module-sync", () => {
     });
   });
 
+  context("setWithdrawalCredentials02", () => {
+    it("Reverts if the caller does not have the role", async () => {
+      await expect(stakingRouter.connect(user).setWithdrawalCredentials02(hexlify(randomBytes(32))))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE());
+    });
+
+    it("Set new withdrawal credentials and informs modules", async () => {
+      const newWithdrawalCredentials = hexlify(randomBytes(32));
+
+      await expect(stakingRouter.setWithdrawalCredentials02(newWithdrawalCredentials))
+        .to.emit(stakingRouter, "WithdrawalCredentials02Set")
+        .withArgs(newWithdrawalCredentials, admin.address)
+        .and.to.emit(stakingModule, "Mock__WithdrawalCredentialsChanged");
+    });
+
+    it("Emits an event if the module hook fails with a revert data", async () => {
+      const shouldRevert = true;
+      await stakingModule.mock__onWithdrawalCredentialsChanged(shouldRevert, false);
+
+      // "revert reason" abi-encoded
+      const revertReasonEncoded = [
+        "0x08c379a0", // string type
+        "0000000000000000000000000000000000000000000000000000000000000020",
+        "000000000000000000000000000000000000000000000000000000000000000d",
+        "72657665727420726561736f6e00000000000000000000000000000000000000",
+      ].join("");
+
+      await expect(stakingRouter.setWithdrawalCredentials02(hexlify(randomBytes(32))))
+        .to.emit(stakingRouter, "WithdrawalsCredentialsChangeFailed")
+        .withArgs(moduleId, revertReasonEncoded);
+    });
+
+    it("Reverts if the module hook fails without reason, e.g. ran out of gas", async () => {
+      const shouldRunOutOfGas = true;
+      await stakingModule.mock__onWithdrawalCredentialsChanged(false, shouldRunOutOfGas);
+
+      await expect(stakingRouter.setWithdrawalCredentials02(hexlify(randomBytes(32)))).to.be.revertedWithCustomError(
+        stakingRouter,
+        "UnrecoverableModuleError",
+      );
+    });
+  });
+
   context("updateTargetValidatorsLimits", () => {
     const NODE_OPERATOR_ID = 0n;
     const TARGET_LIMIT_MODE = 1; // 1 - soft, i.e. on WQ request; 2 - boosted
@@ -352,7 +406,9 @@ describe("StakingRouter.sol:module-sync", () => {
         stakingRouter
           .connect(user)
           .updateTargetValidatorsLimits(moduleId, NODE_OPERATOR_ID, TARGET_LIMIT_MODE, TARGET_LIMIT),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.STAKING_MODULE_MANAGE_ROLE());
     });
 
     it("Redirects the call to the staking module", async () => {
@@ -366,9 +422,9 @@ describe("StakingRouter.sol:module-sync", () => {
 
   context("reportRewardsMinted", () => {
     it("Reverts if the caller does not have the role", async () => {
-      await expect(
-        stakingRouter.connect(user).reportRewardsMinted([moduleId], [0n]),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.REPORT_REWARDS_MINTED_ROLE());
+      await expect(stakingRouter.connect(user).reportRewardsMinted([moduleId], [0n]))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.REPORT_REWARDS_MINTED_ROLE());
     });
 
     it("Reverts if the arrays have different lengths", async () => {
@@ -427,9 +483,9 @@ describe("StakingRouter.sol:module-sync", () => {
 
   context("updateExitedValidatorsCountByStakingModule", () => {
     it("Reverts if the caller does not have the role", async () => {
-      await expect(
-        stakingRouter.connect(user).updateExitedValidatorsCountByStakingModule([moduleId], [0n]),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE());
+      await expect(stakingRouter.connect(user).updateExitedValidatorsCountByStakingModule([moduleId], [0n]))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE());
     });
 
     it("Reverts if the array lengths are different", async () => {
@@ -531,7 +587,9 @@ describe("StakingRouter.sol:module-sync", () => {
         stakingRouter
           .connect(user)
           .reportStakingModuleExitedValidatorsCountByNodeOperator(moduleId, NODE_OPERATOR_IDS, VALIDATORS_COUNTS),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE());
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE());
     });
 
     it("Reverts if the node operators ids are packed incorrectly", async () => {
@@ -662,7 +720,9 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Reverts if the caller does not have the role", async () => {
       await expect(
         stakingRouter.connect(user).unsafeSetExitedValidatorsCount(moduleId, nodeOperatorId, true, correction),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.UNSAFE_SET_EXITED_VALIDATORS_ROLE());
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.UNSAFE_SET_EXITED_VALIDATORS_ROLE());
     });
 
     it("Reverts if the number of exited validators in the module does not match what is stored on the contract", async () => {
@@ -731,9 +791,9 @@ describe("StakingRouter.sol:module-sync", () => {
 
   context("onValidatorsCountsByNodeOperatorReportingFinished", () => {
     it("Reverts if the caller does not have the role", async () => {
-      await expect(
-        stakingRouter.connect(user).onValidatorsCountsByNodeOperatorReportingFinished(),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE());
+      await expect(stakingRouter.connect(user).onValidatorsCountsByNodeOperatorReportingFinished())
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.REPORT_EXITED_VALIDATORS_ROLE());
     });
 
     it("Calls the hook on the staking module", async () => {
@@ -789,7 +849,9 @@ describe("StakingRouter.sol:module-sync", () => {
         stakingRouter
           .connect(user)
           .decreaseStakingModuleVettedKeysCountByNodeOperator(moduleId, NODE_OPERATOR_IDS, VETTED_KEYS_COUNTS),
-      ).to.be.revertedWithOZAccessControlError(user.address, await stakingRouter.STAKING_MODULE_UNVETTING_ROLE());
+      )
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.STAKING_MODULE_UNVETTING_ROLE());
     });
 
     it("Reverts if the node operators ids are packed incorrectly", async () => {
@@ -873,7 +935,7 @@ describe("StakingRouter.sol:module-sync", () => {
     });
 
     it("Reverts if the caller is not Lido", async () => {
-      await expect(stakingRouter.connect(user).deposit(100n, moduleId, "0x")).to.be.revertedWithCustomError(
+      await expect(stakingRouter.connect(user).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
         "AppAuthLidoFailed",
       );
@@ -882,7 +944,7 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Reverts if withdrawal credentials are not set", async () => {
       await stakingRouter.connect(admin).setWithdrawalCredentials(bigintToHex(0n, true, 32));
 
-      await expect(stakingRouter.deposit(100n, moduleId, "0x")).to.be.revertedWithCustomError(
+      await expect(stakingRouter.deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
         "EmptyWithdrawalsCredentials",
       );
@@ -891,7 +953,7 @@ describe("StakingRouter.sol:module-sync", () => {
     it("Reverts if the staking module is not active", async () => {
       await stakingRouter.connect(admin).setStakingModuleStatus(moduleId, Status.DepositsPaused);
 
-      await expect(stakingRouter.deposit(100n, moduleId, "0x")).to.be.revertedWithCustomError(
+      await expect(stakingRouter.deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
         "StakingModuleNotActive",
       );
@@ -904,25 +966,27 @@ describe("StakingRouter.sol:module-sync", () => {
       const etherToSend = correctAmount + 1n;
 
       await expect(
-        stakingRouter.deposit(deposits, moduleId, "0x", {
+        stakingRouter.deposit(moduleId, "0x", {
           value: etherToSend,
         }),
-      )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidDepositsValue")
-        .withArgs(etherToSend, deposits);
+      ).to.be.revertedWithCustomError(stakingRouter, "DepositValueNotMultipleOfInitialDeposit");
     });
 
     it("Does not submit 0 deposits", async () => {
-      await expect(stakingRouter.deposit(0n, moduleId, "0x")).not.to.emit(depositContract, "Deposited__MockEvent");
+      await expect(
+        stakingRouter.deposit(moduleId, "0x", {
+          value: 0,
+        }),
+      ).not.to.emit(depositContract, "Deposited__MockEvent");
     });
 
-    it("Reverts if ether does correspond to the number of deposits", async () => {
+    it("Doesnt Reverts if ether does correspond to the number of deposits", async () => {
       const deposits = 2n;
       const depositValue = ether("32.0");
       const correctAmount = deposits * depositValue;
 
       await expect(
-        stakingRouter.deposit(deposits, moduleId, "0x", {
+        stakingRouter.deposit(moduleId, "0x", {
           value: correctAmount,
         }),
       ).to.emit(depositContract, "Deposited__MockEvent");

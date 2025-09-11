@@ -5,6 +5,9 @@
 pragma solidity 0.8.25;
 
 import {IAccessControlEnumerable} from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
+
+import {IAccessControlEnumerable as IAccessControlEnumerableV5 } from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
+
 import {UpgradeableBeacon} from "@openzeppelin/contracts-v5.2/proxy/beacon/UpgradeableBeacon.sol";
 
 import {IBurner as IBurnerWithoutAccessControl} from "contracts/common/interfaces/IBurner.sol";
@@ -24,7 +27,7 @@ interface IBaseOracle is IAccessControlEnumerable, IVersioned {
     function getConsensusContract() external view returns (address);
 }
 
-interface IStakingRouter is IAccessControlEnumerable {
+interface IStakingRouter is IAccessControlEnumerableV5 {
     function REPORT_REWARDS_MINTED_ROLE() external view returns (bytes32);
 }
 

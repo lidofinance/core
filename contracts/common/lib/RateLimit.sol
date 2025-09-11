@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
+/* solhint-disable one-contract-per-file */
+
 /* See contracts/COMPILERS.md */
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity >=0.8.9 <0.9.0;
@@ -12,7 +14,6 @@ struct LimitData {
     uint32 frameDurationInSec; // Seconds that should pass to restore part of the limit
     uint32 itemsPerFrame; // Restored items per frame
 }
-
 library RateLimitStorage {
     struct DataStorage {
         LimitData _limitData;
@@ -32,7 +33,6 @@ library RateLimitStorage {
         }
     }
 }
-
 // A replenishing quota per time frame
 library RateLimit {
     /// @notice Error when new value for remaining limit exceeds maximum limit.

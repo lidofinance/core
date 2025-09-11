@@ -73,6 +73,7 @@ export const setModuleStakeShareLimit = async (ctx: ProtocolContext, moduleId: b
       module.treasuryFee,
       module.maxDepositsPerBlock,
       module.minDepositBlockDistance,
+      module.withdrawalCredentialsType,
     );
 };
 

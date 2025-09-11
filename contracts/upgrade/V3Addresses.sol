@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {IAccessControlEnumerable} from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
+import {IAccessControlEnumerable as IAccessControlEnumerableV5 } from "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
+
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
-interface IStakingRouter is IAccessControlEnumerable {
+interface IStakingRouter is IAccessControlEnumerableV5  {
     struct StakingModule {
         uint24 id;
         address stakingModuleAddress;
@@ -19,6 +20,7 @@ interface IStakingRouter is IAccessControlEnumerable {
         uint16 priorityExitShareThreshold;
         uint64 maxDepositsPerBlock;
         uint64 minDepositBlockDistance;
+        uint8 withdrawalCredentialsType;
     }
 
     function getStakingModules() external view returns (StakingModule[] memory res);

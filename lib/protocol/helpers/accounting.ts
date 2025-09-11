@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { AccountingOracle } from "typechain-types";
-import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting";
+import { ReportValuesStruct } from "typechain-types/contracts/0.8.9/Accounting.sol/Accounting";
 
 import {
   advanceChainTime,
