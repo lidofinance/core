@@ -70,7 +70,7 @@ describe("OperatorGrid.sol", () => {
       timestamp: 2122n,
     },
     liabilityShares: 555n,
-    locked: 1000n,
+    maxLiabilityShares: 1000n,
     inOutDelta: [
       {
         value: 1000n,

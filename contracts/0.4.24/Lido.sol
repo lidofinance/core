@@ -705,9 +705,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         require(_amountOfShares <= _getMaxMintableExternalShares(), "EXTERNAL_BALANCE_LIMIT_EXCEEDED");
 
-        _setExternalShares(_getExternalShares() + _amountOfShares);
+        _decreaseStakingLimit(getPooledEthByShares(_amountOfShares));
 
+        _setExternalShares(_getExternalShares() + _amountOfShares);
         _mintShares(_recipient, _amountOfShares);
+
         _emitTransferAfterMintingShares(_recipient, _amountOfShares);
 
         emit ExternalSharesMinted(_recipient, _amountOfShares);
@@ -727,10 +729,11 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
         if (externalShares < _amountOfShares) revert("EXT_SHARES_TOO_SMALL");
         _setExternalShares(externalShares - _amountOfShares);
-
         _burnShares(msg.sender, _amountOfShares);
 
+        // Increase staking limit
         uint256 stethAmount = getPooledEthByShares(_amountOfShares);
+        _increaseStakingLimit(stethAmount);
 
         // Historically, Lido contract does not emit Transfer to zero address events
         // for burning but emits SharesBurnt instead, so it's kept here for compatibility
@@ -741,23 +744,27 @@ contract Lido is Versioned, StETHPermit, AragonApp {
 
     /**
      * @notice Transfer ether to the buffer decreasing the number of external shares in the same time
+     * @param _amountOfShares Amount of external shares to burn
      * @dev it's an equivalent of using `submit` and then `burnExternalShares`
      * but without any limits or pauses
      *
      * - msg.value is transferred to the buffer
      */
-    function rebalanceExternalEtherToInternal() external payable {
+    function rebalanceExternalEtherToInternal(uint256 _amountOfShares) external payable {
         require(msg.value != 0, "ZERO_VALUE");
         _auth(_vaultHub());
         _whenNotStopped();
 
-        uint256 amountOfShares = getSharesByPooledEth(msg.value);
+        if (msg.value != getPooledEthBySharesRoundUp(_amountOfShares)) {
+            revert("VALUE_SHARES_MISMATCH");
+        }
+
         uint256 externalShares = _getExternalShares();
 
-        if (externalShares < amountOfShares) revert("EXT_SHARES_TOO_SMALL");
+        if (externalShares < _amountOfShares) revert("EXT_SHARES_TOO_SMALL");
 
         // here the external balance is decreased (totalShares remains the same)
-        _setExternalShares(externalShares - amountOfShares);
+        _setExternalShares(externalShares - _amountOfShares);
 
         // here the buffer is increased
         _setBufferedEther(_getBufferedEther() + msg.value);
@@ -766,7 +773,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         // but it's not worth then using submit for it,
         // so invariants are the same
         emit ExternalEtherTransferredToBuffer(msg.value);
-        emit ExternalSharesBurnt(amountOfShares);
+        emit ExternalSharesBurnt(_amountOfShares);
     }
 
     /**
@@ -1002,20 +1009,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     function _submit(address _referral) internal returns (uint256) {
         require(msg.value != 0, "ZERO_DEPOSIT");
 
-        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
-        // There is an invariant that protocol pause also implies staking pause.
-        // Thus, no need to check protocol pause explicitly.
-        require(!stakeLimitData.isStakingPaused(), "STAKING_PAUSED");
-
-        if (stakeLimitData.isStakingLimitSet()) {
-            uint256 currentStakeLimit = stakeLimitData.calculateCurrentStakeLimit();
-
-            require(msg.value <= currentStakeLimit, "STAKE_LIMIT");
-
-            STAKING_STATE_POSITION.setStorageStakeLimitStruct(
-                stakeLimitData.updatePrevStakeLimit(currentStakeLimit - msg.value)
-            );
-        }
+        _decreaseStakingLimit(msg.value);
 
         uint256 sharesAmount = getSharesByPooledEth(msg.value);
 
@@ -1125,6 +1119,34 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         }
 
         return _stakeLimitData.calculateCurrentStakeLimit();
+    }
+
+    function _decreaseStakingLimit(uint256 _amount) internal {
+        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
+        // There is an invariant that protocol pause also implies staking pause.
+        // Thus, no need to check protocol pause explicitly.
+        require(!stakeLimitData.isStakingPaused(), "STAKING_PAUSED");
+
+        if (stakeLimitData.isStakingLimitSet()) {
+            uint256 currentStakeLimit = stakeLimitData.calculateCurrentStakeLimit();
+            require(_amount <= currentStakeLimit, "STAKE_LIMIT");
+
+            STAKING_STATE_POSITION.setStorageStakeLimitStruct(
+                stakeLimitData.updatePrevStakeLimit(currentStakeLimit - _amount)
+            );
+        }
+    }
+
+    function _increaseStakingLimit(uint256 _amount) internal {
+        StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
+        if (stakeLimitData.isStakingLimitSet()) {
+            uint256 newStakeLimit = stakeLimitData.calculateCurrentStakeLimit() + _amount;
+            uint256 maxStakeLimit = stakeLimitData.maxStakeLimit;
+
+            STAKING_STATE_POSITION.setStorageStakeLimitStruct(
+                stakeLimitData.updatePrevStakeLimit(newStakeLimit > maxStakeLimit ? maxStakeLimit : newStakeLimit)
+            );
+        }
     }
 
     /// @dev Bytecode size-efficient analog of the `auth(_role)` modifier

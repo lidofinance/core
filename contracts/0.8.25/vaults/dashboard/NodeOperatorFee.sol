@@ -185,8 +185,7 @@ contract NodeOperatorFee is Permissions {
         if (rewardsAdjustment.amount != 0) _setRewardsAdjustment(0);
         feePeriodStartReport = latestReport();
 
-        VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
-        emit NodeOperatorFeeDisbursed(msg.sender, fee);
+        _disburseNodeOperatorFee(fee);
     }
 
     /**
@@ -221,10 +220,7 @@ contract NodeOperatorFee is Permissions {
 
         _setNodeOperatorFeeRate(_newNodeOperatorFeeRate);
 
-        if (fee > 0) {
-            VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
-            emit NodeOperatorFeeDisbursed(msg.sender, fee);
-        }
+        if (fee > 0) _disburseNodeOperatorFee(fee);
 
         return true;
     }
@@ -320,6 +316,11 @@ contract NodeOperatorFee is Permissions {
         rewardsAdjustment.latestTimestamp = uint64(block.timestamp);
 
         emit RewardsAdjustmentSet(_newAdjustment, oldAdjustment);
+    }
+
+    function _disburseNodeOperatorFee(uint256 _fee) internal {
+        VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, _fee);
+        emit NodeOperatorFeeDisbursed(msg.sender, _fee);
     }
 
     function _toSignedClamped(uint128 _adjustment) internal pure returns (int128) {

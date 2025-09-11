@@ -102,6 +102,7 @@ describe("VaultHub.sol:hub", () => {
     inOutDelta,
     cumulativeLidoFees,
     liabilityShares,
+    maxLiabilityShares,
     slashingReserve,
   }: {
     vault: StakingVault__MockForVaultHub;
@@ -109,6 +110,7 @@ describe("VaultHub.sol:hub", () => {
     totalValue?: bigint;
     inOutDelta?: bigint;
     liabilityShares?: bigint;
+    maxLiabilityShares?: bigint;
     cumulativeLidoFees?: bigint;
     slashingReserve?: bigint;
   }) {
@@ -120,6 +122,7 @@ describe("VaultHub.sol:hub", () => {
     totalValue = totalValue ?? (await vaultHub.totalValue(vault));
     inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
     liabilityShares = liabilityShares ?? record.liabilityShares;
+    maxLiabilityShares = maxLiabilityShares ?? record.maxLiabilityShares;
     cumulativeLidoFees = cumulativeLidoFees ?? record.cumulativeLidoFees;
     slashingReserve = slashingReserve ?? 0n;
 
@@ -131,6 +134,7 @@ describe("VaultHub.sol:hub", () => {
       inOutDelta,
       cumulativeLidoFees,
       liabilityShares,
+      maxLiabilityShares,
       slashingReserve,
     );
   }
@@ -143,8 +147,8 @@ describe("VaultHub.sol:hub", () => {
         inOutDelta: formatEther(record.report.inOutDelta),
         timestamp: record.report.timestamp,
       },
-      locked: formatEther(record.locked),
-      shares: formatEther(record.liabilityShares),
+      maxLiabilityShares: formatEther(record.maxLiabilityShares),
+      liabilityShares: formatEther(record.liabilityShares),
       inOutDelta: {
         value: formatEther(record.inOutDelta[0].value),
         valueOnRefSlot: formatEther(record.inOutDelta[0].valueOnRefSlot),
@@ -302,7 +306,7 @@ describe("VaultHub.sol:hub", () => {
       const record = await vaultHub.vaultRecord(vault);
 
       expect(record.report).to.deep.equal([0n, 0n, 0n]);
-      expect(record.locked).to.equal(0n);
+      expect(await vaultHub.locked(vault)).to.equal(0n);
       expect(record.liabilityShares).to.equal(0n);
       expect(record.inOutDelta).to.deep.equal([
         [0n, 0n, 0n],
@@ -316,7 +320,7 @@ describe("VaultHub.sol:hub", () => {
 
       const timestamp = await getCurrentBlockTimestamp();
       expect(record.report).to.deep.equal([ether("1"), ether("1"), timestamp]);
-      expect(record.locked).to.equal(ether("1"));
+      expect(await vaultHub.locked(vault)).to.equal(ether("1"));
       expect(record.liabilityShares).to.equal(0n);
       expect(record.inOutDelta).to.deep.equal([
         [ether("1"), 0n, 0n],
@@ -517,7 +521,7 @@ describe("VaultHub.sol:hub", () => {
       // update locked
       await reportVault({ vault });
 
-      const lockedEth = (await vaultHub.vaultRecord(vault)).locked;
+      const lockedEth = await vaultHub.locked(vault);
 
       await reportVault({ vault, totalValue: lockedEth });
       expect(await vaultHub.isVaultHealthy(vault)).to.equal(true);
@@ -1002,7 +1006,7 @@ describe("VaultHub.sol:hub", () => {
       await lazyOracle.mock__setIsVaultQuarantined(vault, true);
       expect(await lazyOracle.isVaultQuarantined(vault)).to.equal(true);
 
-      await expect(lazyOracle.mock__report(vaultHub, vault, await getCurrentBlockTimestamp(), 0n, 0n, 0n, 0n, 0n))
+      await expect(lazyOracle.mock__report(vaultHub, vault, await getCurrentBlockTimestamp(), 0n, 0n, 0n, 0n, 0n, 0n))
         .to.emit(vaultHub, "VaultDisconnectCompleted")
         .withArgs(vault);
 
@@ -1077,7 +1081,7 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if called by non LazyOracle", async () => {
       const { vault } = await createAndConnectVault(vaultFactory);
       await expect(
-        vaultHub.connect(stranger).applyVaultReport(vault, 1n, 1n, 1n, 1n, 1n, 1n),
+        vaultHub.connect(stranger).applyVaultReport(vault, 1n, 1n, 1n, 1n, 1n, 1n, 1n),
       ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
     });
 

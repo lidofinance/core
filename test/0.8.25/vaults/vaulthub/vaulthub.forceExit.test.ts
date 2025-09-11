@@ -148,6 +148,7 @@ describe("VaultHub.sol:forceExit", () => {
     inOutDelta,
     cumulativeLidoFees,
     liabilityShares,
+    maxLiabilityShares,
     slashingReserve,
   }: {
     targetVault?: StakingVault__MockForVaultHub;
@@ -156,6 +157,7 @@ describe("VaultHub.sol:forceExit", () => {
     inOutDelta?: bigint;
     liabilityShares?: bigint;
     cumulativeLidoFees?: bigint;
+    maxLiabilityShares?: bigint;
     slashingReserve?: bigint;
   }) {
     targetVault = targetVault ?? vault;
@@ -168,6 +170,7 @@ describe("VaultHub.sol:forceExit", () => {
     inOutDelta = inOutDelta ?? record.inOutDelta[activeIndex].value;
     liabilityShares = liabilityShares ?? record.liabilityShares;
     cumulativeLidoFees = cumulativeLidoFees ?? record.cumulativeLidoFees;
+    maxLiabilityShares = maxLiabilityShares ?? record.maxLiabilityShares;
     slashingReserve = slashingReserve ?? 0n;
 
     await lazyOracle.mock__report(
@@ -178,6 +181,7 @@ describe("VaultHub.sol:forceExit", () => {
       inOutDelta,
       cumulativeLidoFees,
       liabilityShares,
+      maxLiabilityShares,
       slashingReserve,
     );
   }
