@@ -10,16 +10,16 @@ import {NodeOperatorFee} from "contracts/0.8.25/vaults/dashboard/NodeOperatorFee
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
  /**
- * @title ValidatorConsolidationRequests
- * @author kovalgek
- * @notice Contract for consolidating validators into staking vaults (EIP-7251)
- *         and adjusting rewards. Built to work with Vault CLI tooling and to
- *         support batched execution (EIP-5792).
- *
- *         This contract is strictly for an account that: 
- *           - has its address as withdrawal credentials for pubkeys to consolidate from
- *           - has the `NODE_OPERATOR_REWARDS_ADJUST_ROLE` role assigned in Dashboard.
- */
+  * @title ValidatorConsolidationRequests
+  * @author kovalgek
+  * @notice Contract for consolidating validators into staking vaults (EIP-7251)
+  *         and adjusting rewards. Built to work with Vault CLI tooling and to
+  *         support batched execution (EIP-5792).
+  *
+  *         This contract is strictly for an account that: 
+  *           - has its address as withdrawal credentials for pubkeys to consolidate from
+  *           - has the `NODE_OPERATOR_REWARDS_ADJUST_ROLE` role assigned in Dashboard.
+  */
 contract ValidatorConsolidationRequests {
     /// @notice EIP-7251 consolidation requests contract address.
     address public constant CONSOLIDATION_REQUEST_PREDEPLOY_ADDRESS = 0x0000BBdDc7CE488642fb579F8B00f3a590007251;
@@ -56,11 +56,12 @@ contract ValidatorConsolidationRequests {
      *   calldata using this method, and then submits these call data in batched transactions
      *   via EIP-5792.
      *
-     * @param _sourcePubkeys An array of tightly packed arrays of 48-byte public keys corresponding to validators requesting consolidation.
-     *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
+     * @param _sourcePubkeys An array of tightly packed arrays of 48-byte public keys corresponding to validators
+     *        requesting consolidation.
+     *        | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
      *
      * @param _targetPubkeys An array of 48-byte public keys corresponding to validators to consolidate to.
-     *      | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
+     *        | ----- public key (48 bytes) ----- || ----- public key (48 bytes) ----- | ...
      *
      * @param _dashboard The address of the dashboard contract.
      * @param _allSourceValidatorBalancesWei The total balance (in wei) of all source validators.
@@ -87,38 +88,55 @@ contract ValidatorConsolidationRequests {
         bytes[] calldata _targetPubkeys,
         address _dashboard,
         uint256 _allSourceValidatorBalancesWei
-    ) external view returns (bytes memory adjustmentIncreaseEncodedCall, bytes[] memory consolidationRequestEncodedCalls) {
+    ) external view returns (
+        bytes memory adjustmentIncreaseEncodedCall,
+        bytes[] memory consolidationRequestEncodedCalls
+    ) {
         if (_sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
         if (_targetPubkeys.length == 0) revert ZeroArgument("targetPubkeys");
         if (_dashboard == address(0)) revert ZeroArgument("dashboard");
-        if (_sourcePubkeys.length != _targetPubkeys.length) revert MismatchingSourceAndTargetPubkeysCount(_sourcePubkeys.length, _targetPubkeys.length);
-        
+        if (_sourcePubkeys.length != _targetPubkeys.length) {
+            revert MismatchingSourceAndTargetPubkeysCount(_sourcePubkeys.length, _targetPubkeys.length);
+        }
+
         VaultHub vaultHub = VaultHub(payable(LIDO_LOCATOR.vaultHub()));
         address stakingVault = address(Dashboard(payable(_dashboard)).stakingVault());
-        if(!vaultHub.isVaultConnected(stakingVault) || vaultHub.isPendingDisconnect(stakingVault)) {
+        if (!vaultHub.isVaultConnected(stakingVault) || vaultHub.isPendingDisconnect(stakingVault)) {
             revert VaultNotConnected();
         }
 
         VaultHub.VaultConnection memory vaultConnection = vaultHub.vaultConnection(stakingVault);
-        if(_dashboard != vaultConnection.owner) {
+        if (_dashboard != vaultConnection.owner) {
             revert DashboardNotOwnerOfStakingVault();
         }
 
-        uint256 consolidationRequestsCount = _validatePubkeysAndCountConsolidationRequests(_sourcePubkeys, _targetPubkeys);
+        uint256 consolidationRequestsCount = _validatePubkeysAndCountConsolidationRequests(
+            _sourcePubkeys,
+            _targetPubkeys
+        );
 
-        if(_allSourceValidatorBalancesWei != 0 && _allSourceValidatorBalancesWei < consolidationRequestsCount * MINIMUM_VALIDATOR_BALANCE) {
+        if (_allSourceValidatorBalancesWei != 0 && 
+            _allSourceValidatorBalancesWei < consolidationRequestsCount * MINIMUM_VALIDATOR_BALANCE) {
             revert InvalidAllSourceValidatorBalancesWei();
         }
 
-        consolidationRequestEncodedCalls = _consolidationCalldatas(_sourcePubkeys, _targetPubkeys, consolidationRequestsCount);
+        consolidationRequestEncodedCalls = _consolidationCalldatas(
+            _sourcePubkeys,
+            _targetPubkeys,
+            consolidationRequestsCount
+        );
 
-        if(_allSourceValidatorBalancesWei > 0) {
-            adjustmentIncreaseEncodedCall = abi.encodeWithSelector(NodeOperatorFee.increaseRewardsAdjustment.selector, _allSourceValidatorBalancesWei);
+        if (_allSourceValidatorBalancesWei > 0) {
+            adjustmentIncreaseEncodedCall = abi.encodeWithSelector(
+                NodeOperatorFee.increaseRewardsAdjustment.selector,
+                _allSourceValidatorBalancesWei
+            );
         }
     }
 
     /**
-     * @dev Retrieves the current EIP-7251 consolidation fee. This fee is valid only for the current block and may change in subsequent blocks.
+     * @dev Retrieves the current EIP-7251 consolidation fee. This fee is valid only for the current block and may
+     *      change in subsequent blocks.
      * @return The minimum fee required per consolidation request.
      */
     function getConsolidationRequestFee() external view returns (uint256) {
