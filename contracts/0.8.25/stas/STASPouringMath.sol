@@ -3,15 +3,13 @@ pragma solidity ^0.8.25;
 
 import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";
 import {STASCore} from "./STASCore.sol";
-
-import "./STASTypes.sol" as T;
-import "./STASErrors.sol" as E;
+import {SortIndexedTarget} from "./STASTypes.sol";
 
 /**
  * @title Pouring Math for STAS
  * @author KRogLA
  * @notice Provides allocation logic functions for the Share Target Allocation Strategy (STAS)
- * @dev This library includes functions for calculating allocation based on 2 approaches of waterfilling algorithms
+ * @dev This library includes functions for calculating allocation based on 2 approaches of water-filling algorithms
  */
 library STASPouringMath {
     /// @param shares The shares of each  entity
@@ -27,7 +25,7 @@ library STASPouringMath {
         uint256 inflow
     ) internal pure returns (uint256[] memory imbalance, uint256[] memory fills, uint256 rest) {
         uint256 n = shares.length;
-        if (amounts.length != n || capacities.length != n) revert E.LengthMismatch();
+        if (amounts.length != n || capacities.length != n) revert STASCore.LengthMismatch();
 
         imbalance = new uint256[](n);
         fills = new uint256[](n);
@@ -60,7 +58,7 @@ library STASPouringMath {
         returns (uint256[] memory imbalance, uint256[] memory fills, uint256 rest)
     {
         uint256 n = shares.length;
-        if (amounts.length != n) revert E.LengthMismatch();
+        if (amounts.length != n) revert STASCore.LengthMismatch();
 
         imbalance = new uint256[](n);
         fills = new uint256[](n);
@@ -102,7 +100,7 @@ library STASPouringMath {
     ) internal pure {
         uint256 n = shares.length;
         if (amounts.length != n || capacities.length != n || fills.length != n || imbalance.length != n) {
-            revert E.LengthMismatch();
+            revert STASCore.LengthMismatch();
         }
 
         unchecked {
@@ -139,7 +137,7 @@ library STASPouringMath {
     ) internal pure {
         uint256 n = shares.length;
         if (amounts.length != n || fills.length != n || imbalance.length != n) {
-            revert E.LengthMismatch();
+            revert STASCore.LengthMismatch();
         }
 
         unchecked {
@@ -164,7 +162,7 @@ library STASPouringMath {
         returns (uint256 rest)
     {
         uint256 n = targets.length;
-        if (fills.length != n) revert E.LengthMismatch();
+        if (fills.length != n) revert STASCore.LengthMismatch();
 
         // 0) Пустой массив
         if (n == 0) {
@@ -239,7 +237,7 @@ library STASPouringMath {
         returns (uint256 rest)
     {
         uint256 n = targets.length;
-        if (fills.length != n) revert E.LengthMismatch();
+        if (fills.length != n) revert STASCore.LengthMismatch();
 
         // 0) Empty array
         if (n == 0) {
@@ -256,11 +254,11 @@ library STASPouringMath {
             return (rest);
         }
 
-        // 1) create array ofT.SortIndexedTarget
-        T.SortIndexedTarget[] memory items = new T.SortIndexedTarget[](n);
+        // 1) create array ofSortIndexedTarget
+        SortIndexedTarget[] memory items = new SortIndexedTarget[](n);
         for (uint256 i; i < n; ++i) {
             uint256 t = targets[i];
-            items[i] = T.SortIndexedTarget({idx: i, target: t});
+            items[i] = SortIndexedTarget({idx: i, target: t});
         }
 
         // 2) Quick sort by target DESC (pivot = middle element)
@@ -332,8 +330,8 @@ library STASPouringMath {
     }
 
     // forge-lint: disable-start(unsafe-typecast)
-    /// @dev In-place quicksort onT.SortIndexedTarget {[] by target DESC, tiebreaker idx ASC.
-    function _quickSort(T.SortIndexedTarget[] memory arr, int256 left, int256 right) internal pure {
+    /// @dev In-place quicksort onSortIndexedTarget {[] by target DESC, tiebreaker idx ASC.
+    function _quickSort(SortIndexedTarget[] memory arr, int256 left, int256 right) internal pure {
         if (left >= right) return;
         int256 i = left;
         int256 j = right;
@@ -354,7 +352,7 @@ library STASPouringMath {
             }
             if (i <= j) {
                 // swap arr[i] <-> arr[j]
-                //T.SortIndexedTarget {memory tmp = arr[uint256(i)];
+                //SortIndexedTarget {memory tmp = arr[uint256(i)];
                 // arr[uint256(i)] = arr[uint256(j)];
                 // arr[uint256(j)] = tmp;
                 (arr[uint256(i)], arr[uint256(j)]) = (arr[uint256(j)], arr[uint256(i)]);
