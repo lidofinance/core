@@ -49,12 +49,6 @@ describe("VaultHub.sol:redemptions", () => {
       ).to.be.revertedWithCustomError(vaultHub, "AccessControlUnauthorizedAccount");
     });
 
-    it("reverts if report is stale", async () => {
-      await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 1000n))
-        .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")
-        .withArgs(connectedVault);
-    });
-
     it("reverts if vault is not connected to the hub", async () => {
       await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(disconnectedVault, 1000n))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")

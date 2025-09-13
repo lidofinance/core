@@ -386,12 +386,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _liabilitySharesTarget maximum amount of liabilityShares that will be preserved, the rest will be
     ///         marked as redemptionShares. If value is greater than liabilityShares, redemptionShares are set to 0
     /// @dev NB: Mechanism to be triggered when Lido Core TVL <= stVaults TVL
-    /// @dev requires the fresh report
     function setLiabilitySharesTarget(address _vault, uint256 _liabilitySharesTarget) external onlyRole(REDEMPTION_MASTER_ROLE) {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
-
-        _requireFreshReport(_vault, record);
 
         uint256 liabilityShares_ = record.liabilityShares;
         uint256 redemptionShares = liabilityShares_ > _liabilitySharesTarget ? liabilityShares_ - _liabilitySharesTarget : 0;
@@ -765,13 +762,11 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _amountOfShares amount of shares to burn
     /// @dev msg.sender should be vault's owner
     /// @dev this function is designed to be used by the smart contract, for EOA see `transferAndBurnShares`
-    /// @dev requires the fresh report
     function burnShares(address _vault, uint256 _amountOfShares) public whenResumed {
         _requireNotZero(_amountOfShares);
         _checkConnectionAndOwner(_vault);
 
         VaultRecord storage record = _vaultRecord(_vault);
-        _requireFreshReport(_vault, record);
 
         _decreaseLiability(_vault, record, _amountOfShares);
 
@@ -786,7 +781,6 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _amountOfShares amount of shares to transfer and burn
     /// @dev msg.sender should be vault's owner
-    /// @dev requires the fresh report
     function transferAndBurnShares(address _vault, uint256 _amountOfShares) external {
         LIDO.transferSharesFrom(msg.sender, address(this), _amountOfShares);
 

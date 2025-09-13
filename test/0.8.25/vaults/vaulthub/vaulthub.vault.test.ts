@@ -456,15 +456,6 @@ describe("VaultHub.sol:owner-functions", () => {
       );
     });
 
-    it("reverts when report is stale", async () => {
-      await advanceChainTime(days(3n));
-
-      await expect(vaultHub.connect(vaultOwner).burnShares(vaultAddress, ether("1"))).to.be.revertedWithCustomError(
-        vaultHub,
-        "VaultReportStale",
-      );
-    });
-
     it("reverts when burning more shares than minted", async () => {
       const liabilityShares = await vaultHub.liabilityShares(vaultAddress);
 
@@ -502,14 +493,6 @@ describe("VaultHub.sol:owner-functions", () => {
 
       // Approve VaultHub to transfer shares
       await lido.connect(vaultOwner).approve(vaultHub, burnAmount);
-    });
-
-    it("reverts when report is stale", async () => {
-      await advanceChainTime(days(3n));
-
-      await expect(
-        vaultHub.connect(vaultOwner).transferAndBurnShares(vaultAddress, burnAmount),
-      ).to.be.revertedWithCustomError(vaultHub, "VaultReportStale");
     });
 
     it("transfers and burns shares successfully", async () => {
