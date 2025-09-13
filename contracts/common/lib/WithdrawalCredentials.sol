@@ -7,7 +7,7 @@ pragma solidity ^0.8.25;
  * @notice Provides functionality for managing withdrawal credentials
  * @dev WC bytes layout: [0] = prefix (0x00/0x01/0x02), [1..11] = zero, [12..31] = execution address (20b)
  */
-library WithdrawalCreds {
+library WithdrawalCredentials {
     /// @notice Get the current prefix (0x00/0x01/0x02)
     function getType(bytes32 wc) internal pure returns (uint8) {
         return uint8(uint256(wc) >> 248);
