@@ -3,17 +3,17 @@
 
 pragma solidity 0.8.25;
 
-import {StakingRouter} from "contracts/0.8.25/StakingRouter.sol";
+import {StakingModule} from "contracts/0.8.25/sr/SRTypes.sol";
 
 contract StakingRouter__MockForSanityChecker {
-    mapping(uint256 => StakingRouter.StakingModule) private modules;
+    mapping(uint256 => StakingModule) private modules;
 
     uint256[] private moduleIds;
 
     constructor() {}
 
     function mock__addStakingModuleExitedValidators(uint24 moduleId, uint256 exitedValidators) external {
-        StakingRouter.StakingModule memory module = StakingRouter.StakingModule(
+        StakingModule memory module = StakingModule(
             moduleId,
             address(0),
             0,
@@ -24,6 +24,7 @@ contract StakingRouter__MockForSanityChecker {
             0,
             0,
             exitedValidators,
+            0,
             0,
             0,
             0,
@@ -49,7 +50,7 @@ contract StakingRouter__MockForSanityChecker {
         return moduleIds;
     }
 
-    function getStakingModule(uint256 stakingModuleId) public view returns (StakingRouter.StakingModule memory module) {
+    function getStakingModule(uint256 stakingModuleId) public view returns (StakingModule memory module) {
         return modules[stakingModuleId];
     }
 }

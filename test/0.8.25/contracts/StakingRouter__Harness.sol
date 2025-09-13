@@ -3,23 +3,15 @@
 
 pragma solidity 0.8.25;
 
-import {StakingRouter} from "contracts/0.8.25/StakingRouter.sol";
+import {StakingRouter} from "contracts/0.8.25/sr/StakingRouter.sol";
 import {DepositsTempStorage} from "contracts/common/lib/DepositsTempStorage.sol";
+import {SRLib} from "contracts/0.8.25/sr/SRLib.sol";
+import {StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
 
 contract StakingRouter__Harness is StakingRouter {
-    constructor(
-        address _depositContract,
-        uint256 _secondsPerSlot,
-        uint256 _genesisTime
-    ) StakingRouter(_depositContract, _secondsPerSlot, _genesisTime) {}
-
-    function getStakingModuleIndexById(uint256 _stakingModuleId) external view returns (uint256) {
-        return _getStakingModuleIndexById(_stakingModuleId);
-    }
-
-    function getStakingModuleByIndex(uint256 _stakingModuleIndex) external view returns (StakingModule memory) {
-        return _getStakingModuleByIndex(_stakingModuleIndex);
-    }
+    constructor(address _depositContract, uint256 _secondsPerSlot, uint256 _genesisTime)
+        StakingRouter(_depositContract, _secondsPerSlot, _genesisTime)
+    {}
 
     /// @notice FOR TEST: write operators & counts into the router's transient storage.
     function mock_storeTemp(uint256[] calldata operators, uint256[] calldata counts) external {
@@ -38,8 +30,7 @@ contract StakingRouter__Harness is StakingRouter {
     }
 
     function testing_setStakingModuleStatus(uint256 _stakingModuleId, StakingModuleStatus _status) external {
-        StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
-        _setStakingModuleStatus(stakingModule, _status);
+        SRLib._setModuleStatus(_stakingModuleId, _status);
     }
 
     function _getInitializableStorage_Mock() private pure returns (InitializableStorage storage $) {

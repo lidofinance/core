@@ -12,9 +12,11 @@ import {
   StakingRouter,
 } from "typechain-types";
 
-import { ether, proxify } from "lib";
+import { ether } from "lib";
 
 import { Snapshot } from "test/suite";
+
+import { deployStakingRouter } from "../../deploy/stakingRouter";
 
 describe("StakingRouter.sol:module-sync", () => {
   let deployer: HardhatEthersSigner;
@@ -41,29 +43,15 @@ describe("StakingRouter.sol:module-sync", () => {
   const withdrawalCredentials = hexlify(randomBytes(32));
   const withdrawalCredentials02 = hexlify(randomBytes(32));
 
-  const SECONDS_PER_SLOT = 12n;
-  const GENESIS_TIME = 1606824023;
-  const WITHDRAWAL_CREDENTIALS_TYPE_02 = 2;
+
+  const MODULE_TYPE_LEGACY = 0;
+  const MODULE_TYPE_NEW = 1;
+
 
   before(async () => {
     [deployer, admin] = await ethers.getSigners();
 
-    depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
-    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
-    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
-
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
-      libraries: {
-        ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
-        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
-        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
-      },
-    });
-
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
-
-    [stakingRouter] = await proxify({ impl, admin });
+     ({ stakingRouter, depositContract } = await deployStakingRouter({ deployer, admin }));
 
     depositCallerWrapper = await ethers.deployContract(
       "DepositCallerWrapper__MockForStakingRouter",
@@ -94,7 +82,7 @@ describe("StakingRouter.sol:module-sync", () => {
       treasuryFee,
       maxDepositsPerBlock,
       minDepositBlockDistance,
-      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_02,
+      moduleType: MODULE_TYPE_NEW,
     };
 
     await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);

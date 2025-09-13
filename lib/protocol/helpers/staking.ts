@@ -1,6 +1,6 @@
 import { ethers, ZeroAddress } from "ethers";
 
-import { BigIntMath, certainAddress, ether, impersonate, log } from "lib";
+import { BigIntMath, certainAddress, ether, impersonate, log, StakingModuleStatus } from "lib";
 import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { ZERO_HASH } from "test/deploy";
@@ -21,11 +21,6 @@ export const unpauseStaking = async (ctx: ProtocolContext) => {
   }
 };
 
-export enum StakingModuleStatus {
-  Active = 0,
-  DepositsPaused = 1,
-  Stopped = 2,
-}
 
 export const getStakingModuleStatuses = async (
   ctx: ProtocolContext,
@@ -72,8 +67,7 @@ export const setModuleStakeShareLimit = async (ctx: ProtocolContext, moduleId: b
       module.stakingModuleFee,
       module.treasuryFee,
       module.maxDepositsPerBlock,
-      module.minDepositBlockDistance,
-      module.withdrawalCredentialsType,
+      module.minDepositBlockDistance
     );
 };
 

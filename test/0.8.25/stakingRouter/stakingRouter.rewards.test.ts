@@ -6,10 +6,12 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { StakingModule__MockForStakingRouter, StakingRouter } from "typechain-types";
 
-import { certainAddress, ether, proxify } from "lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants";
+import { certainAddress, ether } from "lib";
+import { StakingModuleType, TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { Snapshot } from "test/suite";
+
+import { deployStakingRouter } from "../../deploy/stakingRouter";
 
 describe("StakingRouter.sol:rewards", () => {
   let deployer: HardhatEthersSigner;
@@ -32,27 +34,10 @@ describe("StakingRouter.sol:rewards", () => {
   const withdrawalCredentials = hexlify(randomBytes(32));
   const withdrawalCredentials02 = hexlify(randomBytes(32));
 
-  const SECONDS_PER_SLOT = 12n;
-  const GENESIS_TIME = 1606824023;
-  const WITHDRAWAL_CREDENTIALS_TYPE_01 = 1n;
-
   before(async () => {
     [deployer, admin] = await ethers.getSigners();
 
-    const depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
-    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
-    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
-      libraries: {
-        ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
-        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
-        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
-      },
-    });
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
-
-    [stakingRouter] = await proxify({ impl, admin });
+    ({ stakingRouter } = await deployStakingRouter({ deployer, admin }));
 
     // initialize staking router
     await stakingRouter.initialize(
@@ -480,7 +465,7 @@ describe("StakingRouter.sol:rewards", () => {
       treasuryFee,
       maxDepositsPerBlock,
       minDepositBlockDistance,
-      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+      moduleType: StakingModuleType.Legacy,
     };
 
     await stakingRouter

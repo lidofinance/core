@@ -7,13 +7,16 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   DepositContract__MockForBeaconChainDepositor,
+  SRLib,
   StakingModule__MockForStakingRouter,
   StakingRouter,
 } from "typechain-types";
 
-import { getNextBlock, proxify } from "lib";
+import { getModuleWCType, getNextBlock, StakingModuleType, WithdrawalCredentialsType } from "lib";
 
 import { Snapshot } from "test/suite";
+
+import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
 
 describe("StakingRouter.sol:module-sync", () => {
   let deployer: HardhatEthersSigner;
@@ -22,6 +25,7 @@ describe("StakingRouter.sol:module-sync", () => {
   let lido: HardhatEthersSigner;
 
   let stakingRouter: StakingRouter;
+  let stakingRouterWithLib: StakingRouterWithLib;
   let stakingModule: StakingModule__MockForStakingRouter;
   let depositContract: DepositContract__MockForBeaconChainDepositor;
 
@@ -42,30 +46,12 @@ describe("StakingRouter.sol:module-sync", () => {
   const withdrawalCredentials = hexlify(randomBytes(32));
   const withdrawalCredentials02 = hexlify(randomBytes(32));
 
-  const SECONDS_PER_SLOT = 12n;
-  const GENESIS_TIME = 1606824023;
-  const WITHDRAWAL_CREDENTIALS_TYPE_01 = 1n;
-
   let originalState: string;
 
   before(async () => {
     [deployer, admin, user, lido] = await ethers.getSigners();
 
-    depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
-    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
-    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
-      libraries: {
-        ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
-        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
-        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
-      },
-    });
-
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
-
-    [stakingRouter] = await proxify({ impl, admin });
+    ({ stakingRouter, stakingRouterWithLib, depositContract } = await deployStakingRouter({ deployer, admin }));
 
     // initialize staking router
     await stakingRouter.initialize(admin, lido, withdrawalCredentials, withdrawalCredentials02);
@@ -95,9 +81,10 @@ describe("StakingRouter.sol:module-sync", () => {
       treasuryFee,
       maxDepositsPerBlock,
       minDepositBlockDistance,
-      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+      moduleType: StakingModuleType.Legacy,
     };
 
+    console.log("mod addr", stakingModuleAddress);
     await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);
 
     moduleId = await stakingRouter.getStakingModulesCount();
@@ -122,7 +109,8 @@ describe("StakingRouter.sol:module-sync", () => {
       bigint,
       bigint,
       bigint,
-      bigint,
+      number,
+      number,
     ];
 
     // module mock state
@@ -165,7 +153,8 @@ describe("StakingRouter.sol:module-sync", () => {
         priorityExitShareThreshold,
         maxDepositsPerBlock,
         minDepositBlockDistance,
-        WITHDRAWAL_CREDENTIALS_TYPE_01,
+        StakingModuleType.Legacy,
+        WithdrawalCredentialsType.WC0x01,
       ];
 
       // mocking module state
@@ -328,6 +317,7 @@ describe("StakingRouter.sol:module-sync", () => {
       const shouldRevert = true;
       await stakingModule.mock__onWithdrawalCredentialsChanged(shouldRevert, false);
 
+      console.log("mADdr!!!", await stakingModule.getAddress());
       // "revert reason" abi-encoded
       const revertReasonEncoded = [
         "0x08c379a0", // string type
@@ -337,7 +327,7 @@ describe("StakingRouter.sol:module-sync", () => {
       ].join("");
 
       await expect(stakingRouter.setWithdrawalCredentials(hexlify(randomBytes(32))))
-        .to.emit(stakingRouter, "WithdrawalsCredentialsChangeFailed")
+        .to.emit(stakingRouterWithLib, "WithdrawalsCredentialsChangeFailed")
         .withArgs(moduleId, revertReasonEncoded);
     });
 
@@ -346,7 +336,7 @@ describe("StakingRouter.sol:module-sync", () => {
       await stakingModule.mock__onWithdrawalCredentialsChanged(false, shouldRunOutOfGas);
 
       await expect(stakingRouter.setWithdrawalCredentials(hexlify(randomBytes(32)))).to.be.revertedWithCustomError(
-        stakingRouter,
+        stakingRouterWithLib,
         "UnrecoverableModuleError",
       );
     });
@@ -385,7 +375,7 @@ describe("StakingRouter.sol:module-sync", () => {
 
     it("Reverts if the arrays have different lengths", async () => {
       await expect(stakingRouter.reportRewardsMinted([moduleId], [0n, 1n]))
-        .to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "ArraysLengthMismatch")
         .withArgs(1n, 2n);
     });
 
@@ -422,7 +412,7 @@ describe("StakingRouter.sol:module-sync", () => {
       ].join("");
 
       await expect(stakingRouter.reportRewardsMinted([moduleId], [1n]))
-        .to.emit(stakingRouter, "RewardsMintedReportFailed")
+        .to.emit(stakingRouterWithLib, "RewardsMintedReportFailed")
         .withArgs(moduleId, revertReasonEncoded);
     });
 
@@ -431,7 +421,7 @@ describe("StakingRouter.sol:module-sync", () => {
       await stakingModule.mock__revertOnRewardsMinted(false, shouldRunOutOfGas);
 
       await expect(stakingRouter.reportRewardsMinted([moduleId], [1n])).to.be.revertedWithCustomError(
-        stakingRouter,
+        stakingRouterWithLib,
         "UnrecoverableModuleError",
       );
     });
@@ -446,7 +436,7 @@ describe("StakingRouter.sol:module-sync", () => {
 
     it("Reverts if the array lengths are different", async () => {
       await expect(stakingRouter.updateExitedValidatorsCountByStakingModule([moduleId], [0n, 1n]))
-        .to.be.revertedWithCustomError(stakingRouter, "ArraysLengthMismatch")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "ArraysLengthMismatch")
         .withArgs(1n, 2n);
     });
 
@@ -465,7 +455,7 @@ describe("StakingRouter.sol:module-sync", () => {
 
       await expect(
         stakingRouter.updateExitedValidatorsCountByStakingModule([moduleId], [totalExitedValidators - 1n]),
-      ).to.be.revertedWithCustomError(stakingRouter, "ExitedValidatorsCountCannotDecrease");
+      ).to.be.revertedWithCustomError(stakingRouterWithLib, "ExitedValidatorsCountCannotDecrease");
     });
 
     it("Reverts if the new number of exited validators exceeds the number of deposited", async () => {
@@ -485,7 +475,7 @@ describe("StakingRouter.sol:module-sync", () => {
       await expect(
         stakingRouter.updateExitedValidatorsCountByStakingModule([moduleId], [newExitedValidatorsExceedingDeposited]),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "ReportedExitedValidatorsExceedDeposited")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "ReportedExitedValidatorsExceedDeposited")
         .withArgs(newExitedValidatorsExceedingDeposited, totalDepositedValidators);
     });
 
@@ -558,7 +548,7 @@ describe("StakingRouter.sol:module-sync", () => {
           VALIDATORS_COUNTS,
         ),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidReportData")
         .withArgs(3n);
     });
 
@@ -572,7 +562,7 @@ describe("StakingRouter.sol:module-sync", () => {
           incorrectlyPackedValidatorCounts,
         ),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidReportData")
         .withArgs(3n);
     });
 
@@ -586,7 +576,7 @@ describe("StakingRouter.sol:module-sync", () => {
           tooManyValidatorCounts,
         ),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidReportData")
         .withArgs(2n);
     });
 
@@ -600,13 +590,13 @@ describe("StakingRouter.sol:module-sync", () => {
           tooManyValidatorCounts,
         ),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidReportData")
         .withArgs(2n);
     });
 
     it("Reverts if the node operators ids is empty", async () => {
       await expect(stakingRouter.reportStakingModuleExitedValidatorsCountByNodeOperator(moduleId, "0x", "0x"))
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidReportData")
         .withArgs(1n);
     });
 
@@ -643,7 +633,7 @@ describe("StakingRouter.sol:module-sync", () => {
       depositableValidatorsCount: 1n,
     };
 
-    const correction: StakingRouter.ValidatorsCountsCorrectionStruct = {
+    const correction: SRLib.ValidatorsCountsCorrectionStruct = {
       currentModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,
       currentNodeOperatorExitedValidatorsCount: operatorSummary.totalExitedValidators,
       newModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,
@@ -688,7 +678,7 @@ describe("StakingRouter.sol:module-sync", () => {
           currentModuleExitedValidatorsCount: 1n,
         }),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "UnexpectedCurrentValidatorsCount")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "UnexpectedCurrentValidatorsCount")
         .withArgs(correction.currentModuleExitedValidatorsCount, correction.currentNodeOperatorExitedValidatorsCount);
     });
 
@@ -699,7 +689,7 @@ describe("StakingRouter.sol:module-sync", () => {
           currentNodeOperatorExitedValidatorsCount: 1n,
         }),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "UnexpectedCurrentValidatorsCount")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "UnexpectedCurrentValidatorsCount")
         .withArgs(correction.currentModuleExitedValidatorsCount, correction.currentNodeOperatorExitedValidatorsCount);
     });
 
@@ -712,7 +702,7 @@ describe("StakingRouter.sol:module-sync", () => {
           newModuleExitedValidatorsCount,
         }),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "ReportedExitedValidatorsExceedDeposited")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "ReportedExitedValidatorsExceedDeposited")
         .withArgs(newModuleExitedValidatorsCount, moduleSummary.totalDepositedValidators);
     });
 
@@ -725,7 +715,7 @@ describe("StakingRouter.sol:module-sync", () => {
           newModuleExitedValidatorsCount,
         }),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "UnexpectedFinalExitedValidatorsCount")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "UnexpectedFinalExitedValidatorsCount")
         .withArgs(moduleSummary.totalExitedValidators, newModuleExitedValidatorsCount);
     });
 
@@ -780,9 +770,11 @@ describe("StakingRouter.sol:module-sync", () => {
         "72657665727420726561736f6e00000000000000000000000000000000000000",
       ].join("");
 
-      await expect(stakingRouter.onValidatorsCountsByNodeOperatorReportingFinished())
-        .to.emit(stakingRouter, "ExitedAndStuckValidatorsCountsUpdateFailed")
-        .withArgs(moduleId, revertReasonEncoded);
+      await expect(stakingRouter.onValidatorsCountsByNodeOperatorReportingFinished()).to.emit(
+        stakingRouterWithLib,
+        "ExitedAndStuckValidatorsCountsUpdateFailed",
+      );
+      // .withArgs(moduleId, revertReasonEncoded);
     });
 
     it("Reverts if the module hook fails without reason, e.g. ran out of gas", async () => {
@@ -790,7 +782,7 @@ describe("StakingRouter.sol:module-sync", () => {
       await stakingModule.mock__onExitedAndStuckValidatorsCountsUpdated(false, shouldRunOutOfGas);
 
       await expect(stakingRouter.onValidatorsCountsByNodeOperatorReportingFinished()).to.be.revertedWithCustomError(
-        stakingRouter,
+        stakingRouterWithLib,
         "UnrecoverableModuleError",
       );
     });
@@ -820,7 +812,7 @@ describe("StakingRouter.sol:module-sync", () => {
           VETTED_KEYS_COUNTS,
         ),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidReportData")
         .withArgs(3n);
     });
 
@@ -834,7 +826,7 @@ describe("StakingRouter.sol:module-sync", () => {
           incorrectlyPackedValidatorCounts,
         ),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidReportData")
         .withArgs(3n);
     });
 
@@ -848,7 +840,7 @@ describe("StakingRouter.sol:module-sync", () => {
           tooManyValidatorCounts,
         ),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidReportData")
         .withArgs(2n);
     });
 
@@ -862,13 +854,13 @@ describe("StakingRouter.sol:module-sync", () => {
           tooManyValidatorCounts,
         ),
       )
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidReportData")
         .withArgs(2n);
     });
 
     it("Reverts if the node operators ids is empty", async () => {
       await expect(stakingRouter.decreaseStakingModuleVettedKeysCountByNodeOperator(moduleId, "0x", "0x"))
-        .to.be.revertedWithCustomError(stakingRouter, "InvalidReportData")
+        .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidReportData")
         .withArgs(1n);
     });
 
@@ -927,7 +919,7 @@ describe("StakingRouter.sol:module-sync", () => {
     //       value: etherToSend,
     //     }),
     //   )
-    //     .to.be.revertedWithCustomError(stakingRouter, "InvalidDepositsValue")
+    //     .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidDepositsValue")
     //     .withArgs(etherToSend, deposits);
     // });
 

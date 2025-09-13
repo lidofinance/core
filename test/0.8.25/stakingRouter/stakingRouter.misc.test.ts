@@ -4,19 +4,21 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { DepositContract__MockForBeaconChainDepositor, StakingRouter__Harness } from "typechain-types";
+import { StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, proxify, randomString } from "lib";
+import { certainAddress, ether, randomString, SECONDS_PER_SLOT, StakingModuleType } from "lib";
 
 import { Snapshot } from "test/suite";
 
+import { deployStakingRouter } from "../../deploy/stakingRouter";
+
 describe("StakingRouter.sol:misc", () => {
   let deployer: HardhatEthersSigner;
-  let proxyAdmin: HardhatEthersSigner;
+  let admin: HardhatEthersSigner;
   let stakingRouterAdmin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
-  let depositContract: DepositContract__MockForBeaconChainDepositor;
+  // let depositContract: DepositContract__MockForBeaconChainDepositor;
   let stakingRouter: StakingRouter__Harness;
   let impl: StakingRouter__Harness;
 
@@ -26,29 +28,18 @@ describe("StakingRouter.sol:misc", () => {
   const withdrawalCredentials = hexlify(randomBytes(32));
   const withdrawalCredentials02 = hexlify(randomBytes(32));
 
-  const SECONDS_PER_SLOT = 12n;
-  const GENESIS_TIME = 1606824023;
-  const WITHDRAWAL_CREDENTIALS_TYPE_01 = 1n;
+  const GENESIS_TIME = 1606824023n;
 
   before(async () => {
-    [deployer, proxyAdmin, stakingRouterAdmin, user] = await ethers.getSigners();
+    [deployer, admin, stakingRouterAdmin, user] = await ethers.getSigners();
 
-    depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-
-    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
-    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
-    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
-      libraries: {
-        ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
-        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
-        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
+    ({ stakingRouter, impl } = await deployStakingRouter(
+      { deployer, admin, user },
+      {
+        secondsPerSlot: SECONDS_PER_SLOT,
+        genesisTime: GENESIS_TIME,
       },
-    });
-
-    impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
-
-    [stakingRouter] = await proxify({ impl, admin: proxyAdmin, caller: user });
+    ));
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -133,7 +124,7 @@ describe("StakingRouter.sol:misc", () => {
         minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
         /// @notice The type of withdrawal credentials for creation of validators.
         /// @dev 1 = 0x01 withdrawals, 2 = 0x02 withdrawals.
-        withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+        moduleType: StakingModuleType.Legacy,
       };
 
       for (let i = 0; i < modulesCount; i++) {
@@ -150,7 +141,8 @@ describe("StakingRouter.sol:misc", () => {
 
     it("fails with UnexpectedContractVersion error when called on implementation", async () => {
       await expect(
-        impl.migrateUpgrade_v4(lido, withdrawalCredentials, withdrawalCredentials02),
+        impl.migrateUpgrade_v4(),
+        // impl.migrateUpgrade_v4(lido, withdrawalCredentials, withdrawalCredentials02),
       ).to.be.revertedWithCustomError(impl, "InvalidInitialization");
     });
 
@@ -175,7 +167,8 @@ describe("StakingRouter.sol:misc", () => {
 
       it("sets correct contract version", async () => {
         expect(await stakingRouter.getContractVersion()).to.equal(3);
-        await stakingRouter.migrateUpgrade_v4(lido, withdrawalCredentials, withdrawalCredentials02);
+        // await stakingRouter.migrateUpgrade_v4(lido, withdrawalCredentials, withdrawalCredentials02);
+        await stakingRouter.migrateUpgrade_v4();
         expect(await stakingRouter.getContractVersion()).to.be.equal(4);
       });
     });
