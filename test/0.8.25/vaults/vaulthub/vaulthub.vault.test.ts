@@ -17,7 +17,7 @@ import {
   VaultHub,
 } from "typechain-types";
 
-import { ether, getCurrentBlockTimestamp, impersonate } from "lib";
+import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate } from "lib";
 import { ONE_GWEI, TOTAL_BASIS_POINTS } from "lib/constants";
 import { findEvents } from "lib/event";
 
@@ -279,8 +279,7 @@ describe("VaultHub.sol:owner-functions", () => {
     });
 
     it("reverts when report is stale", async () => {
-      // Make report stale
-      await lazyOracle.setLatestReportTimestamp((await getCurrentBlockTimestamp()) - 3n * 24n * 60n * 60n);
+      await advanceChainTime(days(3n));
 
       await expect(vaultHub.connect(vaultOwner).withdraw(vaultAddress, recipient, ether("1")))
         .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")
@@ -369,7 +368,7 @@ describe("VaultHub.sol:owner-functions", () => {
     });
 
     it("reverts when report is stale", async () => {
-      await lazyOracle.setLatestReportTimestamp((await getCurrentBlockTimestamp()) - 3n * 24n * 60n * 60n);
+      await advanceChainTime(days(3n));
 
       await expect(vaultHub.connect(vaultOwner).mintShares(vaultAddress, recipient, ether("1")))
         .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")
@@ -457,6 +456,15 @@ describe("VaultHub.sol:owner-functions", () => {
       );
     });
 
+    it("reverts when report is stale", async () => {
+      await advanceChainTime(days(3n));
+
+      await expect(vaultHub.connect(vaultOwner).burnShares(vaultAddress, ether("1"))).to.be.revertedWithCustomError(
+        vaultHub,
+        "VaultReportStale",
+      );
+    });
+
     it("reverts when burning more shares than minted", async () => {
       const liabilityShares = await vaultHub.liabilityShares(vaultAddress);
 
@@ -481,20 +489,30 @@ describe("VaultHub.sol:owner-functions", () => {
   });
 
   describe("transferAndBurnShares", () => {
+    let burnAmount: bigint;
+
     beforeEach(async () => {
       // Setup: fund vault and mint shares
       await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
       await reportVault({ totalValue: ether("11") });
       await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, ether("5"));
       await reportVault({});
-    });
 
-    it("transfers and burns shares successfully", async () => {
-      const burnAmount = ether("2");
+      burnAmount = ether("2");
 
       // Approve VaultHub to transfer shares
       await lido.connect(vaultOwner).approve(vaultHub, burnAmount);
+    });
 
+    it("reverts when report is stale", async () => {
+      await advanceChainTime(days(3n));
+
+      await expect(
+        vaultHub.connect(vaultOwner).transferAndBurnShares(vaultAddress, burnAmount),
+      ).to.be.revertedWithCustomError(vaultHub, "VaultReportStale");
+    });
+
+    it("transfers and burns shares successfully", async () => {
       const liabilitySharesBefore = await vaultHub.liabilityShares(vaultAddress);
       const ownerBalanceBefore = await lido.balanceOf(vaultOwner);
 
@@ -522,7 +540,7 @@ describe("VaultHub.sol:owner-functions", () => {
     });
 
     it("reverts when report is stale", async () => {
-      await lazyOracle.setLatestReportTimestamp((await getCurrentBlockTimestamp()) - 3n * 24n * 60n * 60n);
+      await advanceChainTime(days(3n));
 
       await expect(vaultHub.connect(vaultOwner).rebalance(vaultAddress, ether("1"))).to.be.revertedWithCustomError(
         vaultHub,
@@ -640,6 +658,15 @@ describe("VaultHub.sol:owner-functions", () => {
         .and.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
       expect(await vault.beaconChainDepositsPaused()).to.be.false;
+    });
+
+    it("reverts when report is stale", async () => {
+      await advanceChainTime(days(3n));
+
+      await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "VaultReportStale",
+      );
     });
 
     it("reverts when vault is unhealthy", async () => {
