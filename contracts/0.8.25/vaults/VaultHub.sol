@@ -1338,6 +1338,24 @@ contract VaultHub is PausableUntilWithRoles {
         });
     }
 
+    /// @notice the amount of ether that can be withdrawn from the vault based on the available balance,
+    ///         locked value, vault redemption shares (does not account for Lido fees)
+    function _availableForWithdrawalValue(
+        address _vault,
+        VaultConnection storage _connection,
+        VaultRecord storage _record
+    ) internal view returns (uint256) {
+        uint256 availableBalance = Math256.min(_vault.balance, _totalValue(_record));
+
+        // We can't withdraw funds that can be used to fulfill redemptions
+        uint256 redemptionValue = _getPooledEthBySharesRoundUp(_record.redemptionShares);
+        if (redemptionValue > availableBalance) return 0;
+        availableBalance -= redemptionValue;
+
+        // We must account vaults locked value when calculating the withdrawable amount
+        return Math256.min(availableBalance, _unlocked(_connection, _record));
+    }
+
     /// @notice the amount of lido fees that can be settled on the vault based on the available balance
     /// @dev    this amount already accounts locked value
     function _settleableLidoFeesValue(
@@ -1346,8 +1364,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage _record,
         uint256 _feesToSettle
     ) internal view returns (uint256) {
-        uint256 unlocked = _unlocked(_connection, _record);
-        return Math256.min(Math256.min(unlocked, _vault.balance), _feesToSettle);
+        return Math256.min(_availableForWithdrawalValue(_vault, _connection, _record), _feesToSettle);
     }
 
     /// @notice the amount of ether that can be instantly withdrawn from the vault based on the available balance,
@@ -1357,17 +1374,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
-        uint256 availableBalance = Math256.min(_vault.balance, _totalValue(_record));
-
-        // 1. We can't withdraw funds that can be used to fulfill redemptions
-        uint256 redemptionValue = _getPooledEthBySharesRoundUp(_record.redemptionShares);
-        if (redemptionValue > availableBalance) return 0;
-        availableBalance -= redemptionValue;
-
-        // 2. We must account vaults locked value when calculating the withdrawable amount
-        uint256 withdrawable = Math256.min(availableBalance, _unlocked(_connection, _record));
-
-        // 3. We can't withdraw funds that are used to settle Lido fees
+        uint256 withdrawable = _availableForWithdrawalValue(_vault, _connection, _record);
         uint256 feesValue = _unsettledLidoFeesValue(_record);
         return withdrawable > feesValue ? withdrawable - feesValue : 0;
     }
