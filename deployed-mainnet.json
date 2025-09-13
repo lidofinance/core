@@ -277,7 +277,7 @@
   },
   "dg:dualGovernance": {
     "proxy": {
-      "address": "0xcdF49b058D606AD34c5789FD8c3BF8B3E54bA2db"
+      "address": "0xC1db28B3301331277e307FDCfF8DE28242A4486E"
     }
   },
   "dg:emergencyProtectedTimelock": {
