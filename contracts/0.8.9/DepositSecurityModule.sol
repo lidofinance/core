@@ -7,7 +7,7 @@ pragma solidity 0.8.9;
 import {ECDSA} from "../common/lib/ECDSA.sol";
 
 interface ILido {
-    function deposit(uint256 _maxDepositsCount, uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
+    function deposit(uint256 _maxDepositsAmountPerBlock, uint256 _stakingModuleId, bytes calldata _depositCalldata) external;
     function canDeposit() external view returns (bool);
 }
 

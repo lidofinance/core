@@ -9,7 +9,7 @@ import {SRLib} from "contracts/0.8.25/sr/SRLib.sol";
 import {StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
 
 contract StakingRouter__Harness is StakingRouter {
-    constructor(address _depositContract, uint256 _secondsPerSlot, uint256 _genesisTime)
+    constructor(address _depositContract, uint64 _secondsPerSlot, uint64 _genesisTime)
         StakingRouter(_depositContract, _secondsPerSlot, _genesisTime)
     {}
 

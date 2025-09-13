@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.25;
+pragma solidity 0.8.25;
 
 import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 import {Math} from "@openzeppelin/contracts-v5.2/utils/math/Math.sol";

@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.25;
 
-import {IAccessControlEnumerable} from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
+import {IAccessControlEnumerable as IAccessControlEnumerableV5} from
+    "@openzeppelin/contracts-v5.2/access/extensions/IAccessControlEnumerable.sol";
+
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
-interface IStakingRouter is IAccessControlEnumerable {
+interface IStakingRouter is IAccessControlEnumerableV5 {
     struct StakingModule {
         uint24 id;
         address stakingModuleAddress;
@@ -19,9 +21,11 @@ interface IStakingRouter is IAccessControlEnumerable {
         uint16 priorityExitShareThreshold;
         uint64 maxDepositsPerBlock;
         uint64 minDepositBlockDistance;
+        uint8 moduleType;
+        uint8 withdrawalCredentialsType;
     }
 
-    function getStakingModules() external view returns (StakingModule[] memory res);
+    function getStakingModules() external view returns (StakingModule[] memory);
 }
 
 interface ICSModule {
@@ -34,23 +38,23 @@ interface ICSModule {
  * This contract centralizes address management for V3Template and V3VoteScript.
  */
 contract V3Addresses {
-
     struct V3AddressesParams {
         // Old implementations
         address oldLocatorImpl;
         address oldLidoImpl;
         address oldAccountingOracleImpl;
-
         // New implementations
         address newLocatorImpl;
         address newLidoImpl;
         address newAccountingOracleImpl;
-
         // New fancy proxy and blueprint contracts
         address upgradeableBeacon;
         address stakingVaultImpl;
         address dashboardImpl;
-
+        address gateSealForVaults;
+        // EasyTrack addresses
+        address evmScriptExecutor;
+        address vaultHubAdapter;
         // Existing proxies and contracts
         address kernel;
         address agent;
@@ -96,6 +100,13 @@ contract V3Addresses {
     address public immutable UPGRADEABLE_BEACON;
     address public immutable STAKING_VAULT_IMPL;
     address public immutable DASHBOARD_IMPL;
+    address public immutable GATE_SEAL;
+
+    //
+    // -------- EasyTrack addresses --------
+    //
+    address public immutable EVM_SCRIPT_EXECUTOR;
+    address public immutable VAULT_HUB_ADAPTER;
 
     //
     // -------- Unchanged contracts --------
@@ -114,9 +125,7 @@ contract V3Addresses {
     address public immutable SIMPLE_DVT;
     address public immutable CSM_ACCOUNTING;
 
-    constructor(
-        V3AddressesParams memory params
-    ) {
+    constructor(V3AddressesParams memory params) {
         if (params.newLocatorImpl == params.oldLocatorImpl) {
             revert NewAndOldLocatorImplementationsMustBeDifferent();
         }
@@ -124,7 +133,6 @@ contract V3Addresses {
         //
         // Set directly from passed parameters
         //
-
         ILidoLocator newLocatorImpl = ILidoLocator(params.newLocatorImpl);
         OLD_LOCATOR_IMPL = params.oldLocatorImpl;
         OLD_ACCOUNTING_ORACLE_IMPL = params.oldAccountingOracleImpl;
@@ -141,11 +149,13 @@ contract V3Addresses {
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;
+        GATE_SEAL = params.gateSealForVaults;
+        EVM_SCRIPT_EXECUTOR = params.evmScriptExecutor;
+        VAULT_HUB_ADAPTER = params.vaultHubAdapter;
 
         //
         // Discovered via other contracts
         //
-
         OLD_BURNER = ILidoLocator(params.oldLocatorImpl).burner();
 
         LIDO = newLocatorImpl.lido();
@@ -173,7 +183,9 @@ contract V3Addresses {
             if (_hash(curated.name) != _hash(CURATED_MODULE_NAME)) revert IncorrectStakingModuleName(curated.name);
             NODE_OPERATORS_REGISTRY = curated.stakingModuleAddress;
             IStakingRouter.StakingModule memory simpleDvt = stakingModules[1];
-            if (_hash(simpleDvt.name) != _hash(SIMPLE_DVT_MODULE_NAME)) revert IncorrectStakingModuleName(simpleDvt.name);
+            if (_hash(simpleDvt.name) != _hash(SIMPLE_DVT_MODULE_NAME)) {
+                revert IncorrectStakingModuleName(simpleDvt.name);
+            }
             SIMPLE_DVT = simpleDvt.stakingModuleAddress;
             IStakingRouter.StakingModule memory csm = stakingModules[2];
             if (_hash(csm.name) != _hash(CSM_MODULE_NAME)) revert IncorrectStakingModuleName(csm.name);

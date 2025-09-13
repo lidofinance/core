@@ -146,7 +146,9 @@ export async function getNetworkConfig(network: string): Promise<ProtocolNetwork
       return getMainnetForkNetworkConfig();
     case "holesky-vaults-devnet-0":
       return getLocalNetworkConfig(network, "fork");
-
+    case "custom":
+      console.log("Using custom network configuration");
+      return getMainnetForkNetworkConfig();
     default:
       throw new Error(`Network ${network} is not supported`);
   }

@@ -170,12 +170,10 @@ describe("Lido.sol:externalShares", () => {
 
   context("mintExternalShares", () => {
     context("Reverts", () => {
-      it("if receiver is zero address", async () => {
-        await expect(lido.mintExternalShares(ZeroAddress, 1n)).to.be.revertedWith("MINT_RECEIVER_ZERO_ADDRESS");
-      });
-
       it("if amount of shares is zero", async () => {
-        await expect(lido.mintExternalShares(whale, 0n)).to.be.revertedWith("MINT_ZERO_AMOUNT_OF_SHARES");
+        await expect(lido.connect(vaultHubSigner).mintExternalShares(whale, 0n)).to.be.revertedWith(
+          "MINT_ZERO_AMOUNT_OF_SHARES",
+        );
       });
 
       it("if not authorized", async () => {
@@ -202,6 +200,20 @@ describe("Lido.sol:externalShares", () => {
           "CONTRACT_IS_STOPPED",
         );
       });
+
+      it("if receiver is zero address", async () => {
+        await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+        await expect(lido.connect(vaultHubSigner).mintExternalShares(ZeroAddress, 1n)).to.be.revertedWith(
+          "MINT_TO_ZERO_ADDR",
+        );
+      });
+
+      it("if receiver is StETH token contract", async () => {
+        await lido.setMaxExternalRatioBP(maxExternalRatioBP);
+        await expect(lido.connect(vaultHubSigner).mintExternalShares(lido, 1n)).to.be.revertedWith(
+          "MINT_TO_STETH_CONTRACT",
+        );
+      });
     });
 
     it("Mints shares correctly and emits events", async () => {
@@ -217,7 +229,7 @@ describe("Lido.sol:externalShares", () => {
         .to.emit(lido, "TransferShares")
         .withArgs(ZeroAddress, whale, sharesToMint)
         .to.emit(lido, "ExternalSharesMinted")
-        .withArgs(whale, sharesToMint, etherToMint);
+        .withArgs(whale, sharesToMint);
 
       // Verify external balance was increased
       const externalEther = await lido.getExternalEther();
@@ -244,7 +256,7 @@ describe("Lido.sol:externalShares", () => {
         .to.emit(lido, "TransferShares")
         .withArgs(ZeroAddress, whale, maxMintableShares)
         .to.emit(lido, "ExternalSharesMinted")
-        .withArgs(whale, maxMintableShares, etherToMint);
+        .withArgs(whale, maxMintableShares);
 
       // Verify external balance was increased to the maximum mintable amount
       const initiallyMintedEther = await lido.getPooledEthByShares(sharesToMintInitially);
@@ -296,12 +308,10 @@ describe("Lido.sol:externalShares", () => {
       const stethAmount = await lido.getPooledEthByShares(amountToMint);
 
       await expect(lido.connect(vaultHubSigner).burnExternalShares(amountToMint))
-        .to.emit(lido, "Transfer")
-        .withArgs(vaultHubSigner.address, ZeroAddress, stethAmount)
-        .to.emit(lido, "TransferShares")
-        .withArgs(vaultHubSigner.address, ZeroAddress, amountToMint)
-        .to.emit(lido, "ExternalSharesBurned")
-        .withArgs(vaultHubSigner.address, amountToMint, stethAmount);
+        .to.emit(lido, "SharesBurnt")
+        .withArgs(vaultHubSigner, stethAmount, stethAmount, amountToMint)
+        .to.emit(lido, "ExternalSharesBurnt")
+        .withArgs(amountToMint);
 
       // Verify external balance was reduced
       const externalEther = await lido.getExternalEther();
@@ -327,20 +337,22 @@ describe("Lido.sol:externalShares", () => {
 
   context("rebalanceExternalEtherToInternal", () => {
     it("Reverts if amount of shares is zero", async () => {
-      await expect(lido.connect(user).rebalanceExternalEtherToInternal()).to.be.revertedWith("ZERO_VALUE");
+      await expect(lido.connect(user).rebalanceExternalEtherToInternal(0n)).to.be.revertedWith("ZERO_VALUE");
     });
 
     it("Reverts if not authorized", async () => {
-      await expect(lido.connect(user).rebalanceExternalEtherToInternal({ value: 1n })).to.be.revertedWith(
+      await expect(lido.connect(user).rebalanceExternalEtherToInternal(0n, { value: 1n })).to.be.revertedWith(
         "APP_AUTH_FAILED",
       );
     });
 
     it("Reverts if amount of ether is greater than minted shares", async () => {
+      const amountETH = await lido.getPooledEthBySharesRoundUp(1n);
+      const totalShares = await lido.getTotalShares();
+      const totalPooledETH = await lido.getTotalPooledEther();
+      const shares = (amountETH * totalShares) / totalPooledETH;
       await expect(
-        lido
-          .connect(vaultHubSigner)
-          .rebalanceExternalEtherToInternal({ value: await lido.getPooledEthBySharesRoundUp(1n) }),
+        lido.connect(vaultHubSigner).rebalanceExternalEtherToInternal(shares, { value: amountETH }),
       ).to.be.revertedWith("EXT_SHARES_TOO_SMALL");
     });
 
@@ -353,13 +365,27 @@ describe("Lido.sol:externalShares", () => {
       const bufferedEtherBefore = await lido.getBufferedEther();
 
       const etherToRebalance = await lido.getPooledEthBySharesRoundUp(1n);
-
-      await lido.connect(vaultHubSigner).rebalanceExternalEtherToInternal({
+      const totalShares = await lido.getTotalShares();
+      const totalPooledETH = await lido.getTotalPooledEther();
+      const shares = (etherToRebalance * totalShares) / totalPooledETH;
+      await lido.connect(vaultHubSigner).rebalanceExternalEtherToInternal(shares, {
         value: etherToRebalance,
       });
 
       expect(await lido.getExternalShares()).to.equal(amountToMint - 1n);
       expect(await lido.getBufferedEther()).to.equal(bufferedEtherBefore + etherToRebalance);
+    });
+
+    it("Reverts if amount of ether is less than required", async () => {
+      const amountOfShares = 10n;
+      const totalPooledETH = await lido.getTotalPooledEther();
+      const totalShares = await lido.getTotalShares();
+      const etherToRebalance = (amountOfShares * totalPooledETH - 1n) / totalShares + 1n; // roundUp
+      await expect(
+        lido.connect(vaultHubSigner).rebalanceExternalEtherToInternal(amountOfShares, {
+          value: etherToRebalance - 1n, // less than required
+        }),
+      ).to.be.revertedWith("VALUE_SHARES_MISMATCH");
     });
   });
 

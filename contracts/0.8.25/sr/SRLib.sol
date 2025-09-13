@@ -11,7 +11,6 @@ import {STASPouringMath} from "contracts/0.8.25/stas/STASPouringMath.sol";
 import {SRStorage} from "./SRStorage.sol";
 import {SRUtils} from "./SRUtils.sol";
 import {
-    Metrics,
     Strategies,
     ModuleState,
     StakingModuleConfig,
@@ -27,8 +26,6 @@ import {
     ValidatorExitData,
     ValidatorsCountsCorrection
 } from "./SRTypes.sol";
-
-import "hardhat/console.sol";
 
 library SRLib {
     using StorageSlot for bytes32;
@@ -355,7 +352,6 @@ library SRLib {
         /// @dev due to existing modules with undefined shares, we need to recalculate the metrics values for all modules
         _updateSTASMetricValues();
     }
-
 
     /// @dev module state helpers
 
@@ -827,21 +823,14 @@ library SRLib {
     function _notifyStakingModulesOfWithdrawalCredentialsChange() public {
         uint256[] memory _stakingModuleIds = SRStorage.getModuleIds();
 
-        console.log("modules: %s ", _stakingModuleIds.length);
         for (uint256 i; i < _stakingModuleIds.length; ++i) {
             uint256 moduleId = _stakingModuleIds[i];
 
-            console.log("moduleId: %s ", moduleId);
-            console.log("moduleId addr: %s ", address(moduleId.getIStakingModule()));
             try moduleId.getIStakingModule().onWithdrawalCredentialsChanged() {}
             catch (bytes memory lowLevelRevertData) {
-                console.log("fail catch");
-                console.logBytes(lowLevelRevertData);
                 if (lowLevelRevertData.length == 0) revert UnrecoverableModuleError();
                 _setModuleStatus(moduleId, StakingModuleStatus.DepositsPaused);
-                console.log("_setModuleStatus");
                 emit WithdrawalsCredentialsChangeFailed(moduleId, lowLevelRevertData);
-                console.log("WithdrawalsCredentialsChangeFailed fired!!!");
             }
         }
     }

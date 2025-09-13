@@ -9,7 +9,7 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 import {VaultHub} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {VaultHub, IHashConsensus} from "contracts/0.8.25/vaults/VaultHub.sol";
-import {RefSlotCache} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
+import {DoubleRefSlotCache} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
 
 contract VaultHub__HarnessForReporting is VaultHub {
     // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
@@ -53,7 +53,7 @@ contract VaultHub__HarnessForReporting is VaultHub {
             address(0), // owner
             uint96(_shareLimit),
             uint96($.vaults.length),
-            false, // pendingDisconnect
+            DISCONNECT_NOT_INITIATED, // disconnectInitiatedTs
             uint16(_reserveRatioBP),
             uint16(_forcedRebalanceThresholdBP),
             uint16(_infraFeeBP),
@@ -65,9 +65,16 @@ contract VaultHub__HarnessForReporting is VaultHub {
 
         VaultHub.VaultRecord memory record = VaultHub.VaultRecord({
             report: VaultHub.Report(0, 0, 0),
-            locked: 0,
+            maxLiabilityShares: 0,
             liabilityShares: uint96(_shareLimit),
-            inOutDelta: RefSlotCache.Int112WithRefSlotCache({value: 0, valueOnRefSlot: 0, refSlot: 0})
+            inOutDelta: [
+                DoubleRefSlotCache.Int104WithCache({value: 0, valueOnRefSlot: 0, refSlot: 0}),
+                DoubleRefSlotCache.Int104WithCache({value: 0, valueOnRefSlot: 0, refSlot: 0})
+            ],
+            minimalReserve: 0,
+            redemptionShares: 0,
+            cumulativeLidoFees: 0,
+            settledLidoFees: 0
         });
 
         $.records[_vault] = record;

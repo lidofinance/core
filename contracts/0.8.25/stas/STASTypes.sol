@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.9;
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity 0.8.25;
+
 
 import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 

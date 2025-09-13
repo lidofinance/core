@@ -5,14 +5,12 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
-import { Burner__factory, IStakingModule, NodeOperatorsRegistry } from "typechain-types";
+import { NodeOperatorsRegistry } from "typechain-types";
 
 import {
   advanceChainTime,
   ether,
   EXTRA_DATA_TYPE_EXITED_VALIDATORS,
-  EXTRA_DATA_TYPE_STUCK_VALIDATORS,
-  findEventsWithInterfaces,
   ItemType,
   LoadedContract,
   log,
@@ -24,12 +22,7 @@ import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
 import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
 import { removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
-import {
-  calcNodeOperatorRewards,
-  CSM_MODULE_ID,
-  NOR_MODULE_ID,
-  SDVT_MODULE_ID,
-} from "lib/protocol/helpers/staking-module";
+import { CSM_MODULE_ID, NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { MAX_BASIS_POINTS, Snapshot } from "test/suite";
 
@@ -62,7 +55,6 @@ class ListKeyMapHelper<ValueType> {
   }
 }
 
-// TODO: remove everything related to stuck validators?
 describe("Integration: AccountingOracle extra data full items", () => {
   let ctx: ProtocolContext;
   let stranger: HardhatEthersSigner;
@@ -188,10 +180,8 @@ describe("Integration: AccountingOracle extra data full items", () => {
 
       // Slice arrays based on item counts
       const idsExited = new Map<bigint, bigint[]>();
-      const idsStuck = new Map<bigint, bigint[]>();
 
       idsExited.set(NOR_MODULE_ID, norIds.slice(0, norExitedItems * maxNodeOperatorsPerExtraDataItem));
-
       idsExited.set(SDVT_MODULE_ID, sdvtIds.slice(0, sdvtExitedItems * maxNodeOperatorsPerExtraDataItem));
 
       if (ctx.flags.withCSM) {
@@ -247,22 +237,7 @@ describe("Integration: AccountingOracle extra data full items", () => {
         );
       }
 
-      // Store initial share balances for node operators with stuck validators
-      const sharesBefore = new ListKeyMapHelper<bigint>();
-      for (const { moduleId, module } of modules) {
-        if (moduleId === CSM_MODULE_ID) continue;
-
-        const ids = idsStuck.get(moduleId) ?? [];
-        for (const id of ids) {
-          const nodeOperator = await (module as unknown as LoadedContract<NodeOperatorsRegistry>).getNodeOperator(
-            id,
-            false,
-          );
-          sharesBefore.set([moduleId, id], await ctx.contracts.lido.sharesOf(nodeOperator.rewardAddress));
-        }
-      }
-
-      const { reportTx, submitter, extraDataChunks } = await reportWithoutExtraData(
+      const { submitter, extraDataChunks } = await reportWithoutExtraData(
         ctx,
         numExitedValidatorsByStakingModule,
         modulesWithExited,
@@ -296,71 +271,6 @@ describe("Integration: AccountingOracle extra data full items", () => {
           const summary = await module.getNodeOperatorSummary(id);
           const numExpectedExited = numKeysReportedByNo.get([moduleId, id, EXTRA_DATA_TYPE_EXITED_VALIDATORS]);
           expect(summary.totalExitedValidators).to.equal(numExpectedExited);
-        }
-
-        // Check module stuck validators, penalties and rewards
-        const moduleIdsStuck = idsStuck.get(moduleId) ?? [];
-        for (const opId of moduleIdsStuck) {
-          // Verify stuck validators count matches expected
-          const operatorSummary = await module.getNodeOperatorSummary(opId);
-          const numExpectedStuck = numKeysReportedByNo.get([moduleId, opId, EXTRA_DATA_TYPE_STUCK_VALIDATORS]);
-          expect(operatorSummary.stuckValidatorsCount).to.equal(numExpectedStuck);
-        }
-
-        if (moduleId === CSM_MODULE_ID) {
-          continue;
-        }
-        const moduleNor = module as unknown as LoadedContract<NodeOperatorsRegistry>;
-
-        if (moduleIdsStuck.length > 0) {
-          // Find the TransferShares event for module rewards
-          const receipt = await reportTx.wait();
-          const transferSharesEvents = await findEventsWithInterfaces(receipt!, "TransferShares", [
-            ctx.contracts.lido.interface,
-          ]);
-          const moduleRewardsEvent = transferSharesEvents.find((e) => e.args.to === module.address);
-          const moduleRewards = moduleRewardsEvent ? moduleRewardsEvent.args.sharesValue : 0n;
-
-          let modulePenaltyShares = 0n;
-
-          // Check each stuck node operator
-          for (const opId of moduleIdsStuck) {
-            // Verify operator is penalized
-            expect(await moduleNor.isOperatorPenalized(opId)).to.be.true;
-
-            // Get operator reward address and current shares balance
-            const operator = await moduleNor.getNodeOperator(opId, false);
-            const sharesAfter = await ctx.contracts.lido.sharesOf(operator.rewardAddress);
-
-            // Calculate expected rewards
-            const rewardsAfter = await calcNodeOperatorRewards(
-              moduleNor as unknown as LoadedContract<IStakingModule>,
-              opId,
-              moduleRewards,
-            );
-
-            // Verify operator received only half the rewards (due to penalty)
-            const sharesDiff = sharesAfter - sharesBefore.get([moduleId, opId])!;
-            const expectedReward = rewardsAfter / 2n;
-
-            // Allow for small rounding differences (up to 2 wei)
-            expect(sharesDiff).to.be.closeTo(expectedReward, 2n);
-
-            // Track total penalty shares
-            modulePenaltyShares += expectedReward;
-          }
-
-          // Check if penalty shares were burned
-          if (modulePenaltyShares > 0n) {
-            const distributeReceipt = await distributeTxReceipts[String(moduleId)];
-            const burnEvents = await findEventsWithInterfaces(distributeReceipt!, "StETHBurnRequested", [
-              Burner__factory.createInterface(),
-            ]);
-            const totalBurnedShares = burnEvents.reduce((sum, event) => sum + event.args.amountOfShares, 0n);
-
-            // Verify that the burned shares match the penalty shares (with small tolerance for rounding)
-            expect(totalBurnedShares).to.be.closeTo(modulePenaltyShares, 100n);
-          }
         }
       }
     };

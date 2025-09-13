@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.25;
+// solhint-disable-next-line lido/fixed-compiler-version
+pragma solidity >=0.8.9 <0.9.0;
+
 
 /**
  * @title BitMask16

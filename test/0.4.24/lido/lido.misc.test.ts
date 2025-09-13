@@ -63,7 +63,7 @@ describe("Lido.sol:misc", () => {
 
   context("receiveELRewards", () => {
     it("Reverts if the caller is not `ElRewardsVault`", async () => {
-      await expect(lido.connect(stranger).receiveELRewards()).to.be.revertedWithoutReason();
+      await expect(lido.connect(stranger).receiveELRewards()).to.be.revertedWith("APP_AUTH_FAILED");
     });
 
     it("Tops up the total EL rewards collected", async () => {
@@ -101,7 +101,7 @@ describe("Lido.sol:misc", () => {
 
   context("receiveWithdrawals", () => {
     it("Reverts if the caller is not `WithdrawalsVault`", async () => {
-      await expect(lido.connect(stranger).receiveWithdrawals()).to.be.revertedWithoutReason();
+      await expect(lido.connect(stranger).receiveWithdrawals()).to.be.revertedWith("APP_AUTH_FAILED");
     });
 
     it("Tops up the Lido buffer", async () => {

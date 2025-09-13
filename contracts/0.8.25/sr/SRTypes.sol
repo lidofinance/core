@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.9;
+pragma solidity 0.8.25;
 
 import {STASStorage} from "contracts/0.8.25/stas/STASTypes.sol";
 
@@ -110,7 +110,7 @@ struct StakingModule {
     /// @dev 0 = Legacy, 0x01 withdrawals, 1 = New, 0x02 withdrawals.
     /// @dev See {StakingModuleType} enum.
     uint8 moduleType;
-     /// @notice The type of withdrawal credentials for creation of validators
+    /// @notice The type of withdrawal credentials for creation of validators
     uint8 withdrawalCredentialsType;
 }
 

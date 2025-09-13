@@ -12,7 +12,7 @@ import {
   StakingRouter,
 } from "typechain-types";
 
-import { getModuleWCType, getNextBlock, StakingModuleType, WithdrawalCredentialsType } from "lib";
+import { ether, getNextBlock, StakingModuleType, WithdrawalCredentialsType } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -337,6 +337,50 @@ describe("StakingRouter.sol:module-sync", () => {
 
       await expect(stakingRouter.setWithdrawalCredentials(hexlify(randomBytes(32)))).to.be.revertedWithCustomError(
         stakingRouterWithLib,
+        "UnrecoverableModuleError",
+      );
+    });
+  });
+
+  context("setWithdrawalCredentials02", () => {
+    it("Reverts if the caller does not have the role", async () => {
+      await expect(stakingRouter.connect(user).setWithdrawalCredentials02(hexlify(randomBytes(32))))
+        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
+        .withArgs(user.address, await stakingRouter.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE());
+    });
+
+    it("Set new withdrawal credentials and informs modules", async () => {
+      const newWithdrawalCredentials = hexlify(randomBytes(32));
+
+      await expect(stakingRouter.setWithdrawalCredentials02(newWithdrawalCredentials))
+        .to.emit(stakingRouter, "WithdrawalCredentials02Set")
+        .withArgs(newWithdrawalCredentials, admin.address)
+        .and.to.emit(stakingModule, "Mock__WithdrawalCredentialsChanged");
+    });
+
+    it("Emits an event if the module hook fails with a revert data", async () => {
+      const shouldRevert = true;
+      await stakingModule.mock__onWithdrawalCredentialsChanged(shouldRevert, false);
+
+      // "revert reason" abi-encoded
+      const revertReasonEncoded = [
+        "0x08c379a0", // string type
+        "0000000000000000000000000000000000000000000000000000000000000020",
+        "000000000000000000000000000000000000000000000000000000000000000d",
+        "72657665727420726561736f6e00000000000000000000000000000000000000",
+      ].join("");
+
+      await expect(stakingRouter.setWithdrawalCredentials02(hexlify(randomBytes(32))))
+        .to.emit(stakingRouter, "WithdrawalsCredentialsChangeFailed")
+        .withArgs(moduleId, revertReasonEncoded);
+    });
+
+    it("Reverts if the module hook fails without reason, e.g. ran out of gas", async () => {
+      const shouldRunOutOfGas = true;
+      await stakingModule.mock__onWithdrawalCredentialsChanged(false, shouldRunOutOfGas);
+
+      await expect(stakingRouter.setWithdrawalCredentials02(hexlify(randomBytes(32)))).to.be.revertedWithCustomError(
+        stakingRouter,
         "UnrecoverableModuleError",
       );
     });
@@ -907,21 +951,18 @@ describe("StakingRouter.sol:module-sync", () => {
       );
     });
 
-    // TODO: Add new check on things like DepositValueNotMultipleOfInitialDeposit instead
-    // it("Reverts if ether does correspond to the number of deposits", async () => {
-    //   const deposits = 2n;
-    //   const depositValue = ether("32.0");
-    //   const correctAmount = deposits * depositValue;
-    //   const etherToSend = correctAmount + 1n;
+    it("Reverts if ether does correspond to the number of deposits", async () => {
+      const deposits = 2n;
+      const depositValue = ether("32.0");
+      const correctAmount = deposits * depositValue;
+      const etherToSend = correctAmount + 1n;
 
-    //   await expect(
-    //     stakingRouter.deposit(deposits, moduleId, "0x", {
-    //       value: etherToSend,
-    //     }),
-    //   )
-    //     .to.be.revertedWithCustomError(stakingRouterWithLib, "InvalidDepositsValue")
-    //     .withArgs(etherToSend, deposits);
-    // });
+      await expect(
+        stakingRouter.deposit(moduleId, "0x", {
+          value: etherToSend,
+        }),
+      ).to.be.revertedWithCustomError(stakingRouter, "DepositValueNotMultipleOfInitialDeposit");
+    });
 
     it("Does not submit 0 deposits", async () => {
       await expect(
@@ -931,17 +972,17 @@ describe("StakingRouter.sol:module-sync", () => {
       ).not.to.emit(depositContract, "Deposited__MockEvent");
     });
 
-    // it("Reverts if ether does correspond to the number of deposits", async () => {
-    //   const deposits = 2n;
-    //   const depositValue = ether("32.0");
-    //   const correctAmount = deposits * depositValue;
+    it("Doesnt Reverts if ether does correspond to the number of deposits", async () => {
+      const deposits = 2n;
+      const depositValue = ether("32.0");
+      const correctAmount = deposits * depositValue;
 
-    //   await expect(
-    //     stakingRouter.deposit(deposits, moduleId, "0x", {
-    //       value: correctAmount,
-    //     }),
-    //   ).to.emit(depositContract, "Deposited__MockEvent");
-    // });
+      await expect(
+        stakingRouter.deposit(moduleId, "0x", {
+          value: correctAmount,
+        }),
+      ).to.emit(depositContract, "Deposited__MockEvent");
+    });
   });
 });
 
