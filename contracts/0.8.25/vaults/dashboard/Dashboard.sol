@@ -472,8 +472,8 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Recovers ERC20 tokens or ether from the dashboard/vault contract to the recipient
-     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether (only for dashboard)
+     * @notice Recovers ERC20 tokens or ether from the dashboard contract to the recipient
+     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether (EIP-7528) 
      * @param _recipient Address of the recovery recipient
      * @param _amount Amount of tokens or ether to recover
      */
