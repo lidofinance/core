@@ -8,7 +8,6 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 import {
   Dashboard,
   DepositContract__MockForStakingVault,
-  ERC721__MockForDashboard,
   LidoLocator,
   OperatorGrid,
   OssifiableProxy,
@@ -45,10 +44,10 @@ describe("Dashboard.sol", () => {
   let vaultOwner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
+  let user: HardhatEthersSigner;
 
   let steth: StETHPermit__HarnessForDashboard;
   let weth: WETH9__MockForVault;
-  let erc721: ERC721__MockForDashboard;
   let wsteth: WstETH__Harness;
   let hub: VaultHub__MockForDashboard;
   let depositContract: DepositContract__MockForStakingVault;
@@ -165,7 +164,7 @@ describe("Dashboard.sol", () => {
   };
 
   before(async () => {
-    [deployer, vaultOwner, nodeOperator, stranger] = await ethers.getSigners();
+    [deployer, vaultOwner, nodeOperator, stranger, user] = await ethers.getSigners();
 
     await deployEIP7002WithdrawalRequestContract();
 
@@ -177,7 +176,6 @@ describe("Dashboard.sol", () => {
 
     lidoLocator = await deployLidoLocator({ lido: steth, wstETH: wsteth });
 
-    erc721 = await ethers.deployContract("ERC721__MockForDashboard");
     weth = await ethers.deployContract("WETH9__MockForVault");
 
     depositContract = await ethers.deployContract("DepositContract__MockForStakingVault");
@@ -1114,14 +1112,12 @@ describe("Dashboard.sol", () => {
       const wethContract = weth.connect(vaultOwner);
       await wethContract.deposit({ value: amount });
       await wethContract.transfer(dashboard, amount);
-      await erc721.mint(dashboard, 0);
       await dashboard.grantRole(await dashboard.DEFAULT_ADMIN_ROLE(), vaultOwner);
 
       expect(await wethContract.balanceOf(dashboard)).to.equal(amount);
-      expect(await erc721.ownerOf(0)).to.equal(dashboard);
     });
 
-    it("allows only DEFAULT_ADMIN_ROLE  to recover", async () => {
+    it("allows only DEFAULT_ADMIN_ROLE to recover", async () => {
       await expect(dashboard.connect(stranger).recoverERC20(ZeroAddress, vaultOwner, 1n)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
@@ -1166,6 +1162,32 @@ describe("Dashboard.sol", () => {
         .withArgs(tx.from, await weth.getAddress(), amount);
       expect(await weth.balanceOf(dashboard)).to.equal(0);
       expect(await weth.balanceOf(vaultOwner)).to.equal(preBalance + amount);
+    });
+  });
+
+  context("collect from vault", () => {
+    const amount = ether("1");
+
+    beforeEach(async () => {
+      const wethContract = weth.connect(user);
+      await wethContract.deposit({ value: amount });
+      await wethContract.transfer(vault, amount);
+      await dashboard.grantRole(await dashboard.COLLECT_ASSETS_ROLE(), user);
+
+      expect(await wethContract.balanceOf(vault)).to.equal(amount);
+    });
+
+    it("allows only COLLECT_ASSETS_ROLE to recover", async () => {
+      await expect(
+        dashboard.connect(stranger).collectERC20FromVault(weth, vaultOwner, 1n),
+      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
+    });
+
+    it("allows COLLECT_ASSETS_ROLE to collect assets", async () => {
+      const tx = await dashboard.connect(user).collectERC20FromVault(weth, vaultOwner, amount);
+      const receipt = await tx.wait();
+      await expect(receipt).to.emit(vault, "AssetRecovered").withArgs(vaultOwner, weth, amount);
+      expect(await weth.balanceOf(vault)).to.equal(0n);
     });
   });
 

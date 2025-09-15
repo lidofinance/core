@@ -30,7 +30,7 @@ interface IWstETH is IERC20 {
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
 contract Dashboard is NodeOperatorFee {
-    /// @dev 0xTODO
+    /// @dev 0xa357418be7f3a4c8d24e7ae9d5b5e3212b632111aae5e548920cf9af8be3eb3b
     bytes32 public constant COLLECT_ASSETS_ROLE = keccak256("vaults.Dashboard.CollectAssets");
 
     /**
