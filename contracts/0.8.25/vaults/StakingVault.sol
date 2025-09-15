@@ -488,7 +488,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     ) external onlyOwner {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
-        if (_tokenId == 0) revert ZeroArgument("_tokenId");
 
         RecoverTokens._recoverERC721(_token, _recipient, _tokenId);
     }

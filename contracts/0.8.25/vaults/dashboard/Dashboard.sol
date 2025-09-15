@@ -517,7 +517,6 @@ contract Dashboard is NodeOperatorFee {
     ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         _requireNotZero(_token);
         _requireNotZero(_recipient);
-        _requireNotZero(_tokenId);
 
         if(_fromVault) {
              VAULT_HUB.recoverERC721FromVault(address(_stakingVault()), _token, _recipient, _tokenId);
