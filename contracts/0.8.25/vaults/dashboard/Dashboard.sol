@@ -505,14 +505,14 @@ contract Dashboard is NodeOperatorFee {
      * from the dashboard contract to sender
      *
      * @param _token an ERC721-compatible token
-     * @param _tokenId token id to recover
      * @param _recipient Address of the recovery recipient
+     * @param _tokenId token id to recover
      * @param _fromVault flag indicating whether to recover from the vault (true) or dashboard (false)
      */
     function recoverERC721(
         address _token,
-        uint256 _tokenId,
         address _recipient,
+        uint256 _tokenId,
         bool _fromVault
     ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         _requireNotZero(_token);

@@ -1126,7 +1126,7 @@ describe("Dashboard.sol", () => {
         dashboard.connect(stranger).recoverERC20(ZeroAddress, vaultOwner, 1n, false),
       ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
       await expect(
-        dashboard.connect(stranger).recoverERC721(erc721.getAddress(), 0, vaultOwner, false),
+        dashboard.connect(stranger).recoverERC721(erc721.getAddress(), vaultOwner, 0n, false),
       ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
     });
 
@@ -1146,12 +1146,12 @@ describe("Dashboard.sol", () => {
     });
 
     it("does not allow zero arguments for erc721 recovery", async () => {
-      await expect(dashboard.recoverERC721(ZeroAddress, 0n, ZeroAddress, false)).to.be.revertedWithCustomError(
+      await expect(dashboard.recoverERC721(ZeroAddress, ZeroAddress, 0n, false)).to.be.revertedWithCustomError(
         dashboard,
         "ZeroAddress",
       );
 
-      await expect(dashboard.recoverERC721(erc721.getAddress(), 0n, ZeroAddress, false)).to.be.revertedWithCustomError(
+      await expect(dashboard.recoverERC721(erc721.getAddress(), ZeroAddress, 0n, false)).to.be.revertedWithCustomError(
         dashboard,
         "ZeroAddress",
       );
@@ -1159,7 +1159,7 @@ describe("Dashboard.sol", () => {
 
     it("recovers all eth", async () => {
       const ethAmount = ether("1");
-      const ethTokenAddress = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"; // ETH pseudo-token address
+      const ethTokenAddress = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"; // ETH pseudo-token address
 
       await setBalance(await dashboard.getAddress(), ethAmount);
       const preBalance = await ethers.provider.getBalance(stranger);
@@ -1183,14 +1183,14 @@ describe("Dashboard.sol", () => {
     });
 
     it("does not allow zero token address for erc721 recovery", async () => {
-      await expect(dashboard.recoverERC721(ZeroAddress, 0, vaultOwner, false)).to.be.revertedWithCustomError(
+      await expect(dashboard.recoverERC721(ZeroAddress, vaultOwner, 0n, false)).to.be.revertedWithCustomError(
         dashboard,
         "ZeroAddress",
       );
     });
 
     it("recovers erc721", async () => {
-      const tx = await dashboard.recoverERC721(erc721.getAddress(), 0, vaultOwner, false);
+      const tx = await dashboard.recoverERC721(erc721.getAddress(), vaultOwner, 0n, false);
 
       await expect(tx)
         .to.emit(dashboard, "ERC721Recovered")

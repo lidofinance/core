@@ -149,7 +149,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
               successUsers: [roles.assetRecoverer, owner],
               failingUsers: Object.values(roles).filter((r) => r !== roles.assetRecoverer && r !== owner),
             },
-            [ZeroAddress, owner, 1n],
+            [ZeroAddress, owner, 1n, false],
             await dashboard.RECOVER_ASSETS_ROLE(),
           );
         });
@@ -161,7 +161,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
               successUsers: [roles.assetRecoverer, owner],
               failingUsers: Object.values(roles).filter((r) => r !== roles.assetRecoverer && r !== owner),
             },
-            [ZeroAddress, 0, stranger],
+            [ZeroAddress, stranger, 0, false],
             await dashboard.RECOVER_ASSETS_ROLE(),
           );
         });
