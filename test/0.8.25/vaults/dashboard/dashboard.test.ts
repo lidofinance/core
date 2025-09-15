@@ -1159,7 +1159,7 @@ describe("Dashboard.sol", () => {
 
     it("recovers all eth", async () => {
       const ethAmount = ether("1");
-      const ethTokenAddress = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"; // ETH pseudo-token address
+      const ethTokenAddress = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"; // ETH pseudo-token address
 
       await setBalance(await dashboard.getAddress(), ethAmount);
       const preBalance = await ethers.provider.getBalance(stranger);
