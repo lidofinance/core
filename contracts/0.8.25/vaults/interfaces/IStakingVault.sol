@@ -55,4 +55,6 @@ interface IStakingVault {
     function ejectValidators(bytes calldata _pubkeys, address _refundRecipient) external payable;
     function setDepositor(address _depositor) external;
     function ossify() external;
+    function recoverERC20(address _token, address _recipient,uint256 _amount) external;
+    function recoverERC721(address _token, address _recipient, uint256 _tokenId) external;
 }

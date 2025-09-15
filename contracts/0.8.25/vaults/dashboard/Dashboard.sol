@@ -6,7 +6,7 @@ pragma solidity 0.8.25;
 
 import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
-import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
+import {RecoverTokens} from "../lib/RecoverTokens.sol";
 
 import {ILido as IStETH} from "contracts/common/interfaces/ILido.sol";
 import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
@@ -42,11 +42,6 @@ contract Dashboard is NodeOperatorFee {
      * @notice The wstETH token contract
      */
     IWstETH public immutable WSTETH;
-
-    /**
-     * @notice ETH address convention per EIP-7528
-     */
-    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
      * @notice Slot for the fund-on-receive flag
@@ -477,27 +472,32 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Recovers ERC20 tokens or ether from the dashboard contract to sender
-     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
+     * @notice Recovers ERC20 tokens or ether from the dashboard/vault contract to sender
+     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether (only for dashboard)
      * @param _recipient Address of the recovery recipient
+     * @param _fromVault flag indicating whether to recover from the vault (true) or dashboard (false)
      */
     function recoverERC20(
         address _token,
         address _recipient,
-        uint256 _amount
+        uint256 _amount,
+        bool _fromVault
     ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         _requireNotZero(_token);
         _requireNotZero(_recipient);
         _requireNotZero(_amount);
 
-        if (_token == ETH) {
-            (bool success,) = payable(_recipient).call{value: _amount}("");
-            if (!success) revert EthTransferFailed(_recipient, _amount);
-        } else {
-            SafeERC20.safeTransfer(IERC20(_token), _recipient, _amount);
+        if(_fromVault) {
+            VAULT_HUB.recoverERC20FromVault(address(_stakingVault()),_token, _recipient, _amount);
+            return;
         }
 
-        emit ERC20Recovered(_recipient, _token, _amount);
+        if(_token == RecoverTokens.ETH) {
+            RecoverTokens._recoverEth(_recipient, _amount);
+            return;
+        } 
+
+        RecoverTokens._recoverERC20(_token, _recipient, _amount);
     }
 
     /**
@@ -507,18 +507,23 @@ contract Dashboard is NodeOperatorFee {
      * @param _token an ERC721-compatible token
      * @param _tokenId token id to recover
      * @param _recipient Address of the recovery recipient
+     * @param _fromVault flag indicating whether to recover from the vault (true) or dashboard (false)
      */
     function recoverERC721(
         address _token,
         uint256 _tokenId,
-        address _recipient
+        address _recipient,
+        bool _fromVault
     ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
         _requireNotZero(_token);
         _requireNotZero(_recipient);
+        _requireNotZero(_tokenId);
 
-        IERC721(_token).safeTransferFrom(address(this), _recipient, _tokenId);
-
-        emit ERC721Recovered(_recipient, _token, _tokenId);
+        if(_fromVault) {
+             VAULT_HUB.recoverERC721FromVault(address(_stakingVault()), _token, _recipient, _tokenId);
+             return;
+        }
+        RecoverTokens._recoverERC721(_token, _recipient, _tokenId);
     }
 
     /**
@@ -695,21 +700,6 @@ contract Dashboard is NodeOperatorFee {
      */
     event UnguaranteedDeposits(address indexed stakingVault, uint256 deposits, uint256 totalAmount);
 
-    /**
-     * @notice Emitted when the ERC20 `token` or ether is recovered (i.e. transferred)
-     * @param to The address of the recovery recipient
-     * @param token The address of the recovered ERC20 token (0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether)
-     * @param amount The amount of the token recovered
-     */
-    event ERC20Recovered(address indexed to, address indexed token, uint256 amount);
-
-    /**
-     * @notice Emitted when the ERC721-compatible `token` (NFT) recovered (i.e. transferred)
-     * @param to The address of the recovery recipient
-     * @param token The address of the recovered ERC721 token
-     * @param tokenId id of token recovered
-     */
-    event ERC721Recovered(address indexed to, address indexed token, uint256 tokenId);
 
     // ==================== Errors ====================
 
@@ -724,11 +714,6 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error thrown when minting capacity is exceeded
      */
     error ExceedsMintingCapacity(uint256 requestedShares, uint256 remainingShares);
-
-    /**
-     * @notice Error thrown when recovery of ETH fails on transfer to recipient
-     */
-    error EthTransferFailed(address recipient, uint256 amount);
 
     /**
      * @notice Error when the StakingVault is still connected to the VaultHub.

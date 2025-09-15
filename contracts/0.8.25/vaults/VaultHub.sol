@@ -930,6 +930,26 @@ contract VaultHub is PausableUntilWithRoles {
         _predepositGuarantee().proveUnknownValidator(_witness, IStakingVault(_vault));
     }
 
+    function recoverERC20FromVault(
+        address _vault,
+        address _token,
+        address _recipient,
+        uint256 _amount
+    ) external  {
+         _checkConnectionAndOwner(_vault);
+         IStakingVault(_vault).recoverERC20(_token, _recipient, _amount);
+    }
+
+    function recoverERC721FromVault(
+        address _vault,
+        address _token,
+        address _recipient,
+        uint256 _tokenId
+    ) external  {
+         _checkConnectionAndOwner(_vault);
+         IStakingVault(_vault).recoverERC721(_token, _recipient, _tokenId);
+    }
+
     function _connectVault(
         address _vault,
         uint256 _shareLimit,

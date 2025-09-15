@@ -10,6 +10,7 @@ import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawal
 import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
 
 import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
+import {RecoverTokens} from "./lib/RecoverTokens.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /**
@@ -451,6 +452,45 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     function ossify() external onlyOwner {
         PinnedBeaconUtils.ossify();
+    }
+
+
+    /**
+     * @notice Recovers ERC20 tokens or ether from the dashboard contract to sender
+     * @param _token Address of the token to recover
+     * @param _recipient Address of the recovery recipient
+     * @param _amount Amount of tokens to recover
+     */
+    function recoverERC20(
+        address _token,
+        address _recipient,
+        uint256 _amount
+    ) external onlyOwner {
+        if (_token == address(0)) revert ZeroArgument("_token");
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+        if (_amount == 0) revert ZeroArgument("_amount");
+
+        RecoverTokens._recoverERC20(_token, _recipient, _amount);
+    }
+
+    /**
+     * @notice Transfers a given token_id of an ERC721-compatible NFT (defined by the token contract address)
+     * from the dashboard contract to sender
+     *
+     * @param _token an ERC721-compatible token
+     * @param _recipient Address of the recovery recipient
+     * @param _tokenId token id to recover
+     */
+    function recoverERC721(
+        address _token,
+        address _recipient,
+        uint256 _tokenId
+    ) external onlyOwner {
+        if (_token == address(0)) revert ZeroArgument("_token");
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+        if (_tokenId == 0) revert ZeroArgument("_tokenId");
+
+        RecoverTokens._recoverERC721(_token, _recipient, _tokenId);
     }
 
     /*
