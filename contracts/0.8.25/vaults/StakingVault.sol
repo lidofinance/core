@@ -456,12 +456,12 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
 
     /**
-     * @notice Recovers ERC20 tokens or ether from the dashboard contract to sender
+     * @notice collects ERC20 tokens from the Staking Vault to the recipient
      * @param _token Address of the token to recover
-     * @param _recipient Address of the recovery recipient
+     * @param _recipient Address of collection recipient
      * @param _amount Amount of tokens to recover
      */
-    function recoverERC20(
+    function collectERC20(
         address _token,
         address _recipient,
         uint256 _amount
@@ -469,27 +469,11 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         if (_token == address(0)) revert ZeroArgument("_token");
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount == 0) revert ZeroArgument("_amount");
+        if (_token == RecoverTokens.ETH) {
+            revert EthCollectionNotAllowed();
+        }
 
         RecoverTokens._recoverERC20(_token, _recipient, _amount);
-    }
-
-    /**
-     * @notice Transfers a given token_id of an ERC721-compatible NFT (defined by the token contract address)
-     * from the dashboard contract to sender
-     *
-     * @param _token an ERC721-compatible token
-     * @param _recipient Address of the recovery recipient
-     * @param _tokenId token id to recover
-     */
-    function recoverERC721(
-        address _token,
-        address _recipient,
-        uint256 _tokenId
-    ) external onlyOwner {
-        if (_token == address(0)) revert ZeroArgument("_token");
-        if (_recipient == address(0)) revert ZeroArgument("_recipient");
-
-        RecoverTokens._recoverERC721(_token, _recipient, _tokenId);
     }
 
     /*
@@ -686,4 +670,9 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Thrown when the length of the validator public keys does not match the length of the amounts
      */
     error PubkeyLengthDoesNotMatchAmountLength();
+
+    /**
+     * @notice thrown when trying to recover ETH (via EIP-7528 address) using collectERC20
+     */
+    error EthCollectionNotAllowed();
 }

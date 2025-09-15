@@ -30,8 +30,8 @@ interface IWstETH is IERC20 {
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
 contract Dashboard is NodeOperatorFee {
-    /// @dev 0xa38b301640bddfd3e6a9d2a11d13551d53ef81526347ff09d798738fcc5a49d4
-    bytes32 public constant RECOVER_ASSETS_ROLE = keccak256("vaults.Dashboard.RecoverAssets");
+    /// @dev 0xTODO
+    bytes32 public constant COLLECT_ASSETS_ROLE = keccak256("vaults.Dashboard.CollectAssets");
 
     /**
      * @notice The stETH token contract
@@ -475,55 +475,31 @@ contract Dashboard is NodeOperatorFee {
      * @notice Recovers ERC20 tokens or ether from the dashboard/vault contract to sender
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether (only for dashboard)
      * @param _recipient Address of the recovery recipient
-     * @param _fromVault flag indicating whether to recover from the vault (true) or dashboard (false)
      */
     function recoverERC20(
         address _token,
         address _recipient,
-        uint256 _amount,
-        bool _fromVault
-    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
+        uint256 _amount
+    ) external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
         _requireNotZero(_token);
         _requireNotZero(_recipient);
         _requireNotZero(_amount);
 
-        if(_fromVault) {
-            VAULT_HUB.recoverERC20FromVault(address(_stakingVault()),_token, _recipient, _amount);
-            return;
-        }
-
-        if(_token == RecoverTokens.ETH) {
+        if (_token == RecoverTokens.ETH) {
             RecoverTokens._recoverEth(_recipient, _amount);
-            return;
-        } 
-
-        RecoverTokens._recoverERC20(_token, _recipient, _amount);
+        } else {
+            RecoverTokens._recoverERC20(_token, _recipient, _amount);
+        }       
     }
 
-    /**
-     * @notice Transfers a given token_id of an ERC721-compatible NFT (defined by the token contract address)
-     * from the dashboard contract to sender
-     *
-     * @param _token an ERC721-compatible token
-     * @param _recipient Address of the recovery recipient
-     * @param _tokenId token id to recover
-     * @param _fromVault flag indicating whether to recover from the vault (true) or dashboard (false)
-     */
-    function recoverERC721(
+    function collectERC20FromVault(
         address _token,
         address _recipient,
-        uint256 _tokenId,
-        bool _fromVault
-    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
-        _requireNotZero(_token);
-        _requireNotZero(_recipient);
-
-        if(_fromVault) {
-             VAULT_HUB.recoverERC721FromVault(address(_stakingVault()), _token, _recipient, _tokenId);
-             return;
-        }
-        RecoverTokens._recoverERC721(_token, _recipient, _tokenId);
+        uint256 _amount
+    ) external onlyRoleMemberOrAdmin(COLLECT_ASSETS_ROLE) {
+        VAULT_HUB.collectERC20FromVault(address(_stakingVault()), _token, _recipient, _amount);
     }
+
 
     /**
      * @notice Pauses beacon chain deposits on the StakingVault.

@@ -1115,45 +1115,31 @@ describe("Dashboard.sol", () => {
       await wethContract.deposit({ value: amount });
       await wethContract.transfer(dashboard, amount);
       await erc721.mint(dashboard, 0);
-      await dashboard.grantRole(await dashboard.RECOVER_ASSETS_ROLE(), vaultOwner);
+      await dashboard.grantRole(await dashboard.DEFAULT_ADMIN_ROLE(), vaultOwner);
 
       expect(await wethContract.balanceOf(dashboard)).to.equal(amount);
       expect(await erc721.ownerOf(0)).to.equal(dashboard);
     });
 
-    it("allows only RECOVER_ASSETS_ROLE to recover", async () => {
-      await expect(
-        dashboard.connect(stranger).recoverERC20(ZeroAddress, vaultOwner, 1n, false),
-      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
-      await expect(
-        dashboard.connect(stranger).recoverERC721(erc721.getAddress(), vaultOwner, 0n, false),
-      ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
+    it("allows only DEFAULT_ADMIN_ROLE  to recover", async () => {
+      await expect(dashboard.connect(stranger).recoverERC20(ZeroAddress, vaultOwner, 1n)).to.be.revertedWithCustomError(
+        dashboard,
+        "AccessControlUnauthorizedAccount",
+      );
     });
 
     it("does not allow zero arguments for erc20 recovery", async () => {
-      await expect(dashboard.recoverERC20(ZeroAddress, vaultOwner, 1n, false)).to.be.revertedWithCustomError(
+      await expect(dashboard.recoverERC20(ZeroAddress, vaultOwner, 1n)).to.be.revertedWithCustomError(
         dashboard,
         "ZeroAddress",
       );
-      await expect(dashboard.recoverERC20(weth, ZeroAddress, 1n, false)).to.be.revertedWithCustomError(
+      await expect(dashboard.recoverERC20(weth, ZeroAddress, 1n)).to.be.revertedWithCustomError(
         dashboard,
         "ZeroAddress",
       );
-      await expect(dashboard.recoverERC20(weth, vaultOwner, 0n, false)).to.be.revertedWithCustomError(
+      await expect(dashboard.recoverERC20(weth, vaultOwner, 0n)).to.be.revertedWithCustomError(
         dashboard,
         "ZeroArgument",
-      );
-    });
-
-    it("does not allow zero arguments for erc721 recovery", async () => {
-      await expect(dashboard.recoverERC721(ZeroAddress, ZeroAddress, 0n, false)).to.be.revertedWithCustomError(
-        dashboard,
-        "ZeroAddress",
-      );
-
-      await expect(dashboard.recoverERC721(erc721.getAddress(), ZeroAddress, 0n, false)).to.be.revertedWithCustomError(
-        dashboard,
-        "ZeroAddress",
       );
     });
 
@@ -1164,8 +1150,8 @@ describe("Dashboard.sol", () => {
       await setBalance(await dashboard.getAddress(), ethAmount);
       const preBalance = await ethers.provider.getBalance(stranger);
 
-      await expect(dashboard.recoverERC20(ethTokenAddress, stranger, ethAmount, false))
-        .to.emit(dashboard, "ERC20Recovered")
+      await expect(dashboard.recoverERC20(ethTokenAddress, stranger, ethAmount))
+        .to.emit(dashboard, "AssetRecovered")
         .withArgs(stranger, ethTokenAddress, ethAmount);
 
       expect(await ethers.provider.getBalance(stranger)).to.equal(preBalance + ethAmount);
@@ -1173,30 +1159,13 @@ describe("Dashboard.sol", () => {
 
     it("recovers all weth", async () => {
       const preBalance = await weth.balanceOf(vaultOwner);
-      const tx = await dashboard.recoverERC20(weth.getAddress(), vaultOwner, amount, false);
+      const tx = await dashboard.recoverERC20(weth.getAddress(), vaultOwner, amount);
 
       await expect(tx)
-        .to.emit(dashboard, "ERC20Recovered")
+        .to.emit(dashboard, "AssetRecovered")
         .withArgs(tx.from, await weth.getAddress(), amount);
       expect(await weth.balanceOf(dashboard)).to.equal(0);
       expect(await weth.balanceOf(vaultOwner)).to.equal(preBalance + amount);
-    });
-
-    it("does not allow zero token address for erc721 recovery", async () => {
-      await expect(dashboard.recoverERC721(ZeroAddress, vaultOwner, 0n, false)).to.be.revertedWithCustomError(
-        dashboard,
-        "ZeroAddress",
-      );
-    });
-
-    it("recovers erc721", async () => {
-      const tx = await dashboard.recoverERC721(erc721.getAddress(), vaultOwner, 0n, false);
-
-      await expect(tx)
-        .to.emit(dashboard, "ERC721Recovered")
-        .withArgs(tx.from, await erc721.getAddress(), 0);
-
-      expect(await erc721.ownerOf(0)).to.equal(vaultOwner.address);
     });
   });
 

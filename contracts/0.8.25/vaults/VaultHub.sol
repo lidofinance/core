@@ -930,36 +930,21 @@ contract VaultHub is PausableUntilWithRoles {
         _predepositGuarantee().proveUnknownValidator(_witness, IStakingVault(_vault));
     }
 
-    /// @notice recovers ERC20 tokens from vault 
+    /// @notice collects ERC20 tokens from vault 
     /// @param _vault vault address
-    /// @param _token address of the ERC20 token to recover
-    /// @param _recipient address to send recovered tokens to
-    /// @param _amount amount of tokens to recover
+    /// @param _token address of the ERC20 token to collect
+    /// @param _recipient address to send collected tokens to
+    /// @param _amount amount of tokens to collect
     /// @dev will revert with StakingVault.ZeroArgument if _token, _recipient or _amount is zero 
-    function recoverERC20FromVault(
+    /// @dev will revert with StakingVault.EthCollectionNotAllowed if _token is ETH (via EIP-7528 address)
+    function collectERC20FromVault(
         address _vault,
         address _token,
         address _recipient,
         uint256 _amount
     ) external  {
          _checkConnectionAndOwner(_vault);
-         IStakingVault(_vault).recoverERC20(_token, _recipient, _amount);
-    }
-
-    /// @notice recovers ERC721 tokens from vault 
-    /// @param _vault vault address
-    /// @param _token address of the ERC721 token to recover
-    /// @param _recipient address to send recovered tokens to
-    /// @param _tokenId of ERC721 token to recover
-    /// @dev will revert with StakingVault.ZeroArgument if _token or _recipient is zero 
-    function recoverERC721FromVault(
-        address _vault,
-        address _token,
-        address _recipient,
-        uint256 _tokenId
-    ) external  {
-         _checkConnectionAndOwner(_vault);
-         IStakingVault(_vault).recoverERC721(_token, _recipient, _tokenId);
+         IStakingVault(_vault).collectERC20(_token, _recipient, _amount);
     }
 
     function _connectVault(

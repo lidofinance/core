@@ -55,7 +55,7 @@ export const vaultRoleKeys = [
   "unguaranteedBeaconChainDepositor",
   "tierChanger",
   "nodeOperatorRewardAdjuster",
-  "assetRecoverer",
+  "assetCollector",
 ] as const;
 
 export type VaultRoles = {
@@ -148,7 +148,7 @@ export const getRoleMethods = (dashboard: Dashboard): VaultRoleMethods => {
     unguaranteedBeaconChainDepositor: dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
     tierChanger: dashboard.VAULT_CONFIGURATION_ROLE(),
     nodeOperatorRewardAdjuster: dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
-    assetRecoverer: dashboard.RECOVER_ASSETS_ROLE(),
+    assetCollector: dashboard.COLLECT_ASSETS_ROLE(),
   };
 };
 

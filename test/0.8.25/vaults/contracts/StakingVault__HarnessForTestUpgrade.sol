@@ -160,10 +160,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, Ownable2StepUpgra
         Ownable2StepUpgradeable.transferOwnership(_newOwner);
     }
 
-    function recoverERC20(address _token, address _recipient, uint256 _amount) external {
-        // no-op
-    }
-    function recoverERC721(address _token, address _recipient, uint256 _tokenId) external {
+    function collectERC20(address _token, address _recipient, uint256 _amount) external {
         // no-op
     }
 }
