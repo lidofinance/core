@@ -930,6 +930,12 @@ contract VaultHub is PausableUntilWithRoles {
         _predepositGuarantee().proveUnknownValidator(_witness, IStakingVault(_vault));
     }
 
+    /// @notice recovers ERC20 tokens from vault 
+    /// @param _vault vault address
+    /// @param _token address of the ERC20 token to recover
+    /// @param _recipient address to send recovered tokens to
+    /// @param _amount amount of tokens to recover
+    /// @dev will revert with StakingVault.ZeroArgument if _token, _recipient or _amount is zero 
     function recoverERC20FromVault(
         address _vault,
         address _token,
@@ -940,6 +946,12 @@ contract VaultHub is PausableUntilWithRoles {
          IStakingVault(_vault).recoverERC20(_token, _recipient, _amount);
     }
 
+    /// @notice recovers ERC721 tokens from vault 
+    /// @param _vault vault address
+    /// @param _token address of the ERC721 token to recover
+    /// @param _recipient address to send recovered tokens to
+    /// @param _tokenId of ERC721 token to recover
+    /// @dev will revert with StakingVault.ZeroArgument if _token or _recipient is zero 
     function recoverERC721FromVault(
         address _vault,
         address _token,
