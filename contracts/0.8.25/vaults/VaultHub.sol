@@ -947,6 +947,23 @@ contract VaultHub is PausableUntilWithRoles {
         _predepositGuarantee().proveUnknownValidator(_witness, IStakingVault(_vault));
     }
 
+    /// @notice collects ERC20 tokens from vault 
+    /// @param _vault vault address
+    /// @param _token address of the ERC20 token to collect
+    /// @param _recipient address to send collected tokens to
+    /// @param _amount amount of tokens to collect
+    /// @dev will revert with StakingVault.ZeroArgument if _token, _recipient or _amount is zero 
+    /// @dev will revert with StakingVault.EthCollectionNotAllowed if _token is ETH (via EIP-7528 address)
+    function collectERC20FromVault(
+        address _vault,
+        address _token,
+        address _recipient,
+        uint256 _amount
+    ) external {
+         _checkConnectionAndOwner(_vault);
+         IStakingVault(_vault).collectERC20(_token, _recipient, _amount);
+    }
+
     function _connectVault(
         address _vault,
         uint256 _shareLimit,

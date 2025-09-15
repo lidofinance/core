@@ -1114,6 +1114,30 @@ describe("VaultHub.sol:hub", () => {
     });
   });
 
+  context("collect erc20", () => {
+    let vault: StakingVault__MockForVaultHub;
+
+    before(async () => {
+      const { vault: _vault } = await createAndConnectVault(vaultFactory);
+      vault = _vault;
+    });
+
+    it("reverts on non-owner call", async () => {
+      await expect(
+        vaultHub.connect(stranger).collectERC20FromVault(vault, certainAddress("erc20"), certainAddress("to"), 1n),
+      ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
+    });
+
+    it("passes call to the vault", async () => {
+      const tx = await vaultHub
+        .connect(user)
+        .collectERC20FromVault(vault, certainAddress("erc20"), certainAddress("to"), 1n);
+      await expect(tx.wait())
+        .to.emit(vault, "Mock_Collected")
+        .withArgs(certainAddress("erc20"), certainAddress("to"), 1n);
+    });
+  });
+
   context("applyVaultReport", () => {
     it("reverts if called by non LazyOracle", async () => {
       const { vault } = await createAndConnectVault(vaultFactory);
