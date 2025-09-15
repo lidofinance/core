@@ -146,23 +146,23 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           await testMethod(
             "recoverERC20",
             {
-              successUsers: [roles.assetRecoverer, owner],
-              failingUsers: Object.values(roles).filter((r) => r !== roles.assetRecoverer && r !== owner),
+              successUsers: [owner],
+              failingUsers: Object.values(roles).filter((r) => r !== owner),
             },
             [ZeroAddress, owner, 1n],
-            await dashboard.RECOVER_ASSETS_ROLE(),
+            await dashboard.DEFAULT_ADMIN_ROLE(),
           );
         });
 
-        it("recoverERC721", async () => {
+        it("collectERC20FromVault", async () => {
           await testMethod(
-            "recoverERC721",
+            "collectERC20FromVault",
             {
-              successUsers: [roles.assetRecoverer, owner],
-              failingUsers: Object.values(roles).filter((r) => r !== roles.assetRecoverer && r !== owner),
+              successUsers: [roles.assetCollector, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== owner && r !== roles.assetCollector),
             },
-            [ZeroAddress, 0, stranger],
-            await dashboard.RECOVER_ASSETS_ROLE(),
+            [ZeroAddress, owner, 1n],
+            await dashboard.COLLECT_VAULT_ERC20_ROLE(),
           );
         });
 
