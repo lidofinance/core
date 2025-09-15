@@ -12,6 +12,7 @@ import {
   EthRejector,
   StakingVault,
   StakingVault__factory,
+  WETH9__MockForVault,
 } from "typechain-types";
 
 import {
@@ -52,6 +53,7 @@ describe("StakingVault.sol", () => {
   let stakingVaultImplementation: StakingVault;
   let depositContract: DepositContract__MockForStakingVault;
   let withdrawalRequestContract: EIP7002WithdrawalRequest__Mock;
+  let weth: WETH9__MockForVault;
   let ethRejector: EthRejector;
 
   let originalState: string;
@@ -64,6 +66,7 @@ describe("StakingVault.sol", () => {
     expect(await stakingVaultImplementation.DEPOSIT_CONTRACT()).to.equal(depositContract);
     expect(await stakingVaultImplementation.version()).to.equal(1);
 
+    weth = await ethers.deployContract("WETH9__MockForVault");
     const beacon = await ethers.deployContract("UpgradeableBeacon", [stakingVaultImplementation, deployer]);
     const beaconProxy = await ethers.deployContract("PinnedBeaconProxy", [beacon, "0x"]);
     stakingVault = StakingVault__factory.connect(await beaconProxy.getAddress(), vaultOwner);
@@ -830,6 +833,54 @@ describe("StakingVault.sol", () => {
         .withArgs(vaultOwner, stranger);
 
       expect(await stakingVault.owner()).to.equal(stranger);
+    });
+  });
+
+  context("collect assets", () => {
+    const amount = ether("1");
+
+    beforeEach(async () => {
+      await weth.connect(vaultOwner).deposit({ value: amount });
+      await weth.connect(vaultOwner).transfer(stakingVault, amount);
+      expect(await weth.balanceOf(stakingVault)).to.equal(amount);
+    });
+
+    it("allows only owner to collect assets", async () => {
+      await expect(stakingVault.connect(stranger).collectERC20(weth, stranger, amount))
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(stranger);
+    });
+
+    it('allows owner to collect "ERC20" assets', async () => {
+      const tx = await stakingVault.connect(vaultOwner).collectERC20(weth, stranger, amount);
+      const receipt = await tx.wait();
+
+      await expect(receipt).to.emit(stakingVault, "AssetRecovered").withArgs(stranger, weth, amount);
+
+      expect(await weth.balanceOf(stakingVault)).to.equal(0);
+      expect(await weth.balanceOf(stranger)).to.equal(amount);
+    });
+
+    it("reverts on zero args", async () => {
+      const vault = stakingVault.connect(vaultOwner);
+      await expect(vault.collectERC20(weth, ZeroAddress, amount))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_recipient");
+
+      await expect(vault.collectERC20(ZeroAddress, stranger, amount))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_token");
+
+      await expect(vault.collectERC20(weth, stranger, 0n))
+        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
+        .withArgs("_amount");
+    });
+
+    it("explicitly reverts on ether collection", async () => {
+      const eth = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+      await expect(stakingVault.connect(vaultOwner).collectERC20(eth, stranger, amount))
+        .to.be.revertedWithCustomError(stakingVault, "EthCollectionNotAllowed")
+        .withArgs();
     });
   });
 });
