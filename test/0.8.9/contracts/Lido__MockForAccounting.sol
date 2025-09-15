@@ -7,9 +7,15 @@ contract Lido__MockForAccounting {
     uint256 public depositedValidatorsValue;
     uint256 public reportClValidators;
     uint256 public reportClBalance;
+    uint256 public reportClActiveBalance;
+    uint256 public reportClPendingBalance;
 
     // Emitted when validators number delivered by the oracle
+    // @deprecated This event is deprecated. Use CLBalancesUpdated instead for balance-based accounting
     event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
+
+    // Emitted when CL balances are updated by the oracle
+    event CLBalancesUpdated(uint256 indexed reportTimestamp, uint256 clActiveBalance, uint256 clPendingBalance);
     event Mock__CollectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
         uint256 _reportClBalance,
@@ -91,24 +97,15 @@ contract Lido__MockForAccounting {
         uint256 _sharesMintedAsFees
     ) external {}
 
-    /**
-     * @notice Process CL related state changes as a part of the report processing
-     * @dev All data validation was done by Accounting and OracleReportSanityChecker
-     * @param _reportTimestamp timestamp of the report
-     * @param _preClValidators number of validators in the previous CL state (for event compatibility)
-     * @param _reportClValidators number of validators in the current CL state
-     * @param _reportClBalance total balance of the current CL state
-     */
-    function processClStateUpdate(
+    function processClStateUpdateV2(
         uint256 _reportTimestamp,
-        uint256 _preClValidators,
-        uint256 _reportClValidators,
-        uint256 _reportClBalance
+        uint256 _clActiveBalance,
+        uint256 _clPendingBalance
     ) external {
-        reportClValidators = _reportClValidators;
-        reportClBalance = _reportClBalance;
+        reportClActiveBalance = _clActiveBalance;
+        reportClPendingBalance = _clPendingBalance;
 
-        emit CLValidatorsUpdated(_reportTimestamp, _preClValidators, _reportClValidators);
+        emit CLBalancesUpdated(_reportTimestamp, _clActiveBalance, _clPendingBalance);
     }
 
     function mintShares(address _recipient, uint256 _sharesAmount) external {

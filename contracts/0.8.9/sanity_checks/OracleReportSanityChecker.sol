@@ -508,14 +508,14 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         uint256 _withdrawalVaultBalance,
         uint256 _elRewardsVaultBalance,
         uint256 _sharesRequestedToBurn,
-        uint256 _preCLValidators,
-        uint256 _postCLValidators
+        uint256 _preCLValidators, // solhint-disable-line no-unused-vars
+        uint256 _postCLValidators // solhint-disable-line no-unused-vars
     ) external {
         if (msg.sender != ACCOUNTING_ADDRESS) {
             revert CalledNotFromAccounting();
         }
         LimitsList memory limitsList = _limits.unpack();
-        uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot();
+        uint256 refSlot = IBaseOracle(LIDO_LOCATOR.accountingOracle()).getLastProcessingRefSlot(); // solhint-disable-line no-unused-vars
 
         address withdrawalVault = LIDO_LOCATOR.withdrawalVault();
         // 1. Withdrawals vault reported balance
@@ -529,22 +529,24 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         _checkSharesRequestedToBurn(_sharesRequestedToBurn);
 
         // 4. Consensus Layer balance decrease
-        _checkCLBalanceDecrease(
-            limitsList,
-            _preCLBalance,
-            _postCLBalance,
-            _withdrawalVaultBalance,
-            _postCLValidators,
-            refSlot
-        );
+        // TODO: MaxEB - validator count-based slashing/penalty checks not relevant for balance-based accounting
+        // _checkCLBalanceDecrease(
+        //     limitsList,
+        //     _preCLBalance,
+        //     _postCLBalance,
+        //     _withdrawalVaultBalance,
+        //     _postCLValidators,
+        //     refSlot
+        // );
 
         // 5. Consensus Layer annual balances increase
         _checkAnnualBalancesIncrease(limitsList, _preCLBalance, _postCLBalance, _timeElapsed);
 
         // 6. Appeared validators increase
-        if (_postCLValidators > _preCLValidators) {
-            _checkAppearedValidatorsChurnLimit(limitsList, (_postCLValidators - _preCLValidators), _timeElapsed);
-        }
+        // TODO: MaxEB - validator count-based checks not relevant for balance-based accounting
+        // if (_postCLValidators > _preCLValidators) {
+        //     _checkAppearedValidatorsChurnLimit(limitsList, (_postCLValidators - _preCLValidators), _timeElapsed);
+        // }
     }
 
     /// @notice Applies sanity checks to the number of validator exit requests supplied to ValidatorExitBusOracle
@@ -649,6 +651,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
+    // TODO: MaxEB - validator count-based data tracking not relevant for balance-based accounting
     function _addReportData(uint256 _timestamp, uint256 _exitedValidatorsCount, uint256 _negativeCLRebase) internal {
         reportData.push(
             ReportData(
@@ -659,6 +662,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         );
     }
 
+    // TODO: MaxEB - negative rebase tracking not relevant for balance-based accounting
     function _sumNegativeRebasesNotOlderThan(uint256 _timestamp) internal view returns (uint256) {
         uint256 sum;
         for (int256 index = int256(reportData.length) - 1; index >= 0; index--) {
@@ -671,6 +675,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return sum;
     }
 
+    // TODO: MaxEB - validator count-based data lookup not relevant for balance-based accounting
     function _exitedValidatorsAtTimestamp(uint256 _timestamp) internal view returns (uint256) {
         for (int256 index = int256(reportData.length) - 1; index >= 0; index--) {
             if (reportData[uint256(index)].timestamp <= SafeCast.toUint64(_timestamp)) {
@@ -680,6 +685,7 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         return 0;
     }
 
+    // TODO: MaxEB - validator count-based slashing/penalty checks not relevant for balance-based accounting
     function _checkCLBalanceDecrease(
         LimitsList memory _limitsList,
         uint256 _preCLBalance,
@@ -807,19 +813,20 @@ contract OracleReportSanityChecker is AccessControlEnumerable {
         }
     }
 
-    function _checkAppearedValidatorsChurnLimit(
-        LimitsList memory _limitsList,
-        uint256 _appearedValidators,
-        uint256 _timeElapsed
-    ) internal pure {
-        if (_timeElapsed == 0) {
-            _timeElapsed = DEFAULT_TIME_ELAPSED;
-        }
+    // TODO: MaxEB - validator count-based checks not relevant for balance-based accounting
+    // function _checkAppearedValidatorsChurnLimit(
+    //     LimitsList memory _limitsList,
+    //     uint256 _appearedValidators,
+    //     uint256 _timeElapsed
+    // ) internal pure {
+    //     if (_timeElapsed == 0) {
+    //         _timeElapsed = DEFAULT_TIME_ELAPSED;
+    //     }
 
-        uint256 appearedLimit = (_limitsList.appearedValidatorsPerDayLimit * _timeElapsed) / SECONDS_PER_DAY;
+    //     uint256 appearedLimit = (_limitsList.appearedValidatorsPerDayLimit * _timeElapsed) / SECONDS_PER_DAY;
 
-        if (_appearedValidators > appearedLimit) revert IncorrectAppearedValidators(_appearedValidators);
-    }
+    //     if (_appearedValidators > appearedLimit) revert IncorrectAppearedValidators(_appearedValidators);
+    // }
 
     function _checkLastFinalizableId(
         LimitsList memory _limitsList,
