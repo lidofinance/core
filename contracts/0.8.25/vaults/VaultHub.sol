@@ -385,7 +385,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault The address of the vault
     /// @param _liabilitySharesTarget maximum amount of liabilityShares that will be preserved, the rest will be
     ///         marked as redemptionShares. If value is greater than liabilityShares, redemptionShares are set to 0
-    /// @dev NB: Mechanism to be triggered when Lido Core TVL <= stVaults TVL.
+    /// @dev NB: Mechanism to be triggered when Lido Core TVL <= stVaults TVL
     function setLiabilitySharesTarget(address _vault, uint256 _liabilitySharesTarget) external onlyRole(REDEMPTION_MASTER_ROLE) {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
@@ -408,6 +408,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _infraFeeBP new infra fee
     /// @param _liquidityFeeBP new liquidity fee
     /// @param _reservationFeeBP new reservation fee
+    /// @dev requires the fresh report
     function updateConnection(
         address _vault,
         uint256 _shareLimit,
@@ -463,6 +464,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender must have VAULT_MASTER_ROLE
     /// @dev vault's `liabilityShares` should be zero
+    /// @dev requires the fresh report (see _initiateDisconnection)
     function disconnect(address _vault) external onlyRole(VAULT_MASTER_ROLE) {
         _initiateDisconnection(_vault, _checkConnection(_vault), _vaultRecord(_vault), false);
 
@@ -493,6 +495,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         VaultConnection storage connection = _vaultConnection(_vault);
         _requireConnected(connection, _vault);
+
         VaultRecord storage record = _vaultRecord(_vault);
 
         if (connection.disconnectInitiatedTs <= _reportTimestamp) {
@@ -542,6 +545,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @return number of shares that was socialized
     ///         (it's limited by acceptor vault capacity and bad debt actual size)
     /// @dev msg.sender must have BAD_DEBT_MASTER_ROLE
+    /// @dev requires the fresh report for both bad debt and acceptor vaults
     function socializeBadDebt(
         address _badDebtVault,
         address _vaultAcceptor,
@@ -589,6 +593,8 @@ contract VaultHub is PausableUntilWithRoles {
                 _overrideOperatorLimits: true
             });
 
+            _updateBeaconChainDepositsPause(_vaultAcceptor, acceptorRecord, acceptorConnection);
+
             emit BadDebtSocialized(_badDebtVault, _vaultAcceptor, badDebtSharesToAccept);
         }
 
@@ -600,6 +606,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _maxSharesToInternalize maximum amount of shares to internalize
     /// @return number of shares that was internalized (limited by actual size of the bad debt)
     /// @dev msg.sender must have BAD_DEBT_MASTER_ROLE
+    /// @dev requires the fresh report
     function internalizeBadDebt(
         address _badDebtVault,
         uint256 _maxSharesToInternalize
@@ -664,6 +671,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     /// @dev vault's `liabilityShares` should be zero
+    /// @dev requires the fresh report (see _initiateDisconnection)
     function voluntaryDisconnect(address _vault) external whenResumed {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
 
@@ -691,9 +699,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _recipient recipient address
     /// @param _ether amount of ether to withdraw
     /// @dev msg.sender should be vault's owner
+    /// @dev requires the fresh report
     function withdraw(address _vault, address _recipient, uint256 _ether) external whenResumed {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
-
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
@@ -709,17 +717,22 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @param _shares amount of shares to rebalance
     /// @dev msg.sender should be vault's owner
+    /// @dev requires the fresh report
     function rebalance(address _vault, uint256 _shares) external whenResumed {
         _requireNotZero(_shares);
         _checkConnectionAndOwner(_vault);
 
-        _rebalance(_vault, _vaultRecord(_vault), _shares);
+        VaultRecord storage record = _vaultRecord(_vault);
+        _requireFreshReport(_vault, record);
+
+        _rebalance(_vault, record, _shares);
     }
 
     /// @notice mint StETH shares backed by vault external balance to the receiver address
     /// @param _vault vault address
     /// @param _recipient address of the receiver
     /// @param _amountOfShares amount of stETH shares to mint
+    /// @dev requires the fresh report
     function mintShares(address _vault, address _recipient, uint256 _amountOfShares) external whenResumed {
         _requireNotZero(_recipient);
         _requireNotZero(_amountOfShares);
@@ -790,11 +803,14 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice resumes beacon chain deposits for the vault
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
+    /// @dev requires the fresh report
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         if (!connection.isBeaconDepositsManuallyPaused) revert PausedExpected();
 
         VaultRecord storage record = _vaultRecord(_vault);
+        _requireFreshReport(_vault, record);
+
         if (record.redemptionShares > 0) revert HasRedemptionsCannotDeposit(_vault);
         if (_unsettledLidoFeesValue(record) >= MIN_BEACON_DEPOSIT) revert FeesTooHighCannotDeposit(_vault);
         if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
@@ -821,7 +837,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _amountsInGwei array of amounts to withdraw from each validator (0 for full withdrawal)
     /// @param _refundRecipient address that will receive the refund for transaction costs
     /// @dev msg.sender should be vault's owner
-    /// @dev in case of partial withdrawals, the report should be fresh
+    /// @dev requires the fresh report (in case of partial withdrawals)
     function triggerValidatorWithdrawals(
         address _vault,
         bytes calldata _pubkeys,
@@ -854,14 +870,14 @@ contract VaultHub is PausableUntilWithRoles {
         _triggerVaultValidatorWithdrawals(_vault, msg.value, _pubkeys, _amountsInGwei, _refundRecipient);
     }
 
-    /// @notice Triggers validator full withdrawals for the vault using EIP-7002 permissionlessly if the vault has
-    ///         obligations shortfall
+    /// @notice Triggers validator full withdrawals for the vault using EIP-7002 if the vault has obligations shortfall
     /// @param _vault address of the vault to exit validators from
     /// @param _pubkeys array of public keys of the validators to exit
     /// @param _refundRecipient address that will receive the refund for transaction costs
     /// @dev    In case the vault has obligations shortfall, trusted actor with the role can force its validators to
     ///         exit the beacon chain. This returns the vault's deposited ETH back to vault's balance and allows to
-    ///         rebalance the vault.
+    ///         rebalance the vault
+    /// @dev requires the fresh report
     function forceValidatorExit(
         address _vault,
         bytes calldata _pubkeys,
@@ -883,7 +899,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice Permissionless rebalance for vaults with obligations shortfall
     /// @param _vault vault address
     /// @dev rebalance all available amount of ether on the vault to fulfill the vault's obligations: restore vault
-    ///      to healthy state and settle outstanding redemptions. Fees are not settled in this case.
+    ///      to healthy state and settle outstanding redemptions. Fees are not settled in this case
+    /// @dev requires the fresh report
     function forceRebalance(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
@@ -904,6 +921,7 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice Permissionless payout of unsettled Lido fees to treasury
     /// @param _vault vault address
+    /// @dev requires the fresh report
     function settleLidoFees(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);

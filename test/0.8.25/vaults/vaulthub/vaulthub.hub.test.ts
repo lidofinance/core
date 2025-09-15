@@ -21,8 +21,10 @@ import {
 import { TierParamsStruct } from "typechain-types/contracts/0.8.25/vaults/OperatorGrid";
 
 import {
+  advanceChainTime,
   BigIntMath,
   certainAddress,
+  days,
   ether,
   findEvents,
   GENESIS_FORK_VERSION,
@@ -888,6 +890,12 @@ describe("VaultHub.sol:hub", () => {
   });
 
   context("updateConnection", () => {
+    let operatorGridSigner: HardhatEthersSigner;
+
+    before(async () => {
+      operatorGridSigner = await impersonate(await operatorGridMock.getAddress(), ether("1"));
+    });
+
     it("reverts if called by non-VAULT_MASTER_ROLE", async () => {
       const { vault } = await createAndConnectVault(vaultFactory);
       await expect(
@@ -905,11 +913,31 @@ describe("VaultHub.sol:hub", () => {
       ).to.be.revertedWithCustomError(vaultHub, "NotAuthorized");
     });
 
+    it("reverts if report is stale", async () => {
+      const { vault } = await createAndConnectVault(vaultFactory);
+      await advanceChainTime(days(3n));
+
+      await expect(
+        vaultHub
+          .connect(operatorGridSigner)
+          .updateConnection(
+            vault,
+            SHARE_LIMIT,
+            RESERVE_RATIO_BP,
+            FORCED_REBALANCE_THRESHOLD_BP,
+            INFRA_FEE_BP,
+            LIQUIDITY_FEE_BP,
+            RESERVATION_FEE_BP,
+          ),
+      )
+        .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")
+        .withArgs(vault);
+    });
+
     it("update connection parameters", async () => {
       const { vault } = await createAndConnectVault(vaultFactory);
       const vaultAddress = await vault.getAddress();
       const nodeOperator = await vault.nodeOperator();
-      const operatorGridSigner = await impersonate(await operatorGridMock.getAddress(), ether("1"));
 
       const oldConnection = await vaultHub.vaultConnection(vaultAddress);
       const newInfraFeeBP = oldConnection.infraFeeBP + 10n;
@@ -972,6 +1000,15 @@ describe("VaultHub.sol:hub", () => {
       await expect(vaultHub.connect(user).disconnect(certainAddress("random"))).to.be.revertedWithCustomError(
         vaultHub,
         "NotConnectedToHub",
+      );
+    });
+
+    it("reverts if report is stale", async () => {
+      await advanceChainTime(days(3n));
+
+      await expect(vaultHub.connect(user).disconnect(vault)).to.be.revertedWithCustomError(
+        vaultHub,
+        "VaultReportStale",
       );
     });
 
