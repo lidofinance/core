@@ -30,8 +30,8 @@ interface IWstETH is IERC20 {
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
 contract Dashboard is NodeOperatorFee {
-    /// @dev 0xa357418be7f3a4c8d24e7ae9d5b5e3212b632111aae5e548920cf9af8be3eb3b
-    bytes32 public constant COLLECT_ASSETS_ROLE = keccak256("vaults.Dashboard.CollectAssets");
+    /// @dev 0xb694d4d19c77484e8f232470d9bf7e10450638db998b577a833d46df71fb6d97
+    bytes32 public constant COLLECT_VAULT_ERC20_ROLE = keccak256("vaults.Dashboard.CollectVaultERC20");
 
     /**
      * @notice The stETH token contract
@@ -472,9 +472,10 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Recovers ERC20 tokens or ether from the dashboard/vault contract to sender
+     * @notice Recovers ERC20 tokens or ether from the dashboard/vault contract to the recipient
      * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether (only for dashboard)
      * @param _recipient Address of the recovery recipient
+     * @param _amount Amount of tokens or ether to recover
      */
     function recoverERC20(
         address _token,
@@ -492,14 +493,21 @@ contract Dashboard is NodeOperatorFee {
         }       
     }
 
+    /**
+     * @notice Collects ERC20 tokens from vault contract balance to the recipient
+     * @param _token Address of the token to collect
+     * @param _recipient Address of the recipient
+     * @param _amount Amount of tokens to collect
+     * @dev will revert on EIP-7528 ETH address with StakingVault.EthCollectionNotAllowed()
+     *      or on zero arguments with StakingVault.ZeroArgument()
+     */
     function collectERC20FromVault(
         address _token,
         address _recipient,
         uint256 _amount
-    ) external onlyRoleMemberOrAdmin(COLLECT_ASSETS_ROLE) {
+    ) external onlyRoleMemberOrAdmin(COLLECT_VAULT_ERC20_ROLE) {
         VAULT_HUB.collectERC20FromVault(address(_stakingVault()), _token, _recipient, _amount);
     }
-
 
     /**
      * @notice Pauses beacon chain deposits on the StakingVault.

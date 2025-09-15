@@ -942,7 +942,7 @@ contract VaultHub is PausableUntilWithRoles {
         address _token,
         address _recipient,
         uint256 _amount
-    ) external  {
+    ) external {
          _checkConnectionAndOwner(_vault);
          IStakingVault(_vault).collectERC20(_token, _recipient, _amount);
     }

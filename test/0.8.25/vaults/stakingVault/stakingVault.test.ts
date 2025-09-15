@@ -855,7 +855,7 @@ describe("StakingVault.sol", () => {
       const tx = await stakingVault.connect(vaultOwner).collectERC20(weth, stranger, amount);
       const receipt = await tx.wait();
 
-      await expect(receipt).to.emit(stakingVault, "AssetRecovered").withArgs(stranger, weth, amount);
+      await expect(receipt).to.emit(stakingVault, "AssetsRecovered").withArgs(stranger, weth, amount);
 
       expect(await weth.balanceOf(stakingVault)).to.equal(0);
       expect(await weth.balanceOf(stranger)).to.equal(amount);

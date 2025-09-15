@@ -1147,7 +1147,7 @@ describe("Dashboard.sol", () => {
       const preBalance = await ethers.provider.getBalance(stranger);
 
       await expect(dashboard.recoverERC20(ethTokenAddress, stranger, ethAmount))
-        .to.emit(dashboard, "AssetRecovered")
+        .to.emit(dashboard, "AssetsRecovered")
         .withArgs(stranger, ethTokenAddress, ethAmount);
 
       expect(await ethers.provider.getBalance(stranger)).to.equal(preBalance + ethAmount);
@@ -1158,7 +1158,7 @@ describe("Dashboard.sol", () => {
       const tx = await dashboard.recoverERC20(weth.getAddress(), vaultOwner, amount);
 
       await expect(tx)
-        .to.emit(dashboard, "AssetRecovered")
+        .to.emit(dashboard, "AssetsRecovered")
         .withArgs(tx.from, await weth.getAddress(), amount);
       expect(await weth.balanceOf(dashboard)).to.equal(0);
       expect(await weth.balanceOf(vaultOwner)).to.equal(preBalance + amount);
@@ -1172,21 +1172,22 @@ describe("Dashboard.sol", () => {
       const wethContract = weth.connect(user);
       await wethContract.deposit({ value: amount });
       await wethContract.transfer(vault, amount);
-      await dashboard.grantRole(await dashboard.COLLECT_ASSETS_ROLE(), user);
+      console.log(await dashboard.COLLECT_VAULT_ERC20_ROLE());
+      await dashboard.grantRole(await dashboard.COLLECT_VAULT_ERC20_ROLE(), user);
 
       expect(await wethContract.balanceOf(vault)).to.equal(amount);
     });
 
-    it("allows only COLLECT_ASSETS_ROLE to recover", async () => {
+    it("allows only COLLECT_VAULT_ERC20_ROLE to recover", async () => {
       await expect(
         dashboard.connect(stranger).collectERC20FromVault(weth, vaultOwner, 1n),
       ).to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
     });
 
-    it("allows COLLECT_ASSETS_ROLE to collect assets", async () => {
+    it("allows COLLECT_VAULT_ERC20_ROLE to collect assets", async () => {
       const tx = await dashboard.connect(user).collectERC20FromVault(weth, vaultOwner, amount);
       const receipt = await tx.wait();
-      await expect(receipt).to.emit(vault, "AssetRecovered").withArgs(vaultOwner, weth, amount);
+      await expect(receipt).to.emit(vault, "AssetsRecovered").withArgs(vaultOwner, weth, amount);
       expect(await weth.balanceOf(vault)).to.equal(0n);
     });
   });

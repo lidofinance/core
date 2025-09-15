@@ -21,7 +21,7 @@ library RecoverTokens {
      * @param assetAddress The address of the recovered ERC20 token (0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether)
      * @param amount The amount of the token recovered
      */
-    event AssetRecovered(address indexed to, address indexed assetAddress, uint256 amount);
+    event AssetsRecovered(address indexed to, address indexed assetAddress, uint256 amount);
 
     /**
      * @notice Error thrown when recovery of ETH fails on transfer to recipient
@@ -37,7 +37,7 @@ library RecoverTokens {
         (bool success,) = payable(_recipient).call{value: _amount}("");
         if (!success) revert EthTransferFailed(_recipient, _amount);
 
-        emit AssetRecovered(_recipient, ETH, _amount);
+        emit AssetsRecovered(_recipient, ETH, _amount);
     }
 
     function _recoverERC20(
@@ -47,7 +47,7 @@ library RecoverTokens {
     ) internal {
         SafeERC20.safeTransfer(IERC20(_token), _recipient, _amount);
 
-        emit AssetRecovered(_recipient, _token, _amount);
+        emit AssetsRecovered(_recipient, _token, _amount);
     }
 }
 
