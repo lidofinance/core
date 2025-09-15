@@ -154,6 +154,18 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           );
         });
 
+        it("collectERC20FromVault", async () => {
+          await testMethod(
+            "collectERC20FromVault",
+            {
+              successUsers: [roles.assetCollector, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== owner && r !== roles.assetCollector),
+            },
+            [ZeroAddress, owner, 1n],
+            await dashboard.COLLECT_ASSETS_ROLE(),
+          );
+        });
+
         it("triggerValidatorWithdrawal", async () => {
           await testMethod(
             "triggerValidatorWithdrawals",
