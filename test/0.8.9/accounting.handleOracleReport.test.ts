@@ -56,6 +56,14 @@ describe("Accounting.sol:report", () => {
         new VaultHub__MockForAccountingReport__factory(deployer).deploy(),
       ]);
 
+    await stakingRouter.mock__getStakingRewardsDistribution(
+      [], // recipients
+      [], // stakingModuleIds
+      [], // stakingModuleFees
+      0, // totalFee
+      100n * 10n ** 18n // precisionPoints = 100%
+    );
+
     locator = await deployLidoLocator(
       {
         lido,
@@ -69,7 +77,14 @@ describe("Accounting.sol:report", () => {
       deployer,
     );
 
-    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido], deployer);
+    const depositsTrackerLib = await ethers.deployContract("DepositsTracker", [], deployer);
+    const genesisTime = 1606824023n; // Ethereum 2.0 genesis time
+    const secondsPerSlot = 12n; // 12 seconds per slot
+    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido, genesisTime, secondsPerSlot], {
+      libraries: {
+        DepositsTracker: await depositsTrackerLib.getAddress()
+      }
+    });
     const accountingProxy = await ethers.deployContract(
       "OssifiableProxy",
       [accountingImpl, deployer, new Uint8Array()],
@@ -83,11 +98,12 @@ describe("Accounting.sol:report", () => {
   });
 
   function report(overrides?: Partial<ReportValuesStruct>): ReportValuesStruct {
+    const now = Math.floor(Date.now() / 1000);
     return {
-      timestamp: 0n,
-      timeElapsed: 0n,
-      clValidators: 0n,
-      clBalance: 0n,
+      timestamp: BigInt(now),
+      timeElapsed: 12n,
+      clActiveBalance: 0n,
+      clPendingBalance: 0n,
       withdrawalVaultBalance: 0n,
       elRewardsVaultBalance: 0n,
       sharesRequestedToBurn: 0n,
@@ -124,28 +140,33 @@ describe("Accounting.sol:report", () => {
   });
 
   context("handleOracleReport", () => {
-    it("Update CL validators count if reported more", async () => {
-      let depositedValidators = 100n;
-      await lido.mock__setDepositedValidators(depositedValidators);
+    it("Update CL balances when reported", async () => {
+      await lido.mock__setDepositedValidators(100n);
 
-      // first report, 100 validators
+      // Record deposits to setup DepositsTracker
+      const lidoSigner = await impersonate(await lido.getAddress(), ether("100.0"));
+      await accounting.connect(lidoSigner).recordDeposit(ether("150"));
+
       await accounting.handleOracleReport(
         report({
-          clValidators: depositedValidators,
+          clActiveBalance: ether("100"),
+          clPendingBalance: ether("50"),
         }),
       );
-      expect(await lido.reportClValidators()).to.equal(depositedValidators);
+      expect(await lido.reportClActiveBalance()).to.equal(ether("100"));
+      expect(await lido.reportClPendingBalance()).to.equal(ether("50"));
 
-      depositedValidators = 101n;
-      await lido.mock__setDepositedValidators(depositedValidators);
+      await lido.mock__setDepositedValidators(101n);
+      await accounting.connect(lidoSigner).recordDeposit(ether("20"));
 
-      // second report, 101 validators
       await accounting.handleOracleReport(
         report({
-          clValidators: depositedValidators,
+          clActiveBalance: ether("110"),
+          clPendingBalance: ether("60"),
         }),
       );
-      expect(await lido.reportClValidators()).to.equal(depositedValidators);
+      expect(await lido.reportClActiveBalance()).to.equal(ether("110"));
+      expect(await lido.reportClPendingBalance()).to.equal(ether("60"));
     });
 
     it("Reverts if the `checkAccountingOracleReport` sanity check fails", async () => {
@@ -179,19 +200,6 @@ describe("Accounting.sol:report", () => {
           }),
         ),
       ).to.be.revertedWithCustomError(accounting, "IncorrectReportTimestamp");
-    });
-
-    it("Reverts if the reported validators count is less than the current count", async () => {
-      const depositedValidators = 100n;
-      await expect(
-        accounting.handleOracleReport(
-          report({
-            clValidators: depositedValidators,
-          }),
-        ),
-      )
-        .to.be.revertedWithCustomError(accounting, "IncorrectReportValidators")
-        .withArgs(100n, 0n, 0n);
     });
 
     it("Does not revert if the `checkWithdrawalQueueOracleReport` sanity check fails but no withdrawal batches were reported", async () => {
@@ -283,7 +291,7 @@ describe("Accounting.sol:report", () => {
       await expect(
         accounting.handleOracleReport(
           report({
-            clBalance: 1n, // made 1 wei of profit, triggers reward processing
+            clActiveBalance: 1n, // made 1 wei of profit, triggers reward processing
           }),
         ),
       ).to.be.revertedWithPanic(0x01); // assert
@@ -312,7 +320,7 @@ describe("Accounting.sol:report", () => {
       await expect(
         accounting.handleOracleReport(
           report({
-            clBalance: 1n, // made 1 wei of profit, triggers reward processing
+            clActiveBalance: 1n, // made 1 wei of profit, triggers reward processing
           }),
         ),
       ).to.be.revertedWithPanic(0x01); // assert
@@ -338,7 +346,7 @@ describe("Accounting.sol:report", () => {
       await expect(
         accounting.handleOracleReport(
           report({
-            clBalance: 1n,
+            clActiveBalance: 1n,
           }),
         ),
       ).not.to.emit(stakingRouter, "Mock__MintedRewardsReported");
@@ -363,10 +371,10 @@ describe("Accounting.sol:report", () => {
         precisionPoints,
       );
 
-      const clBalance = ether("1.0");
+      const clActiveBalance = ether("1.0");
       const expectedSharesToMint =
-        (clBalance * totalFee * (await lido.getTotalShares())) /
-        (((await lido.getTotalPooledEther()) + clBalance) * precisionPoints - clBalance * totalFee);
+        (clActiveBalance * totalFee * (await lido.getTotalShares())) /
+        (((await lido.getTotalPooledEther()) + clActiveBalance) * precisionPoints - clActiveBalance * totalFee);
 
       const expectedModuleRewardInShares = expectedSharesToMint / (totalFee / stakingModule.fee);
       const expectedTreasuryCutInShares = expectedSharesToMint - expectedModuleRewardInShares;
@@ -374,7 +382,7 @@ describe("Accounting.sol:report", () => {
       await expect(
         accounting.handleOracleReport(
           report({
-            clBalance: ether("1.0"), // 1 ether of profit
+            clActiveBalance: ether("1.0"), // 1 ether of profit
           }),
         ),
       )
@@ -404,18 +412,18 @@ describe("Accounting.sol:report", () => {
         precisionPoints,
       );
 
-      const clBalance = ether("1.0");
+      const clActiveBalance = ether("1.0");
 
       const expectedSharesToMint =
-        (clBalance * totalFee * (await lido.getTotalShares())) /
-        (((await lido.getTotalPooledEther()) + clBalance) * precisionPoints - clBalance * totalFee);
+        (clActiveBalance * totalFee * (await lido.getTotalShares())) /
+        (((await lido.getTotalPooledEther()) + clActiveBalance) * precisionPoints - clActiveBalance * totalFee);
 
       const expectedTreasuryCutInShares = expectedSharesToMint;
 
       await expect(
         accounting.handleOracleReport(
           report({
-            clBalance: ether("1.0"), // 1 ether of profit
+            clActiveBalance: ether("1.0"), // 1 ether of profit
           }),
         ),
       )

@@ -183,8 +183,8 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   log.debug("Validators on beacon chain before provisioning", {
     "Module ID to deposit": moduleId,
     "Deposited": before.depositedValidators,
-    "Total": before.beaconValidators,
-    "Balance": before.beaconBalance,
+    "Total": before.clActiveBalance,
+    "Balance": before.clPendingBalance,
   });
 
   // Add new validators to beacon chain
@@ -199,7 +199,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   log.debug("Validators on beacon chain after depositing", {
     "Module ID deposited": moduleId,
     "Deposited": after.depositedValidators,
-    "Total": after.beaconValidators,
-    "Balance": after.beaconBalance,
+    "Total": after.clActiveBalance,
+    "Balance": after.clPendingBalance,
   });
 };

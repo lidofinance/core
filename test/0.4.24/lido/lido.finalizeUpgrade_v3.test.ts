@@ -157,9 +157,9 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       expect(await lido.getLidoLocator()).to.equal(locator);
       expect(await lido.getTotalShares()).to.equal(totalShares);
       expect(await lido.getBufferedEther()).to.equal(bufferedEther);
-
-      expect((await lido.getBeaconStat()).beaconBalance).to.equal(beaconBalance);
-      expect((await lido.getBeaconStat()).beaconValidators).to.equal(beaconValidators);
+      // TODO: remove this test and write for v4 migration
+      // expect((await lido.getBeaconStat()).beaconBalance).to.equal(beaconBalance);
+      // expect((await lido.getBeaconStat()).beaconValidators).to.equal(beaconValidators);
       expect((await lido.getBeaconStat()).depositedValidators).to.equal(depositedValidators);
     });
 

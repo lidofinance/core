@@ -217,13 +217,8 @@ contract Accounting {
             _report
         );
 
-        // Calculate slots from report timestamp and timeElapsed
-        uint256 currentSlot = (_report.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
-        uint256 prevTimestamp = _report.timestamp - _report.timeElapsed;
-        uint256 prevSlot = (prevTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
-
         // Calculate deposits made since last report
-        uint256 depositedSinceLastReport = _getDepositedEthBetweenSlots(prevSlot, currentSlot);
+        uint256 depositedSinceLastReport = _getDepositedEthSinceLastReport(_report.timestamp, _report.timeElapsed);
 
         // Principal CL balance is sum of previous balances and new deposits
         update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance + depositedSinceLastReport;
@@ -556,6 +551,30 @@ contract Accounting {
                 IStakingRouter(stakingRouter),
                 IVaultHub(vaultHub)
             );
+    }
+
+    /**
+     * @dev Calculates ETH deposited since the last report
+     * @param reportTimestamp Current report timestamp
+     * @param timeElapsed Time elapsed since the previous report
+     * @return Amount of ETH deposited between reports
+     */
+    function _getDepositedEthSinceLastReport(
+        uint256 reportTimestamp,
+        uint256 timeElapsed
+    ) internal view returns (uint256) {
+        // Calculate slots from report timestamp and timeElapsed
+        uint256 currentSlot = (reportTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
+        uint256 prevTimestamp = reportTimestamp - timeElapsed;
+
+        // Handle first report or timeElapsed too large scenarios
+        if (prevTimestamp >= GENESIS_TIME) {
+            uint256 prevSlot = (prevTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
+            return _getDepositedEthBetweenSlots(prevSlot, currentSlot);
+        } else {
+            // First report or timeElapsed too large - no deposits to track
+            return 0;
+        }
     }
 
     error NotAuthorized(string operation, address addr);
