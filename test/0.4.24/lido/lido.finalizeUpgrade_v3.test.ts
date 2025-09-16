@@ -140,9 +140,9 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
     it("Migrates storage successfully", async () => {
       const totalShares = await getStorageAtPosition(lido, "lido.StETH.totalShares");
       const bufferedEther = await getStorageAtPosition(lido, "lido.Lido.bufferedEther");
-
-      const beaconValidators = await getStorageAtPosition(lido, "lido.Lido.beaconValidators");
-      const beaconBalance = await getStorageAtPosition(lido, "lido.Lido.beaconBalance");
+      // TODO: remove this test and write for v4 migration
+      // const beaconValidators = await getStorageAtPosition(lido, "lido.Lido.beaconValidators");
+      // const beaconBalance = await getStorageAtPosition(lido, "lido.Lido.beaconBalance");
       const depositedValidators = await getStorageAtPosition(lido, "lido.Lido.depositedValidators");
 
       await expect(
