@@ -37,14 +37,22 @@ contract Lido__MockForAccounting {
         depositedValidatorsValue = _amount;
     }
 
+    function mock__setClActiveBalance(uint256 _amount) external {
+        reportClActiveBalance = _amount;
+    }
+
+    function mock__setClPendingBalance(uint256 _amount) external {
+        reportClPendingBalance = _amount;
+    }
+
     function getBeaconStat()
         external
         view
-        returns (uint256 depositedValidators, uint256 beaconValidators, uint256 beaconBalance)
+        returns (uint256 depositedValidators, uint256 clActiveBalance, uint256 clPendingBalance)
     {
         depositedValidators = depositedValidatorsValue;
-        beaconValidators = reportClValidators;
-        beaconBalance = 0;
+        clActiveBalance = reportClActiveBalance;
+        clPendingBalance = reportClPendingBalance;
     }
 
     function getTotalPooledEther() external pure returns (uint256) {

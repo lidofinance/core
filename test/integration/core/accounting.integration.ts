@@ -206,7 +206,9 @@ describe("Integration: Accounting", () => {
     const { lido, accountingOracle, oracleReportSanityChecker, stakingRouter } = ctx.contracts;
 
     const { annualBalanceIncreaseBPLimit } = await oracleReportSanityChecker.getOracleReportLimits();
-    const { beaconBalance } = await lido.getBeaconStat();
+    // TODO: Update to use balance-based accounting
+    const { clActiveBalance, clPendingBalance } = await lido.getBeaconStat();
+    const beaconBalance = clActiveBalance + clPendingBalance;
 
     const { timeElapsed } = await getReportTimeElapsed(ctx);
 
