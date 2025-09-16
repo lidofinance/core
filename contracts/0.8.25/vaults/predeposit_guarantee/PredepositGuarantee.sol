@@ -415,7 +415,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         }
 
         balance.locked += totalDepositAmount;
-        $.pendingPredeposits[address(_stakingVault)]++;
+        $.pendingPredeposits[address(_stakingVault)] += _deposits.length;
 
         _stakingVault.depositToBeaconChain(_deposits);
 
