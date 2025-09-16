@@ -9,6 +9,7 @@ library DepositsTempStorage {
     bytes32 private constant COUNTS = keccak256("lido.DepositsTempStorage.operators.new.validators.count");
     /// need to store operators and allocations
     /// allocations or counts
+
     function storeOperators(uint256[] memory operators) public {
         _storeArray(OPERATORS, operators);
     }
@@ -28,6 +29,7 @@ library DepositsTempStorage {
     function clearOperators() internal {
         _clearArray(OPERATORS);
     }
+
     function clearCounts() internal {
         _clearArray(COUNTS);
     }
@@ -37,7 +39,7 @@ library DepositsTempStorage {
         assembly {
             tstore(base, mload(values))
         }
- 
+
         unchecked {
             for (uint256 i = 0; i < values.length; ++i) {
                 bytes32 slot = bytes32(uint256(base) + 1 + i);
