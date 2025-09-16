@@ -178,17 +178,6 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the amount of ether that is required to cover the outstanding obligations of the vault
-     */
-    function obligationsShortfallAmount() external view returns (uint256) {
-        uint256 obligationsAmount = VAULT_HUB.obligationsAmount(address(_stakingVault()));
-        if (obligationsAmount == type(uint256).max) return type(uint256).max;
-
-        uint256 balance = address(_stakingVault()).balance;
-        return obligationsAmount > balance ? obligationsAmount - balance : 0;
-    }
-
-    /**
      * @notice Returns the amount of shares to rebalance to restore vault healthiness or to fulfill redemptions
      */
     function rebalanceShortfallShares() external view returns (uint256) {
@@ -477,7 +466,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Recovers ERC20 tokens or ether from the dashboard contract to the recipient
-     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether (EIP-7528) 
+     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether (EIP-7528)
      * @param _recipient Address of the recovery recipient
      * @param _amount Amount of tokens or ether to recover
      */
@@ -494,7 +483,7 @@ contract Dashboard is NodeOperatorFee {
             RecoverTokens._recoverEth(_recipient, _amount);
         } else {
             RecoverTokens._recoverERC20(_token, _recipient, _amount);
-        }       
+        }
     }
 
     /**

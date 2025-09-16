@@ -294,18 +294,6 @@ contract VaultHub is PausableUntilWithRoles {
         return _rebalanceShortfallShares(_vaultConnection(_vault), _vaultRecord(_vault));
     }
 
-    /// @notice calculates the total amount of ether required to fully cover all outstanding obligations of the vault
-    ///         including:
-    ///         - ether for rebalancing to restore vault health or fulfill redemptions
-    ///         - amount of Lido fees that are forced to be settled (>= MIN_BEACON_DEPOSIT)
-    /// @param _vault The address of the vault to check
-    /// @return amount of ether required to cover all uncovered obligations or UINT256_MAX if it's impossible to cover
-    ///         obligations and make the vault healthy
-    function obligationsAmount(address _vault) external view returns (uint256) {
-        VaultConnection storage connection = _checkConnection(_vault);
-        return _obligationsAmount(connection, _vaultRecord(_vault));
-    }
-
     /// @notice returns the obligations of the vault: shares to rebalance to maintain healthiness or fulfill redemptions
     ///         and amount of the outstanding Lido fees
     /// @param _vault vault address
@@ -947,12 +935,12 @@ contract VaultHub is PausableUntilWithRoles {
         _predepositGuarantee().proveUnknownValidator(_witness, IStakingVault(_vault));
     }
 
-    /// @notice collects ERC20 tokens from vault 
+    /// @notice collects ERC20 tokens from vault
     /// @param _vault vault address
     /// @param _token address of the ERC20 token to collect
     /// @param _recipient address to send collected tokens to
     /// @param _amount amount of tokens to collect
-    /// @dev will revert with StakingVault.ZeroArgument if _token, _recipient or _amount is zero 
+    /// @dev will revert with StakingVault.ZeroArgument if _token, _recipient or _amount is zero
     /// @dev will revert with StakingVault.EthCollectionNotAllowed if _token is ETH (via EIP-7528 address)
     function collectERC20FromVault(
         address _vault,
@@ -1258,7 +1246,9 @@ contract VaultHub is PausableUntilWithRoles {
         return liability > _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
     }
 
-    /// @notice the amount of ether required to cover all outstanding obligations of the vault
+    /// @return the total amount of ether needed to fully settle all outstanding obligations of the vault, including:
+    ///         - unsettled shares required to restore vault healthiness or fulfill redemptions
+    ///         - unsettled Lido fees (if above the minimum beacon deposit)
     function _obligationsAmount(
         VaultConnection storage _connection,
         VaultRecord storage _record
@@ -1273,8 +1263,7 @@ contract VaultHub is PausableUntilWithRoles {
         return _getPooledEthBySharesRoundUp(sharesToSettle) + feesToSettle;
     }
 
-    /// @notice the amount of ether required to cover all outstanding obligations of the vault taking into account
-    ///         the vault's available balance and locked value
+    /// @return the ether shortfall required to fully cover all outstanding obligations amount of the vault
     function _obligationsShortfall(
         address _vault,
         VaultConnection storage _connection,
