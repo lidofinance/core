@@ -81,6 +81,10 @@ contract StakingVault__MockForVaultHub is Ownable2StepUpgradeable {
         emit Mock_Collected(_token, _recipient, _amount);
     }
 
+    function availableBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
     event ValidatorWithdrawalsTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
 
     // Mock events for VaultHub forwarding operations
