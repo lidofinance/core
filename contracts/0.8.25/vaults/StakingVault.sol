@@ -196,8 +196,20 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         return _numberOfKeys * TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
+    /**
+     * @notice Calculates the balance that is available for withdrawal (does not account the balances stashed for activations)
+     * @return amount of ether available for withdrawal in Wei
+     */
     function availableBalance() public view returns (uint256) {
         return address(this).balance - _storage().stash;
+    }
+
+    /**
+     * @notice Returns the amount of ether on the balanced that was stashed by depositor for validator activations
+     * @return the amount of stashed ether in Wei
+     */
+    function stashedBalance() external view returns (uint256) {
+        return _storage().stash;
     }
 
     /*
@@ -281,7 +293,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Performs deposits to the beacon chain
      * @param _deposits Array of validator deposits
      */
-    function depositToBeaconChain(Deposit[] calldata _deposits) external onlyDepositorIfNotPaused {
+    function depositToBeaconChain(Deposit[] calldata _deposits) external onlyDepositor whenDepositsNotPaused {
         uint256 numberOfDeposits = _deposits.length;
         if (numberOfDeposits == 0) revert ZeroArgument("_deposits");
 
@@ -296,20 +308,18 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
 
         for (uint256 i = 0; i < numberOfDeposits; i++) {
-            Deposit calldata deposit = _deposits[i];
-
-            DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
-                deposit.pubkey,
-                withdrawalCredentials_,
-                deposit.signature,
-                deposit.depositDataRoot
-            );
+            _depositToBeaconChain(_deposits[i], withdrawalCredentials_);
         }
 
         emit DepositedToBeaconChain(numberOfDeposits, totalAmount);
     }
 
-    function stash(uint256 _ether) external onlyDepositorIfNotPaused {
+    /**
+     * @notice Puts away some ether from the balance to use it for further deposits
+     * @param _ether the amount of ether to stash in Wei
+     */
+    function stash(uint256 _ether) external onlyDepositor whenDepositsNotPaused {
+        if (_ether == 0) revert ZeroArgument("_ether");
         uint256 balance = availableBalance();
         if (balance < _ether) revert InsufficientBalance(balance, _ether);
 
@@ -319,7 +329,12 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         emit EtherStashed(_ether, newStashed);
     }
 
-    function unstash(uint256 _ether) external onlyDepositorIfNotPaused {
+    /**
+     * @notice Returns the ether stashed for deposits back to available balance
+     * @param _ether the amount of ether to remove from stash in Wei
+     */
+    function unstash(uint256 _ether) public onlyDepositor {
+        if (_ether == 0) revert ZeroArgument("_ether");
         uint256 stashed = _storage().stash;
         if (stashed < _ether) revert InsufficientStash(stashed, _ether);
 
@@ -327,6 +342,19 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         _storage().stash = newStashed;
 
         emit EtherUnstashed(_ether, newStashed);
+    }
+
+    /**
+     * @notice Performs deposits to the beacon chain using the stashed ether
+     * @param _deposit struct
+     * @dev NB! this deposit is not affected by pause
+     */
+    function depositFromStash(Deposit calldata _deposit) external onlyDepositor {
+        unstash(_deposit.amount);
+
+        _depositToBeaconChain(_deposit, bytes.concat(withdrawalCredentials()));
+
+        emit DepositedToBeaconChain(1, _deposit.amount);
     }
 
     /*
@@ -496,6 +524,15 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         }
     }
 
+    function _depositToBeaconChain(Deposit calldata _deposit, bytes memory _withdrawalCredentials) internal {
+        DEPOSIT_CONTRACT.deposit{value: _deposit.amount}(
+            _deposit.pubkey,
+            _withdrawalCredentials,
+            _deposit.signature,
+            _deposit.depositDataRoot
+        );
+    }
+
     /**
      * @dev Sets the depositor address in the `StakingVault`
      * @param _depositor Address of the new depositor
@@ -508,10 +545,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         emit DepositorSet(previousDepositor, _depositor);
     }
 
-    modifier onlyDepositorIfNotPaused {
-        Storage storage $ = _storage();
-        if (_storage().depositor != msg.sender) revert SenderNotDepositor();
+    modifier whenDepositsNotPaused {
         if (_storage().beaconChainDepositsPaused) revert BeaconChainDepositsOnPause();
+        _;
+    }
+
+    modifier onlyDepositor {
+        if (_storage().depositor != msg.sender) revert SenderNotDepositor();
         _;
     }
 
@@ -631,6 +671,11 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     error InsufficientBalance(uint256 _balance, uint256 _required);
 
+    /**
+     * @notice Thrown when the amount of ether in stash is not sufficient
+     * @param _stash Stashed amount on the vault
+     * @param _requested Amount of ether requested to unstash
+     */
     error InsufficientStash(uint256 _stash, uint256 _requested);
 
     /**

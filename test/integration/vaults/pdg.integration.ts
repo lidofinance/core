@@ -144,7 +144,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       // 6. Anyone (permissionless) submits a Merkle proof of the validator's appearing on the Consensus Layer to the PDG contract with the withdrawal credentials corresponding to the stVault's address.
       //    6.1. Upon successful verification, 1 ETH of the Node Operator's guarantee collateral is unlocked from the PDG balance
       //    — making it available for withdrawal or reuse for the next validator predeposit.
-      await expect(predepositGuarantee.connect(stranger).proveValidatorWC(witnesses[0]))
+      await expect(predepositGuarantee.connect(stranger).proveWCAndActivateValidator(witnesses[0]))
         .to.emit(predepositGuarantee, "ValidatorProven")
         .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials)
         .to.emit(predepositGuarantee, "BalanceUnlocked")

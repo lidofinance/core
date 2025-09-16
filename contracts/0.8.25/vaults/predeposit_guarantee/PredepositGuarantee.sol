@@ -59,6 +59,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         mapping(address guarantor => uint256 claimableEther) guarantorClaimableEther;
         mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) validatorStatus;
         mapping(address nodeOperator => address depositor) nodeOperatorDepositor;
+        mapping(address stakingVault => uint256 numberOfDeposits) pendingPredeposits;
     }
 
     /**
@@ -158,7 +159,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @return balance object of the node operator
      */
     function nodeOperatorBalance(address _nodeOperator) external view returns (NodeOperatorBalance memory) {
-        return _getStorage().nodeOperatorBalance[_nodeOperator];
+        return _storage().nodeOperatorBalance[_nodeOperator];
     }
 
     /**
@@ -167,7 +168,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @return unlocked amount
      */
     function unlockedBalance(address _nodeOperator) external view returns (uint256 unlocked) {
-        NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[_nodeOperator];
+        NodeOperatorBalance storage balance = _storage().nodeOperatorBalance[_nodeOperator];
         unlocked = balance.total - balance.locked;
     }
 
@@ -196,7 +197,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @return amount of ether that guarantor can claim by calling `claimGuarantorRefund(amount)`
      */
     function claimableRefund(address _guarantor) external view returns (uint256) {
-        return _getStorage().guarantorClaimableEther[_guarantor];
+        return _storage().guarantorClaimableEther[_guarantor];
     }
 
     /**
@@ -205,7 +206,16 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @return struct of ValidatorStatus
      */
     function validatorStatus(bytes calldata _validatorPubkey) external view returns (ValidatorStatus memory) {
-        return _getStorage().validatorStatus[_validatorPubkey];
+        return _storage().validatorStatus[_validatorPubkey];
+    }
+
+    /**
+     * @notice returns the current amount of ether that is predeposited to a given vault
+     * @param _vault staking vault address
+     * @return amount of ether in wei
+     */
+    function pendingPredeposits(IStakingVault _vault) external view returns (uint256) {
+        return _storage().pendingPredeposits[address(_vault)] * PREDEPOSIT_AMOUNT;
     }
 
     /**
@@ -259,7 +269,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_amount % PREDEPOSIT_AMOUNT != 0) revert ValueNotMultipleOfPredepositAmount(_amount);
 
-        NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[_nodeOperator];
+        NodeOperatorBalance storage balance = _storage().nodeOperatorBalance[_nodeOperator];
 
         uint256 unlocked = balance.total - balance.locked;
 
@@ -279,7 +289,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @dev refunded ether can be claimed by previous guarantor with `claimGuarantorRefund()`
      */
     function setNodeOperatorGuarantor(address _newGuarantor) external whenResumed {
-        ERC7201Storage storage $ = _getStorage();
+        ERC7201Storage storage $ = _storage();
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[msg.sender];
 
         address prevGuarantor = _guarantorOf(msg.sender);
@@ -314,7 +324,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         address prevDepositor = _depositorOf(msg.sender);
         if (_newDepositor == prevDepositor) revert SameDepositor();
 
-        _getStorage().nodeOperatorDepositor.setOrReset(msg.sender, _newDepositor);
+        _storage().nodeOperatorDepositor.setOrReset(msg.sender, _newDepositor);
 
         emit DepositorSet(msg.sender, _newDepositor, prevDepositor);
     }
@@ -325,7 +335,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @return claimedEther amount of refund
      */
     function claimGuarantorRefund(address _recipient) external whenResumed returns (uint256 claimedEther) {
-        ERC7201Storage storage $ = _getStorage();
+        ERC7201Storage storage $ = _storage();
 
         claimedEther = $.guarantorClaimableEther[msg.sender];
 
@@ -345,10 +355,12 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     // * * * * * * * * * * * * * * * * * * * * //
 
     /**
-     * @notice deposits NO's validators with PREDEPOSIT_AMOUNT ether from StakingVault and locks up NO's balance
+     * @notice deposits validators with PREDEPOSIT_AMOUNT ether from StakingVault, locks up NO's balance
+     *         and reserve ACTIVATION_DEPOSIT_AMOUNT on StakingVault for further validator activation
      * @dev optionally accepts multiples of`PREDEPOSIT_AMOUNT` in `msg.value` to top up NO balance if NO is self-guarantor
-     * @param _stakingVault to deposit validators to
-     * @param _deposits StakingVault deposit struct that has amount as PREDEPOSIT_AMOUNT
+     * @param _stakingVault address of the StakingVault to use as withdrawal credentials for the deposited validator
+     * @param _deposits array of deposit data with amount set as PREDEPOSIT_AMOUNT
+     * @param _depositsY array of uncompressed pubkey data to verify the signature for each deposit
      */
     function predeposit(
         IStakingVault _stakingVault,
@@ -371,7 +383,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         // sanity check that vault returns valid WC
         _validateWC(_stakingVault, withdrawalCredentials);
 
-        ERC7201Storage storage $ = _getStorage();
+        ERC7201Storage storage $ = _storage();
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[nodeOperator];
 
         uint128 totalDepositAmount = PREDEPOSIT_AMOUNT * uint128(_deposits.length);
@@ -385,26 +397,26 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         for (uint256 i = 0; i < _deposits.length; i++) {
             IStakingVault.Deposit calldata _deposit = _deposits[i];
 
+            if (_deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositAmountInvalid(_deposit.pubkey, _deposit.amount);
+
             // this check isn't needed in  `depositToBeaconChain` because
             // Beacon Chain doesn't enforce the signature checks for existing validators and just top-ups to their balance
             verifyDepositMessage(_deposit, _depositsY[i], withdrawalCredentials);
 
-            if ($.validatorStatus[_deposit.pubkey].stage != ValidatorStage.NONE) {
-                revert ValidatorNotNew(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
-            }
-
-            if (_deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositAmountInvalid(_deposit.pubkey, _deposit.amount);
-
-            $.validatorStatus[_deposit.pubkey] = ValidatorStatus({
-                stage: ValidatorStage.PREDEPOSITED,
-                stakingVault: _stakingVault,
-                nodeOperator: nodeOperator
-            });
+            _createValidatorStatus(_deposit.pubkey,
+                ValidatorStatus({
+                    stage: ValidatorStage.PREDEPOSITED,
+                    stakingVault: _stakingVault,
+                    nodeOperator: nodeOperator
+                })
+            );
 
             emit ValidatorPreDeposited(_deposit.pubkey, nodeOperator, address(_stakingVault), withdrawalCredentials);
         }
 
         balance.locked += totalDepositAmount;
+        $.pendingPredeposits[address(_stakingVault)]++;
+
         _stakingVault.depositToBeaconChain(_deposits);
 
         emit BalanceLocked(nodeOperator, balance.total, balance.locked);
@@ -413,12 +425,14 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     // * * * * * Positive Proof Flow  * * * * * //
 
     /**
-     * @notice permissionless method to prove correct Withdrawal Credentials for the validator on CL
+     * @notice permissionless method to prove correct Withdrawal Credentials for the validator
+     *         and to send the activation deposit
      * @param _witness object containing validator pubkey, Merkle proof and timestamp for Beacon Block root child block
      * @dev will revert if proof is invalid or misformed or validator is not predeposited
+     * @dev will **not** revert if activation is impossible, but it may result in the vault's total value drop
      */
-    function proveValidatorWC(ValidatorWitness calldata _witness) public whenResumed {
-        ValidatorStatus storage validator = _getStorage().validatorStatus[_witness.pubkey];
+    function proveWCAndActivateValidator(ValidatorWitness calldata _witness) public whenResumed {
+        ValidatorStatus storage validator = _storage().validatorStatus[_witness.pubkey];
 
         // checking stage here prevents revert on call to zero address at `.stakingVault.withdrawalCredentials()`
         if (validator.stage != ValidatorStage.PREDEPOSITED) {
@@ -433,14 +447,21 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         _processPositiveProof(_witness.pubkey, validator, withdrawalCredentials);
 
-        _activateTheValidator(vault, _witness.pubkey, withdrawalCredentials);
+        // there is a case when it's impossible to activate the validator if the vault has been disconnected
+        // and has its depositor changed and/or stash unstashed
+        // in this case the Oracle will not account the predeposited amount as part of the total value
+        // until the validator is topped up for ACTIVATION_DEPOSIT_AMOUNT
+        // but the guarantee will be unlocked anyway
+        if (vault.depositor() != address(this) && vault.stashedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
+            _activateValidator(vault, _witness.pubkey, withdrawalCredentials);
+        }
     }
 
     /**
      * @notice deposits ether to proven validators from staking vault
      * @param _stakingVault address
      * @param _deposits array of StakingVault.Deposit structs
-     * @dev only callable by Node Operator of this staking vault
+     * @dev only callable by the depositor assigned by the node operator of the given staking vault
      */
     function depositToBeaconChain(
         IStakingVault _stakingVault,
@@ -449,7 +470,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         if (msg.sender != _depositorOf(_stakingVault.nodeOperator())) {
             revert NotDepositor();
         }
-        ERC7201Storage storage $ = _getStorage();
+
+        ERC7201Storage storage $ = _storage();
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             IStakingVault.Deposit calldata _deposit = _deposits[i];
@@ -457,7 +479,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             ValidatorStatus storage validator = $.validatorStatus[_deposit.pubkey];
 
             if (validator.stage != ValidatorStage.PROVEN) {
-                revert DepositToUnprovenValidator(_deposit.pubkey, $.validatorStatus[_deposit.pubkey].stage);
+                revert DepositToUnprovenValidator(_deposit.pubkey, validator.stage);
             }
 
             // sanity check because first check relies on external contract
@@ -490,15 +512,15 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         IStakingVault _stakingVault
     ) external payable {
         for (uint256 i = 0; i < _witnesses.length; i++) {
-            proveValidatorWC(_witnesses[i]);
+            proveWCAndActivateValidator(_witnesses[i]);
         }
 
         depositToBeaconChain(_stakingVault, _deposits);
     }
 
     /**
-     * @notice shortcut if validator already has valid WC setup
-     * @param _witness  ValidatorWitness struct proving validator WC belong to staking vault
+     * @notice shortcut if validator already has valid WC setup and have activation_eligibility_epoch set (>= 32 ETH balance)
+     * @param _witness  ValidatorWitness struct proving validator WC belongs to the staking vault
      * @param _stakingVault address
      * @dev only callable by staking vault owner & only if validator stage is NONE
      */
@@ -508,32 +530,33 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     ) external whenResumed {
         if (_stakingVault.owner() != msg.sender) revert NotStakingVaultOwner();
 
+        // Filter out validators not eligible for activation (all epochs are set to FAR_FUTURE_EPOCH)
+        //
+        // sha256(
+        //  sha256(FAR_FUTURE_EPOCH|FAR_FUTURE_EPOCH) |  // activation_eligibility_epoch | activation_epoch
+        //  sha256(FAR_FUTURE_EPOCH|FAR_FUTURE_EPOCH)    // exit_epoch  | withdrawable_epoch
+        // )
         if (_witness.proof[1] == 0x2c84ba62dc4e7011c24fb0878e3ef2245a9e2cf2cacbbaf2978a4efa47037283) {
             revert ValidatorNotEligibleForActivation(_witness.pubkey);
         }
 
-        ERC7201Storage storage $ = _getStorage();
-
-        if ($.validatorStatus[_witness.pubkey].stage != ValidatorStage.NONE) {
-            revert ValidatorNotNew(_witness.pubkey, $.validatorStatus[_witness.pubkey].stage);
-        }
-
         bytes32 withdrawalCredentials = _stakingVault.withdrawalCredentials();
-
         // sanity check that vault returns valid WC
         _validateWC(_stakingVault, withdrawalCredentials);
-
         _validatePubKeyWCProof(_witness, withdrawalCredentials);
+        address nodeOperator = _stakingVault.nodeOperator();
 
-        $.validatorStatus[_witness.pubkey] = ValidatorStatus({
-            stage: ValidatorStage.PROVEN,
-            stakingVault: _stakingVault,
-            nodeOperator: _stakingVault.nodeOperator()
-        });
+        _createValidatorStatus(_witness.pubkey,
+            ValidatorStatus({
+                stage: ValidatorStage.PROVEN,
+                stakingVault: _stakingVault,
+                nodeOperator: nodeOperator
+            })
+        );
 
         emit ValidatorProven(
             _witness.pubkey,
-            $.validatorStatus[_witness.pubkey].nodeOperator,
+            nodeOperator,
             address(_stakingVault),
             withdrawalCredentials
         );
@@ -554,7 +577,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     ) public whenResumed returns (uint256) {
         _validatePubKeyWCProof(_witness, _invalidWithdrawalCredentials);
 
-        ERC7201Storage storage $ = _getStorage();
+        ERC7201Storage storage $ = _storage();
         ValidatorStatus storage validator = $.validatorStatus[_witness.pubkey];
 
         // validator state and WC incorrectness are enforced inside
@@ -582,6 +605,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[nodeOperator];
         balance.total -= PREDEPOSIT_AMOUNT;
         balance.locked -= PREDEPOSIT_AMOUNT;
+        $.pendingPredeposits[address(stakingVault)]--;
 
         // unlocking the stashed amount as we are not activating this validator
         stakingVault.unstash(ACTIVATION_DEPOSIT_AMOUNT);
@@ -599,6 +623,17 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     // * * * * * Internal Functions * * * * *  //
     // * * * * * * * * * * * * * * * * * * * * //
 
+    function _createValidatorStatus(bytes calldata _pubkey, ValidatorStatus memory _validator) internal {
+        mapping(bytes validatorPubkey => ValidatorStatus) storage validatorByPubkey = _storage().validatorStatus;
+
+        ValidatorStatus storage validator = validatorByPubkey[_pubkey];
+        if (validator.stage != ValidatorStage.NONE) {
+            revert ValidatorNotNew(_pubkey, validator.stage);
+        }
+
+        validatorByPubkey[_pubkey] = _validator;
+    }
+
     function _processPositiveProof(
         bytes calldata _pubkey,
         ValidatorStatus storage validator,
@@ -608,41 +643,41 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         _validateWC(validator.stakingVault, _withdrawalCredentials);
 
         validator.stage = ValidatorStage.PROVEN;
-        NodeOperatorBalance storage balance = _getStorage().nodeOperatorBalance[validator.nodeOperator];
+
+        NodeOperatorBalance storage balance = _storage().nodeOperatorBalance[validator.nodeOperator];
         balance.locked -= PREDEPOSIT_AMOUNT;
+        _storage().pendingPredeposits[address(validator.stakingVault)]--;
 
         emit BalanceUnlocked(validator.nodeOperator, balance.total, balance.locked);
         emit ValidatorProven(_pubkey, validator.nodeOperator, address(validator.stakingVault), _withdrawalCredentials);
     }
 
-    function _activateTheValidator(
+    /// @dev deposits ACTIVATION_DEPOSIT_AMOUNT to the predeposited validator,
+    /// so oracle can count it as a part of the total value
+    function _activateValidator(
         IStakingVault _stakingVault,
         bytes calldata _pubkey,
-        bytes32 _wc
+        bytes32 _withdrawalCredentials
     ) internal {
-        _stakingVault.unstash(ACTIVATION_DEPOSIT_AMOUNT);
-
         IStakingVault.Deposit memory deposit = IStakingVault.Deposit({
             pubkey: _pubkey,
-            signature: "",
+            signature: new bytes(96),
             amount: ACTIVATION_DEPOSIT_AMOUNT,
-            depositDataRoot: _depositDataRoot31ETHWithNoSig(_pubkey, _wc)
+            depositDataRoot: _depositDataRoot31ETHWithZeroSig(_pubkey, _withdrawalCredentials)
         });
 
-        IStakingVault.Deposit[] memory deposits = new IStakingVault.Deposit[](1);
-        deposits[0] = deposit;
-
-        _stakingVault.depositToBeaconChain(deposits);
+        _stakingVault.depositFromStash(deposit);
     }
 
-    function _depositDataRoot31ETHWithNoSig(bytes calldata _pubkey, bytes32 _wc) internal returns (bytes32){
+    /// @dev the edge case deposit data root for zero signature and 31 ETH amount
+    function _depositDataRoot31ETHWithZeroSig(bytes calldata _pubkey, bytes32 _withdrawalCredentials) internal pure returns (bytes32){
         bytes32 pubkeyRoot = sha256(bytes.concat(_pubkey, bytes16(0)));
         // sha256(sha256(0x0)|sha256(0x0))
         bytes32 zeroSignatureRoot = 0x2eeb74a6177f588d80c0c752b99556902ddf9682d0b906f5aa2adbaf8466a4e9;
         // to_little_endian_64(ACTIVATION_DEPOSIT_AMOUNT)|bytes24(0)
         bytes32 amountLE64ZeroPadded = 0x00001c45c11f36ae000000000000000000000000000000000000000000000000;
         return sha256(bytes.concat(
-            sha256(bytes.concat(pubkeyRoot, _wc)),
+            sha256(bytes.concat(pubkeyRoot, _withdrawalCredentials)),
             sha256(bytes.concat(amountLE64ZeroPadded, zeroSignatureRoot))
         ));
     }
@@ -654,7 +689,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         if (amount == 0) revert ZeroArgument("msg.value");
         if (amount % PREDEPOSIT_AMOUNT != 0) revert ValueNotMultipleOfPredepositAmount(amount);
 
-        _getStorage().nodeOperatorBalance[_nodeOperator].total += uint128(amount);
+        _storage().nodeOperatorBalance[_nodeOperator].total += uint128(amount);
 
         emit BalanceToppedUp(_nodeOperator, msg.sender, amount);
     }
@@ -662,7 +697,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /// @notice returns guarantor of the NO
     /// @dev if guarantor is not set, returns NO address
     function _guarantorOf(address _nodeOperator) internal view returns (address) {
-        return _getStorage().nodeOperatorGuarantor.getValueOrKey(_nodeOperator);
+        return _storage().nodeOperatorGuarantor.getValueOrKey(_nodeOperator);
     }
 
     /// @notice enforces that only NO's guarantor can call the function
@@ -676,7 +711,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /// @notice returns depositor of the NO
     /// @dev if depositor is not set, returns NO address
     function _depositorOf(address _nodeOperator) internal view returns (address) {
-        return _getStorage().nodeOperatorDepositor.getValueOrKey(_nodeOperator);
+        return _storage().nodeOperatorDepositor.getValueOrKey(_nodeOperator);
     }
 
     /// @notice validates that WC belong to the vault
@@ -697,7 +732,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         }
     }
 
-    function _getStorage() private pure returns (ERC7201Storage storage $) {
+    function _storage() private pure returns (ERC7201Storage storage $) {
         assembly {
             $.slot := ERC7201_STORAGE_LOCATION
         }

@@ -57,6 +57,8 @@ interface IStakingVault {
     function ossify() external;
 
     function availableBalance() external view returns (uint256);
+    function stashedBalance() external view returns (uint256);
     function stash(uint256 _ether) external;
     function unstash(uint256 _ether) external;
+    function depositFromStash(Deposit calldata _deposit) external;
 }
