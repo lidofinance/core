@@ -33,7 +33,7 @@ import { bailOnFailure, Snapshot } from "test/suite";
 import { ONE_DAY } from "test/suite/constants";
 
 const VALIDATORS_PER_VAULT = 2n;
-const VALIDATOR_DEPOSIT_SIZE = ether("32");
+const VALIDATOR_DEPOSIT_SIZE = ether("33");
 const VAULT_DEPOSIT = VALIDATOR_DEPOSIT_SIZE * VALIDATORS_PER_VAULT;
 
 const ONE_YEAR = 365n * ONE_DAY;
@@ -257,7 +257,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       proposerIndex: beaconBlockHeader.proposerIndex,
     }));
 
-    const postDepositAmount = VALIDATOR_DEPOSIT_SIZE - predepositAmount;
+    const postDepositAmount = VALIDATOR_DEPOSIT_SIZE - predepositAmount - ether("31");
     const postdeposits = validators.map((validator) => {
       return generatePostDeposit(validator.container, postDepositAmount);
     });
