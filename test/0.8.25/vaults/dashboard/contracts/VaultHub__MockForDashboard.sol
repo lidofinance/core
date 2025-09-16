@@ -39,8 +39,8 @@ contract VaultHub__MockForDashboard {
     }
 
     struct Obligations {
-        uint256 sharesToRebalance;
-        uint256 unsettledLidoFees;
+        uint256 sharesToSettle;
+        uint256 feesToSettle;
     }
 
     mapping(address => VaultHub.VaultConnection) public vaultConnections;
@@ -190,26 +190,18 @@ contract VaultHub__MockForDashboard {
         sendWithdraw = _sendWithdraw;
     }
 
-    function mock__setObligations(address _vault, uint256 _sharesToRebalance, uint256 _unsettledLidoFees) external {
-        mock__obligations[_vault] = Obligations({
-            sharesToRebalance: _sharesToRebalance,
-            unsettledLidoFees: _unsettledLidoFees
-        });
+    function mock__setObligations(address _vault, uint256 _sharesToSettle, uint256 _feesToSettle) external {
+        mock__obligations[_vault] = Obligations({sharesToSettle: _sharesToSettle, feesToSettle: _feesToSettle});
     }
 
     function obligations(address _vault) external view returns (uint256, uint256) {
         Obligations storage $ = mock__obligations[_vault];
-        return ($.sharesToRebalance, $.unsettledLidoFees);
-    }
-
-    function obligationsAmount(address _vault) external view returns (uint256) {
-        Obligations storage $ = mock__obligations[_vault];
-        return steth.getPooledEthBySharesRoundUp($.sharesToRebalance) + $.unsettledLidoFees;
+        return ($.sharesToSettle, $.feesToSettle);
     }
 
     function rebalanceShortfallShares(address _vault) external view returns (uint256) {
         Obligations storage $ = mock__obligations[_vault];
-        return $.sharesToRebalance;
+        return $.sharesToSettle;
     }
 
     function withdraw(address _vault, address _recipient, uint256 _amount) external {
