@@ -1,5 +1,6 @@
 import { ethers } from "hardhat";
 
+import { StakingModuleType } from "lib";
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { streccak } from "lib/keccak";
@@ -13,7 +14,7 @@ const NOR_STAKING_MODULE_MODULE_FEE_BP = 500; // 5%
 const NOR_STAKING_MODULE_TREASURY_FEE_BP = 500; // 5%
 const NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 150;
 const NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
-const NOR_WITHDRAWAL_CREDENTIAL_TYPE = 1;
+const NOR_MODULE_TYPE = StakingModuleType.Legacy;
 
 const SDVT_STAKING_MODULE_TARGET_SHARE_BP = 400; // 4%
 const SDVT_STAKING_MODULE_PRIORITY_EXIT_SHARE_THRESHOLD_BP = 10000; // 100%
@@ -21,7 +22,7 @@ const SDVT_STAKING_MODULE_MODULE_FEE_BP = 800; // 8%
 const SDVT_STAKING_MODULE_TREASURY_FEE_BP = 200; // 2%
 const SDVT_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK = 150;
 const SDVT_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE = 25;
-const SDVT_WITHDRAWAL_CREDENTIAL_TYPE = 1;
+const SDVT_MODULE_TYPE = StakingModuleType.Legacy;
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
@@ -47,7 +48,7 @@ export async function main() {
         treasuryFee: NOR_STAKING_MODULE_TREASURY_FEE_BP,
         maxDepositsPerBlock: NOR_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
         minDepositBlockDistance: NOR_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
-        withdrawalCredentialsType: NOR_WITHDRAWAL_CREDENTIAL_TYPE,
+        moduleType: NOR_MODULE_TYPE,
       },
     ],
     { from: deployer },
@@ -67,7 +68,7 @@ export async function main() {
         treasuryFee: SDVT_STAKING_MODULE_TREASURY_FEE_BP,
         maxDepositsPerBlock: SDVT_STAKING_MODULE_MAX_DEPOSITS_PER_BLOCK,
         minDepositBlockDistance: SDVT_STAKING_MODULE_MIN_DEPOSIT_BLOCK_DISTANCE,
-        withdrawalCredentialsType: SDVT_WITHDRAWAL_CREDENTIAL_TYPE,
+        moduleType: SDVT_MODULE_TYPE,
       },
     ],
     { from: deployer },
