@@ -2,15 +2,17 @@
 pragma solidity 0.8.25;
 
 import {SRStorage} from "./SRStorage.sol";
-import {StakingModuleType, Strategies, Metrics} from "./SRTypes.sol";
+import {StakingModuleType, Strategies, Metrics, ModuleState} from "./SRTypes.sol";
 
 library SRUtils {
+    using SRStorage for ModuleState;
+    using SRStorage for uint256; // for module IDs
+
     uint256 public constant TOTAL_BASIS_POINTS = 10000;
     // uint256 internal constant TOTAL_METRICS_COUNT = 2;
     uint256 public constant MAX_STAKING_MODULES_COUNT = 32;
     /// @dev Restrict the name size with 31 bytes to storage in a single slot.
     uint256 public constant MAX_STAKING_MODULE_NAME_LENGTH = 31;
-
 
     uint256 public constant MAX_EFFECTIVE_BALANCE_01 = 32 ether;
     uint256 public constant MAX_EFFECTIVE_BALANCE_02 = 2048 ether;
@@ -118,5 +120,26 @@ library SRUtils {
         strategyIds[0] = uint8(Strategies.Deposit);
         strategyIds[1] = uint8(Strategies.Withdrawal);
         // strategyIds[2] = uint8(Strategies.Reward);
+    }
+
+    ///  @dev get current balance of the module in ETH
+    function _getModuleBalance(uint256 moduleId) internal view returns (uint256) {
+        // TODO: add deposit tracker
+        return moduleId.getModuleState().getStateAccounting().effectiveBalanceGwei * 1 gwei; // + deposit tracker
+    }
+
+    ///  @dev get total balance of all modules + deposit tracker in ETH
+    function _getModulesTotalBalance() internal view returns (uint256) {
+        // TODO: add deposit tracker
+        return SRStorage.getRouterStorage().totalEffectiveBalanceGwei * 1 gwei; // + router deposit tracker
+    }
+
+    ///  @dev calculate module capacity in ETH
+    function _getModuleCapacity(StakingModuleType moduleType, uint256 availableKeysCount)
+        internal
+        pure
+        returns (uint256)
+    {
+        return availableKeysCount * _getModuleMEB(moduleType);
     }
 }

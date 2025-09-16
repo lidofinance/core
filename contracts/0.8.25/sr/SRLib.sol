@@ -78,7 +78,6 @@ library SRLib {
     error WrongInitialMigrationState();
     error StakingModuleAddressExists();
     error EffectiveBalanceExceeded();
-
     error BPSOverflow();
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
     error ReportedExitedValidatorsExceedDeposited(
@@ -93,6 +92,7 @@ library SRLib {
     error UnrecoverableModuleError();
     error ExitedValidatorsCountCannotDecrease();
     error InvalidReportData(uint256 code);
+    error InvalidDepositAmount();
 
     /// @notice initialize STAS storage
     /// @dev assuming we have only 2 metrics and 2 strategies
@@ -119,13 +119,13 @@ library SRLib {
         uint16[] memory metricWeights = new uint16[](metricIds.length);
 
         // set metric weights for Deposit strategy: 100% for DepositTargetShare, 0% for WithdrawalProtectShare
-        metricWeights[0] = 50000; // some big relative number (uint16)
+        metricWeights[0] = 10000; // some big relative number (uint16)
         metricWeights[1] = 0;
         _stas.setWeights(strategyIds[0], metricIds, metricWeights);
 
         // set metric weights for Withdrawal strategy: 0% for DepositTargetShare, 100% for WithdrawalProtectShare
         metricWeights[0] = 0;
-        metricWeights[1] = 50000; // some big relative number (uint16)
+        metricWeights[1] = 10000; // some big relative number (uint16)
         _stas.setWeights(strategyIds[1], metricIds, metricWeights);
     }
 
@@ -175,30 +175,36 @@ library SRLib {
             moduleState.name = smOld.name;
 
             // 1 SSTORE
-            moduleState.config = ModuleStateConfig({
-                moduleAddress: smOld.stakingModuleAddress,
-                moduleFee: smOld.stakingModuleFee,
-                treasuryFee: smOld.treasuryFee,
-                depositTargetShare: smOld.stakeShareLimit,
-                withdrawalProtectShare: smOld.priorityExitShareThreshold,
-                status: StakingModuleStatus(smOld.status),
-                moduleType: StakingModuleType.Legacy
-            });
+            moduleState.setStateConfig(
+                ModuleStateConfig({
+                    moduleAddress: smOld.stakingModuleAddress,
+                    moduleFee: smOld.stakingModuleFee,
+                    treasuryFee: smOld.treasuryFee,
+                    depositTargetShare: smOld.stakeShareLimit,
+                    withdrawalProtectShare: smOld.priorityExitShareThreshold,
+                    status: StakingModuleStatus(smOld.status),
+                    moduleType: StakingModuleType.Legacy
+                })
+            );
 
             // 1 SSTORE
-            moduleState.deposits = ModuleStateDeposits({
-                lastDepositAt: smOld.lastDepositAt,
-                lastDepositBlock: uint64(smOld.lastDepositBlock),
-                maxDepositsPerBlock: smOld.maxDepositsPerBlock,
-                minDepositBlockDistance: smOld.minDepositBlockDistance
-            });
+            moduleState.setStateDeposits(
+                ModuleStateDeposits({
+                    lastDepositAt: smOld.lastDepositAt,
+                    lastDepositBlock: uint64(smOld.lastDepositBlock),
+                    maxDepositsPerBlock: smOld.maxDepositsPerBlock,
+                    minDepositBlockDistance: smOld.minDepositBlockDistance
+                })
+            );
 
             // 1 SSTORE
             uint128 effBalanceGwei = _calcEffBalanceGwei(smOld.stakingModuleAddress, smOld.exitedValidatorsCount);
-            moduleState.accounting = ModuleStateAccounting({
-                effectiveBalanceGwei: effBalanceGwei,
-                exitedValidatorsCount: uint64(smOld.exitedValidatorsCount)
-            });
+            moduleState.setStateAccounting(
+                ModuleStateAccounting({
+                    effectiveBalanceGwei: effBalanceGwei,
+                    exitedValidatorsCount: uint64(smOld.exitedValidatorsCount)
+                })
+            );
 
             totalEffectiveBalanceGwei += effBalanceGwei;
 
@@ -364,51 +370,80 @@ library SRLib {
         }
     }
 
+    // function _setModuleAcc(uint256 _moduleId, uint128 effBalanceGwei, uint64 exitedValidatorsCount)
+    //     internal
+    //     returns (bool isChanged)
+    // {
+    //     ModuleStateAccounting storage stateAcc = _moduleId.getModuleState().getStateAccounting();
+    //     uint256 totalEffectiveBalanceGwei = SRStorage.getRouterStorage().totalEffectiveBalanceGwei;
+    //     totalEffectiveBalanceGwei -= stateAcc.effectiveBalanceGwei;
+    //     SRStorage.getRouterStorage().totalEffectiveBalanceGwei = totalEffectiveBalanceGwei + effBalanceGwei;
+
+    //     stateAcc.effectiveBalanceGwei = effBalanceGwei;
+    //     stateAcc.exitedValidatorsCount = exitedValidatorsCount;
+    // }
+
     /// @dev mimic OpenZeppelin ContextUpgradeable._msgSender()
     function _msgSender() internal view returns (address) {
         return msg.sender;
     }
 
+    function _getStakingModuleAllocationAndCapacity(uint256 _moduleId, bool loadSummary)
+        internal
+        view
+        returns (uint256 allocation, uint256 capacity)
+    {
+        ModuleStateConfig memory stateConfig = _moduleId.getModuleState().getStateConfig();
+        allocation = SRUtils._getModuleBalance(_moduleId);
+
+        if (loadSummary && stateConfig.status == StakingModuleStatus.Active) {
+            (,, uint256 depositableValidatorsCount) = _moduleId.getIStakingModule().getStakingModuleSummary();
+            capacity = SRUtils._getModuleCapacity(stateConfig.moduleType, depositableValidatorsCount);
+        }
+        // else capacity = 0
+    }
+
     /// @notice Deposit allocation for module
     /// @param _moduleId - Id of staking module
-    /// @param _moduleCapacity - Capacity of staking module
     /// @param _allocateAmount - Eth amount that can be deposited in module
-    function _getDepositAllocation(uint256 _moduleId, uint256 _moduleCapacity, uint256 _allocateAmount)
+    function _getDepositAllocation(uint256 _moduleId, uint256 _allocateAmount)
         public
         view
-        returns (uint256 allocated, uint256 allocation)
+        returns (uint256 allocated, uint256 newAllocation)
     {
-        uint256[] memory ids = new uint256[](1);
-        uint256[] memory capacities = new uint256[](1);
-        ids[0] = _moduleId;
-        capacities[0] = _moduleCapacity;
-
         uint256[] memory allocations;
-        (allocated, allocations) = _getDepositAllocations(ids, capacities, _allocateAmount);
+        (allocated, allocations) = _getDepositAllocations(_asSingletonArray(_moduleId), _allocateAmount);
+
         return (allocated, allocations[0]);
     }
 
     /// @notice Deposit allocation for modules
     /// @param _moduleIds - IDs of staking modules
-    /// @param _moduleCapacities - Capacities of staking modules
     /// @param _allocateAmount - Eth amount that should be allocated into modules
-    function _getDepositAllocations(
-        uint256[] memory _moduleIds,
-        uint256[] memory _moduleCapacities,
-        uint256 _allocateAmount
-    ) public view returns (uint256 allocated, uint256[] memory allocations) {
+    function _getDepositAllocations(uint256[] memory _moduleIds, uint256 _allocateAmount)
+        public
+        view
+        returns (uint256 allocated, uint256[] memory allocations)
+    {
+        // if (_allocateAmount % 1 gwei != 0) {
+        //     revert InvalidDepositAmount();
+        // }
+        // // convert to Gwei
+        // _allocateAmount /= 1 gwei;
+
         uint256 n = _moduleIds.length;
         allocations = new uint256[](n);
-        for (uint256 i = 0; i < n; ++i) {
+        uint256[] memory capacities = new uint256[](n);
+
+        for (uint256 i; i < n; ++i) {
             // load module current balance
-            allocations[i] = _getModuleBalance(_moduleIds[i]);
+            (allocations[i], capacities[i]) = _getStakingModuleAllocationAndCapacity(_moduleIds[i], true);
         }
 
         uint256[] memory shares = SRStorage.getSTASStorage().sharesOf(_moduleIds, uint8(Strategies.Deposit));
-        uint256 totalAmount = SRStorage.getRouterStorage().totalEffectiveBalanceGwei;
-
+        uint256 totalAllocation = SRUtils._getModulesTotalBalance();
         (, uint256[] memory fills, uint256 rest) =
-            STASPouringMath._allocate(shares, allocations, _moduleCapacities, totalAmount, _allocateAmount);
+            STASPouringMath._allocate(shares, allocations, capacities, totalAllocation, _allocateAmount);
 
         unchecked {
             uint256 sum;
@@ -419,42 +454,37 @@ library SRLib {
             allocated = _allocateAmount - rest;
             assert(allocated == sum);
         }
+        return (allocated, allocations);
     }
 
     function _getWithdrawalDeallocations(uint256[] memory _moduleIds, uint256 _deallocateAmount)
         public
         view
-        returns (uint256 deallocated, uint256[] memory deallocations)
+        returns (uint256 deallocated, uint256[] memory allocations)
     {
         uint256 n = _moduleIds.length;
-        deallocations = new uint256[](n);
-        for (uint256 i = 0; i < n; ++i) {
+        allocations = new uint256[](n);
+
+        for (uint256 i; i < n; ++i) {
             // load module current balance
-            deallocations[i] = _getModuleBalance(_moduleIds[i]);
+            (allocations[i],) = _getStakingModuleAllocationAndCapacity(_moduleIds[i], false);
         }
 
         uint256[] memory shares = SRStorage.getSTASStorage().sharesOf(_moduleIds, uint8(Strategies.Withdrawal));
-        uint256 totalAmount = SRStorage.getRouterStorage().totalEffectiveBalanceGwei;
+        uint256 totalAllocation = SRUtils._getModulesTotalBalance();
 
         (, uint256[] memory fills, uint256 rest) =
-            STASPouringMath._deallocate(shares, deallocations, totalAmount, _deallocateAmount);
+            STASPouringMath._deallocate(shares, allocations, totalAllocation, _deallocateAmount);
 
         unchecked {
             uint256 sum;
             for (uint256 i = 0; i < n; ++i) {
-                deallocations[i] -= fills[i];
+                allocations[i] -= fills[i];
                 sum += fills[i];
             }
             deallocated = _deallocateAmount - rest;
             assert(deallocated == sum);
         }
-    }
-
-    function _getModuleBalance(uint256 _moduleId) public view returns (uint256) {
-        ModuleState storage state = _moduleId.getModuleState();
-        ModuleStateAccounting storage accounting = state.getStateAccounting();
-        // TODO: add deposit tracker
-        return accounting.effectiveBalanceGwei * 1 gwei;
     }
 
     /// @dev old storage ref. for staking modules mapping, remove after 1st migration
@@ -464,7 +494,7 @@ library SRLib {
         returns (mapping(uint256 => StakingModule) storage result)
     {
         bytes32 position = STAKING_MODULES_MAPPING_POSITION;
-        assembly {
+        assembly ("memory-safe") {
             result.slot := position
         }
     }
@@ -472,7 +502,7 @@ library SRLib {
     /// @dev old storage ref. for staking modules mapping, remove after 1st migration
     function _getStorageStakingIndicesMapping() internal pure returns (mapping(uint256 => uint256) storage result) {
         bytes32 position = STAKING_MODULE_INDICES_MAPPING_POSITION;
-        assembly {
+        assembly ("memory-safe") {
             result.slot := position
         }
     }
@@ -855,5 +885,12 @@ library SRLib {
         if (firstArrayLength != secondArrayLength) {
             revert ArraysLengthMismatch(firstArrayLength, secondArrayLength);
         }
+    }
+
+    function _asSingletonArray(uint256 element) private pure returns (uint256[] memory) {
+        uint256[] memory array = new uint256[](1);
+        array[0] = element;
+
+        return array;
     }
 }

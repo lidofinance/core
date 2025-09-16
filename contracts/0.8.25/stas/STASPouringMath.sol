@@ -44,8 +44,8 @@ library STASPouringMath {
             fills: fills,
             totalAmount: totalAmount
         });
-        // rest = _pourSimple(imbalance, fills, inflow);
-        rest = _pourWaterFill(imbalance, fills, inflow);
+        rest = _pourSimple(imbalance, fills, inflow);
+        // rest = _pourWaterFill(imbalance, fills, inflow);
     }
 
     /// @param shares The shares of each  entity
@@ -74,8 +74,8 @@ library STASPouringMath {
             fills: fills,
             totalAmount: totalAmount
         });
-        // rest = _pourSimple(imbalance, fills, outflow);
-        rest = _pourWaterFill(imbalance, fills, outflow);
+        rest = _pourSimple(imbalance, fills, outflow);
+        // rest = _pourWaterFill(imbalance, fills, outflow);
     }
 
     // `capacity` - extra inflow for current entity that can be fitted into

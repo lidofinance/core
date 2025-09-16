@@ -22,8 +22,8 @@ library STASCore {
     uint8 public constant MAX_STRATEGIES = 16;
 
     // resulted shares precision
-    uint8 public constant S_FRAC = 32; // Q32.32
-    uint256 public constant S_SCALE = uint256(1) << S_FRAC; // 2^32
+    uint8 public constant S_FRAC = 96; // Q96.96
+    uint256 public constant S_SCALE = uint256(1) << S_FRAC; // 2^96
 
     event UpdatedEntities(uint256 updateCount);
     event UpdatedStrategyWeights(uint256 strategyId, uint256 updatesCount);
@@ -371,7 +371,7 @@ library STASCore {
             }
         }
         // return Math.mulDiv(acc, S_SCALE, sW, Math.Rounding.Floor);
-        return (acc << S_FRAC) / sW; // Q32.32
+        return (acc << S_FRAC) / sW;
     }
 
     function _checkEntity(STASStorage storage $, uint256 eId) private view {

@@ -32,7 +32,6 @@ import {
     NodeOperatorSummary,
     StakingModuleDigest,
     NodeOperatorDigest,
-    StakingModuleCache,
     ModuleStateConfig,
     ModuleStateDeposits,
     ModuleStateAccounting
@@ -392,6 +391,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         SRLib._onValidatorExitTriggered(validatorExitData, _withdrawalRequestPaidFee, _exitType);
     }
 
+    // TODO replace with new method in SanityChecker, V3TemporaryAdmin etc
     /// @dev DEPRECATED, use getStakingModuleStates() instead
     /// @notice Returns all registered staking modules.
     /// @return moduleStates Array of staking modules.
@@ -405,16 +405,35 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return moduleStates;
     }
 
-    // /// @notice Returns state for all registered staking modules.
-    // /// @return moduleStates Array of staking modules.
-    // function getStakingModuleStates() external view returns (ModuleState[] memory moduleStates) {
-    //     uint256[] memory moduleIds = SRStorage.getModuleIds();
-    //     moduleStates = new ModuleState[](moduleIds.length);
+    /// @notice Returns state for staking modules.
+    /// @param _stakingModuleId Id of the staking module.
+    /// @return stateConfig staking modules config state
+    function getStakingModuleStateConfig(uint256 _stakingModuleId)
+        external
+        view
+        returns (ModuleStateConfig memory stateConfig)
+    {
+        (, stateConfig) = _validateAndGetModuleState(_stakingModuleId);
+    }
 
-    //     for (uint256 i; i < moduleIds.length; ++i) {
-    //         moduleStates[i] = moduleIds[i].getModuleState();
-    //     }
+    // function getStakingModuleStateDeposits(uint256 _stakingModuleId)
+    //     external
+    //     view
+    //     returns (ModuleStateDeposits memory stateDeposits)
+    // {
+    //     (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
+    //     stateDeposits = state.getStateDeposits();
     // }
+
+    function getStakingModuleStateAccounting(uint256 _stakingModuleId)
+        external
+        view
+        returns (uint128 effectiveBalanceGwei, uint64 exitedValidatorsCount)
+    {
+        (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
+        ModuleStateAccounting memory stateAccounting = state.getStateAccounting();
+        return (stateAccounting.effectiveBalanceGwei, stateAccounting.exitedValidatorsCount);
+    }
 
     /// @notice Returns the ids of all registered staking modules.
     /// @return stakingModuleIds Array of staking module ids.
@@ -578,31 +597,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (!SRLib._setModuleStatus(_stakingModuleId, _status)) revert StakingModuleStatusTheSame();
     }
 
-    // function _setStakingModuleStatus(uint256 _stakingModuleId, StakingModuleStatus _status)
-    //     internal
-    //     returns (bool isChanged)
-    // {
-    //     ModuleStateConfig storage stateConfig = _stakingModuleId.getModuleState().getStateConfig();
-    //     isChanged = stateConfig.status != _status;
-    //     if (isChanged) {
-    //         stateConfig.status = _status;
-    //         emit StakingModuleStatusSet(_stakingModuleId, _status, _msgSender());
-    //     }
-    // }
-
-    // function _updateModuleStatus(uint256 _moduleId, StakingModuleStatus _status) public returns (bool isChanged) {
-    //     isChanged = _setModuleStatus(_moduleId, _status);
-    //     if (!isChanged) revert StakingModuleStatusTheSame();
-    // }
-
-    // function _setModuleStatus(uint256 _moduleId, StakingModuleStatus _status) public returns (bool isChanged) {
-    //     ModuleStateConfig storage stateConfig = _moduleId.getModuleState().getStateConfig();
-    //     isChanged = stateConfig.status != _status;
-    //     if (isChanged) {
-    //         stateConfig.status = _status;
-    //     }
-    // }
-
     /// @notice Returns whether the staking module is stopped.
     /// @param _stakingModuleId Id of the staking module.
     /// @return True if the staking module is stopped, false otherwise.
@@ -708,7 +702,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (stateConfig.status != StakingModuleStatus.Active) return 0;
 
         if (stateConfig.moduleType == StakingModuleType.New) {
-            (, uint256 stakingModuleTargetEthAmount,) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
+            (, uint256 stakingModuleTargetEthAmount) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
             (uint256[] memory operators, uint256[] memory allocations) =
                 IStakingModuleV2(stateConfig.moduleAddress).getAllocation(stakingModuleTargetEthAmount);
 
@@ -743,7 +737,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             revert ModuleTypeNotSupported();
         }
 
-        (, uint256 stakingModuleTargetEthAmount,) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
+        (, uint256 stakingModuleTargetEthAmount) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
 
         uint256 countKeys = stakingModuleTargetEthAmount / SRUtils.MAX_EFFECTIVE_BALANCE_01;
         // todo move up
@@ -822,37 +816,43 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             uint256 precisionPoints
         )
     {
-        (uint256 totalActiveBalance, StakingModuleCache[] memory stakingModulesCache) = _loadStakingModulesCache();
-        uint256 stakingModulesCount = stakingModulesCache.length;
+        uint256 totalActiveBalance = SRUtils._getModulesTotalBalance();
 
-        /// @dev Return empty response if there are no staking modules or active validators yet.
-        if (stakingModulesCount == 0 || totalActiveBalance == 0) {
-            return (new address[](0), new uint256[](0), new uint96[](0), 0, FEE_PRECISION_POINTS);
-        }
+        uint256[] memory moduleIds = SRStorage.getModuleIds();
+        uint256 stakingModulesCount = totalActiveBalance == 0 ? 0 : moduleIds.length;
 
-        // precisionPoints = FEE_PRECISION_POINTS;
         stakingModuleIds = new uint256[](stakingModulesCount);
         recipients = new address[](stakingModulesCount);
         stakingModuleFees = new uint96[](stakingModulesCount);
+        precisionPoints = FEE_PRECISION_POINTS;
+
+        /// @dev Return empty response if there are no staking modules or active validators yet.
+        if (stakingModulesCount == 0) {
+            return (recipients, stakingModuleIds, stakingModuleFees, totalFee, precisionPoints);
+        }
 
         uint256 rewardedStakingModulesCount = 0;
 
         for (uint256 i; i < stakingModulesCount; ++i) {
+            uint256 moduleId = moduleIds[i];
+            uint256 allocation = SRUtils._getModuleBalance(moduleId);
+
             /// @dev Skip staking modules which have no active balance.
-            if (stakingModulesCache[i].activeBalance == 0) continue;
+            if (allocation == 0) continue;
 
-            stakingModuleIds[rewardedStakingModulesCount] = stakingModulesCache[i].moduleId;
-            recipients[rewardedStakingModulesCount] = stakingModulesCache[i].moduleAddress;
+            stakingModuleIds[rewardedStakingModulesCount] = moduleId;
 
-            (uint96 moduleFee, uint96 treasuryFee) = _computeModuleFee(stakingModulesCache[i], totalActiveBalance);
+            ModuleStateConfig memory stateConfig = moduleId.getModuleState().getStateConfig();
+            recipients[rewardedStakingModulesCount] = stateConfig.moduleAddress;
+
+            (uint96 moduleFee, uint96 treasuryFee) = _computeModuleFee(allocation, totalActiveBalance, stateConfig);
 
             /// @dev If the staking module has the Stopped status for some reason, then
             ///      the staking module's rewards go to the treasury, so that the DAO has ability
             ///      to manage them (e.g. to compensate the staking module in case of an error, etc.)
-            if (stakingModulesCache[i].status != StakingModuleStatus.Stopped) {
+            if (stateConfig.status != StakingModuleStatus.Stopped) {
                 stakingModuleFees[rewardedStakingModulesCount] = moduleFee;
             }
-            // Else keep stakingModuleFees[rewardedStakingModulesCount] = 0, but increase totalFee.
             totalFee += treasuryFee + moduleFee;
 
             unchecked {
@@ -861,21 +861,21 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         }
 
         // Total fee never exceeds 100%.
-        assert(totalFee <= FEE_PRECISION_POINTS);
+        assert(totalFee <= precisionPoints);
 
         /// @dev Shrink arrays.
         if (rewardedStakingModulesCount < stakingModulesCount) {
-            assembly {
+            assembly ("memory-safe") {
                 mstore(stakingModuleIds, rewardedStakingModulesCount)
                 mstore(recipients, rewardedStakingModulesCount)
                 mstore(stakingModuleFees, rewardedStakingModulesCount)
             }
         }
 
-        return (recipients, stakingModuleIds, stakingModuleFees, totalFee, FEE_PRECISION_POINTS);
+        return (recipients, stakingModuleIds, stakingModuleFees, totalFee, precisionPoints);
     }
 
-    function _computeModuleFee(StakingModuleCache memory moduleCache, uint256 totalActiveBalance)
+    function _computeModuleFee(uint256 activeBalance, uint256 totalActiveBalance, ModuleStateConfig memory stateConfig)
         internal
         pure
         returns (uint96 moduleFee, uint96 treasuryFee)
@@ -883,9 +883,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // uint256 share = Math.mulDiv(moduleCache.activeBalance, FEE_PRECISION_POINTS, totalActiveBalance);
         // moduleFee = uint96(Math.mulDiv(share, moduleCache.moduleFee, TOTAL_BASIS_POINTS));
         // treasuryFee = uint96(Math.mulDiv(share, moduleCache.treasuryFee, TOTAL_BASIS_POINTS));
-        uint256 share = moduleCache.activeBalance * FEE_PRECISION_POINTS / totalActiveBalance;
-        moduleFee = uint96(share * moduleCache.moduleFee / SRUtils.TOTAL_BASIS_POINTS);
-        treasuryFee = uint96(share * moduleCache.treasuryFee / SRUtils.TOTAL_BASIS_POINTS);
+        uint256 share = activeBalance * FEE_PRECISION_POINTS / totalActiveBalance;
+        moduleFee = uint96(share * stateConfig.moduleFee / SRUtils.TOTAL_BASIS_POINTS);
+        treasuryFee = uint96(share * stateConfig.treasuryFee / SRUtils.TOTAL_BASIS_POINTS);
     }
 
     /// @notice Returns the same as getStakingRewardsDistribution() but in reduced, 1e4 precision (DEPRECATED).
@@ -915,17 +915,16 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         treasuryFee = SRUtils._toE4Precision(treasuryFeeHighPrecision, precision);
     }
 
-    /// @notice Returns new deposits allocation after the distribution of the `_depositsCount` deposits.
-    /// @param _depositsCount The maximum number of deposits to be allocated.
+    /// @notice Returns new deposits allocation after the distribution of the `_depositAmount` deposits.
+    /// @param _depositAmount The maximum ETH amount of deposits to be allocated.
     /// @return allocated Number of deposits allocated to the staking modules.
     /// @return allocations Array of new deposits allocation to the staking modules.
-    function getDepositsAllocation(uint256 _depositsCount)
+    function getDepositsAllocation(uint256 _depositAmount)
         external
         view
         returns (uint256 allocated, uint256[] memory allocations)
     {
-        // todo
-        // (allocated, allocations, ) = _getDepositsAllocation(_depositsCount);
+        (allocated, allocations) = _getTargetDepositsAllocations(SRStorage.getModuleIds(), _depositAmount);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.
@@ -1064,73 +1063,23 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         emit StakingRouterETHDeposited(stakingModuleId, depositsValue);
     }
 
-    /// @dev Loads modules into a memory cache.
-    /// @return totalActiveBalance Total active balance (effective + deposited) across all modules.
-    /// @return stakingModulesCache Array of StakingModuleCache structs.
-    function _loadStakingModulesCache()
-        internal
-        view
-        returns (uint256 totalActiveBalance, StakingModuleCache[] memory stakingModulesCache)
-    {
-        uint256[] memory moduleIds = SRStorage.getModuleIds();
-        uint256 stakingModulesCount = moduleIds.length;
-        stakingModulesCache = new StakingModuleCache[](stakingModulesCount);
-
-        for (uint256 i; i < stakingModulesCount; ++i) {
-            _loadStakingModulesCacheItem(stakingModulesCache[i], moduleIds[i]);
-            totalActiveBalance += stakingModulesCache[i].activeBalance;
-        }
-    }
-
-    /// @dev fill cache object with module data
-    /// @param cacheItem The cache object to fill
-    /// @param moduleId The ID of the module to load
-    function _loadStakingModulesCacheItem(StakingModuleCache memory cacheItem, uint256 moduleId) internal view {
-        ModuleState storage state = moduleId.getModuleState();
-
-        ModuleStateConfig memory stateConfig = state.getStateConfig();
-        ModuleStateAccounting memory stateAccounting = state.getStateAccounting();
-        // ModuleStateDeposits memory stateDeposit = state.getStateDeposits();
-
-        cacheItem.moduleId = moduleId;
-        cacheItem.moduleAddress = stateConfig.moduleAddress;
-        cacheItem.moduleFee = stateConfig.moduleFee;
-        cacheItem.treasuryFee = stateConfig.treasuryFee;
-        cacheItem.status = stateConfig.status;
-
-        cacheItem.exitedValidatorsCount = stateAccounting.exitedValidatorsCount;
-        // todo load deposit tracker
-        cacheItem.activeBalance = stateAccounting.effectiveBalanceGwei * 1 gwei + 0;
-
-        StakingModuleType moduleType = stateConfig.moduleType;
-        cacheItem.moduleType = moduleType;
-
-        if (stateConfig.status != StakingModuleStatus.Active) {
-            return;
-        }
-
-        (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(moduleId);
-        cacheItem.depositableValidatorsCount = depositableValidatorsCount;
-        cacheItem.depositableAmount = depositableValidatorsCount * SRUtils._getModuleMEB(moduleType);
-    }
-
-    // function _getModuleBalance(uint256 _moduleId) internal view returns (uint256) {
-    //     // TODO: add deposit tracker
-    //     return _loadModuleStateAccounting(_moduleId).effectiveBalanceGwei * 1 gwei;
-    // }
-
     /// @notice Allocation for module based on target share
-    /// @param stakingModuleId - Id of staking module
+    /// @param moduleId - Id of staking module
     /// @param amountToAllocate - Eth amount that can be deposited in module
-    function _getTargetDepositsAllocation(uint256 stakingModuleId, uint256 amountToAllocate)
+    function _getTargetDepositsAllocation(uint256 moduleId, uint256 amountToAllocate)
         internal
         view
-        returns (uint256 allocated, uint256 allocation, StakingModuleCache memory moduleCache)
+        returns (uint256 allocated, uint256 allocation)
     {
-        // todo check cache initialization
-        _loadStakingModulesCacheItem(moduleCache, stakingModuleId);
-        (allocated, allocation) =
-            SRLib._getDepositAllocation(stakingModuleId, moduleCache.depositableAmount, amountToAllocate);
+        (allocated, allocation) = SRLib._getDepositAllocation(moduleId, amountToAllocate);
+    }
+
+    function _getTargetDepositsAllocations(uint256[] memory moduleIds, uint256 amountToAllocate)
+        internal
+        view
+        returns (uint256 allocated, uint256[] memory allocations)
+    {
+        (allocated, allocations) = SRLib._getDepositAllocations(moduleIds, amountToAllocate);
     }
 
     /// module wrapper

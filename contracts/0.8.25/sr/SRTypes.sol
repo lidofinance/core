@@ -253,24 +253,6 @@ struct NodeOperatorDigest {
     NodeOperatorSummary summary;
 }
 
-struct StakingModuleCache {
-    address moduleAddress;
-    uint256 moduleId;
-    uint16 moduleFee;
-    uint16 treasuryFee;
-    // uint16 stakeShareLimit;
-    StakingModuleStatus status;
-    StakingModuleType moduleType;
-    uint256 exitedValidatorsCount; // todo ?
-    uint256 activeBalance; // eff + deposited
-    // uint256 effectiveBalance;
-    // uint256 depositedBalance;
-    // uint256 availableValidatorsCount;
-    // uint256 availableAmount;
-    uint256 depositableValidatorsCount;
-    uint256 depositableAmount;
-}
-
 struct ValidatorsCountsCorrection {
     /// @notice The expected current number of exited validators of the module that is
     /// being corrected.
