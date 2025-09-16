@@ -128,7 +128,7 @@ contract ValidatorConsolidationRequests {
 
         if (_allSourceValidatorBalancesWei > 0) {
             adjustmentIncreaseEncodedCall = abi.encodeWithSelector(
-                NodeOperatorFee.increaseRewardsAdjustment.selector,
+                NodeOperatorFee.addFeeExemption.selector,
                 _allSourceValidatorBalancesWei
             );
         }

@@ -92,7 +92,13 @@ contract Dashboard is NodeOperatorFee {
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry
     ) external {
-        super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeRecipient, _nodeOperatorFeeBP, _confirmExpiry);
+        super._initialize(
+            _defaultAdmin,
+            _nodeOperatorManager,
+            _nodeOperatorFeeRecipient,
+            _nodeOperatorFeeBP,
+            _confirmExpiry
+        );
 
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
@@ -273,7 +279,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function voluntaryDisconnect() external {
         disburseNodeOperatorFee();
-
+        _disableFeeDisbursement();
         _voluntaryDisconnect();
     }
 
@@ -304,6 +310,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Connects to VaultHub, transferring ownership to VaultHub.
      */
     function connectToVaultHub() public payable {
+        _disableFeeDisbursement();
         if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
@@ -449,7 +456,7 @@ contract Dashboard is NodeOperatorFee {
         // Instead of relying on auto-reset at the end of the transaction,
         // re-enable fund-on-receive manually to restore the default receive() behavior in the same transaction
         _enableFundOnReceive();
-        _setRewardsAdjustment(rewardsAdjustment.amount + totalAmount);
+        _addFeeExemption(totalAmount);
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
 
@@ -491,7 +498,7 @@ contract Dashboard is NodeOperatorFee {
         _requireNotZero(_amount);
 
         if (_token == ETH) {
-            (bool success,) = payable(_recipient).call{value: _amount}("");
+            (bool success, ) = payable(_recipient).call{value: _amount}("");
             if (!success) revert EthTransferFailed(_recipient, _amount);
         } else {
             SafeERC20.safeTransfer(IERC20(_token), _recipient, _amount);
