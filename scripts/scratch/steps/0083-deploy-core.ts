@@ -215,10 +215,20 @@ export async function main() {
   // Deploy Accounting
   //
 
-  const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
-    locator.address,
-    lidoAddress,
-  ]);
+  const accounting = await deployBehindOssifiableProxy(
+    Sk.accounting,
+    "Accounting",
+    proxyContractsOwner,
+    deployer,
+    [locator.address, lidoAddress, chainSpec.secondsPerSlot, chainSpec.genesisTime],
+    null,
+    true,
+    {
+      libraries: {
+        DepositsTracker: depositsTracker.address,
+      },
+    },
+  );
 
   //
   // Deploy AccountingOracle and its HashConsensus
