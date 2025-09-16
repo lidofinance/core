@@ -6,12 +6,15 @@ pragma solidity 0.8.25;
 import {StakingRouter} from "contracts/0.8.25/sr/StakingRouter.sol";
 import {DepositsTempStorage} from "contracts/common/lib/DepositsTempStorage.sol";
 import {SRLib} from "contracts/0.8.25/sr/SRLib.sol";
-import {StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
+import {SRStorage} from "contracts/0.8.25/sr/SRStorage.sol";
+import {StakingModuleStatus, ModuleStateAccounting} from "contracts/0.8.25/sr/SRTypes.sol";
 
 contract StakingRouter__Harness is StakingRouter {
-    constructor(address _depositContract, uint64 _secondsPerSlot, uint64 _genesisTime)
-        StakingRouter(_depositContract, _secondsPerSlot, _genesisTime)
-    {}
+    constructor(
+        address _depositContract,
+        uint64 _secondsPerSlot,
+        uint64 _genesisTime
+    ) StakingRouter(_depositContract, _secondsPerSlot, _genesisTime) {}
 
     /// @notice FOR TEST: write operators & counts into the router's transient storage.
     function mock_storeTemp(uint256[] calldata operators, uint256[] calldata counts) external {
@@ -31,6 +34,23 @@ contract StakingRouter__Harness is StakingRouter {
 
     function testing_setStakingModuleStatus(uint256 _stakingModuleId, StakingModuleStatus _status) external {
         SRLib._setModuleStatus(_stakingModuleId, _status);
+    }
+
+    function testing_setStakingModuleAccounting(
+        uint256 _stakingModuleId,
+        uint128 effBalanceGwei,
+        uint64 exitedValidatorsCount
+    ) external {
+        ModuleStateAccounting storage stateAcc = SRStorage.getStateAccounting(
+            SRStorage.getModuleState(_stakingModuleId)
+        );
+
+        uint256 totalEffectiveBalanceGwei = SRStorage.getRouterStorage().totalEffectiveBalanceGwei;
+        totalEffectiveBalanceGwei -= stateAcc.effectiveBalanceGwei;
+        SRStorage.getRouterStorage().totalEffectiveBalanceGwei = totalEffectiveBalanceGwei + effBalanceGwei;
+
+        stateAcc.effectiveBalanceGwei = effBalanceGwei;
+        stateAcc.exitedValidatorsCount = exitedValidatorsCount;
     }
 
     function _getInitializableStorage_Mock() private pure returns (InitializableStorage storage $) {

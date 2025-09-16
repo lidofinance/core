@@ -90,9 +90,7 @@ export enum WithdrawalCredentialsType {
   WC0x02 = WITHDRAWAL_CREDENTIALS_TYPE_02,
 }
 
-export const getModuleWCType = (
-  moduleType: StakingModuleType
-): WithdrawalCredentialsType => {
+export const getModuleWCType = (moduleType: StakingModuleType): WithdrawalCredentialsType => {
   switch (moduleType) {
     case StakingModuleType.Legacy:
       return WithdrawalCredentialsType.WC0x01;
@@ -103,4 +101,20 @@ export const getModuleWCType = (
       return _exhaustive;
     }
   }
-}
+};
+
+export const MAX_EFFECTIVE_BALANCE_WC0x01 = 32n * 10n ** 18n; // 32 ETH
+export const MAX_EFFECTIVE_BALANCE_WC0x02 = 2048n * 10n ** 18n; // 2048 ETH
+
+export const getModuleMEB = (moduleType: StakingModuleType): bigint => {
+  switch (moduleType) {
+    case StakingModuleType.Legacy:
+      return MAX_EFFECTIVE_BALANCE_WC0x01;
+    case StakingModuleType.New:
+      return MAX_EFFECTIVE_BALANCE_WC0x02;
+    default: {
+      const _exhaustive: never = moduleType;
+      return _exhaustive;
+    }
+  }
+};

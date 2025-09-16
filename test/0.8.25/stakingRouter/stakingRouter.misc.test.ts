@@ -147,9 +147,7 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("fails with InvalidInitialization error when called on deployed from scratch SRv3", async () => {
-      await expect(
-        stakingRouter.migrateUpgrade_v4(lido, withdrawalCredentials, withdrawalCredentials02),
-      ).to.be.revertedWithCustomError(impl, "InvalidInitialization");
+      await expect(stakingRouter.migrateUpgrade_v4()).to.be.revertedWithCustomError(impl, "InvalidInitialization");
     });
 
     // do this check via new Initializer from openzeppelin
@@ -161,9 +159,7 @@ describe("StakingRouter.sol:misc", () => {
 
       it("sets correct contract version", async () => {
         expect(await stakingRouter.getContractVersion()).to.equal(3);
-        await expect(stakingRouter.migrateUpgrade_v4(lido, withdrawalCredentials, withdrawalCredentials02))
-          .to.emit(stakingRouter, "Initialized")
-          .withArgs(4);
+        await expect(stakingRouter.migrateUpgrade_v4()).to.emit(stakingRouter, "Initialized").withArgs(4);
         expect(await stakingRouter.getContractVersion()).to.be.equal(4);
       });
     });

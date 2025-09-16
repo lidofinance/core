@@ -26,13 +26,13 @@ contract StakingRouter__MockForAccountingOracle is IStakingRouter {
 
     uint256 public totalCalls_onValidatorsCountsByNodeOperatorReportingFinished;
 
-    // function lastCall_updateExitedKeysByModule() external view returns (UpdateExitedKeysByModuleCallData memory) {
-    //     return _lastCall_updateExitedKeysByModule;
-    // }
+    function lastCall_updateExitedKeysByModule() external view returns (UpdateExitedKeysByModuleCallData memory) {
+        return _lastCall_updateExitedKeysByModule;
+    }
 
-    // function totalCalls_reportExitedKeysByNodeOperator() external view returns (uint256) {
-    //     return calls_reportExitedKeysByNodeOperator.length;
-    // }
+    function totalCalls_reportExitedKeysByNodeOperator() external view returns (uint256) {
+        return calls_reportExitedKeysByNodeOperator.length;
+    }
 
     ///
     /// IStakingRouter

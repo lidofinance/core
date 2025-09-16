@@ -1,4 +1,5 @@
-import { ethers, Contract } from "hardhat";
+import { Contract } from "ethers";
+import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 

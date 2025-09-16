@@ -7,12 +7,12 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   DepositContract__MockForBeaconChainDepositor,
-  SRLib,
   StakingModule__MockForStakingRouter,
   StakingRouter,
 } from "typechain-types";
+import { ValidatorsCountsCorrectionStruct } from "typechain-types/contracts/0.8.25/sr/StakingRouter";
 
-import { ether, getNextBlock, StakingModuleType, WithdrawalCredentialsType } from "lib";
+import { ether, getNextBlock, StakingModuleStatus, StakingModuleType, WithdrawalCredentialsType } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -114,7 +114,7 @@ describe("StakingRouter.sol:module-sync", () => {
     ];
 
     // module mock state
-    const stakingModuleSummary: Parameters<StakingModule__MockForStakingRouter["mock__getStakingModuleSummary"]> = [
+    const stakingModuleSummary: Parameters<StakingModule__MockForStakingRouter["mock__setStakingModuleSummary"]> = [
       100n, // exitedValidators
       1000, // depositedValidators
       200, // depositableValidators
@@ -145,7 +145,7 @@ describe("StakingRouter.sol:module-sync", () => {
         stakingModuleFee,
         treasuryFee,
         stakeShareLimit,
-        Status.Active,
+        StakingModuleStatus.Active,
         name,
         lastDepositAt,
         lastDepositBlock,
@@ -158,7 +158,7 @@ describe("StakingRouter.sol:module-sync", () => {
       ];
 
       // mocking module state
-      await stakingModule.mock__getStakingModuleSummary(...stakingModuleSummary);
+      await stakingModule.mock__setStakingModuleSummary(...stakingModuleSummary);
       await stakingModule.mock__getNodeOperatorSummary(...nodeOperatorSummary);
       await stakingModule.mock__nodeOperatorsCount(...nodeOperatorsCounts);
       await stakingModule.mock__getNodeOperatorIds(nodeOperatorsIds);
@@ -371,7 +371,7 @@ describe("StakingRouter.sol:module-sync", () => {
       ].join("");
 
       await expect(stakingRouter.setWithdrawalCredentials02(hexlify(randomBytes(32))))
-        .to.emit(stakingRouter, "WithdrawalsCredentialsChangeFailed")
+        .to.emit(stakingRouterWithLib, "WithdrawalsCredentialsChangeFailed")
         .withArgs(moduleId, revertReasonEncoded);
     });
 
@@ -380,7 +380,7 @@ describe("StakingRouter.sol:module-sync", () => {
       await stakingModule.mock__onWithdrawalCredentialsChanged(false, shouldRunOutOfGas);
 
       await expect(stakingRouter.setWithdrawalCredentials02(hexlify(randomBytes(32)))).to.be.revertedWithCustomError(
-        stakingRouter,
+        stakingRouterWithLib,
         "UnrecoverableModuleError",
       );
     });
@@ -489,7 +489,7 @@ describe("StakingRouter.sol:module-sync", () => {
       const totalDepositedValidators = 10n;
       const depositableValidatorsCount = 2n;
 
-      await stakingModule.mock__getStakingModuleSummary(
+      await stakingModule.mock__setStakingModuleSummary(
         totalExitedValidators,
         totalDepositedValidators,
         depositableValidatorsCount,
@@ -507,7 +507,7 @@ describe("StakingRouter.sol:module-sync", () => {
       const totalDepositedValidators = 10n;
       const depositableValidatorsCount = 2n;
 
-      await stakingModule.mock__getStakingModuleSummary(
+      await stakingModule.mock__setStakingModuleSummary(
         totalExitedValidators,
         totalDepositedValidators,
         depositableValidatorsCount,
@@ -528,7 +528,7 @@ describe("StakingRouter.sol:module-sync", () => {
       const totalDepositedValidators = 10n;
       const depositableValidatorsCount = 2n;
 
-      await stakingModule.mock__getStakingModuleSummary(
+      await stakingModule.mock__setStakingModuleSummary(
         totalExitedValidators,
         totalDepositedValidators,
         depositableValidatorsCount,
@@ -549,7 +549,7 @@ describe("StakingRouter.sol:module-sync", () => {
       const totalDepositedValidators = 10n;
       const depositableValidatorsCount = 2n;
 
-      await stakingModule.mock__getStakingModuleSummary(
+      await stakingModule.mock__setStakingModuleSummary(
         totalExitedValidators,
         totalDepositedValidators,
         depositableValidatorsCount,
@@ -677,7 +677,7 @@ describe("StakingRouter.sol:module-sync", () => {
       depositableValidatorsCount: 1n,
     };
 
-    const correction: SRLib.ValidatorsCountsCorrectionStruct = {
+    const correction: ValidatorsCountsCorrectionStruct = {
       currentModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,
       currentNodeOperatorExitedValidatorsCount: operatorSummary.totalExitedValidators,
       newModuleExitedValidatorsCount: moduleSummary.totalExitedValidators,
@@ -685,7 +685,7 @@ describe("StakingRouter.sol:module-sync", () => {
     };
 
     beforeEach(async () => {
-      await stakingModule.mock__getStakingModuleSummary(
+      await stakingModule.mock__setStakingModuleSummary(
         moduleSummary.totalExitedValidators,
         moduleSummary.totalDepositedValidators,
         moduleSummary.depositableValidatorsCount,
@@ -794,7 +794,7 @@ describe("StakingRouter.sol:module-sync", () => {
     });
 
     it("Does nothing if there is a mismatch between exited validators count on the module and the router cache", async () => {
-      await stakingModule.mock__getStakingModuleSummary(1n, 0n, 0n);
+      await stakingModule.mock__setStakingModuleSummary(1n, 0n, 0n);
 
       await expect(stakingRouter.onValidatorsCountsByNodeOperatorReportingFinished()).not.to.emit(
         stakingModule,
@@ -814,11 +814,9 @@ describe("StakingRouter.sol:module-sync", () => {
         "72657665727420726561736f6e00000000000000000000000000000000000000",
       ].join("");
 
-      await expect(stakingRouter.onValidatorsCountsByNodeOperatorReportingFinished()).to.emit(
-        stakingRouterWithLib,
-        "ExitedAndStuckValidatorsCountsUpdateFailed",
-      );
-      // .withArgs(moduleId, revertReasonEncoded);
+      await expect(stakingRouter.onValidatorsCountsByNodeOperatorReportingFinished())
+        .to.emit(stakingRouterWithLib, "ExitedAndStuckValidatorsCountsUpdateFailed")
+        .withArgs(moduleId, revertReasonEncoded);
     });
 
     it("Reverts if the module hook fails without reason, e.g. ran out of gas", async () => {
@@ -943,7 +941,7 @@ describe("StakingRouter.sol:module-sync", () => {
     });
 
     it("Reverts if the staking module is not active", async () => {
-      await stakingRouter.connect(admin).setStakingModuleStatus(moduleId, Status.DepositsPaused);
+      await stakingRouter.connect(admin).setStakingModuleStatus(moduleId, StakingModuleStatus.DepositsPaused);
 
       await expect(stakingRouter.deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
@@ -985,9 +983,3 @@ describe("StakingRouter.sol:module-sync", () => {
     });
   });
 });
-
-enum Status {
-  Active,
-  DepositsPaused,
-  Stopped,
-}
