@@ -139,7 +139,7 @@ describe("PredepositGuarantee.sol", () => {
 
       // Staking Vault is funded with enough ether to run validator
       await stakingVault.fund({ value: ether("32") });
-      expect(await stakingVault.totalValue()).to.equal(ether("32"));
+      expect(await stakingVault.availableBalance()).to.equal(ether("32"));
 
       // NO generates validator for vault
       const vaultWC = await stakingVault.withdrawalCredentials();
@@ -887,7 +887,7 @@ describe("PredepositGuarantee.sol", () => {
 
         // Staking Vault is funded with enough ether to run validator
         await stakingVault.fund({ value: ether("32") });
-        expect(await stakingVault.totalValue()).to.equal(ether("32"));
+        expect(await stakingVault.availableBalance()).to.equal(ether("32"));
 
         // NO generates validator for vault
         const vaultWC = await stakingVault.withdrawalCredentials();
@@ -1275,7 +1275,6 @@ describe("PredepositGuarantee.sol", () => {
 
       let validWC: string;
       let validValidator: Validator;
-      let validValidatorWitness: IPredepositGuarantee.ValidatorWitnessStruct;
 
       beforeEach(async () => {
         await pdg.topUpNodeOperatorBalance(vaultOperator, { value: ether("20") });
@@ -1322,21 +1321,6 @@ describe("PredepositGuarantee.sol", () => {
             ...beaconProof,
           ],
         };
-
-        validValidatorWitness = {
-          childBlockTimestamp,
-          validatorIndex: 2n,
-          pubkey: validValidator.container.pubkey,
-          slot: beaconHeader.slot,
-          proposerIndex: beaconHeader.proposerIndex,
-          proof: [
-            ...(await sszMerkleTree.getValidatorPubkeyWCParentProof(validValidator.container)).proof,
-            ...(await sszMerkleTree.getMerkleProof(firstValidatorLeafIndex + 2n)),
-            ...beaconProof,
-          ],
-        };
-
-        await pdg.proveWCAndActivateValidator(validValidatorWitness);
       });
 
       it("allows to compensate disproven validator", async () => {
@@ -1344,7 +1328,7 @@ describe("PredepositGuarantee.sol", () => {
         const [balanceTotal, balanceLocked] = await pdg.nodeOperatorBalance(vaultOperator.address);
 
         let validatorStatus = await pdg.validatorStatus(invalidValidator.container.pubkey);
-        expect(validatorStatus.stage).to.equal(1n); // 3n is PREDEPOSITED
+        expect(validatorStatus.stage).to.equal(1n); // 1n is PREDEPOSITED
         expect(validatorStatus.stakingVault).to.equal(stakingVault);
         expect(validatorStatus.nodeOperator).to.equal(vaultOperator.address);
 
