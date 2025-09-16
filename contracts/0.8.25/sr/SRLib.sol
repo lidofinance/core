@@ -622,6 +622,7 @@ library SRLib {
 
         for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
             if (_totalShares[i] == 0) continue;
+            SRUtils._validateModuleId(_stakingModuleIds[i]);
 
             try _stakingModuleIds[i].getIStakingModule().onRewardsMinted(_totalShares[i]) {}
             catch (bytes memory lowLevelRevertData) {

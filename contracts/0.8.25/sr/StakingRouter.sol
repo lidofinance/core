@@ -106,8 +106,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error AllocationExceedsTarget();
     error DepositContractZeroAddress();
     error DepositValueNotMultipleOfInitialDeposit();
-    error ModuleTypeNotSupported();
     error StakingModuleStatusTheSame();
+    error LegacyStakingModuleNotSupported();
+    error LegacyStakingModuleRequired();
 
     /// @dev compatibility getters for constants removed in favor of SRLib
     // function INITIAL_DEPOSIT_SIZE() external pure returns (uint256) {
@@ -298,6 +299,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 _targetLimitMode,
         uint256 _targetLimit
     ) external onlyRole(STAKING_MODULE_MANAGE_ROLE) {
+        SRUtils._validateModuleId(_stakingModuleId);
         _stakingModuleId.getIStakingModule().updateTargetValidatorsLimits(
             _nodeOperatorId, _targetLimitMode, _targetLimit
         );
@@ -320,6 +322,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256[] calldata _stakingModuleIds,
         uint256[] calldata _exitedValidatorsCounts
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) returns (uint256) {
+        /// @dev validation of _stakingModuleId is done in _reportValidatorExitDelay
         return SRLib._updateExitedValidatorsCountByStakingModule(_stakingModuleIds, _exitedValidatorsCounts);
     }
 
@@ -331,15 +334,34 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes calldata _nodeOperatorIds,
         bytes calldata _exitedValidatorsCounts
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
+        /// @dev validation of _stakingModuleId is done in _reportValidatorExitDelay
         SRLib._reportStakingModuleExitedValidatorsCountByNodeOperator(
             _stakingModuleId, _nodeOperatorIds, _exitedValidatorsCounts
         );
     }
 
-    /// @dev See {SRLib._unsafeSetExitedValidatorsCount}.
-    ///
-    /// @dev The function is restricted to the `UNSAFE_SET_EXITED_VALIDATORS_ROLE` role.
+    /// @notice Reports operator balances for balance-based staking modules (v2 modules with 0x02 withdrawal credentials)
+    /// @param _stakingModuleId The id of the staking module to be updated
+    /// @param _operatorIds Ids of the node operators to be updated
+    /// @param _effectiveBalances Effective balances for the specified operators
+    /// @dev TODO: add separate role for this function
+    function reportStakingModuleOperatorBalances(
+        uint256 _stakingModuleId,
+        bytes calldata _operatorIds,
+        bytes calldata _effectiveBalances
+    ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
+        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
+
+        /// @dev This method is only supported for new modules
+        if (stateConfig.moduleType != StakingModuleType.New) {
+            revert LegacyStakingModuleNotSupported();
+        }
+
+        _stakingModuleId.getIStakingModuleV2().updateOperatorBalances(_operatorIds, _effectiveBalances);
+    }
+
     // todo REMOVE
+    /// @dev See {SRLib._unsafeSetExitedValidatorsCount}.
     function unsafeSetExitedValidatorsCount(
         uint256 _stakingModuleId,
         uint256 _nodeOperatorId,
@@ -364,6 +386,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes calldata _nodeOperatorIds,
         bytes calldata _vettedSigningKeysCounts
     ) external onlyRole(STAKING_MODULE_UNVETTING_ROLE) {
+        /// @dev validation of _stakingModuleId is done inside
         SRLib._decreaseStakingModuleVettedKeysCountByNodeOperator(
             _stakingModuleId, _nodeOperatorIds, _vettedSigningKeysCounts
         );
@@ -377,6 +400,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         bytes calldata _publicKey,
         uint256 _eligibleToExitInSec
     ) external onlyRole(REPORT_VALIDATOR_EXITING_STATUS_ROLE) {
+        /// @dev validation of _stakingModuleId is done inside
         SRLib._reportValidatorExitDelay(
             _stakingModuleId, _nodeOperatorId, _proofSlotTimestamp, _publicKey, _eligibleToExitInSec
         );
@@ -416,14 +440,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         (, stateConfig) = _validateAndGetModuleState(_stakingModuleId);
     }
 
-    // function getStakingModuleStateDeposits(uint256 _stakingModuleId)
-    //     external
-    //     view
-    //     returns (ModuleStateDeposits memory stateDeposits)
-    // {
-    //     (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
-    //     stateDeposits = state.getStateDeposits();
-    // }
+    function getStakingModuleStateDeposits(uint256 _stakingModuleId)
+        external
+        view
+        returns (ModuleStateDeposits memory stateDeposits)
+    {
+        (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
+        stateDeposits = state.getStateDeposits();
+    }
 
     function getStakingModuleStateAccounting(uint256 _stakingModuleId)
         external
@@ -683,6 +707,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRUtils._getModuleWCType(stateConfig.moduleType);
     }
 
+    /// @notice Returns the staking module type: Legacy or New, i.e. balance-based (uses 0x02 withdrawal credentials)
+    /// @param _stakingModuleId Id of the staking module
+    /// @return Staking module type
     function getStakingModuleType(uint256 _stakingModuleId) external view returns (StakingModuleType) {
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
         return stateConfig.moduleType;
@@ -734,7 +761,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         /// @dev This method is only supported for legacy modules
         if (stateConfig.moduleType != StakingModuleType.Legacy) {
-            revert ModuleTypeNotSupported();
+            revert LegacyStakingModuleRequired();
         }
 
         (, uint256 stakingModuleTargetEthAmount) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);

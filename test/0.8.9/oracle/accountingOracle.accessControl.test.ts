@@ -66,8 +66,8 @@ describe("AccountingOracle.sol:accessControl", () => {
     reportFields = {
       consensusVersion: AO_CONSENSUS_VERSION,
       refSlot: refSlot,
-      numValidators: 10,
-      clBalanceGwei: 320n * ONE_GWEI,
+      clActiveBalanceGwei: 300n * ONE_GWEI,
+      clPendingBalanceGwei: 20n * ONE_GWEI,
       stakingModuleIdsWithNewlyExitedValidators: [1],
       numExitedValidatorsByStakingModule: [3],
       withdrawalVaultBalance: ether("1"),

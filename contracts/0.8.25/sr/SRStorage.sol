@@ -3,6 +3,7 @@ pragma solidity 0.8.25;
 
 import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
+import {IStakingModuleV2} from "contracts/common/interfaces/IStakingModuleV2.sol";
 import {
     ModuleState,
     ModuleStateConfig,
@@ -31,8 +32,16 @@ library SRStorage {
         return _moduleId.getModuleState().getIStakingModule();
     }
 
+    function getIStakingModuleV2(uint256 _moduleId) internal view returns (IStakingModuleV2) {
+        return _moduleId.getModuleState().getIStakingModuleV2();
+    }
+
     function getIStakingModule(ModuleState storage $) internal view returns (IStakingModule) {
         return IStakingModule($.getStateConfig().moduleAddress);
+    }
+
+    function getIStakingModuleV2(ModuleState storage $) internal view returns (IStakingModuleV2) {
+        return IStakingModuleV2($.getStateConfig().moduleAddress);
     }
 
     function getStateConfig(ModuleState storage $) internal view returns (ModuleStateConfig storage) {

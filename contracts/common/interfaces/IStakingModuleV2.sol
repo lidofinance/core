@@ -53,4 +53,25 @@ interface IStakingModuleV2 {
         uint256[] memory operators,
         uint256[] memory topUpLimits
     ) external view returns (uint256[] memory allocations);
+
+    /// @notice Updates the effective balances for node operators
+    /// @param operatorIds Encoded operator IDs
+    /// @param effectiveBalances Encoded effective balances for the operators
+    function updateOperatorBalances(
+        bytes calldata operatorIds,
+        bytes calldata effectiveBalances
+    ) external;
+
+    // TODO: uncomment after devnet-0 and first v2 module implementation
+    // /// @notice Returns the staking module summary with balance information
+    // /// @return totalExitedValidators Total number of exited validators
+    // /// @return totalDepositedValidators Total number of deposited validators
+    // /// @return depositableValidatorsCount Number of validators available for deposit
+    // /// @return totalEffectiveBalance Total effective balance of all validators (new field for v2)
+    // function getStakingModuleSummary() external view returns (
+    //     uint256 totalExitedValidators,
+    //     uint256 totalDepositedValidators,
+    //     uint256 depositableValidatorsCount,
+    //     uint256 totalEffectiveBalance
+    // );
 }
