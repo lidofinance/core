@@ -166,6 +166,22 @@ describe("Integration: Vault with bad debt", () => {
       );
     });
 
+    it("Socialization lead to bad debt beacon chain deposits pause", async () => {
+      await acceptorDashboard.connect(otherOwner).fund({ value: ether("2") });
+      const { vaultHub, lido } = ctx.contracts;
+
+      const badDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      expect(await acceptorStakingVault.beaconChainDepositsPaused()).to.be.false;
+
+      await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, acceptorStakingVault, badDebtShares))
+        .to.emit(vaultHub, "BadDebtSocialized")
+        .and.to.emit(acceptorStakingVault, "BeaconChainDepositsPaused");
+
+      expect(await acceptorStakingVault.beaconChainDepositsPaused()).to.be.true;
+    });
+
     it("OperatorGrid shareLimits can't prevent socialization", async () => {
       await acceptorDashboard.connect(otherOwner).fund({ value: ether("10") });
       const { vaultHub, lido } = ctx.contracts;

@@ -10,6 +10,7 @@ import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawal
 import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
 
 import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
+import {RecoverTokens} from "./lib/RecoverTokens.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /**
@@ -506,6 +507,28 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         PinnedBeaconUtils.ossify();
     }
 
+
+    /**
+     * @notice collects ERC20 tokens from the Staking Vault to the recipient
+     * @param _token Address of the token to recover
+     * @param _recipient Address of collection recipient
+     * @param _amount Amount of tokens to recover
+     */
+    function collectERC20(
+        address _token,
+        address _recipient,
+        uint256 _amount
+    ) external onlyOwner {
+        if (_token == address(0)) revert ZeroArgument("_token");
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+        if (_amount == 0) revert ZeroArgument("_amount");
+        if (_token == RecoverTokens.ETH) {
+            revert EthCollectionNotAllowed();
+        }
+
+        RecoverTokens._recoverERC20(_token, _recipient, _amount);
+    }
+
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
@@ -736,4 +759,9 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Thrown when the length of the validator public keys does not match the length of the amounts
      */
     error PubkeyLengthDoesNotMatchAmountLength();
+
+    /**
+     * @notice thrown when trying to recover ETH (via EIP-7528 address) using collectERC20
+     */
+    error EthCollectionNotAllowed();
 }

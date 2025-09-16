@@ -6,7 +6,7 @@ pragma solidity 0.8.25;
 
 import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
-import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
+import {RecoverTokens} from "../lib/RecoverTokens.sol";
 
 import {ILido as IStETH} from "contracts/common/interfaces/ILido.sol";
 import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
@@ -30,8 +30,8 @@ interface IWstETH is IERC20 {
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
 contract Dashboard is NodeOperatorFee {
-    /// @dev 0xa38b301640bddfd3e6a9d2a11d13551d53ef81526347ff09d798738fcc5a49d4
-    bytes32 public constant RECOVER_ASSETS_ROLE = keccak256("vaults.Dashboard.RecoverAssets");
+    /// @dev 0xb694d4d19c77484e8f232470d9bf7e10450638db998b577a833d46df71fb6d97
+    bytes32 public constant COLLECT_VAULT_ERC20_ROLE = keccak256("vaults.Dashboard.CollectVaultERC20");
 
     /**
      * @notice The stETH token contract
@@ -42,11 +42,6 @@ contract Dashboard is NodeOperatorFee {
      * @notice The wstETH token contract
      */
     IWstETH public immutable WSTETH;
-
-    /**
-     * @notice ETH address convention per EIP-7528
-     */
-    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
      * @notice Slot for the fund-on-receive flag
@@ -477,48 +472,41 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Recovers ERC20 tokens or ether from the dashboard contract to sender
-     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
+     * @notice Recovers ERC20 tokens or ether from the dashboard contract to the recipient
+     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether (EIP-7528) 
      * @param _recipient Address of the recovery recipient
+     * @param _amount Amount of tokens or ether to recover
      */
     function recoverERC20(
         address _token,
         address _recipient,
         uint256 _amount
-    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
+    ) external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
         _requireNotZero(_token);
         _requireNotZero(_recipient);
         _requireNotZero(_amount);
 
-        if (_token == ETH) {
-            (bool success,) = payable(_recipient).call{value: _amount}("");
-            if (!success) revert EthTransferFailed(_recipient, _amount);
+        if (_token == RecoverTokens.ETH) {
+            RecoverTokens._recoverEth(_recipient, _amount);
         } else {
-            SafeERC20.safeTransfer(IERC20(_token), _recipient, _amount);
-        }
-
-        emit ERC20Recovered(_recipient, _token, _amount);
+            RecoverTokens._recoverERC20(_token, _recipient, _amount);
+        }       
     }
 
     /**
-     * @notice Transfers a given token_id of an ERC721-compatible NFT (defined by the token contract address)
-     * from the dashboard contract to sender
-     *
-     * @param _token an ERC721-compatible token
-     * @param _tokenId token id to recover
-     * @param _recipient Address of the recovery recipient
+     * @notice Collects ERC20 tokens from vault contract balance to the recipient
+     * @param _token Address of the token to collect
+     * @param _recipient Address of the recipient
+     * @param _amount Amount of tokens to collect
+     * @dev will revert on EIP-7528 ETH address with StakingVault.EthCollectionNotAllowed()
+     *      or on zero arguments with StakingVault.ZeroArgument()
      */
-    function recoverERC721(
+    function collectERC20FromVault(
         address _token,
-        uint256 _tokenId,
-        address _recipient
-    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
-        _requireNotZero(_token);
-        _requireNotZero(_recipient);
-
-        IERC721(_token).safeTransferFrom(address(this), _recipient, _tokenId);
-
-        emit ERC721Recovered(_recipient, _token, _tokenId);
+        address _recipient,
+        uint256 _amount
+    ) external onlyRoleMemberOrAdmin(COLLECT_VAULT_ERC20_ROLE) {
+        VAULT_HUB.collectERC20FromVault(address(_stakingVault()), _token, _recipient, _amount);
     }
 
     /**
@@ -695,21 +683,6 @@ contract Dashboard is NodeOperatorFee {
      */
     event UnguaranteedDeposits(address indexed stakingVault, uint256 deposits, uint256 totalAmount);
 
-    /**
-     * @notice Emitted when the ERC20 `token` or ether is recovered (i.e. transferred)
-     * @param to The address of the recovery recipient
-     * @param token The address of the recovered ERC20 token (0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether)
-     * @param amount The amount of the token recovered
-     */
-    event ERC20Recovered(address indexed to, address indexed token, uint256 amount);
-
-    /**
-     * @notice Emitted when the ERC721-compatible `token` (NFT) recovered (i.e. transferred)
-     * @param to The address of the recovery recipient
-     * @param token The address of the recovered ERC721 token
-     * @param tokenId id of token recovered
-     */
-    event ERC721Recovered(address indexed to, address indexed token, uint256 tokenId);
 
     // ==================== Errors ====================
 
@@ -724,11 +697,6 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error thrown when minting capacity is exceeded
      */
     error ExceedsMintingCapacity(uint256 requestedShares, uint256 remainingShares);
-
-    /**
-     * @notice Error thrown when recovery of ETH fails on transfer to recipient
-     */
-    error EthTransferFailed(address recipient, uint256 amount);
 
     /**
      * @notice Error when the StakingVault is still connected to the VaultHub.
