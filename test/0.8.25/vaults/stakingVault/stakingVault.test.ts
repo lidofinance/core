@@ -356,7 +356,7 @@ describe("StakingVault.sol", () => {
     });
 
     it("reverts if the number of deposits is zero", async () => {
-      await expect(stakingVault.depositToBeaconChain([]))
+      await expect(stakingVault.connect(depositor).depositToBeaconChain([]))
         .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
         .withArgs("_deposits");
     });
