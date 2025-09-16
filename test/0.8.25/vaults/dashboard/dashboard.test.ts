@@ -592,8 +592,11 @@ describe("Dashboard.sol", () => {
       const [sharesToRebalance, unsettledLidoFees] = await dashboard.obligations();
       const rebalanceAmount = await steth.getPooledEthBySharesRoundUp(sharesToRebalance);
 
+      const balance = 100n;
+      await setBalance(await vault.getAddress(), balance); // no balance to cover the obligations
+
       const obligationsShortfallAmount = await dashboard.obligationsShortfallAmount();
-      expect(obligationsShortfallAmount).to.equal(rebalanceAmount + unsettledLidoFees);
+      expect(obligationsShortfallAmount).to.equal(rebalanceAmount + unsettledLidoFees - balance);
     });
 
     it("shows the correct rebalance shortfall shares", async () => {

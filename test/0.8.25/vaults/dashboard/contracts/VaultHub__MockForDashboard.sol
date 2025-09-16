@@ -202,7 +202,7 @@ contract VaultHub__MockForDashboard {
         return ($.sharesToRebalance, $.unsettledLidoFees);
     }
 
-    function obligationsShortfallAmount(address _vault) external view returns (uint256) {
+    function obligationsAmount(address _vault) external view returns (uint256) {
         Obligations storage $ = mock__obligations[_vault];
         return steth.getPooledEthBySharesRoundUp($.sharesToRebalance) + $.unsettledLidoFees;
     }
