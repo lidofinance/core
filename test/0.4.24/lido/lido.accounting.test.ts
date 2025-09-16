@@ -68,46 +68,44 @@ describe("Lido:accounting", () => {
     await lido.resume();
   });
 
-  context("processClStateUpdate", async () => {
+  context("processClStateUpdateV2", async () => {
     it("Reverts when contract is stopped", async () => {
       await lido.connect(deployer).stop();
-      await expect(lido.processClStateUpdate(...args())).to.be.revertedWith("CONTRACT_IS_STOPPED");
+      await expect(lido.processClStateUpdateV2(...args())).to.be.revertedWith("CONTRACT_IS_STOPPED");
     });
 
     it("Reverts if sender is not `Accounting`", async () => {
-      await expect(lido.connect(stranger).processClStateUpdate(...args())).to.be.revertedWith("APP_AUTH_FAILED");
+      await expect(lido.connect(stranger).processClStateUpdateV2(...args())).to.be.revertedWith("APP_AUTH_FAILED");
     });
 
     it("Updates beacon stats", async () => {
       const accountingSigner = await impersonate(await locator.accounting(), ether("100.0"));
       lido = lido.connect(accountingSigner);
       await expect(
-        lido.processClStateUpdate(
+        lido.processClStateUpdateV2(
           ...args({
-            postClValidators: 100n,
-            postClBalance: 100n,
+            clActiveBalance: 100n,
+            clPendingBalance: 50n,
           }),
         ),
       )
-        .to.emit(lido, "CLValidatorsUpdated")
-        .withArgs(0n, 0n, 100n);
+        .to.emit(lido, "CLBalancesUpdated")
+        .withArgs(0n, 100n, 50n);
     });
 
-    type ArgsTuple = [bigint, bigint, bigint, bigint];
+    type ArgsTuple = [bigint, bigint, bigint];
 
     interface Args {
       reportTimestamp: bigint;
-      preClValidators: bigint;
-      postClValidators: bigint;
-      postClBalance: bigint;
+      clActiveBalance: bigint;
+      clPendingBalance: bigint;
     }
 
     function args(overrides?: Partial<Args>): ArgsTuple {
       return Object.values({
         reportTimestamp: 0n,
-        preClValidators: 0n,
-        postClValidators: 0n,
-        postClBalance: 0n,
+        clActiveBalance: 0n,
+        clPendingBalance: 0n,
         ...overrides,
       }) as ArgsTuple;
     }

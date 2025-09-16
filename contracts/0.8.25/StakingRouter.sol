@@ -61,6 +61,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error DirectETHTransfer();
     error InvalidReportData(uint256 code);
     error ExitedValidatorsCountCannotDecrease();
+    error ModuleIsNotBalanceBased();
     error ReportedExitedValidatorsExceedDeposited(
         uint256 reportedExitedValidatorsCount, uint256 depositedValidatorsCount
     );
@@ -613,6 +614,24 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         _getIStakingModuleById(_stakingModuleId).updateExitedValidatorsCount(_nodeOperatorIds, _exitedValidatorsCounts);
     }
 
+    /// @notice Reports operator balances for balance-based staking modules (v2 modules with 0x02 withdrawal credentials)
+    /// @param _stakingModuleId The id of the staking module to be updated
+    /// @param _operatorIds Ids of the node operators to be updated
+    /// @param _effectiveBalances Effective balances for the specified operators
+    /// @dev TODO: add separate role for this function
+    function reportStakingModuleOperatorBalances(
+        uint256 _stakingModuleId,
+        bytes calldata _operatorIds,
+        bytes calldata _effectiveBalances
+    ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
+        if (!isBalanceBasedModule(_stakingModuleId)) {
+            revert ModuleIsNotBalanceBased();
+        }
+
+        IStakingModuleV2(address(_getIStakingModuleById(_stakingModuleId)))
+            .updateOperatorBalances(_operatorIds, _effectiveBalances);
+    }
+
     struct ValidatorsCountsCorrection {
         /// @notice The expected current number of exited validators of the module that is
         /// being corrected.
@@ -1114,6 +1133,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function getStakingModuleWithdrawalCredentialsType(uint256 _stakingModuleId) public view returns (uint256) {
         StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
         return stakingModule.withdrawalCredentialsType;
+    }
+
+    /// @notice Returns whether the staking module is balance-based (uses 0x02 withdrawal credentials)
+    /// @param _stakingModuleId Id of the staking module
+    /// @return True if the module uses balance-based reporting (0x02 withdrawal credentials)
+    function isBalanceBasedModule(uint256 _stakingModuleId) public view returns (bool) {
+        StakingModule storage stakingModule = _getStakingModuleByIndex(_getStakingModuleIndexById(_stakingModuleId));
+        return stakingModule.withdrawalCredentialsType == NEW_WITHDRAWAL_CREDENTIALS_TYPE;
     }
 
     /// @notice Returns the max amount of Eth for initial 32 eth deposits in staking module.

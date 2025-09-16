@@ -50,8 +50,8 @@ const getDefaultExtraData = (): ExtraDataType => ({
 const getDefaultReportFields = (override = {}) => ({
   consensusVersion: AO_CONSENSUS_VERSION,
   refSlot: 0,
-  numValidators: 10,
-  clBalanceGwei: 320n * ONE_GWEI,
+  clActiveBalanceGwei: 300n * ONE_GWEI,
+  clPendingBalanceGwei: 20n * ONE_GWEI,
   stakingModuleIdsWithNewlyExitedValidators: [1],
   numExitedValidatorsByStakingModule: [3],
   withdrawalVaultBalance: ether("1"),
@@ -863,8 +863,8 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
             .withArgs(wrongTypedIndex, typeCustom);
         });
 
-        it("if type `3` was passed", async () => {
-          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(3n);
+        it("if type `4` was passed", async () => {
+          const { extraDataItems, wrongTypedIndex, typeCustom } = getExtraWithCustomType(4n);
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
@@ -885,6 +885,15 @@ describe("AccountingOracle.sol:submitReportExtraData", () => {
 
         it("succeeds if `2` was passed", async () => {
           const { extraDataItems } = getExtraWithCustomType(2n);
+          await consensus.advanceTimeToNextFrameStart();
+          const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
+          await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
+          const tx = await oracle.connect(member1).submitReportExtraDataList(extraDataList);
+          await expect(tx).to.emit(oracle, "ExtraDataSubmitted").withArgs(reportFields.refSlot, anyValue, anyValue);
+        });
+
+        it("succeeds if `3` was passed", async () => {
+          const { extraDataItems } = getExtraWithCustomType(3n);
           await consensus.advanceTimeToNextFrameStart();
           const { reportFields, extraDataList } = await submitReportHash({ extraData: extraDataItems });
           await oracle.connect(member1).submitReportData(reportFields, oracleVersion);

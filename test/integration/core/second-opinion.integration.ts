@@ -62,7 +62,9 @@ describe("Integration: Second opinion", () => {
       .connect(agentSigner)
       .grantRole(await oracleReportSanityChecker.SECOND_OPINION_MANAGER_ROLE(), agentSigner.address);
 
-    let { beaconBalance } = await lido.getBeaconStat();
+    // TODO: Update to use balance-based accounting
+    const { clActiveBalance, clPendingBalance } = await lido.getBeaconStat();
+    let beaconBalance = clActiveBalance + clPendingBalance;
     // Report initial balances if TVL is zero
     if (beaconBalance === 0n) {
       await report(ctx, {
@@ -70,7 +72,9 @@ describe("Integration: Second opinion", () => {
         clAppearedValidators: 3n,
         excludeVaultsBalances: true,
       });
-      beaconBalance = (await lido.getBeaconStat()).beaconBalance;
+      // TODO: Update to use balance-based accounting
+      const { clActiveBalance: newActive, clPendingBalance: newPending } = await lido.getBeaconStat();
+      beaconBalance = newActive + newPending;
     }
     totalSupply = beaconBalance;
 

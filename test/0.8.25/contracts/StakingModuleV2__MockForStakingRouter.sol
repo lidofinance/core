@@ -355,4 +355,10 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
     function mock__exitDeadlineThreshold(uint256 _threshold) external {
         exitDeadlineThreshold__mocked = _threshold;
     }
+
+    event Mock__OperatorBalancesUpdated(bytes operatorIds, bytes effectiveBalances);
+
+    function updateOperatorBalances(bytes calldata operatorIds, bytes calldata effectiveBalances) external {
+        emit Mock__OperatorBalancesUpdated(operatorIds, effectiveBalances);
+    }
 }

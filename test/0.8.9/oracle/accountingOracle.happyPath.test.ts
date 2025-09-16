@@ -132,8 +132,8 @@ describe("AccountingOracle.sol:happyPath", () => {
     reportFields = {
       consensusVersion: AO_CONSENSUS_VERSION,
       refSlot: refSlot,
-      numValidators: 10,
-      clBalanceGwei: 320n * ONE_GWEI,
+      clActiveBalanceGwei: 300n * ONE_GWEI,
+      clPendingBalanceGwei: 20n * ONE_GWEI,
       stakingModuleIdsWithNewlyExitedValidators: [1],
       numExitedValidatorsByStakingModule: [3],
       withdrawalVaultBalance: ether("1"),
@@ -222,14 +222,12 @@ describe("AccountingOracle.sol:happyPath", () => {
   it("Accounting got the oracle report", async () => {
     const lastOracleReportCall = await mockAccounting.lastCall__handleOracleReport();
     expect(lastOracleReportCall.callCount).to.equal(1);
-    expect(lastOracleReportCall.arg.timeElapsed).to.equal(
-      (reportFields.refSlot - ORACLE_LAST_REPORT_SLOT) * SECONDS_PER_SLOT,
-    );
-    expect(lastOracleReportCall.arg.clValidators).to.equal(reportFields.numValidators);
-    expect(lastOracleReportCall.arg.clBalance).to.equal(BigInt(reportFields.clBalanceGwei) * ONE_GWEI);
-    expect(lastOracleReportCall.arg.withdrawalVaultBalance).to.equal(reportFields.withdrawalVaultBalance);
-    expect(lastOracleReportCall.arg.elRewardsVaultBalance).to.equal(reportFields.elRewardsVaultBalance);
-    expect(lastOracleReportCall.arg.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
+    expect(lastOracleReportCall.arg[1]).to.equal((reportFields.refSlot - ORACLE_LAST_REPORT_SLOT) * SECONDS_PER_SLOT);
+    expect(lastOracleReportCall.arg[2]).to.equal(BigInt(reportFields.clActiveBalanceGwei) * 1000000000n);
+    expect(lastOracleReportCall.arg[3]).to.equal(BigInt(reportFields.clPendingBalanceGwei) * 1000000000n);
+    expect(lastOracleReportCall.arg[4]).to.equal(reportFields.withdrawalVaultBalance);
+    expect(lastOracleReportCall.arg[5]).to.equal(reportFields.elRewardsVaultBalance);
+    expect(lastOracleReportCall.arg[7].map(Number)).to.have.ordered.members(
       reportFields.withdrawalFinalizationBatches.map(Number),
     );
   });

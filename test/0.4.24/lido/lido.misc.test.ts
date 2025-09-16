@@ -5,6 +5,7 @@ import { ethers } from "hardhat";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
+  Accounting__MockForAccountingOracle,
   ACL,
   Lido,
   LidoLocator,
@@ -29,6 +30,7 @@ describe("Lido.sol:misc", () => {
   let locator: LidoLocator;
   let withdrawalQueue: WithdrawalQueue__MockForLidoMisc;
   let stakingRouter: StakingRouter__MockForLidoMisc;
+  let accounting: Accounting__MockForAccountingOracle;
 
   const elRewardsVaultBalance = ether("100.0");
   const withdrawalsVaultBalance = ether("100.0");
@@ -39,6 +41,7 @@ describe("Lido.sol:misc", () => {
 
     withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForLidoMisc", deployer);
     stakingRouter = await ethers.deployContract("StakingRouter__MockForLidoMisc", deployer);
+    accounting = await ethers.deployContract("Accounting__MockForAccountingOracle", deployer);
 
     ({ lido, acl } = await deployLidoDao({
       rootAccount: deployer,
@@ -47,6 +50,7 @@ describe("Lido.sol:misc", () => {
         withdrawalQueue,
         stakingRouter,
         depositSecurityModule,
+        accounting,
       },
     }));
 
