@@ -670,15 +670,18 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     }
 
     /// @dev the edge case deposit data root for zero signature and 31 ETH amount
-    function _depositDataRoot31ETHWithZeroSig(bytes calldata _pubkey, bytes32 _withdrawalCredentials) internal pure returns (bytes32){
+    function _depositDataRoot31ETHWithZeroSig(bytes calldata _pubkey, bytes32 _withdrawalCredentials) internal pure returns (bytes32) {
         bytes32 pubkeyRoot = sha256(bytes.concat(_pubkey, bytes16(0)));
+
         // sha256(sha256(0x0)|sha256(0x0))
-        bytes32 zeroSignatureRoot = 0x2eeb74a6177f588d80c0c752b99556902ddf9682d0b906f5aa2adbaf8466a4e9;
-        // to_little_endian_64(ACTIVATION_DEPOSIT_AMOUNT)|bytes24(0)
-        bytes32 amountLE64ZeroPadded = 0x00001c45c11f36ae000000000000000000000000000000000000000000000000;
+        bytes32 zeroSignatureRoot = 0xdb56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71;
+
+        // to_little_endian_64(uint64(ACTIVATION_DEPOSIT_AMOUNT / 1 gwei))
+        bytes8 amountLE64 = 0x0076be3707000000;
+
         return sha256(bytes.concat(
             sha256(bytes.concat(pubkeyRoot, _withdrawalCredentials)),
-            sha256(bytes.concat(amountLE64ZeroPadded, zeroSignatureRoot))
+            sha256(bytes.concat(amountLE64, bytes24(0), zeroSignatureRoot))
         ));
     }
 
