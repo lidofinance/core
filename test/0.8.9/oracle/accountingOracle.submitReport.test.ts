@@ -463,8 +463,12 @@ describe("AccountingOracle.sol:submitReport", () => {
           GENESIS_TIME + reportFields.refSlot * SECONDS_PER_SLOT,
         );
 
-        expect(lastOracleReportToAccounting.arg.clActiveBalance).to.equal(reportFields.clActiveBalanceGwei + "000000000");
-        expect(lastOracleReportToAccounting.arg.clPendingBalance).to.equal(reportFields.clPendingBalanceGwei + "000000000");
+        expect(lastOracleReportToAccounting.arg.clActiveBalance).to.equal(
+          reportFields.clActiveBalanceGwei + "000000000",
+        );
+        expect(lastOracleReportToAccounting.arg.clPendingBalance).to.equal(
+          reportFields.clPendingBalanceGwei + "000000000",
+        );
         expect(lastOracleReportToAccounting.arg.withdrawalVaultBalance).to.equal(reportFields.withdrawalVaultBalance);
         expect(lastOracleReportToAccounting.arg.elRewardsVaultBalance).to.equal(reportFields.elRewardsVaultBalance);
         expect(lastOracleReportToAccounting.arg.withdrawalFinalizationBatches.map(Number)).to.have.ordered.members(
@@ -664,62 +668,76 @@ describe("AccountingOracle.sol:submitReport", () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
-        const nextReport = await prepareNextReportInNextFrame(getReportFields({
-          clActiveBalanceGwei: 0n,
-          clPendingBalanceGwei: 64n * ONE_GWEI,
-        }));
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clActiveBalanceGwei: 0n,
+            clPendingBalanceGwei: 64n * ONE_GWEI,
+          }),
+        );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be.reverted;
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
       });
 
       it("should accept zero pending balance", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
-        const nextReport = await prepareNextReportInNextFrame(getReportFields({
-          clActiveBalanceGwei: 1000n * ONE_GWEI,
-          clPendingBalanceGwei: 0n,
-        }));
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clActiveBalanceGwei: 1000n * ONE_GWEI,
+            clPendingBalanceGwei: 0n,
+          }),
+        );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be.reverted;
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
       });
 
       it("should accept large balance values", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
-        const nextReport = await prepareNextReportInNextFrame(getReportFields({
-          clActiveBalanceGwei: 2000000n * ONE_GWEI,
-          clPendingBalanceGwei: 50000n * ONE_GWEI,
-        }));
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clActiveBalanceGwei: 2000000n * ONE_GWEI,
+            clPendingBalanceGwei: 50000n * ONE_GWEI,
+          }),
+        );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be.reverted;
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
       });
 
       it("should handle pending larger than active", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
-        const nextReport = await prepareNextReportInNextFrame(getReportFields({
-          clActiveBalanceGwei: 100n * ONE_GWEI,
-          clPendingBalanceGwei: 500n * ONE_GWEI,
-        }));
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clActiveBalanceGwei: 100n * ONE_GWEI,
+            clPendingBalanceGwei: 500n * ONE_GWEI,
+          }),
+        );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be.reverted;
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
       });
 
       it("should convert gwei to wei correctly", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
-        const nextReport = await prepareNextReportInNextFrame(getReportFields({
-          clActiveBalanceGwei: 123n * ONE_GWEI,
-          clPendingBalanceGwei: 456n * ONE_GWEI,
-        }));
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clActiveBalanceGwei: 123n * ONE_GWEI,
+            clPendingBalanceGwei: 456n * ONE_GWEI,
+          }),
+        );
 
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion);
@@ -733,39 +751,48 @@ describe("AccountingOracle.sol:submitReport", () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
-        const nextReport = await prepareNextReportInNextFrame(getReportFields({
-          clActiveBalanceGwei: 0n,
-          clPendingBalanceGwei: 0n,
-        }));
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clActiveBalanceGwei: 0n,
+            clPendingBalanceGwei: 0n,
+          }),
+        );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be.reverted;
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
       });
 
       it("should accept minimal gwei values", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
-        const nextReport = await prepareNextReportInNextFrame(getReportFields({
-          clActiveBalanceGwei: 1n,
-          clPendingBalanceGwei: 1n,
-        }));
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clActiveBalanceGwei: 1n,
+            clPendingBalanceGwei: 1n,
+          }),
+        );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be.reverted;
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
       });
 
       it("should handle realistic scenarios", async () => {
         await consensus.setTime(deadline);
         await oracle.connect(member1).submitReportData(reportFields, oracleVersion);
 
-        const nextReport = await prepareNextReportInNextFrame(getReportFields({
-          clActiveBalanceGwei: 500000n * ONE_GWEI,
-          clPendingBalanceGwei: 1000n * ONE_GWEI,
-        }));
+        const nextReport = await prepareNextReportInNextFrame(
+          getReportFields({
+            clActiveBalanceGwei: 500000n * ONE_GWEI,
+            clPendingBalanceGwei: 1000n * ONE_GWEI,
+          }),
+        );
 
         await consensus.setTime(deadline);
-        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be.reverted;
+        await expect(oracle.connect(member1).submitReportData(nextReport.newReportFields, oracleVersion)).not.to.be
+          .reverted;
       });
 
       it("should verify ReportValues structure", async () => {
@@ -774,12 +801,12 @@ describe("AccountingOracle.sol:submitReport", () => {
 
         const lastCall = await mockAccounting.lastCall__handleOracleReport();
 
-        expect(lastCall.arg).to.be.an('array');
+        expect(lastCall.arg).to.be.an("array");
         expect(lastCall.arg).to.have.length(9);
-        expect(lastCall.arg[0]).to.be.a('bigint');
-        expect(lastCall.arg[1]).to.be.a('bigint');
-        expect(lastCall.arg[2]).to.be.a('bigint');
-        expect(lastCall.arg[3]).to.be.a('bigint');
+        expect(lastCall.arg[0]).to.be.a("bigint");
+        expect(lastCall.arg[1]).to.be.a("bigint");
+        expect(lastCall.arg[2]).to.be.a("bigint");
+        expect(lastCall.arg[3]).to.be.a("bigint");
         expect(lastCall.arg[2]).to.equal(BigInt(reportFields.clActiveBalanceGwei) * 1000000000n);
         expect(lastCall.arg[3]).to.equal(BigInt(reportFields.clPendingBalanceGwei) * 1000000000n);
       });

@@ -61,7 +61,7 @@ describe("Accounting.sol:report", () => {
       [], // stakingModuleIds
       [], // stakingModuleFees
       0, // totalFee
-      100n * 10n ** 18n // precisionPoints = 100%
+      100n * 10n ** 18n, // precisionPoints = 100%
     );
 
     locator = await deployLidoLocator(
@@ -82,8 +82,8 @@ describe("Accounting.sol:report", () => {
     const secondsPerSlot = 12n; // 12 seconds per slot
     const accountingImpl = await ethers.deployContract("Accounting", [locator, lido, genesisTime, secondsPerSlot], {
       libraries: {
-        DepositsTracker: await depositsTrackerLib.getAddress()
-      }
+        DepositsTracker: await depositsTrackerLib.getAddress(),
+      },
     });
     const accountingProxy = await ethers.deployContract(
       "OssifiableProxy",
