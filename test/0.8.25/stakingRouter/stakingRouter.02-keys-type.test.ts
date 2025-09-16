@@ -9,10 +9,10 @@ import {
   DepositCallerWrapper__MockForStakingRouter,
   DepositContract__MockForBeaconChainDepositor,
   StakingModuleV2__MockForStakingRouter,
-  StakingRouter,
+  StakingRouter__Harness,
 } from "typechain-types";
 
-import { ether } from "lib";
+import { ether, StakingModuleType } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -22,7 +22,7 @@ describe("StakingRouter.sol:keys-02-type", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
 
-  let stakingRouter: StakingRouter;
+  let stakingRouter: StakingRouter__Harness;
 
   let originalState: string;
 
@@ -43,15 +43,10 @@ describe("StakingRouter.sol:keys-02-type", () => {
   const withdrawalCredentials = hexlify(randomBytes(32));
   const withdrawalCredentials02 = hexlify(randomBytes(32));
 
-
-  const MODULE_TYPE_LEGACY = 0;
-  const MODULE_TYPE_NEW = 1;
-
-
   before(async () => {
     [deployer, admin] = await ethers.getSigners();
 
-     ({ stakingRouter, depositContract } = await deployStakingRouter({ deployer, admin }));
+    ({ stakingRouter, depositContract } = await deployStakingRouter({ deployer, admin }));
 
     depositCallerWrapper = await ethers.deployContract(
       "DepositCallerWrapper__MockForStakingRouter",
@@ -82,7 +77,7 @@ describe("StakingRouter.sol:keys-02-type", () => {
       treasuryFee,
       maxDepositsPerBlock,
       minDepositBlockDistance,
-      moduleType: MODULE_TYPE_NEW,
+      moduleType: StakingModuleType.New,
     };
 
     await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);
@@ -134,10 +129,14 @@ describe("StakingRouter.sol:keys-02-type", () => {
   });
 
   context("getStakingModuleMaxInitialDepositsAmount", () => {
-    it("", async () => {
+    it("[TDB]", async () => {
       // mock allocation that will return staking module of second type
       // 2 keys + 2 keys + 0 + 1
-      await stakingModuleV2.mock_getAllocation([1, 2, 3, 4], [ether("4096"), ether("4000"), ether("31"), ether("32")]);
+      const opIds = [1, 2, 3, 4];
+      const opAllocs = [ether("4096"), ether("4000"), ether("31"), ether("32")];
+      const totalAlloc = opAllocs.reduce((a, b) => a + b, 0n);
+      await stakingModuleV2.mock_getAllocation(opIds, opAllocs);
+      await stakingRouter.testing_setStakingModuleAccounting(moduleId, totalAlloc, 0n);
 
       const depositableEth = ether("10242");
       // _getTargetDepositsAllocation mocked currently to return the same amount it received
