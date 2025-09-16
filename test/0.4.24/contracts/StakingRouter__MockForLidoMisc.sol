@@ -6,6 +6,8 @@ pragma solidity 0.8.9;
 contract StakingRouter__MockForLidoMisc {
     event Mock__DepositCalled();
 
+    uint256 public constant INITIAL_DEPOSIT_SIZE = 32 ether;
+
     uint256 private stakingModuleMaxDepositsCount;
     uint256 private stakingModuleMaxInitialDepositsAmount;
 
@@ -33,8 +35,8 @@ contract StakingRouter__MockForLidoMisc {
     function getStakingModuleMaxInitialDepositsAmount(
         uint256 stakingModuleId,
         uint256 eth
-    ) external view returns (uint256) {
-        return stakingModuleMaxInitialDepositsAmount;
+    ) external view returns (uint256, uint256) {
+        return (stakingModuleMaxInitialDepositsAmount, stakingModuleMaxDepositsCount);
     }
 
     function getStakingModuleMaxDepositsCount(
@@ -53,6 +55,7 @@ contract StakingRouter__MockForLidoMisc {
 
     function mock__getStakingModuleMaxDepositsCount(uint256 newValue) external {
         stakingModuleMaxDepositsCount = newValue;
+        stakingModuleMaxInitialDepositsAmount = newValue * INITIAL_DEPOSIT_SIZE;
     }
 
     function mock__setStakingModuleMaxInitialDepositsAmount(uint256 newValue) external {

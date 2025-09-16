@@ -718,33 +718,35 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @notice Returns the max amount of Eth for initial 32 eth deposits in staking module.
     /// @param _stakingModuleId Id of the staking module to be deposited.
     /// @param _depositableEth Max amount of ether that might be used for deposits count calculation.
-    /// @return Max amount of Eth that can be deposited using the given staking module.
+    /// @return depositsAmount Max amount of Eth that can be deposited using the given staking module.
+    /// @return depositsCount Count of deposits corresponding to the deposits amount
     function getStakingModuleMaxInitialDepositsAmount(uint256 _stakingModuleId, uint256 _depositableEth)
         public
-        returns (uint256)
+        returns (uint256 depositsAmount, uint256 depositsCount)
     {
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
 
         // TODO: is it correct?
-        if (stateConfig.status != StakingModuleStatus.Active) return 0;
+        if (stateConfig.status != StakingModuleStatus.Active) return (0, 0);
 
         if (stateConfig.moduleType == StakingModuleType.New) {
             (, uint256 stakingModuleTargetEthAmount) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
             (uint256[] memory operators, uint256[] memory allocations) =
                 IStakingModuleV2(stateConfig.moduleAddress).getAllocation(stakingModuleTargetEthAmount);
 
-            (uint256 totalCount, uint256[] memory counts) =
+            uint256[] memory counts;
+            (depositsCount, counts) =
                 _getNewDepositsCount02(stakingModuleTargetEthAmount, allocations, INITIAL_DEPOSIT_SIZE);
 
             // this will be read and clean in deposit method
             DepositsTempStorage.storeOperators(operators);
             DepositsTempStorage.storeCounts(counts);
 
-            return totalCount * INITIAL_DEPOSIT_SIZE;
+            depositsAmount = depositsCount * INITIAL_DEPOSIT_SIZE;
         } else if (stateConfig.moduleType == StakingModuleType.Legacy) {
-            uint256 count = getStakingModuleMaxDepositsCount(_stakingModuleId, _depositableEth);
+            depositsCount = getStakingModuleMaxDepositsCount(_stakingModuleId, _depositableEth);
 
-            return count * INITIAL_DEPOSIT_SIZE;
+            depositsAmount = depositsCount * INITIAL_DEPOSIT_SIZE;
         } else {
             revert WrongWithdrawalCredentialsType();
         }
@@ -996,23 +998,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             signaturesBatch
         );
 
-        // Deposits amount should be tracked for module
-        // here calculate slot based on timestamp and genesis time
-        // and just put new value in state
-        // also find position for module tracker
+        // update counters for deposits that are not visible before ao report
         // TODO: here depositsValue  in wei, check type
-        // TODO: maybe tracker should be stored in AO and AO will use it
-        DepositsTracker.insertSlotDeposit(
-            _getStakingModuleTrackerPosition(_stakingModuleId), _getCurrentSlot(), depositsValue
-        );
-
-        // TODO: notify module about deposits
-
-        // todo Update total effective balance gwei via deposit tracked in module and total
-        // RouterStorage storage rs = SRStorage.getRouterStorage();
-        // uint256 totalEffectiveBalanceGwei = rs.totalEffectiveBalanceGwei;
-        // rs.totalEffectiveBalanceGwei = totalEffectiveBalanceGwei + depositsValue / 1 gwei;
-        // moduleState.getStateAccounting().totalEffectiveBalanceGwei += depositsValue / 1 gwei;
+        _trackDeposit(_stakingModuleId, depositsValue);
 
         uint256 etherBalanceAfterDeposits = address(this).balance;
 
@@ -1226,5 +1214,20 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     function _getCurrentSlot() internal view returns (uint256) {
         return (block.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
+    }
+
+    // function _getSlot(uint256 timestamp) internal view returns (uint64) {
+    //     return uint64((timestamp - GENESIS_TIME) / SECONDS_PER_SLOT);
+    // }
+
+    /// @dev Track deposits for staking module and overall.
+    /// @param _stakingModuleId Id of the staking module to track deposits for
+    /// @param _depositsValue the amount of ETH deposited
+    function _trackDeposit(uint256 _stakingModuleId, uint256 _depositsValue) internal {
+        uint256 slot = _getCurrentSlot();
+        // track total deposited amount for all modules
+        DepositsTracker.insertSlotDeposit(DEPOSITS_TRACKER, slot, _depositsValue);
+        // track deposited amount for module
+        DepositsTracker.insertSlotDeposit(_getStakingModuleTrackerPosition(_stakingModuleId), slot, _depositsValue);
     }
 }

@@ -42,7 +42,7 @@ interface IStakingRouter {
     function getStakingModuleMaxInitialDepositsAmount(
         uint256 _stakingModuleId,
         uint256 _depositableEth
-    ) external returns (uint256);
+    ) external returns (uint256 depositsAmount, uint256 depositsCount);
 }
 
 interface IWithdrawalQueue {
@@ -663,7 +663,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         require(canDeposit(), "CAN_NOT_DEPOSIT");
 
         IStakingRouter stakingRouter = _stakingRouter(locator);
-        uint256 depositsAmount = stakingRouter.getStakingModuleMaxInitialDepositsAmount(
+        (uint256 depositsAmount, uint256 depositsCount) = stakingRouter.getStakingModuleMaxInitialDepositsAmount(
             _stakingModuleId,
             Math256.min(_maxDepositsAmountPerBlock, getDepositableEther())
         );
@@ -672,11 +672,15 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             /// @dev firstly update the local state of the contract to prevent a reentrancy attack,
             ///     even if the StakingRouter is a trusted contract.
 
-            _setBufferedEther(_getBufferedEther().sub(depositsAmount));
+            (uint256 bufferedEther, uint256 depositedValidators) = _getBufferedEtherAndDepositedValidators();
+            depositedValidators = depositedValidators.add(depositsCount);
+
+            _setBufferedEtherAndDepositedValidators(bufferedEther.sub(depositsAmount), depositedValidators);
             emit Unbuffered(depositsAmount);
-            // emit DepositedValidatorsChanged(depositedValidators);
+            emit DepositedValidatorsChanged(depositedValidators);
             // here should be counter for deposits that are not visible before ao report
             // Notify Accounting about the deposit
+            // TODO move to SR
             IAccounting(locator.accounting()).recordDeposit(depositsAmount);
         }
 
