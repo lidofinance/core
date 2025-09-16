@@ -452,7 +452,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         // in this case the Oracle will not account the predeposited amount as part of the total value
         // until the validator is topped up for ACTIVATION_DEPOSIT_AMOUNT
         // but the guarantee will be unlocked anyway
-        if (vault.depositor() != address(this) && vault.stashedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
+        if (vault.depositor() == address(this) && vault.stashedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
             _activateValidator(vault, _witness.pubkey, withdrawalCredentials);
         }
     }
