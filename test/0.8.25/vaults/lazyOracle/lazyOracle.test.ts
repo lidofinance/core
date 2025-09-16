@@ -8,6 +8,7 @@ import {
   Lido__MockForLazyOracle,
   LidoLocator,
   OperatorGrid__MockForLazyOracle,
+  PredepositGuarantee__MockForLazyOracle,
   VaultHub,
   VaultHub__MockForLazyOracle,
 } from "typechain-types";
@@ -64,6 +65,7 @@ describe("LazyOracle.sol", () => {
   let vaultHub: VaultHub__MockForLazyOracle;
   let operatorGrid: OperatorGrid__MockForLazyOracle;
   let lido: Lido__MockForLazyOracle;
+  let predepositGuarantee: PredepositGuarantee__MockForLazyOracle;
   let lazyOracle: LazyOracle;
 
   let originalState: string;
@@ -76,8 +78,14 @@ describe("LazyOracle.sol", () => {
     lido = await ethers.deployContract("Lido__MockForLazyOracle", []);
     vaultHub = await ethers.deployContract("VaultHub__MockForLazyOracle", [lido, locator]);
     operatorGrid = await ethers.deployContract("OperatorGrid__MockForLazyOracle", []);
+    predepositGuarantee = await ethers.deployContract("PredepositGuarantee__MockForLazyOracle", []);
 
-    await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, operatorGrid, lido });
+    await updateLidoLocatorImplementation(await locator.getAddress(), {
+      vaultHub,
+      operatorGrid,
+      lido,
+      predepositGuarantee,
+    });
 
     const lazyOracleImpl = await ethers.deployContract("LazyOracle", [locator]);
 
