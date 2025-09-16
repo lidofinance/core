@@ -16,12 +16,13 @@ export const randomValidatorPubkey = (): string => hexlify(randomBytes(48));
 export const randomInt = (max: number): number => Math.floor(Math.random() * max);
 const ikm = Uint8Array.from(Buffer.from("test test test test test test test", "utf-8"));
 const masterSecret = SecretKey.deriveMasterEip2333(ikm);
+const FAR_FUTURE_EPOCH = 2n ** 64n - 1n;
 let secretIndex = 0;
 
 export const addressToWC = (address: string, version = 2) =>
   `${hexlify(new Uint8Array([version]))}${"00".repeat(11)}${de0x(address.toLowerCase())}`;
 
-export const generateValidator = (customWC?: string): Validator => {
+export const generateValidator = (customWC?: string, fresh: boolean = false): Validator => {
   const secretKey = masterSecret.deriveChildEip2333(secretIndex++);
 
   return {
@@ -31,10 +32,10 @@ export const generateValidator = (customWC?: string): Validator => {
       withdrawalCredentials: customWC ?? hexlify(randomBytes32()),
       effectiveBalance: parseUnits(randomInt(32).toString(), "gwei"),
       slashed: false,
-      activationEligibilityEpoch: randomInt(343300),
-      activationEpoch: randomInt(343300),
-      exitEpoch: randomInt(343300),
-      withdrawableEpoch: randomInt(343300),
+      activationEligibilityEpoch: fresh ? FAR_FUTURE_EPOCH : randomInt(343300),
+      activationEpoch: fresh ? FAR_FUTURE_EPOCH : randomInt(343300),
+      exitEpoch: fresh ? FAR_FUTURE_EPOCH : randomInt(343300),
+      withdrawableEpoch: fresh ? FAR_FUTURE_EPOCH : randomInt(343300),
     },
   };
 };

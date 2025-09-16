@@ -231,7 +231,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         await stakingVault.connect(owner).fund({ value: ether("2048") });
       });
 
-      it("Can set depositor and deposit validators to beacon chain", async () => {
+      it("Can set depositor and deposit validators to beacon chain manually", async () => {
         const { predepositGuarantee } = ctx.contracts;
         await expect(stakingVault.connect(owner).setDepositor(owner))
           .to.emit(stakingVault, "DepositorSet")
@@ -265,7 +265,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
       it("Can deposit to beacon chain using predeposit guarantee", async () => {
         const { predepositGuarantee } = ctx.contracts;
         const withdrawalCredentials = await stakingVault.withdrawalCredentials();
-        const validator = generateValidator(withdrawalCredentials);
+        const validator = generateValidator(withdrawalCredentials, true);
 
         await predepositGuarantee.connect(nodeOperator).topUpNodeOperatorBalance(nodeOperator, {
           value: ether("1"),
@@ -287,12 +287,18 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           ctx,
           validator,
           withdrawalCredentials,
-          ether("2048"),
+          ether("2016"),
         );
 
-        await expect(predepositGuarantee.connect(nodeOperator).proveAndDeposit(witnesses, [postdeposit], stakingVault))
+        await expect(predepositGuarantee.connect(nodeOperator).proveWCAndActivateValidator(witnesses[0]))
+          .to.emit(predepositGuarantee, "ValidatorProven")
+          .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials)
           .to.emit(stakingVault, "DepositedToBeaconChain")
-          .withArgs(1, ether("2048"));
+          .withArgs(1, ether("31"));
+
+        await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
+          .to.emit(stakingVault, "DepositedToBeaconChain")
+          .withArgs(1, ether("2016"));
       });
     });
   });

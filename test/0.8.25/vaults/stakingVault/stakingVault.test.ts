@@ -41,7 +41,6 @@ const encodeEip7002Input = (pubkey: string, amount: bigint): string => {
   return `${pubkey}${amount.toString(16).padStart(16, "0")}`;
 };
 
-// @TODO: test reentrancy attacks
 describe("StakingVault.sol", () => {
   let deployer: HardhatEthersSigner;
   let vaultOwner: HardhatEthersSigner;
