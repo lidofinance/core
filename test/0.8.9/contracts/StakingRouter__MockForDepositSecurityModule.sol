@@ -20,6 +20,7 @@ interface IStakingRouter {
         bytes calldata _vettedSigningKeysCounts
     ) external;
 }
+
 contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     error StakingModuleUnregistered();
 
@@ -29,11 +30,7 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         bytes vettedSigningKeysCounts
     );
     event StakingModuleDeposited(uint256 maxDepositsCount, uint24 stakingModuleId, bytes depositCalldata);
-    event StakingModuleStatusSet(
-        uint24 indexed stakingModuleId,
-        StakingModuleStatus status,
-        address setBy
-    );
+    event StakingModuleStatusSet(uint24 indexed stakingModuleId, StakingModuleStatus status, address setBy);
 
     StakingModuleStatus private status;
     uint256 private stakingModuleNonce;

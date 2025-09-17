@@ -129,7 +129,7 @@ describe("StakingRouter.sol:keys-02-type", () => {
   });
 
   context("getStakingModuleMaxInitialDepositsAmount", () => {
-    it("[TDB]", async () => {
+    it("correctly returns max initial deposits amount", async () => {
       // mock allocation that will return staking module of second type
       // 2 keys + 2 keys + 0 + 1
       const opIds = [1, 2, 3, 4];
@@ -140,12 +140,11 @@ describe("StakingRouter.sol:keys-02-type", () => {
 
       const depositableEth = ether("10242");
       // _getTargetDepositsAllocation mocked currently to return the same amount it received
-      const moduleDepositEth = await stakingRouter.getStakingModuleMaxInitialDepositsAmount.staticCall(
-        moduleId,
-        depositableEth,
-      );
+      const [moduleDepositEth, moduleDepositCount] =
+        await stakingRouter.getStakingModuleMaxInitialDepositsAmount.staticCall(moduleId, depositableEth);
 
       expect(moduleDepositEth).to.equal(ether("160"));
+      expect(moduleDepositCount).to.equal(5);
     });
   });
 });

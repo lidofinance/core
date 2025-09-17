@@ -7,7 +7,7 @@ interface IStakingRouter {
     function getStakingModuleMaxInitialDepositsAmount(
         uint256 _stakingModuleId,
         uint256 _depositableEth
-    ) external view returns (uint256);
+    ) external view returns (uint256, uint256);
 
     function mock_storeTemp(uint256[] calldata operators, uint256[] calldata counts) external;
 

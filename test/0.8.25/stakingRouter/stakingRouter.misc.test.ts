@@ -18,7 +18,6 @@ describe("StakingRouter.sol:misc", () => {
   let stakingRouterAdmin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
-  // let depositContract: DepositContract__MockForBeaconChainDepositor;
   let stakingRouter: StakingRouter__Harness;
   let impl: StakingRouter__Harness;
 
@@ -142,7 +141,6 @@ describe("StakingRouter.sol:misc", () => {
     it("fails with InvalidInitialization error when called on implementation", async () => {
       await expect(
         impl.migrateUpgrade_v4(),
-        // impl.migrateUpgrade_v4(lido, withdrawalCredentials, withdrawalCredentials02),
       ).to.be.revertedWithCustomError(impl, "InvalidInitialization");
     });
 

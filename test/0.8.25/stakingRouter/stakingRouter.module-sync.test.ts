@@ -84,7 +84,6 @@ describe("StakingRouter.sol:module-sync", () => {
       moduleType: StakingModuleType.Legacy,
     };
 
-    console.log("mod addr", stakingModuleAddress);
     await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);
 
     moduleId = await stakingRouter.getStakingModulesCount();
@@ -317,7 +316,6 @@ describe("StakingRouter.sol:module-sync", () => {
       const shouldRevert = true;
       await stakingModule.mock__onWithdrawalCredentialsChanged(shouldRevert, false);
 
-      console.log("mADdr!!!", await stakingModule.getAddress());
       // "revert reason" abi-encoded
       const revertReasonEncoded = [
         "0x08c379a0", // string type

@@ -1,9 +1,8 @@
 import { ethers, ZeroAddress } from "ethers";
 
-import { BigIntMath, certainAddress, ether, impersonate, log, StakingModuleStatus } from "lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants";
+import { BigIntMath, certainAddress, ether, impersonate, log, StakingModuleStatus, TOTAL_BASIS_POINTS } from "lib";
 
-import { ZERO_HASH } from "test/deploy";
+import { MAX_DEPOSIT_AMOUNT, ZERO_HASH } from "test/suite";
 
 import { ProtocolContext } from "../types";
 
@@ -20,7 +19,6 @@ export const unpauseStaking = async (ctx: ProtocolContext) => {
     log.success("Staking contract unpaused");
   }
 };
-
 
 export const getStakingModuleStatuses = async (
   ctx: ProtocolContext,
@@ -67,7 +65,7 @@ export const setModuleStakeShareLimit = async (ctx: ProtocolContext, moduleId: b
       module.stakingModuleFee,
       module.treasuryFee,
       module.maxDepositsPerBlock,
-      module.minDepositBlockDistance
+      module.minDepositBlockDistance,
     );
 };
 
@@ -157,7 +155,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   const numDepositedBefore = (await lido.getBeaconStat()).depositedValidators;
 
   // Deposit validators
-  await lido.connect(dsmSigner).deposit(depositsCount, moduleId, ZERO_HASH);
+  await lido.connect(dsmSigner).deposit(MAX_DEPOSIT_AMOUNT, moduleId, ZERO_HASH);
 
   const numDepositedAfter = (await lido.getBeaconStat()).depositedValidators;
 
@@ -177,8 +175,8 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   log.debug("Validators on beacon chain before provisioning", {
     "Module ID to deposit": moduleId,
     "Deposited": before.depositedValidators,
-    "Total": before.beaconValidators,
-    "Balance": before.beaconBalance,
+    "Total": before.clActiveBalance,
+    "Balance": before.clPendingBalance,
   });
 
   // Add new validators to beacon chain
@@ -193,7 +191,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   log.debug("Validators on beacon chain after depositing", {
     "Module ID deposited": moduleId,
     "Deposited": after.depositedValidators,
-    "Total": after.beaconValidators,
-    "Balance": after.beaconBalance,
+    "Total": after.clActiveBalance,
+    "Balance": after.clPendingBalance,
   });
 };

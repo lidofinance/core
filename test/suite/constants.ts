@@ -1,7 +1,10 @@
+import { MAX_EFFECTIVE_BALANCE_WC0x01 } from "lib";
+
 export const ONE_DAY = 24n * 60n * 60n;
 export const MAX_BASIS_POINTS = 100_00n;
 
 export const MAX_DEPOSIT = 150n;
+export const MAX_DEPOSIT_AMOUNT = MAX_DEPOSIT * MAX_EFFECTIVE_BALANCE_WC0x01; // 150 * 32 ETH
 export const CURATED_MODULE_ID = 1n;
 export const SIMPLE_DVT_MODULE_ID = 2n;
 

@@ -140,9 +140,9 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
     it("Migrates storage successfully", async () => {
       const totalShares = await getStorageAtPosition(lido, "lido.StETH.totalShares");
       const bufferedEther = await getStorageAtPosition(lido, "lido.Lido.bufferedEther");
-
-      const beaconValidators = await getStorageAtPosition(lido, "lido.Lido.beaconValidators");
-      const beaconBalance = await getStorageAtPosition(lido, "lido.Lido.beaconBalance");
+      // TODO: remove this test and write for v4 migration
+      // const beaconValidators = await getStorageAtPosition(lido, "lido.Lido.beaconValidators");
+      // const beaconBalance = await getStorageAtPosition(lido, "lido.Lido.beaconBalance");
       const depositedValidators = await getStorageAtPosition(lido, "lido.Lido.depositedValidators");
 
       await expect(
@@ -157,9 +157,9 @@ describe("Lido.sol:finalizeUpgrade_v3", () => {
       expect(await lido.getLidoLocator()).to.equal(locator);
       expect(await lido.getTotalShares()).to.equal(totalShares);
       expect(await lido.getBufferedEther()).to.equal(bufferedEther);
-
-      expect((await lido.getBeaconStat()).beaconBalance).to.equal(beaconBalance);
-      expect((await lido.getBeaconStat()).beaconValidators).to.equal(beaconValidators);
+      // TODO: remove this test and write for v4 migration
+      // expect((await lido.getBeaconStat()).beaconBalance).to.equal(beaconBalance);
+      // expect((await lido.getBeaconStat()).beaconValidators).to.equal(beaconValidators);
       expect((await lido.getBeaconStat()).depositedValidators).to.equal(depositedValidators);
     });
 

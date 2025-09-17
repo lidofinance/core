@@ -81,6 +81,20 @@ describe("StakingRouter.sol:rewards", () => {
       );
     });
 
+    it("Returns the maximum allocation to a single module based on the value and module capacity", async () => {
+      const depositableEther = ether("32") * 100n + 10n;
+
+      const config = {
+        ...DEFAULT_CONFIG,
+        depositable: 150n,
+      };
+
+      const [, id] = await setupModule(config);
+      await setupModule({ ...config, status: StakingModuleStatus.DepositsPaused });
+
+      expect(await stakingRouter.getStakingModuleMaxDepositsCount(id, depositableEther)).to.equal(100n);
+    });
+
     it("Returns even allocation between modules if target shares are equal and capacities allow for that", async () => {
       const maxDeposits = 200n;
 
@@ -142,6 +156,26 @@ describe("StakingRouter.sol:rewards", () => {
       expect(await stakingRouter.getDepositsAllocation(ethToDeposit)).to.deep.equal([
         moduleAllocation * 2n,
         [moduleAllocation, moduleAllocation],
+      ]);
+    });
+
+    it("Not allocate to non-Active modules", async () => {
+      const config = {
+        ...DEFAULT_CONFIG,
+        stakeShareLimit: 50_00n,
+        priorityExitShareThreshold: 50_00n,
+        depositable: 50n,
+      };
+
+      await setupModule(config);
+      await setupModule({ ...config, status: StakingModuleStatus.DepositsPaused });
+
+      const ethToDeposit = 200n * DEFAULT_MEB;
+      const moduleAllocation = config.depositable * DEFAULT_MEB;
+
+      expect(await stakingRouter.getDepositsAllocation(ethToDeposit)).to.deep.equal([
+        moduleAllocation,
+        [moduleAllocation, 0n],
       ]);
     });
 

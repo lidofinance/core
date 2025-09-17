@@ -257,7 +257,8 @@ library SRLib {
         for (uint256 i; i < modulesCount; ++i) {
             metricValues[i] = new uint16[](2); // 2 metric values per entity (i.e. module)
             ModuleStateConfig memory stateConfig = moduleIds[i].getModuleState().getStateConfig();
-            curStakeShareLimits[i] = stateConfig.depositTargetShare;
+            curStakeShareLimits[i] =
+                stateConfig.status == StakingModuleStatus.Active ? stateConfig.depositTargetShare : 0;
             curPriorityExitShareThresholds[i] = stateConfig.withdrawalProtectShare;
         }
 
@@ -361,12 +362,14 @@ library SRLib {
 
     /// @dev module state helpers
 
-    function _setModuleStatus(uint256 _moduleId, StakingModuleStatus _status) internal returns (bool isChanged) {
+    function _setModuleStatus(uint256 _moduleId, StakingModuleStatus _status) public returns (bool isChanged) {
         ModuleStateConfig storage stateConfig = _moduleId.getModuleState().getStateConfig();
         isChanged = stateConfig.status != _status;
         if (isChanged) {
             stateConfig.status = _status;
             emit StakingModuleStatusSet(_moduleId, _status, _msgSender());
+
+            _updateSTASMetricValues();
         }
     }
 
@@ -622,6 +625,7 @@ library SRLib {
 
         for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
             if (_totalShares[i] == 0) continue;
+            SRUtils._validateModuleId(_stakingModuleIds[i]);
 
             try _stakingModuleIds[i].getIStakingModule().onRewardsMinted(_totalShares[i]) {}
             catch (bytes memory lowLevelRevertData) {
