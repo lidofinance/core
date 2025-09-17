@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4802"  lines-covered="4606"  line-rate="0.9592"  branches-valid="2238"  branches-covered="2098"  branch-rate="0.9373999999999999"  timestamp="1758108083924" complexity="0" version="0.1">
+<coverage lines-valid="4802"  lines-covered="4606"  line-rate="0.9592"  branches-valid="2238"  branches-covered="2098"  branch-rate="0.9373999999999999"  timestamp="1758122174960" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2869,10 +2869,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="14"  branch="false" />
-			<line number="173"  hits="14"  branch="false" />
-			<line number="175"  hits="14"  branch="false" />
-			<line number="176"  hits="14"  branch="false" />
+			<line number="172"  hits="21"  branch="false" />
+			<line number="173"  hits="21"  branch="false" />
+			<line number="175"  hits="21"  branch="false" />
+			<line number="176"  hits="21"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
@@ -3799,34 +3799,34 @@
 				<lines><line number="578"  hits="0" /></lines>
 			</method>
 			<method name="updateShareLimit"  hits="0"  signature="()V" >
-				<lines><line number="593"  hits="0" /></lines>
+				<lines><line number="591"  hits="0" /></lines>
 			</method>
 			<method name="fundable"  hits="24"  signature="()V" >
-				<lines><line number="602"  hits="24" /></lines>
+				<lines><line number="600"  hits="24" /></lines>
 			</method>
 			<method name="_mintSharesWithinMintingCapacity"  hits="21"  signature="()V" >
-				<lines><line number="615"  hits="21" /></lines>
+				<lines><line number="613"  hits="21" /></lines>
 			</method>
 			<method name="_burnStETH"  hits="3"  signature="()V" >
-				<lines><line number="626"  hits="3" /></lines>
+				<lines><line number="624"  hits="3" /></lines>
 			</method>
 			<method name="_burnWstETH"  hits="113"  signature="()V" >
-				<lines><line number="636"  hits="113" /></lines>
+				<lines><line number="634"  hits="113" /></lines>
 			</method>
 			<method name="_totalMintingCapacityShares"  hits="40"  signature="()V" >
-				<lines><line number="647"  hits="40" /></lines>
+				<lines><line number="645"  hits="40" /></lines>
 			</method>
 			<method name="_getSharesByPooledEth"  hits="125"  signature="()V" >
-				<lines><line number="652"  hits="125" /></lines>
+				<lines><line number="650"  hits="125" /></lines>
 			</method>
 			<method name="_shouldFundOnReceive"  hits="2"  signature="()V" >
-				<lines><line number="658"  hits="2" /></lines>
+				<lines><line number="656"  hits="2" /></lines>
 			</method>
 			<method name="_enableFundOnReceive"  hits="1"  signature="()V" >
-				<lines><line number="664"  hits="1" /></lines>
+				<lines><line number="662"  hits="1" /></lines>
 			</method>
 			<method name="_disableFundOnReceive"  hits="2"  signature="()V" >
-				<lines><line number="670"  hits="2" /></lines>
+				<lines><line number="668"  hits="2" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -3926,26 +3926,26 @@
 			<line number="553"  hits="3"  branch="false" />
 			<line number="567"  hits="2"  branch="false" />
 			<line number="579"  hits="0"  branch="false" />
-			<line number="594"  hits="0"  branch="false" />
-			<line number="603"  hits="24"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="604"  hits="4"  branch="false" />
-			<line number="606"  hits="24"  branch="false" />
-			<line number="616"  hits="21"  branch="false" />
-			<line number="617"  hits="21"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="619"  hits="21"  branch="false" />
+			<line number="592"  hits="0"  branch="false" />
+			<line number="601"  hits="24"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="602"  hits="4"  branch="false" />
+			<line number="604"  hits="24"  branch="false" />
+			<line number="614"  hits="21"  branch="false" />
+			<line number="615"  hits="21"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="617"  hits="21"  branch="false" />
+			<line number="625"  hits="3"  branch="false" />
+			<line number="626"  hits="3"  branch="false" />
 			<line number="627"  hits="3"  branch="false" />
-			<line number="628"  hits="3"  branch="false" />
-			<line number="629"  hits="3"  branch="false" />
-			<line number="637"  hits="113"  branch="false" />
-			<line number="638"  hits="113"  branch="false" />
+			<line number="635"  hits="113"  branch="false" />
+			<line number="636"  hits="113"  branch="false" />
+			<line number="637"  hits="112"  branch="false" />
 			<line number="639"  hits="112"  branch="false" />
-			<line number="641"  hits="112"  branch="false" />
-			<line number="642"  hits="112"  branch="false" />
-			<line number="648"  hits="40"  branch="false" />
-			<line number="653"  hits="125"  branch="false" />
-			<line number="659"  hits="2"  branch="false" />
-			<line number="665"  hits="1"  branch="false" />
-			<line number="671"  hits="2"  branch="false" />
+			<line number="640"  hits="112"  branch="false" />
+			<line number="646"  hits="40"  branch="false" />
+			<line number="651"  hits="125"  branch="false" />
+			<line number="657"  hits="2"  branch="false" />
+			<line number="663"  hits="1"  branch="false" />
+			<line number="669"  hits="2"  branch="false" />
 		</lines>
 		</class>
 		<class name="NodeOperatorFee.sol"  filename="contracts/0.8.25/vaults/dashboard/NodeOperatorFee.sol"  line-rate="1"  branch-rate="0.925" >
