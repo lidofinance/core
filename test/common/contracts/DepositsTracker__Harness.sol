@@ -23,10 +23,8 @@ contract DepositsTracker__Harness {
     using SlotDepositPacking for SlotDeposit;
     using SlotDepositPacking for uint256;
 
-    // Dedicated storage position for tests
     bytes32 public constant TEST_POSITION = keccak256("deposits.tracker.test.position");
 
-    // Expose the library functions
     function insertSlotDeposit(uint256 slot, uint256 amount) external {
         DepositsTracker.insertSlotDeposit(TEST_POSITION, slot, amount);
     }
@@ -35,12 +33,19 @@ contract DepositsTracker__Harness {
         return DepositsTracker.getDepositedEthUpToSlot(TEST_POSITION, slot);
     }
 
-    function moveCursorToSlot(uint256 slot, uint256 cumulative) external {
-        DepositsTracker.moveCursorToSlot(TEST_POSITION, slot, cumulative);
+    function getDepositedEthUpToLastSlot() external view returns (uint256) {
+        return DepositsTracker.getDepositedEthUpToLastSlot(TEST_POSITION);
     }
 
-    // helpers
+    function moveCursorToSlot(uint256 slot) external {
+        DepositsTracker.moveCursorToSlot(TEST_POSITION, slot);
+    }
 
+    function moveCursorToLastSlot() external {
+        DepositsTracker.moveCursorToLastSlot(TEST_POSITION);
+    }
+
+    // === Helpers for assertions ===
     function getCursor() external view returns (uint256) {
         return _getDataStorage(TEST_POSITION).cursor;
     }
