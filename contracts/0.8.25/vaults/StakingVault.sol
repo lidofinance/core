@@ -291,28 +291,14 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Performs deposits to the beacon chain
-     * @param _deposits Array of validator deposits
+     * @notice Performs deposit to the beacon chain using ether from available balance
+     * @param _deposit validator deposit struct
      */
-    function depositToBeaconChain(Deposit[] calldata _deposits) external onlyDepositor whenDepositsNotPaused {
-        uint256 numberOfDeposits = _deposits.length;
-        if (numberOfDeposits == 0) revert ZeroArgument("_deposits");
-
-        uint256 totalAmount;
-        for (uint256 i = 0; i < numberOfDeposits; i++) {
-            totalAmount += _deposits[i].amount;
-        }
-
+    function depositToBeaconChain(Deposit calldata _deposit) external onlyDepositor whenDepositsNotPaused {
         uint256 balance = availableBalance();
-        if (totalAmount > balance) revert InsufficientBalance(balance, totalAmount);
+        if (_deposit.amount > balance) revert InsufficientBalance(balance, _deposit.amount);
 
-        bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
-
-        for (uint256 i = 0; i < numberOfDeposits; i++) {
-            _depositToBeaconChain(_deposits[i], withdrawalCredentials_);
-        }
-
-        emit DepositedToBeaconChain(numberOfDeposits, totalAmount);
+        _depositToBeaconChain(_deposit, bytes.concat(withdrawalCredentials()));
     }
 
     /**
@@ -352,8 +338,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         unstage(_deposit.amount);
 
         _depositToBeaconChain(_deposit, bytes.concat(withdrawalCredentials()));
-
-        emit DepositedToBeaconChain(1, _deposit.amount);
     }
 
     /*
@@ -619,13 +603,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Emitted when the beacon chain deposits are resumed
      */
     event BeaconChainDepositsResumed();
-
-    /**
-     * @notice Emitted when ether is deposited to `DepositContract`.
-     * @param _deposits Number of validator deposits made.
-     * @param _totalAmount Total amount of ether deposited.
-     */
-    event DepositedToBeaconChain(uint256 _deposits, uint256 _totalAmount);
 
     /**
      * @notice Emitted when vault owner requests node operator to exit validators from the beacon chain

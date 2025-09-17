@@ -7,7 +7,7 @@ import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.so
 import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
 
 contract StakingVault__MockForPDG is IStakingVault {
-    event Mock_depositToBeaconChain(address indexed _depositor, uint256 _depositCount, uint256 _totalDepositAmount);
+    event Mock_depositToBeaconChain(address indexed _depositor, uint256 _totalDepositAmount);
 
     uint256 private constant WC_0X02_PREFIX = 0x02 << 248;
 
@@ -39,13 +39,8 @@ contract StakingVault__MockForPDG is IStakingVault {
         return owner_;
     }
 
-    function depositToBeaconChain(Deposit[] calldata _deposits) external override {
-        uint256 totalDepositAmount = 0;
-        for (uint256 i = 0; i < _deposits.length; i++) {
-            totalDepositAmount += _deposits[i].amount;
-        }
-
-        emit Mock_depositToBeaconChain(msg.sender, _deposits.length, totalDepositAmount);
+    function depositToBeaconChain(Deposit calldata _deposit) external override {
+        emit Mock_depositToBeaconChain(msg.sender, _deposit.amount);
     }
 
     function mock__setWithdrawalCredentials(bytes32 _withdrawalCredentials) external {

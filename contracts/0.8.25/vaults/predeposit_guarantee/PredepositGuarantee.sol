@@ -395,6 +395,11 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         // stashing 31 ETH to be able to activate the validator as it gets proved
         _stakingVault.stage(ACTIVATION_DEPOSIT_AMOUNT * _deposits.length);
 
+        balance.locked += uint128(totalDepositAmount);
+        emit BalanceLocked(nodeOperator, balance.total, balance.locked);
+
+        $.pendingPredeposits[address(_stakingVault)] += _deposits.length * PREDEPOSIT_AMOUNT;
+
         for (uint256 i = 0; i < _deposits.length; i++) {
             IStakingVault.Deposit calldata _deposit = _deposits[i];
 
@@ -412,15 +417,10 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
                 })
             );
 
+            _stakingVault.depositToBeaconChain(_deposit);
+
             emit ValidatorPreDeposited(_deposit.pubkey, nodeOperator, address(_stakingVault), withdrawalCredentials);
         }
-
-        balance.locked += uint128(totalDepositAmount);
-        $.pendingPredeposits[address(_stakingVault)] += _deposits.length * PREDEPOSIT_AMOUNT;
-
-        _stakingVault.depositToBeaconChain(_deposits);
-
-        emit BalanceLocked(nodeOperator, balance.total, balance.locked);
     }
 
     // * * * * * Positive Proof Flow  * * * * * //
@@ -495,9 +495,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             if (validator.stakingVault != _stakingVault) {
                 revert DepositToWrongVault(_deposit.pubkey, address(_stakingVault));
             }
+             _stakingVault.depositToBeaconChain(_deposit);
         }
-
-        _stakingVault.depositToBeaconChain(_deposits);
     }
 
     /**

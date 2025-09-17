@@ -1,11 +1,12 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, PinnedBeaconProxy, StakingVault } from "typechain-types";
+import { Dashboard, DepositContract, PinnedBeaconProxy, StakingVault } from "typechain-types";
 
-import { addressToWC, ether, generatePredeposit, generateValidator, ONE_ETHER } from "lib";
+import { addressToWC, ether, generatePredeposit, generateValidator, ONE_ETHER, toGwei, toLittleEndian64 } from "lib";
 import {
   createVaultWithDashboard,
   generatePredepositData,
@@ -24,6 +25,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
   let originalSnapshot: string;
 
   let stakingVault: StakingVault;
+  let depositContract: DepositContract;
   let dashboard: Dashboard;
   let proxy: PinnedBeaconProxy;
   let owner: HardhatEthersSigner;
@@ -52,6 +54,8 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     ));
 
     agent = await ctx.getSigner("agent");
+
+    depositContract = await ethers.getContractAt("DepositContract", await stakingVault.DEPOSIT_CONTRACT());
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -129,10 +133,16 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
           .connect(nodeOperator)
           .predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]),
       )
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(1, ether("1"))
         .to.emit(predepositGuarantee, "BalanceLocked")
-        .withArgs(nodeOperator, ether("1"), ether("1"));
+        .withArgs(nodeOperator, ether("1"), ether("1"))
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(
+          predepositData.deposit.pubkey,
+          withdrawalCredentials,
+          toLittleEndian64(toGwei(predepositData.deposit.amount)),
+          predepositData.deposit.signature,
+          anyValue,
+        );
 
       const { witnesses, postdeposit } = await getProofAndDepositData(
         ctx,
@@ -148,7 +158,15 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
         .to.emit(predepositGuarantee, "ValidatorProven")
         .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials)
         .to.emit(predepositGuarantee, "BalanceUnlocked")
-        .withArgs(nodeOperator, ether("1"), ether("0"));
+        .withArgs(nodeOperator, ether("1"), ether("0"))
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(
+          postdeposit.pubkey,
+          withdrawalCredentials,
+          toLittleEndian64(toGwei(await predepositGuarantee.ACTIVATION_DEPOSIT_AMOUNT())),
+          postdeposit.signature,
+          anyValue,
+        );
 
       // 7. The Node Operator's guarantor withdraws the 1 ETH from the PDG contract or retains it for reuse with future validators.
       const balanceBefore = await ethers.provider.getBalance(guarantor);
@@ -172,8 +190,14 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       // 8. The Node Operator makes a top-up deposit of the remaining 99 ETH from the vault balance to the validator through the PDG.
       //    Method called: PredepositGuarantee.depositToBeaconChain(stakingVault, deposits).
       await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(1, ether("99"));
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(
+          postdeposit.pubkey,
+          await stakingVault.withdrawalCredentials(),
+          toLittleEndian64(toGwei(postdeposit.amount)),
+          postdeposit.signature,
+          anyValue,
+        );
     });
 
     it("Works with vaults deposit pauses", async () => {
@@ -200,8 +224,14 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
       // 11. The Node Operator deposits the remaining 99 ETH from the vault balance to the validator through the PDG.
       await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(1, ether("99"));
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(
+          postdeposit.pubkey,
+          await stakingVault.withdrawalCredentials(),
+          toLittleEndian64(toGwei(postdeposit.amount)),
+          postdeposit.signature,
+          anyValue,
+        );
     });
   });
 
@@ -248,8 +278,14 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
     // 7. The Node Operator deposits the remaining 99 ETH from the vault balance to the validator through the PDG.
     await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
-      .to.emit(stakingVault, "DepositedToBeaconChain")
-      .withArgs(1, ether("99"));
+      .to.emit(depositContract, "DepositEvent")
+      .withArgs(
+        postdeposit.pubkey,
+        await stakingVault.withdrawalCredentials(),
+        toLittleEndian64(toGwei(postdeposit.amount)),
+        postdeposit.signature,
+        anyValue,
+      );
   });
 
   describe("Disproven pubkey compensation", () => {
@@ -287,8 +323,14 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
           .connect(nodeOperator)
           .predeposit(stakingVault, [invalidPredeposit.deposit], [invalidPredeposit.depositY]),
       )
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(1, ether("1"))
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(
+          invalidPredeposit.deposit.pubkey,
+          await stakingVault.withdrawalCredentials(),
+          toLittleEndian64(toGwei(invalidPredeposit.deposit.amount)),
+          invalidPredeposit.deposit.signature,
+          anyValue,
+        )
         .to.emit(predepositGuarantee, "BalanceLocked")
         .withArgs(nodeOperator, ether("1"), ether("1"));
 

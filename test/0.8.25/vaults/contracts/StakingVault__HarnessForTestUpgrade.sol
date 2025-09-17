@@ -82,7 +82,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, Ownable2StepUpgra
         }
     }
 
-    function depositToBeaconChain(IStakingVault.Deposit[] calldata _deposits) external {}
+    function depositToBeaconChain(IStakingVault.Deposit calldata _deposit) external override {}
 
     function fund() external payable {}
 

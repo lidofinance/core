@@ -1,9 +1,10 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, StakingVault } from "typechain-types";
+import { Dashboard, DepositContract, StakingVault } from "typechain-types";
 
 import {
   certainAddress,
@@ -12,6 +13,8 @@ import {
   generatePredeposit,
   generateValidator,
   getNextBlockTimestamp,
+  toGwei,
+  toLittleEndian64,
 } from "lib";
 import {
   createVaultWithDashboard,
@@ -32,6 +35,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
   let dashboard: Dashboard;
   let stakingVault: StakingVault;
+  let depositContract: DepositContract;
 
   let owner: HardhatEthersSigner;
   let nodeOperator: HardhatEthersSigner;
@@ -60,6 +64,8 @@ describe("Integration: Actions with vault disconnected from hub", () => {
     await reportVaultDataWithProof(ctx, stakingVault);
 
     dashboard = dashboard.connect(owner);
+
+    depositContract = await ethers.getContractAt("DepositContract", await stakingVault.DEPOSIT_CONTRACT());
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -244,10 +250,15 @@ describe("Integration: Actions with vault disconnected from hub", () => {
 
         const deposit = await generatePostDeposit(validator.container, ether("2048"));
 
-        await expect(stakingVault.connect(owner).depositToBeaconChain([deposit])).to.emit(
-          stakingVault,
-          "DepositedToBeaconChain",
-        );
+        await expect(stakingVault.connect(owner).depositToBeaconChain(deposit))
+          .to.emit(depositContract, "DepositEvent")
+          .withArgs(
+            deposit.pubkey,
+            withdrawalCredentials,
+            toLittleEndian64(toGwei(deposit.amount)),
+            deposit.signature,
+            anyValue,
+          );
       });
 
       it("Can pause/resume deposits to beacon chain", async () => {
@@ -280,8 +291,14 @@ describe("Integration: Actions with vault disconnected from hub", () => {
             .connect(nodeOperator)
             .predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]),
         )
-          .to.emit(stakingVault, "DepositedToBeaconChain")
-          .withArgs(1, ether("1"));
+          .to.emit(depositContract, "DepositEvent")
+          .withArgs(
+            predepositData.deposit.pubkey,
+            withdrawalCredentials,
+            toLittleEndian64(toGwei(predepositData.deposit.amount)),
+            predepositData.deposit.signature,
+            anyValue,
+          );
 
         const { witnesses, postdeposit } = await getProofAndDepositData(
           ctx,
@@ -293,12 +310,24 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         await expect(predepositGuarantee.connect(nodeOperator).proveWCAndActivateValidator(witnesses[0]))
           .to.emit(predepositGuarantee, "ValidatorProven")
           .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials)
-          .to.emit(stakingVault, "DepositedToBeaconChain")
-          .withArgs(1, ether("31"));
+          .to.emit(depositContract, "DepositEvent")
+          .withArgs(
+            postdeposit.pubkey,
+            withdrawalCredentials,
+            toLittleEndian64(toGwei(ether("31"))),
+            postdeposit.signature,
+            anyValue,
+          );
 
         await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
-          .to.emit(stakingVault, "DepositedToBeaconChain")
-          .withArgs(1, ether("2016"));
+          .to.emit(depositContract, "DepositEvent")
+          .withArgs(
+            postdeposit.pubkey,
+            withdrawalCredentials,
+            toLittleEndian64(toGwei(postdeposit.amount)),
+            postdeposit.signature,
+            anyValue,
+          );
       });
     });
   });

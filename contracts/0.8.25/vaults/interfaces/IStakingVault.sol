@@ -48,7 +48,7 @@ interface IStakingVault {
     function beaconChainDepositsPaused() external view returns (bool);
     function pauseBeaconChainDeposits() external;
     function resumeBeaconChainDeposits() external;
-    function depositToBeaconChain(Deposit[] calldata _deposits) external;
+    function depositToBeaconChain(Deposit calldata _deposits) external;
 
     function requestValidatorExit(bytes calldata _pubkeys) external;
     function triggerValidatorWithdrawals(bytes calldata _pubkeys, uint64[] calldata _amountsInGwei, address _refundRecipient) external payable;

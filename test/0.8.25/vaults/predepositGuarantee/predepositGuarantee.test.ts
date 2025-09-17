@@ -153,7 +153,7 @@ describe("PredepositGuarantee.sol", () => {
         .to.emit(pdg, "ValidatorPreDeposited")
         .withArgs(deposit.pubkey, vaultOperator, stakingVault, vaultWC)
         .to.emit(stakingVault, "Mock_depositToBeaconChain")
-        .withArgs(pdg, 1, deposit.amount);
+        .withArgs(pdg, deposit.amount);
 
       [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
@@ -198,7 +198,7 @@ describe("PredepositGuarantee.sol", () => {
         .to.emit(pdg, "ValidatorProven")
         .withArgs(validator.container.pubkey, vaultOperator, stakingVault, vaultWC)
         .to.emit(stakingVault, "Mock_depositToBeaconChain")
-        .withArgs(pdg, 1, postDepositData.amount);
+        .withArgs(pdg, postDepositData.amount);
 
       [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
@@ -693,11 +693,7 @@ describe("PredepositGuarantee.sol", () => {
           }),
         );
 
-        await expect(predepositTX)
-          .to.emit(pdg, "BalanceLocked")
-          .withArgs(vaultOperator, totalBalance, totalBalance)
-          .to.emit(stakingVault, "Mock_depositToBeaconChain")
-          .withArgs(pdg, batchCount, totalBalance);
+        await expect(predepositTX).to.emit(pdg, "BalanceLocked").withArgs(vaultOperator, totalBalance, totalBalance);
 
         expect(await pdg.nodeOperatorBalance(vaultOperator)).to.deep.equal([totalBalance, totalBalance]);
         expect(await pdg.unlockedBalance(vaultOperator)).to.equal(0n);

@@ -4,7 +4,6 @@ import { ContractTransactionReceipt, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   DepositContract__MockForStakingVault,
@@ -21,8 +20,6 @@ import {
   de0x,
   EIP7002_MIN_WITHDRAWAL_REQUEST_FEE,
   ether,
-  generatePostDeposit,
-  generateValidator,
   MAX_UINT256,
   ONE_GWEI,
   proxify,
@@ -348,27 +345,20 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(stranger)
-          .depositToBeaconChain([
-            { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
-          ]),
+          .depositToBeaconChain({ pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") }),
       ).to.be.revertedWithCustomError(stakingVault, "SenderNotDepositor");
-    });
-
-    it("reverts if the number of deposits is zero", async () => {
-      await expect(stakingVault.connect(depositor).depositToBeaconChain([]))
-        .to.be.revertedWithCustomError(stakingVault, "ZeroArgument")
-        .withArgs("_deposits");
     });
 
     it("reverts if the total amount of deposits exceeds the vault's balance", async () => {
       await stakingVault.fund({ value: ether("1") });
 
       await expect(
-        stakingVault
-          .connect(depositor)
-          .depositToBeaconChain([
-            { pubkey: "0x", signature: "0x", amount: ether("2"), depositDataRoot: streccak("random-root") },
-          ]),
+        stakingVault.connect(depositor).depositToBeaconChain({
+          pubkey: "0x",
+          signature: "0x",
+          amount: ether("2"),
+          depositDataRoot: streccak("random-root"),
+        }),
       )
         .to.be.revertedWithCustomError(stakingVault, "InsufficientBalance")
         .withArgs(ether("1"), ether("2"));
@@ -379,13 +369,11 @@ describe("StakingVault.sol", () => {
       await expect(
         stakingVault
           .connect(depositor)
-          .depositToBeaconChain([
-            { pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") },
-          ]),
+          .depositToBeaconChain({ pubkey: "0x", signature: "0x", amount: 0, depositDataRoot: streccak("random-root") }),
       ).to.be.revertedWithCustomError(stakingVault, "BeaconChainDepositsOnPause");
     });
 
-    it("makes deposits to the beacon chain and emits the `DepositedToBeaconChain` event", async () => {
+    it("makes deposits to the beacon chain", async () => {
       await stakingVault.fund({ value: ether("32") });
 
       const pubkey = "0x" + "ab".repeat(48);
@@ -394,29 +382,9 @@ describe("StakingVault.sol", () => {
       const withdrawalCredentials = await stakingVault.withdrawalCredentials();
       const depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
 
-      await expect(
-        stakingVault.connect(depositor).depositToBeaconChain([{ pubkey, signature, amount, depositDataRoot }]),
-      )
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(1, amount);
-    });
-
-    it("makes multiple deposits to the beacon chain and emits the `DepositedToBeaconChain` event", async () => {
-      const numberOfKeys = 300; // number because of Array.from
-      const totalAmount = ether("32") * BigInt(numberOfKeys);
-      const withdrawalCredentials = await stakingVault.withdrawalCredentials();
-
-      // topup the contract with enough ETH to cover the deposits
-      await setBalance(await stakingVault.getAddress(), ether("32") * BigInt(numberOfKeys));
-
-      const deposits = Array.from({ length: numberOfKeys }, () => {
-        const validator = generateValidator(withdrawalCredentials);
-        return generatePostDeposit(validator.container, ether("32"));
-      });
-
-      await expect(stakingVault.connect(depositor).depositToBeaconChain(deposits))
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(numberOfKeys, totalAmount);
+      await expect(stakingVault.connect(depositor).depositToBeaconChain({ pubkey, signature, amount, depositDataRoot }))
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(pubkey, withdrawalCredentials, signature, depositDataRoot);
     });
   });
 
