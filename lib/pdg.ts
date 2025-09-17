@@ -108,7 +108,7 @@ export const generatePredeposit = async (
   };
 };
 
-export const generatePostDeposit = (
+export const generateTopUp = (
   validator: SSZBLSHelpers.ValidatorStruct,
   amount = ether("31"),
 ): PredepositGuarantee.ValidatorTopUpStruct => {

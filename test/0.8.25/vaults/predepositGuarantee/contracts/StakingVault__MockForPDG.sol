@@ -14,13 +14,15 @@ contract StakingVault__MockForPDG is IStakingVault {
 
     address private nodeOperator_;
     address private owner_;
+    address private depositor_;
     bytes32 private withdrawalCredentials_;
 
     uint256 staged;
 
-    constructor(address _owner, address _nodeOperator) {
+    constructor(address _owner, address _nodeOperator, address _depositor) {
         owner_ = _owner;
         nodeOperator_ = _nodeOperator;
+        depositor_ = _depositor;
     }
 
     receive() external payable {}
@@ -64,7 +66,9 @@ contract StakingVault__MockForPDG is IStakingVault {
 
     function transferOwnership(address _newOwner) external override {}
 
-    function depositor() external view override returns (address) {}
+    function depositor() external view override returns (address) {
+        return depositor_;
+    }
 
     function calculateValidatorWithdrawalFee(uint256 _keysCount) external view override returns (uint256) {}
 

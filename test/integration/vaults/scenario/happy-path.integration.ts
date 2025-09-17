@@ -11,8 +11,8 @@ import { Dashboard, SSZBLSHelpers, StakingVault } from "typechain-types";
 import {
   days,
   ether,
-  generatePostDeposit,
   generatePredeposit,
+  generateTopUp,
   generateValidator,
   log,
   prepareLocalMerkleTree,
@@ -259,7 +259,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     const postDepositAmount = VALIDATOR_DEPOSIT_SIZE - predepositAmount - ether("31");
     const postdeposits = validators.map((validator) => {
-      return generatePostDeposit(validator.container, postDepositAmount);
+      return generateTopUp(validator.container, postDepositAmount);
     });
 
     await pdg.proveWCAndTopUpValidators(

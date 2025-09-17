@@ -20,8 +20,8 @@ import {
   days,
   de0x,
   findEventsWithInterfaces,
-  generatePostDeposit,
   generatePredeposit,
+  generateTopUp,
   getCurrentBlockTimestamp,
   impersonate,
   prepareLocalMerkleTree,
@@ -452,7 +452,7 @@ export const getProofAndDepositData = async (
   );
   const proof = await mockCLtree.buildProof(validatorIndex, beaconBlockHeader);
 
-  const postdeposit = generatePostDeposit(validator.container, amount);
+  const postdeposit = generateTopUp(validator.container, amount);
   const pubkey = hexlify(validator.container.pubkey);
 
   const witnesses = [
