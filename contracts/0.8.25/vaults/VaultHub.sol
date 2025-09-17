@@ -55,7 +55,8 @@ contract VaultHub is PausableUntilWithRoles {
         /// @notice index of the vault in the list of vaults. Indexes are not guaranteed to be stable.
         /// @dev vaultIndex is always greater than 0
         uint96 vaultIndex;
-        /// @notice if true, vault is disconnected and fee is not accrued
+        /// @notice timestamp of the block when disconnection was initiated
+        /// equal 0 if vault is disconnected and max(uint48) - for connected ,
         uint48 disconnectInitiatedTs;
         /// @notice share of ether that is locked on the vault as an additional reserve
         /// e.g RR=30% means that for 1stETH minted 1/(1-0.3)=1.428571428571428571 ETH is locked on the vault
@@ -133,8 +134,6 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
     /// @dev basis points base
     uint256 internal immutable TOTAL_BASIS_POINTS = 100_00;
-    /// @notice length of the validator pubkey in bytes
-    uint256 internal immutable PUBLIC_KEY_LENGTH = 48;
     /// @dev special value for `disconnectTimestamp` storage means the vault is not marked for disconnect
     uint48 internal immutable DISCONNECT_NOT_INITIATED = type(uint48).max;
     /// @notice minimum amount of ether that is required for the beacon chain deposit
