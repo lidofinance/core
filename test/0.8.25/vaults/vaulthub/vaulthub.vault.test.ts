@@ -799,8 +799,8 @@ describe("VaultHub.sol:owner-functions", () => {
 
       await setBalance(vaultAddress, 0n); // simulate vault total value is on Beacon Chain
 
-      const rebalanceShortfallShares = await vaultHub.rebalanceShortfallShares(vaultAddress);
-      const rebalanceShortfallValue = await lido.getPooledEthBySharesRoundUp(rebalanceShortfallShares);
+      const healthShortfallShares = await vaultHub.healthShortfallShares(vaultAddress);
+      const rebalanceShortfallValue = await lido.getPooledEthBySharesRoundUp(healthShortfallShares);
       const amount = rebalanceShortfallValue / ONE_GWEI - 1n; // 1 gwei less than rebalance shortfall
 
       await expect(
@@ -836,8 +836,8 @@ describe("VaultHub.sol:owner-functions", () => {
 
       await setBalance(vaultAddress, 0n); // simulate vault total value is on Beacon Chain
 
-      const rebalanceShortfallShares = await vaultHub.rebalanceShortfallShares(vaultAddress);
-      const rebalanceShortfallValue = await lido.getPooledEthBySharesRoundUp(rebalanceShortfallShares);
+      const healthShortfallShares = await vaultHub.healthShortfallShares(vaultAddress);
+      const rebalanceShortfallValue = await lido.getPooledEthBySharesRoundUp(healthShortfallShares);
       const amount = rebalanceShortfallValue / ONE_GWEI;
 
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.be.false;

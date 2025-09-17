@@ -531,22 +531,17 @@ describe("Integration: Vault redemptions and fees obligations", () => {
       it("Reduces the unsettled fees when redemptions are set", async () => {
         await vaultHub.connect(agentSigner).setLiabilitySharesTarget(stakingVaultAddress, 0n);
 
-        const totalValue = await vaultHub.totalValue(stakingVaultAddress);
-        const locked = await vaultHub.locked(stakingVaultAddress);
+        const redemptionValue = await lido.getPooledEthBySharesRoundUp(redemptionShares);
+        await setBalance(stakingVaultAddress, redemptionValue + 1n);
 
-        const free = totalValue - locked; // some free balance on the vault
-
-        await dashboard.fund({ value: cumulativeLidoFees - free });
-
-        const feesToSettle = cumulativeLidoFees;
         await expect(vaultHub.settleLidoFees(stakingVaultAddress))
           .to.emit(vaultHub, "LidoFeesSettled")
-          .withArgs(stakingVaultAddress, feesToSettle, cumulativeLidoFees, feesToSettle);
+          .withArgs(stakingVaultAddress, 1n, cumulativeLidoFees, 1n);
 
         const recordAfter = await vaultHub.vaultRecord(stakingVaultAddress);
         expect(recordAfter.redemptionShares).to.equal(redemptionShares);
         expect(recordAfter.cumulativeLidoFees).to.equal(cumulativeLidoFees);
-        expect(recordAfter.settledLidoFees).to.equal(feesToSettle);
+        expect(recordAfter.settledLidoFees).to.equal(1n);
       });
 
       it("Does not make the vault unhealthy", async () => {
