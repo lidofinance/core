@@ -577,11 +577,9 @@ contract Dashboard is NodeOperatorFee {
      * @param _requestedShareLimit The requested share limit.
      * @return bool Whether the share limit change was executed.
      * @dev Share limit update confirmation logic:
-     *      - Default tier (0): Only vault owner confirmation required (via this function)
-     *      - Non-default tier + decreasing limit: Only vault owner confirmation required (via this function)
-     *      - Non-default tier + increasing limit: Both vault owner (via this function) AND node operator confirmations required
-     *        - First call returns false (pending), second call with node operator confirmation completes the update
-     *        - Confirmations expire after the configured period (default: 1 day)
+     *      - Both vault owner (via this function) AND node operator confirmations required
+     *      - First call returns false (pending), second call with node operator confirmation completes the update
+     *      - Confirmations expire after the configured period (default: 1 day)
      */
     function updateShareLimit(uint256 _requestedShareLimit) external returns (bool) {
         return _updateVaultShareLimit(_requestedShareLimit);

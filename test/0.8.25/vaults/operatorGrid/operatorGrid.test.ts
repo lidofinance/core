@@ -2349,37 +2349,7 @@ describe("OperatorGrid.sol", () => {
       ).to.be.revertedWithCustomError(operatorGrid, "ShareLimitAlreadySet");
     });
 
-    it("allows vault owner to decrease share limit without confirmation", async () => {
-      const currentShareLimit = 500n;
-      const newShareLimit = 300n;
-      const connection = createVaultConnection(vaultOwner.address, currentShareLimit);
-      await vaultHub.mock__setVaultConnection(vault_NO1_V1, connection);
-
-      await expect(operatorGrid.connect(vaultOwner).updateVaultShareLimit(vault_NO1_V1, newShareLimit)).to.emit(
-        vaultHub,
-        "VaultConnectionUpdated",
-      );
-
-      const newConnection = await vaultHub.vaultConnection(vault_NO1_V1);
-      expect(newConnection.shareLimit).to.be.equal(newShareLimit);
-    });
-
-    it("allows vault owner to increase share limit in default tier without confirmation", async () => {
-      const currentShareLimit = 300n;
-      const newShareLimit = 500n;
-      const connection = createVaultConnection(vaultOwner.address, currentShareLimit);
-      await vaultHub.mock__setVaultConnection(vault_NO1_V1, connection);
-
-      await expect(operatorGrid.connect(vaultOwner).updateVaultShareLimit(vault_NO1_V1, newShareLimit)).to.emit(
-        vaultHub,
-        "VaultConnectionUpdated",
-      );
-
-      const newConnection = await vaultHub.vaultConnection(vault_NO1_V1);
-      expect(newConnection.shareLimit).to.be.equal(newShareLimit);
-    });
-
-    it("requires confirmation from both vault owner and node operator for increasing share limit in non-default tier", async () => {
+    it("requires confirmation from both vault owner and node operator for increasing share limit", async () => {
       // First, move vault to tier 1
       const connection = createVaultConnection(vaultOwner.address, 500n);
       await vaultHub.mock__setVaultConnection(vault_NO1_V1, connection);
@@ -2413,7 +2383,7 @@ describe("OperatorGrid.sol", () => {
       );
     });
 
-    it("allows decreasing share limit in non-default tier without node operator confirmation", async () => {
+    it("requires confirmation from both vault owner and node operator for decreasing share limit", async () => {
       // First, move vault to tier 1
       const connection = createVaultConnection(vaultOwner.address, 500n);
       await vaultHub.mock__setVaultConnection(vault_NO1_V1, connection);
@@ -2429,12 +2399,19 @@ describe("OperatorGrid.sol", () => {
       const updatedConnection = createVaultConnection(vaultOwner.address, currentShareLimit);
       await vaultHub.mock__setVaultConnection(vault_NO1_V1, updatedConnection);
 
-      // Should return true immediately (no confirmation needed for decrease)
+      // First confirmation from vault owner - should return false (not confirmed yet)
       expect(
         await operatorGrid.connect(vaultOwner).updateVaultShareLimit.staticCall(vault_NO1_V1, newShareLimit),
+      ).to.equal(false);
+
+      await operatorGrid.connect(vaultOwner).updateVaultShareLimit(vault_NO1_V1, newShareLimit);
+
+      // Second confirmation from node operator - should return true (fully confirmed)
+      expect(
+        await operatorGrid.connect(nodeOperator1).updateVaultShareLimit.staticCall(vault_NO1_V1, newShareLimit),
       ).to.equal(true);
 
-      await expect(operatorGrid.connect(vaultOwner).updateVaultShareLimit(vault_NO1_V1, newShareLimit)).to.emit(
+      await expect(operatorGrid.connect(nodeOperator1).updateVaultShareLimit(vault_NO1_V1, newShareLimit)).to.emit(
         vaultHub,
         "VaultConnectionUpdated",
       );
@@ -2458,11 +2435,11 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).updateVaultShareLimit(vault_NO1_V1, newShareLimit);
 
       // Verify that other parameters are preserved
-      await expect(operatorGrid.connect(vaultOwner).updateVaultShareLimit(vault_NO1_V1, newShareLimit + 1n))
+      await expect(operatorGrid.connect(nodeOperator1).updateVaultShareLimit(vault_NO1_V1, newShareLimit))
         .to.emit(vaultHub, "VaultConnectionUpdated")
         .withArgs(
           vault_NO1_V1.target,
-          newShareLimit + 1n,
+          newShareLimit,
           1234, // Should preserve original reserve ratio
           1111, // Should preserve original forced rebalance threshold
           777, // Should preserve original infra fee
