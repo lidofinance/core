@@ -106,7 +106,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     struct VaultInfo {
         address vault;
-        uint256 balance;
+        uint256 aggregateBalance; // includes pendingPredeposits, availableBalance and stagedBalance
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
@@ -231,7 +231,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             VaultHub.VaultRecord memory record = vaultHub.vaultRecord(vaultAddress);
             batch[i] = VaultInfo(
                 vaultAddress,
-                address(vault).balance + pendingPredeposits(vault),
+                vault.availableBalance() + vault.stagedBalance() + pendingPredeposits(vault),
                 record.inOutDelta.currentValue(),
                 vault.withdrawalCredentials(),
                 record.liabilityShares,

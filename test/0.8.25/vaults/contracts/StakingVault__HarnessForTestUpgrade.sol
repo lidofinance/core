@@ -168,11 +168,11 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, Ownable2StepUpgra
         return address(this).balance;
     }
 
-    function stash(uint256 _ether) external override {}
+    function stagedBalance() external view override returns (uint256) {}
 
-    function unstash(uint256 _ether) external override {}
+    function stage(uint256 _ether) external override {}
 
-    function stashedBalance() external view override returns (uint256) {}
+    function unstage(uint256 _ether) external override {}
 
-    function depositFromStash(Deposit calldata _deposit) external override {}
+    function depositFromStaged(Deposit calldata _deposit) external override {}
 }

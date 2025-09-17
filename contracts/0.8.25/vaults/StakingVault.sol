@@ -87,7 +87,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address depositor;
         bool beaconChainDepositsPaused;
         // 3rd slot
-        uint256 stash;
+        uint256 stagedBalance;
     }
 
     /*
@@ -202,15 +202,15 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @return amount of ether available for withdrawal in Wei
      */
     function availableBalance() public view returns (uint256) {
-        return address(this).balance - _storage().stash;
+        return address(this).balance - _storage().stagedBalance;
     }
 
     /**
-     * @notice Returns the amount of ether on the balanced that was stashed by depositor for validator activations
+     * @notice Returns the amount of ether on the balance that was stashed by depositor for validator activations
      * @return the amount of stashed ether in Wei
      */
-    function stashedBalance() external view returns (uint256) {
-        return _storage().stash;
+    function stagedBalance() external view returns (uint256) {
+        return _storage().stagedBalance;
     }
 
     /*
@@ -316,33 +316,31 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Puts away some ether from the balance to use it for further deposits
+     * @notice Puts aside some ether from the balance to deposit it later
      * @param _ether the amount of ether to stash in Wei
      */
-    function stash(uint256 _ether) external onlyDepositor whenDepositsNotPaused {
+    function stage(uint256 _ether) external onlyDepositor whenDepositsNotPaused {
         if (_ether == 0) revert ZeroArgument("_ether");
         uint256 balance = availableBalance();
         if (balance < _ether) revert InsufficientBalance(balance, _ether);
 
-        uint256 newStashed = _storage().stash + _ether;
-        _storage().stash = newStashed;
+        _storage().stagedBalance += _ether;
 
-        emit EtherStashed(_ether, newStashed);
+        emit EtherStashed(_ether);
     }
 
     /**
      * @notice Returns the ether stashed for deposits back to available balance
      * @param _ether the amount of ether to remove from stash in Wei
      */
-    function unstash(uint256 _ether) public onlyDepositor {
+    function unstage(uint256 _ether) public onlyDepositor {
         if (_ether == 0) revert ZeroArgument("_ether");
-        uint256 stashed = _storage().stash;
-        if (stashed < _ether) revert InsufficientStash(stashed, _ether);
+        uint256 staged = _storage().stagedBalance;
+        if (staged < _ether) revert InsufficientStash(staged, _ether);
 
-        uint256 newStashed = stashed - _ether;
-        _storage().stash = newStashed;
+        _storage().stagedBalance = staged - _ether;
 
-        emit EtherUnstashed(_ether, newStashed);
+        emit EtherUnstaged(_ether);
     }
 
     /**
@@ -350,8 +348,8 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _deposit struct
      * @dev NB! this deposit is not affected by pause
      */
-    function depositFromStash(Deposit calldata _deposit) external onlyDepositor {
-        unstash(_deposit.amount);
+    function depositFromStaged(Deposit calldata _deposit) external onlyDepositor {
+        unstage(_deposit.amount);
 
         _depositToBeaconChain(_deposit, bytes.concat(withdrawalCredentials()));
 
@@ -663,15 +661,17 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address indexed refundRecipient
     );
 
-    event EtherStashed(
-        uint256 etherStashed,
-        uint256 stashSize
-    );
+    /**
+     * Emitted when ether is put aside from available balance
+     * @param amount Amount of ether being staged in Wei
+     */
+    event EtherStashed(uint256 amount);
 
-    event EtherUnstashed(
-        uint256 etherUnstashed,
-        uint256 stashSize
-    );
+    /**
+     * Emitted when ether is returned back to available balance
+     * @param amount amount of ether being unstaged in Wei
+     */
+    event EtherUnstaged(uint256 amount);
 
     /*
      * ╔══════════════════════════════════════════════════╗

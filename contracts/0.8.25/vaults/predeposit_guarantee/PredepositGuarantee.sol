@@ -59,7 +59,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         mapping(address guarantor => uint256 claimableEther) guarantorClaimableEther;
         mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) validatorStatus;
         mapping(address nodeOperator => address depositor) nodeOperatorDepositor;
-        mapping(address stakingVault => uint256 numberOfDeposits) pendingPredeposits;
+        mapping(address stakingVault => uint256 balance) pendingPredeposits;
     }
 
     /**
@@ -106,6 +106,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /// @notice amount of ether that is predeposited with each validator
     uint128 public constant PREDEPOSIT_AMOUNT = 1 ether;
 
+    /// @notice amount of ether to be deposited after the predeposit to activate the validator
     uint256 public constant ACTIVATION_DEPOSIT_AMOUNT = 31 ether;
 
     /**
@@ -215,7 +216,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @return amount of ether in wei
      */
     function pendingPredeposits(IStakingVault _vault) external view returns (uint256) {
-        return _storage().pendingPredeposits[address(_vault)] * PREDEPOSIT_AMOUNT;
+        return _storage().pendingPredeposits[address(_vault)];
     }
 
     /**
@@ -356,7 +357,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
     /**
      * @notice deposits validators with PREDEPOSIT_AMOUNT ether from StakingVault, locks up NO's balance
-     *         and reserve ACTIVATION_DEPOSIT_AMOUNT on StakingVault for further validator activation
+     *         and stage ACTIVATION_DEPOSIT_AMOUNT on StakingVault for further validator activation
      * @dev optionally accepts multiples of`PREDEPOSIT_AMOUNT` in `msg.value` to top up NO balance if NO is self-guarantor
      * @param _stakingVault address of the StakingVault to use as withdrawal credentials for the deposited validator
      * @param _deposits array of deposit data with amount set as PREDEPOSIT_AMOUNT
@@ -386,13 +387,13 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         ERC7201Storage storage $ = _storage();
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[nodeOperator];
 
-        uint128 totalDepositAmount = PREDEPOSIT_AMOUNT * uint128(_deposits.length);
-        uint128 unlocked = balance.total - balance.locked;
+        uint256 totalDepositAmount = PREDEPOSIT_AMOUNT * _deposits.length;
+        uint256 unlockedGuarantee = balance.total - balance.locked;
 
-        if (unlocked < totalDepositAmount) revert NotEnoughUnlocked(unlocked, totalDepositAmount);
+        if (unlockedGuarantee < totalDepositAmount) revert NotEnoughUnlocked(unlockedGuarantee, totalDepositAmount);
 
         // stashing 31 ETH to be able to activate the validator as it gets proved
-        _stakingVault.stash(ACTIVATION_DEPOSIT_AMOUNT * uint128(_deposits.length));
+        _stakingVault.stage(ACTIVATION_DEPOSIT_AMOUNT * _deposits.length);
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             IStakingVault.Deposit calldata _deposit = _deposits[i];
@@ -414,8 +415,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             emit ValidatorPreDeposited(_deposit.pubkey, nodeOperator, address(_stakingVault), withdrawalCredentials);
         }
 
-        balance.locked += totalDepositAmount;
-        $.pendingPredeposits[address(_stakingVault)] += _deposits.length;
+        balance.locked += uint128(totalDepositAmount);
+        $.pendingPredeposits[address(_stakingVault)] += _deposits.length * PREDEPOSIT_AMOUNT;
 
         _stakingVault.depositToBeaconChain(_deposits);
 
@@ -439,20 +440,24 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             revert ValidatorNotPreDeposited(_witness.pubkey, validator.stage);
         }
 
-        // WC will be sanity checked in `_processPositiveProof()`
         IStakingVault vault = validator.stakingVault;
         bytes32 withdrawalCredentials = vault.withdrawalCredentials();
 
+        // sanity check that vault returns valid WC
+        _validateWC(validator.stakingVault, withdrawalCredentials);
         _validatePubKeyWCProof(_witness, withdrawalCredentials);
 
-        _processPositiveProof(_witness.pubkey, validator, withdrawalCredentials);
+        validator.stage = ValidatorStage.PROVEN;
+        NodeOperatorBalance storage balance = _storage().nodeOperatorBalance[validator.nodeOperator];
+        balance.locked -= PREDEPOSIT_AMOUNT;
+        _storage().pendingPredeposits[address(validator.stakingVault)] -= PREDEPOSIT_AMOUNT;
 
-        // there is a case when it's impossible to activate the validator if the vault has been disconnected
-        // and has its depositor changed and/or stash unstashed
-        // in this case the Oracle will not account the predeposited amount as part of the total value
-        // until the validator is topped up for ACTIVATION_DEPOSIT_AMOUNT
-        // but the guarantee will be unlocked anyway
-        if (vault.depositor() == address(this) && vault.stashedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
+        emit BalanceUnlocked(validator.nodeOperator, balance.total, balance.locked);
+        emit ValidatorProven(_witness.pubkey, validator.nodeOperator, address(validator.stakingVault), withdrawalCredentials);
+
+        // if the vault is disconnected from VaultHub and changed depositor or unstaged ether
+        // skip the activation to unlock node operator's guarantee
+        if (vault.depositor() == address(this) && vault.stagedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
             _activateValidator(vault, _witness.pubkey, withdrawalCredentials);
         }
     }
@@ -519,10 +524,12 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     }
 
     /**
-     * @notice shortcut if validator already has valid WC setup and have activation_eligibility_epoch set (>= 32 ETH balance)
+     * @notice proves the side-deposited validator's WC to allow depositing to it through PDG
      * @param _witness  ValidatorWitness struct proving validator WC belongs to the staking vault
-     * @param _stakingVault address
+     * @param _stakingVault address of the StakingVault
      * @dev only callable by staking vault owner & only if validator stage is NONE
+     * @dev reverts if the validator is not eligible for activation
+     *      (to prevent validators that is not withdrawable by EIP-7002)
      */
     function proveUnknownValidator(
         ValidatorWitness calldata _witness,
@@ -536,6 +543,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         //  sha256(FAR_FUTURE_EPOCH|FAR_FUTURE_EPOCH) |  // activation_eligibility_epoch | activation_epoch
         //  sha256(FAR_FUTURE_EPOCH|FAR_FUTURE_EPOCH)    // exit_epoch  | withdrawable_epoch
         // )
+        // see CLProofVerifier.sol for Validator Container Root scheme that explains the proof positioning
         if (_witness.proof[1] == 0x2c84ba62dc4e7011c24fb0878e3ef2245a9e2cf2cacbbaf2978a4efa47037283) {
             revert ValidatorNotEligibleForActivation(_witness.pubkey);
         }
@@ -605,10 +613,10 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[nodeOperator];
         balance.total -= PREDEPOSIT_AMOUNT;
         balance.locked -= PREDEPOSIT_AMOUNT;
-        $.pendingPredeposits[address(stakingVault)]--;
+        $.pendingPredeposits[address(stakingVault)] -= PREDEPOSIT_AMOUNT;
 
         // unlocking the stashed amount as we are not activating this validator
-        stakingVault.unstash(ACTIVATION_DEPOSIT_AMOUNT);
+        stakingVault.unstage(ACTIVATION_DEPOSIT_AMOUNT);
 
         // transfer the compensation directly to the vault
         (bool success, ) = address(stakingVault).call{value: PREDEPOSIT_AMOUNT}("");
@@ -634,24 +642,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         validatorByPubkey[_pubkey] = _validator;
     }
 
-    function _processPositiveProof(
-        bytes calldata _pubkey,
-        ValidatorStatus storage validator,
-        bytes32 _withdrawalCredentials
-    ) internal {
-        // sanity check that vault returns valid WC
-        _validateWC(validator.stakingVault, _withdrawalCredentials);
-
-        validator.stage = ValidatorStage.PROVEN;
-
-        NodeOperatorBalance storage balance = _storage().nodeOperatorBalance[validator.nodeOperator];
-        balance.locked -= PREDEPOSIT_AMOUNT;
-        _storage().pendingPredeposits[address(validator.stakingVault)]--;
-
-        emit BalanceUnlocked(validator.nodeOperator, balance.total, balance.locked);
-        emit ValidatorProven(_pubkey, validator.nodeOperator, address(validator.stakingVault), _withdrawalCredentials);
-    }
-
     /// @dev deposits ACTIVATION_DEPOSIT_AMOUNT to the predeposited validator,
     /// so oracle can count it as a part of the total value
     function _activateValidator(
@@ -666,7 +656,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             depositDataRoot: _depositDataRoot31ETHWithZeroSig(_pubkey, _withdrawalCredentials)
         });
 
-        _stakingVault.depositFromStash(deposit);
+        _stakingVault.depositFromStaged(deposit);
     }
 
     /// @dev the edge case deposit data root for zero signature and 31 ETH amount

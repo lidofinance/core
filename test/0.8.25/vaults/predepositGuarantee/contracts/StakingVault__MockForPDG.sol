@@ -98,11 +98,11 @@ contract StakingVault__MockForPDG is IStakingVault {
         return address(this).balance;
     }
 
-    function stashedBalance() external view override returns (uint256) {}
+    function stagedBalance() external view override returns (uint256) {}
 
-    function stash(uint256 _ether) external override {}
+    function stage(uint256 _ether) external override {}
 
-    function unstash(uint256 _ether) external override {}
+    function unstage(uint256 _ether) external override {}
 
-    function depositFromStash(Deposit calldata _deposit) external override {}
+    function depositFromStaged(Deposit calldata _deposit) external override {}
 }

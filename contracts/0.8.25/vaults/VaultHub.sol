@@ -140,6 +140,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice minimum amount of ether that is required for the beacon chain deposit
     /// @dev used as a threshold for the beacon chain deposits pause
     uint256 internal immutable MIN_BEACON_DEPOSIT = 1 ether;
+    /// @dev amount of ether that should be in vault's stagedBalance for each pending predeposit in PDG
+    uint256 internal immutable ACTIVATION_DEPOSIT_AMOUNT = 31 ether;
 
     // -----------------------------
     //           IMMUTABLES
@@ -347,6 +349,10 @@ contract VaultHub is PausableUntilWithRoles {
         if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
         if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(_predepositGuarantee())) revert PDGNotDepositor(_vault);
+        // for each pending predeposit, vault should have an activation amount staged in StakingVault
+        if (vault_.stagedBalance() < _predepositGuarantee().pendingPredeposits(vault_) * ACTIVATION_DEPOSIT_AMOUNT) {
+            revert InsufficientStashedBalance(_vault);
+        }
 
         (
             , // nodeOperatorInTier
@@ -948,12 +954,12 @@ contract VaultHub is PausableUntilWithRoles {
         _predepositGuarantee().proveUnknownValidator(_witness, IStakingVault(_vault));
     }
 
-    /// @notice collects ERC20 tokens from vault 
+    /// @notice collects ERC20 tokens from vault
     /// @param _vault vault address
     /// @param _token address of the ERC20 token to collect
     /// @param _recipient address to send collected tokens to
     /// @param _amount amount of tokens to collect
-    /// @dev will revert with StakingVault.ZeroArgument if _token, _recipient or _amount is zero 
+    /// @dev will revert with StakingVault.ZeroArgument if _token, _recipient or _amount is zero
     /// @dev will revert with StakingVault.EthCollectionNotAllowed if _token is ETH (via EIP-7528 address)
     function collectERC20FromVault(
         address _vault,
@@ -1669,6 +1675,7 @@ contract VaultHub is PausableUntilWithRoles {
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 expectedSharesAfterMint, uint256 shareLimit);
     error AlreadyConnected(address vault, uint256 index);
+    error InsufficientStashedBalance(address vault);
     error NotConnectedToHub(address vault);
     error NotAuthorized();
     error ZeroAddress();

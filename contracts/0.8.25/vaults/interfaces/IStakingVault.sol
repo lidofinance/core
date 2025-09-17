@@ -58,8 +58,8 @@ interface IStakingVault {
     function collectERC20(address _token, address _recipient, uint256 _amount) external;
 
     function availableBalance() external view returns (uint256);
-    function stashedBalance() external view returns (uint256);
-    function stash(uint256 _ether) external;
-    function unstash(uint256 _ether) external;
-    function depositFromStash(Deposit calldata _deposit) external;
+    function stagedBalance() external view returns (uint256);
+    function stage(uint256 _ether) external;
+    function unstage(uint256 _ether) external;
+    function depositFromStaged(Deposit calldata _deposit) external;
 }
