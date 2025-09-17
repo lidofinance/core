@@ -48,7 +48,7 @@ interface IStakingVault {
     function beaconChainDepositsPaused() external view returns (bool);
     function pauseBeaconChainDeposits() external;
     function resumeBeaconChainDeposits() external;
-    function depositToBeaconChain(Deposit[] calldata _deposits) external;
+    function depositToBeaconChain(Deposit calldata _deposits) external;
 
     function requestValidatorExit(bytes calldata _pubkeys) external;
     function triggerValidatorWithdrawals(bytes calldata _pubkeys, uint64[] calldata _amountsInGwei, address _refundRecipient) external payable;
@@ -56,4 +56,10 @@ interface IStakingVault {
     function setDepositor(address _depositor) external;
     function ossify() external;
     function collectERC20(address _token, address _recipient, uint256 _amount) external;
+
+    function availableBalance() external view returns (uint256);
+    function stagedBalance() external view returns (uint256);
+    function stage(uint256 _ether) external;
+    function unstage(uint256 _ether) external;
+    function depositFromStaged(Deposit calldata _deposit, uint256 _additionalAmount) external;
 }

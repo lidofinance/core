@@ -82,7 +82,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, Ownable2StepUpgra
         }
     }
 
-    function depositToBeaconChain(IStakingVault.Deposit[] calldata _deposits) external {}
+    function depositToBeaconChain(IStakingVault.Deposit calldata _deposit) external override {}
 
     function fund() external payable {}
 
@@ -163,4 +163,16 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, Ownable2StepUpgra
     function collectERC20(address _token, address _recipient, uint256 _amount) external {
         // no-op
     }
+
+    function availableBalance() external view override returns (uint256) {
+        return address(this).balance;
+    }
+
+    function stagedBalance() external view override returns (uint256) {}
+
+    function stage(uint256 _ether) external override {}
+
+    function unstage(uint256 _ether) external override {}
+
+    function depositFromStaged(Deposit calldata _deposit, uint256 _additionalDeposit) external override {}
 }

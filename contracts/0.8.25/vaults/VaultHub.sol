@@ -141,6 +141,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev used as a threshold for the beacon chain deposits pause
     uint256 internal immutable MIN_BEACON_DEPOSIT = 1 ether;
 
+
     // -----------------------------
     //           IMMUTABLES
     // -----------------------------
@@ -353,6 +354,11 @@ contract VaultHub is PausableUntilWithRoles {
         if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
         if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(_predepositGuarantee())) revert PDGNotDepositor(_vault);
+        // for each pending predeposit, vault should have an activation amount staged in StakingVault
+        // 1 predeposit is 1 ether and activation amount is 31 ether
+        if (vault_.stagedBalance() != 31 * _predepositGuarantee().pendingPredeposits(vault_)) {
+            revert InsufficientStagedBalance(_vault);
+        }
 
         (
             , // nodeOperatorInTier
@@ -912,7 +918,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 availableBalance = Math256.min(_vault.balance, _totalValue(record));
+        uint256 availableBalance = Math256.min(_availableBalance(_vault), _totalValue(record));
         if (availableBalance == 0) revert NoFundsForForceRebalance(_vault);
 
         uint256 sharesToForceRebalance = Math256.min(
@@ -985,7 +991,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection memory connection = _vaultConnection(_vault);
         if (connection.vaultIndex != 0) revert AlreadyConnected(_vault, connection.vaultIndex);
 
-        uint256 vaultBalance = _vault.balance;
+        uint256 vaultBalance = _availableBalance(_vault);
         if (vaultBalance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, vaultBalance, CONNECT_DEPOSIT);
 
         // Connecting a new vault with totalValue == balance
@@ -1033,7 +1039,7 @@ contract VaultHub is PausableUntilWithRoles {
 
         uint256 unsettledLidoFees = _unsettledLidoFeesValue(_record);
         if (unsettledLidoFees > 0) {
-            uint256 _vaultBalance = _vault.balance;
+            uint256 _vaultBalance = _availableBalance(_vault);
             if (_vaultBalance < unsettledLidoFees && _forceFullFeesSettlement) {
                 revert NoUnsettledLidoFeesShouldBeLeft(_vault, unsettledLidoFees);
             }
@@ -1291,7 +1297,9 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 obligationsAmount_ = _obligationsAmount(_connection, _record);
         if (obligationsAmount_ == type(uint256).max) return type(uint256).max;
 
-        return obligationsAmount_ > _vault.balance ? obligationsAmount_ - _vault.balance : 0;
+        uint256 balance = _availableBalance(_vault);
+
+        return obligationsAmount_ > balance ? obligationsAmount_ - balance : 0;
     }
 
     function _addVault(address _vault, VaultConnection memory _connection, VaultRecord memory _record) internal {
@@ -1390,7 +1398,7 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
-        uint256 availableBalance = Math256.min(_vault.balance, _totalValue(_record));
+        uint256 availableBalance = Math256.min(_availableBalance(_vault), _totalValue(_record));
 
         // We can't withdraw funds that can be used to cover redemptions
         uint256 redemptionValue = _getPooledEthBySharesRoundUp(_record.redemptionShares);
@@ -1541,6 +1549,10 @@ contract VaultHub is PausableUntilWithRoles {
         return IStakingVault(_vault).nodeOperator();
     }
 
+    function _availableBalance(address _vault) internal view returns (uint256) {
+        return IStakingVault(_vault).availableBalance();
+    }
+
     function _requireNotZero(uint256 _value) internal pure {
         if (_value == 0) revert ZeroArgument();
     }
@@ -1679,6 +1691,7 @@ contract VaultHub is PausableUntilWithRoles {
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 expectedSharesAfterMint, uint256 shareLimit);
     error AlreadyConnected(address vault, uint256 index);
+    error InsufficientStagedBalance(address vault);
     error NotConnectedToHub(address vault);
     error NotAuthorized();
     error ZeroAddress();
