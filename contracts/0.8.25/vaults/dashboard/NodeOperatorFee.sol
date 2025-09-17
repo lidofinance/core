@@ -186,7 +186,7 @@ contract NodeOperatorFee is Permissions {
 
         // Calculate fee on new growth since last settlement
         uint256 fee = ((uint256(growth) - settledGrowth) * nodeOperatorFeeRate) / TOTAL_BASIS_POINTS;
-        // Mark this growth as settled 
+        // Mark this growth as settled
         _setSettledGrowth(uint256(growth));
 
         // Transfer fee from vault to node operator recipient
@@ -240,7 +240,7 @@ contract NodeOperatorFee is Permissions {
      * @return bool True if correction was applied, false if awaiting confirmations
      */
     function setSettledGrowth(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) external returns (bool) {
-        if (settledGrowth != _expectedSettledGrowth) UnexpectedSettledGrowth;
+        if (settledGrowth != _expectedSettledGrowth) revert UnexpectedSettledGrowth();
 
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
@@ -256,7 +256,7 @@ contract NodeOperatorFee is Permissions {
      * This function allows authorized roles to exempt certain vault value changes from
      * triggering node operator fees. This is essential for operations like:
      * - Validator consolidations
-     * - Side deposits 
+     * - Side deposits
      *
      * The exemption works by increasing the settled growth baseline, effectively
      * treating the exempted amount as if fees were already paid on it.
