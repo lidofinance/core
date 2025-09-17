@@ -140,8 +140,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @notice minimum amount of ether that is required for the beacon chain deposit
     /// @dev used as a threshold for the beacon chain deposits pause
     uint256 internal immutable MIN_BEACON_DEPOSIT = 1 ether;
-    /// @dev amount of ether that should be in vault's stagedBalance for each pending predeposit in PDG
-    uint256 internal immutable ACTIVATION_DEPOSIT_AMOUNT = 31 ether;
+
 
     // -----------------------------
     //           IMMUTABLES
@@ -350,8 +349,9 @@ contract VaultHub is PausableUntilWithRoles {
         if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(_predepositGuarantee())) revert PDGNotDepositor(_vault);
         // for each pending predeposit, vault should have an activation amount staged in StakingVault
-        if (vault_.stagedBalance() < _predepositGuarantee().pendingPredeposits(vault_) * ACTIVATION_DEPOSIT_AMOUNT) {
-            revert InsufficientStashedBalance(_vault);
+        // 1 predeposit is 1 ether and activation amount is 31 ether
+        if (vault_.stagedBalance() < 31 * _predepositGuarantee().pendingPredeposits(vault_)) {
+            revert InsufficientStagedBalance(_vault);
         }
 
         (
@@ -1675,7 +1675,7 @@ contract VaultHub is PausableUntilWithRoles {
     error InsufficientSharesToBurn(address vault, uint256 amount);
     error ShareLimitExceeded(address vault, uint256 expectedSharesAfterMint, uint256 shareLimit);
     error AlreadyConnected(address vault, uint256 index);
-    error InsufficientStashedBalance(address vault);
+    error InsufficientStagedBalance(address vault);
     error NotConnectedToHub(address vault);
     error NotAuthorized();
     error ZeroAddress();
