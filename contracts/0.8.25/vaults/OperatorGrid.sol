@@ -128,9 +128,9 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
      * @notice ERC-7201 storage namespace for the OperatorGrid
      * @dev ERC-7201 namespace is used to prevent upgrade collisions
      * @custom:storage-location erc7201:Lido.Vaults.OperatorGrid
-     * @custom:tiers Tiers
+     * @custom:tiers tier configuration
      * @custom:vaultTier Vault tier
-     * @custom:groups Groups
+     * @custom:groups group configuration
      * @custom:nodeOperators Node operators
      * @custom:isVaultInJail if true, vault is in jail and can't mint stETH
      */

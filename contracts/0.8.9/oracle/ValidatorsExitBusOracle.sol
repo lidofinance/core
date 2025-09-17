@@ -37,7 +37,7 @@ contract ValidatorsExitBusOracle is BaseOracle, ValidatorsExitBus {
     /// This mapping was previously used for storing last requested validator indexes per (moduleId, nodeOpId) key.
     /// This code was removed from the contract, but slots can still contain logic.
 
-    /// @dev Storage slot: DataProcessingState dataProcessingState
+    /// @dev Storage slot: dataProcessingState
     bytes32 internal constant DATA_PROCESSING_STATE_POSITION =
         keccak256("lido.ValidatorsExitBusOracle.dataProcessingState");
 

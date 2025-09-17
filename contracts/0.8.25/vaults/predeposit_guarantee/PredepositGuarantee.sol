@@ -78,7 +78,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /**
      * @notice represents NO balance in PDG
      * @dev fits into single 32 bytes slot
-     * @param total total ether balance of the NO
+     * @param total ether balance of the NO
      * @param locked ether locked in not yet proven predeposits
      */
     struct NodeOperatorBalance {

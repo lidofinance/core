@@ -1214,7 +1214,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @notice Returns n-th signing key of the node operator #`_nodeOperatorId`
     /// @param _nodeOperatorId Node Operator id
     /// @param _index Index of the key, starting with 0
-    /// @return key Key
+    /// @return key signing key
     /// @return depositSignature Signature needed for a deposit_contract.deposit call
     /// @return used Flag indication if the key was used in the staking
     function getSigningKey(uint256 _nodeOperatorId, uint256 _index)
@@ -1232,7 +1232,7 @@ contract NodeOperatorsRegistry is AragonApp, Versioned {
     /// @param _offset Offset of the key, starting with 0
     /// @param _limit Number of keys to return
     /// @return pubkeys Keys concatenated into the bytes batch
-    /// @return signatures Signatures concatenated into the bytes batch needed for a deposit_contract.deposit call
+    /// @return signatures keys signatures concatenated into the bytes batch needed for a deposit_contract.deposit call
     /// @return used Array of flags indicated if the key was used in the staking
     function getSigningKeys(uint256 _nodeOperatorId, uint256 _offset, uint256 _limit)
         public

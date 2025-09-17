@@ -43,7 +43,7 @@ contract TriggerableWithdrawalsGateway is AccessControlEnumerable, PausableUntil
 
     /**
      * @notice Thrown when an invalid zero value is passed
-     * @param name Name of the argument that was zero
+     * @param name argument that was zero
      */
     error ZeroArgument(string name);
 

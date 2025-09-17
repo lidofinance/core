@@ -25,7 +25,7 @@ library RecoverTokens {
     /**
      * @notice Error thrown when recovery of ETH fails on transfer to recipient
      * @param recipient Address of the recovery recipient
-     * @param amount Amount of ETH attempted to recover
+     * @param amount value of ETH attempted to recover
      */
     error EthTransferFailed(address recipient, uint256 amount);
 

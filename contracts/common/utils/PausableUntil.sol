@@ -39,8 +39,8 @@ abstract contract PausableUntil {
     }
 
     /// @notice Returns one of:
-    ///  - PAUSE_INFINITELY if paused infinitely returns
-    ///  - the timestamp when the contract get resumed if paused for specific duration
+    ///  - PAUSE_INFINITELY if paused infinitely
+    ///  - the timestamp when the contract gets resumed if paused for specific duration
     ///  - some timestamp in past if not paused
     function getResumeSinceTimestamp() external view returns (uint256) {
         return RESUME_SINCE_TIMESTAMP_POSITION.getStorageUint256();

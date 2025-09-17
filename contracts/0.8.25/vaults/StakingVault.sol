@@ -516,14 +516,14 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
     /**
      * @notice Emitted when ether is funded to the `StakingVault`
-     * @param amount Amount of ether funded
+     * @param amount value of ether funded
      */
     event EtherFunded(uint256 amount);
 
     /**
      * @notice Emitted when ether is withdrawn from the `StakingVault`
      * @param recipient Address that received the ether
-     * @param amount Amount of ether withdrawn
+     * @param amount value of ether withdrawn
      */
     event EtherWithdrawn(address indexed recipient, uint256 amount);
 
@@ -601,7 +601,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
     /**
      * @notice Thrown when an invalid zero value is passed
-     * @param name Name of the argument that was zero
+     * @param name argument that was zero
      */
     error ZeroArgument(string name);
 
@@ -615,7 +615,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     /**
      * @notice Thrown when the transfer of ether to a recipient fails
      * @param recipient Address that was supposed to receive the transfer
-     * @param amount Amount that failed to transfer
+     * @param amount value that failed to transfer
      */
     error TransferFailed(address recipient, uint256 amount);
 

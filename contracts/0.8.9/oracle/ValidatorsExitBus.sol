@@ -40,7 +40,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
 
     /**
      * @notice Thrown when an invalid zero value is passed
-     * @param name Name of the argument that was zero
+     * @param name argument name that was zero
      */
     error ZeroArgument(string name);
 
@@ -444,7 +444,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
      * @notice Returns validator exit request data by index.
      * @param exitRequests Encoded list of validator exit requests.
      * @param dataFormat Format of the encoded exit request data. Currently, only DATA_FORMAT_LIST = 1 is supported.
-     * @param index Index of the exit request within the `exitRequests` list.
+     * @param index exit request index within the `exitRequests` list.
      * @return pubkey Public key of the validator.
      * @return nodeOpId ID of the node operator.
      * @return moduleId ID of the staking module.
@@ -637,7 +637,7 @@ abstract contract ValidatorsExitBus is AccessControlEnumerable, PausableUntil, V
     /**
      * @notice Method for reading node operator id, module id and validator index from validator exit request data
      * @param exitRequestData Validator exit requests data. DATA_FORMAT = 1
-     * @param index index of request in array above
+     * @param index request index in array above
      * @return validatorData Validator data including node operator id, module id, validator index
      */
     function _getValidatorData(

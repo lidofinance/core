@@ -92,7 +92,7 @@ abstract contract BaseOracle is IReportAsyncProcessor, AccessControlEnumerable, 
     bytes32 internal constant LAST_PROCESSING_REF_SLOT_POSITION =
         keccak256("lido.BaseOracle.lastProcessingRefSlot");
 
-    /// @dev Storage slot: ConsensusReport consensusReport
+    /// @dev Storage slot: consensusReport
     bytes32 internal constant CONSENSUS_REPORT_POSITION =
         keccak256("lido.BaseOracle.consensusReport");
 
