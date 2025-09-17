@@ -288,24 +288,45 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice calculate shares amount to make the vault healthy using rebalance
     /// @param _vault vault address
-    /// @return amount of shares to rebalance or UINT256_MAX if it's impossible to make the vault healthy using rebalance
+    /// @return amount of shares or UINT256_MAX if it's impossible to make the vault healthy using rebalance
     /// @dev returns 0 if the vault is not connected
-    function rebalanceShortfallShares(address _vault) external view returns (uint256) {
-        return _rebalanceShortfallShares(_vaultConnection(_vault), _vaultRecord(_vault));
+    function healthShortfallShares(address _vault) external view returns (uint256) {
+        return _healthShortfallShares(_vaultConnection(_vault), _vaultRecord(_vault));
     }
 
-    /// @notice returns the obligations of the vault: shares to rebalance to maintain healthiness or fulfill redemptions
-    ///         and amount of the outstanding Lido fees
+    /// @notice returns the vault's current obligations toward the protocol
+    ///
+    /// Obligations are amounts the vault must cover, in the following priority:
+    /// 1) Maintain healthiness - burn/rebalance liability shares until the health ratio is restored
+    /// 2) Cover redemptions - burn/rebalance part of the liability shares marked as `redemptionShares`
+    /// 3) Pay Lido fees - settle accrued but unsettled fees
+    ///
+    /// Effects:
+    /// - Withdrawals from the vault are limited by the amount required to cover the obligations
+    /// - Beacon chain deposits are auto-paused while the vault is unhealthy, has redemptions to cover, or has
+    ///   unsettled fees ≥ `MIN_BEACON_DEPOSIT` (1 ETH)
+    ///
+    /// How to settle:
+    /// - Anyone can:
+    ///   - Rebalance shares permissionlessly when there are funds via `forceRebalance` (restores health / covers redemptions)
+    ///   - Settle fees permissionlessly when there are funds via `settleLidoFees`
+    /// - The owner (or a trusted role) can trigger validator exits / withdrawals to source ETH when needed
+    ///
     /// @param _vault vault address
-    /// @return sharesToSettle amount of shares to rebalance or to burn
+    /// @return sharesToBurn amount of shares to burn / rebalance
     /// @return feesToSettle amount of Lido fees to settle
-    /// @dev returns 0 if the vault is not connected
-    function obligations(address _vault) external view returns (uint256 sharesToSettle, uint256 feesToSettle) {
-        VaultConnection storage connection = _checkConnection(_vault);
+    /// @dev If the vault has bad debt (i.e. not fixable by rebalance), `healthShortfallShares` becomes `type(uint256).max`
+    ///      and thus `sharesToBurn` will be `type(uint256).max`
+    /// @dev settling fees is only forced when unsettled fees >= `MIN_BEACON_DEPOSIT` (1 ETH)
+    /// @dev returns (0, 0) if the vault is not connected
+    function obligations(address _vault) external view returns (uint256 sharesToBurn, uint256 feesToSettle) {
+        VaultConnection storage connection = _vaultConnection(_vault);
         VaultRecord storage record = _vaultRecord(_vault);
 
-        sharesToSettle = _unsettledObligationsShares(connection, record);
-        feesToSettle = _unsettledLidoFeesValue(record);
+        return (
+            _obligationsShares(connection, record),
+            _unsettledLidoFeesValue(record)
+        );
     }
 
     /// @return the amount of Lido fees that currently can be settled. Even if vault's balance is sufficient to cover
@@ -897,7 +918,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (availableBalance == 0) revert NoFundsForForceRebalance(_vault);
 
         uint256 sharesToForceRebalance = Math256.min(
-            _unsettledObligationsShares(connection, record),
+            _obligationsShares(connection, record),
             _getSharesByPooledEth(availableBalance)
         );
 
@@ -1139,7 +1160,7 @@ contract VaultHub is PausableUntilWithRoles {
         return liabilityShares_ - totalValueShares;
     }
 
-    function _rebalanceShortfallShares(
+    function _healthShortfallShares(
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
@@ -1246,21 +1267,21 @@ contract VaultHub is PausableUntilWithRoles {
         return liability > _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
     }
 
-    /// @return the total amount of ether needed to fully settle all outstanding obligations of the vault, including:
-    ///         - unsettled shares required to restore vault healthiness or fulfill redemptions
+    /// @return the total amount of ether needed to fully cover all outstanding obligations of the vault, including:
+    ///         - shares to burn required to restore vault healthiness or fulfill redemptions
     ///         - unsettled Lido fees (if above the minimum beacon deposit)
     function _obligationsAmount(
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
-        uint256 sharesToSettle = _unsettledObligationsShares(_connection, _record);
-        if (sharesToSettle == type(uint256).max) return type(uint256).max;
+        uint256 sharesToBurn = _obligationsShares(_connection, _record);
+        if (sharesToBurn == type(uint256).max) return type(uint256).max;
 
         // no need to cover fees if they are less than the minimum beacon deposit
         uint256 unsettledLidoFees = _unsettledLidoFeesValue(_record);
         uint256 feesToSettle = unsettledLidoFees < MIN_BEACON_DEPOSIT ? 0 : unsettledLidoFees;
 
-        return _getPooledEthBySharesRoundUp(sharesToSettle) + feesToSettle;
+        return _getPooledEthBySharesRoundUp(sharesToBurn) + feesToSettle;
     }
 
     /// @return the ether shortfall required to fully cover all outstanding obligations amount of the vault
@@ -1454,11 +1475,11 @@ contract VaultHub is PausableUntilWithRoles {
         return _record.cumulativeLidoFees - _record.settledLidoFees;
     }
 
-    function _unsettledObligationsShares(
+    function _obligationsShares(
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
-        return Math256.max(_rebalanceShortfallShares(_connection, _record), _record.redemptionShares);
+        return Math256.max(_healthShortfallShares(_connection, _record), _record.redemptionShares);
     }
 
     function _storage() internal pure returns (Storage storage $) {

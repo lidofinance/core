@@ -590,9 +590,9 @@ describe("Dashboard.sol", () => {
 
     it("shows the correct rebalance shortfall shares", async () => {
       const [sharesToRebalance] = await dashboard.obligations();
-      const rebalanceShortfallShares = await dashboard.rebalanceShortfallShares();
+      const healthShortfallShares = await dashboard.healthShortfallShares();
 
-      expect(rebalanceShortfallShares).to.equal(sharesToRebalance);
+      expect(healthShortfallShares).to.equal(sharesToRebalance);
     });
   });
 

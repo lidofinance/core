@@ -199,7 +199,7 @@ contract VaultHub__MockForDashboard {
         return ($.sharesToSettle, $.feesToSettle);
     }
 
-    function rebalanceShortfallShares(address _vault) external view returns (uint256) {
+    function healthShortfallShares(address _vault) external view returns (uint256) {
         Obligations storage $ = mock__obligations[_vault];
         return $.sharesToSettle;
     }
