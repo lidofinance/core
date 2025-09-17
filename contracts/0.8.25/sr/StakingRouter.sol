@@ -101,7 +101,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     error EmptyWithdrawalsCredentials();
     error DirectETHTransfer();
     error AppAuthLidoFailed();
-    // error InvalidDepositsValue(uint256 etherValue, uint256 depositsCount);
     error InvalidChainConfig();
     error AllocationExceedsTarget();
     error DepositContractZeroAddress();
