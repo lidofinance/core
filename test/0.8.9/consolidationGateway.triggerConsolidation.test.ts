@@ -19,6 +19,48 @@ const PUBKEYS = [
 
 const ZERO_ADDRESS = ethers.ZeroAddress;
 
+// Helper functions
+const grantConsolidationRequestRole = async (
+  consolidationGateway: ConsolidationGateway,
+  account: HardhatEthersSigner,
+) => {
+  const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();
+  await consolidationGateway.grantRole(role, account);
+};
+
+const grantLimitManagerRole = async (consolidationGateway: ConsolidationGateway, account: HardhatEthersSigner) => {
+  const role = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
+  await consolidationGateway.grantRole(role, account);
+};
+
+const setConsolidationLimit = async (
+  consolidationGateway: ConsolidationGateway,
+  signer: HardhatEthersSigner,
+  maxRequests: number,
+  requestsPerFrame: number,
+  frameDuration: number,
+) => {
+  return consolidationGateway
+    .connect(signer)
+    .setConsolidationRequestLimit(maxRequests, requestsPerFrame, frameDuration);
+};
+
+const expectLimitData = async (
+  consolidationGateway: ConsolidationGateway,
+  expectedMaxRequests: number,
+  expectedPerFrame: number,
+  expectedFrameDuration: number,
+  expectedPrevLimit: number,
+  expectedCurrentLimit: number | typeof ethers.MaxUint256,
+) => {
+  const data = await consolidationGateway.getConsolidationRequestLimitFullInfo();
+  expect(data[0]).to.equal(expectedMaxRequests); // maxConsolidationRequestsLimit
+  expect(data[1]).to.equal(expectedPerFrame); // consolidationsPerFrame
+  expect(data[2]).to.equal(expectedFrameDuration); // frameDurationInSec
+  expect(data[3]).to.equal(expectedPrevLimit); // prevConsolidationRequestsLimit
+  expect(data[4]).to.equal(expectedCurrentLimit); // currentConsolidationRequestsLimit
+};
+
 describe("ConsolidationGateway.sol: triggerConsolidation", () => {
   let consolidationGateway: ConsolidationGateway;
   let withdrawalVault: WithdrawalVault__MockForCG;
@@ -48,8 +90,7 @@ describe("ConsolidationGateway.sol: triggerConsolidation", () => {
       48, // frameDurationInSec
     ]);
 
-    const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();
-    await consolidationGateway.grantRole(role, authorizedEntity);
+    await grantConsolidationRequestRole(consolidationGateway, authorizedEntity);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -115,10 +156,9 @@ describe("ConsolidationGateway.sol: triggerConsolidation", () => {
   });
 
   it("should set consolidation limit", async () => {
-    const role = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
-    await consolidationGateway.grantRole(role, authorizedEntity);
+    await grantLimitManagerRole(consolidationGateway, authorizedEntity);
 
-    const limitTx = await consolidationGateway.connect(authorizedEntity).setConsolidationRequestLimit(4, 1, 48);
+    const limitTx = await setConsolidationLimit(consolidationGateway, authorizedEntity, 4, 1, 48);
     await expect(limitTx).to.emit(consolidationGateway, "ConsolidationRequestsLimitSet").withArgs(4, 1, 48);
   });
 
@@ -135,18 +175,7 @@ describe("ConsolidationGateway.sol: triggerConsolidation", () => {
   });
 
   it("should check current consolidation limit", async () => {
-    let data = await consolidationGateway.getConsolidationRequestLimitFullInfo();
-
-    // maxConsolidationRequestsLimit
-    expect(data[0]).to.equal(100);
-    // consolidationsPerFrame
-    expect(data[1]).to.equal(1);
-    // frameDurationInSec
-    expect(data[2]).to.equal(48);
-    // prevConsolidationRequestsLimit
-    expect(data[3]).to.equal(100);
-    // currentConsolidationRequestsLimit
-    expect(data[4]).to.equal(100);
+    await expectLimitData(consolidationGateway, 100, 1, 48, 100, 100);
 
     const sourcePubkeys = [PUBKEYS[0], PUBKEYS[1]];
     const targetPubkeys = [PUBKEYS[1], PUBKEYS[2]];
@@ -155,39 +184,16 @@ describe("ConsolidationGateway.sol: triggerConsolidation", () => {
       .connect(authorizedEntity)
       .triggerConsolidation(sourcePubkeys, targetPubkeys, ZERO_ADDRESS, { value: 3 });
 
-    data = await consolidationGateway.getConsolidationRequestLimitFullInfo();
-
-    // maxConsolidationRequestsLimit
-    expect(data[0]).to.equal(100);
-    // consolidationsPerFrame
-    expect(data[1]).to.equal(1);
-    // frameDurationInSec
-    expect(data[2]).to.equal(48);
-    // prevConsolidationRequestsLimit
-    expect(data[3]).to.equal(98);
-    // currentConsolidationRequestsLimit
-    expect(data[4]).to.equal(98);
+    await expectLimitData(consolidationGateway, 100, 1, 48, 98, 98);
 
     await advanceChainTime(48n);
 
-    data = await consolidationGateway.getConsolidationRequestLimitFullInfo();
-
-    // maxConsolidationRequestsLimit
-    expect(data[0]).to.equal(100);
-    // consolidationsPerFrame
-    expect(data[1]).to.equal(1);
-    // frameDurationInSec
-    expect(data[2]).to.equal(48);
-    // prevConsolidationRequestsLimit
-    expect(data[3]).to.equal(98);
-    // currentConsolidationRequestsLimit
-    expect(data[4]).to.equal(99);
+    await expectLimitData(consolidationGateway, 100, 1, 48, 98, 99);
   });
 
   it("should revert if limit doesn't cover requests count", async () => {
-    const role = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
-    await consolidationGateway.grantRole(role, authorizedEntity);
-    await consolidationGateway.connect(authorizedEntity).setConsolidationRequestLimit(2, 1, 48);
+    await grantLimitManagerRole(consolidationGateway, authorizedEntity);
+    await setConsolidationLimit(consolidationGateway, authorizedEntity, 2, 1, 48);
 
     const sourcePubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2]];
     const targetPubkeys = [PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]];
@@ -202,9 +208,8 @@ describe("ConsolidationGateway.sol: triggerConsolidation", () => {
   });
 
   it("should trigger consolidation request as limit is enough for processing all requests", async () => {
-    const role = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
-    await consolidationGateway.grantRole(role, authorizedEntity);
-    await consolidationGateway.connect(authorizedEntity).setConsolidationRequestLimit(3, 1, 48);
+    await grantLimitManagerRole(consolidationGateway, authorizedEntity);
+    await setConsolidationLimit(consolidationGateway, authorizedEntity, 3, 1, 48);
 
     const sourcePubkeys = [PUBKEYS[0], PUBKEYS[1], PUBKEYS[2]];
     const targetPubkeys = [PUBKEYS[1], PUBKEYS[2], PUBKEYS[0]];
@@ -295,17 +300,11 @@ describe("ConsolidationGateway.sol: triggerConsolidation", () => {
   });
 
   it("should set maxConsolidationRequestsLimit to 0 and return currentConsolidationRequestsLimit as type(uint256).max", async () => {
-    const role = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
-    await consolidationGateway.grantRole(role, authorizedEntity);
+    await grantLimitManagerRole(consolidationGateway, authorizedEntity);
 
-    await consolidationGateway.connect(authorizedEntity).setConsolidationRequestLimit(0, 0, 48);
+    await setConsolidationLimit(consolidationGateway, authorizedEntity, 0, 0, 48);
 
-    const data = await consolidationGateway.getConsolidationRequestLimitFullInfo();
-    expect(data.maxConsolidationRequestsLimit).to.equal(0); // maxConsolidationRequestsLimit
-    expect(data.consolidationsPerFrame).to.equal(0);
-    expect(data.frameDurationInSec).to.equal(48);
-    expect(data.prevConsolidationRequestsLimit).to.equal(0);
-    expect(data.currentConsolidationRequestsLimit).to.equal(ethers.MaxUint256); // currentConsolidationRequestsLimit should be max uint256
+    await expectLimitData(consolidationGateway, 0, 0, 48, 0, ethers.MaxUint256);
   });
 
   it("should allow unlimited consolidation requests when limit is 0", async () => {
@@ -323,11 +322,11 @@ describe("ConsolidationGateway.sol: triggerConsolidation", () => {
   });
 
   it("should not allow to set consolidationsPerFrame bigger than maxConsolidationRequestsLimit", async () => {
-    const role = await consolidationGateway.CONSOLIDATION_LIMIT_MANAGER_ROLE();
-    await consolidationGateway.grantRole(role, authorizedEntity);
+    await grantLimitManagerRole(consolidationGateway, authorizedEntity);
 
-    await expect(
-      consolidationGateway.connect(authorizedEntity).setConsolidationRequestLimit(0, 1, 48),
-    ).to.be.revertedWithCustomError(consolidationGateway, "TooLargeItemsPerFrame");
+    await expect(setConsolidationLimit(consolidationGateway, authorizedEntity, 0, 1, 48)).to.be.revertedWithCustomError(
+      consolidationGateway,
+      "TooLargeItemsPerFrame",
+    );
   });
 });
