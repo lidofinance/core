@@ -51,6 +51,11 @@ const PAIRS_TO_SKIP: {
     contractFqn: "contracts/0.8.9/utils/PausableUntil.sol:PausableUntil",
     reason: "TODO: Temp solution",
   },
+  {
+    interfaceFqn: "contracts/0.4.24/Lido.sol:IStakingRouter",
+    contractFqn: "contracts/0.8.25/sr/StakingRouter.sol:StakingRouter",
+    reason: "only var names/state modifiers are diff., can be safely ignored",
+  },
 ];
 
 task("check-interfaces").setAction(async (_, hre) => {

@@ -44,7 +44,7 @@ interface IBaseOracle {
 }
 
 interface IStakingRouter {
-    function getStakingModuleIds() external view returns (uint256[] memory stakingModuleIds);
+    function getStakingModuleIds() external view returns (uint256[] memory);
 
     function getStakingModule(uint256 _stakingModuleId) external view returns (StakingModule memory);
 }
@@ -84,6 +84,10 @@ struct StakingModule {
     /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
     /// See docs for the `OracleReportSanityChecker.setAppearedValidatorsPerDayLimit` function).
     uint64 minDepositBlockDistance;
+    /// @notice The type of staking module (Legacy/Standard), defines the module interface and withdrawal credentials type.
+    /// @dev 0 = Legacy, 0x01 withdrawals, 1 = New, 0x02 withdrawals.
+    /// @dev See {StakingModuleType} enum.
+    uint8 moduleType;
     /// @notice The type of withdrawal credentials for creation of validators
     uint8 withdrawalCredentialsType;
 }

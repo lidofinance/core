@@ -48,10 +48,11 @@ interface IStakingRouter {
         uint16 priorityExitShareThreshold;
         uint64 maxDepositsPerBlock;
         uint64 minDepositBlockDistance;
+        uint8 moduleType;
         uint8 withdrawalCredentialsType;
     }
 
-    function getStakingModules() external view returns (StakingModule[] memory res);
+    function getStakingModules() external view returns (StakingModule[] memory);
 }
 
 interface ICSModule {

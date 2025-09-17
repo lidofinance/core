@@ -9,18 +9,20 @@ import {
   DepositCallerWrapper__MockForStakingRouter,
   DepositContract__MockForBeaconChainDepositor,
   StakingModuleV2__MockForStakingRouter,
-  StakingRouter,
+  StakingRouter__Harness,
 } from "typechain-types";
 
-import { ether, proxify } from "lib";
+import { ether, StakingModuleType } from "lib";
 
 import { Snapshot } from "test/suite";
+
+import { deployStakingRouter } from "../../deploy/stakingRouter";
 
 describe("StakingRouter.sol:keys-02-type", () => {
   let deployer: HardhatEthersSigner;
   let admin: HardhatEthersSigner;
 
-  let stakingRouter: StakingRouter;
+  let stakingRouter: StakingRouter__Harness;
 
   let originalState: string;
 
@@ -41,29 +43,10 @@ describe("StakingRouter.sol:keys-02-type", () => {
   const withdrawalCredentials = hexlify(randomBytes(32));
   const withdrawalCredentials02 = hexlify(randomBytes(32));
 
-  const SECONDS_PER_SLOT = 12n;
-  const GENESIS_TIME = 1606824023;
-  const WITHDRAWAL_CREDENTIALS_TYPE_02 = 2;
-
   before(async () => {
     [deployer, admin] = await ethers.getSigners();
 
-    depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
-    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
-    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
-
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
-      libraries: {
-        ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
-        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
-        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
-      },
-    });
-
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
-
-    [stakingRouter] = await proxify({ impl, admin });
+    ({ stakingRouter, depositContract } = await deployStakingRouter({ deployer, admin }));
 
     depositCallerWrapper = await ethers.deployContract(
       "DepositCallerWrapper__MockForStakingRouter",
@@ -94,7 +77,7 @@ describe("StakingRouter.sol:keys-02-type", () => {
       treasuryFee,
       maxDepositsPerBlock,
       minDepositBlockDistance,
-      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_02,
+      moduleType: StakingModuleType.New,
     };
 
     await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);
@@ -146,19 +129,22 @@ describe("StakingRouter.sol:keys-02-type", () => {
   });
 
   context("getStakingModuleMaxInitialDepositsAmount", () => {
-    it("", async () => {
+    it("correctly returns max initial deposits amount", async () => {
       // mock allocation that will return staking module of second type
       // 2 keys + 2 keys + 0 + 1
-      await stakingModuleV2.mock_getAllocation([1, 2, 3, 4], [ether("4096"), ether("4000"), ether("31"), ether("32")]);
+      const opIds = [1, 2, 3, 4];
+      const opAllocs = [ether("4096"), ether("4000"), ether("31"), ether("32")];
+      const totalAlloc = opAllocs.reduce((a, b) => a + b, 0n);
+      await stakingModuleV2.mock_getAllocation(opIds, opAllocs);
+      await stakingRouter.testing_setStakingModuleAccounting(moduleId, totalAlloc, 0n);
 
       const depositableEth = ether("10242");
       // _getTargetDepositsAllocation mocked currently to return the same amount it received
-      const moduleDepositEth = await stakingRouter.getStakingModuleMaxInitialDepositsAmount.staticCall(
-        moduleId,
-        depositableEth,
-      );
+      const [moduleDepositEth, moduleDepositCount] =
+        await stakingRouter.getStakingModuleMaxInitialDepositsAmount.staticCall(moduleId, depositableEth);
 
       expect(moduleDepositEth).to.equal(ether("160"));
+      expect(moduleDepositCount).to.equal(5);
     });
   });
 });

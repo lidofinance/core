@@ -4,25 +4,23 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  DepositContract__MockForBeaconChainDepositor,
-  StakingModule__MockForTriggerableWithdrawals,
-  StakingRouter__Harness,
-} from "typechain-types";
+import { StakingModule__MockForTriggerableWithdrawals, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, proxify, randomString } from "lib";
+import { certainAddress, ether, randomString, StakingModuleType } from "lib";
 
 import { Snapshot } from "test/suite";
 
+import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
+
 describe("StakingRouter.sol:exit", () => {
   let deployer: HardhatEthersSigner;
-  let proxyAdmin: HardhatEthersSigner;
+  let admin: HardhatEthersSigner;
   let stakingRouterAdmin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
   let reporter: HardhatEthersSigner;
 
-  let depositContract: DepositContract__MockForBeaconChainDepositor;
   let stakingRouter: StakingRouter__Harness;
+  let stakingRouterWithLib: StakingRouterWithLib;
   let stakingModule: StakingModule__MockForTriggerableWithdrawals;
 
   let originalState: string;
@@ -38,28 +36,11 @@ describe("StakingRouter.sol:exit", () => {
   const MIN_DEPOSIT_BLOCK_DISTANCE = 25n;
   const STAKING_MODULE_ID = 1n;
   const NODE_OPERATOR_ID = 1n;
-  const SECONDS_PER_SLOT = 12n;
-  const GENESIS_TIME = 1606824023;
-  const WITHDRAWAL_CREDENTIALS_TYPE_01 = 1n;
 
   before(async () => {
-    [deployer, proxyAdmin, stakingRouterAdmin, user, reporter] = await ethers.getSigners();
+    [deployer, admin, stakingRouterAdmin, user, reporter] = await ethers.getSigners();
 
-    depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-
-    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
-    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
-    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
-      libraries: {
-        ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
-        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
-        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
-      },
-    });
-
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
-    [stakingRouter] = await proxify({ impl, admin: proxyAdmin, caller: user });
+    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter({ deployer, admin, user }));
 
     // Initialize StakingRouter
     await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials, withdrawalCredentials02);
@@ -94,9 +75,10 @@ describe("StakingRouter.sol:exit", () => {
       /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
       ///      Value must be > 0 and ≤ type(uint64).max.
       minDepositBlockDistance: MIN_DEPOSIT_BLOCK_DISTANCE,
-      /// @notice The type of withdrawal credentials for creation of validators.
-      /// @dev 1 = 0x01 withdrawals, 2 = 0x02 withdrawals.
-      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+      /// @notice The type of module (Legacy/Standard), defines the module interface and withdrawal credentials type.
+      /// @dev 0 = Legacy, 0x01 withdrawals, 1 = New, 0x02 withdrawals.
+      /// @dev See {StakingModuleType} enum.
+      moduleType: StakingModuleType.Legacy,
     };
 
     // Add staking module
@@ -192,7 +174,7 @@ describe("StakingRouter.sol:exit", () => {
       await expect(
         stakingRouter.connect(reporter).onValidatorExitTriggered(validatorExitData, withdrawalRequestPaidFee, exitType),
       )
-        .to.emit(stakingRouter, "StakingModuleExitNotificationFailed")
+        .to.emit(stakingRouterWithLib, "StakingModuleExitNotificationFailed")
         .withArgs(STAKING_MODULE_ID, NODE_OPERATOR_ID, publicKey);
     });
 
@@ -210,7 +192,7 @@ describe("StakingRouter.sol:exit", () => {
 
       await expect(
         stakingRouter.connect(reporter).onValidatorExitTriggered(validatorExitData, withdrawalRequestPaidFee, exitType),
-      ).to.be.revertedWithCustomError(stakingRouter, "UnrecoverableModuleError");
+      ).to.be.revertedWithCustomError(stakingRouterWithLib, "UnrecoverableModuleError");
     });
 
     it("reverts when called by unauthorized user", async () => {

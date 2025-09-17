@@ -115,6 +115,7 @@ export enum Sk {
   depositsTracker = "depositsTracker",
   depositsTempStorage = "depositsTempStorage",
   beaconChainDepositor = "beaconChainDepositor",
+  srLib = "srLib",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {

@@ -6,14 +6,11 @@ import { SecondOpinionOracle__Mock } from "typechain-types";
 import { ether, impersonate, log, ONE_GWEI } from "lib";
 import { getProtocolContext, ProtocolContext, report } from "lib/protocol";
 
-import { bailOnFailure, Snapshot } from "test/suite";
+import { bailOnFailure, MAX_DEPOSIT_AMOUNT, Snapshot, ZERO_HASH } from "test/suite";
 
 const AMOUNT = ether("100");
-const MAX_DEPOSIT = 150n;
 const CURATED_MODULE_ID = 1n;
 const INITIAL_REPORTED_BALANCE = ether("32") * 3n; // 32 ETH * 3 validators
-
-const ZERO_HASH = new Uint8Array(32).fill(0);
 
 // Diff amount is 10% of total supply
 function getDiffAmount(totalSupply: bigint): bigint {
@@ -52,7 +49,7 @@ describe("Integration: Second opinion", () => {
     }
 
     const dsmSigner = await impersonate(depositSecurityModule.address, AMOUNT);
-    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT, CURATED_MODULE_ID, ZERO_HASH);
+    await lido.connect(dsmSigner).deposit(MAX_DEPOSIT_AMOUNT, CURATED_MODULE_ID, ZERO_HASH);
 
     secondOpinion = await ethers.deployContract("SecondOpinionOracle__Mock", []);
     const soAddress = await secondOpinion.getAddress();

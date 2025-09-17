@@ -61,7 +61,60 @@ export const ONE_GWEI = 1_000_000_000n;
 export const TOTAL_BASIS_POINTS = 100_00n;
 
 export const MAX_FEE_BP = 65_535n;
+
 export const MAX_RESERVE_RATIO_BP = 99_99n;
 export const LIMITER_PRECISION_BASE = 10n ** 9n;
 
 export const DISCONNECT_NOT_INITIATED = 2n ** 48n - 1n;
+
+// Staking module related
+export const MODULE_TYPE_LEGACY = 0;
+export const MODULE_TYPE_NEW = 1;
+
+export const WITHDRAWAL_CREDENTIALS_TYPE_01 = 0x01;
+export const WITHDRAWAL_CREDENTIALS_TYPE_02 = 0x02;
+
+export enum StakingModuleStatus {
+  Active = 0,
+  DepositsPaused = 1,
+  Stopped = 2,
+}
+
+export enum StakingModuleType {
+  Legacy = MODULE_TYPE_LEGACY,
+  New = MODULE_TYPE_NEW,
+}
+
+export enum WithdrawalCredentialsType {
+  WC0x01 = WITHDRAWAL_CREDENTIALS_TYPE_01,
+  WC0x02 = WITHDRAWAL_CREDENTIALS_TYPE_02,
+}
+
+export const getModuleWCType = (moduleType: StakingModuleType): WithdrawalCredentialsType => {
+  switch (moduleType) {
+    case StakingModuleType.Legacy:
+      return WithdrawalCredentialsType.WC0x01;
+    case StakingModuleType.New:
+      return WithdrawalCredentialsType.WC0x02;
+    default: {
+      const _exhaustive: never = moduleType;
+      return _exhaustive;
+    }
+  }
+};
+
+export const MAX_EFFECTIVE_BALANCE_WC0x01 = 32n * 10n ** 18n; // 32 ETH
+export const MAX_EFFECTIVE_BALANCE_WC0x02 = 2048n * 10n ** 18n; // 2048 ETH
+
+export const getModuleMEB = (moduleType: StakingModuleType): bigint => {
+  switch (moduleType) {
+    case StakingModuleType.Legacy:
+      return MAX_EFFECTIVE_BALANCE_WC0x01;
+    case StakingModuleType.New:
+      return MAX_EFFECTIVE_BALANCE_WC0x02;
+    default: {
+      const _exhaustive: never = moduleType;
+      return _exhaustive;
+    }
+  }
+};

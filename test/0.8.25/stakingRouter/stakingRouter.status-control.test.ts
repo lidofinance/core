@@ -7,10 +7,11 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, proxify } from "lib";
+import { certainAddress, StakingModuleType } from "lib";
 
 import { Snapshot } from "test/suite";
 
+import { deployStakingRouter } from "../../deploy/stakingRouter";
 enum Status {
   Active,
   DepositsPaused,
@@ -27,36 +28,19 @@ context("StakingRouter.sol:status-control", () => {
 
   let originalState: string;
 
+  const lido = certainAddress("test:staking-router-status:lido");
+  const withdrawalCredentials = hexlify(randomBytes(32));
+  const withdrawalCredentials02 = hexlify(randomBytes(32));
+
   before(async () => {
     [deployer, admin, user] = await ethers.getSigners();
 
     // deploy staking router
-    const depositContract = await ethers.deployContract("DepositContract__MockForBeaconChainDepositor", deployer);
-    const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
-    const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
-    const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
-    const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
-      libraries: {
-        ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
-        ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
-        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
-      },
-    });
-
-    const withdrawalCredentials = hexlify(randomBytes(32));
-    const withdrawalCredentials02 = hexlify(randomBytes(32));
-
-    const SECONDS_PER_SLOT = 12n;
-    const GENESIS_TIME = 1606824023;
-    const WITHDRAWAL_CREDENTIALS_TYPE_01 = 1n;
-
-    const impl = await stakingRouterFactory.connect(deployer).deploy(depositContract, SECONDS_PER_SLOT, GENESIS_TIME);
-
-    [stakingRouter] = await proxify({ impl, admin });
+    ({ stakingRouter } = await deployStakingRouter({ deployer, admin }));
 
     await stakingRouter.initialize(
       admin,
-      certainAddress("test:staking-router-status:lido"), // mock lido address
+      lido, // mock lido address
       withdrawalCredentials,
       withdrawalCredentials02,
     );
@@ -71,7 +55,7 @@ context("StakingRouter.sol:status-control", () => {
       treasuryFee: 5_00,
       maxDepositsPerBlock: 150,
       minDepositBlockDistance: 25,
-      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
+      moduleType: StakingModuleType.Legacy,
     };
 
     // add staking module

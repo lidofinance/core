@@ -157,6 +157,9 @@ export async function main() {
   // deploy beacon chain depositor
   const beaconChainDepositor = await deployWithoutProxy(Sk.beaconChainDepositor, "BeaconChainDepositor", deployer);
 
+  // deploy SRLib
+  const srLib = await deployWithoutProxy(Sk.srLib, "SRLib", deployer);
+
   const stakingRouter_ = await deployBehindOssifiableProxy(
     Sk.stakingRouter,
     "StakingRouter",
@@ -170,6 +173,7 @@ export async function main() {
         DepositsTracker: depositsTracker.address,
         BeaconChainDepositor: beaconChainDepositor.address,
         DepositsTempStorage: depositsTempStorage.address,
+        SRLib: srLib.address,
       },
     },
   );
@@ -211,10 +215,20 @@ export async function main() {
   // Deploy Accounting
   //
 
-  const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
-    locator.address,
-    lidoAddress,
-  ]);
+  const accounting = await deployBehindOssifiableProxy(
+    Sk.accounting,
+    "Accounting",
+    proxyContractsOwner,
+    deployer,
+    [locator.address, lidoAddress, chainSpec.secondsPerSlot, chainSpec.genesisTime],
+    null,
+    true,
+    {
+      libraries: {
+        DepositsTracker: depositsTracker.address,
+      },
+    },
+  );
 
   //
   // Deploy AccountingOracle and its HashConsensus

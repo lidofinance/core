@@ -1,9 +1,8 @@
 import { ethers, ZeroAddress } from "ethers";
 
-import { BigIntMath, certainAddress, ether, impersonate, log } from "lib";
-import { TOTAL_BASIS_POINTS } from "lib/constants";
+import { BigIntMath, certainAddress, ether, impersonate, log, StakingModuleStatus, TOTAL_BASIS_POINTS } from "lib";
 
-import { ZERO_HASH } from "test/deploy";
+import { MAX_DEPOSIT_AMOUNT, ZERO_HASH } from "test/suite";
 
 import { ProtocolContext } from "../types";
 
@@ -20,12 +19,6 @@ export const unpauseStaking = async (ctx: ProtocolContext) => {
     log.success("Staking contract unpaused");
   }
 };
-
-export enum StakingModuleStatus {
-  Active = 0,
-  DepositsPaused = 1,
-  Stopped = 2,
-}
 
 export const getStakingModuleStatuses = async (
   ctx: ProtocolContext,
@@ -73,7 +66,6 @@ export const setModuleStakeShareLimit = async (ctx: ProtocolContext, moduleId: b
       module.treasuryFee,
       module.maxDepositsPerBlock,
       module.minDepositBlockDistance,
-      module.withdrawalCredentialsType,
     );
 };
 
@@ -163,7 +155,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   const numDepositedBefore = (await lido.getBeaconStat()).depositedValidators;
 
   // Deposit validators
-  await lido.connect(dsmSigner).deposit(depositsCount, moduleId, ZERO_HASH);
+  await lido.connect(dsmSigner).deposit(MAX_DEPOSIT_AMOUNT, moduleId, ZERO_HASH);
 
   const numDepositedAfter = (await lido.getBeaconStat()).depositedValidators;
 

@@ -3,7 +3,9 @@
 
 pragma solidity 0.8.25;
 
-import {StakingRouter} from "contracts/0.8.25/StakingRouter.sol";
+// import {StakingRouter} from "contracts/0.8.25/sr/StakingRouter.sol";
+// import {SRLib} from "contracts/0.8.25/sr/SRLib.sol";
+import {StakingModuleStatus} from "contracts/0.8.25/sr/SRTypes.sol";
 
 interface IStakingRouter {
     function getStakingModuleMinDepositBlockDistance(uint256 _stakingModuleId) external view returns (uint256);
@@ -18,6 +20,7 @@ interface IStakingRouter {
         bytes calldata _vettedSigningKeysCounts
     ) external;
 }
+
 contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     error StakingModuleUnregistered();
 
@@ -27,13 +30,9 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
         bytes vettedSigningKeysCounts
     );
     event StakingModuleDeposited(uint256 maxDepositsCount, uint24 stakingModuleId, bytes depositCalldata);
-    event StakingModuleStatusSet(
-        uint24 indexed stakingModuleId,
-        StakingRouter.StakingModuleStatus status,
-        address setBy
-    );
+    event StakingModuleStatusSet(uint24 indexed stakingModuleId, StakingModuleStatus status, address setBy);
 
-    StakingRouter.StakingModuleStatus private status;
+    StakingModuleStatus private status;
     uint256 private stakingModuleNonce;
     uint256 private stakingModuleLastDepositBlock;
     uint256 private stakingModuleMaxDepositsPerBlock;
@@ -68,13 +67,13 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
 
     function getStakingModuleStatus(
         uint256 stakingModuleId
-    ) external view whenModuleIsRegistered(stakingModuleId) returns (StakingRouter.StakingModuleStatus) {
+    ) external view whenModuleIsRegistered(stakingModuleId) returns (StakingModuleStatus) {
         return status;
     }
 
     function setStakingModuleStatus(
         uint256 _stakingModuleId,
-        StakingRouter.StakingModuleStatus _status
+        StakingModuleStatus _status
     ) external whenModuleIsRegistered(_stakingModuleId) {
         emit StakingModuleStatusSet(uint24(_stakingModuleId), _status, msg.sender);
         status = _status;
@@ -83,19 +82,19 @@ contract StakingRouter__MockForDepositSecurityModule is IStakingRouter {
     function getStakingModuleIsStopped(
         uint256 stakingModuleId
     ) external view whenModuleIsRegistered(stakingModuleId) returns (bool) {
-        return status == StakingRouter.StakingModuleStatus.Stopped;
+        return status == StakingModuleStatus.Stopped;
     }
 
     function getStakingModuleIsDepositsPaused(
         uint256 stakingModuleId
     ) external view whenModuleIsRegistered(stakingModuleId) returns (bool) {
-        return status == StakingRouter.StakingModuleStatus.DepositsPaused;
+        return status == StakingModuleStatus.DepositsPaused;
     }
 
     function getStakingModuleIsActive(
         uint256 stakingModuleId
     ) external view whenModuleIsRegistered(stakingModuleId) returns (bool) {
-        return status == StakingRouter.StakingModuleStatus.Active;
+        return status == StakingModuleStatus.Active;
     }
 
     function getStakingModuleNonce(

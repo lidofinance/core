@@ -1,0 +1,9 @@
+@aragon/=node_modules/@aragon/
+@openzeppelin/=node_modules/@openzeppelin/
+ens/=node_modules/@aragon/os/contracts/lib/ens/
+forge-std/=foundry/lib/forge-std/src/
+hardhat/=node_modules/hardhat/
+math/=node_modules/@aragon/os/contracts/lib/math/
+misc/=node_modules/@aragon/os/contracts/lib/misc/
+openzeppelin-solidity/=node_modules/openzeppelin-solidity/
+token/=node_modules/@aragon/os/contracts/lib/token/
