@@ -84,7 +84,6 @@ describe("StakingRouter.sol:module-sync", () => {
       moduleType: StakingModuleType.Legacy,
     };
 
-    console.log("mod addr", stakingModuleAddress);
     await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);
 
     moduleId = await stakingRouter.getStakingModulesCount();
