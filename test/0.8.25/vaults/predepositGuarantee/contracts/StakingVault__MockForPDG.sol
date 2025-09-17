@@ -8,12 +8,15 @@ import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol
 
 contract StakingVault__MockForPDG is IStakingVault {
     event Mock_depositToBeaconChain(address indexed _depositor, uint256 _totalDepositAmount);
+    event Mock_depositFromStaged(address indexed _depositor, uint256 _totalDepositAmount);
 
     uint256 private constant WC_0X02_PREFIX = 0x02 << 248;
 
     address private nodeOperator_;
     address private owner_;
     bytes32 private withdrawalCredentials_;
+
+    uint256 staged;
 
     constructor(address _owner, address _nodeOperator) {
         owner_ = _owner;
@@ -93,11 +96,19 @@ contract StakingVault__MockForPDG is IStakingVault {
         return address(this).balance;
     }
 
-    function stagedBalance() external view override returns (uint256) {}
+    function stagedBalance() external view override returns (uint256) {
+        return staged;
+    }
 
-    function stage(uint256 _ether) external override {}
+    function stage(uint256 _ether) external override {
+        staged += _ether;
+    }
 
-    function unstage(uint256 _ether) external override {}
+    function unstage(uint256 _ether) external override {
+        staged -= _ether;
+    }
 
-    function depositFromStaged(Deposit calldata _deposit) external override {}
+    function depositFromStaged(Deposit calldata _deposit, uint256) external override {
+        emit Mock_depositFromStaged(msg.sender, _deposit.amount);
+    }
 }

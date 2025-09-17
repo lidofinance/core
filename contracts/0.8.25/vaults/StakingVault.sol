@@ -198,7 +198,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Calculates the balance that is available for withdrawal (does not account the balances stashed for activations)
+     * @notice Calculates the balance that is available for withdrawal (does not account the balances staged for activations)
      * @return amount of ether available for withdrawal in Wei
      */
     function availableBalance() public view returns (uint256) {
@@ -206,8 +206,8 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Returns the amount of ether on the balance that was stashed by depositor for validator activations
-     * @return the amount of stashed ether in Wei
+     * @notice Returns the amount of ether on the balance that was staged by depositor for validator activations
+     * @return the amount of staged ether in Wei
      */
     function stagedBalance() external view returns (uint256) {
         return _storage().stagedBalance;
@@ -295,15 +295,12 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _deposit validator deposit struct
      */
     function depositToBeaconChain(Deposit calldata _deposit) external onlyDepositor whenDepositsNotPaused {
-        uint256 balance = availableBalance();
-        if (_deposit.amount > balance) revert InsufficientBalance(balance, _deposit.amount);
-
         _depositToBeaconChain(_deposit, bytes.concat(withdrawalCredentials()));
     }
 
     /**
      * @notice Puts aside some ether from the balance to deposit it later
-     * @param _ether the amount of ether to stash in Wei
+     * @param _ether the amount of ether to stage in Wei
      */
     function stage(uint256 _ether) external onlyDepositor whenDepositsNotPaused {
         if (_ether == 0) revert ZeroArgument("_ether");
@@ -316,8 +313,8 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Returns the ether stashed for deposits back to available balance
-     * @param _ether the amount of ether to remove from stash in Wei
+     * @notice Returns the ether staged for deposits back to available balance
+     * @param _ether the amount of ether to remove from stage in Wei
      */
     function unstage(uint256 _ether) public onlyDepositor {
         if (_ether == 0) revert ZeroArgument("_ether");
@@ -330,12 +327,16 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Performs deposits to the beacon chain using the stashed ether
+     * @notice Performs deposits to the beacon chain using the staged and available ether.
      * @param _deposit struct
-     * @dev NB! this deposit is not affected by pause
+     * @param _additionalAmount amount of ether that should be taken from available balance for this deposit
+     * @dev NB! this deposit is not affected by pause if _additionalDeposit == 0
      */
-    function depositFromStaged(Deposit calldata _deposit) external onlyDepositor {
-        unstage(_deposit.amount);
+    function depositFromStaged(Deposit calldata _deposit, uint256 _additionalAmount) external onlyDepositor {
+        if (_additionalAmount > 0) {
+            if (_storage().beaconChainDepositsPaused) revert BeaconChainDepositsOnPause();
+        }
+        unstage(_deposit.amount - _additionalAmount);
 
         _depositToBeaconChain(_deposit, bytes.concat(withdrawalCredentials()));
     }
@@ -530,6 +531,9 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     function _depositToBeaconChain(Deposit calldata _deposit, bytes memory _withdrawalCredentials) internal {
+        uint256 balance = availableBalance();
+        if (_deposit.amount > balance) revert InsufficientBalance(balance, _deposit.amount);
+
         DEPOSIT_CONTRACT.deposit{value: _deposit.amount}(
             _deposit.pubkey,
             _withdrawalCredentials,
@@ -672,11 +676,11 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     error InsufficientBalance(uint256 _balance, uint256 _required);
 
     /**
-     * @notice Thrown when the amount of ether in stash is not sufficient
-     * @param _stash Stashed amount on the vault
-     * @param _requested Amount of ether requested to unstash
+     * @notice Thrown when the amount of ether in stage is not sufficient
+     * @param _staged Stashed amount on the vault
+     * @param _requested Amount of ether requested to unstage
      */
-    error InsufficientStash(uint256 _stash, uint256 _requested);
+    error InsufficientStash(uint256 _staged, uint256 _requested);
 
     /**
      * @notice Thrown when the transfer of ether to a recipient fails

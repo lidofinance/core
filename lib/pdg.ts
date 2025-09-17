@@ -4,7 +4,10 @@ import { ethers } from "hardhat";
 import { SecretKey } from "@chainsafe/blst";
 
 import { IStakingVault, SSZBLSHelpers, SSZMerkleTree } from "typechain-types";
-import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
+import {
+  BLS12_381,
+  PredepositGuarantee,
+} from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
 import { computeDepositDataRoot, computeDepositMessageRoot, de0x, ether, impersonate } from "lib";
 
@@ -106,6 +109,16 @@ export const generatePredeposit = async (
 };
 
 export const generatePostDeposit = (
+  validator: SSZBLSHelpers.ValidatorStruct,
+  amount = ether("31"),
+): PredepositGuarantee.ValidatorTopUpStruct => {
+  return {
+    pubkey: validator.pubkey,
+    amount,
+  };
+};
+
+export const generateDepositStruct = (
   validator: SSZBLSHelpers.ValidatorStruct,
   amount = ether("31"),
 ): IStakingVault.DepositStruct => {

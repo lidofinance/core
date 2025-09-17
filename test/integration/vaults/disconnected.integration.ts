@@ -9,7 +9,7 @@ import { Dashboard, DepositContract, StakingVault } from "typechain-types";
 import {
   certainAddress,
   ether,
-  generatePostDeposit,
+  generateDepositStruct,
   generatePredeposit,
   generateValidator,
   getNextBlockTimestamp,
@@ -248,7 +248,7 @@ describe("Integration: Actions with vault disconnected from hub", () => {
         const withdrawalCredentials = await stakingVault.withdrawalCredentials();
         const validator = generateValidator(withdrawalCredentials);
 
-        const deposit = await generatePostDeposit(validator.container, ether("2048"));
+        const deposit = generateDepositStruct(validator.container, ether("2048"));
 
         await expect(stakingVault.connect(owner).depositToBeaconChain(deposit))
           .to.emit(depositContract, "DepositEvent")
@@ -315,17 +315,17 @@ describe("Integration: Actions with vault disconnected from hub", () => {
             postdeposit.pubkey,
             withdrawalCredentials,
             toLittleEndian64(toGwei(ether("31"))),
-            postdeposit.signature,
+            anyValue,
             anyValue,
           );
 
-        await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
+        await expect(predepositGuarantee.connect(nodeOperator).topUpExistingValidators([postdeposit]))
           .to.emit(depositContract, "DepositEvent")
           .withArgs(
             postdeposit.pubkey,
             withdrawalCredentials,
             toLittleEndian64(toGwei(postdeposit.amount)),
-            postdeposit.signature,
+            anyValue,
             anyValue,
           );
       });

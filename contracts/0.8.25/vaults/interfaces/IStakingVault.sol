@@ -61,5 +61,5 @@ interface IStakingVault {
     function stagedBalance() external view returns (uint256);
     function stage(uint256 _ether) external;
     function unstage(uint256 _ether) external;
-    function depositFromStaged(Deposit calldata _deposit) external;
+    function depositFromStaged(Deposit calldata _deposit, uint256 _additionalAmount) external;
 }

@@ -17,7 +17,6 @@ import {
 import { BLS12_381 } from "typechain-types/contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee";
 
 import {
-  computeDepositDataRoot,
   days,
   de0x,
   findEventsWithInterfaces,
@@ -455,9 +454,6 @@ export const getProofAndDepositData = async (
 
   const postdeposit = generatePostDeposit(validator.container, amount);
   const pubkey = hexlify(validator.container.pubkey);
-  const signature = hexlify(postdeposit.signature);
-
-  postdeposit.depositDataRoot = computeDepositDataRoot(withdrawalCredentials, pubkey, signature, amount);
 
   const witnesses = [
     {

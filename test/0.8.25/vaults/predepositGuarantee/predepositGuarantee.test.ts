@@ -178,8 +178,7 @@ describe("PredepositGuarantee.sol", () => {
       const concatenatedProof = [...validatorMerkle.proof, ...stateProof, ...beaconBlockMerkle.proof];
 
       // NO posts proof and triggers deposit to total of 32 ether
-      const postDepositData = generatePostDeposit(validator.container, ether("31"));
-      const proveAndDepositTx = pdg.proveAndDeposit(
+      const proveAndDepositTx = pdg.proveWCAndTopUpValidators(
         [
           {
             pubkey: validator.container.pubkey,
@@ -190,15 +189,14 @@ describe("PredepositGuarantee.sol", () => {
             proof: concatenatedProof,
           },
         ],
-        [postDepositData],
-        stakingVault,
+        [ether("31")],
       );
 
       await expect(proveAndDepositTx)
         .to.emit(pdg, "ValidatorProven")
         .withArgs(validator.container.pubkey, vaultOperator, stakingVault, vaultWC)
-        .to.emit(stakingVault, "Mock_depositToBeaconChain")
-        .withArgs(pdg, postDepositData.amount);
+        .to.emit(stakingVault, "Mock_depositFromStaged")
+        .withArgs(pdg, ether("62"));
 
       [operatorBondTotal, operatorBondLocked] = await pdg.nodeOperatorBalance(vaultOperator);
       expect(operatorBondTotal).to.equal(ether("1"));
@@ -941,7 +939,7 @@ describe("PredepositGuarantee.sol", () => {
         const validator = generateValidator();
         const deposit = generatePostDeposit(validator.container);
 
-        await expect(pdg.depositToBeaconChain(stakingVault, [deposit])).to.be.revertedWithCustomError(
+        await expect(pdg.topUpExistingValidators([deposit])).to.be.revertedWithCustomError(
           pdg,
           "DepositToUnprovenValidator",
         );
@@ -951,7 +949,7 @@ describe("PredepositGuarantee.sol", () => {
         const validator = generateValidator();
         const deposit = generatePostDeposit(validator.container);
 
-        await expect(pdg.connect(stranger).depositToBeaconChain(stakingVault, [deposit])).to.be.revertedWithCustomError(
+        await expect(pdg.connect(stranger).topUpExistingValidators([deposit])).to.be.revertedWithCustomError(
           pdg,
           "NotDepositor",
         );
@@ -961,9 +959,10 @@ describe("PredepositGuarantee.sol", () => {
         await pdg.connect(vaultOperator).setNodeOperatorDepositor(stranger);
         const validator = generateValidator();
         const deposit = generatePostDeposit(validator.container);
-        await expect(
-          pdg.connect(vaultOperator).depositToBeaconChain(stakingVault, [deposit]),
-        ).to.be.revertedWithCustomError(pdg, "NotDepositor");
+        await expect(pdg.connect(vaultOperator).topUpExistingValidators([deposit])).to.be.revertedWithCustomError(
+          pdg,
+          "NotDepositor",
+        );
       });
 
       it("reverts to deposit someone else validators", async () => {
@@ -1048,16 +1047,11 @@ describe("PredepositGuarantee.sol", () => {
 
         const mainDeposit = generatePostDeposit(mainValidator.container, ether("31"));
         const sideDeposit = generatePostDeposit(sideValidator.container, ether("31"));
-        const sameNoDeposit = generatePostDeposit(sameNOValidator.container, ether("31"));
 
-        await expect(pdg.depositToBeaconChain(stakingVault, [mainDeposit, sideDeposit])).to.be.revertedWithCustomError(
+        await expect(pdg.topUpExistingValidators([mainDeposit, sideDeposit])).to.be.revertedWithCustomError(
           pdg,
           "NotDepositor",
         );
-
-        await expect(pdg.depositToBeaconChain(stakingVault, [mainDeposit, sameNoDeposit]))
-          .to.be.revertedWithCustomError(pdg, "DepositToWrongVault")
-          .withArgs(sameNoDeposit.pubkey, stakingVault);
       });
     });
 
@@ -1414,8 +1408,8 @@ describe("PredepositGuarantee.sol", () => {
 
       await expect(pdg.predeposit(stakingVault, [], [])).to.revertedWithCustomError(pdg, "ResumedExpected");
       await expect(pdg.proveWCAndActivateValidator(witness)).to.revertedWithCustomError(pdg, "ResumedExpected");
-      await expect(pdg.depositToBeaconChain(stakingVault, [])).to.revertedWithCustomError(pdg, "ResumedExpected");
-      await expect(pdg.proveAndDeposit([], [], stakingVault)).to.revertedWithCustomError(pdg, "ResumedExpected");
+      await expect(pdg.topUpExistingValidators([])).to.revertedWithCustomError(pdg, "ResumedExpected");
+      await expect(pdg.proveWCAndTopUpValidators([], [])).to.revertedWithCustomError(pdg, "ResumedExpected");
 
       await expect(pdg.proveUnknownValidator(witness, stakingVault)).to.revertedWithCustomError(pdg, "ResumedExpected");
 

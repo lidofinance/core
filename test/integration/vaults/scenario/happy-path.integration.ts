@@ -262,7 +262,10 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       return generatePostDeposit(validator.container, postDepositAmount);
     });
 
-    await pdg.proveAndDeposit(witnesses, postdeposits, stakingVault);
+    await pdg.proveWCAndTopUpValidators(
+      witnesses,
+      postdeposits.map((p) => p.amount),
+    );
 
     stakingVaultCLBalance += VAULT_DEPOSIT;
 

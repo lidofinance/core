@@ -174,5 +174,5 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, Ownable2StepUpgra
 
     function unstage(uint256 _ether) external override {}
 
-    function depositFromStaged(Deposit calldata _deposit) external override {}
+    function depositFromStaged(Deposit calldata _deposit, uint256 _additionalDeposit) external override {}
 }
