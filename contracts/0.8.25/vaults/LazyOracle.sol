@@ -496,10 +496,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             uint256 totalValueIncrease = _reportedTotalValue > onchainTotalValueOnRefSlot
                 ? _reportedTotalValue - onchainTotalValueOnRefSlot
                 : 0;
-            uint256 maxIncreaseWithRewards = quarantinedValue +
-                (onchainTotalValueOnRefSlot + quarantinedValue) * $.maxRewardRatioBP / TOTAL_BASIS_POINTS;
+            uint256 quarantineThresholdWithRewards = quarantineThreshold + quarantinedValue
+                * (TOTAL_BASIS_POINTS + $.maxRewardRatioBP) / TOTAL_BASIS_POINTS;
 
-            if (totalValueIncrease <= maxIncreaseWithRewards) {
+            if (_reportedTotalValue <= quarantineThresholdWithRewards) {
                 // Transition: QUARANTINE_EXPIRED → NO_QUARANTINE (release and accept all)
                 delete $.vaultQuarantines[_vault];
                 emit QuarantineReleased(_vault, _reportedTotalValue <= quarantineThreshold ? 0 : totalValueIncrease);
