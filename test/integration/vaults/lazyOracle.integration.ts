@@ -645,8 +645,8 @@ describe("Integration: LazyOracle", () => {
     it("Gift and withdraw causing underflow on slashed vault", async () => {
       // This test is to reproduce the underflow vulnerability reported in https://github.com/lidofinance/core/issues/1342
       const INITIAL_FUND = ether("1000");
-      const SLASHED_AMOUNT = ether("2");
-      const GIFT_AMOUNT = ether("999");
+      const SLASHED_AMOUNT = ether("5");
+      const GIFT_AMOUNT = ether("996");
 
       // Step 1: Fund the vault with 1000 ETH and report it
       await dashboard.fund({ value: INITIAL_FUND - ether("1") });
@@ -656,13 +656,13 @@ describe("Integration: LazyOracle", () => {
       // Advance time for next report slot
       await advanceChainTime(days(1n));
 
-      // Step 2: Gift the vault 999 ETH directly (bypassing fund() to not update inOutDelta)
+      // Step 2: Gift the vault 996 ETH directly (bypassing fund() to not update inOutDelta)
       await owner.sendTransaction({
         to: await stakingVault.getAddress(),
         value: GIFT_AMOUNT,
       });
 
-      // Step 3: Withdraw 999 ETH (this decreases current inOutDelta but keeps previous refSlot inOutDelta high)
+      // Step 3: Withdraw 996 ETH (this decreases current inOutDelta but keeps previous refSlot inOutDelta high)
       await dashboard.withdraw(stranger, GIFT_AMOUNT);
 
       // Step 4: Try to update with slashed total value
@@ -670,13 +670,20 @@ describe("Integration: LazyOracle", () => {
 
       // This calculation should underflow:
       // totalValueWithoutQuarantine + currentInOutDelta - inOutDeltaOnRefSlot
-      // = 998 + 1 ETH - 1000 ETH
+      // = 995 + 4 ETH - 1000 ETH
       await expect(
         reportVaultDataWithProof(ctx, stakingVault, {
           totalValue: slashedTotalValue,
           waitForNextRefSlot: false,
         }),
       ).to.be.revertedWithCustomError(lazyOracle, "UnderflowInTotalValueCalculation");
+
+      // if attacker continues to repeat this, the freshness condition would prevent withdrawals
+      await advanceChainTime(days(2n));
+      await expect(dashboard.withdraw(stranger, ether("1"))).to.be.revertedWithCustomError(
+        vaultHub,
+        "VaultReportStale",
+      );
 
       // but it works after waiting for next refSlot
       await expect(
