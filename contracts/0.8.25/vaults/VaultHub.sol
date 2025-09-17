@@ -315,9 +315,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @return sharesToBurn amount of shares to burn / rebalance
     /// @return feesToSettle amount of Lido fees to settle
-    /// @dev If the vault has bad debt (i.e. not fixable by rebalance), `healthShortfallShares` becomes `type(uint256).max`
-    ///      and thus `sharesToBurn` will be `type(uint256).max`
-    /// @dev settling fees is only forced when unsettled fees >= `MIN_BEACON_DEPOSIT` (1 ETH)
+    /// @dev if the vault has bad debt (i.e. not fixable by rebalance), returns `type(uint256).max` for `sharesToBurn`
     /// @dev returns (0, 0) if the vault is not connected
     function obligations(address _vault) external view returns (uint256 sharesToBurn, uint256 feesToSettle) {
         VaultConnection storage connection = _vaultConnection(_vault);
@@ -904,10 +902,10 @@ contract VaultHub is PausableUntilWithRoles {
         emit ForcedValidatorExitTriggered(_vault, _pubkeys, _refundRecipient);
     }
 
-    /// @notice Permissionless rebalance for vaults with obligations shortfall
+    /// @notice allows anyone to rebalance a vault with an obligations shortfall
     /// @param _vault vault address
-    /// @dev rebalance all available amount of ether on the vault to fulfill the vault's obligations: restore vault
-    ///      to healthy state and settle outstanding redemptions. Fees are not settled in this case
+    /// @dev uses all available ether in the vault to cover outstanding obligations and restore vault health; this
+    ///      operation does not settle Lido fees
     /// @dev requires the fresh report
     function forceRebalance(address _vault) external {
         VaultConnection storage connection = _checkConnection(_vault);
@@ -927,7 +925,7 @@ contract VaultHub is PausableUntilWithRoles {
         _rebalance(_vault, record, sharesToForceRebalance);
     }
 
-    /// @notice Permissionless payout of unsettled Lido fees to treasury
+    /// @notice allows anyone to settle any outstanding Lido fees for a vault, sending them to the treasury
     /// @param _vault vault address
     /// @dev requires the fresh report
     function settleLidoFees(address _vault) external {
@@ -1268,7 +1266,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @return the total amount of ether needed to fully cover all outstanding obligations of the vault, including:
-    ///         - shares to burn required to restore vault healthiness or fulfill redemptions
+    ///         - shares to burn required to restore vault healthiness or cover redemptions
     ///         - unsettled Lido fees (if above the minimum beacon deposit)
     function _obligationsAmount(
         VaultConnection storage _connection,
@@ -1394,7 +1392,7 @@ contract VaultHub is PausableUntilWithRoles {
     ) internal view returns (uint256) {
         uint256 availableBalance = Math256.min(_vault.balance, _totalValue(_record));
 
-        // We can't withdraw funds that can be used to fulfill redemptions
+        // We can't withdraw funds that can be used to cover redemptions
         uint256 redemptionValue = _getPooledEthBySharesRoundUp(_record.redemptionShares);
         if (redemptionValue > availableBalance) return 0;
         availableBalance -= redemptionValue;
