@@ -570,10 +570,14 @@ contract Accounting {
         // Handle first report or timeElapsed too large scenarios
         if (prevTimestamp >= GENESIS_TIME) {
             uint256 prevSlot = (prevTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
+            if (prevSlot == currentSlot) {
+                return DepositsTracker.getDepositedEthUpToSlot(DEPOSITS_TRACKER_POSITION, currentSlot);
+            }
             return _getDepositedEthBetweenSlots(prevSlot, currentSlot);
         } else {
-            // First report or timeElapsed too large - no deposits to track
-            return 0;
+            // First report - track all deposits since GENESIS_TIME
+            uint256 genesisSlot = 0;
+            return _getDepositedEthBetweenSlots(genesisSlot, currentSlot);
         }
     }
 
