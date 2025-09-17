@@ -350,7 +350,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (vault_.depositor() != address(_predepositGuarantee())) revert PDGNotDepositor(_vault);
         // for each pending predeposit, vault should have an activation amount staged in StakingVault
         // 1 predeposit is 1 ether and activation amount is 31 ether
-        if (vault_.stagedBalance() < 31 * _predepositGuarantee().pendingPredeposits(vault_)) {
+        if (vault_.stagedBalance() != 31 * _predepositGuarantee().pendingPredeposits(vault_)) {
             revert InsufficientStagedBalance(_vault);
         }
 

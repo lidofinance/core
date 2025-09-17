@@ -52,6 +52,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param nodeOperatorGuarantor - mapping of NO to its' guarantor (zero address means NO is self-guarantor)
      * @param guarantorClaimableEther - ether that guarantor can claim back if NO has changed guarantor with balance
      * @param validatorStatus - status of the validators in PDG
+     * @param nodeOperatorDepositor - address delegated by the node operator to be the depositor
+     * @param pendingPredeposits - amount of ether that is pending as predeposits but not proved yet
      */
     struct ERC7201Storage {
         mapping(address nodeOperator => NodeOperatorBalance balance) nodeOperatorBalance;
@@ -330,7 +332,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @notice sets the depositor for the NO
      * @param _newDepositor address of the depositor
      */
-    function setNodeOperatorDepositor(address _newDepositor) external {
+    function setNodeOperatorDepositor(address _newDepositor) external whenResumed {
         if (_newDepositor == address(0)) revert ZeroArgument("_newDepositor");
         address prevDepositor = _depositorOf(msg.sender);
         if (_newDepositor == prevDepositor) revert SameDepositor();
@@ -486,11 +488,10 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /**
      * @notice happy path shortcut for the node operator that allows:
      * - prove validators to unlock NO balance
+     * - activate the validators from stash
      * - optionally top up NO balance
-     * - trigger deposit to proven validators via vault
      * @param _witnesses array of ValidatorWitness structs to prove validators WCs
      * @param _amounts array of StakingVault.Deposit structs with deposit data for provided _stakingVault
-     * @dev proven validators and  staking vault + deposited validators don't have to match
      */
     function proveWCAndTopUpValidators(
         ValidatorWitness[] calldata _witnesses,
@@ -631,7 +632,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         ValidatorWitness calldata _witness,
         uint256 _additionalDeposit
     ) internal {
-        // checking stage here prevents revert on call to zero address at `.stakingVault.withdrawalCredentials()`
+        // checking stage here prevents revert on call to zero address at `stakingVault.withdrawalCredentials()`
         if (validator.stage != ValidatorStage.PREDEPOSITED) {
             revert ValidatorNotPreDeposited(_witness.pubkey, validator.stage);
         }
