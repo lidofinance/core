@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4844"  lines-covered="4634"  line-rate="0.9566"  branches-valid="2266"  branches-covered="2101"  branch-rate="0.9272"  timestamp="1758139964435" complexity="0" version="0.1">
+<coverage lines-valid="4844"  lines-covered="4634"  line-rate="0.9566"  branches-valid="2266"  branches-covered="2101"  branch-rate="0.9272"  timestamp="1758140023082" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2193,8 +2193,8 @@
 			<method name="_mintableStETH"  hits="8"  signature="()V" >
 				<lines><line number="553"  hits="8" /></lines>
 			</method>
-			<method name="_storage"  hits="169"  signature="()V" >
-				<lines><line number="559"  hits="169" /></lines>
+			<method name="_storage"  hits="149"  signature="()V" >
+				<lines><line number="559"  hits="149" /></lines>
 			</method>
 			<method name="pendingPredeposits"  hits="8"  signature="()V" >
 				<lines><line number="565"  hits="8" /></lines>
@@ -2320,7 +2320,7 @@
 			<line number="554"  hits="8"  branch="false" />
 			<line number="555"  hits="8"  branch="false" />
 			<line number="556"  hits="8"  branch="false" />
-			<line number="560"  hits="169"  branch="false" />
+			<line number="560"  hits="149"  branch="false" />
 			<line number="566"  hits="8"  branch="false" />
 			<line number="570"  hits="58"  branch="false" />
 			<line number="574"  hits="0"  branch="false" />
@@ -2907,10 +2907,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="16"  branch="false" />
-			<line number="173"  hits="16"  branch="false" />
-			<line number="175"  hits="16"  branch="false" />
-			<line number="176"  hits="16"  branch="false" />
+			<line number="172"  hits="45"  branch="false" />
+			<line number="173"  hits="45"  branch="false" />
+			<line number="175"  hits="45"  branch="false" />
+			<line number="176"  hits="45"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
