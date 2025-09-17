@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ConsolidationGateway__Harness, WithdrawalVault__MockForCG } from "typechain-types";
+import { ConsolidationGateway, WithdrawalVault__MockForCG } from "typechain-types";
 
 import { advanceChainTime, getCurrentBlockTimestamp, streccak } from "lib";
 
@@ -23,7 +23,7 @@ const PUBKEYS = [
 const ZERO_ADDRESS = ethers.ZeroAddress;
 
 describe("ConsolidationGateway.sol: pausable", () => {
-  let consolidationGateway: ConsolidationGateway__Harness;
+  let consolidationGateway: ConsolidationGateway;
   let withdrawalVault: WithdrawalVault__MockForCG;
   let admin: HardhatEthersSigner;
   let authorizedEntity: HardhatEthersSigner;
@@ -43,13 +43,7 @@ describe("ConsolidationGateway.sol: pausable", () => {
       withdrawalVault: await withdrawalVault.getAddress(),
     });
 
-    consolidationGateway = await ethers.deployContract("ConsolidationGateway__Harness", [
-      admin,
-      locatorAddr,
-      100,
-      1,
-      48,
-    ]);
+    consolidationGateway = await ethers.deployContract("ConsolidationGateway", [admin, locatorAddr, 100, 1, 48]);
 
     const role = await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE();
     await consolidationGateway.grantRole(role, authorizedEntity);
