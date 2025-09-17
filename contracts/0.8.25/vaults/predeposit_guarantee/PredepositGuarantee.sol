@@ -442,7 +442,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @dev will revert if proof is invalid or misformed or validator is not predeposited
      * @dev will **not** revert if activation is impossible, but it may result in the vault's total value drop
      */
-    function proveWCAndActivateValidator(ValidatorWitness calldata _witness) public whenResumed {
+    function proveWCAndActivateValidator(ValidatorWitness calldata _witness) external whenResumed {
         ValidatorStatus storage validator = _storage().validatorStatus[_witness.pubkey];
         _proveWCAndActivateValidator(validator, _witness, 0);
     }
@@ -452,7 +452,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _topUps array of ValidatorTopUp structs with pubkey and amounts
      * @dev only callable by the depositor assigned by the node operator
      */
-    function topUpExistingValidators(ValidatorTopUp[] calldata _topUps) public whenResumed {
+    function topUpExistingValidators(ValidatorTopUp[] calldata _topUps) external whenResumed {
         ERC7201Storage storage $ = _storage();
 
         for (uint256 i = 0; i < _topUps.length; i++) {
@@ -495,7 +495,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     function proveWCAndTopUpValidators(
         ValidatorWitness[] calldata _witnesses,
         uint256[] calldata _amounts
-    ) external payable {
+    ) external whenResumed {
         for (uint256 i = 0; i < _witnesses.length; i++) {
             ValidatorStatus storage validator = _storage().validatorStatus[_witnesses[i].pubkey];
 
@@ -566,7 +566,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     function proveInvalidValidatorWC(
         ValidatorWitness calldata _witness,
         bytes32 _invalidWithdrawalCredentials
-    ) public whenResumed returns (uint256) {
+    ) external whenResumed returns (uint256) {
         _validatePubKeyWCProof(_witness, _invalidWithdrawalCredentials);
 
         ERC7201Storage storage $ = _storage();
