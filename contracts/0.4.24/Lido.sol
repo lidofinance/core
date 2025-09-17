@@ -680,7 +680,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             emit DepositedValidatorsChanged(depositedValidators);
             // here should be counter for deposits that are not visible before ao report
             // Notify Accounting about the deposit
-            // TODO move to SR
             IAccounting(locator.accounting()).recordDeposit(depositsAmount);
         }
 

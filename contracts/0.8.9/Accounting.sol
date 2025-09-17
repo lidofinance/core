@@ -164,6 +164,15 @@ contract Accounting {
         return depositsAtTo > depositsAtFrom ? depositsAtTo - depositsAtFrom : 0;
     }
 
+    /// @notice Internal function to get deposits between slots
+    /// @param currentSlot current slot
+    /// @return The amount of ETH deposited between ref slots
+    function _getDepositedEthSinceLastRefSlot(uint256 currentSlot) internal returns (uint256) {
+        uint256 depositsAtTo = DepositsTracker.getDepositedEthUpToSlot(DEPOSITS_TRACKER_POSITION, currentSlot);
+        DepositsTracker.moveCursorToSlot(DEPOSITS_TRACKER_POSITION, currentSlot);
+        return depositsAtTo;
+    }
+
     /// @notice calculates all the state changes that is required to apply the report
     /// This a initial part of Accounting Oracle flow:
     /// 1. simulate the report without any WQ processing (withdrawalFinalizationBatches.length == 0)
