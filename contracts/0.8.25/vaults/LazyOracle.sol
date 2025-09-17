@@ -392,7 +392,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             revert CumulativeLidoFeesTooLow(_cumulativeLidoFees, previousCumulativeLidoFees);
         }
 
-        uint256 maxLidoFees = (_storage().vaultsDataTimestamp - record.report.timestamp) * uint256(_storage().maxLidoFeeRatePerSecond);
+        uint256 maxLidoFees = (_reportTimestamp - record.report.timestamp) * uint256(_storage().maxLidoFeeRatePerSecond);
         if (_cumulativeLidoFees - previousCumulativeLidoFees > maxLidoFees) {
             revert CumulativeLidoFeesTooLarge(_cumulativeLidoFees - previousCumulativeLidoFees, maxLidoFees);
         }
