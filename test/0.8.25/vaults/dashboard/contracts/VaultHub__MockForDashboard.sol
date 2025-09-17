@@ -241,6 +241,10 @@ contract VaultHub__MockForDashboard {
         return vaultConnections[_vault].vaultIndex != 0;
     }
 
+    function collectERC20FromVault(address _vault, address _token, address _recipient, uint256 _amount) external {
+        IStakingVault(_vault).collectERC20(_token, _recipient, _amount);
+    }
+
     function updateConnection(
         address _vault,
         uint256 _shareLimit,
