@@ -332,22 +332,24 @@ export async function main() {
     admin,
     locator.address,
     // ToDo: Replace dummy parameters with real ones
-    1000, // maxConsolidationRequestsLimit,
-    100, // consolidationsPerFrame,
-    300, // frameDurationInSec
+    10, // maxConsolidationRequestsLimit,
+    1, // consolidationsPerFrame,
+    60, // frameDurationInSec
   ]);
 
   const consolidationGateway = await loadContract<ConsolidationGateway>(
     "ConsolidationGateway",
     consolidationGateway_.address,
   );
-  // ToDo: Grant ADD_CONSOLIDATION_REQUEST_ROLE to MessageBus address
-  // await makeTx(
-  //   consolidationGateway,
-  //   "grantRole",
-  //   [await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE(), "MessageBusAddress...."],
-  //   { from: deployer },
-  // );
+
+  // ToDo: Grant ADD_CONSOLIDATION_REQUEST_ROLE to MessageBus address instead of deployer
+  // ADD_CONSOLIDATION_REQUEST_ROLE granted to deployer for testing convenience
+  await makeTx(
+    consolidationGateway,
+    "grantRole",
+    [await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE(), deployer],
+    { from: deployer },
+  );
 
   //
   // Deploy ValidatorExitDelayVerifier
