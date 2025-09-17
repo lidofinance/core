@@ -168,27 +168,20 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the amount of shares to burn to restore vault healthiness or to fulfill redemptions and the
+     * @notice Returns the amount of shares to burn to restore vault healthiness or to cover redemptions and the
      *         amount of outstanding Lido fees
-     * @return sharesToRebalance amount of shares to rebalance
-     * @return unsettledLidoFees amount of Lido fees to be settled
+     * @return sharesToBurn amount of shares to burn or to rebalance
+     * @return feesToSettle amount of Lido fees to be settled
      */
-    function obligations() external view returns (uint256 sharesToRebalance, uint256 unsettledLidoFees) {
-        (sharesToRebalance, unsettledLidoFees) = VAULT_HUB.obligations(address(_stakingVault()));
+    function obligations() external view returns (uint256 sharesToBurn, uint256 feesToSettle) {
+        (sharesToBurn, feesToSettle) = VAULT_HUB.obligations(address(_stakingVault()));
     }
 
     /**
-     * @notice Returns the amount of ether shortfall to cover the outstanding obligations of the vault
+     * @notice Returns the amount of shares to rebalance to restore vault healthiness or to cover redemptions
      */
-    function obligationsShortfall() external view returns (uint256) {
-        return VAULT_HUB.obligationsShortfall(address(_stakingVault()));
-    }
-
-    /**
-     * @notice Returns the amount of shares to rebalance to restore vault healthiness or to fulfill redemptions
-     */
-    function rebalanceShortfallShares() external view returns (uint256) {
-        return VAULT_HUB.rebalanceShortfallShares(address(_stakingVault()));
+    function healthShortfallShares() external view returns (uint256) {
+        return VAULT_HUB.healthShortfallShares(address(_stakingVault()));
     }
 
     /**
@@ -473,7 +466,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Recovers ERC20 tokens or ether from the dashboard contract to the recipient
-     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether (EIP-7528) 
+     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether (EIP-7528)
      * @param _recipient Address of the recovery recipient
      * @param _amount Amount of tokens or ether to recover
      */
@@ -490,7 +483,7 @@ contract Dashboard is NodeOperatorFee {
             RecoverTokens._recoverEth(_recipient, _amount);
         } else {
             RecoverTokens._recoverERC20(_token, _recipient, _amount);
-        }       
+        }
     }
 
     /**
