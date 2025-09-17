@@ -309,7 +309,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
         _storage().stagedBalance += _ether;
 
-        emit EtherStashed(_ether);
+        emit EtherStaged(_ether);
     }
 
     /**
@@ -319,10 +319,9 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     function unstage(uint256 _ether) public onlyDepositor {
         if (_ether == 0) revert ZeroArgument("_ether");
         uint256 staged = _storage().stagedBalance;
-        if (staged < _ether) revert InsufficientStash(staged, _ether);
+        if (staged < _ether) revert InsufficientStaged(staged, _ether);
 
         _storage().stagedBalance = staged - _ether;
-
         emit EtherUnstaged(_ether);
     }
 
@@ -646,7 +645,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * Emitted when ether is put aside from available balance
      * @param amount Amount of ether being staged in Wei
      */
-    event EtherStashed(uint256 amount);
+    event EtherStaged(uint256 amount);
 
     /**
      * Emitted when ether is returned back to available balance
@@ -680,7 +679,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _staged Stashed amount on the vault
      * @param _requested Amount of ether requested to unstage
      */
-    error InsufficientStash(uint256 _staged, uint256 _requested);
+    error InsufficientStaged(uint256 _staged, uint256 _requested);
 
     /**
      * @notice Thrown when the transfer of ether to a recipient fails
