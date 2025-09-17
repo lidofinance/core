@@ -18,7 +18,6 @@ describe("StakingRouter.sol:misc", () => {
   let stakingRouterAdmin: HardhatEthersSigner;
   let user: HardhatEthersSigner;
 
-  // let depositContract: DepositContract__MockForBeaconChainDepositor;
   let stakingRouter: StakingRouter__Harness;
   let impl: StakingRouter__Harness;
 
