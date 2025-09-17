@@ -139,9 +139,7 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("fails with InvalidInitialization error when called on implementation", async () => {
-      await expect(
-        impl.migrateUpgrade_v4(),
-      ).to.be.revertedWithCustomError(impl, "InvalidInitialization");
+      await expect(impl.migrateUpgrade_v4()).to.be.revertedWithCustomError(impl, "InvalidInitialization");
     });
 
     it("fails with InvalidInitialization error when called on deployed from scratch SRv3", async () => {
