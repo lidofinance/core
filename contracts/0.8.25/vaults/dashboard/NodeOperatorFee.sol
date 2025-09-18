@@ -62,11 +62,11 @@ contract NodeOperatorFee is Permissions {
     uint256 public settledGrowth;
 
     /**
-     * @notice Timestamp of the most recent fee exemption.
+     * @notice Timestamp of the most recent settled growth correction.
      * This timestamp is used to prevent retroactive fees after a fee rate change.
-     * The timestamp ensures that all fee exemptions are fully reported before changing the fee rate.
+     * The timestamp ensures that all fee exemptions and corrections are fully reported before changing the fee rate.
      */
-    uint256 public feeExemptionTimestamp;
+    uint256 public latestCorrectionTimestamp;
 
     /**
      * @notice Flag indicating whether settled growth is pending manual adjustment.
@@ -75,7 +75,7 @@ contract NodeOperatorFee is Permissions {
      * e.g. when connecting to VaultHub, the inOutDelta is reset to the vault's EL balance,
      * which may lead to an inadequate node operator fee calculated against the difference of inOutDelta and reported totalValue.
      */
-    bool public settledGrowthPending;
+    bool public pendingCorrection;
 
     /**
      * @notice Passes the address of the vault hub up the inheritance chain.
@@ -157,6 +157,10 @@ contract NodeOperatorFee is Permissions {
      */
     function disburseNodeOperatorFee() public {
         (uint256 fee, int256 growth) = _calculateFee();
+
+        // it's important not to revert here so as not to block disconnect
+        if (fee == 0) return;
+
         _setSettledGrowth(uint256(growth));
 
         VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
@@ -174,13 +178,13 @@ contract NodeOperatorFee is Permissions {
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
 
         // Latest fee exemption must be earlier than the latest fresh report timestamp
-        if (feeExemptionTimestamp >= _lazyOracle().latestReportTimestamp()) revert ExemptedValueNotReportedYet();
+        if (latestCorrectionTimestamp >= _lazyOracle().latestReportTimestamp()) revert ExemptedValueNotReportedYet();
 
         // If the vault is quarantined, the total value is reduced and may not reflect the exemption
         if (_lazyOracle().vaultQuarantine(address(_stakingVault())).isActive) revert VaultQuarantined();
 
         // Disburse will revert if true, but it's important to check this before recording confirmations
-        if (settledGrowthPending) revert SettledGrowthPending();
+        if (pendingCorrection) revert SettledGrowthPendingCorrection();
 
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
@@ -201,12 +205,12 @@ contract NodeOperatorFee is Permissions {
      * @param _expectedSettledGrowth The expected current settled growth
      * @return bool True if correction was applied, false if awaiting confirmations
      */
-    function setSettledGrowth(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) external returns (bool) {
+    function correctSettledGrowth(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) external returns (bool) {
         if (settledGrowth != _expectedSettledGrowth) revert UnexpectedSettledGrowth();
 
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
-        _setSettledGrowth(_newSettledGrowth);
+        _correctSettledGrowth(_newSettledGrowth);
         // multiconfirmation ensures the owner and node operator have agreed on the fees
         // and the fee disbursement can be resumed
         _enableFeeDisbursement();
@@ -256,29 +260,39 @@ contract NodeOperatorFee is Permissions {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
-    function _setSettledGrowth(uint256 _newSettledGrowth) internal {
+    function _setSettledGrowth(uint256 _newSettledGrowth) private {
         uint256 oldSettledGrowth = settledGrowth;
+        if (oldSettledGrowth == _newSettledGrowth) revert SameSettledGrowth();
         settledGrowth = _newSettledGrowth;
 
         emit SettledGrowthSet(oldSettledGrowth, _newSettledGrowth);
     }
 
-    function _increaseSettledGrowth(uint256 _increaseAmount) internal {
-        _setSettledGrowth(settledGrowth + _increaseAmount);
+    /**
+     * @dev Set a new settled growth and updates the timestamp.
+     * Should be used to correct settled growth for total value change that might not have been reported yet
+     */
+    function _correctSettledGrowth(uint256 _newSettledGrowth) internal {
+        _setSettledGrowth(_newSettledGrowth);
+        latestCorrectionTimestamp = block.timestamp;
+
+        emit CorrectionTimestampUpdated(block.timestamp);
     }
 
+    /**
+     * @dev Increases settled growth for total value increases not subject to fee,
+     * which is why it updates the timestamp to ensure that the exemption comes before
+     * the total value report during the fee rate change, which guarantees that the exemption is reported
+     */
     function _addFeeExemption(uint256 _amount) internal {
-        _increaseSettledGrowth(_amount);
-        feeExemptionTimestamp = block.timestamp;
-
-        emit FeeExemptionAdded(_amount, block.timestamp);
+        _correctSettledGrowth(settledGrowth + _amount);
     }
 
     function _calculateFee() internal view returns (uint256 fee, int256 growth) {
         // revert if the settled growth is awaiting manual adjustment,
         // thus a meaningful return value cannot be calculated.
         // cannot return 0 instead of revert because 0 is a legal value
-        if (settledGrowthPending) revert SettledGrowthPending();
+        if (pendingCorrection) revert SettledGrowthPendingCorrection();
 
         VaultHub.Report memory report = latestReport();
         growth = int104(report.totalValue) - report.inOutDelta;
@@ -289,13 +303,13 @@ contract NodeOperatorFee is Permissions {
     }
 
     function _enableFeeDisbursement() internal {
-        settledGrowthPending = false;
+        pendingCorrection = false;
 
         emit FeeDisbursementEnabled();
     }
 
     function _disableFeeDisbursement() internal {
-        settledGrowthPending = true;
+        pendingCorrection = true;
 
         emit FeeDisbursementDisabled();
     }
@@ -357,11 +371,11 @@ contract NodeOperatorFee is Permissions {
     event SettledGrowthSet(uint256 oldSettledGrowth, uint256 newSettledGrowth);
 
     /**
-     * @dev Emitted when a fee exemption is added.
-     * @param amountExempted the amount exempted
-     * @param timestamp the timestamp of the exemption
+     * @dev Emitted when the settled growth is corrected.
+     * @param timestamp new correction timestamp
      */
-    event FeeExemptionAdded(uint256 amountExempted, uint256 timestamp);
+    event CorrectionTimestampUpdated(uint256 timestamp);
+
 
     /**
      * @dev Emitted when the fee disbursement is enabled.
@@ -386,6 +400,11 @@ contract NodeOperatorFee is Permissions {
     error SameRecipient();
 
     /**
+     * @dev Error emitted when trying to set same value for settled growth
+     */
+    error SameSettledGrowth();
+
+    /**
      * @dev Error emitted when the report is stale.
      */
     error ReportStale();
@@ -403,7 +422,7 @@ contract NodeOperatorFee is Permissions {
     /**
      * @dev Error emitted when the settled growth is pending manual adjustment.
      */
-    error SettledGrowthPending();
+    error SettledGrowthPendingCorrection();
 
     /**
      * @dev Error emitted when the vault is quarantined.
