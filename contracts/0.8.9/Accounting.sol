@@ -29,6 +29,8 @@ interface IStakingRouter {
         );
 
     function reportRewardsMinted(uint256[] calldata _stakingModuleIds, uint256[] calldata _totalShares) external;
+    function onAccountingReport(uint256 slot) external;
+    function getDepositAmountFromLastSlot(uint256 slot) external view returns (uint256);
 }
 
 /// @title Lido Accounting contract
@@ -134,19 +136,6 @@ contract Accounting {
         SECONDS_PER_SLOT = _secondsPerSlot;
     }
 
-    /// @notice Function to record deposits (called by Lido)
-    /// @param amount the amount of ETH deposited
-    function recordDeposit(uint256 amount) external {
-        if (msg.sender != address(LIDO)) revert NotAuthorized("recordDeposit", msg.sender);
-
-        uint256 currentSlot = (block.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
-        DepositsTracker.insertSlotDeposit(
-            DEPOSITS_TRACKER_POSITION,
-            currentSlot,
-            amount
-        );
-    }
-
     /// @notice Internal function to get deposits between slots
     /// @param fromSlot the starting slot
     /// @param toSlot the ending slot
@@ -227,8 +216,9 @@ contract Accounting {
         );
 
         // Calculate deposits made since last report
-        uint256 depositedSinceLastReport = _getDepositedEthSinceLastReport(_report.timestamp, _report.timeElapsed);
-
+        uint256 depositedSinceLastReport = _contracts.stakingRouter.getDepositAmountFromLastSlot(
+            (block.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT
+        );
         // Principal CL balance is sum of previous balances and new deposits
         update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance + depositedSinceLastReport;
 
@@ -445,6 +435,9 @@ contract Accounting {
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
 
+        // move cursor for deposits tracker
+        _contracts.stakingRouter.onAccountingReport((block.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT);
+
         LIDO.emitTokenRebase(
             _report.timestamp,
             _report.timeElapsed,
@@ -560,30 +553,6 @@ contract Accounting {
                 IStakingRouter(stakingRouter),
                 IVaultHub(vaultHub)
             );
-    }
-
-    /**
-     * @dev Calculates ETH deposited since the last report
-     * @param reportTimestamp Current report timestamp
-     * @param timeElapsed Time elapsed since the previous report
-     * @return Amount of ETH deposited between reports
-     */
-    function _getDepositedEthSinceLastReport(
-        uint256 reportTimestamp,
-        uint256 timeElapsed
-    ) internal view returns (uint256) {
-        // Calculate slots from report timestamp and timeElapsed
-        uint256 currentSlot = (reportTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
-        uint256 prevTimestamp = reportTimestamp - timeElapsed;
-
-        // Handle first report or timeElapsed too large scenarios
-        if (prevTimestamp >= GENESIS_TIME) {
-            uint256 prevSlot = (prevTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
-            return _getDepositedEthBetweenSlots(prevSlot, currentSlot);
-        } else {
-            // First report or timeElapsed too large - no deposits to track
-            return 0;
-        }
     }
 
     error NotAuthorized(string operation, address addr);
