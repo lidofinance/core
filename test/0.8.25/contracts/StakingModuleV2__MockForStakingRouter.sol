@@ -83,7 +83,7 @@ contract StakingModuleV2__MockForStakingRouter is IStakingModule, IStakingModule
         return allocations__mocked;
     }
 
-    function depositedEth(uint256 operatorId, uint256 amount) external {}
+    function onDeposit(uint256 operatorId, uint256 amount) external {}
 
     function getType() external view returns (bytes32) {
         return keccak256(abi.encodePacked("staking.module"));

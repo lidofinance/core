@@ -61,10 +61,6 @@ interface IWithdrawalVault {
     function withdrawWithdrawals(uint256 _amount) external;
 }
 
-interface IAccounting {
-    function recordDeposit(uint256 amount) external;
-}
-
 /**
  * @title Liquid staking pool implementation
  *
@@ -678,9 +674,6 @@ contract Lido is Versioned, StETHPermit, AragonApp {
             _setBufferedEtherAndDepositedValidators(bufferedEther.sub(depositsAmount), depositedValidators);
             emit Unbuffered(depositsAmount);
             emit DepositedValidatorsChanged(depositedValidators);
-            // here should be counter for deposits that are not visible before ao report
-            // Notify Accounting about the deposit
-            IAccounting(locator.accounting()).recordDeposit(depositsAmount);
         }
 
         /// @dev transfer ether to StakingRouter and make a deposit at the same time. All the ether

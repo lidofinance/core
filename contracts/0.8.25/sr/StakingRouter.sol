@@ -88,6 +88,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     bytes32 public constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 public constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
     bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
+    bytes32 public constant ACCOUNTING_REPORT_ROLE = keccak256("ACCOUNTING_REPORT_ROLE");
 
     /// Chain specification
     uint64 internal immutable SECONDS_PER_SLOT;
@@ -414,6 +415,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         SRLib._onValidatorExitTriggered(validatorExitData, _withdrawalRequestPaidFee, _exitType);
     }
 
+    /// @notice Hook for ao report
+    function onAccountingReport(uint256 slot) external onlyRole(ACCOUNTING_REPORT_ROLE) {
+        // move cursor for common tracker and for modules
+        DepositsTracker.moveCursorToSlot(DEPOSITS_TRACKER, slot);
+        _updateModulesTrackers(slot);
+    }
+
     // TODO replace with new method in SanityChecker, V3TemporaryAdmin etc
     /// @dev DEPRECATED, use getStakingModuleStates() instead
     /// @notice Returns all registered staking modules.
@@ -606,6 +614,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             digests[i].isActive = _getStakingModuleNodeOperatorIsActive(stakingModule, nodeOperatorId);
             digests[i].summary = _getNodeOperatorSummary(stakingModule, nodeOperatorId);
         }
+    }
+
+    /// @notice Return deposit amount in wei
+    /// @param slot - slot
+    /// @return deposit amount since last time cursor was moved
+    function getDepositAmountFromLastSlot(uint256 slot) public view returns (uint256) {
+      return DepositsTracker.getDepositedEthUpToSlot(DEPOSITS_TRACKER, slot);
     }
 
     /// @notice Sets the staking module status flag for participation in further deposits and/or reward distribution.
@@ -1218,6 +1233,17 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     // function _getSlot(uint256 timestamp) internal view returns (uint64) {
     //     return uint64((timestamp - GENESIS_TIME) / SECONDS_PER_SLOT);
     // }
+
+    /// @notice Internal function to move cursor to slot
+    /// @param slot Slot
+    function _updateModulesTrackers(uint256 slot) internal {
+      uint256[] memory moduleIds = SRStorage.getModuleIds();
+
+      for (uint256 i; i < moduleIds.length; ++i) {
+        uint256 id = _getModuleStateCompat(moduleIds[i]).id;
+        DepositsTracker.moveCursorToSlot(_getStakingModuleTrackerPosition(id), slot);
+      }
+    }
 
     /// @dev Track deposits for staking module and overall.
     /// @param _stakingModuleId Id of the staking module to track deposits for
