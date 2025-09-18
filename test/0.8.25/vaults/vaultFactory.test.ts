@@ -394,7 +394,7 @@ describe("VaultFactory.sol", () => {
         days(7n),
         [
           {
-            role: await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+            role: await dashboard.NODE_OPERATOR_FEE_EXEMPT_ROLE(),
             account: operator.address,
           },
         ],
