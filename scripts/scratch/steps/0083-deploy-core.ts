@@ -223,11 +223,6 @@ export async function main() {
     [locator.address, lidoAddress, chainSpec.secondsPerSlot, chainSpec.genesisTime],
     null,
     true,
-    {
-      libraries: {
-        DepositsTracker: depositsTracker.address,
-      },
-    },
   );
 
   //

@@ -217,7 +217,7 @@ contract Accounting {
 
         // Calculate deposits made since last report
         uint256 depositedSinceLastReport = _contracts.stakingRouter.getDepositAmountFromLastSlot(
-            (block.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT
+            (_report.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT
         );
         // Principal CL balance is sum of previous balances and new deposits
         update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance + depositedSinceLastReport;
@@ -436,7 +436,7 @@ contract Accounting {
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
 
         // move cursor for deposits tracker
-        _contracts.stakingRouter.onAccountingReport((block.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT);
+        _contracts.stakingRouter.onAccountingReport((_report.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT);
 
         LIDO.emitTokenRebase(
             _report.timestamp,
