@@ -34,6 +34,16 @@ contract StakingRouter__MockForLidoAccounting {
         emit Mock__MintedRewardsReported();
     }
 
+    uint256 private depositAmountFromLastSlot__mocked;
+
+    function onAccountingReport(uint256) external {
+        // Mock implementation - no-op
+    }
+
+    function getDepositAmountFromLastSlot(uint256) external view returns (uint256) {
+        return depositAmountFromLastSlot__mocked;
+    }
+
     function mock__getStakingRewardsDistribution(
         address[] calldata _recipients,
         uint256[] calldata _stakingModuleIds,
@@ -46,5 +56,9 @@ contract StakingRouter__MockForLidoAccounting {
         stakingModuleFees__mocked = _stakingModuleFees;
         totalFee__mocked = _totalFee;
         precisionPoint__mocked = _precisionPoints;
+    }
+
+    function mock__setDepositAmountFromLastSlot(uint256 _amount) external {
+        depositAmountFromLastSlot__mocked = _amount;
     }
 }

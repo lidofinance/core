@@ -11,7 +11,7 @@ import { certainAddress, StakingModuleType } from "lib";
 
 import { Snapshot } from "test/suite";
 
-import { deployStakingRouter } from "../../deploy/stakingRouter";
+import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
 enum Status {
   Active,
   DepositsPaused,
@@ -24,6 +24,7 @@ context("StakingRouter.sol:status-control", () => {
   let user: HardhatEthersSigner;
 
   let stakingRouter: StakingRouter__Harness;
+  let stakingRouterWithLib: StakingRouterWithLib;
   let moduleId: bigint;
 
   let originalState: string;
@@ -36,7 +37,7 @@ context("StakingRouter.sol:status-control", () => {
     [deployer, admin, user] = await ethers.getSigners();
 
     // deploy staking router
-    ({ stakingRouter } = await deployStakingRouter({ deployer, admin }));
+    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter({ deployer, admin }));
 
     await stakingRouter.initialize(
       admin,
@@ -87,7 +88,7 @@ context("StakingRouter.sol:status-control", () => {
 
     it("Updates the status of staking module", async () => {
       await expect(stakingRouter.setStakingModuleStatus(moduleId, Status.DepositsPaused))
-        .to.emit(stakingRouter, "StakingModuleStatusSet")
+        .to.emit(stakingRouterWithLib, "StakingModuleStatusSet")
         .withArgs(moduleId, Status.DepositsPaused, admin.address);
     });
 
@@ -95,7 +96,7 @@ context("StakingRouter.sol:status-control", () => {
       await stakingRouter.setStakingModuleStatus(moduleId, Status.DepositsPaused);
 
       await expect(stakingRouter.testing_setStakingModuleStatus(moduleId, Status.DepositsPaused)).to.not.emit(
-        stakingRouter,
+        stakingRouterWithLib,
         "StakingModuleStatusSet",
       );
       expect(await stakingRouter.getStakingModuleStatus(moduleId)).to.equal(Status.DepositsPaused);
