@@ -149,7 +149,7 @@ export async function main() {
 
   // deploy deposit tracker
 
-  const depositsTracker = await deployWithoutProxy(Sk.depositsTracker, "DepositsTracker", deployer);
+  // const depositsTracker = await deployWithoutProxy(Sk.depositsTracker, "DepositsTracker", deployer);
 
   // deploy temporary storage
   const depositsTempStorage = await deployWithoutProxy(Sk.depositsTempStorage, "DepositsTempStorage", deployer);
@@ -170,7 +170,7 @@ export async function main() {
     true,
     {
       libraries: {
-        DepositsTracker: depositsTracker.address,
+        // DepositsTracker: depositsTracker.address,
         BeaconChainDepositor: beaconChainDepositor.address,
         DepositsTempStorage: depositsTempStorage.address,
         SRLib: srLib.address,
@@ -224,9 +224,9 @@ export async function main() {
     null,
     true,
     {
-      libraries: {
-        DepositsTracker: depositsTracker.address,
-      },
+      // libraries: {
+      //   DepositsTracker: depositsTracker.address,
+      // },
     },
   );
 

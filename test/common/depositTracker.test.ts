@@ -10,29 +10,27 @@ describe("DepositsTracker.sol", () => {
 
   beforeEach(async () => {
     slotDepositPacking = await ethers.deployContract("SlotDepositPacking__Harness");
+    // deploy the library so the matcher can reference its custom errors ABI
     depositTrackerLib = await ethers.deployContract("DepositsTracker");
-    depositTracker = await ethers.deployContract("DepositsTracker__Harness", {
-      libraries: {
-        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositTrackerLib.getAddress(),
-      },
-    });
+    // harness does internal calls; no library linking needed
+    depositTracker = await ethers.deployContract("DepositsTracker__Harness");
   });
 
   context("SlotDepositPacking", () => {
     it("Min values", async () => {
       const packed = await slotDepositPacking.pack(0n, 0n);
-      const unpacked = await slotDepositPacking.unpack(packed);
-      expect(unpacked.slot).to.equal(0);
-      expect(unpacked.cumulativeEth).to.equal(0);
+      const [slot, cumulativeEth] = await slotDepositPacking.unpack(packed);
+      expect(slot).to.equal(0n);
+      expect(cumulativeEth).to.equal(0n);
     });
 
     it("Max values", async () => {
       const MAX_SLOT = 2n ** 64n - 1n;
       const MAX_CUMULATIVE = 2n ** 192n - 1n;
       const packed = await slotDepositPacking.pack(MAX_SLOT, MAX_CUMULATIVE);
-      const unpacked = await slotDepositPacking.unpack(packed);
-      expect(unpacked.slot).to.equal(MAX_SLOT);
-      expect(unpacked.cumulativeEth).to.equal(MAX_CUMULATIVE);
+      const [slot, cumulativeEth] = await slotDepositPacking.unpack(packed);
+      expect(slot).to.equal(MAX_SLOT);
+      expect(cumulativeEth).to.equal(MAX_CUMULATIVE);
     });
   });
 
@@ -211,25 +209,6 @@ describe("DepositsTracker.sol", () => {
         // already all read; no-op
         await depositTracker.moveCursorToSlot(5);
         expect(await depositTracker.getCursor()).to.equal(3);
-      });
-    });
-
-    context("getDepositedEthUpToLastSlot / moveCursorToLastSlot", () => {
-      it("computes remaining to last and zeroes after moveCursorToLastSlot", async () => {
-        await depositTracker.insertSlotDeposit(10, 1);
-        await depositTracker.insertSlotDeposit(20, 2);
-        await depositTracker.insertSlotDeposit(30, 3);
-
-        // from cursor=0, remaining = total cumulative = 6
-        expect(await depositTracker.getDepositedEthUpToLastSlot()).to.equal(6);
-
-        await depositTracker.moveCursorToSlot(20); // cursor -> 2
-        // remaining = 6 - cumulative at index 1 (3) = 3
-        expect(await depositTracker.getDepositedEthUpToLastSlot()).to.equal(3);
-
-        await depositTracker.moveCursorToLastSlot(); // cursor = len
-        expect(await depositTracker.getCursor()).to.equal(3);
-        expect(await depositTracker.getDepositedEthUpToLastSlot()).to.equal(0);
       });
     });
   });

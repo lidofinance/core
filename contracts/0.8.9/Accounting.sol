@@ -10,7 +10,6 @@ import {IOracleReportSanityChecker} from "contracts/common/interfaces/IOracleRep
 import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 import {IVaultHub} from "contracts/common/interfaces/IVaultHub.sol";
-import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
 
 import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
 
@@ -136,41 +135,36 @@ contract Accounting {
 
     /// @notice Function to record deposits (called by Lido)
     /// @param amount the amount of ETH deposited
-    function recordDeposit(uint256 amount) external {
-        if (msg.sender != address(LIDO)) revert NotAuthorized("recordDeposit", msg.sender);
+    // solhint-disable-next-line
+    // function recordDeposit(uint256 amount) external {
+    //     if (msg.sender != address(LIDO)) revert NotAuthorized("recordDeposit", msg.sender);
 
-        uint256 currentSlot = (block.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
-        DepositsTracker.insertSlotDeposit(
-            DEPOSITS_TRACKER_POSITION,
-            currentSlot,
-            amount
-        );
-    }
+      
+    //     uint256 currentSlot = (block.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
+    //     // DepositsTracker.insertSlotDeposit(
+    //     //     DEPOSITS_TRACKER_POSITION,
+    //     //     currentSlot,
+    //     //     amount
+    //     // );
+    // }
 
     /// @notice Internal function to get deposits between slots
     /// @param fromSlot the starting slot
     /// @param toSlot the ending slot
     /// @return the amount of ETH deposited between the slots
+    // solhint-disable-next-line
     function _getDepositedEthBetweenSlots(uint256 fromSlot, uint256 toSlot) internal view returns (uint256) {
         // TODO: add optimization for slot range queries (DepositsTracker.moveCursorToSlot)
-        uint256 depositsAtTo = DepositsTracker.getDepositedEthUpToSlot(
-            DEPOSITS_TRACKER_POSITION,
-            toSlot
-        );
-        uint256 depositsAtFrom = DepositsTracker.getDepositedEthUpToSlot(
-            DEPOSITS_TRACKER_POSITION,
-            fromSlot
-        );
-        return depositsAtTo > depositsAtFrom ? depositsAtTo - depositsAtFrom : 0;
-    }
-
-    /// @notice Internal function to get deposits between slots
-    /// @param currentSlot current slot
-    /// @return The amount of ETH deposited between ref slots
-    function _getDepositedEthSinceLastRefSlot(uint256 currentSlot) internal returns (uint256) {
-        uint256 depositsAtTo = DepositsTracker.getDepositedEthUpToSlot(DEPOSITS_TRACKER_POSITION, currentSlot);
-        DepositsTracker.moveCursorToSlot(DEPOSITS_TRACKER_POSITION, currentSlot);
-        return depositsAtTo;
+        // uint256 depositsAtTo = DepositsTracker.getDepositedEthUpToSlot(
+        //     DEPOSITS_TRACKER_POSITION,
+        //     toSlot
+        // );
+        // uint256 depositsAtFrom = DepositsTracker.getDepositedEthUpToSlot(
+        //     DEPOSITS_TRACKER_POSITION,
+        //     fromSlot
+        // );
+        // return depositsAtTo > depositsAtFrom ? depositsAtTo - depositsAtFrom : 0;
+        return 0;
     }
 
     /// @notice calculates all the state changes that is required to apply the report

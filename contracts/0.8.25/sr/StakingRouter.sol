@@ -9,6 +9,7 @@ import {AccessControlEnumerableUpgradeable} from
     "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {BeaconChainDepositor, IDepositContract} from "contracts/0.8.25/lib/BeaconChainDepositor.sol";
 import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
+import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
 import {DepositsTempStorage} from "contracts/common/lib/DepositsTempStorage.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
@@ -42,6 +43,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     using WithdrawalCredentials for bytes32;
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
+    using DepositsTracker for DepositedState;
 
     /// @dev Events
 
@@ -418,7 +420,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @notice Hook for ao report
     function onAccountingReport(uint256 slot) external onlyRole(ACCOUNTING_REPORT_ROLE) {
         // move cursor for common tracker and for modules
-        DepositsTracker.moveCursorToSlot(DEPOSITS_TRACKER, slot);
+        // DepositsTracker.moveCursorToSlot(DEPOSITS_TRACKER, slot);
+        DepositedState storage state = SRStorage.getLidoDepositTrackerStorage();
+        state.moveCursorToSlot(slot);
         _updateModulesTrackers(slot);
     }
 
@@ -620,7 +624,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param slot - slot
     /// @return deposit amount since last time cursor was moved
     function getDepositAmountFromLastSlot(uint256 slot) public view returns (uint256) {
-      return DepositsTracker.getDepositedEthUpToSlot(DEPOSITS_TRACKER, slot);
+      DepositedState storage state = SRStorage.getLidoDepositTrackerStorage();
+      return state.getDepositedEthUpToSlot(slot);
     }
 
     /// @notice Sets the staking module status flag for participation in further deposits and/or reward distribution.
@@ -1241,7 +1246,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
       for (uint256 i; i < moduleIds.length; ++i) {
         uint256 id = _getModuleStateCompat(moduleIds[i]).id;
-        DepositsTracker.moveCursorToSlot(_getStakingModuleTrackerPosition(id), slot);
+        DepositedState storage state = SRStorage.getStakingModuleTrackerStorage(id);
+        state.moveCursorToSlot(slot);
       }
     }
 
@@ -1251,8 +1257,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function _trackDeposit(uint256 _stakingModuleId, uint256 _depositsValue) internal {
         uint256 slot = _getCurrentSlot();
         // track total deposited amount for all modules
-        DepositsTracker.insertSlotDeposit(DEPOSITS_TRACKER, slot, _depositsValue);
+        DepositedState storage state = SRStorage.getLidoDepositTrackerStorage();
+        state.insertSlotDeposit(slot, _depositsValue);
         // track deposited amount for module
-        DepositsTracker.insertSlotDeposit(_getStakingModuleTrackerPosition(_stakingModuleId), slot, _depositsValue);
+        DepositedState storage moduleState = SRStorage.getStakingModuleTrackerStorage(_stakingModuleId);
+        moduleState.insertSlotDeposit(slot, _depositsValue);
     }
 }

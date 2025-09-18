@@ -3,10 +3,13 @@ pragma solidity 0.8.25;
 
 import {SRStorage} from "./SRStorage.sol";
 import {StakingModuleType, Strategies, Metrics, ModuleState} from "./SRTypes.sol";
+import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
+import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
 
 library SRUtils {
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
+    using DepositsTracker for DepositedState;
 
     uint256 public constant TOTAL_BASIS_POINTS = 10000;
     // uint256 internal constant TOTAL_METRICS_COUNT = 2;
@@ -124,14 +127,16 @@ library SRUtils {
 
     ///  @dev get current balance of the module in ETH
     function _getModuleBalance(uint256 moduleId) internal view returns (uint256) {
-        // TODO: add deposit tracker
-        return moduleId.getModuleState().getStateAccounting().effectiveBalanceGwei * 1 gwei; // + deposit tracker
+        uint256 effectiveBalance = moduleId.getModuleState().getStateAccounting().effectiveBalanceGwei * 1 gwei;
+        uint256 pendingDeposits = SRStorage.getStakingModuleTrackerStorage(moduleId).getDepositedEthUpToLastSlot();
+        return effectiveBalance + pendingDeposits;
     }
 
     ///  @dev get total balance of all modules + deposit tracker in ETH
     function _getModulesTotalBalance() internal view returns (uint256) {
-        // TODO: add deposit tracker
-        return SRStorage.getRouterStorage().totalEffectiveBalanceGwei * 1 gwei; // + router deposit tracker
+        uint256 totalEffectiveBalance = SRStorage.getRouterStorage().totalEffectiveBalanceGwei * 1 gwei;
+        uint256 pendingDeposits = SRStorage.getLidoDepositTrackerStorage().getDepositedEthUpToLastSlot();
+        return totalEffectiveBalance + pendingDeposits;
     }
 
     ///  @dev calculate module capacity in ETH
