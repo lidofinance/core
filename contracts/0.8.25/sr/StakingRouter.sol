@@ -61,6 +61,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     event StakingModuleExitedValidatorsIncompleteReporting(
         uint256 indexed stakingModuleId, uint256 unreportedExitedValidatorsCount
     );
+    event StakingModuleStatusSet(uint256 indexed stakingModuleId, StakingModuleStatus status, address setBy);
 
     event WithdrawalCredentialsSet(bytes32 withdrawalCredentials, address setBy);
     event WithdrawalCredentials02Set(bytes32 withdrawalCredentials02, address setBy);
