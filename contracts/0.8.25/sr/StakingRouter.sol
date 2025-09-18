@@ -1241,8 +1241,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
       uint256[] memory moduleIds = SRStorage.getModuleIds();
 
       for (uint256 i; i < moduleIds.length; ++i) {
-        uint256 id = _getModuleStateCompat(moduleIds[i]).id;
-        DepositedState storage state = SRStorage.getStakingModuleTrackerStorage(id);
+        DepositedState storage state = SRStorage.getStakingModuleTrackerStorage(moduleIds[i]);
         state.moveCursorToSlot(slot);
       }
     }
