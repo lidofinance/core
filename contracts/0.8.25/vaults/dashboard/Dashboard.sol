@@ -279,7 +279,6 @@ contract Dashboard is NodeOperatorFee {
      */
     function voluntaryDisconnect() external {
         disburseNodeOperatorFee();
-        _disableFeeDisbursement();
         _voluntaryDisconnect();
     }
 
