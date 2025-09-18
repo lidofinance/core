@@ -220,7 +220,7 @@ export async function main() {
     "Accounting",
     proxyContractsOwner,
     deployer,
-    [locator.address, lidoAddress, chainSpec.secondsPerSlot, chainSpec.genesisTime],
+    [locator.address, lidoAddress, chainSpec.genesisTime, chainSpec.secondsPerSlot],
     null,
     true,
   );
