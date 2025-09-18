@@ -11,13 +11,7 @@ import {Permissions} from "./Permissions.sol";
 /**
  * @title NodeOperatorFee
  * @author Lido
- * @notice An accounting contract for a vault's node operator fee management.
- *
- * This contract provides fee calculation and disbursement functionality:
- * • Calculates the node operator's proportional share of vault rewards based on actual growth
- * • Enables permissionless on-demand fee disbursement to a configured recipient
- * • Requires dual confirmation (vault owner + node operator) for critical parameter changes
- * • Supports fee exemptions for specific operations like validator consolidations, unguaranteed/side deposits
+ * @notice A contract that manages the node operator fee.
  */
 contract NodeOperatorFee is Permissions {
     /**
@@ -26,57 +20,60 @@ contract NodeOperatorFee is Permissions {
     uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
 
     /**
-     * @notice Maximum value that can be set via manual adjustment
+     * @notice Parent role representing the node operator of the underlying StakingVault.
+     * The members may not include the node operator address recorded in the underlying StakingVault
+     * but it is assumed that the members of this role act in the interest of that node operator.
+     *
+     * @dev 0x59783a4ae82167eefad593739a5430c1d9e896a16c35f1e5285ddd0c0980885c
      */
-    uint256 public constant MAX_SANE_SETTLED_GROWTH = 10_000_000 ether;
-
-    /**
-     * @notice Node operator manager role:
-     * - confirms confirm expiry;
-     * - confirms node operator fee changes;
-     * - confirms the transfer of the StakingVault ownership;
-     * - sets the node operator fee recipient.
-     */
-    /// @dev 0x59783a4ae82167eefad593739a5430c1d9e896a16c35f1e5285ddd0c0980885c
     bytes32 public constant NODE_OPERATOR_MANAGER_ROLE = keccak256("vaults.NodeOperatorFee.NodeOperatorManagerRole");
 
     /**
-     * @notice Adjusts rewards to allow fee correction during side deposits or consolidations
+     * @notice Node operator's sub-role for fee exemptions.
+     * Managed by `NODE_OPERATOR_MANAGER_ROLE`.
+     *
+     * @dev 0xcceeef0309e9a678ed7f11f20499aeb00a9a4b0d50e53daa428f8591debc583a
      */
-    /// @dev 0xe0b9915a7819e810f29b50730662441fec3443eb363b7e7c90c77fada416f276
     bytes32 public constant NODE_OPERATOR_FEE_EXEMPT_ROLE = keccak256("vaults.NodeOperatorFee.FeeExemptRole");
 
     /**
      * @notice Node operator fee rate in basis points (1 bp = 0.01%).
      * Cannot exceed 100.00% (10000 basis points).
-     * The node operator's disbursable fee in ether is returned by `nodeOperatorDisbursableFee()`.
      */
     uint256 public nodeOperatorFeeRate;
 
     /**
-     * @notice The address that receives node operator fee disbursements.
-     * This address is set by the node operator manager and receives ETH when fees are disbursed.
+     * @notice Address that receives node operator fee disbursements.
+     * This address is set by the node operator manager and receives disbursed fees.
      */
     address public nodeOperatorFeeRecipient;
 
     /**
-     * @notice A high-water mark for the vault's total value growth.
-     * This value tracks how much of the vault's total growth has already been settled for fee payments.
-     * Used to calculate the outstanding fee amount: (currentGrowth - settledGrowth) × feeRate.
+     * @notice Growth of the vault not subject to fees.
+     *
+     * Growth is the difference between inOutDelta and totalValue,
+     * i.e. the component of totalValue that has not been directly funded to the underlying StakingVault via `fund()`:
+     *    inOutDelta + growth = totalValue
+     *
+     * Settled growth is the portion of the total growth that is not subject to node operator because:
+     * - it has already been paid for,
+     * - not subject to fee (exempted) such as unguaranteed/side deposits, consolidations.
      */
     uint256 public settledGrowth;
 
     /**
-     * @notice Timestamp of the most recent fee exemption adjustment.
-     * Used to ensure exemptions are properly reported by the oracle before allowing fee rate changes.
-     * Must be earlier than the latest oracle report timestamp for fee operations to proceed.
+     * @notice Timestamp of the most recent fee exemption.
+     * This timestamp is used to prevent retroactive fees after a fee rate change.
+     * The timestamp ensures that all fee exemptions are fully reported before changing the fee rate.
      */
     uint256 public feeExemptionTimestamp;
 
     /**
-     * @notice Flag indicating whether growth settlement is pending manual intervention.
-     * When true, fee calculations and disbursements are temporarily disabled until
-     * the settled growth value is manually corrected through dual confirmation.
+     * @notice Flag indicating whether settled growth is pending manual adjustment.
+     * This flag blocks any fee disbursement until the settled growth is confirmed by both the vault owner and node operator.
+     * Settled growth needs manual adjustment when inOutDelta is outdated,
+     * e.g. when connecting to VaultHub, the inOutDelta is reset to the vault's EL balance,
+     * which may lead to an inadequate node operator fee calculated against the difference of inOutDelta and reported totalValue.
      */
     bool public settledGrowthPending;
 
@@ -115,10 +112,7 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice Returns the roles that can:
-     * - change the confirm expiry;
-     * - set the node operator fee;
-     * - set a new owner of the StakingVault.
+     * @notice The roles that must confirm critical parameters changes in the contract.
      * @return roles is an array of roles that form the confirming roles.
      */
     function confirmingRoles() public pure override returns (bytes32[] memory roles) {
@@ -128,8 +122,7 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice Returns the latest vault report data containing total value and cumulative in-out delta.
-     * This data is essential for calculating the vault's current growth and outstanding fees.
+     * @notice The latest vault report for the underlying StakingVault.
      * @return report The latest report containing totalValue, inOutDelta, and timestamp
      */
     function latestReport() public view returns (VaultHub.Report memory) {
@@ -139,68 +132,39 @@ contract NodeOperatorFee is Permissions {
     /**
      * @notice Calculates the current disbursable node operator fee amount in ETH.
      *
-     * Fee Calculation Process:
-     * 1. Retrieves latest vault report (totalValue, inOutDelta)
-     * 2. Calculates current growth: totalValue - inOutDelta
-     * 3. Determines unsettled growth: currentGrowth - settledGrowth
-     * 4. Applies fee rate: unsettledGrowth × nodeOperatorFeeRate / 10000
+     * Fee calculation steps:
+     * 1. Retrieve latest vault report (totalValue, inOutDelta)
+     * 2. Calculate current growth: totalValue - inOutDelta
+     * 3. Determine unsettled growth: currentGrowth - settledGrowth
+     * 4. Apply fee rate: unsettledGrowth × nodeOperatorFeeRate / 10000
      *
-     * @return The amount of ETH available for disbursement to the node operator
+     * @dev Even though it's a view function, it will still revert
+     * if the settled growth is pending, indicating the need for manual adjustment
+     * @return fee The amount of ETH available for disbursement to the node operator
      */
-    function nodeOperatorDisbursableFee() public view returns (uint256) {
-        // No fees can be disbursed when settlement is pending manual correction
-        if (settledGrowthPending) return 0;
-
-        VaultHub.Report memory report = latestReport();
-        // Calculate current growth
-        int256 growth = int104(report.totalValue) - report.inOutDelta;
-
-        // No fee if current growth hasn't exceeded what's already been settled
-        if (int256(settledGrowth) >= growth) return 0;
-
-        // Calculate fee on unsettled growth: (newGrowth - settledGrowth) × feeRate / 10000
-        return ((uint256(growth) - settledGrowth) * nodeOperatorFeeRate) / TOTAL_BASIS_POINTS;
+    function nodeOperatorDisbursableFee() public view returns (uint256 fee) {
+        (fee, ) = _calculateFee();
     }
 
     /**
-     * @notice Permissionless function to disburse outstanding node operator fees.
+     * @notice Permissionless function to disburse node operator fees.
      *
-     * This function can be called by anyone to trigger fee payment to the node operator.
-     *
-     * Process:
-     * 1. Calculates current vault growth from latest report
-     * 2. Determines fee amount on unsettled growth
-     * 3. Updates settled growth to current growth (marking fees as paid)
+     * Fee disbursement steps:
+     * 1. Calculate current vault growth from latest report
+     * 2. Determine fee amount on unsettled growth
+     * 3. Update settled growth to current growth (marking fees as paid)
      * 4. Withdraws fee amount from vault to node operator recipient
      */
     function disburseNodeOperatorFee() public {
-        // Cannot disburse when settlement requires manual intervention
-        if (settledGrowthPending) return;
-
-        VaultHub.Report memory report = latestReport();
-        // Calculate current vault growth
-        int256 growth = int104(report.totalValue) - report.inOutDelta;
-
-        // No disbursement needed if growth hasn't increased since last settlement
-        if (int256(settledGrowth) >= growth) return;
-
-        // Calculate fee on new growth since last settlement
-        uint256 fee = ((uint256(growth) - settledGrowth) * nodeOperatorFeeRate) / TOTAL_BASIS_POINTS;
-        // Mark this growth as settled
+        (uint256 fee, int256 growth) = _calculateFee();
         _setSettledGrowth(uint256(growth));
 
-        // Transfer fee from vault to node operator recipient
         VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
         emit NodeOperatorFeeDisbursed(msg.sender, fee);
     }
 
     /**
      * @notice Updates the node operator's fee rate with dual confirmation.
-     *
-     * This critical function requires confirmation from both vault owner and node operator
-     * due to its significant financial impact. The fee rate determines the node operator's
-     * percentage share of all future vault rewards.
-     *
      * @param _newNodeOperatorFeeRate The new fee rate in basis points (max 10000 = 100%)
      * @return bool True if fee rate was updated, false if still awaiting confirmations
      */
@@ -210,13 +174,13 @@ contract NodeOperatorFee is Permissions {
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
 
         // Latest fee exemption must be earlier than the latest fresh report timestamp
-        if (feeExemptionTimestamp >= _lazyOracle().latestReportTimestamp()) revert AdjustmentNotReported();
+        if (feeExemptionTimestamp >= _lazyOracle().latestReportTimestamp()) revert ExemptedValueNotReportedYet();
 
-        // If the vault is quarantined, the total value is reduced and may not reflect the adjustment
+        // If the vault is quarantined, the total value is reduced and may not reflect the exemption
         if (_lazyOracle().vaultQuarantine(address(_stakingVault())).isActive) revert VaultQuarantined();
 
-        // Cannot allow to disburse fee, if the growth is not settled
-        if (settledGrowthPending) revert();
+        // Disburse will revert if true, but it's important to check this before recording confirmations
+        if (settledGrowthPending) revert SettledGrowthPending();
 
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
@@ -231,9 +195,7 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Manually corrects the settled growth value with dual confirmation.
-     *
-     * This critical function allows manual correction of the settled growth tracking
-     * when automated calculations become inconsistent after disconnection.
+     * Used to correct fee calculation.
      *
      * @param _newSettledGrowth The corrected settled growth value
      * @param _expectedSettledGrowth The expected current settled growth
@@ -245,21 +207,17 @@ contract NodeOperatorFee is Permissions {
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
         _setSettledGrowth(_newSettledGrowth);
+        // multiconfirmation ensures the owner and node operator have agreed on the fees
+        // and the fee disbursement can be resumed
         _enableFeeDisbursement();
 
         return true;
     }
 
     /**
-     * @notice Adds a fee exemption to exclude specific amounts from node operator fee calculations.
-     *
-     * This function allows authorized roles to exempt certain vault value changes from
-     * triggering node operator fees. This is essential for operations like:
-     * - Validator consolidations
-     * - Side deposits
-     *
-     * The exemption works by increasing the settled growth baseline, effectively
-     * treating the exempted amount as if fees were already paid on it.
+     * @notice Adds a fee exemption to exclude this value from node operator fee base.
+     * The exemption works by increasing the settled growth,
+     * effectively treating the exempted amount as if fees were already paid on it.
      *
      * @param _exemptedAmount Amount in ETH to exempt from fee calculations
      */
@@ -269,16 +227,6 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Sets the confirmation expiry period with dual confirmation.
-     *
-     * The confirmation expiry defines how long confirmations remain valid before
-     * they must be re-submitted. This prevents stale confirmations from being
-     * used for critical operations after circumstances have changed.
-     *
-     * This setting affects all operations requiring dual confirmation:
-     * - Fee rate changes
-     * - Settled growth corrections
-     * - Confirmation expiry changes themselves
-     *
      * @param _newConfirmExpiry The new confirmation expiry period in seconds
      * @return bool True if expiry was updated, false if awaiting confirmations
      */
@@ -294,16 +242,62 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Sets the address that receives node operator fee disbursements.
-     *
-     * This function can only be called by the node operator manager and allows
-     * updating where fees are sent when `disburseNodeOperatorFee()` is called.
-     *
      * @param _newNodeOperatorFeeRecipient The new recipient address for fee payments
      */
     function setNodeOperatorFeeRecipient(
         address _newNodeOperatorFeeRecipient
     ) external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
         _setNodeOperatorFeeRecipient(_newNodeOperatorFeeRecipient);
+    }
+
+    // ==================== Internal Functions ====================
+
+    function _lazyOracle() internal view returns (LazyOracle) {
+        return LazyOracle(LIDO_LOCATOR.lazyOracle());
+    }
+
+    function _setSettledGrowth(uint256 _newSettledGrowth) internal {
+        uint256 oldSettledGrowth = settledGrowth;
+        settledGrowth = _newSettledGrowth;
+
+        emit SettledGrowthSet(oldSettledGrowth, _newSettledGrowth);
+    }
+
+    function _increaseSettledGrowth(uint256 _increaseAmount) internal {
+        _setSettledGrowth(settledGrowth + _increaseAmount);
+    }
+
+    function _addFeeExemption(uint256 _amount) internal {
+        _increaseSettledGrowth(_amount);
+        feeExemptionTimestamp = block.timestamp;
+
+        emit FeeExemptionAdded(_amount, block.timestamp);
+    }
+
+    function _calculateFee() internal view returns (uint256 fee, int256 growth) {
+        // revert if the settled growth is awaiting manual adjustment,
+        // thus a meaningful return value cannot be calculated.
+        // cannot return 0 instead of revert because 0 is a legal value
+        if (settledGrowthPending) revert SettledGrowthPending();
+
+        VaultHub.Report memory report = latestReport();
+        growth = int104(report.totalValue) - report.inOutDelta;
+
+        if (growth > int256(settledGrowth)) {
+            fee = ((uint256(growth) - settledGrowth) * nodeOperatorFeeRate) / TOTAL_BASIS_POINTS;
+        }
+    }
+
+    function _enableFeeDisbursement() internal {
+        settledGrowthPending = false;
+
+        emit FeeDisbursementEnabled();
+    }
+
+    function _disableFeeDisbursement() internal {
+        settledGrowthPending = true;
+
+        emit FeeDisbursementDisabled();
     }
 
     function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
@@ -322,47 +316,6 @@ contract NodeOperatorFee is Permissions {
         address oldNodeOperatorFeeRecipient = nodeOperatorFeeRecipient;
         nodeOperatorFeeRecipient = _newNodeOperatorFeeRecipient;
         emit NodeOperatorFeeRecipientSet(msg.sender, oldNodeOperatorFeeRecipient, _newNodeOperatorFeeRecipient);
-    }
-
-    function _addFeeExemption(uint256 _amount) internal {
-        _increaseSettledGrowth(_amount);
-        feeExemptionTimestamp = block.timestamp;
-
-        emit FeeExemptionAdded(_amount, block.timestamp);
-    }
-
-    function _increaseSettledGrowth(uint256 _increaseAmount) internal {
-        _setSettledGrowth(settledGrowth + _increaseAmount);
-    }
-
-    function _setSettledGrowth(uint256 _newSettledGrowth) internal {
-        if (_newSettledGrowth > MAX_SANE_SETTLED_GROWTH) revert SettledGrowthTooHigh();
-
-        uint256 oldSettledGrowth = settledGrowth;
-        settledGrowth = _newSettledGrowth;
-
-        emit SettledGrowthSet(oldSettledGrowth, _newSettledGrowth);
-    }
-
-    function _enableFeeDisbursement() internal {
-        settledGrowthPending = false;
-
-        emit FeeDisbursementEnabled();
-    }
-
-    function _disableFeeDisbursement() internal {
-        settledGrowthPending = true;
-
-        emit FeeDisbursementDisabled();
-    }
-
-    function _toSignedClamped(uint128 _adjustment) internal pure returns (int128) {
-        if (_adjustment > uint128(type(int128).max)) return type(int128).max;
-        return int128(_adjustment);
-    }
-
-    function _lazyOracle() internal view returns (LazyOracle) {
-        return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
     // ==================== Events ====================
@@ -385,13 +338,6 @@ contract NodeOperatorFee is Permissions {
     event NodeOperatorFeeDisbursed(address indexed sender, uint256 fee);
 
     /**
-     * @dev Emitted when the new rewards adjustment is set.
-     * @param newAdjustment the new adjustment value
-     * @param oldAdjustment previous adjustment value
-     */
-    event RewardsAdjustmentSet(uint256 newAdjustment, uint256 oldAdjustment);
-
-    /**
      * @dev Emitted when the node operator fee recipient is set.
      * @param sender the address of the sender who set the recipient
      * @param oldNodeOperatorFeeRecipient the old node operator fee recipient
@@ -403,9 +349,28 @@ contract NodeOperatorFee is Permissions {
         address newNodeOperatorFeeRecipient
     );
 
+    /**
+     * @dev Emitted when the settled growth is set.
+     * @param oldSettledGrowth the old settled growth
+     * @param newSettledGrowth the new settled growth
+     */
     event SettledGrowthSet(uint256 oldSettledGrowth, uint256 newSettledGrowth);
+
+    /**
+     * @dev Emitted when a fee exemption is added.
+     * @param amountExempted the amount exempted
+     * @param timestamp the timestamp of the exemption
+     */
     event FeeExemptionAdded(uint256 amountExempted, uint256 timestamp);
+
+    /**
+     * @dev Emitted when the fee disbursement is enabled.
+     */
     event FeeDisbursementEnabled();
+
+    /**
+     * @dev Emitted when the fee disbursement is disabled.
+     */
     event FeeDisbursementDisabled();
 
     // ==================== Errors ====================
@@ -414,21 +379,6 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the combined feeBPs exceed 100%.
      */
     error FeeValueExceed100Percent();
-
-    /**
-     * @dev Error emitted when the increased adjustment exceeds the `MANUAL_REWARDS_ADJUSTMENT_LIMIT`.
-     */
-    error SettledGrowthTooHigh();
-
-    /**
-     * @dev Error emitted when the adjustment setting vote is not valid due to changed state
-     */
-    error InvalidatedAdjustmentVote(uint256 currentAdjustment, uint256 currentAtPropositionAdjustment);
-
-    /**
-     * @dev Error emitted when trying to set same value for adjustment
-     */
-    error SameAdjustment();
 
     /**
      * @dev Error emitted when trying to set same value for recipient
@@ -441,14 +391,19 @@ contract NodeOperatorFee is Permissions {
     error ReportStale();
 
     /**
-     * @dev Error emitted when the adjustment has not been reported yet.
+     * @dev Error emitted when the exempted value has not been reported yet.
      */
-    error AdjustmentNotReported();
+    error ExemptedValueNotReportedYet();
 
     /**
      * @dev Error emitted when the settled growth does not match the expected value.
      */
     error UnexpectedSettledGrowth();
+
+    /**
+     * @dev Error emitted when the settled growth is pending manual adjustment.
+     */
+    error SettledGrowthPending();
 
     /**
      * @dev Error emitted when the vault is quarantined.
