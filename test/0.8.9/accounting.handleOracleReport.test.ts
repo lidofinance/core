@@ -77,14 +77,9 @@ describe("Accounting.sol:report", () => {
       deployer,
     );
 
-    const depositsTrackerLib = await ethers.deployContract("DepositsTracker", [], deployer);
     const genesisTime = 1606824023n; // Ethereum 2.0 genesis time
     const secondsPerSlot = 12n; // 12 seconds per slot
-    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido, genesisTime, secondsPerSlot], {
-      libraries: {
-        DepositsTracker: await depositsTrackerLib.getAddress(),
-      },
-    });
+    const accountingImpl = await ethers.deployContract("Accounting", [locator, lido, genesisTime, secondsPerSlot]);
     const accountingProxy = await ethers.deployContract(
       "OssifiableProxy",
       [accountingImpl, deployer, new Uint8Array()],
@@ -143,9 +138,8 @@ describe("Accounting.sol:report", () => {
     it("Update CL balances when reported", async () => {
       await lido.mock__setDepositedValidators(100n);
 
-      // Record deposits to setup DepositsTracker
-      const lidoSigner = await impersonate(await lido.getAddress(), ether("100.0"));
-      await accounting.connect(lidoSigner).recordDeposit(ether("150"));
+      // Setup deposits mock in StakingRouter
+      await stakingRouter.mock__setDepositAmountFromLastSlot(ether("150"));
 
       await accounting.handleOracleReport(
         report({
@@ -157,7 +151,7 @@ describe("Accounting.sol:report", () => {
       expect(await lido.reportClPendingBalance()).to.equal(ether("50"));
 
       await lido.mock__setDepositedValidators(101n);
-      await accounting.connect(lidoSigner).recordDeposit(ether("20"));
+      await stakingRouter.mock__setDepositAmountFromLastSlot(ether("20"));
 
       await accounting.handleOracleReport(
         report({
