@@ -210,7 +210,7 @@ contract V3Template is V3Addresses {
         if (VaultFactory(VAULT_FACTORY).BEACON() != UPGRADEABLE_BEACON) {
             revert IncorrectVaultFactoryBeacon(VAULT_FACTORY, UPGRADEABLE_BEACON);
         }
-        if (VaultFactory(VAULT_FACTORY).DASHBOARD_IMPL() != DASHBOARD_IMPL) {
+        if (VaultFactory(VAULT_FACTORY).dashboardImpl() != DASHBOARD_IMPL) {
             revert IncorrectVaultFactoryDashboardImplementation(VAULT_FACTORY, DASHBOARD_IMPL);
         }
         if (UpgradeableBeacon(UPGRADEABLE_BEACON).owner() != AGENT) {

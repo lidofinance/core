@@ -15,6 +15,7 @@ export async function main() {
   const locatorAddress = state[Sk.lidoLocator].proxy.address;
   const lidoAddress = state[Sk.appLido].proxy.address;
   const hashConsensusAddress = state[Sk.hashConsensusForAccountingOracle].address;
+  const agentAddress = state[Sk.appAgent].proxy.address;
 
   const vaultHubParams = state[Sk.vaultHub].deployParameters;
   const operatorGridParams = state[Sk.operatorGrid].deployParameters;
@@ -111,6 +112,7 @@ export async function main() {
     locatorAddress,
     beaconAddress,
     dashboardAddress,
+    agentAddress,
   ]);
 
   // Deploy PredepositGuarantee

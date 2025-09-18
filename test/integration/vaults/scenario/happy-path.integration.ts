@@ -119,7 +119,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     const { stakingVaultFactory, stakingVaultBeacon } = ctx.contracts;
 
     const implAddress = await stakingVaultBeacon.implementation();
-    const dashboardAddress = await stakingVaultFactory.DASHBOARD_IMPL();
+    const dashboardAddress = await stakingVaultFactory.dashboardImpl();
     const _stakingVault = await ethers.getContractAt("StakingVault", implAddress);
     const _dashboard = await ethers.getContractAt("Dashboard", dashboardAddress);
 

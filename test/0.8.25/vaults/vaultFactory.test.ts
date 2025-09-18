@@ -123,7 +123,7 @@ describe("VaultFactory.sol", () => {
     beacon = await ethers.deployContract("UpgradeableBeacon", [implOld, admin]);
 
     dashboard = await ethers.deployContract("Dashboard", [steth, wsteth, vaultHub, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, dashboard], {
+    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, dashboard, admin], {
       from: deployer,
     });
 
@@ -156,14 +156,14 @@ describe("VaultFactory.sol", () => {
     });
 
     it("reverts if `_lidoLocator` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, beacon, dashboard], { from: deployer }))
+      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, beacon, dashboard, admin], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_lidoLocator");
     });
 
     it("reverts if `_beacon` is zero address", async () => {
       await expect(
-        ethers.deployContract("VaultFactory", [locator, ZeroAddress, dashboard], {
+        ethers.deployContract("VaultFactory", [locator, ZeroAddress, dashboard, admin], {
           from: deployer,
         }),
       )
@@ -172,7 +172,7 @@ describe("VaultFactory.sol", () => {
     });
 
     it("reverts if `_dashboard` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [locator, beacon, ZeroAddress], { from: deployer }))
+      await expect(ethers.deployContract("VaultFactory", [locator, beacon, ZeroAddress, admin], { from: deployer }))
         .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
         .withArgs("_dashboardImpl");
     });
