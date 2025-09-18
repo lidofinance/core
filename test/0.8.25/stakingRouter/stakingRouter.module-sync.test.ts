@@ -538,7 +538,7 @@ describe("StakingRouter.sol:module-sync", () => {
       const newTotalExitedValidators = totalExitedValidators + 1n;
 
       await expect(stakingRouter.updateExitedValidatorsCountByStakingModule([moduleId], [newTotalExitedValidators]))
-        .to.be.emit(stakingRouter, "StakingModuleExitedValidatorsIncompleteReporting")
+        .to.be.emit(stakingRouterWithLib, "StakingModuleExitedValidatorsIncompleteReporting")
         .withArgs(moduleId, previouslyReportedTotalExitedValidators - totalExitedValidators);
     });
 
