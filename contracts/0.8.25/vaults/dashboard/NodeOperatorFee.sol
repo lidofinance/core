@@ -208,7 +208,12 @@ contract NodeOperatorFee is Permissions {
     function correctSettledGrowth(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) external returns (bool) {
         if (settledGrowth != _expectedSettledGrowth) revert UnexpectedSettledGrowth();
 
-        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) {
+            // if a party starts a vote to correct the settled growth,
+            // the disbursement is disabled until the correction is confirmed
+            _disableFeeDisbursement();
+            return false;
+        }
 
         _correctSettledGrowth(_newSettledGrowth);
         // multiconfirmation ensures the owner and node operator have agreed on the fees
