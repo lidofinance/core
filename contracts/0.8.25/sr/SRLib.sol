@@ -146,10 +146,10 @@ library SRLib {
         delete LAST_STAKING_MODULE_ID_POSITION.getBytes32Slot().value;
 
         // migrate WC
-        SRStorage.getRouterStorage().withdrawalCredentials = WITHDRAWAL_CREDENTIALS_POSITION.getBytes32Slot().value;
-        // bytes32 wc = WITHDRAWAL_CREDENTIALS_POSITION.getBytes32Slot().value;
-        // SRStorage.getRouterStorage().withdrawalCredentials = wc.to01();
-        // SRStorage.getRouterStorage().withdrawalCredentials02 = wc.to02();
+        // 0x01 creds
+        bytes32 wc = WITHDRAWAL_CREDENTIALS_POSITION.getBytes32Slot().value;
+        SRStorage.getRouterStorage().withdrawalCredentials = wc;
+        SRStorage.getRouterStorage().withdrawalCredentials02 = wc.setType(0x02);
         delete WITHDRAWAL_CREDENTIALS_POSITION.getBytes32Slot().value;
 
         uint256 modulesCount = STAKING_MODULES_COUNT_POSITION.getUint256Slot().value;
