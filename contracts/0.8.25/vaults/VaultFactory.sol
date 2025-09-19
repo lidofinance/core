@@ -83,7 +83,7 @@ contract VaultFactory {
 
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
-        dashboard.connectToVaultHub{value: msg.value}();
+        dashboard.connectToVaultHub{value: msg.value}(0);
 
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
         dashboard.revokeRole(dashboard.DEFAULT_ADMIN_ROLE(), address(this));
