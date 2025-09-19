@@ -324,6 +324,20 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRLib._updateExitedValidatorsCountByStakingModule(_stakingModuleIds, _exitedValidatorsCounts);
     }
 
+    /// @dev The function is restricted to the same role as `updateExitedValidatorsCountByStakingModule`,
+    /// i.e. `REPORT_EXITED_VALIDATORS_ROLE` role.
+    function reportActiveBalancesByStakingModule(
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _activeBalancesGwei,
+        uint256 refSlot
+    ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
+        SRLib._reportActiveBalancesByStakingModule(_stakingModuleIds, _activeBalancesGwei);
+
+        // move cursor for common tracker and for modules
+        SRStorage.getLidoDepositTrackerStorage().moveCursorToSlot(refSlot);
+        _updateModulesTrackers(refSlot);
+    }
+
     /// @dev See {SRLib._reportStakingModuleExitedValidatorsCountByNodeOperator}.
     ///
     /// @dev The function is restricted to the `REPORT_EXITED_VALIDATORS_ROLE` role.
@@ -411,15 +425,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 _exitType
     ) external onlyRole(REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE) {
         SRLib._onValidatorExitTriggered(validatorExitData, _withdrawalRequestPaidFee, _exitType);
-    }
-
-    /// @notice Hook for ao report
-    function onAccountingReport(uint256 slot) external onlyRole(ACCOUNTING_REPORT_ROLE) {
-        // move cursor for common tracker and for modules
-        // DepositsTracker.moveCursorToSlot(DEPOSITS_TRACKER, slot);
-        DepositedState storage state = SRStorage.getLidoDepositTrackerStorage();
-        state.moveCursorToSlot(slot);
-        _updateModulesTrackers(slot);
     }
 
     // TODO replace with new method in SanityChecker, V3TemporaryAdmin etc
@@ -620,8 +625,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param slot - slot
     /// @return deposit amount since last time cursor was moved
     function getDepositAmountFromLastSlot(uint256 slot) public view returns (uint256) {
-      DepositedState storage state = SRStorage.getLidoDepositTrackerStorage();
-      return state.getDepositedEthUpToSlot(slot);
+        DepositedState storage state = SRStorage.getLidoDepositTrackerStorage();
+        return state.getDepositedEthUpToSlot(slot);
     }
 
     /// @notice Sets the staking module status flag for participation in further deposits and/or reward distribution.
@@ -1238,12 +1243,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @notice Internal function to move cursor to slot
     /// @param slot Slot
     function _updateModulesTrackers(uint256 slot) internal {
-      uint256[] memory moduleIds = SRStorage.getModuleIds();
+        uint256[] memory moduleIds = SRStorage.getModuleIds();
 
-      for (uint256 i; i < moduleIds.length; ++i) {
-        DepositedState storage state = SRStorage.getStakingModuleTrackerStorage(moduleIds[i]);
-        state.moveCursorToSlot(slot);
-      }
+        for (uint256 i; i < moduleIds.length; ++i) {
+            SRStorage.getStakingModuleTrackerStorage(moduleIds[i]).moveCursorToSlot(slot);
+        }
     }
 
     /// @dev Track deposits for staking module and overall.

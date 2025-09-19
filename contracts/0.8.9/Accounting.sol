@@ -135,25 +135,6 @@ contract Accounting {
         SECONDS_PER_SLOT = _secondsPerSlot;
     }
 
-    /// @notice Internal function to get deposits between slots
-    /// @param fromSlot the starting slot
-    /// @param toSlot the ending slot
-    /// @return the amount of ETH deposited between the slots
-    // solhint-disable-next-line
-    function _getDepositedEthBetweenSlots(uint256 fromSlot, uint256 toSlot) internal view returns (uint256) {
-        // TODO: add optimization for slot range queries (DepositsTracker.moveCursorToSlot)
-        // uint256 depositsAtTo = DepositsTracker.getDepositedEthUpToSlot(
-        //     DEPOSITS_TRACKER_POSITION,
-        //     toSlot
-        // );
-        // uint256 depositsAtFrom = DepositsTracker.getDepositedEthUpToSlot(
-        //     DEPOSITS_TRACKER_POSITION,
-        //     fromSlot
-        // );
-        // return depositsAtTo > depositsAtFrom ? depositsAtTo - depositsAtFrom : 0;
-        return 0;
-    }
-
     /// @notice calculates all the state changes that is required to apply the report
     /// This a initial part of Accounting Oracle flow:
     /// 1. simulate the report without any WQ processing (withdrawalFinalizationBatches.length == 0)
@@ -426,9 +407,6 @@ contract Accounting {
         }
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
-
-        // move cursor for deposits tracker
-        _contracts.stakingRouter.onAccountingReport((_report.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT);
 
         LIDO.emitTokenRebase(
             _report.timestamp,

@@ -373,19 +373,6 @@ library SRLib {
         }
     }
 
-    // function _setModuleAcc(uint256 _moduleId, uint128 effBalanceGwei, uint64 exitedValidatorsCount)
-    //     internal
-    //     returns (bool isChanged)
-    // {
-    //     ModuleStateAccounting storage stateAcc = _moduleId.getModuleState().getStateAccounting();
-    //     uint256 totalEffectiveBalanceGwei = SRStorage.getRouterStorage().totalEffectiveBalanceGwei;
-    //     totalEffectiveBalanceGwei -= stateAcc.effectiveBalanceGwei;
-    //     SRStorage.getRouterStorage().totalEffectiveBalanceGwei = totalEffectiveBalanceGwei + effBalanceGwei;
-
-    //     stateAcc.effectiveBalanceGwei = effBalanceGwei;
-    //     stateAcc.exitedValidatorsCount = exitedValidatorsCount;
-    // }
-
     /// @dev mimic OpenZeppelin ContextUpgradeable._msgSender()
     function _msgSender() internal view returns (address) {
         return msg.sender;
@@ -852,6 +839,28 @@ library SRLib {
 
             stakingModule.onExitedAndStuckValidatorsCountsUpdated();
         }
+    }
+
+    function _reportActiveBalancesByStakingModule(
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _activeBalancesGwei
+    ) public {
+        _validateEqualArrayLengths(_stakingModuleIds.length, _activeBalancesGwei.length);
+
+        uint256 totalEffectiveBalanceGwei = SRStorage.getRouterStorage().totalEffectiveBalanceGwei;
+
+        for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
+            uint256 moduleId = _stakingModuleIds[i];
+            SRUtils._validateModuleId(moduleId);
+            SRUtils._validateAmountGwei(_activeBalancesGwei[i]);
+            uint128 balanceGwei = uint128(_activeBalancesGwei[i]);
+
+            ModuleStateAccounting storage stateAccounting = moduleId.getModuleState().getStateAccounting();
+            totalEffectiveBalanceGwei = totalEffectiveBalanceGwei - stateAccounting.effectiveBalanceGwei + balanceGwei;
+            stateAccounting.effectiveBalanceGwei = balanceGwei;
+        }
+
+        SRStorage.getRouterStorage().totalEffectiveBalanceGwei = totalEffectiveBalanceGwei;
     }
 
     function _notifyStakingModulesOfWithdrawalCredentialsChange() public {

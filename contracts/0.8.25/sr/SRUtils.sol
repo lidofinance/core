@@ -31,6 +31,7 @@ library SRUtils {
     error InvalidPriorityExitShareThreshold();
     error InvalidMinDepositBlockDistance();
     error InvalidMaxDepositPerBlockValue();
+    error InvalidAmountGwei();
     error InvalidStakeShareLimit();
     error InvalidFeeSum();
 
@@ -65,6 +66,12 @@ library SRUtils {
             revert InvalidMinDepositBlockDistance();
         }
         if (_maxDepositsPerBlock > type(uint64).max) revert InvalidMaxDepositPerBlockValue();
+    }
+
+    function _validateAmountGwei(uint256 _amountGwei) internal pure {
+        if (_amountGwei > type(uint128).max) {
+            revert InvalidAmountGwei();
+        }
     }
 
     function _validateModuleType(uint256 _moduleType) internal pure {
