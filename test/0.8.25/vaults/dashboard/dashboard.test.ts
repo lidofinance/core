@@ -319,6 +319,12 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.STETH()).to.equal(steth);
       expect(await dashboard.WSTETH()).to.equal(wsteth);
       expect(await dashboard.LIDO_LOCATOR()).to.equal(lidoLocator);
+      expect(await dashboard.settledGrowth()).to.equal(0n);
+      expect(await dashboard.latestCorrectionTimestamp()).to.equal(0n);
+      expect(await dashboard.pendingCorrection()).to.be.false;
+      expect(await dashboard.nodeOperatorFeeRate()).to.equal(nodeOperatorFeeBP);
+      expect(await dashboard.nodeOperatorFeeRecipient()).to.equal(nodeOperator);
+      expect(await dashboard.getConfirmExpiry()).to.equal(confirmExpiry);
       // dashboard roles
       expect(await dashboard.hasRole(await dashboard.DEFAULT_ADMIN_ROLE(), vaultOwner)).to.be.true;
       expect(await dashboard.getRoleMemberCount(await dashboard.DEFAULT_ADMIN_ROLE())).to.equal(1);
@@ -629,7 +635,7 @@ describe("Dashboard.sol", () => {
 
     beforeEach(async () => {
       const defaultAdminRoles = await Promise.all([
-        { role: await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), account: nodeOperator.address },
+        { role: await dashboard.NODE_OPERATOR_FEE_EXEMPT_ROLE(), account: nodeOperator.address },
       ]);
 
       // Create a new vault without hub connection
@@ -658,14 +664,14 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
-      await expect(newDashboard.connect(stranger).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+      await expect(newDashboard.connect(stranger).connectAndAcceptTier(1, 1n, 0n)).to.be.revertedWithCustomError(
         newDashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
     it("reverts if change tier is not confirmed by node operator", async () => {
-      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, 0n)).to.be.revertedWithCustomError(
         newDashboard,
         "TierChangeNotConfirmed",
       );
@@ -673,14 +679,16 @@ describe("Dashboard.sol", () => {
 
     it("works", async () => {
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
-      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.emit(hub, "Mock__VaultConnected");
+      const settledGrowth = await dashboard.settledGrowth();
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, settledGrowth)).to.emit(hub, "Mock__VaultConnected");
     });
 
     it("works with connection deposit", async () => {
       const connectDeposit = await hub.CONNECT_DEPOSIT();
 
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
-      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, { value: connectDeposit }))
+      const settledGrowth = await dashboard.settledGrowth();
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, settledGrowth, { value: connectDeposit }))
         .to.emit(hub, "Mock__VaultConnected")
         .withArgs(newVault);
     });
@@ -1427,7 +1435,7 @@ describe("Dashboard.sol", () => {
   context("reconnectToVaultHub", () => {
     it("reverts if called by a non-admin", async () => {
       await setup({ isConnected: false });
-      await expect(dashboard.connect(stranger).reconnectToVaultHub()).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).reconnectToVaultHub(0)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
@@ -1444,7 +1452,7 @@ describe("Dashboard.sol", () => {
 
       // reconnect
       await vault.connect(vaultOwner).transferOwnership(dashboard);
-      await dashboard.reconnectToVaultHub();
+      await dashboard.reconnectToVaultHub(0);
       expect(await vault.owner()).to.equal(hub);
     });
   });

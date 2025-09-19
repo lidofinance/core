@@ -228,17 +228,17 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         });
 
         // requires prepared state for this test to pass, skipping for now
-        it("increaseRewardsAdjustment", async () => {
+        it("addFeeExemption", async () => {
           await testMethod(
-            "increaseRewardsAdjustment",
+            "addFeeExemption",
             {
-              successUsers: [roles.nodeOperatorRewardAdjuster, nodeOperatorManager],
+              successUsers: [roles.nodeOperatorFeeExemptor, nodeOperatorManager],
               failingUsers: Object.values(roles).filter(
-                (r) => r !== roles.nodeOperatorRewardAdjuster && r !== nodeOperatorManager,
+                (r) => r !== roles.nodeOperatorFeeExemptor && r !== nodeOperatorManager,
               ),
             },
             [100n],
-            await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+            await dashboard.NODE_OPERATOR_FEE_EXEMPT_ROLE(),
           );
         });
 

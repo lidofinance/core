@@ -54,7 +54,7 @@ export const vaultRoleKeys = [
   "unknownValidatorProver",
   "unguaranteedBeaconChainDepositor",
   "tierChanger",
-  "nodeOperatorRewardAdjuster",
+  "nodeOperatorFeeExemptor",
   "assetRecoverer",
 ] as const;
 
@@ -147,7 +147,7 @@ export const getRoleMethods = (dashboard: Dashboard): VaultRoleMethods => {
     unknownValidatorProver: dashboard.PDG_PROVE_VALIDATOR_ROLE(),
     unguaranteedBeaconChainDepositor: dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
     tierChanger: dashboard.VAULT_CONFIGURATION_ROLE(),
-    nodeOperatorRewardAdjuster: dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+    nodeOperatorFeeExemptor: dashboard.NODE_OPERATOR_FEE_EXEMPT_ROLE(),
     assetRecoverer: dashboard.RECOVER_ASSETS_ROLE(),
   };
 };

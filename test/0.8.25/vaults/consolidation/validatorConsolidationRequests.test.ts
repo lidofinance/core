@@ -107,7 +107,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
   context("get consolidation requests and adjustment increase encoded calls", () => {
     it("Should revert if empty parameters are provided", async function () {
       await expect(
-        validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+        validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
           [],
           [],
           dashboardAddress,
@@ -118,7 +118,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         .withArgs("sourcePubkeys");
 
       await expect(
-        validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+        validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
           [PUBKEY],
           [],
           dashboardAddress,
@@ -129,7 +129,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
         .withArgs("targetPubkeys");
 
       await expect(
-        validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+        validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
           [PUBKEY],
           [PUBKEY],
           ethers.ZeroAddress,
@@ -141,7 +141,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     });
   });
 
-  it("getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls should revert if vault is not connected", async function () {
+  it("getConsolidationRequestsAndFeeExemptionEncodedCalls should revert if vault is not connected", async function () {
     // index is 0
     await vaultHub.mock__setVaultConnection(stakingVault, {
       owner: dashboardAddress,
@@ -158,7 +158,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     await vaultHub.mock__setPendingDisconnect(false);
 
     await expect(
-      validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+      validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
         [PUBKEY],
         [PUBKEY],
         dashboardAddress,
@@ -182,7 +182,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     await vaultHub.mock__setPendingDisconnect(true);
 
     await expect(
-      validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+      validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
         [PUBKEY],
         [PUBKEY],
         dashboardAddress,
@@ -206,7 +206,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     await vaultHub.mock__setPendingDisconnect(false);
 
     await expect(
-      validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+        validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
         [PUBKEY],
         [PUBKEY],
         dashboardAddress,
@@ -215,9 +215,9 @@ describe("ValidatorConsolidationRequests.sol", () => {
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "DashboardNotOwnerOfStakingVault");
   });
 
-  it("getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls should revert if array lengths do not match", async function () {
+  it("getConsolidationRequestsAndFeeExemptionEncodedCalls should revert if array lengths do not match", async function () {
     await expect(
-      validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+      validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
         [PUBKEY],
         [PUBKEY, PUBKEY],
         dashboardAddress,
@@ -228,12 +228,12 @@ describe("ValidatorConsolidationRequests.sol", () => {
       .withArgs(1, 2);
   });
 
-  it("getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls should revert if the adjustment increase is less than the minimum validator balance", async function () {
+  it("getConsolidationRequestsAndFeeExemptionEncodedCalls should revert if the adjustment increase is less than the minimum validator balance", async function () {
     const requestCount = 2;
     const { sourcePubkeys, targetPubkeys, totalSourcePubkeysCount } = generateConsolidationRequestPayload(requestCount);
 
     await expect(
-      validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+      validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
         sourcePubkeys,
         targetPubkeys,
         dashboardAddress,
@@ -242,10 +242,10 @@ describe("ValidatorConsolidationRequests.sol", () => {
     ).to.be.revertedWithCustomError(validatorConsolidationRequests, "InvalidAllSourceValidatorBalancesWei");
   });
 
-  it("Should get correct encoded calls for consolidation requests and adjustment increase", async function () {
+  it("Should get correct encoded calls for consolidation requests and fee exemption", async function () {
     const { sourcePubkeys, targetPubkeys, adjustmentIncrease } = generateConsolidationRequestPayload(1);
-    const { adjustmentIncreaseEncodedCall, consolidationRequestEncodedCalls } =
-      await validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+    const { feeExemptionEncodedCall, consolidationRequestEncodedCalls } =
+      await validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
         sourcePubkeys,
         targetPubkeys,
         dashboardAddress,
@@ -263,8 +263,8 @@ describe("ValidatorConsolidationRequests.sol", () => {
         k++;
       }
     }
-    const iface = new ethers.Interface(["function increaseRewardsAdjustment(uint256)"]);
-    const calldata = iface.encodeFunctionData("increaseRewardsAdjustment", [adjustmentIncrease]);
-    expect(adjustmentIncreaseEncodedCall).to.equal(calldata);
+    const iface = new ethers.Interface(["function addFeeExemption(uint256)"]);
+    const calldata = iface.encodeFunctionData("addFeeExemption", [adjustmentIncrease]);
+    expect(feeExemptionEncodedCall).to.equal(calldata);
   });
 });

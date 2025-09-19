@@ -107,10 +107,6 @@ describe("NodeOperatorFee.sol", () => {
     await Snapshot.restore(originalState);
   });
 
-  it("hello", async () => {
-    expect(await nodeOperatorFee.VAULT_HUB()).to.equal(hub);
-  });
-
   context("initialize", () => {
     it("reverts if already initialized", async () => {
       await expect(
@@ -448,7 +444,7 @@ describe("NodeOperatorFee.sol", () => {
     });
   });
 
-  context("setSettledGrowth", () => {
+  context("correctSettledGrowth", () => {
     it("reverts if called by not CONFIRMING_ROLE", async () => {
       await expect(nodeOperatorFee.connect(stranger).correctSettledGrowth(100n, 0n)).to.be.revertedWithCustomError(
         nodeOperatorFee,
@@ -517,7 +513,10 @@ describe("NodeOperatorFee.sol", () => {
           confirmTimestamp,
           expiryTimestamp,
           msgData,
-        );
+        )
+        .and.to.emit(nodeOperatorFee, "FeeDisbursementDisabled");
+
+      expect(await nodeOperatorFee.pendingCorrection()).to.be.true;
 
       expect(await nodeOperatorFee.settledGrowth()).to.equal(currentSettledGrowth);
 
@@ -532,11 +531,13 @@ describe("NodeOperatorFee.sol", () => {
       await expect(secondConfirmTx)
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
         .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, expiryTimestamp, msgData)
+        .and.to.emit(nodeOperatorFee, "FeeDisbursementEnabled")
         .to.emit(nodeOperatorFee, "SettledGrowthSet")
         .withArgs(currentSettledGrowth, newSettledGrowth);
 
       expect(await nodeOperatorFee.settledGrowth()).to.deep.equal(newSettledGrowth);
       expect(await nodeOperatorFee.latestCorrectionTimestamp()).to.deep.equal(timestamp);
+      expect(await nodeOperatorFee.pendingCorrection()).to.be.false;
     });
   });
 
