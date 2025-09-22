@@ -444,6 +444,8 @@ contract Dashboard is NodeOperatorFee {
     function unguaranteedDepositToBeaconChain(
         IStakingVault.Deposit[] calldata _deposits
     ) external returns (uint256 totalAmount) {
+        if (!unguaranteedDepositsAllowed) revert UnguaranteedDepositsDisallowedByAdmin();
+
         IStakingVault stakingVault_ = _stakingVault();
         IDepositContract depositContract = stakingVault_.DEPOSIT_CONTRACT();
 

@@ -136,10 +136,6 @@ contract VaultFactory__MockPermissions {
         permissions.grantRole(permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositPauser);
         permissions.grantRole(permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE(), _permissionsConfig.depositResumer);
         permissions.grantRole(permissions.PDG_PROVE_VALIDATOR_ROLE(), _permissionsConfig.unknownValidatorProver);
-        permissions.grantRole(
-            permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
-            _permissionsConfig.unguaranteedBeaconChainDepositor
-        );
         permissions.grantRole(permissions.REQUEST_VALIDATOR_EXIT_ROLE(), _permissionsConfig.validatorExitRequester);
         permissions.grantRole(
             permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE(),

@@ -226,12 +226,13 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     await dashboard.connect(owner).grantRole(await dashboard.FUND_ROLE(), proxy);
 
     await reportVaultDataWithProof(ctx, stakingVault);
+    await dashboard.connect(owner).allowUnguaranteedDeposits();
 
     // 4. The stVault's owner deposits 1 ETH from the vault balance directly to the validator, bypassing the PDG.
     //    Method called: Dashboard.unguaranteedDepositToBeaconChain(deposits).
     //    4.1. As a result, the stVault's total value is temporarily reduced by 1 ETH until the next oracle report delivered containing the appeared validator's balance.
     // todo: this step fails, BUT this is the point of the test!
-    await expect(dashboard.connect(owner).unguaranteedDepositToBeaconChain([predepositData.deposit]))
+    await expect(dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain([predepositData.deposit]))
       .to.emit(dashboard, "UnguaranteedDeposits")
       .withArgs(await stakingVault.getAddress(), 1, predepositData.deposit.amount);
     // check that emit the event from deposit contract

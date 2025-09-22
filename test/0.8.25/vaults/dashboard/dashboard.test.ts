@@ -238,6 +238,7 @@ describe("Dashboard.sol", () => {
     const dashboardCreatedEvent = findEvents(createVaultReceipt, "DashboardCreated")[0];
     const dashboardAddress = dashboardCreatedEvent.args.dashboard;
     dashboard = await ethers.getContractAt("Dashboard", dashboardAddress, vaultOwner);
+    await dashboard.connect(vaultOwner).allowUnguaranteedDeposits();
 
     originalState = await Snapshot.take();
   });
@@ -1355,7 +1356,7 @@ describe("Dashboard.sol", () => {
     it("reverts if the total amount exceeds the withdrawable value", async () => {
       await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
 
-      await expect(dashboard.unguaranteedDepositToBeaconChain(deposits))
+      await expect(dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits))
         .to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable")
         .withArgs(ether("1"), ether("0.9"));
     });
@@ -1373,7 +1374,7 @@ describe("Dashboard.sol", () => {
       await setBalance(await hub.getAddress(), ether("100"));
       await hub.mock__setSendWithdraw(true);
 
-      await expect(dashboard.unguaranteedDepositToBeaconChain(deposits))
+      await expect(dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits))
         .to.emit(hub, "Mock__Withdrawn")
         .withArgs(vault, dashboard, ether("1"))
         .and.to.emit(dashboard, "UnguaranteedDeposits")

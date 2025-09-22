@@ -84,10 +84,6 @@ contract Permissions__Harness is Permissions {
         _proveUnknownValidatorsToPDG(_witnesses);
     }
 
-    function withdrawForUnguaranteedDepositToBeaconChain(uint256 _ether) external {
-        _withdrawForUnguaranteedDepositToBeaconChain(_ether);
-    }
-
     function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external {
         _changeTier(_tierId, _requestedShareLimit);
     }

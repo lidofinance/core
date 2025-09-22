@@ -23,4 +23,8 @@ contract NodeOperatorFee__Harness is NodeOperatorFee {
             _confirmExpiry
         );
     }
+
+    function withdrawForUnguaranteedDepositToBeaconChain(uint256 _ether) external {
+        _withdrawForUnguaranteedDepositToBeaconChain(_ether);
+    }
 }

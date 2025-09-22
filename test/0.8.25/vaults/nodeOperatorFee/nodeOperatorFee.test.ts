@@ -133,6 +133,9 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_FEE_EXEMPT_ROLE())).to.equal(
         await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
       );
+      expect(
+        await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE()),
+      ).to.equal(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE());
 
       expect(await nodeOperatorFee.getConfirmExpiry()).to.equal(initialConfirmExpiry);
       expect(await nodeOperatorFee.nodeOperatorFeeRate()).to.equal(nodeOperatorFeeRate);
@@ -333,6 +336,65 @@ describe("NodeOperatorFee.sol", () => {
         .withArgs(vault, nodeOperatorManager, expectedNodeOperatorFee);
 
       expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
+    });
+  });
+
+  context("allowUnguaranteedDeposits", () => {
+    it("reverts if the caller is not a member of the node operator manager role", async () => {
+      await expect(nodeOperatorFee.connect(stranger).allowUnguaranteedDeposits())
+        .to.be.revertedWithCustomError(nodeOperatorFee, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await nodeOperatorFee.DEFAULT_ADMIN_ROLE());
+    });
+
+    it("allows unguaranteed deposits", async () => {
+      expect(await nodeOperatorFee.unguaranteedDepositsAllowed()).to.be.false;
+      await expect(nodeOperatorFee.connect(vaultOwner).allowUnguaranteedDeposits()).to.emit(
+        nodeOperatorFee,
+        "UnguaranteedDepositsAllowed",
+      );
+      expect(await nodeOperatorFee.unguaranteedDepositsAllowed()).to.be.true;
+    });
+
+    it("disallows unguaranteed deposits", async () => {
+      await nodeOperatorFee.connect(vaultOwner).allowUnguaranteedDeposits();
+      expect(await nodeOperatorFee.unguaranteedDepositsAllowed()).to.be.true;
+      await expect(nodeOperatorFee.connect(vaultOwner).disallowUnguaranteedDeposits()).to.emit(
+        nodeOperatorFee,
+        "UnguaranteedDepositsDisallowed",
+      );
+      expect(await nodeOperatorFee.unguaranteedDepositsAllowed()).to.be.false;
+    });
+
+    it("reverts if the caller is not a member of the node operator manager role", async () => {
+      await expect(nodeOperatorFee.connect(stranger).disallowUnguaranteedDeposits())
+        .to.be.revertedWithCustomError(nodeOperatorFee, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await nodeOperatorFee.DEFAULT_ADMIN_ROLE());
+    });
+  });
+
+  context("withdrawForUnguaranteedDepositToBeaconChain", () => {
+    it("reverts if the caller is not a member of the node operator manager role", async () => {
+      await nodeOperatorFee.connect(vaultOwner).allowUnguaranteedDeposits();
+
+      await expect(nodeOperatorFee.connect(stranger).withdrawForUnguaranteedDepositToBeaconChain(ether("1")))
+        .to.be.revertedWithCustomError(nodeOperatorFee, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await nodeOperatorFee.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE());
+    });
+
+    it("reverts if the unguaranteed deposits are not allowed", async () => {
+      expect(await nodeOperatorFee.unguaranteedDepositsAllowed()).to.be.false;
+      await expect(
+        nodeOperatorFee.connect(nodeOperatorManager).withdrawForUnguaranteedDepositToBeaconChain(ether("1")),
+      ).to.be.revertedWithCustomError(nodeOperatorFee, "UnguaranteedDepositsDisallowedByAdmin");
+    });
+
+    it("withdraws the ether", async () => {
+      await nodeOperatorFee.connect(vaultOwner).allowUnguaranteedDeposits();
+      expect(await nodeOperatorFee.unguaranteedDepositsAllowed()).to.be.true;
+      await expect(nodeOperatorFee.connect(nodeOperatorManager).withdrawForUnguaranteedDepositToBeaconChain(ether("1")))
+        .to.emit(hub, "Mock__Withdrawn")
+        .and.to.emit(hub, "Mock__Withdrawn")
+        .withArgs(vault, nodeOperatorFee, ether("1"));
     });
   });
 

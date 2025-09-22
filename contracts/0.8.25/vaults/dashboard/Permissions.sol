@@ -94,12 +94,6 @@ abstract contract Permissions is AccessControlConfirmable {
     /// @dev 0xb850402129bccae797798069a8cf3147a0cb7c3193f70558a75f7df0b8651c30
     bytes32 public constant PDG_PROVE_VALIDATOR_ROLE = keccak256("vaults.Permissions.PDGProveValidator");
 
-    /**
-     * @notice Permission for unguaranteed deposit to trusted validators
-     */
-    /// @dev 0xea6487df651bb740150364c496e1c7403dd62063c96e44906cc98c6a919a9d88
-    bytes32 public constant UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE =
-        keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
 
     /**
      * @dev Permission for vault configuration operations on the OperatorGrid (tier changes, tier sync, share limit updates).
@@ -332,15 +326,6 @@ abstract contract Permissions is AccessControlConfirmable {
         for (uint256 i = 0; i < _witnesses.length; i++) {
             VAULT_HUB.proveUnknownValidatorToPDG(address(_stakingVault()), _witnesses[i]);
         }
-    }
-
-    /**
-     * @dev Withdraws ether from vault to this contract for unguaranteed deposit to validators
-     */
-    function _withdrawForUnguaranteedDepositToBeaconChain(
-        uint256 _ether
-    ) internal onlyRoleMemberOrAdmin(UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE) {
-        VAULT_HUB.withdraw(address(_stakingVault()), address(this), _ether);
     }
 
     /**
