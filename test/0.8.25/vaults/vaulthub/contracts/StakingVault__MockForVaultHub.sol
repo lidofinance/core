@@ -77,6 +77,16 @@ contract StakingVault__MockForVaultHub is Ownable2StepUpgradeable {
         emit Mock__BeaconChainDepositsResumed();
     }
 
+    function collectERC20(address _token, address _recipient, uint256 _amount) external {
+        emit Mock_Collected(_token, _recipient, _amount);
+    }
+
+    function availableBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    function stagedBalance() external view returns (uint256) {}
+
     event ValidatorWithdrawalsTriggered(bytes pubkeys, uint64[] amounts, address refundRecipient);
 
     // Mock events for VaultHub forwarding operations
@@ -85,6 +95,7 @@ contract StakingVault__MockForVaultHub is Ownable2StepUpgradeable {
     event Mock__BeaconChainDepositsPaused();
     event Mock__BeaconChainDepositsResumed();
     event Mock__ValidatorExitRequested(bytes pubkeys);
+    event Mock_Collected(address token, address recipient, uint256 amount);
 
     error Mock__HealthyVault();
 }

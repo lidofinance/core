@@ -68,7 +68,7 @@ describe("Integration: Vault with bad debt", () => {
     );
 
     // Indicates bad debt
-    expect(await vaultHub.rebalanceShortfallShares(stakingVault)).to.be.equal(MAX_UINT256);
+    expect(await vaultHub.healthShortfallShares(stakingVault)).to.be.equal(MAX_UINT256);
 
     // Grant a role to the DAO agent
     await vaultHub.connect(await ctx.getSigner("agent")).grantRole(await vaultHub.BAD_DEBT_MASTER_ROLE(), daoAgent);
@@ -164,6 +164,22 @@ describe("Integration: Vault with bad debt", () => {
         await lido.getSharesByPooledEth(await acceptorDashboard.totalValue()),
         "No bad debt in acceptor vault",
       );
+    });
+
+    it("Socialization lead to bad debt beacon chain deposits pause", async () => {
+      await acceptorDashboard.connect(otherOwner).fund({ value: ether("2") });
+      const { vaultHub, lido } = ctx.contracts;
+
+      const badDebtShares =
+        (await dashboard.liabilityShares()) - (await lido.getSharesByPooledEth(await dashboard.totalValue()));
+
+      expect(await acceptorStakingVault.beaconChainDepositsPaused()).to.be.false;
+
+      await expect(vaultHub.connect(daoAgent).socializeBadDebt(stakingVault, acceptorStakingVault, badDebtShares))
+        .to.emit(vaultHub, "BadDebtSocialized")
+        .and.to.emit(acceptorStakingVault, "BeaconChainDepositsPaused");
+
+      expect(await acceptorStakingVault.beaconChainDepositsPaused()).to.be.true;
     });
 
     it("OperatorGrid shareLimits can't prevent socialization", async () => {
