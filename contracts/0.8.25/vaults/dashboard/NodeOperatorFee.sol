@@ -205,7 +205,7 @@ contract NodeOperatorFee is Permissions {
      * @param _expectedSettledGrowth The expected current settled growth
      * @return bool True if correction was applied, false if awaiting confirmations
      */
-    function correctSettledGrowth(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) external returns (bool) {
+    function correctSettledGrowth(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) public returns (bool) {
         if (settledGrowth != _expectedSettledGrowth) revert UnexpectedSettledGrowth();
 
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) {

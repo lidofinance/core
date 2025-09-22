@@ -55,7 +55,8 @@ describe("Scenario: Lazy Oracle prevents overwriting freshly reconnected vault r
     expect(await lazyOracle.latestReportTimestamp()).to.be.greaterThan(0);
     expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
 
-    await dashboard.connect(owner).reconnectToVaultHub(await dashboard.settledGrowth());
+    const settledGrowth = await dashboard.settledGrowth();
+    await dashboard.connect(owner).reconnectToVaultHub(settledGrowth, settledGrowth);
 
     await expect(
       reportVaultDataWithProof(ctx, stakingVault, { updateReportData: false }),
