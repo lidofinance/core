@@ -611,7 +611,7 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
         nodeOperatorFee,
-        "ExemptedValueNotReportedYet",
+        "CorrectionAfterReport",
       );
     });
 
@@ -642,7 +642,7 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(nodeOperatorFee.connect(vaultOwner).setNodeOperatorFeeRate(100n)).to.be.revertedWithCustomError(
         nodeOperatorFee,
-        "ExemptedValueNotReportedYet",
+        "CorrectionAfterReport",
       );
     });
 

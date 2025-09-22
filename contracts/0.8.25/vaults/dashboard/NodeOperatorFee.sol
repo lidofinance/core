@@ -55,9 +55,9 @@ contract NodeOperatorFee is Permissions {
      * i.e. the component of totalValue that has not been directly funded to the underlying StakingVault via `fund()`:
      *    inOutDelta + growth = totalValue
      *
-     * Settled growth is the portion of the total growth that is not subject to node operator because:
-     * - it has already been paid for,
-     * - not subject to fee (exempted) such as unguaranteed/side deposits, consolidations.
+     * Settled growth is the portion of the total growth that:
+     * - has already been charged by the node operator,
+     * - or is not subject to fee (exempted) such as unguaranteed/side deposits, consolidations.
      */
     uint256 public settledGrowth;
 
@@ -65,6 +65,7 @@ contract NodeOperatorFee is Permissions {
      * @notice Timestamp of the most recent settled growth correction.
      * This timestamp is used to prevent retroactive fees after a fee rate change.
      * The timestamp ensures that all fee exemptions and corrections are fully reported before changing the fee rate.
+     * Regular fee disbursements do not update this timestamp.
      */
     uint256 public latestCorrectionTimestamp;
 
@@ -112,7 +113,7 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice The roles that must confirm critical parameters changes in the contract.
+     * @notice The roles that must confirm critical parameter changes in the contract.
      * @return roles is an array of roles that form the confirming roles.
      */
     function confirmingRoles() public pure override returns (bytes32[] memory roles) {
@@ -178,7 +179,7 @@ contract NodeOperatorFee is Permissions {
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
 
         // Latest fee exemption must be earlier than the latest fresh report timestamp
-        if (latestCorrectionTimestamp >= _lazyOracle().latestReportTimestamp()) revert ExemptedValueNotReportedYet();
+        if (latestCorrectionTimestamp >= _lazyOracle().latestReportTimestamp()) revert CorrectionAfterReport();
 
         // If the vault is quarantined, the total value is reduced and may not reflect the exemption
         if (_lazyOracle().vaultQuarantine(address(_stakingVault())).isActive) revert VaultQuarantined();
@@ -415,9 +416,9 @@ contract NodeOperatorFee is Permissions {
     error ReportStale();
 
     /**
-     * @dev Error emitted when the exempted value has not been reported yet.
+     * @dev Error emitted when the correction is made after the report.
      */
-    error ExemptedValueNotReportedYet();
+    error CorrectionAfterReport();
 
     /**
      * @dev Error emitted when the settled growth does not match the expected value.
