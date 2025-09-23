@@ -5,7 +5,16 @@ import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import { LidoLocator } from "typechain-types";
 
-import { cy, deployImplementation, deployWithoutProxy, loadContract, log, persistNetworkState, readNetworkState, Sk } from "lib";
+import {
+  cy,
+  deployImplementation,
+  deployWithoutProxy,
+  loadContract,
+  log,
+  persistNetworkState,
+  readNetworkState,
+  Sk,
+} from "lib";
 
 dotenv.config({ path: join(__dirname, "../../.env") });
 
@@ -112,15 +121,15 @@ export async function main() {
     locator.address,
     {
       gIFirstValidatorPrev: "0x0000000000000000000000000000000000000000000000000096000000000028",
-      gIFirstValidatorCurr: "0x0000000000000000000000000000000000000000000000000096000000000028", 
+      gIFirstValidatorCurr: "0x0000000000000000000000000000000000000000000000000096000000000028",
       gIFirstHistoricalSummaryPrev: "0x000000000000000000000000000000000000000000000000000000b600000018",
       gIFirstHistoricalSummaryCurr: "0x000000000000000000000000000000000000000000000000000000b600000018",
       gIFirstBlockRootInSummaryPrev: "0x000000000000000000000000000000000000000000000000000000000040000d",
-      gIFirstBlockRootInSummaryCurr: "0x000000000000000000000000000000000000000000000000000000000040000d"
+      gIFirstBlockRootInSummaryCurr: "0x000000000000000000000000000000000000000000000000000000000040000d",
     }, // GIndices struct
-    22140000, // uint64 firstSupportedSlot, same as test data
-    22140000, // uint64 pivotSlot, same as test data  
-    22140000, // uint64 capellaSlot, same as test data
+    11649024, // uint64 firstSupportedSlot, same as test data
+    11649024, // uint64 pivotSlot, same as test data
+    6209536, // uint64 capellaSlot, same as test data
     8192, // uint64 slotsPerHistoricalRoot,
     32, // uint32 slotsPerEpoch,
     12, // uint32 secondsPerSlot,
