@@ -69,7 +69,7 @@ library SRUtils {
     }
 
     function _validateAmountGwei(uint256 _amountGwei) internal pure {
-        if (_amountGwei > type(uint128).max) {
+        if (_amountGwei > type(uint96).max) {
             revert InvalidAmountGwei();
         }
     }
@@ -134,16 +134,24 @@ library SRUtils {
 
     ///  @dev get current balance of the module in ETH
     function _getModuleBalance(uint256 moduleId) internal view returns (uint256) {
-        uint256 effectiveBalance = moduleId.getModuleState().getStateAccounting().effectiveBalanceGwei * 1 gwei;
+        uint256 clBalance = _fromGwei(moduleId.getModuleState().getStateAccounting().clBalanceGwei);
         uint256 pendingDeposits = SRStorage.getStakingModuleTrackerStorage(moduleId).getDepositedEthUpToLastSlot();
-        return effectiveBalance + pendingDeposits;
+        return clBalance + pendingDeposits;
+    }
+
+    function _getModuleActiveBalance(uint256 moduleId) internal view returns (uint256) {
+        return _fromGwei(moduleId.getModuleState().getStateAccounting().activeBalanceGwei);
     }
 
     ///  @dev get total balance of all modules + deposit tracker in ETH
-    function _getModulesTotalBalance() internal view returns (uint256) {
-        uint256 totalEffectiveBalance = SRStorage.getRouterStorage().totalEffectiveBalanceGwei * 1 gwei;
+    function _getTotalModulesBalance() internal view returns (uint256) {
+        uint256 totalClBalance = _fromGwei(SRStorage.getRouterStorage().totalClBalanceGwei);
         uint256 pendingDeposits = SRStorage.getLidoDepositTrackerStorage().getDepositedEthUpToLastSlot();
-        return totalEffectiveBalance + pendingDeposits;
+        return totalClBalance + pendingDeposits;
+    }
+
+    function _getTotalModulesActiveBalance() internal view returns (uint256) {
+        return _fromGwei(SRStorage.getRouterStorage().totalActiveBalanceGwei);
     }
 
     ///  @dev calculate module capacity in ETH
@@ -153,5 +161,15 @@ library SRUtils {
         returns (uint256)
     {
         return availableKeysCount * _getModuleMEB(moduleType);
+    }
+
+    function _toGwei(uint256 amount) internal pure returns (uint96) {
+        amount /= 1 gwei;
+        _validateAmountGwei(amount);
+        return uint96(amount);
+    }
+
+    function _fromGwei(uint256 amount) internal pure returns (uint256) {
+        return amount * 1 gwei;
     }
 }

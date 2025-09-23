@@ -329,13 +329,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function reportActiveBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
         uint256[] calldata _activeBalancesGwei,
-        uint256 refSlot
+        uint256[] calldata _pendingBalancesGwei
     ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
-        SRLib._reportActiveBalancesByStakingModule(_stakingModuleIds, _activeBalancesGwei);
-
-        // move cursor for common tracker and for modules
-        SRStorage.getLidoDepositTrackerStorage().moveCursorToSlot(refSlot);
-        _updateModulesTrackers(refSlot);
+        SRLib._reportActiveBalancesByStakingModule(_stakingModuleIds, _activeBalancesGwei, _pendingBalancesGwei);
     }
 
     /// @dev See {SRLib._reportStakingModuleExitedValidatorsCountByNodeOperator}.
@@ -427,6 +423,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         SRLib._onValidatorExitTriggered(validatorExitData, _withdrawalRequestPaidFee, _exitType);
     }
 
+    /// @notice Hook for AO report
+    function onAccountingReport(uint256 slot) external onlyRole(ACCOUNTING_REPORT_ROLE) {
+        // move cursor for global deposit tracker
+        SRStorage.getLidoDepositTrackerStorage().moveCursorToSlot(slot);
+        // move cursor for all module's deposits trackers
+        _updateModulesTrackers(slot);
+    }
+
     // TODO replace with new method in SanityChecker, V3TemporaryAdmin etc
     /// @dev DEPRECATED, use getStakingModuleStates() instead
     /// @notice Returns all registered staking modules.
@@ -464,11 +468,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function getStakingModuleStateAccounting(uint256 _stakingModuleId)
         external
         view
-        returns (uint128 effectiveBalanceGwei, uint64 exitedValidatorsCount)
+        returns (uint96 clBalanceGwei, uint96 activeBalanceGwei, uint64 exitedValidatorsCount)
     {
         (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
         ModuleStateAccounting memory stateAccounting = state.getStateAccounting();
-        return (stateAccounting.effectiveBalanceGwei, stateAccounting.exitedValidatorsCount);
+        return (stateAccounting.clBalanceGwei, stateAccounting.activeBalanceGwei, stateAccounting.exitedValidatorsCount);
     }
 
     /// @notice Returns the ids of all registered staking modules.
@@ -865,7 +869,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             uint256 precisionPoints
         )
     {
-        uint256 totalActiveBalance = SRUtils._getModulesTotalBalance();
+        uint256 totalActiveBalance = SRUtils._getTotalModulesActiveBalance();
 
         uint256[] memory moduleIds = SRStorage.getModuleIds();
         uint256 stakingModulesCount = totalActiveBalance == 0 ? 0 : moduleIds.length;
@@ -884,7 +888,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         for (uint256 i; i < stakingModulesCount; ++i) {
             uint256 moduleId = moduleIds[i];
-            uint256 allocation = SRUtils._getModuleBalance(moduleId);
+            uint256 allocation = SRUtils._getModuleActiveBalance(moduleId);
 
             /// @dev Skip staking modules which have no active balance.
             if (allocation == 0) continue;
@@ -922,6 +926,15 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         }
 
         return (recipients, stakingModuleIds, stakingModuleFees, totalFee, precisionPoints);
+    }
+
+    function getStakingModuleBalance(uint256 moduleId) external view returns (uint256) {
+        SRUtils._validateModuleId(moduleId);
+        return SRUtils._getModuleBalance(moduleId);
+    }
+
+    function getTotalStakingModulesBalance() external view returns (uint256) {
+        return SRUtils._getTotalModulesBalance();
     }
 
     function _computeModuleFee(uint256 activeBalance, uint256 totalActiveBalance, ModuleStateConfig memory stateConfig)
@@ -1223,11 +1236,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     function _getLido() internal view returns (address) {
         return SRStorage.getRouterStorage().lido;
-    }
-
-    function _getStakingModuleTrackerPosition(uint256 stakingModuleId) internal pure returns (bytes32) {
-        // Mirrors mapping slot formula: keccak256(abi.encode(key, baseSlot))
-        return keccak256(abi.encode(stakingModuleId, DEPOSITS_TRACKER));
     }
 
     // Helpers

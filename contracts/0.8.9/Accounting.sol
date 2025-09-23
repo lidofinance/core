@@ -408,6 +408,9 @@ contract Accounting {
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
 
+         // move cursor for deposit trackers
+        _contracts.stakingRouter.onAccountingReport((_report.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT);
+
         LIDO.emitTokenRebase(
             _report.timestamp,
             _report.timeElapsed,

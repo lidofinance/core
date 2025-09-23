@@ -77,7 +77,6 @@ library SRLib {
 
     error WrongInitialMigrationState();
     error StakingModuleAddressExists();
-    error EffectiveBalanceExceeded();
     error BPSOverflow();
     error ArraysLengthMismatch(uint256 firstArrayLength, uint256 secondArrayLength);
     error ReportedExitedValidatorsExceedDeposited(
@@ -159,7 +158,7 @@ library SRLib {
         mapping(uint256 => StakingModule) storage oldStakingModules = _getStorageStakingModulesMapping();
         // get old storage ref. for staking modules indices mapping
         mapping(uint256 => uint256) storage oldStakingModuleIndices = _getStorageStakingIndicesMapping();
-        uint256 totalEffectiveBalanceGwei;
+        uint96 totalClBalanceGwei;
         StakingModule memory smOld;
 
         for (uint256 i; i < modulesCount; ++i) {
@@ -198,22 +197,26 @@ library SRLib {
             );
 
             // 1 SSTORE
-            uint128 effBalanceGwei = _calcEffBalanceGwei(smOld.stakingModuleAddress, smOld.exitedValidatorsCount);
+            uint96 effBalanceGwei = _calcEffBalanceGwei(smOld.stakingModuleAddress, smOld.exitedValidatorsCount);
             moduleState.setStateAccounting(
                 ModuleStateAccounting({
-                    effectiveBalanceGwei: effBalanceGwei,
+                    clBalanceGwei: effBalanceGwei,
+                    activeBalanceGwei: effBalanceGwei,
                     exitedValidatorsCount: uint64(smOld.exitedValidatorsCount)
                 })
             );
 
-            totalEffectiveBalanceGwei += effBalanceGwei;
+            totalClBalanceGwei += effBalanceGwei;
 
             // cleanup old storage for staking module data
             delete oldStakingModules[i];
             delete oldStakingModuleIndices[_moduleId];
         }
 
-        SRStorage.getRouterStorage().totalEffectiveBalanceGwei = totalEffectiveBalanceGwei;
+        /// @dev use the same value for both CL balance and active balance at migration moment,
+        /// next Oracle report will update the both values
+        SRStorage.getRouterStorage().totalClBalanceGwei = totalClBalanceGwei;
+        SRStorage.getRouterStorage().totalActiveBalanceGwei = totalClBalanceGwei;
 
         _updateSTASMetricValues();
     }
@@ -222,20 +225,15 @@ library SRLib {
     function _calcEffBalanceGwei(address moduleAddress, uint256 routerExitedValidatorsCount)
         private
         view
-        returns (uint128)
+        returns (uint96)
     {
         IStakingModule stakingModule = IStakingModule(moduleAddress);
         (uint256 exitedValidatorsCount, uint256 depositedValidatorsCount,) = stakingModule.getStakingModuleSummary();
         // The module might not receive all exited validators data yet => we need to replacing
         // the exitedValidatorsCount with the one that the staking router is aware of.
         uint256 activeCount = depositedValidatorsCount - Math.max(routerExitedValidatorsCount, exitedValidatorsCount);
-        uint256 effBalanceGwei = activeCount * SRUtils.MAX_EFFECTIVE_BALANCE_01 / 1 gwei;
 
-        if (effBalanceGwei > type(uint128).max) {
-            revert EffectiveBalanceExceeded();
-        }
-
-        return uint128(effBalanceGwei);
+        return SRUtils._toGwei(activeCount * SRUtils.MAX_EFFECTIVE_BALANCE_01);
     }
 
     /// @dev recalculate and update modules STAS metric values
@@ -431,7 +429,7 @@ library SRLib {
         }
 
         uint256[] memory shares = SRStorage.getSTASStorage().sharesOf(_moduleIds, uint8(Strategies.Deposit));
-        uint256 totalAllocation = SRUtils._getModulesTotalBalance();
+        uint256 totalAllocation = SRUtils._getTotalModulesBalance();
         (, uint256[] memory fills, uint256 rest) =
             STASPouringMath._allocate(shares, allocations, capacities, totalAllocation, _allocateAmount);
 
@@ -461,7 +459,7 @@ library SRLib {
         }
 
         uint256[] memory shares = SRStorage.getSTASStorage().sharesOf(_moduleIds, uint8(Strategies.Withdrawal));
-        uint256 totalAllocation = SRUtils._getModulesTotalBalance();
+        uint256 totalAllocation = SRUtils._getTotalModulesBalance();
 
         (, uint256[] memory fills, uint256 rest) =
             STASPouringMath._deallocate(shares, allocations, totalAllocation, _deallocateAmount);
@@ -843,24 +841,32 @@ library SRLib {
 
     function _reportActiveBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
-        uint256[] calldata _activeBalancesGwei
+        uint256[] calldata _activeBalancesGwei,
+        uint256[] calldata _pendingBalancesGwei
     ) public {
         _validateEqualArrayLengths(_stakingModuleIds.length, _activeBalancesGwei.length);
+        _validateEqualArrayLengths(_stakingModuleIds.length, _pendingBalancesGwei.length);
 
-        uint256 totalEffectiveBalanceGwei = SRStorage.getRouterStorage().totalEffectiveBalanceGwei;
+        uint96 totalClBalanceGwei = SRStorage.getRouterStorage().totalClBalanceGwei;
+        uint96 totalActiveBalanceGwei = SRStorage.getRouterStorage().totalActiveBalanceGwei;
 
         for (uint256 i = 0; i < _stakingModuleIds.length; ++i) {
             uint256 moduleId = _stakingModuleIds[i];
             SRUtils._validateModuleId(moduleId);
             SRUtils._validateAmountGwei(_activeBalancesGwei[i]);
-            uint128 balanceGwei = uint128(_activeBalancesGwei[i]);
+            SRUtils._validateAmountGwei(_pendingBalancesGwei[i]);
+            uint96 activeBalanceGwei = uint96(_activeBalancesGwei[i]);
+            uint96 clBalanceGwei = activeBalanceGwei + uint96(_pendingBalancesGwei[i]);
 
             ModuleStateAccounting storage stateAccounting = moduleId.getModuleState().getStateAccounting();
-            totalEffectiveBalanceGwei = totalEffectiveBalanceGwei - stateAccounting.effectiveBalanceGwei + balanceGwei;
-            stateAccounting.effectiveBalanceGwei = balanceGwei;
+            // update totals incrementally as we iterate through the part of modules in general case
+            totalClBalanceGwei = totalClBalanceGwei - stateAccounting.clBalanceGwei + clBalanceGwei;
+            totalActiveBalanceGwei = totalActiveBalanceGwei - stateAccounting.activeBalanceGwei + activeBalanceGwei;
+            stateAccounting.clBalanceGwei = clBalanceGwei;
+            stateAccounting.activeBalanceGwei = activeBalanceGwei;
         }
-
-        SRStorage.getRouterStorage().totalEffectiveBalanceGwei = totalEffectiveBalanceGwei;
+        SRStorage.getRouterStorage().totalClBalanceGwei = totalClBalanceGwei;
+        SRStorage.getRouterStorage().totalActiveBalanceGwei = totalActiveBalanceGwei;
     }
 
     function _notifyStakingModulesOfWithdrawalCredentialsChange() public {

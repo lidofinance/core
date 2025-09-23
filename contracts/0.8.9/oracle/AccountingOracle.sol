@@ -34,7 +34,7 @@ interface IStakingRouter {
     function reportActiveBalancesByStakingModule(
         uint256[] calldata _stakingModuleIds,
         uint256[] calldata _activeBalancesGwei,
-        uint256 _refSlot
+        uint256[] calldata _pendingBalancesGwei
     ) external;
 
     function reportStakingModuleExitedValidatorsCountByNodeOperator(
@@ -66,7 +66,7 @@ contract AccountingOracle is BaseOracle {
     error IncorrectOracleMigration(uint256 code);
     error SenderNotAllowed();
     error InvalidExitedValidatorsData();
-    error InvalidActiveBalancesData();
+    error InvalidClBalancesData();
     error UnsupportedExtraDataFormat(uint256 format);
     error UnsupportedExtraDataType(uint256 itemIndex, uint256 dataType);
     error DeprecatedExtraDataType(uint256 itemIndex, uint256 dataType);
@@ -174,10 +174,11 @@ contract AccountingOracle is BaseOracle {
         uint256[] numExitedValidatorsByStakingModule;
         /// @dev Ids of staking modules that have effective balances changed compared to the number
         /// stored in the respective staking module contract as observed at the reference slot.
-        uint256[] stakingModuleIdsWithUpdatedActiveBalance;
-        /// @dev Active balances of each staking module from stakingModuleIdsWithUpdatedActiveBalance
+        uint256[] stakingModuleIdsWithUpdatedBalance;
+        /// @dev Active balances of each staking module from stakingModuleIdsWithUpdatedBalance
         /// without pending deposits as observed at the reference slot.
         uint256[] activeBalancesGweiByStakingModule;
+        uint256[] pendingBalancesGweiByStakingModule;
         ///
         /// EL values
         ///
@@ -494,11 +495,15 @@ contract AccountingOracle is BaseOracle {
             slotsElapsed
         );
 
+        /// @notice update CL balances in StakingRouter
+        /// @dev we need to update balances before rewards and fee calculation
+        /// Note, deposit trackers not changed at this moment, they are bumped
+        /// in StakingRouter.onAccountingReport during `handleAccountingReport`
         _processStakingRouterActiveBalancesByModule(
             stakingRouter,
-            data.stakingModuleIdsWithUpdatedActiveBalance,
+            data.stakingModuleIdsWithUpdatedBalance,
             data.activeBalancesGweiByStakingModule,
-            data.refSlot
+            data.pendingBalancesGweiByStakingModule
         );
 
         withdrawalQueue.onOracleReport(
@@ -588,11 +593,11 @@ contract AccountingOracle is BaseOracle {
         IStakingRouter stakingRouter,
         uint256[] calldata stakingModuleIds,
         uint256[] calldata activeBalancesGwei,
-        uint256 refSlot
+        uint256[] calldata pendingBalancesGwei
     ) internal {
         uint256 numModules = stakingModuleIds.length;
-        if (numModules != activeBalancesGwei.length) {
-            revert InvalidActiveBalancesData();
+        if (numModules != activeBalancesGwei.length || numModules != pendingBalancesGwei.length) {
+            revert InvalidClBalancesData();
         }
         if (numModules == 0) {
             return;
@@ -600,7 +605,7 @@ contract AccountingOracle is BaseOracle {
 
         for (uint256 i = 1; i < numModules;) {
             if (stakingModuleIds[i] <= stakingModuleIds[i - 1]) {
-                revert InvalidActiveBalancesData();
+                revert InvalidClBalancesData();
             }
             unchecked {
                 ++i;
@@ -608,7 +613,7 @@ contract AccountingOracle is BaseOracle {
         }
 
         // todo add sanity checks?
-        stakingRouter.reportActiveBalancesByStakingModule(stakingModuleIds, activeBalancesGwei, refSlot);
+        stakingRouter.reportActiveBalancesByStakingModule(stakingModuleIds, activeBalancesGwei, pendingBalancesGwei);
     }
 
     function _submitReportExtraDataEmpty() internal {
@@ -695,7 +700,7 @@ contract AccountingOracle is BaseOracle {
             procState.dataHash = dataHash;
             procState.itemsProcessed = uint64(itemsProcessed);
             procState.lastSortingKey = iter.lastSortingKey;
-             _storageExtraDataProcessingState().value = procState;
+            _storageExtraDataProcessingState().value = procState;
         }
 
         emit ExtraDataSubmitted(procState.refSlot, procState.itemsProcessed, procState.itemsCount);
