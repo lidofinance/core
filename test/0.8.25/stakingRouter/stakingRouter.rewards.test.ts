@@ -537,7 +537,7 @@ describe("StakingRouter.sol:rewards", () => {
     if (effBalanceGwei == 0n && deposited > 0n) {
       effBalanceGwei = (deposited * getModuleMEB(moduleType)) / 1_000_000_000n; // in gwei
     }
-    await stakingRouter.testing_setStakingModuleAccounting(moduleId, effBalanceGwei, exited);
+    await stakingRouter.testing_setStakingModuleAccounting(moduleId, effBalanceGwei, effBalanceGwei, exited);
 
     if (status != StakingModuleStatus.Active) {
       await stakingRouter.setStakingModuleStatus(moduleId, status);

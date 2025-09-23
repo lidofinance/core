@@ -38,18 +38,25 @@ contract StakingRouter__Harness is StakingRouter {
 
     function testing_setStakingModuleAccounting(
         uint256 _stakingModuleId,
-        uint128 effBalanceGwei,
+        uint96 clBalanceGwei,
+        uint96 activeBalanceGwei,
         uint64 exitedValidatorsCount
     ) external {
         ModuleStateAccounting storage stateAcc = SRStorage.getStateAccounting(
             SRStorage.getModuleState(_stakingModuleId)
         );
 
-        uint256 totalEffectiveBalanceGwei = SRStorage.getRouterStorage().totalEffectiveBalanceGwei;
-        totalEffectiveBalanceGwei -= stateAcc.effectiveBalanceGwei;
-        SRStorage.getRouterStorage().totalEffectiveBalanceGwei = totalEffectiveBalanceGwei + effBalanceGwei;
+        uint96 totalClBalanceGwei = SRStorage.getRouterStorage().totalClBalanceGwei;
+        SRStorage.getRouterStorage().totalClBalanceGwei = totalClBalanceGwei - stateAcc.clBalanceGwei + clBalanceGwei;
 
-        stateAcc.effectiveBalanceGwei = effBalanceGwei;
+        uint96 totalActiveBalanceGwei = SRStorage.getRouterStorage().totalActiveBalanceGwei;
+        SRStorage.getRouterStorage().totalActiveBalanceGwei =
+            totalActiveBalanceGwei -
+            stateAcc.activeBalanceGwei +
+            activeBalanceGwei;
+
+        stateAcc.clBalanceGwei = clBalanceGwei;
+        stateAcc.activeBalanceGwei = activeBalanceGwei;
         stateAcc.exitedValidatorsCount = exitedValidatorsCount;
     }
 

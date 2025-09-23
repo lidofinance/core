@@ -47,8 +47,9 @@ export type OracleReportParams = {
   extraDataList?: Uint8Array;
   stakingModuleIdsWithNewlyExitedValidators?: bigint[];
   numExitedValidatorsByStakingModule?: bigint[];
-  stakingModuleIdsWithUpdatedActiveBalance?: bigint[];
+  stakingModuleIdsWithUpdatedBalance?: bigint[];
   activeBalancesGweiByStakingModule?: bigint[];
+  pendingBalancesGweiByStakingModule?: bigint[];
   reportElVault?: boolean;
   reportWithdrawalsVault?: boolean;
   vaultsDataTreeRoot?: string;
@@ -85,8 +86,9 @@ export const report = async (
     extraDataList = new Uint8Array(),
     stakingModuleIdsWithNewlyExitedValidators = [],
     numExitedValidatorsByStakingModule = [],
-    stakingModuleIdsWithUpdatedActiveBalance = [],
+    stakingModuleIdsWithUpdatedBalance = [],
     activeBalancesGweiByStakingModule = [],
+    pendingBalancesGweiByStakingModule = [],
     reportElVault = true,
     reportWithdrawalsVault = true,
     vaultsDataTreeRoot = ZERO_BYTES32,
@@ -182,6 +184,29 @@ export const report = async (
     log.debug("Bunker Mode", { "Is Active": isBunkerMode });
   }
 
+  const savedTotalClBalance = await ctx.contracts.stakingRouter.getTotalStakingModulesBalance();
+  expect(savedTotalClBalance).to.equal(postCLBalance);
+
+  if (stakingModuleIdsWithUpdatedBalance.length === 0) {
+    activeBalancesGweiByStakingModule = [];
+    pendingBalancesGweiByStakingModule = [];
+    let postCLBalanceRest = postCLBalance;
+    const moduleIds = await ctx.contracts.stakingRouter.getStakingModuleIds();
+    for (const moduleId of moduleIds) {
+      const moduleClBalance = await ctx.contracts.stakingRouter.getStakingModuleBalance(moduleId);
+      const moduleClBalanceNew = BigIntMath.min(
+        (postCLBalance * moduleClBalance) / savedTotalClBalance,
+        postCLBalanceRest > 0n ? postCLBalanceRest : 0n,
+      );
+      postCLBalanceRest -= moduleClBalanceNew;
+      if (moduleClBalance > 0) {
+        stakingModuleIdsWithUpdatedBalance.push(moduleId);
+        activeBalancesGweiByStakingModule.push(moduleClBalanceNew / ONE_GWEI);
+        pendingBalancesGweiByStakingModule.push(0n);
+      }
+    }
+  }
+
   const reportData = {
     consensusVersion: await accountingOracle.getConsensusVersion(),
     refSlot,
@@ -190,8 +215,9 @@ export const report = async (
     clPendingBalanceGwei: 0n,
     stakingModuleIdsWithNewlyExitedValidators,
     numExitedValidatorsByStakingModule,
-    stakingModuleIdsWithUpdatedActiveBalance,
+    stakingModuleIdsWithUpdatedBalance,
     activeBalancesGweiByStakingModule,
+    pendingBalancesGweiByStakingModule,
     withdrawalVaultBalance,
     elRewardsVaultBalance,
     sharesRequestedToBurn,
@@ -561,8 +587,9 @@ export type OracleReportSubmitParams = {
   sharesRequestedToBurn: bigint;
   stakingModuleIdsWithNewlyExitedValidators?: bigint[];
   numExitedValidatorsByStakingModule?: bigint[];
-  stakingModuleIdsWithUpdatedActiveBalance?: bigint[];
+  stakingModuleIdsWithUpdatedBalance?: bigint[];
   activeBalancesGweiByStakingModule?: bigint[];
+  pendingBalancesGweiByStakingModule?: bigint[];
   withdrawalFinalizationBatches?: bigint[];
   simulatedShareRate?: bigint;
   isBunkerMode?: boolean;
@@ -594,8 +621,9 @@ const submitReport = async (
     sharesRequestedToBurn,
     stakingModuleIdsWithNewlyExitedValidators = [],
     numExitedValidatorsByStakingModule = [],
-    stakingModuleIdsWithUpdatedActiveBalance = [],
+    stakingModuleIdsWithUpdatedBalance = [],
     activeBalancesGweiByStakingModule = [],
+    pendingBalancesGweiByStakingModule = [],
     withdrawalFinalizationBatches = [],
     simulatedShareRate = 0n,
     isBunkerMode = false,
@@ -618,8 +646,9 @@ const submitReport = async (
     "Shares requested to burn": sharesRequestedToBurn,
     "Staking module ids with newly exited validators": stakingModuleIdsWithNewlyExitedValidators,
     "Num exited validators by staking module": numExitedValidatorsByStakingModule,
-    "Staking module ids with updated active balance": stakingModuleIdsWithUpdatedActiveBalance,
+    "Staking module ids with updated active balance": stakingModuleIdsWithUpdatedBalance,
     "Active balances by staking module": activeBalancesGweiByStakingModule,
+    "Pending balances by staking module": pendingBalancesGweiByStakingModule,
     "Withdrawal finalization batches": withdrawalFinalizationBatches,
     "Is bunker mode": isBunkerMode,
     "Vaults data tree root": vaultsDataTreeRoot,
@@ -644,8 +673,9 @@ const submitReport = async (
     sharesRequestedToBurn,
     stakingModuleIdsWithNewlyExitedValidators,
     numExitedValidatorsByStakingModule,
-    stakingModuleIdsWithUpdatedActiveBalance,
+    stakingModuleIdsWithUpdatedBalance,
     activeBalancesGweiByStakingModule,
+    pendingBalancesGweiByStakingModule,
     withdrawalFinalizationBatches,
     simulatedShareRate,
     isBunkerMode,
@@ -770,8 +800,9 @@ export const getReportDataItems = (data: AccountingOracle.ReportDataStruct) => [
   data.clPendingBalanceGwei,
   data.stakingModuleIdsWithNewlyExitedValidators,
   data.numExitedValidatorsByStakingModule,
-  data.stakingModuleIdsWithUpdatedActiveBalance,
+  data.stakingModuleIdsWithUpdatedBalance,
   data.activeBalancesGweiByStakingModule,
+  data.pendingBalancesGweiByStakingModule,
   data.withdrawalVaultBalance,
   data.elRewardsVaultBalance,
   data.sharesRequestedToBurn,
@@ -797,8 +828,9 @@ export const calcReportDataHash = (items: ReturnType<typeof getReportDataItems>)
     "uint256", // clPendingBalanceGwei
     "uint256[]", // stakingModuleIdsWithNewlyExitedValidators
     "uint256[]", // numExitedValidatorsByStakingModule
-    "uint256[]", // stakingModuleIdsWithUpdatedActiveBalance
+    "uint256[]", // stakingModuleIdsWithUpdatedBalance
     "uint256[]", // activeBalancesGweiByStakingModule
+    "uint256[]", // pendingBalancesGweiByStakingModule
     "uint256", // withdrawalVaultBalance
     "uint256", // elRewardsVaultBalance
     "uint256", // sharesRequestedToBurn
