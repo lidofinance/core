@@ -139,7 +139,7 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.nodeOperatorDisbursableFee()).to.equal(0n);
       expect(await nodeOperatorFee.settledGrowth()).to.equal(0n);
       expect(await nodeOperatorFee.latestCorrectionTimestamp()).to.equal(0n);
-      expect(await nodeOperatorFee.pendingCorrection()).to.be.false;
+      expect(await nodeOperatorFee.isApprovedToConnect()).to.be.false;
     });
   });
 
@@ -513,10 +513,9 @@ describe("NodeOperatorFee.sol", () => {
           confirmTimestamp,
           expiryTimestamp,
           msgData,
-        )
-        .and.to.emit(nodeOperatorFee, "FeeDisbursementDisabled");
+        );
 
-      expect(await nodeOperatorFee.pendingCorrection()).to.be.true;
+      expect(await nodeOperatorFee.isApprovedToConnect()).to.be.false;
 
       expect(await nodeOperatorFee.settledGrowth()).to.equal(currentSettledGrowth);
 
@@ -531,13 +530,12 @@ describe("NodeOperatorFee.sol", () => {
       await expect(secondConfirmTx)
         .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
         .withArgs(vaultOwner, await nodeOperatorFee.DEFAULT_ADMIN_ROLE(), confirmTimestamp, expiryTimestamp, msgData)
-        .and.to.emit(nodeOperatorFee, "FeeDisbursementEnabled")
         .to.emit(nodeOperatorFee, "SettledGrowthSet")
         .withArgs(currentSettledGrowth, newSettledGrowth);
 
       expect(await nodeOperatorFee.settledGrowth()).to.deep.equal(newSettledGrowth);
       expect(await nodeOperatorFee.latestCorrectionTimestamp()).to.deep.equal(timestamp);
-      expect(await nodeOperatorFee.pendingCorrection()).to.be.false;
+      expect(await nodeOperatorFee.isApprovedToConnect()).to.be.false;
     });
   });
 

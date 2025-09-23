@@ -381,8 +381,8 @@ describe("Integration: OperatorGrid", () => {
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
 
       // Reconnect vault
-      const settledGrowth = await dashboard.settledGrowth();
-      await dashboard.connect(owner).reconnectToVaultHub(settledGrowth, settledGrowth);
+      await dashboard.connect(nodeOperator).approveToConnect();
+      await dashboard.connect(owner).reconnectToVaultHub();
 
       // Verify vault is reconnected
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;

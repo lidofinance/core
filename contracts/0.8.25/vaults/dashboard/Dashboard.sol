@@ -297,9 +297,14 @@ contract Dashboard is NodeOperatorFee {
      * @notice Connects to VaultHub, transferring ownership to VaultHub.
      */
     function connectToVaultHub() public payable {
+        if (!isApprovedToConnect) revert ForbiddenToConnectByNodeOperator();
+
         if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
+
+        // node operator approval is one time only and is reset after connect
+        _forbidToConnect();
     }
 
     /**

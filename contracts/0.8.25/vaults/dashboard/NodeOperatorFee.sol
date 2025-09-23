@@ -70,6 +70,13 @@ contract NodeOperatorFee is Permissions {
     uint256 public latestCorrectionTimestamp;
 
     /**
+     * @notice Flag indicating whether the vault is approved by the node operator to connect to VaultHub.
+     * The node operator's approval is needed to confirm the validity of fee calculations, 
+     * particularly the settled growth.
+     */
+    bool public isApprovedToConnect;
+
+    /**
      * @notice Passes the address of the vault hub up the inheritance chain.
      * @param _vaultHub The address of the vault hub.
      * @param _lidoLocator The address of the Lido locator.
@@ -136,6 +143,14 @@ contract NodeOperatorFee is Permissions {
      */
     function nodeOperatorDisbursableFee() public view returns (uint256 fee) {
         (fee, ) = _calculateFee();
+    }
+
+    function approveToConnect() external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
+        _approveToConnect();
+    }
+
+    function forbidToConnect() external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
+        _forbidToConnect();
     }
 
     /**
@@ -245,6 +260,18 @@ contract NodeOperatorFee is Permissions {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
+    function _approveToConnect() internal {
+        isApprovedToConnect = true;
+
+        emit ApprovedToConnect();
+    }
+
+    function _forbidToConnect() internal {
+        isApprovedToConnect = false;
+
+        emit ForbiddenToConnect();
+    }
+
     function _setSettledGrowth(uint256 _newSettledGrowth) private {
         uint256 oldSettledGrowth = settledGrowth;
         if (oldSettledGrowth == _newSettledGrowth) revert SameSettledGrowth();
@@ -344,6 +371,16 @@ contract NodeOperatorFee is Permissions {
      */
     event CorrectionTimestampUpdated(uint256 timestamp);
 
+    /**
+     * @dev Emitted when the node operator approves to connect to VaultHub.
+     */
+    event ApprovedToConnect();
+
+    /**
+     * @dev Emitted when the node operator forbids to connect to VaultHub.
+     */
+    event ForbiddenToConnect();
+
     // ==================== Errors ====================
 
     /**
@@ -379,7 +416,7 @@ contract NodeOperatorFee is Permissions {
     /**
      * @dev Error emitted when the settled growth is pending manual adjustment.
      */
-    error SettledGrowthPendingCorrection();
+    error ForbiddenToConnectByNodeOperator();
 
     /**
      * @dev Error emitted when the vault is quarantined.

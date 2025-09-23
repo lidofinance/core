@@ -319,7 +319,7 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.LIDO_LOCATOR()).to.equal(lidoLocator);
       expect(await dashboard.settledGrowth()).to.equal(0n);
       expect(await dashboard.latestCorrectionTimestamp()).to.equal(0n);
-      expect(await dashboard.pendingCorrection()).to.be.false;
+      expect(await dashboard.isApprovedToConnect()).to.be.false;
       expect(await dashboard.nodeOperatorFeeRate()).to.equal(nodeOperatorFeeBP);
       expect(await dashboard.nodeOperatorFeeRecipient()).to.equal(nodeOperator);
       expect(await dashboard.getConfirmExpiry()).to.equal(confirmExpiry);
@@ -654,38 +654,41 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
-      await expect(newDashboard.connect(stranger).connectAndAcceptTier(1, 1n, 0n, 0n)).to.be.revertedWithCustomError(
+      await newDashboard.connect(nodeOperator).approveToConnect();
+      await expect(newDashboard.connect(stranger).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
         newDashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
+    it("reverts if connect is not approved by node operator", async () => {
+      expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+        newDashboard,
+        "ForbiddenToConnectByNodeOperator",
+      );
+    });
+
     it("reverts if change tier is not confirmed by node operator", async () => {
-      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, 0n, 0n)).to.be.revertedWithCustomError(
+      await newDashboard.connect(nodeOperator).approveToConnect();
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
         newDashboard,
         "TierChangeNotConfirmed",
       );
     });
 
     it("works", async () => {
+      await newDashboard.connect(nodeOperator).approveToConnect();
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
-      const settledGrowth = await dashboard.settledGrowth();
-      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, settledGrowth, settledGrowth)).to.emit(
-        hub,
-        "Mock__VaultConnected",
-      );
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.emit(hub, "Mock__VaultConnected");
     });
 
     it("works with connection deposit", async () => {
       const connectDeposit = await hub.CONNECT_DEPOSIT();
 
+      await newDashboard.connect(nodeOperator).approveToConnect();
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
-      const settledGrowth = await dashboard.settledGrowth();
-      await expect(
-        newDashboard
-          .connect(vaultOwner)
-          .connectAndAcceptTier(1, 1n, settledGrowth, settledGrowth, { value: connectDeposit }),
-      )
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, { value: connectDeposit }))
         .to.emit(hub, "Mock__VaultConnected")
         .withArgs(newVault);
     });
@@ -1425,7 +1428,7 @@ describe("Dashboard.sol", () => {
   context("reconnectToVaultHub", () => {
     it("reverts if called by a non-admin", async () => {
       await setup({ isConnected: false });
-      await expect(dashboard.connect(stranger).reconnectToVaultHub(0, 0)).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).reconnectToVaultHub()).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
@@ -1441,8 +1444,9 @@ describe("Dashboard.sol", () => {
       expect(await vault.owner()).to.equal(vaultOwner);
 
       // reconnect
+      await dashboard.connect(nodeOperator).approveToConnect();
       await vault.connect(vaultOwner).transferOwnership(dashboard);
-      await dashboard.reconnectToVaultHub(0, 0);
+      await dashboard.reconnectToVaultHub();
       expect(await vault.owner()).to.equal(hub);
     });
   });
