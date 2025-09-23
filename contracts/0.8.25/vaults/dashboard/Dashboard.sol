@@ -288,17 +288,15 @@ contract Dashboard is NodeOperatorFee {
      * @notice Accepts the ownership over the StakingVault and connects to VaultHub. Can be called to reconnect
      *         to the hub after voluntaryDisconnect()
      */
-    function reconnectToVaultHub(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) external {
+    function reconnectToVaultHub() external {
         _acceptOwnership();
-        connectToVaultHub(_newSettledGrowth, _expectedSettledGrowth);
+        connectToVaultHub();
     }
 
     /**
      * @notice Connects to VaultHub, transferring ownership to VaultHub.
      */
-    function connectToVaultHub(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) public payable {
-        if (_newSettledGrowth != settledGrowth) correctSettledGrowth(_newSettledGrowth, _expectedSettledGrowth);
-
+    function connectToVaultHub() public payable {
         if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
@@ -309,13 +307,8 @@ contract Dashboard is NodeOperatorFee {
      * @param _tierId The tier to change to
      * @param _requestedShareLimit The requested share limit
      */
-    function connectAndAcceptTier(
-        uint256 _tierId,
-        uint256 _requestedShareLimit,
-        uint256 _newSettledGrowth,
-        uint256 _expectedSettledGrowth
-    ) external payable {
-        connectToVaultHub(_newSettledGrowth, _expectedSettledGrowth);
+    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit) external payable {
+        connectToVaultHub();
         if (!_changeTier(_tierId, _requestedShareLimit)) {
             revert TierChangeNotConfirmed();
         }
@@ -685,7 +678,6 @@ contract Dashboard is NodeOperatorFee {
      * @param totalAmount the total amount of ether deposited to beacon chain
      */
     event UnguaranteedDeposits(address indexed stakingVault, uint256 deposits, uint256 totalAmount);
-
 
     // ==================== Errors ====================
 

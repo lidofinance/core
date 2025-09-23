@@ -70,15 +70,6 @@ contract NodeOperatorFee is Permissions {
     uint256 public latestCorrectionTimestamp;
 
     /**
-     * @notice Flag indicating whether settled growth is pending manual adjustment.
-     * This flag blocks any fee disbursement until the settled growth is confirmed by both the vault owner and node operator.
-     * Settled growth needs manual adjustment when inOutDelta is outdated,
-     * e.g. when connecting to VaultHub, the inOutDelta is reset to the vault's EL balance,
-     * which may lead to an inadequate node operator fee calculated against the difference of inOutDelta and reported totalValue.
-     */
-    bool public pendingCorrection;
-
-    /**
      * @notice Passes the address of the vault hub up the inheritance chain.
      * @param _vaultHub The address of the vault hub.
      * @param _lidoLocator The address of the Lido locator.
@@ -184,9 +175,6 @@ contract NodeOperatorFee is Permissions {
         // If the vault is quarantined, the total value is reduced and may not reflect the exemption
         if (_lazyOracle().vaultQuarantine(address(_stakingVault())).isActive) revert VaultQuarantined();
 
-        // Disburse will revert if true, but it's important to check this before recording confirmations
-        if (pendingCorrection) revert SettledGrowthPendingCorrection();
-
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
@@ -209,17 +197,8 @@ contract NodeOperatorFee is Permissions {
     function correctSettledGrowth(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) public returns (bool) {
         if (settledGrowth != _expectedSettledGrowth) revert UnexpectedSettledGrowth();
 
-        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) {
-            // if a party starts a vote to correct the settled growth,
-            // the disbursement is disabled until the correction is confirmed
-            _disableFeeDisbursement();
-            return false;
-        }
-
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
         _correctSettledGrowth(_newSettledGrowth);
-        // multiconfirmation ensures the owner and node operator have agreed on the fees
-        // and the fee disbursement can be resumed
-        _enableFeeDisbursement();
 
         return true;
     }
@@ -295,29 +274,12 @@ contract NodeOperatorFee is Permissions {
     }
 
     function _calculateFee() internal view returns (uint256 fee, int256 growth) {
-        // revert if the settled growth is awaiting manual adjustment,
-        // thus a meaningful return value cannot be calculated.
-        // cannot return 0 instead of revert because 0 is a legal value
-        if (pendingCorrection) revert SettledGrowthPendingCorrection();
-
         VaultHub.Report memory report = latestReport();
         growth = int104(report.totalValue) - report.inOutDelta;
 
         if (growth > int256(settledGrowth)) {
             fee = ((uint256(growth) - settledGrowth) * nodeOperatorFeeRate) / TOTAL_BASIS_POINTS;
         }
-    }
-
-    function _enableFeeDisbursement() internal {
-        pendingCorrection = false;
-
-        emit FeeDisbursementEnabled();
-    }
-
-    function _disableFeeDisbursement() internal {
-        pendingCorrection = true;
-
-        emit FeeDisbursementDisabled();
     }
 
     function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
@@ -381,17 +343,6 @@ contract NodeOperatorFee is Permissions {
      * @param timestamp new correction timestamp
      */
     event CorrectionTimestampUpdated(uint256 timestamp);
-
-
-    /**
-     * @dev Emitted when the fee disbursement is enabled.
-     */
-    event FeeDisbursementEnabled();
-
-    /**
-     * @dev Emitted when the fee disbursement is disabled.
-     */
-    event FeeDisbursementDisabled();
 
     // ==================== Errors ====================
 
