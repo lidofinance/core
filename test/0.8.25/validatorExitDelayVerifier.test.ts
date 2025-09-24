@@ -38,8 +38,13 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     await Snapshot.restore(originalState);
   });
 
+  // Mainnet values
+  // Pectra hardfork slot
+  // https://github.com/ethereum/consensus-specs/blob/365320e778965631cbef11fd93328e82a746b1f6/specs/electra/fork.md#configuration
   const FIRST_SUPPORTED_SLOT = 11649024;
   const PIVOT_SLOT = 11649024;
+  // Capella hardfork slot
+  // https://github.com/ethereum/consensus-specs/blob/365320e778965631cbef11fd93328e82a746b1f6/specs/capella/fork.md#configuration
   const CAPELLA_SLOT = 194048 * 32;
   const SLOTS_PER_EPOCH = 32;
   const SECONDS_PER_SLOT = 12;

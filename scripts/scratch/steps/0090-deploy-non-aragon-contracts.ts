@@ -219,9 +219,15 @@ export async function main() {
   const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
   const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
 
+  // Mainnet values
+  // Pectra hardfork slot
+  // https://github.com/ethereum/consensus-specs/blob/365320e778965631cbef11fd93328e82a746b1f6/specs/electra/fork.md#configuration
   const FIRST_SUPPORTED_SLOT = 11649024;
   const PIVOT_SLOT = 11649024;
+  // Capella hardfork slot
+  // https://github.com/ethereum/consensus-specs/blob/365320e778965631cbef11fd93328e82a746b1f6/specs/capella/fork.md#configuration
   const CAPELLA_SLOT = 194048 * 32;
+  // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters
   const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
   // Deploy ValidatorExitDelayVerifier

@@ -115,7 +115,7 @@ async function main(): Promise<void> {
   const FIRST_SUPPORTED_SLOT = 364032 * SLOTS_PER_EPOCH; // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7600.md#activation
   const PIVOT_SLOT = FIRST_SUPPORTED_SLOT;
   const CAPELLA_SLOT = 194048 * 32; // capellaSlot @see https://github.com/ethereum/consensus-specs/blob/365320e778965631cbef11fd93328e82a746b1f6/specs/capella/fork.md?plain=1#L22
-  const SLOTS_PER_HISTORICAL_ROOT = 8192;
+  const SLOTS_PER_HISTORICAL_ROOT = 8192; // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters
 
   // TriggerableWithdrawalsGateway params
   const TRIGGERABLE_WITHDRAWALS_MAX_LIMIT = 11_200;
