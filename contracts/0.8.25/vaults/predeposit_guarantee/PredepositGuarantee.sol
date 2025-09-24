@@ -121,6 +121,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /// @notice amount of ether to be deposited after the predeposit to activate the validator
     uint256 public constant ACTIVATION_DEPOSIT_AMOUNT = 31 ether;
 
+    uint256 public constant MAX_TOPUP_AMOUNT = 2048 ether - ACTIVATION_DEPOSIT_AMOUNT - PREDEPOSIT_AMOUNT;
+
     /**
      * @notice computed DEPOSIT_DOMAIN for current chain
      * @dev changes between chains and testnets depending on GENESIS_FORK_VERSION
@@ -425,7 +427,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             if (_deposit.amount != PREDEPOSIT_AMOUNT) revert PredepositAmountInvalid(_deposit.pubkey, _deposit.amount);
 
             // checking BLS signature to avoid burning the predeposit
-            // for existing validators Beacon Chain does not enforce signature check, so zero sig messages can be used
             verifyDepositMessage(_deposit, _depositsY[i], withdrawalCredentials);
 
             validatorByPubkey[_deposit.pubkey] = ValidatorStatus({
@@ -588,11 +589,15 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @dev only callable by the vault's depositor (or node operator)
      */
     function topUpExistingValidators(ValidatorTopUp[] calldata _topUps) external whenResumed {
-        ERC7201Storage storage $ = _storage();
+        mapping(bytes => ValidatorStatus) storage validators = _storage().validatorStatus;
+        bytes memory zeroSignature = new bytes(96);
 
         for (uint256 i = 0; i < _topUps.length; i++) {
             ValidatorTopUp calldata _topUp = _topUps[i];
-            ValidatorStatus storage validator = $.validatorStatus[_topUp.pubkey];
+
+            if (_topUp.amount > MAX_TOPUP_AMOUNT) revert InvalidTopUpAmount(_topUp.amount);
+
+            ValidatorStatus storage validator = validators[_topUp.pubkey];
 
             if (_depositorOf(validator.nodeOperator) != msg.sender) {
                 revert NotDepositor();
@@ -607,7 +612,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
             IStakingVault.Deposit memory deposit = IStakingVault.Deposit({
                 pubkey: _topUp.pubkey,
-                signature: new bytes(96),
+                signature: zeroSignature,
                 amount: _topUp.amount,
                 depositDataRoot: _depositDataRootWithZeroSig(_topUp.pubkey, _topUp.amount, withdrawalCredentials)
             });
@@ -645,6 +650,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             if (_amounts[i] > 0 && msg.sender != _depositorOf(nodeOperator)) {
                 revert NotDepositor();
             }
+
+            if (_amounts[i] > MAX_TOPUP_AMOUNT) revert InvalidTopUpAmount(_amounts[i]);
 
             IStakingVault vault = validator.stakingVault;
             bytes32 withdrawalCredentials = _checkVaultWC(vault);
@@ -861,6 +868,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     // depositing errors
     error ValidatorNotActivated(bytes validatorPubkey, ValidatorStage stage);
     error ValidatorNotProven(bytes validatorPubkey, ValidatorStage stage);
+    error InvalidTopUpAmount(uint256 amount);
 
     // prove
     error ValidatorNotPreDeposited(bytes validatorPubkey, ValidatorStage stage);
