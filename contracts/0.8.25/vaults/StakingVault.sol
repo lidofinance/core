@@ -79,6 +79,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
 
     /**
      * @dev ERC-7201: Namespaced Storage Layout
+     * @custom:storage-location erc7201:Lido.Vaults.StakingVault
      */
     struct Storage {
         // 1st slot
