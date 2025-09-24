@@ -134,9 +134,8 @@ describe("StakingRouter.sol:keys-02-type", () => {
       // 2 keys + 2 keys + 0 + 1
       const opIds = [1, 2, 3, 4];
       const opAllocs = [ether("4096"), ether("4000"), ether("31"), ether("32")];
-      const totalAlloc = opAllocs.reduce((a, b) => a + b, 0n);
       await stakingModuleV2.mock_getAllocation(opIds, opAllocs);
-      await stakingRouter.testing_setStakingModuleAccounting(moduleId, totalAlloc, totalAlloc, 0n);
+      await stakingModuleV2.mock__getStakingModuleSummary(moduleId, 0n, 100n);
 
       const depositableEth = ether("10242");
       // _getTargetDepositsAllocation mocked currently to return the same amount it received

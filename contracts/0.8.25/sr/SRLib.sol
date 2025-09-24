@@ -376,15 +376,16 @@ library SRLib {
         return msg.sender;
     }
 
-    function _getStakingModuleAllocationAndCapacity(uint256 _moduleId, bool loadSummary)
+    function _getStakingModuleBalanceAndCapacity(uint256 _moduleId, bool _getCapacity)
         internal
         view
-        returns (uint256 allocation, uint256 capacity)
+        returns (uint256 balance, uint256 capacity)
     {
         ModuleStateConfig memory stateConfig = _moduleId.getModuleState().getStateConfig();
-        allocation = SRUtils._getModuleBalance(_moduleId);
+        balance = SRUtils._getModuleBalance(_moduleId);
 
-        if (loadSummary && stateConfig.status == StakingModuleStatus.Active) {
+        if (_getCapacity && stateConfig.status == StakingModuleStatus.Active) {
+            // todo rethink getting capacity for new modules (maybe some additional limits will be applied)
             (,, uint256 depositableValidatorsCount) = _moduleId.getIStakingModule().getStakingModuleSummary();
             capacity = SRUtils._getModuleCapacity(stateConfig.moduleType, depositableValidatorsCount);
         }
@@ -397,7 +398,7 @@ library SRLib {
     function _getDepositAllocation(uint256 _moduleId, uint256 _allocateAmount)
         public
         view
-        returns (uint256 allocated, uint256 newAllocation)
+        returns (uint256 allocated, uint256 allocation)
     {
         uint256[] memory allocations;
         (allocated, allocations) = _getDepositAllocations(_asSingletonArray(_moduleId), _allocateAmount);
@@ -413,36 +414,22 @@ library SRLib {
         view
         returns (uint256 allocated, uint256[] memory allocations)
     {
-        // if (_allocateAmount % 1 gwei != 0) {
-        //     revert InvalidDepositAmount();
-        // }
-        // // convert to Gwei
-        // _allocateAmount /= 1 gwei;
-
         uint256 n = _moduleIds.length;
-        allocations = new uint256[](n);
+        uint256[] memory shares = SRStorage.getSTASStorage().sharesOf(_moduleIds, uint8(Strategies.Deposit));
+        uint256[] memory balances = new uint256[](n);
         uint256[] memory capacities = new uint256[](n);
 
         for (uint256 i; i < n; ++i) {
             // load module current balance
-            (allocations[i], capacities[i]) = _getStakingModuleAllocationAndCapacity(_moduleIds[i], true);
+            (balances[i], capacities[i]) = _getStakingModuleBalanceAndCapacity(_moduleIds[i], true);
         }
 
-        uint256[] memory shares = SRStorage.getSTASStorage().sharesOf(_moduleIds, uint8(Strategies.Deposit));
-        uint256 totalAllocation = SRUtils._getTotalModulesBalance();
-        (, uint256[] memory fills, uint256 rest) =
-            STASPouringMath._allocate(shares, allocations, capacities, totalAllocation, _allocateAmount);
+        uint256 totalBalance = SRUtils._getTotalModulesBalance();
+        uint256 notAllocated;
+        (, allocations, notAllocated) =
+            STASPouringMath._allocate(shares, balances, capacities, totalBalance, _allocateAmount);
 
-        unchecked {
-            uint256 sum;
-            for (uint256 i = 0; i < n; ++i) {
-                allocations[i] += fills[i];
-                sum += fills[i];
-            }
-            allocated = _allocateAmount - rest;
-            assert(allocated == sum);
-        }
-        return (allocated, allocations);
+        allocated = _allocateAmount - notAllocated;
     }
 
     function _getWithdrawalDeallocations(uint256[] memory _moduleIds, uint256 _deallocateAmount)
@@ -451,29 +438,22 @@ library SRLib {
         returns (uint256 deallocated, uint256[] memory allocations)
     {
         uint256 n = _moduleIds.length;
-        allocations = new uint256[](n);
+        uint256[] memory balances = new uint256[](n);
 
         for (uint256 i; i < n; ++i) {
             // load module current balance
-            (allocations[i],) = _getStakingModuleAllocationAndCapacity(_moduleIds[i], false);
+            (balances[i],) = _getStakingModuleBalanceAndCapacity(_moduleIds[i], false);
         }
 
         uint256[] memory shares = SRStorage.getSTASStorage().sharesOf(_moduleIds, uint8(Strategies.Withdrawal));
-        uint256 totalAllocation = SRUtils._getTotalModulesBalance();
+        uint256 totalBalance = SRUtils._getTotalModulesBalance();
+        uint256 notDeallocated;
+        (, allocations, notDeallocated) = STASPouringMath._deallocate(shares, balances, totalBalance, _deallocateAmount);
 
-        (, uint256[] memory fills, uint256 rest) =
-            STASPouringMath._deallocate(shares, allocations, totalAllocation, _deallocateAmount);
-
-        unchecked {
-            uint256 sum;
-            for (uint256 i = 0; i < n; ++i) {
-                allocations[i] -= fills[i];
-                sum += fills[i];
-            }
-            deallocated = _deallocateAmount - rest;
-            assert(deallocated == sum);
-        }
+        deallocated = _deallocateAmount - notDeallocated;
     }
+
+
 
     /// @dev old storage ref. for staking modules mapping, remove after 1st migration
     function _getStorageStakingModulesMapping()

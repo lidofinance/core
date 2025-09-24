@@ -72,7 +72,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @dev Identical for both 0x01 and 0x02 types.
     ///      For 0x02, the validator may later be topped up.
     ///      Top-ups are not supported for 0x01.
-    uint256 public constant INITIAL_DEPOSIT_SIZE = 32 ether;
+    uint256 public constant INITIAL_DEPOSIT_SIZE = SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
 
     /// @dev Module trackers will be derived from this position
     bytes32 internal constant DEPOSITS_TRACKER = keccak256("lido.StakingRouter.depositTracker");
@@ -733,8 +733,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     /// @notice Returns the staking module type: Legacy or New, i.e. balance-based (uses 0x02 withdrawal credentials)
     /// @param _stakingModuleId Id of the staking module
-    /// @return Staking module type
-    function getStakingModuleType(uint256 _stakingModuleId) external view returns (StakingModuleType) {
+    /// @return Staking module type: 0 - Legacy (WC type 0x01) or 1 - New (WC type 0x02)
+    function getStakingModuleType(uint256 _stakingModuleId) public view returns (StakingModuleType) {
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
         return stateConfig.moduleType;
     }
@@ -754,13 +754,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (stateConfig.status != StakingModuleStatus.Active) return (0, 0);
 
         if (stateConfig.moduleType == StakingModuleType.New) {
-            (, uint256 stakingModuleTargetEthAmount) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
+            (, uint256 stakingModuleDepositableEthAmount) =
+                _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
+
             (uint256[] memory operators, uint256[] memory allocations) =
-                IStakingModuleV2(stateConfig.moduleAddress).getAllocation(stakingModuleTargetEthAmount);
+                IStakingModuleV2(stateConfig.moduleAddress).getAllocation(stakingModuleDepositableEthAmount);
 
             uint256[] memory counts;
-            (depositsCount, counts) =
-                _getNewDepositsCount02(stakingModuleTargetEthAmount, allocations, INITIAL_DEPOSIT_SIZE);
+            (depositsCount, counts) = _getNewDepositsCount02(stakingModuleDepositableEthAmount, allocations);
 
             // this will be read and clean in deposit method
             DepositsTempStorage.storeOperators(operators);
@@ -789,47 +790,43 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (stateConfig.moduleType != StakingModuleType.Legacy) {
             revert LegacyStakingModuleRequired();
         }
-
-        (, uint256 stakingModuleTargetEthAmount) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
-
-        uint256 countKeys = stakingModuleTargetEthAmount / SRUtils.MAX_EFFECTIVE_BALANCE_01;
-        // todo move up
+        // todo remove, as stakingModuleDepositableEthAmount should be 0 if module is not active,
+        // and therefore capacity will be 0
         if (stateConfig.status != StakingModuleStatus.Active) return 0;
 
-        // todo: remove, as stakingModuleTargetEthAmount is already capped by depositableValidatorsCount
-        (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
-        return Math256.min(depositableValidatorsCount, countKeys);
+        (, uint256 stakingModuleDepositableEthAmount) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
+
+        return stakingModuleDepositableEthAmount / SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
     }
 
-    function _getNewDepositsCount02(
-        uint256 stakingModuleTargetEthAmount,
-        uint256[] memory allocations,
-        uint256 initialDeposit
-    ) internal pure returns (uint256 totalCount, uint256[] memory counts) {
+    function _getNewDepositsCount02(uint256 stakingModuleTargetEthAmount, uint256[] memory allocations)
+        internal
+        pure
+        returns (uint256 totalCount, uint256[] memory counts)
+    {
         uint256 len = allocations.length;
         counts = new uint256[](len);
+        uint256 initialDeposit = INITIAL_DEPOSIT_SIZE;
         unchecked {
             for (uint256 i = 0; i < len; ++i) {
                 uint256 allocation = allocations[i];
 
-                // should sum of uint256[] memory allocations be <= stakingModuleTargetEthAmount?
+                // sum of all `allocations` items should be <= stakingModuleTargetEthAmount
                 if (allocation > stakingModuleTargetEthAmount) {
                     revert AllocationExceedsTarget();
                 }
 
                 stakingModuleTargetEthAmount -= allocation;
-                uint256 depositsCount;
 
                 if (allocation >= initialDeposit) {
                     // if allocation is 4000 - 2
                     // if allocation 32 - 1
                     // if less than 32 - 0
                     // is it correct situation if allocation 32 for new type of keys?
-                    depositsCount = 1 + (allocation - initialDeposit) / SRUtils.MAX_EFFECTIVE_BALANCE_02;
+                    uint256 depositsCount = 1 + (allocation - initialDeposit) / SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
+                    counts[i] = depositsCount;
+                    totalCount += depositsCount;
                 }
-
-                counts[i] = depositsCount;
-                totalCount += depositsCount;
             }
         }
     }

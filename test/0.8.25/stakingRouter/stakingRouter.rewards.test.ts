@@ -533,7 +533,7 @@ describe("StakingRouter.sol:rewards", () => {
     const moduleId = modulesCount + 1n;
     expect(await stakingRouter.getStakingModulesCount()).to.equal(modulesCount + 1n);
 
-    await module.mock__setStakingModuleSummary(exited, deposited, depositable);
+    await module.mock__getStakingModuleSummary(exited, deposited, depositable);
     if (effBalanceGwei == 0n && deposited > 0n) {
       effBalanceGwei = (deposited * getModuleMEB(moduleType)) / 1_000_000_000n; // in gwei
     }

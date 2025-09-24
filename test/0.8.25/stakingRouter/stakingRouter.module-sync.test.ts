@@ -113,7 +113,7 @@ describe("StakingRouter.sol:module-sync", () => {
     ];
 
     // module mock state
-    const stakingModuleSummary: Parameters<StakingModule__MockForStakingRouter["mock__setStakingModuleSummary"]> = [
+    const stakingModuleSummary: Parameters<StakingModule__MockForStakingRouter["mock__getStakingModuleSummary"]> = [
       100n, // exitedValidators
       1000, // depositedValidators
       200, // depositableValidators
@@ -157,7 +157,7 @@ describe("StakingRouter.sol:module-sync", () => {
       ];
 
       // mocking module state
-      await stakingModule.mock__setStakingModuleSummary(...stakingModuleSummary);
+      await stakingModule.mock__getStakingModuleSummary(...stakingModuleSummary);
       await stakingModule.mock__getNodeOperatorSummary(...nodeOperatorSummary);
       await stakingModule.mock__nodeOperatorsCount(...nodeOperatorsCounts);
       await stakingModule.mock__getNodeOperatorIds(nodeOperatorsIds);
@@ -487,7 +487,7 @@ describe("StakingRouter.sol:module-sync", () => {
       const totalDepositedValidators = 10n;
       const depositableValidatorsCount = 2n;
 
-      await stakingModule.mock__setStakingModuleSummary(
+      await stakingModule.mock__getStakingModuleSummary(
         totalExitedValidators,
         totalDepositedValidators,
         depositableValidatorsCount,
@@ -505,7 +505,7 @@ describe("StakingRouter.sol:module-sync", () => {
       const totalDepositedValidators = 10n;
       const depositableValidatorsCount = 2n;
 
-      await stakingModule.mock__setStakingModuleSummary(
+      await stakingModule.mock__getStakingModuleSummary(
         totalExitedValidators,
         totalDepositedValidators,
         depositableValidatorsCount,
@@ -526,7 +526,7 @@ describe("StakingRouter.sol:module-sync", () => {
       const totalDepositedValidators = 10n;
       const depositableValidatorsCount = 2n;
 
-      await stakingModule.mock__setStakingModuleSummary(
+      await stakingModule.mock__getStakingModuleSummary(
         totalExitedValidators,
         totalDepositedValidators,
         depositableValidatorsCount,
@@ -547,7 +547,7 @@ describe("StakingRouter.sol:module-sync", () => {
       const totalDepositedValidators = 10n;
       const depositableValidatorsCount = 2n;
 
-      await stakingModule.mock__setStakingModuleSummary(
+      await stakingModule.mock__getStakingModuleSummary(
         totalExitedValidators,
         totalDepositedValidators,
         depositableValidatorsCount,
@@ -683,7 +683,7 @@ describe("StakingRouter.sol:module-sync", () => {
     };
 
     beforeEach(async () => {
-      await stakingModule.mock__setStakingModuleSummary(
+      await stakingModule.mock__getStakingModuleSummary(
         moduleSummary.totalExitedValidators,
         moduleSummary.totalDepositedValidators,
         moduleSummary.depositableValidatorsCount,
@@ -792,7 +792,7 @@ describe("StakingRouter.sol:module-sync", () => {
     });
 
     it("Does nothing if there is a mismatch between exited validators count on the module and the router cache", async () => {
-      await stakingModule.mock__setStakingModuleSummary(1n, 0n, 0n);
+      await stakingModule.mock__getStakingModuleSummary(1n, 0n, 0n);
 
       await expect(stakingRouter.onValidatorsCountsByNodeOperatorReportingFinished()).not.to.emit(
         stakingModule,

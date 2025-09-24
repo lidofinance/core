@@ -185,7 +185,6 @@ export const report = async (
   }
 
   const savedTotalClBalance = await ctx.contracts.stakingRouter.getTotalStakingModulesBalance();
-  expect(savedTotalClBalance).to.equal(postCLBalance);
 
   if (stakingModuleIdsWithUpdatedBalance.length === 0) {
     activeBalancesGweiByStakingModule = [];

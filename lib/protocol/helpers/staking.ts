@@ -2,7 +2,7 @@ import { ethers, ZeroAddress } from "ethers";
 
 import { BigIntMath, certainAddress, ether, impersonate, log, StakingModuleStatus, TOTAL_BASIS_POINTS } from "lib";
 
-import { MAX_DEPOSIT_AMOUNT, ZERO_HASH } from "test/suite";
+import { ZERO_HASH } from "test/suite";
 
 import { ProtocolContext } from "../types";
 
@@ -130,7 +130,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   }
 
   const isMaxDepositsCountNotEnough = async () => {
-    const maxDepositsCount = await stakingRouter.getStakingModuleMaxDepositsCount(moduleId, depositableEther);
+    const maxDepositsCount = await stakingRouter.getStakingModuleMaxDepositsCount(moduleId, ethToDeposit);
     return maxDepositsCount < depositsCount;
   };
 
@@ -155,7 +155,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
   const numDepositedBefore = (await lido.getBeaconStat()).depositedValidators;
 
   // Deposit validators
-  await lido.connect(dsmSigner).deposit(MAX_DEPOSIT_AMOUNT, moduleId, ZERO_HASH);
+  await lido.connect(dsmSigner).deposit(ethToDeposit, moduleId, ZERO_HASH);
 
   const numDepositedAfter = (await lido.getBeaconStat()).depositedValidators;
 
@@ -168,6 +168,7 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
     const currentStatus = await stakingRouter.getStakingModuleStatus(mId);
     if (currentStatus === BigInt(originalStatus)) continue;
     await stakingRouter.connect(managerSigner).setStakingModuleStatus(mId, originalStatus);
+    console.log("!!staking.ts>depositAndReportValidators: unpause module:", mId, originalStatus);
   }
 
   const before = await lido.getBeaconStat();
