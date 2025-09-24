@@ -11,8 +11,8 @@ import { Dashboard, SSZBLSHelpers, StakingVault } from "typechain-types";
 import {
   days,
   ether,
-  generatePostDeposit,
   generatePredeposit,
+  generateTopUp,
   generateValidator,
   log,
   prepareLocalMerkleTree,
@@ -33,7 +33,7 @@ import { bailOnFailure, Snapshot } from "test/suite";
 import { ONE_DAY } from "test/suite/constants";
 
 const VALIDATORS_PER_VAULT = 2n;
-const VALIDATOR_DEPOSIT_SIZE = ether("32");
+const VALIDATOR_DEPOSIT_SIZE = ether("33");
 const VAULT_DEPOSIT = VALIDATOR_DEPOSIT_SIZE * VALIDATORS_PER_VAULT;
 
 const ONE_YEAR = 365n * ONE_DAY;
@@ -257,12 +257,15 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       proposerIndex: beaconBlockHeader.proposerIndex,
     }));
 
-    const postDepositAmount = VALIDATOR_DEPOSIT_SIZE - predepositAmount;
+    const postDepositAmount = VALIDATOR_DEPOSIT_SIZE - predepositAmount - ether("31");
     const postdeposits = validators.map((validator) => {
-      return generatePostDeposit(validator.container, postDepositAmount);
+      return generateTopUp(validator.container, postDepositAmount);
     });
 
-    await pdg.proveAndDeposit(witnesses, postdeposits, stakingVault);
+    await pdg.proveWCAndTopUpValidators(
+      witnesses,
+      postdeposits.map((p) => p.amount),
+    );
 
     stakingVaultCLBalance += VAULT_DEPOSIT;
 
@@ -340,18 +343,18 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(vaultReportedEvent.args?.reportLiabilityShares).to.equal(stakingVaultMaxMintingShares);
     // TODO: add assertions for fees
 
-    expect(await dashboard.nodeOperatorDisbursableFee()).to.be.gt(0n);
+    expect(await dashboard.accruedFee()).to.be.gt(0n);
   });
 
   it("Should allow Operator to claim performance fees", async () => {
-    const performanceFee = await dashboard.nodeOperatorDisbursableFee();
+    const performanceFee = await dashboard.accruedFee();
     log.debug("Staking Vault stats", {
       "Staking Vault performance fee": ethers.formatEther(performanceFee),
     });
 
     const operatorBalanceBefore = await ethers.provider.getBalance(nodeOperator);
 
-    const claimPerformanceFeesTx = await dashboard.connect(nodeOperator).disburseNodeOperatorFee();
+    const claimPerformanceFeesTx = await dashboard.connect(nodeOperator).disburseFee();
     const claimPerformanceFeesTxReceipt = (await claimPerformanceFeesTx.wait()) as ContractTransactionReceipt;
 
     const operatorBalanceAfter = await ethers.provider.getBalance(nodeOperator);

@@ -1,6 +1,7 @@
 export * from "./account";
 export * from "./address";
 export * from "./bigint-math";
+export * from "./bytes";
 export * from "./constants";
 export * from "./contract";
 export * from "./deploy";

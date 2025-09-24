@@ -81,7 +81,7 @@ async function updateImplementation(
 
 export async function updateLidoLocatorImplementation(
   locatorAddress: string,
-  configUpdate = {},
+  configUpdate: Partial<LidoLocator.ConfigStruct> = {},
   customLocator?: string,
   admin?: HardhatEthersSigner,
 ) {
@@ -92,7 +92,7 @@ export async function updateLidoLocatorImplementation(
   await updateImplementation(locatorAddress, config, customLocator, admin);
 }
 
-async function getLocatorConfig(locatorAddress: string) {
+async function getLocatorConfig(locatorAddress: string): Promise<LidoLocator.ConfigStruct> {
   const locator = await ethers.getContractAt("LidoLocator", locatorAddress);
 
   const addresses = [

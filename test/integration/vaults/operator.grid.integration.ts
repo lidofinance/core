@@ -215,18 +215,7 @@ describe("Integration: OperatorGrid", () => {
       agentSigner = await ctx.getSigner("agent");
     });
 
-    it("update share limit should work", async () => {
-      // Default tier: owner can update share limit directly
-      const before = await vaultHub.vaultConnection(stakingVault);
-      const decreased = before.shareLimit - 1n;
-
-      await expect(dashboard.updateShareLimit(decreased)).to.emit(vaultHub, "VaultConnectionUpdated");
-
-      const after = await vaultHub.vaultConnection(stakingVault);
-      expect(after.shareLimit).to.equal(decreased);
-    });
-
-    it("increasing share limit in non-default tier requires both confirmations", async () => {
+    it("changing share limit in non-default tier requires both confirmations", async () => {
       // Register group and move to tier 1
       await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("5000"));
       await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
@@ -259,37 +248,6 @@ describe("Integration: OperatorGrid", () => {
       expect(after.shareLimit).to.equal(increaseTo);
     });
 
-    it("allows decreasing share limit in non-default tier by vault owner only", async () => {
-      await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("5000"));
-      await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
-        {
-          shareLimit: ether("3000"),
-          reserveRatioBP: 2000,
-          forcedRebalanceThresholdBP: 1800,
-          infraFeeBP: 500,
-          liquidityFeeBP: 400,
-          reservationFeeBP: 100,
-        },
-      ]);
-
-      await dashboard.changeTier(1n, ether("1200"));
-      await operatorGrid.connect(nodeOperator).changeTier(stakingVault, 1n, ether("1200"));
-
-      const current = await vaultHub.vaultConnection(stakingVault);
-      const decreased = current.shareLimit - 100n;
-
-      // Node operator cannot decrease directly
-      expect(
-        await operatorGrid.connect(nodeOperator).updateVaultShareLimit.staticCall(stakingVault, decreased),
-      ).to.equal(false);
-
-      // Owner (Dashboard) can decrease by itself
-      await expect(dashboard.updateShareLimit(decreased)).to.emit(vaultHub, "VaultConnectionUpdated");
-
-      const after = await vaultHub.vaultConnection(stakingVault);
-      expect(after.shareLimit).to.equal(decreased);
-    });
-
     it("reverts when requested share limit equals current", async () => {
       const current = await vaultHub.vaultConnection(stakingVault);
       await expect(dashboard.updateShareLimit(current.shareLimit)).to.be.revertedWithCustomError(
@@ -311,16 +269,27 @@ describe("Integration: OperatorGrid", () => {
     it("requires fresh report before updating connection (stale report reverts)", async () => {
       // Ensure we are in a known tier and connected
       const current = await vaultHub.vaultConnection(stakingVault);
-      const newLimit = current.shareLimit - 1n;
+      let newLimit = current.shareLimit - 1n;
 
-      await expect(dashboard.updateShareLimit(newLimit)).to.emit(vaultHub, "VaultConnectionUpdated");
+      expect(await dashboard.updateShareLimit.staticCall(newLimit)).to.equal(false);
+      await dashboard.updateShareLimit(newLimit);
+
+      // Second confirmation by node operator via OperatorGrid finalizes
+      await expect(operatorGrid.connect(nodeOperator).updateVaultShareLimit(stakingVault, newLimit)).to.emit(
+        vaultHub,
+        "VaultConnectionUpdated",
+      );
 
       await advanceChainTime(days(3n)); // REPORT_FRESHNESS_DELTA = 2 days
 
-      await expect(dashboard.updateShareLimit(newLimit - 1n)).to.be.revertedWithCustomError(
-        vaultHub,
-        "VaultReportStale",
-      );
+      newLimit = newLimit - 1n;
+
+      expect(await dashboard.updateShareLimit.staticCall(newLimit)).to.equal(false);
+      await dashboard.updateShareLimit(newLimit);
+
+      await expect(
+        operatorGrid.connect(nodeOperator).updateVaultShareLimit(stakingVault, newLimit),
+      ).to.be.revertedWithCustomError(vaultHub, "VaultReportStale");
     });
   });
 
@@ -412,8 +381,8 @@ describe("Integration: OperatorGrid", () => {
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
 
       // Reconnect vault
-      const settledGrowth = await dashboard.settledGrowth();
-      await dashboard.connect(owner).reconnectToVaultHub(settledGrowth, settledGrowth);
+      await dashboard.connect(nodeOperator).setApprovedToConnect(true);
+      await dashboard.connect(owner).reconnectToVaultHub();
 
       // Verify vault is reconnected
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;

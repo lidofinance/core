@@ -107,12 +107,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
   context("get consolidation requests and adjustment increase encoded calls", () => {
     it("Should revert if empty parameters are provided", async function () {
       await expect(
-        validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
-          [],
-          [],
-          dashboardAddress,
-          0,
-        ),
+        validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls([], [], dashboardAddress, 0),
       )
         .to.be.revertedWithCustomError(validatorConsolidationRequests, "ZeroArgument")
         .withArgs("sourcePubkeys");
@@ -206,7 +201,7 @@ describe("ValidatorConsolidationRequests.sol", () => {
     await vaultHub.mock__setPendingDisconnect(false);
 
     await expect(
-        validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
+      validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
         [PUBKEY],
         [PUBKEY],
         dashboardAddress,

@@ -79,7 +79,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       describe("Dashboard methods", () => {
         it("setNodeOperatorFeeRecipient", async () => {
           await testGrantingRole(
-            "setNodeOperatorFeeRecipient",
+            "setFeeRecipient",
             await dashboard.NODE_OPERATOR_MANAGER_ROLE(),
             [stranger],
             nodeOperatorManager,
@@ -103,7 +103,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       describe("Dashboard methods", () => {
         it("setNodeOperatorFeeRecipient", async () => {
           await testGrantingRole(
-            "setNodeOperatorFeeRecipient",
+            "setFeeRecipient",
             await dashboard.NODE_OPERATOR_MANAGER_ROLE(),
             [stranger],
             nodeOperatorManager,
@@ -120,7 +120,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     });
 
     it("Allows anyone to read public metrics of the vault", async () => {
-      expect(await dashboard.connect(stranger).nodeOperatorDisbursableFee()).to.equal(0);
+      expect(await dashboard.connect(stranger).accruedFee()).to.equal(0);
       expect(await dashboard.connect(stranger).withdrawableValue()).to.equal(ether("1"));
     });
 
@@ -146,23 +146,23 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           await testMethod(
             "recoverERC20",
             {
-              successUsers: [roles.assetRecoverer, owner],
-              failingUsers: Object.values(roles).filter((r) => r !== roles.assetRecoverer && r !== owner),
+              successUsers: [owner],
+              failingUsers: Object.values(roles).filter((r) => r !== owner),
             },
             [ZeroAddress, owner, 1n],
-            await dashboard.RECOVER_ASSETS_ROLE(),
+            await dashboard.DEFAULT_ADMIN_ROLE(),
           );
         });
 
-        it("recoverERC721", async () => {
+        it("collectERC20FromVault", async () => {
           await testMethod(
-            "recoverERC721",
+            "collectERC20FromVault",
             {
-              successUsers: [roles.assetRecoverer, owner],
-              failingUsers: Object.values(roles).filter((r) => r !== roles.assetRecoverer && r !== owner),
+              successUsers: [roles.assetCollector, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== owner && r !== roles.assetCollector),
             },
-            [ZeroAddress, 0, stranger],
-            await dashboard.RECOVER_ASSETS_ROLE(),
+            [ZeroAddress, owner, 1n],
+            await dashboard.COLLECT_VAULT_ERC20_ROLE(),
           );
         });
 
@@ -359,17 +359,11 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
     describe("Verify ACL for methods that require confirmations", () => {
       it("setNodeOperatorFeeBP", async () => {
-        await expect(dashboard.connect(owner).setNodeOperatorFeeRate(1n)).not.to.emit(
-          dashboard,
-          "NodeOperatorFeeRateSet",
-        );
-        await expect(dashboard.connect(nodeOperatorManager).setNodeOperatorFeeRate(1n)).to.emit(
-          dashboard,
-          "NodeOperatorFeeRateSet",
-        );
+        await expect(dashboard.connect(owner).setFeeRate(1n)).not.to.emit(dashboard, "FeeRateSet");
+        await expect(dashboard.connect(nodeOperatorManager).setFeeRate(1n)).to.emit(dashboard, "FeeRateSet");
 
         await testMethodConfirmedRoles(
-          "setNodeOperatorFeeRate",
+          "setFeeRate",
           {
             successUsers: [],
             failingUsers: Object.values(roles).filter((r) => r !== owner && r !== nodeOperatorManager),
@@ -397,7 +391,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     });
 
     it("Allows anyone to read public metrics of the vault", async () => {
-      expect(await dashboard.connect(stranger).nodeOperatorDisbursableFee()).to.equal(0);
+      expect(await dashboard.connect(stranger).accruedFee()).to.equal(0);
       expect(await dashboard.connect(stranger).withdrawableValue()).to.equal(ether("1"));
     });
 

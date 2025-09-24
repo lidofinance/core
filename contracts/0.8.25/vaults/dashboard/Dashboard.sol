@@ -6,7 +6,7 @@ pragma solidity 0.8.25;
 
 import {SafeERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts-v5.2/token/ERC20/IERC20.sol";
-import {IERC721} from "@openzeppelin/contracts-v5.2/token/ERC721/IERC721.sol";
+import {RecoverTokens} from "../lib/RecoverTokens.sol";
 
 import {ILido as IStETH} from "contracts/common/interfaces/ILido.sol";
 import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
@@ -30,8 +30,8 @@ interface IWstETH is IERC20 {
  * including funding, withdrawing, minting, burning, and rebalancing operations.
  */
 contract Dashboard is NodeOperatorFee {
-    /// @dev 0xa38b301640bddfd3e6a9d2a11d13551d53ef81526347ff09d798738fcc5a49d4
-    bytes32 public constant RECOVER_ASSETS_ROLE = keccak256("vaults.Dashboard.RecoverAssets");
+    /// @dev 0xb694d4d19c77484e8f232470d9bf7e10450638db998b577a833d46df71fb6d97
+    bytes32 public constant COLLECT_VAULT_ERC20_ROLE = keccak256("vaults.Dashboard.CollectVaultERC20");
 
     /**
      * @notice The stETH token contract
@@ -42,11 +42,6 @@ contract Dashboard is NodeOperatorFee {
      * @notice The wstETH token contract
      */
     IWstETH public immutable WSTETH;
-
-    /**
-     * @notice ETH address convention per EIP-7528
-     */
-    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /**
      * @notice Slot for the fund-on-receive flag
@@ -179,27 +174,20 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the amount of shares to burn to restore vault healthiness or to fulfill redemptions and the
+     * @notice Returns the amount of shares to burn to restore vault healthiness or to cover redemptions and the
      *         amount of outstanding Lido fees
-     * @return sharesToRebalance amount of shares to rebalance
-     * @return unsettledLidoFees amount of Lido fees to be settled
+     * @return sharesToBurn amount of shares to burn or to rebalance
+     * @return feesToSettle amount of Lido fees to be settled
      */
-    function obligations() external view returns (uint256 sharesToRebalance, uint256 unsettledLidoFees) {
-        (sharesToRebalance, unsettledLidoFees) = VAULT_HUB.obligations(address(_stakingVault()));
+    function obligations() external view returns (uint256 sharesToBurn, uint256 feesToSettle) {
+        (sharesToBurn, feesToSettle) = VAULT_HUB.obligations(address(_stakingVault()));
     }
 
     /**
-     * @notice Returns the amount of ether shortfall to cover the outstanding obligations of the vault
+     * @notice Returns the amount of shares to rebalance to restore vault healthiness or to cover redemptions
      */
-    function obligationsShortfall() external view returns (uint256) {
-        return VAULT_HUB.obligationsShortfall(address(_stakingVault()));
-    }
-
-    /**
-     * @notice Returns the amount of shares to rebalance to restore vault healthiness or to fulfill redemptions
-     */
-    function rebalanceShortfallShares() external view returns (uint256) {
-        return VAULT_HUB.rebalanceShortfallShares(address(_stakingVault()));
+    function healthShortfallShares() external view returns (uint256) {
+        return VAULT_HUB.healthShortfallShares(address(_stakingVault()));
     }
 
     /**
@@ -215,7 +203,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function maxLockableValue() external view returns (uint256) {
         uint256 maxLockableValue_ = VAULT_HUB.maxLockableValue(address(_stakingVault()));
-        uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
+        uint256 nodeOperatorFee = accruedFee();
 
         return maxLockableValue_ > nodeOperatorFee ? maxLockableValue_ - nodeOperatorFee : 0;
     }
@@ -224,7 +212,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() external view returns (uint256) {
-        return _totalMintingCapacityShares(-int256(nodeOperatorDisbursableFee()));
+        return _totalMintingCapacityShares(-int256(accruedFee()));
     }
 
     /**
@@ -234,7 +222,7 @@ contract Dashboard is NodeOperatorFee {
      * @return the number of shares that can be minted using additional ether
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) public view returns (uint256) {
-        int256 deltaValue = int256(_etherToFund) - int256(nodeOperatorDisbursableFee());
+        int256 deltaValue = int256(_etherToFund) - int256(accruedFee());
         uint256 vaultTotalMintingCapacityShares = _totalMintingCapacityShares(deltaValue);
         uint256 vaultLiabilityShares = liabilityShares();
 
@@ -249,7 +237,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function withdrawableValue() public view returns (uint256) {
         uint256 withdrawable = VAULT_HUB.withdrawableValue(address(_stakingVault()));
-        uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
+        uint256 nodeOperatorFee = accruedFee();
 
         return withdrawable > nodeOperatorFee ? withdrawable - nodeOperatorFee : 0;
     }
@@ -278,7 +266,7 @@ contract Dashboard is NodeOperatorFee {
      *         or abandonDashboard() to transfer the ownership to a new owner.
      */
     function voluntaryDisconnect() external {
-        disburseNodeOperatorFee();
+        disburseFee();
         _voluntaryDisconnect();
     }
 
@@ -300,20 +288,23 @@ contract Dashboard is NodeOperatorFee {
      * @notice Accepts the ownership over the StakingVault and connects to VaultHub. Can be called to reconnect
      *         to the hub after voluntaryDisconnect()
      */
-    function reconnectToVaultHub(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) external {
+    function reconnectToVaultHub() external {
         _acceptOwnership();
-        connectToVaultHub(_newSettledGrowth, _expectedSettledGrowth);
+        connectToVaultHub();
     }
 
     /**
      * @notice Connects to VaultHub, transferring ownership to VaultHub.
      */
-    function connectToVaultHub(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) public payable {
-        if (_newSettledGrowth != settledGrowth) correctSettledGrowth(_newSettledGrowth, _expectedSettledGrowth);
+    function connectToVaultHub() public payable {
+        if (!isApprovedToConnect) revert ForbiddenToConnectByNodeOperator();
 
         if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
+
+        // node operator approval is one time only and is reset after connect
+        _setApprovedToConnect(false);
     }
 
     /**
@@ -321,13 +312,8 @@ contract Dashboard is NodeOperatorFee {
      * @param _tierId The tier to change to
      * @param _requestedShareLimit The requested share limit
      */
-    function connectAndAcceptTier(
-        uint256 _tierId,
-        uint256 _requestedShareLimit,
-        uint256 _newSettledGrowth,
-        uint256 _expectedSettledGrowth
-    ) external payable {
-        connectToVaultHub(_newSettledGrowth, _expectedSettledGrowth);
+    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit) external payable {
+        connectToVaultHub();
         if (!_changeTier(_tierId, _requestedShareLimit)) {
             revert TierChangeNotConfirmed();
         }
@@ -491,48 +477,41 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Recovers ERC20 tokens or ether from the dashboard contract to sender
-     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether
+     * @notice Recovers ERC20 tokens or ether from the dashboard contract to the recipient
+     * @param _token Address of the token to recover or 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether (EIP-7528)
      * @param _recipient Address of the recovery recipient
+     * @param _amount Amount of tokens or ether to recover
      */
     function recoverERC20(
         address _token,
         address _recipient,
         uint256 _amount
-    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
+    ) external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
         _requireNotZero(_token);
         _requireNotZero(_recipient);
         _requireNotZero(_amount);
 
-        if (_token == ETH) {
-            (bool success, ) = payable(_recipient).call{value: _amount}("");
-            if (!success) revert EthTransferFailed(_recipient, _amount);
+        if (_token == RecoverTokens.ETH) {
+            RecoverTokens._recoverEth(_recipient, _amount);
         } else {
-            SafeERC20.safeTransfer(IERC20(_token), _recipient, _amount);
+            RecoverTokens._recoverERC20(_token, _recipient, _amount);
         }
-
-        emit ERC20Recovered(_recipient, _token, _amount);
     }
 
     /**
-     * @notice Transfers a given token_id of an ERC721-compatible NFT (defined by the token contract address)
-     * from the dashboard contract to sender
-     *
-     * @param _token an ERC721-compatible token
-     * @param _tokenId token id to recover
-     * @param _recipient Address of the recovery recipient
+     * @notice Collects ERC20 tokens from vault contract balance to the recipient
+     * @param _token Address of the token to collect
+     * @param _recipient Address of the recipient
+     * @param _amount Amount of tokens to collect
+     * @dev will revert on EIP-7528 ETH address with StakingVault.EthCollectionNotAllowed()
+     *      or on zero arguments with StakingVault.ZeroArgument()
      */
-    function recoverERC721(
+    function collectERC20FromVault(
         address _token,
-        uint256 _tokenId,
-        address _recipient
-    ) external onlyRoleMemberOrAdmin(RECOVER_ASSETS_ROLE) {
-        _requireNotZero(_token);
-        _requireNotZero(_recipient);
-
-        IERC721(_token).safeTransferFrom(address(this), _recipient, _tokenId);
-
-        emit ERC721Recovered(_recipient, _token, _tokenId);
+        address _recipient,
+        uint256 _amount
+    ) external onlyRoleMemberOrAdmin(COLLECT_VAULT_ERC20_ROLE) {
+        VAULT_HUB.collectERC20FromVault(address(_stakingVault()), _token, _recipient, _amount);
     }
 
     /**
@@ -610,11 +589,9 @@ contract Dashboard is NodeOperatorFee {
      * @param _requestedShareLimit The requested share limit.
      * @return bool Whether the share limit change was executed.
      * @dev Share limit update confirmation logic:
-     *      - Default tier (0): Only vault owner confirmation required (via this function)
-     *      - Non-default tier + decreasing limit: Only vault owner confirmation required (via this function)
-     *      - Non-default tier + increasing limit: Both vault owner (via this function) AND node operator confirmations required
-     *        - First call returns false (pending), second call with node operator confirmation completes the update
-     *        - Confirmations expire after the configured period (default: 1 day)
+     *      - Both vault owner (via this function) AND node operator confirmations required
+     *      - First call returns false (pending), second call with node operator confirmation completes the update
+     *      - Confirmations expire after the configured period (default: 1 day)
      */
     function updateShareLimit(uint256 _requestedShareLimit) external returns (bool) {
         return _updateVaultShareLimit(_requestedShareLimit);
@@ -709,22 +686,6 @@ contract Dashboard is NodeOperatorFee {
      */
     event UnguaranteedDeposits(address indexed stakingVault, uint256 deposits, uint256 totalAmount);
 
-    /**
-     * @notice Emitted when the ERC20 `token` or ether is recovered (i.e. transferred)
-     * @param to The address of the recovery recipient
-     * @param token The address of the recovered ERC20 token (0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee for ether)
-     * @param amount The amount of the token recovered
-     */
-    event ERC20Recovered(address indexed to, address indexed token, uint256 amount);
-
-    /**
-     * @notice Emitted when the ERC721-compatible `token` (NFT) recovered (i.e. transferred)
-     * @param to The address of the recovery recipient
-     * @param token The address of the recovered ERC721 token
-     * @param tokenId id of token recovered
-     */
-    event ERC721Recovered(address indexed to, address indexed token, uint256 tokenId);
-
     // ==================== Errors ====================
 
     /**
@@ -738,11 +699,6 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error thrown when minting capacity is exceeded
      */
     error ExceedsMintingCapacity(uint256 requestedShares, uint256 remainingShares);
-
-    /**
-     * @notice Error thrown when recovery of ETH fails on transfer to recipient
-     */
-    error EthTransferFailed(address recipient, uint256 amount);
 
     /**
      * @notice Error when the StakingVault is still connected to the VaultHub.
