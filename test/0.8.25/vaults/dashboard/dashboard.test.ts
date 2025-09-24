@@ -320,8 +320,8 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.settledGrowth()).to.equal(0n);
       expect(await dashboard.latestCorrectionTimestamp()).to.equal(0n);
       expect(await dashboard.isApprovedToConnect()).to.be.false;
-      expect(await dashboard.nodeOperatorFeeRate()).to.equal(nodeOperatorFeeBP);
-      expect(await dashboard.nodeOperatorFeeRecipient()).to.equal(nodeOperator);
+      expect(await dashboard.feeRate()).to.equal(nodeOperatorFeeBP);
+      expect(await dashboard.feeRecipient()).to.equal(nodeOperator);
       expect(await dashboard.getConfirmExpiry()).to.equal(confirmExpiry);
       // dashboard roles
       expect(await dashboard.hasRole(await dashboard.DEFAULT_ADMIN_ROLE(), vaultOwner)).to.be.true;

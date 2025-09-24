@@ -45,13 +45,13 @@ contract NodeOperatorFee is Permissions {
      * @notice Address that receives node operator fee disbursements.
      * This address is set by the node operator manager and receives disbursed fees.
      */
-    address public nodeOperatorFeeRecipient;
+    address public feeRecipient;
 
     /**
      * @notice Node operator fee rate in basis points (1 bp = 0.01%).
      * Cannot exceed 100.00% (10000 basis points).
      */
-    uint16 public nodeOperatorFeeRate;
+    uint16 public feeRate;
 
     // ==================== Packed Storage Slot 2 ====================
     /**
@@ -94,23 +94,23 @@ contract NodeOperatorFee is Permissions {
      * and makes the node operator manager the admin for the node operator roles.
      * @param _defaultAdmin The address of the default admin
      * @param _nodeOperatorManager The address of the node operator manager
-     * @param _nodeOperatorFeeRecipient The node operator fee recipient address
-     * @param _nodeOperatorFeeRate The node operator fee rate
+     * @param _feeRecipient The node operator fee recipient address
+     * @param _feeRate The node operator fee rate
      * @param _confirmExpiry The confirmation expiry time in seconds
      */
     function _initialize(
         address _defaultAdmin,
         address _nodeOperatorManager,
-        address _nodeOperatorFeeRecipient,
-        uint256 _nodeOperatorFeeRate,
+        address _feeRecipient,
+        uint256 _feeRate,
         uint256 _confirmExpiry
     ) internal {
         _requireNotZero(_nodeOperatorManager);
 
         super._initialize(_defaultAdmin, _confirmExpiry);
 
-        _setNodeOperatorFeeRate(_nodeOperatorFeeRate);
-        _setNodeOperatorFeeRecipient(_nodeOperatorFeeRecipient);
+        _setFeeRate(_feeRate);
+        _setFeeRecipient(_feeRecipient);
 
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
@@ -136,17 +136,17 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice Calculates the current disbursable node operator fee amount in ETH.
+     * @notice Calculates the current node operator fee amount in ETH.
      *
      * Fee calculation steps:
      * 1. Retrieve latest vault report (totalValue, inOutDelta)
      * 2. Calculate current growth: totalValue - inOutDelta
      * 3. Determine unsettled growth: currentGrowth - settledGrowth
-     * 4. Apply fee rate: unsettledGrowth × nodeOperatorFeeRate / 10000
+     * 4. Apply fee rate: unsettledGrowth × feeRate / 10000
      *
-     * @return fee The amount of ETH available for disbursement to the node operator
+     * @return fee The amount of ETH accrued as fee
      */
-    function nodeOperatorDisbursableFee() public view returns (uint256 fee) {
+    function accruedFee() public view returns (uint256 fee) {
         (fee, ) = _calculateFee();
     }
 
@@ -167,7 +167,7 @@ contract NodeOperatorFee is Permissions {
      * 3. Update settled growth to current growth (marking fees as paid)
      * 4. Withdraws fee amount from vault to node operator recipient
      */
-    function disburseNodeOperatorFee() public {
+    function disburseFee() public {
         (uint256 fee, int128 growth) = _calculateFee();
 
         // it's important not to revert here so as not to block disconnect
@@ -175,16 +175,16 @@ contract NodeOperatorFee is Permissions {
 
         _setSettledGrowth(growth);
 
-        VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
-        emit NodeOperatorFeeDisbursed(msg.sender, fee);
+        VAULT_HUB.withdraw(address(_stakingVault()), feeRecipient, fee);
+        emit FeeDisbursed(msg.sender, fee);
     }
 
     /**
      * @notice Updates the node operator's fee rate with dual confirmation.
-     * @param _newNodeOperatorFeeRate The new fee rate in basis points (max 10000 = 100%)
+     * @param _newFeeRate The new fee rate in basis points (max 10000 = 100%)
      * @return bool True if fee rate was updated, false if still awaiting confirmations
      */
-    function setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) external returns (bool) {
+    function setFeeRate(uint256 _newFeeRate) external returns (bool) {
         // The report must be fresh so that the total value of the vault is up to date
         // and all the node operator fees are paid out fairly up to the moment of the latest fresh report
         if (!VAULT_HUB.isReportFresh(address(_stakingVault()))) revert ReportStale();
@@ -199,10 +199,9 @@ contract NodeOperatorFee is Permissions {
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
 
         // Disburse any outstanding fees at the current rate before changing it
-        disburseNodeOperatorFee();
+        disburseFee();
 
-        // uint16.max < uint256.max = safe cast needed
-        _setNodeOperatorFeeRate(_newNodeOperatorFeeRate);
+        _setFeeRate(_newFeeRate);
 
         return true;
     }
@@ -254,12 +253,10 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @notice Sets the address that receives node operator fee disbursements.
-     * @param _newNodeOperatorFeeRecipient The new recipient address for fee payments
+     * @param _newFeeRecipient The new recipient address for fee payments
      */
-    function setNodeOperatorFeeRecipient(
-        address _newNodeOperatorFeeRecipient
-    ) external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
-        _setNodeOperatorFeeRecipient(_newNodeOperatorFeeRecipient);
+    function setFeeRecipient(address _newFeeRecipient) external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
+        _setFeeRecipient(_newFeeRecipient);
     }
 
     // ==================== Internal Functions ====================
@@ -322,57 +319,55 @@ contract NodeOperatorFee is Permissions {
         // because settled growth is an int, we have to make sure that growth is positive
         if (growth > 0 && growth > settledGrowth) {
             // growth and settled growth are positive and can't underflow when casting to uint256
-            fee =
-                ((uint256(int256(growth)) - uint256(int256(settledGrowth))) * uint256(nodeOperatorFeeRate)) /
-                TOTAL_BASIS_POINTS;
+            fee = ((uint256(int256(growth)) - uint256(int256(settledGrowth))) * uint256(feeRate)) / TOTAL_BASIS_POINTS;
         }
     }
 
-    function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
-        if (_newNodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
+    function _setFeeRate(uint256 _newFeeRate) internal {
+        if (_newFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
 
-        uint16 oldNodeOperatorFeeRate = nodeOperatorFeeRate;
-        uint16 newNodeOperatorFeeRate = uint16(_newNodeOperatorFeeRate);
+        uint16 oldFeeRate = feeRate;
+        uint16 newFeeRate = uint16(_newFeeRate);
 
-        nodeOperatorFeeRate = newNodeOperatorFeeRate;
+        feeRate = newFeeRate;
 
-        emit NodeOperatorFeeRateSet(msg.sender, oldNodeOperatorFeeRate, newNodeOperatorFeeRate);
+        emit FeeRateSet(msg.sender, oldFeeRate, newFeeRate);
     }
 
-    function _setNodeOperatorFeeRecipient(address _newNodeOperatorFeeRecipient) internal {
-        _requireNotZero(_newNodeOperatorFeeRecipient);
-        if (_newNodeOperatorFeeRecipient == nodeOperatorFeeRecipient) revert SameRecipient();
+    function _setFeeRecipient(address _newFeeRecipient) internal {
+        _requireNotZero(_newFeeRecipient);
+        if (_newFeeRecipient == feeRecipient) revert SameRecipient();
 
-        address oldNodeOperatorFeeRecipient = nodeOperatorFeeRecipient;
-        nodeOperatorFeeRecipient = _newNodeOperatorFeeRecipient;
-        emit NodeOperatorFeeRecipientSet(msg.sender, oldNodeOperatorFeeRecipient, _newNodeOperatorFeeRecipient);
+        address oldFeeRecipient = feeRecipient;
+        feeRecipient = _newFeeRecipient;
+        emit FeeRecipientSet(msg.sender, oldFeeRecipient, _newFeeRecipient);
     }
 
     // ==================== Events ====================
 
     /**
      * @dev Emitted when the node operator fee is set.
-     * @param oldNodeOperatorFeeRate The old node operator fee rate.
-     * @param newNodeOperatorFeeRate The new node operator fee rate.
+     * @param oldFeeRate The old node operator fee rate.
+     * @param newFeeRate The new node operator fee rate.
      */
-    event NodeOperatorFeeRateSet(address indexed sender, uint64 oldNodeOperatorFeeRate, uint64 newNodeOperatorFeeRate);
+    event FeeRateSet(address indexed sender, uint64 oldFeeRate, uint64 newFeeRate);
 
     /**
      * @dev Emitted when the node operator fee is disbursed.
      * @param fee the amount of disbursed fee.
      */
-    event NodeOperatorFeeDisbursed(address indexed sender, uint256 fee);
+    event FeeDisbursed(address indexed sender, uint256 fee);
 
     /**
      * @dev Emitted when the node operator fee recipient is set.
      * @param sender the address of the sender who set the recipient
-     * @param oldNodeOperatorFeeRecipient the old node operator fee recipient
-     * @param newNodeOperatorFeeRecipient the new node operator fee recipient
+     * @param oldFeeRecipient the old node operator fee recipient
+     * @param newFeeRecipient the new node operator fee recipient
      */
-    event NodeOperatorFeeRecipientSet(
+    event FeeRecipientSet(
         address indexed sender,
-        address oldNodeOperatorFeeRecipient,
-        address newNodeOperatorFeeRecipient
+        address oldFeeRecipient,
+        address newFeeRecipient
     );
 
     /**

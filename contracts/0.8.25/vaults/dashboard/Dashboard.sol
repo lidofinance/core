@@ -204,7 +204,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function maxLockableValue() external view returns (uint256) {
         uint256 maxLockableValue_ = VAULT_HUB.maxLockableValue(address(_stakingVault()));
-        uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
+        uint256 nodeOperatorFee = accruedFee();
 
         return maxLockableValue_ > nodeOperatorFee ? maxLockableValue_ - nodeOperatorFee : 0;
     }
@@ -213,7 +213,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() external view returns (uint256) {
-        return _totalMintingCapacityShares(-int256(nodeOperatorDisbursableFee()));
+        return _totalMintingCapacityShares(-int256(accruedFee()));
     }
 
     /**
@@ -223,7 +223,7 @@ contract Dashboard is NodeOperatorFee {
      * @return the number of shares that can be minted using additional ether
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) public view returns (uint256) {
-        int256 deltaValue = int256(_etherToFund) - int256(nodeOperatorDisbursableFee());
+        int256 deltaValue = int256(_etherToFund) - int256(accruedFee());
         uint256 vaultTotalMintingCapacityShares = _totalMintingCapacityShares(deltaValue);
         uint256 vaultLiabilityShares = liabilityShares();
 
@@ -238,7 +238,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function withdrawableValue() public view returns (uint256) {
         uint256 withdrawable = VAULT_HUB.withdrawableValue(address(_stakingVault()));
-        uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
+        uint256 nodeOperatorFee = accruedFee();
 
         return withdrawable > nodeOperatorFee ? withdrawable - nodeOperatorFee : 0;
     }
@@ -267,7 +267,7 @@ contract Dashboard is NodeOperatorFee {
      *         or abandonDashboard() to transfer the ownership to a new owner.
      */
     function voluntaryDisconnect() external {
-        disburseNodeOperatorFee();
+        disburseFee();
         _voluntaryDisconnect();
     }
 
