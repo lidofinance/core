@@ -217,10 +217,9 @@ contract NodeOperatorFee is Permissions {
      */
     function correctSettledGrowth(int256 _newSettledGrowth, int256 _expectedSettledGrowth) public returns (bool) {
         if (settledGrowth != _expectedSettledGrowth) revert UnexpectedSettledGrowth();
-
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
-        // int128.max < int256.max = safe cast needed
-        _correctSettledGrowth(_newSettledGrowth.toInt128());
+
+        _correctSettledGrowth(_newSettledGrowth);
 
         return true;
     }
@@ -233,8 +232,7 @@ contract NodeOperatorFee is Permissions {
      * @param _exemptedAmount Amount in ETH to exempt from fee calculations
      */
     function addFeeExemption(uint256 _exemptedAmount) external onlyRoleMemberOrAdmin(NODE_OPERATOR_FEE_EXEMPT_ROLE) {
-        // uint128.max < uint256.max = safe cast needed
-        _addFeeExemption(_exemptedAmount.toUint128());
+        _addFeeExemption(_exemptedAmount);
     }
 
     /**
@@ -272,19 +270,21 @@ contract NodeOperatorFee is Permissions {
         emit ApprovedToConnectSet(_isApproved);
     }
 
-    function _setSettledGrowth(int128 _newSettledGrowth) private {
+    function _setSettledGrowth(int256 _newSettledGrowth) private {
         int128 oldSettledGrowth = settledGrowth;
         if (oldSettledGrowth == _newSettledGrowth) revert SameSettledGrowth();
-        settledGrowth = _newSettledGrowth;
 
-        emit SettledGrowthSet(oldSettledGrowth, _newSettledGrowth);
+        int128 newSettledGrowth = _newSettledGrowth.toInt128();
+        settledGrowth = newSettledGrowth;
+
+        emit SettledGrowthSet(oldSettledGrowth, newSettledGrowth);
     }
 
     /**
      * @dev Set a new settled growth and updates the timestamp.
      * Should be used to correct settled growth for total value change that might not have been reported yet
      */
-    function _correctSettledGrowth(int128 _newSettledGrowth) internal {
+    function _correctSettledGrowth(int256 _newSettledGrowth) internal {
         _setSettledGrowth(_newSettledGrowth);
         latestCorrectionTimestamp = uint64(block.timestamp);
 
@@ -298,23 +298,16 @@ contract NodeOperatorFee is Permissions {
      * @dev fee exemption can only be positive
      */
     function _addFeeExemption(uint256 _amount) internal {
-        // int256.max < uint256.max = safe cast needed
-        // int256.max < int128.max = safe cast needed
-        // if the sum overflows int128, EVM reverts
-        _correctSettledGrowth(settledGrowth + _amount.toInt256().toInt128());
+        _correctSettledGrowth(settledGrowth + _amount.toInt256());
     }
 
     function _calculateFee() internal view returns (uint256 fee, int128 growth) {
         VaultHub.Report memory report = latestReport();
-        // uint104.max < uint256.max = no safe cast needed
-        // uint104.max < int256.max = no safe cast needed
-        // uint104.max > int104.max = safe cast needed
-        growth = int256(uint256(report.totalValue)).toInt104() - report.inOutDelta;
+        growth = int128(int256(uint256(report.totalValue))) - int128(report.inOutDelta);
+        int128 unsettledGrowth = growth - settledGrowth;
 
-        // because settled growth is an int, we have to make sure that growth is positive
-        if (growth > 0 && growth > settledGrowth) {
-            // growth and settled growth are positive and can't underflow when casting to uint256
-            fee = ((uint256(int256(growth)) - uint256(int256(settledGrowth))) * uint256(feeRate)) / TOTAL_BASIS_POINTS;
+        if (unsettledGrowth > 0) {
+            fee = uint256(uint128(unsettledGrowth)) * uint256(feeRate) / TOTAL_BASIS_POINTS;
         }
     }
 
@@ -322,7 +315,7 @@ contract NodeOperatorFee is Permissions {
         if (_newFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
 
         uint16 oldFeeRate = feeRate;
-        uint16 newFeeRate = uint16(_newFeeRate);
+        uint16 newFeeRate = _newFeeRate.toUint16();
 
         feeRate = newFeeRate;
 
