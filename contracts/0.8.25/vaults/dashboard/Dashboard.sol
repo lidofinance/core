@@ -305,7 +305,7 @@ contract Dashboard is NodeOperatorFee {
         VAULT_HUB.connectVault(address(_stakingVault()));
 
         // node operator approval is one time only and is reset after connect
-        _forbidToConnect();
+        _setApprovedToConnect(false);
     }
 
     /**

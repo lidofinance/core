@@ -150,12 +150,13 @@ contract NodeOperatorFee is Permissions {
         (fee, ) = _calculateFee();
     }
 
-    function approveToConnect() external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
-        _approveToConnect();
-    }
-
-    function forbidToConnect() external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
-        _forbidToConnect();
+    /**
+     * @notice Approves/forbids connection to VaultHub. Approval implies that the node operator agrees
+     * with the current fee parameters, particularly the settled growth used as baseline for fee calculations.
+     * @param _isApproved True to approve, False to forbid
+     */
+    function setApprovedToConnect(bool _isApproved) external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
+       _setApprovedToConnect(_isApproved);
     }
 
     /**
@@ -265,16 +266,10 @@ contract NodeOperatorFee is Permissions {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
-    function _approveToConnect() internal {
-        isApprovedToConnect = true;
+    function _setApprovedToConnect(bool _isApproved) internal {
+        isApprovedToConnect = _isApproved;
 
-        emit ApprovedToConnect();
-    }
-
-    function _forbidToConnect() internal {
-        isApprovedToConnect = false;
-
-        emit ForbiddenToConnect();
+        emit ApprovedToConnectSet(_isApproved);
     }
 
     function _setSettledGrowth(int128 _newSettledGrowth) private {
@@ -384,14 +379,9 @@ contract NodeOperatorFee is Permissions {
     event CorrectionTimestampUpdated(uint64 timestamp);
 
     /**
-     * @dev Emitted when the node operator approves to connect to VaultHub.
+     * @dev Emitted when the node operator approves/forbids to connect to VaultHub.
      */
-    event ApprovedToConnect();
-
-    /**
-     * @dev Emitted when the node operator forbids to connect to VaultHub.
-     */
-    event ForbiddenToConnect();
+    event ApprovedToConnectSet(bool isApproved);
 
     // ==================== Errors ====================
 

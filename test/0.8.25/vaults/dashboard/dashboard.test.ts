@@ -654,7 +654,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
-      await newDashboard.connect(nodeOperator).approveToConnect();
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await expect(newDashboard.connect(stranger).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
         newDashboard,
         "AccessControlUnauthorizedAccount",
@@ -670,7 +670,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if change tier is not confirmed by node operator", async () => {
-      await newDashboard.connect(nodeOperator).approveToConnect();
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
         newDashboard,
         "TierChangeNotConfirmed",
@@ -678,7 +678,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("works", async () => {
-      await newDashboard.connect(nodeOperator).approveToConnect();
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
       await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.emit(hub, "Mock__VaultConnected");
     });
@@ -686,7 +686,7 @@ describe("Dashboard.sol", () => {
     it("works with connection deposit", async () => {
       const connectDeposit = await hub.CONNECT_DEPOSIT();
 
-      await newDashboard.connect(nodeOperator).approveToConnect();
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
       await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, { value: connectDeposit }))
         .to.emit(hub, "Mock__VaultConnected")
@@ -1444,7 +1444,7 @@ describe("Dashboard.sol", () => {
       expect(await vault.owner()).to.equal(vaultOwner);
 
       // reconnect
-      await dashboard.connect(nodeOperator).approveToConnect();
+      await dashboard.connect(nodeOperator).setApprovedToConnect(true);
       await vault.connect(vaultOwner).transferOwnership(dashboard);
       await dashboard.reconnectToVaultHub();
       expect(await vault.owner()).to.equal(hub);
@@ -1491,7 +1491,9 @@ describe("Dashboard.sol", () => {
       it("allows node operator to approve connection", async () => {
         expect(await newDashboard.isApprovedToConnect()).to.be.false;
 
-        await expect(newDashboard.connect(nodeOperator).approveToConnect()).to.emit(newDashboard, "ApprovedToConnect");
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(true))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(true);
 
         expect(await newDashboard.isApprovedToConnect()).to.be.true;
       });
@@ -1499,7 +1501,7 @@ describe("Dashboard.sol", () => {
       it("reverts if called by a stranger", async () => {
         expect(await newDashboard.isApprovedToConnect()).to.be.false;
 
-        await expect(newDashboard.connect(stranger).approveToConnect())
+        await expect(newDashboard.connect(stranger).setApprovedToConnect(true))
           .to.be.revertedWithCustomError(newDashboard, "AccessControlUnauthorizedAccount")
           .withArgs(stranger, await newDashboard.NODE_OPERATOR_MANAGER_ROLE());
 
@@ -1507,11 +1509,13 @@ describe("Dashboard.sol", () => {
       });
 
       it("should allow multiple calls to approveToConnect", async () => {
-        await newDashboard.connect(nodeOperator).approveToConnect();
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
         expect(await newDashboard.isApprovedToConnect()).to.be.true;
 
         // Should not revert when called again
-        await expect(newDashboard.connect(nodeOperator).approveToConnect()).to.emit(newDashboard, "ApprovedToConnect");
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(true))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(true);
 
         expect(await newDashboard.isApprovedToConnect()).to.be.true;
       });
@@ -1520,12 +1524,14 @@ describe("Dashboard.sol", () => {
     context("forbidToConnect", () => {
       beforeEach(async () => {
         // First approve to connect
-        await newDashboard.connect(nodeOperator).approveToConnect();
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
         expect(await newDashboard.isApprovedToConnect()).to.be.true;
       });
 
       it("allows node operator to forbid connection", async () => {
-        await expect(newDashboard.connect(nodeOperator).forbidToConnect()).to.emit(newDashboard, "ForbiddenToConnect");
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(false))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(false);
 
         expect(await newDashboard.isApprovedToConnect()).to.be.false;
       });
@@ -1533,7 +1539,7 @@ describe("Dashboard.sol", () => {
       it("reverts when called by a stranger", async () => {
         expect(await newDashboard.isApprovedToConnect()).to.be.true;
 
-        await expect(newDashboard.connect(stranger).forbidToConnect())
+        await expect(newDashboard.connect(stranger).setApprovedToConnect(false))
           .to.be.revertedWithCustomError(newDashboard, "AccessControlUnauthorizedAccount")
           .withArgs(stranger, await newDashboard.NODE_OPERATOR_MANAGER_ROLE());
 
@@ -1541,11 +1547,13 @@ describe("Dashboard.sol", () => {
       });
 
       it("allows multiple calls to forbidToConnect", async () => {
-        await newDashboard.connect(nodeOperator).forbidToConnect();
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(false);
         expect(await newDashboard.isApprovedToConnect()).to.be.false;
 
         // Should not revert when called again
-        await expect(newDashboard.connect(nodeOperator).forbidToConnect()).to.emit(newDashboard, "ForbiddenToConnect");
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(false))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(false);
 
         expect(await newDashboard.isApprovedToConnect()).to.be.false;
       });
@@ -1562,14 +1570,14 @@ describe("Dashboard.sol", () => {
       });
 
       it("succeeds when approved to connect", async () => {
-        await newDashboard.connect(nodeOperator).approveToConnect();
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
         expect(await newDashboard.isApprovedToConnect()).to.be.true;
 
         await expect(newDashboard.connectToVaultHub()).to.emit(hub, "Mock__VaultConnected").withArgs(newVault);
       });
 
       it("resets approval after successful connection", async () => {
-        await newDashboard.connect(nodeOperator).approveToConnect();
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
         expect(await newDashboard.isApprovedToConnect()).to.be.true;
 
         await newDashboard.connectToVaultHub();

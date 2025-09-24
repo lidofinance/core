@@ -84,7 +84,7 @@ contract VaultFactory {
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
         // connection must be pre-approved by the node operator manager
-        dashboard.approveToConnect();
+        dashboard.setApprovedToConnect(true);
         dashboard.connectToVaultHub{value: msg.value}();
 
         dashboard.grantRole(dashboard.DEFAULT_ADMIN_ROLE(), _defaultAdmin);
