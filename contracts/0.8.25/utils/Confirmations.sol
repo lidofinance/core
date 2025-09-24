@@ -13,6 +13,7 @@ abstract contract Confirmations {
 
     /**
      * @notice Tracks confirmations
+     * @custom:storage-location erc7201:Lido.Utils.Confirmations
      * @dev We cannot set confirmExpiry to 0 because this means that all confirmations have to be in the same block,
      *      which can never be guaranteed. And, more importantly, if the `_setConfirmExpiry` is restricted by
      *      the `onlyConfirmed` modifier, the confirmation expiry will be tricky to change.
@@ -33,10 +34,10 @@ abstract contract Confirmations {
     /**
      * @notice Storage offset slot for ERC-7201 namespace
      *         The storage namespace is used to prevent upgrade collisions
-     *         keccak256(abi.encode(uint256(keccak256("Lido.Vaults.storage.Confirmations")) - 1)) & ~bytes32(uint256(0xff))
+     *         keccak256(abi.encode(uint256(keccak256("Lido.Utils.Confirmations")) - 1)) & ~bytes32(uint256(0xff))
      */
     bytes32 private constant CONFIRMATIONS_STORAGE_LOCATION =
-        0x1b8b5828bd311c11f60881dedc705c95b2fbc3408c25f5c1964af0a81ceb0900;
+        0xe4ca011a1344eb515c922209bf867930fc05bf79f4b0e3bb4ec9938eedd47700;
 
 
     /**

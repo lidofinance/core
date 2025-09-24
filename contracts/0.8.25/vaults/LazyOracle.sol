@@ -29,7 +29,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         QUARANTINE_EXPIRED  // Quarantine period has passed
     }
 
-    /// @custom:storage-location erc7201:LazyOracle
+    /// @custom:storage-location erc7201:Lido.Vaults.LazyOracle
     struct Storage {
         /// @notice root of the vaults data tree
         bytes32 vaultsDataTreeRoot;
@@ -121,9 +121,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         bool pendingDisconnect;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("LazyOracle")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("Lido.Vaults.LazyOracle")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant LAZY_ORACLE_STORAGE_LOCATION =
-        0xe5459f2b48ec5df2407caac4ec464a5cb0f7f31a1f22f649728a9579b25c1d00;
+        0x73a2a247d4b1b6fe056fe90935e9bd3694e896bafdd08f046c2afe6ec2db2100;
 
     /// @dev 0x7baf7f4a9784fa74c97162de631a3eb567edeb85878cb6965945310f2c512c63
     bytes32 public constant UPDATE_SANITY_PARAMS_ROLE = keccak256("vaults.LazyOracle.UpdateSanityParams");
