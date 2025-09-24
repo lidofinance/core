@@ -121,6 +121,161 @@ describe("Accounting.sol:report", () => {
       expect(simulated.postTotalShares).to.equal(preTotalShares);
       expect(simulated.postTotalPooledEther).to.equal(preTotalPooledEther);
     });
+
+    context("should match handleOracleReport results", () => {
+      it("happy path", async () => {
+        const simulated = await accounting.simulateOracleReport(report());
+
+        await accounting.handleOracleReport(report());
+
+        const postExternalShares = await lido.getExternalShares();
+
+        expect(simulated.withdrawalsVaultTransfer).to.equal(0n);
+        expect(simulated.elRewardsVaultTransfer).to.equal(0n);
+        expect(simulated.etherToFinalizeWQ).to.equal(0n);
+        expect(simulated.sharesToFinalizeWQ).to.equal(0n);
+        expect(simulated.sharesToBurnForWithdrawals).to.equal(0n);
+        expect(simulated.totalSharesToBurn).to.equal(0n);
+        expect(simulated.sharesToMintAsFees).to.equal(0n);
+
+        expect(simulated.principalClBalance).to.equal(0n);
+
+        expect(simulated.preTotalShares).to.equal(await lido.getTotalShares());
+        expect(simulated.preTotalPooledEther).to.equal(await lido.getTotalPooledEther());
+
+        expect(simulated.postTotalShares).to.equal(simulated.preTotalShares + simulated.sharesToMintAsFees);
+        expect(simulated.postInternalShares).to.equal(
+          simulated.preTotalShares - postExternalShares + simulated.sharesToMintAsFees,
+        );
+      });
+
+      it("with CL validators increase", async () => {
+        const depositedValidators = 100n;
+        const clValidators = 50n;
+
+        await lido.mock__setDepositedValidators(depositedValidators);
+
+        const reportData = report({ clValidators, clBalance: 0n });
+        const simulated = await accounting.simulateOracleReport(reportData);
+        const tx = await accounting.handleOracleReport(reportData);
+        const receipt = await tx.wait();
+
+        const collectEvent = receipt?.logs
+          .map((log) => {
+            try {
+              return lido.interface.parseLog({ topics: [...log.topics], data: log.data });
+            } catch {
+              return null;
+            }
+          })
+          .find((e) => e?.name === "Mock__CollectRewardsAndProcessWithdrawals");
+
+        if (collectEvent) {
+          expect(simulated.principalClBalance).to.equal(collectEvent.args._principalCLBalance);
+          expect(simulated.withdrawalsVaultTransfer).to.equal(collectEvent.args._withdrawalsToWithdraw);
+          expect(simulated.elRewardsVaultTransfer).to.equal(collectEvent.args._elRewardsToWithdraw);
+        }
+
+        const postExternalShares = await lido.getExternalShares();
+
+        expect(simulated.withdrawalsVaultTransfer).to.equal(0n);
+        expect(simulated.elRewardsVaultTransfer).to.equal(0n);
+        expect(simulated.etherToFinalizeWQ).to.equal(0n);
+        expect(simulated.sharesToFinalizeWQ).to.equal(0n);
+        expect(simulated.sharesToBurnForWithdrawals).to.equal(0n);
+        expect(simulated.totalSharesToBurn).to.equal(0n);
+        expect(simulated.sharesToMintAsFees).to.equal(0n);
+
+        const expectedPrincipalCl = 0n + clValidators * 32n * 10n ** 18n;
+        expect(simulated.principalClBalance).to.equal(expectedPrincipalCl);
+
+        expect(simulated.preTotalShares).to.equal(await lido.getTotalShares());
+        expect(simulated.preTotalPooledEther).to.equal(await lido.getTotalPooledEther());
+
+        expect(simulated.postTotalShares).to.equal(simulated.preTotalShares + simulated.sharesToMintAsFees);
+        expect(simulated.postInternalShares).to.equal(
+          simulated.preTotalShares - postExternalShares + simulated.sharesToMintAsFees,
+        );
+      });
+
+      it("with withdrawal finalization", async () => {
+        const depositedValidators = 100n;
+        const clValidators = 100n;
+        const clBalance = ether("3200");
+        const withdrawalFinalizationBatches = [1n, 2n, 3n];
+        const simulatedShareRate = 10n ** 27n;
+
+        await lido.mock__setDepositedValidators(depositedValidators);
+        await withdrawalQueue.mock__prefinalizeReturn(ether("10"), ether("0.01"));
+
+        const reportData = report({
+          clValidators,
+          clBalance,
+          withdrawalFinalizationBatches,
+          simulatedShareRate,
+        });
+
+        const simulated = await accounting.simulateOracleReport(reportData);
+
+        await accounting.handleOracleReport(reportData);
+
+        const postExternalShares = await lido.getExternalShares();
+
+        expect(simulated.withdrawalsVaultTransfer).to.equal(0n);
+        expect(simulated.elRewardsVaultTransfer).to.equal(0n);
+        expect(simulated.etherToFinalizeWQ).to.equal(ether("10"));
+        expect(simulated.sharesToFinalizeWQ).to.equal(ether("0.01"));
+        expect(simulated.sharesToBurnForWithdrawals).to.equal(0n);
+        expect(simulated.totalSharesToBurn).to.equal(0n);
+        expect(simulated.sharesToMintAsFees).to.equal(0n);
+
+        const expectedPrincipalCl = 0n + clValidators * 32n * 10n ** 18n;
+        expect(simulated.principalClBalance).to.equal(expectedPrincipalCl);
+
+        expect(simulated.preTotalShares).to.equal(await lido.getTotalShares());
+        expect(simulated.preTotalPooledEther).to.equal(await lido.getTotalPooledEther());
+
+        expect(simulated.postTotalShares).to.equal(simulated.preTotalShares + simulated.sharesToMintAsFees);
+        expect(simulated.postInternalShares).to.equal(
+          simulated.preTotalShares - postExternalShares + simulated.sharesToMintAsFees,
+        );
+      });
+
+      it("with bad debt and external shares", async () => {
+        const totalShares = ether("1000");
+        const externalShares = ether("100");
+        const badDebtToInternalize = ether("50");
+
+        await lido.mock__setTotalShares(totalShares);
+        await lido.mock__setExternalShares(externalShares);
+        await vaultHub.setBadDebtToInternalize(badDebtToInternalize);
+
+        const simulated = await accounting.simulateOracleReport(report());
+
+        await accounting.handleOracleReport(report());
+
+        const preExternalShares = externalShares;
+        const preInternalShares = totalShares - preExternalShares;
+
+        expect(simulated.withdrawalsVaultTransfer).to.equal(0n);
+        expect(simulated.elRewardsVaultTransfer).to.equal(0n);
+        expect(simulated.etherToFinalizeWQ).to.equal(0n);
+        expect(simulated.sharesToFinalizeWQ).to.equal(0n);
+        expect(simulated.sharesToBurnForWithdrawals).to.equal(0n);
+        expect(simulated.totalSharesToBurn).to.equal(0n);
+        expect(simulated.sharesToMintAsFees).to.equal(0n);
+
+        expect(simulated.principalClBalance).to.equal(0n);
+
+        expect(simulated.preTotalShares).to.equal(await lido.getTotalShares());
+        expect(simulated.preTotalPooledEther).to.equal(await lido.getTotalPooledEther());
+
+        expect(simulated.postTotalShares).to.equal(simulated.preTotalShares + simulated.sharesToMintAsFees);
+        expect(simulated.postInternalShares).to.equal(
+          preInternalShares + simulated.sharesToMintAsFees + badDebtToInternalize,
+        );
+      });
+    });
   });
 
   context("handleOracleReport", () => {

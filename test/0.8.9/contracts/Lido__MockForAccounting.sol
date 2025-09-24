@@ -7,8 +7,9 @@ contract Lido__MockForAccounting {
     uint256 public depositedValidatorsValue;
     uint256 public reportClValidators;
     uint256 public reportClBalance;
+    uint256 private externalSharesValue = 0;
+    uint256 private totalSharesValue = 1000000000000000000;
 
-    // Emitted when validators number delivered by the oracle
     event CLValidatorsUpdated(uint256 indexed reportTimestamp, uint256 preCLValidators, uint256 postCLValidators);
     event Mock__CollectRewardsAndProcessWithdrawals(
         uint256 _reportTimestamp,
@@ -20,15 +21,18 @@ contract Lido__MockForAccounting {
         uint256 _withdrawalsShareRate,
         uint256 _etherToLockOnWithdrawalQueue
     );
-    /**
-     * @notice An executed shares transfer from `sender` to `recipient`.
-     *
-     * @dev emitted in pair with an ERC20-defined `Transfer` event.
-     */
     event TransferShares(address indexed from, address indexed to, uint256 sharesValue);
 
     function mock__setDepositedValidators(uint256 _amount) external {
         depositedValidatorsValue = _amount;
+    }
+
+    function mock__setExternalShares(uint256 _amount) external {
+        externalSharesValue = _amount;
+    }
+
+    function mock__setTotalShares(uint256 _amount) external {
+        totalSharesValue = _amount;
     }
 
     function getBeaconStat()
@@ -45,12 +49,12 @@ contract Lido__MockForAccounting {
         return 3201000000000000000000;
     }
 
-    function getTotalShares() external pure returns (uint256) {
-        return 1000000000000000000;
+    function getTotalShares() external view returns (uint256) {
+        return totalSharesValue;
     }
 
-    function getExternalShares() external pure returns (uint256) {
-        return 0;
+    function getExternalShares() external view returns (uint256) {
+        return externalSharesValue;
     }
 
     function getExternalEther() external pure returns (uint256) {
@@ -113,5 +117,10 @@ contract Lido__MockForAccounting {
 
     function mintShares(address _recipient, uint256 _sharesAmount) external {
         emit TransferShares(address(0), _recipient, _sharesAmount);
+    }
+
+    function internalizeExternalBadDebt(uint256 _badDebt) external {
+        externalSharesValue -= _badDebt;
+        totalSharesValue = totalSharesValue;
     }
 }
