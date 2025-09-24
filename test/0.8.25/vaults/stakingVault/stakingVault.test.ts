@@ -340,6 +340,21 @@ describe("StakingVault.sol", () => {
     });
   });
 
+  context("renounceOwnership", () => {
+    it("reverts if called by a non-owner", async () => {
+      await expect(stakingVault.connect(stranger).renounceOwnership())
+        .to.be.revertedWithCustomError(stakingVault, "OwnableUnauthorizedAccount")
+        .withArgs(stranger);
+    });
+
+    it("reverts if called by the owner", async () => {
+      await expect(stakingVault.connect(vaultOwner).renounceOwnership()).to.be.revertedWithCustomError(
+        stakingVault,
+        "RenouncementNotAllowed",
+      );
+    });
+  });
+
   context("depositToBeaconChain", () => {
     it("reverts if called by a non-depositor", async () => {
       await expect(

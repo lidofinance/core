@@ -469,6 +469,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
+     * @notice Override the OwnableUpgradeable function to revert
+     */
+    function renounceOwnership() public onlyOwner override(OwnableUpgradeable) {
+        revert RenouncementNotAllowed();
+    }
+
+    /**
      * @notice Sets the depositor address
      * @param _depositor Address of the new depositor
      */
@@ -734,4 +741,9 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice thrown when trying to recover ETH (via EIP-7528 address) using collectERC20
      */
     error EthCollectionNotAllowed();
+
+    /**
+     * @notice thrown when trying to renounce ownership
+     */
+    error RenouncementNotAllowed();
 }
