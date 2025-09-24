@@ -12,9 +12,9 @@ import {VaultHub, IHashConsensus} from "contracts/0.8.25/vaults/VaultHub.sol";
 import {DoubleRefSlotCache} from "contracts/0.8.25/vaults/lib/RefSlotCache.sol";
 
 contract VaultHub__HarnessForReporting is VaultHub {
-    // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("Lido.Vaults.VaultHub")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant VAULT_HUB_STORAGE_LOCATION =
-        0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
+        0x9eb73ffa4c77d08d5d1746cf5a5e50a47018b610ea5d728ea9bd9e399b76e200;
 
     constructor(
         ILidoLocator _locator,

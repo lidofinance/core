@@ -74,7 +74,7 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
     // -----------------------------
     //           STORAGE STRUCTS
     // -----------------------------
-    /// @custom:storage-location erc7201:Burner
+    /// @custom:storage-location erc7201:Lido.Core.Burner
     struct Storage {
         uint256 coverSharesBurnRequested;
         uint256 nonCoverSharesBurnRequested;
@@ -83,7 +83,7 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
         uint256 totalNonCoverSharesBurnt;
     }
 
-    /// @custom:storage-location erc7201:Burner:IsMigrationAllowed-v3Upgrade
+    /// @custom:storage-location erc7201:Lido.Core.Burner.IsMigrationAllowed-v3Upgrade
     struct StorageV3Upgrade {
         bool isMigrationAllowed;
     }
@@ -91,12 +91,12 @@ contract Burner is IBurner, AccessControlEnumerable, Versioned {
     bytes32 public constant REQUEST_BURN_MY_STETH_ROLE = keccak256("REQUEST_BURN_MY_STETH_ROLE");
     bytes32 public constant REQUEST_BURN_SHARES_ROLE = keccak256("REQUEST_BURN_SHARES_ROLE");
 
-    // keccak256(abi.encode(uint256(keccak256("Burner")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant STORAGE_LOCATION = 0xf01bebc885dbdcd6f86dfe57676112e525cafe0421724bf6b4a9ab1ee741de00;
+    // keccak256(abi.encode(uint256(keccak256("Lido.Core.Burner")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant STORAGE_LOCATION = 0x04517d045bc1d7fa739b92929a9ee93e91c437a627c5986e8a9995c580fcf100;
 
     /// @dev After V3 Upgrade finished is no longer needed and should be removed
-    // keccak256(abi.encode(uint256(keccak256("Burner.IsMigrationAllowed-v3Upgrade")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant STORAGE_V3_UPGRADE_LOCATION = 0xe26691b9ae4d2ff5628fc98afc2ccacdd3dd28e1ab2df809eb32ad4af2845800;
+    // keccak256(abi.encode(uint256(keccak256("Lido.Core.Burner.IsMigrationAllowed-v3Upgrade")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant STORAGE_V3_UPGRADE_LOCATION = 0xafb4c21a1fd8ac67c6b68b753f327ad8fbae7f124d43b32b852df233b8d62900;
 
     ILidoLocator public immutable LOCATOR;
     ILido public immutable LIDO;
