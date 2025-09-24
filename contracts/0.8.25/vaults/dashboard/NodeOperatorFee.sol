@@ -7,6 +7,7 @@ pragma solidity 0.8.25;
 import {VaultHub} from "../VaultHub.sol";
 import {LazyOracle} from "../LazyOracle.sol";
 import {Permissions} from "./Permissions.sol";
+import {SafeCast} from "@openzeppelin/contracts-v5.2/utils/math/SafeCast.sol";
 
 /**
  * @title NodeOperatorFee
@@ -14,6 +15,9 @@ import {Permissions} from "./Permissions.sol";
  * @notice A contract that manages the node operator fee.
  */
 contract NodeOperatorFee is Permissions {
+    using SafeCast for uint256;
+    using SafeCast for int256;
+
     /**
      * @notice Total basis points; 1bp = 0.01%, 100_00bp = 100.00%.
      */
@@ -36,18 +40,20 @@ contract NodeOperatorFee is Permissions {
      */
     bytes32 public constant NODE_OPERATOR_FEE_EXEMPT_ROLE = keccak256("vaults.NodeOperatorFee.FeeExemptRole");
 
-    /**
-     * @notice Node operator fee rate in basis points (1 bp = 0.01%).
-     * Cannot exceed 100.00% (10000 basis points).
-     */
-    uint256 public nodeOperatorFeeRate;
-
+    // ==================== Packed Storage Slot 1 ====================
     /**
      * @notice Address that receives node operator fee disbursements.
      * This address is set by the node operator manager and receives disbursed fees.
      */
     address public nodeOperatorFeeRecipient;
 
+    /**
+     * @notice Node operator fee rate in basis points (1 bp = 0.01%).
+     * Cannot exceed 100.00% (10000 basis points).
+     */
+    uint16 public nodeOperatorFeeRate;
+
+    // ==================== Packed Storage Slot 2 ====================
     /**
      * @notice Growth of the vault not subject to fees.
      *
@@ -59,7 +65,7 @@ contract NodeOperatorFee is Permissions {
      * - has already been charged by the node operator,
      * - or is not subject to fee (exempted) such as unguaranteed/side deposits, consolidations.
      */
-    uint256 public settledGrowth;
+    int128 public settledGrowth;
 
     /**
      * @notice Timestamp of the most recent settled growth correction.
@@ -67,11 +73,11 @@ contract NodeOperatorFee is Permissions {
      * The timestamp ensures that all fee exemptions and corrections are fully reported before changing the fee rate.
      * Regular fee disbursements do not update this timestamp.
      */
-    uint256 public latestCorrectionTimestamp;
+    uint64 public latestCorrectionTimestamp;
 
     /**
      * @notice Flag indicating whether the vault is approved by the node operator to connect to VaultHub.
-     * The node operator's approval is needed to confirm the validity of fee calculations, 
+     * The node operator's approval is needed to confirm the validity of fee calculations,
      * particularly the settled growth.
      */
     bool public isApprovedToConnect;
@@ -88,6 +94,7 @@ contract NodeOperatorFee is Permissions {
      * and makes the node operator manager the admin for the node operator roles.
      * @param _defaultAdmin The address of the default admin
      * @param _nodeOperatorManager The address of the node operator manager
+     * @param _nodeOperatorFeeRecipient The node operator fee recipient address
      * @param _nodeOperatorFeeRate The node operator fee rate
      * @param _confirmExpiry The confirmation expiry time in seconds
      */
@@ -102,7 +109,7 @@ contract NodeOperatorFee is Permissions {
 
         super._initialize(_defaultAdmin, _confirmExpiry);
 
-        _setNodeOperatorFeeRate(_nodeOperatorFeeRate);
+        _setNodeOperatorFeeRate(_nodeOperatorFeeRate.toUint16());
         _setNodeOperatorFeeRecipient(_nodeOperatorFeeRecipient);
 
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
@@ -137,8 +144,6 @@ contract NodeOperatorFee is Permissions {
      * 3. Determine unsettled growth: currentGrowth - settledGrowth
      * 4. Apply fee rate: unsettledGrowth × nodeOperatorFeeRate / 10000
      *
-     * @dev Even though it's a view function, it will still revert
-     * if the settled growth is pending, indicating the need for manual adjustment
      * @return fee The amount of ETH available for disbursement to the node operator
      */
     function nodeOperatorDisbursableFee() public view returns (uint256 fee) {
@@ -163,12 +168,12 @@ contract NodeOperatorFee is Permissions {
      * 4. Withdraws fee amount from vault to node operator recipient
      */
     function disburseNodeOperatorFee() public {
-        (uint256 fee, int256 growth) = _calculateFee();
+        (uint256 fee, int128 growth) = _calculateFee();
 
         // it's important not to revert here so as not to block disconnect
         if (fee == 0) return;
 
-        _setSettledGrowth(uint256(growth));
+        _setSettledGrowth(growth);
 
         VAULT_HUB.withdraw(address(_stakingVault()), nodeOperatorFeeRecipient, fee);
         emit NodeOperatorFeeDisbursed(msg.sender, fee);
@@ -196,7 +201,8 @@ contract NodeOperatorFee is Permissions {
         // Disburse any outstanding fees at the current rate before changing it
         disburseNodeOperatorFee();
 
-        _setNodeOperatorFeeRate(_newNodeOperatorFeeRate);
+        // uint16.max < uint256.max = safe cast needed
+        _setNodeOperatorFeeRate(_newNodeOperatorFeeRate.toUint16());
 
         return true;
     }
@@ -209,11 +215,12 @@ contract NodeOperatorFee is Permissions {
      * @param _expectedSettledGrowth The expected current settled growth
      * @return bool True if correction was applied, false if awaiting confirmations
      */
-    function correctSettledGrowth(uint256 _newSettledGrowth, uint256 _expectedSettledGrowth) public returns (bool) {
+    function correctSettledGrowth(int256 _newSettledGrowth, int256 _expectedSettledGrowth) public returns (bool) {
         if (settledGrowth != _expectedSettledGrowth) revert UnexpectedSettledGrowth();
 
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
-        _correctSettledGrowth(_newSettledGrowth);
+        // int128.max < int256.max = safe cast needed
+        _correctSettledGrowth(_newSettledGrowth.toInt128());
 
         return true;
     }
@@ -226,7 +233,8 @@ contract NodeOperatorFee is Permissions {
      * @param _exemptedAmount Amount in ETH to exempt from fee calculations
      */
     function addFeeExemption(uint256 _exemptedAmount) external onlyRoleMemberOrAdmin(NODE_OPERATOR_FEE_EXEMPT_ROLE) {
-        _addFeeExemption(_exemptedAmount);
+        // uint128.max < uint256.max = safe cast needed
+        _addFeeExemption(_exemptedAmount.toUint128());
     }
 
     /**
@@ -272,8 +280,8 @@ contract NodeOperatorFee is Permissions {
         emit ForbiddenToConnect();
     }
 
-    function _setSettledGrowth(uint256 _newSettledGrowth) private {
-        uint256 oldSettledGrowth = settledGrowth;
+    function _setSettledGrowth(int128 _newSettledGrowth) private {
+        int128 oldSettledGrowth = settledGrowth;
         if (oldSettledGrowth == _newSettledGrowth) revert SameSettledGrowth();
         settledGrowth = _newSettledGrowth;
 
@@ -284,35 +292,46 @@ contract NodeOperatorFee is Permissions {
      * @dev Set a new settled growth and updates the timestamp.
      * Should be used to correct settled growth for total value change that might not have been reported yet
      */
-    function _correctSettledGrowth(uint256 _newSettledGrowth) internal {
+    function _correctSettledGrowth(int128 _newSettledGrowth) internal {
         _setSettledGrowth(_newSettledGrowth);
-        latestCorrectionTimestamp = block.timestamp;
+        latestCorrectionTimestamp = uint64(block.timestamp);
 
-        emit CorrectionTimestampUpdated(block.timestamp);
+        emit CorrectionTimestampUpdated(latestCorrectionTimestamp);
     }
 
     /**
      * @dev Increases settled growth for total value increases not subject to fee,
      * which is why it updates the timestamp to ensure that the exemption comes before
      * the total value report during the fee rate change, which guarantees that the exemption is reported
+     * @dev fee exemption can only be positive
      */
     function _addFeeExemption(uint256 _amount) internal {
-        _correctSettledGrowth(settledGrowth + _amount);
+        // int256.max < uint256.max = safe cast needed
+        // int256.max < int128.max = safe cast needed
+        // if the sum overflows int128, EVM reverts
+        _correctSettledGrowth(settledGrowth + _amount.toInt256().toInt128());
     }
 
-    function _calculateFee() internal view returns (uint256 fee, int256 growth) {
+    function _calculateFee() internal view returns (uint256 fee, int128 growth) {
         VaultHub.Report memory report = latestReport();
-        growth = int104(report.totalValue) - report.inOutDelta;
+        // uint104.max < uint256.max = no safe cast needed
+        // uint104.max < int256.max = no safe cast needed
+        // uint104.max > int104.max = safe cast needed
+        growth = int256(uint256(report.totalValue)).toInt104() - report.inOutDelta;
 
-        if (growth > int256(settledGrowth)) {
-            fee = ((uint256(growth) - settledGrowth) * nodeOperatorFeeRate) / TOTAL_BASIS_POINTS;
+        // because settled growth is an int, we have to make sure that growth is positive
+        if (growth > 0 && growth > settledGrowth) {
+            // growth and settled growth are positive and can't underflow when casting to uint256
+            fee =
+                ((uint256(int256(growth)) - uint256(int256(settledGrowth))) * uint256(nodeOperatorFeeRate)) /
+                TOTAL_BASIS_POINTS;
         }
     }
 
-    function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
+    function _setNodeOperatorFeeRate(uint16 _newNodeOperatorFeeRate) internal {
         if (_newNodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
 
-        uint256 oldNodeOperatorFeeRate = nodeOperatorFeeRate;
+        uint16 oldNodeOperatorFeeRate = nodeOperatorFeeRate;
         nodeOperatorFeeRate = _newNodeOperatorFeeRate;
 
         emit NodeOperatorFeeRateSet(msg.sender, oldNodeOperatorFeeRate, _newNodeOperatorFeeRate);
@@ -334,11 +353,7 @@ contract NodeOperatorFee is Permissions {
      * @param oldNodeOperatorFeeRate The old node operator fee rate.
      * @param newNodeOperatorFeeRate The new node operator fee rate.
      */
-    event NodeOperatorFeeRateSet(
-        address indexed sender,
-        uint256 oldNodeOperatorFeeRate,
-        uint256 newNodeOperatorFeeRate
-    );
+    event NodeOperatorFeeRateSet(address indexed sender, uint64 oldNodeOperatorFeeRate, uint64 newNodeOperatorFeeRate);
 
     /**
      * @dev Emitted when the node operator fee is disbursed.
@@ -363,13 +378,13 @@ contract NodeOperatorFee is Permissions {
      * @param oldSettledGrowth the old settled growth
      * @param newSettledGrowth the new settled growth
      */
-    event SettledGrowthSet(uint256 oldSettledGrowth, uint256 newSettledGrowth);
+    event SettledGrowthSet(int128 oldSettledGrowth, int128 newSettledGrowth);
 
     /**
      * @dev Emitted when the settled growth is corrected.
      * @param timestamp new correction timestamp
      */
-    event CorrectionTimestampUpdated(uint256 timestamp);
+    event CorrectionTimestampUpdated(uint64 timestamp);
 
     /**
      * @dev Emitted when the node operator approves to connect to VaultHub.
