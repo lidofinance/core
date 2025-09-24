@@ -262,7 +262,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       return generateTopUp(validator.container, postDepositAmount);
     });
 
-    await pdg.proveWCAndTopUpValidators(
+    await pdg.proveWCActivateAndTopUpValidators(
       witnesses,
       postdeposits.map((p) => p.amount),
     );

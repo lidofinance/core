@@ -307,24 +307,16 @@ describe("Integration: Actions with vault disconnected from hub", () => {
           ether("2016"),
         );
 
-        await expect(predepositGuarantee.connect(nodeOperator).proveWCAndActivateValidator(witnesses[0]))
+        await expect(
+          predepositGuarantee.connect(nodeOperator).proveWCActivateAndTopUpValidators(witnesses, [postdeposit.amount]),
+        )
           .to.emit(predepositGuarantee, "ValidatorProven")
           .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials)
           .to.emit(depositContract, "DepositEvent")
           .withArgs(
             postdeposit.pubkey,
             withdrawalCredentials,
-            toLittleEndian64(toGwei(ether("31"))),
-            anyValue,
-            anyValue,
-          );
-
-        await expect(predepositGuarantee.connect(nodeOperator).topUpExistingValidators([postdeposit]))
-          .to.emit(depositContract, "DepositEvent")
-          .withArgs(
-            postdeposit.pubkey,
-            withdrawalCredentials,
-            toLittleEndian64(toGwei(postdeposit.amount)),
+            toLittleEndian64(toGwei(ether("2047"))),
             anyValue,
             anyValue,
           );
