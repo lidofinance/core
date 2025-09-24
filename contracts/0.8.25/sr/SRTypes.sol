@@ -182,7 +182,6 @@ struct RouterStorage {
     uint96 totalClBalanceGwei;
     uint96 totalActiveBalanceGwei;
     bytes32 withdrawalCredentials;
-    bytes32 withdrawalCredentials02;
     address lido;
     uint24 lastModuleId;
 }

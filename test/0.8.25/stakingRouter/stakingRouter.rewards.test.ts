@@ -34,7 +34,6 @@ describe("StakingRouter.sol:rewards", () => {
   const DEFAULT_MEB = getModuleMEB(DEFAULT_CONFIG.moduleType);
 
   const withdrawalCredentials = hexlify(randomBytes(32));
-  const withdrawalCredentials02 = hexlify(randomBytes(32));
 
   before(async () => {
     [deployer, admin] = await ethers.getSigners();
@@ -46,7 +45,6 @@ describe("StakingRouter.sol:rewards", () => {
       admin,
       certainAddress("test:staking-router-modules:lido"), // mock lido address
       withdrawalCredentials,
-      withdrawalCredentials02,
     );
 
     // grant roles

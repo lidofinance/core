@@ -31,7 +31,6 @@ context("StakingRouter.sol:status-control", () => {
 
   const lido = certainAddress("test:staking-router-status:lido");
   const withdrawalCredentials = hexlify(randomBytes(32));
-  const withdrawalCredentials02 = hexlify(randomBytes(32));
 
   before(async () => {
     [deployer, admin, user] = await ethers.getSigners();
@@ -43,7 +42,6 @@ context("StakingRouter.sol:status-control", () => {
       admin,
       lido, // mock lido address
       withdrawalCredentials,
-      withdrawalCredentials02,
     );
 
     // give the necessary role to the admin

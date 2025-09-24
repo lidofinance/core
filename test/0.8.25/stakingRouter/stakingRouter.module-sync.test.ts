@@ -44,7 +44,6 @@ describe("StakingRouter.sol:module-sync", () => {
   const minDepositBlockDistance = 25n;
 
   const withdrawalCredentials = hexlify(randomBytes(32));
-  const withdrawalCredentials02 = hexlify(randomBytes(32));
 
   let originalState: string;
 
@@ -54,7 +53,7 @@ describe("StakingRouter.sol:module-sync", () => {
     ({ stakingRouter, stakingRouterWithLib, depositContract } = await deployStakingRouter({ deployer, admin }));
 
     // initialize staking router
-    await stakingRouter.initialize(admin, lido, withdrawalCredentials, withdrawalCredentials02);
+    await stakingRouter.initialize(admin, lido, withdrawalCredentials);
 
     // grant roles
 
@@ -303,6 +302,12 @@ describe("StakingRouter.sol:module-sync", () => {
         .withArgs(user.address, await stakingRouter.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE());
     });
 
+    it("Reverts if withdrawal credentials are empty", async () => {
+      await expect(
+        stakingRouter.connect(admin).setWithdrawalCredentials(bigintToHex(0n, true, 32)),
+      ).to.be.revertedWithCustomError(stakingRouter, "EmptyWithdrawalsCredentials");
+    });
+
     it("Set new withdrawal credentials and informs modules", async () => {
       const newWithdrawalCredentials = hexlify(randomBytes(32));
 
@@ -334,50 +339,6 @@ describe("StakingRouter.sol:module-sync", () => {
       await stakingModule.mock__onWithdrawalCredentialsChanged(false, shouldRunOutOfGas);
 
       await expect(stakingRouter.setWithdrawalCredentials(hexlify(randomBytes(32)))).to.be.revertedWithCustomError(
-        stakingRouterWithLib,
-        "UnrecoverableModuleError",
-      );
-    });
-  });
-
-  context("setWithdrawalCredentials02", () => {
-    it("Reverts if the caller does not have the role", async () => {
-      await expect(stakingRouter.connect(user).setWithdrawalCredentials02(hexlify(randomBytes(32))))
-        .to.be.revertedWithCustomError(stakingRouter, "AccessControlUnauthorizedAccount")
-        .withArgs(user.address, await stakingRouter.MANAGE_WITHDRAWAL_CREDENTIALS_ROLE());
-    });
-
-    it("Set new withdrawal credentials and informs modules", async () => {
-      const newWithdrawalCredentials = hexlify(randomBytes(32));
-
-      await expect(stakingRouter.setWithdrawalCredentials02(newWithdrawalCredentials))
-        .to.emit(stakingRouter, "WithdrawalCredentials02Set")
-        .withArgs(newWithdrawalCredentials, admin.address)
-        .and.to.emit(stakingModule, "Mock__WithdrawalCredentialsChanged");
-    });
-
-    it("Emits an event if the module hook fails with a revert data", async () => {
-      const shouldRevert = true;
-      await stakingModule.mock__onWithdrawalCredentialsChanged(shouldRevert, false);
-
-      // "revert reason" abi-encoded
-      const revertReasonEncoded = [
-        "0x08c379a0", // string type
-        "0000000000000000000000000000000000000000000000000000000000000020",
-        "000000000000000000000000000000000000000000000000000000000000000d",
-        "72657665727420726561736f6e00000000000000000000000000000000000000",
-      ].join("");
-
-      await expect(stakingRouter.setWithdrawalCredentials02(hexlify(randomBytes(32))))
-        .to.emit(stakingRouterWithLib, "WithdrawalsCredentialsChangeFailed")
-        .withArgs(moduleId, revertReasonEncoded);
-    });
-
-    it("Reverts if the module hook fails without reason, e.g. ran out of gas", async () => {
-      const shouldRunOutOfGas = true;
-      await stakingModule.mock__onWithdrawalCredentialsChanged(false, shouldRunOutOfGas);
-
-      await expect(stakingRouter.setWithdrawalCredentials02(hexlify(randomBytes(32)))).to.be.revertedWithCustomError(
         stakingRouterWithLib,
         "UnrecoverableModuleError",
       );
@@ -926,15 +887,6 @@ describe("StakingRouter.sol:module-sync", () => {
       await expect(stakingRouter.connect(user).deposit(moduleId, "0x")).to.be.revertedWithCustomError(
         stakingRouter,
         "AppAuthLidoFailed",
-      );
-    });
-
-    it("Reverts if withdrawal credentials are not set", async () => {
-      await stakingRouter.connect(admin).setWithdrawalCredentials(bigintToHex(0n, true, 32));
-
-      await expect(stakingRouter.deposit(moduleId, "0x")).to.be.revertedWithCustomError(
-        stakingRouter,
-        "EmptyWithdrawalsCredentials",
       );
     });
 

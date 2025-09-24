@@ -41,7 +41,6 @@ describe("StakingRouter.sol:keys-02-type", () => {
   let moduleId: bigint;
   let stakingModuleAddress: string;
   const withdrawalCredentials = hexlify(randomBytes(32));
-  const withdrawalCredentials02 = hexlify(randomBytes(32));
 
   before(async () => {
     [deployer, admin] = await ethers.getSigners();
@@ -57,7 +56,7 @@ describe("StakingRouter.sol:keys-02-type", () => {
     const depositCallerWrapperAddress = await depositCallerWrapper.getAddress();
 
     // initialize staking router
-    await stakingRouter.initialize(admin, depositCallerWrapperAddress, withdrawalCredentials, withdrawalCredentials02);
+    await stakingRouter.initialize(admin, depositCallerWrapperAddress, withdrawalCredentials);
 
     // grant roles
 
@@ -81,14 +80,6 @@ describe("StakingRouter.sol:keys-02-type", () => {
     };
 
     await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);
-
-    const newWithdrawalCredentials = hexlify(randomBytes(32));
-
-    // set withdrawal credentials for 0x02 type
-    await expect(stakingRouter.setWithdrawalCredentials02(newWithdrawalCredentials))
-      .to.emit(stakingRouter, "WithdrawalCredentials02Set")
-      .withArgs(newWithdrawalCredentials, admin.address)
-      .and.to.emit(stakingModuleV2, "Mock__WithdrawalCredentialsChanged");
 
     moduleId = await stakingRouter.getStakingModulesCount();
   });

@@ -61,7 +61,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
     );
     event WithdrawalCredentialsSet(bytes32 withdrawalCredentials, address setBy);
-    event WithdrawalCredentials02Set(bytes32 withdrawalCredentials02, address setBy);
 
     /// Emitted when the StakingRouter received ETH
     event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
@@ -139,12 +138,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _admin Lido DAO Aragon agent contract address.
     /// @param _lido Lido address.
     /// @param _withdrawalCredentials 0x01 credentials to withdraw ETH on Consensus Layer side.
-    /// @param _withdrawalCredentials02 0x02 Credentials to withdraw ETH on Consensus Layer side
     /// @dev Proxy initialization method.
-    function initialize(address _admin, address _lido, bytes32 _withdrawalCredentials, bytes32 _withdrawalCredentials02)
-        external
-        reinitializer(4)
-    {
+    function initialize(address _admin, address _lido, bytes32 _withdrawalCredentials) external reinitializer(4) {
         if (_admin == address(0)) revert ZeroAddressAdmin();
         if (_lido == address(0)) revert ZeroAddressLido();
 
@@ -153,14 +148,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         _initializeSTAS();
 
-        RouterStorage storage rs = SRStorage.getRouterStorage();
-        rs.lido = _lido;
+        SRStorage.getRouterStorage().lido = _lido;
 
         // TODO: maybe store withdrawalVault
-        rs.withdrawalCredentials = _withdrawalCredentials;
-        rs.withdrawalCredentials02 = _withdrawalCredentials02;
-        emit WithdrawalCredentialsSet(_withdrawalCredentials, _msgSender());
-        emit WithdrawalCredentials02Set(_withdrawalCredentials02, _msgSender());
+        _setWithdrawalCredentials(_withdrawalCredentials);
     }
 
     /// @dev Prohibit direct transfer to contract.
@@ -192,12 +183,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         _initializeSTAS();
         // migrate current modules to new storage
         SRLib._migrateStorage();
-
-        // emit STASInitialized();
-
-        RouterStorage storage rs = SRStorage.getRouterStorage();
-        emit WithdrawalCredentialsSet(rs.withdrawalCredentials, _msgSender());
-        emit WithdrawalCredentials02Set(rs.withdrawalCredentials02, _msgSender());
     }
 
     /// @notice Returns Lido contract address.
@@ -703,9 +688,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return Max deposits count per block for the staking module.
     function getStakingModuleMaxDepositsAmountPerBlock(uint256 _stakingModuleId) external view returns (uint256) {
         // TODO: maybe will be defined via staking module config
-        // MAX_EFFECTIVE_BALANCE_01 here is old deposit value per validator
+        // MAX_EFFECTIVE_BALANCE_WC_TYPE_01 here is old deposit value per validator
         (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
-        return (state.getStateDeposits().maxDepositsPerBlock * SRUtils.MAX_EFFECTIVE_BALANCE_01);
+        return (state.getStateDeposits().maxDepositsPerBlock * SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
     }
 
     /// @notice Returns active validators count for the staking module.
@@ -725,10 +710,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     /// @notice Returns withdrawal credentials type
     /// @param _stakingModuleId Id of the staking module to be deposited.
-    /// @return module type: 0 - Legacy (WC type 0x01) or 1 - New (WC type 0x02)
-    function getStakingModuleWithdrawalCredentialType(uint256 _stakingModuleId) external view returns (uint8) {
-        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
-        return SRUtils._getModuleWCType(stateConfig.moduleType);
+    /// @return withdrawal credentials: 0x01... - for Legacy modules, 0x02... - for New modules
+    function getStakingModuleWithdrawalCredentials(uint256 _stakingModuleId) external view returns (bytes32) {
+        return _getWithdrawalCredentialsWithType(getStakingModuleType(_stakingModuleId));
     }
 
     /// @notice Returns the staking module type: Legacy or New, i.e. balance-based (uses 0x02 withdrawal credentials)
@@ -983,7 +967,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         view
         returns (uint256 allocated, uint256[] memory allocations)
     {
-        (allocated, allocations) = _getTargetDepositsAllocations(SRStorage.getModuleIds(), _depositAmount);
+        return _getTargetDepositsAllocations(SRStorage.getModuleIds(), _depositAmount);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.
@@ -1064,22 +1048,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         external
         onlyRole(MANAGE_WITHDRAWAL_CREDENTIALS_ROLE)
     {
-        SRStorage.getRouterStorage().withdrawalCredentials = _withdrawalCredentials;
-        SRLib._notifyStakingModulesOfWithdrawalCredentialsChange();
-        emit WithdrawalCredentialsSet(_withdrawalCredentials, _msgSender());
-    }
-
-    /// @notice Set 0x02 credentials to withdraw ETH on Consensus Layer side.
-    /// @param _withdrawalCredentials 0x02 withdrawal credentials field as defined in the Consensus Layer specs.
-    /// @dev Note that setWithdrawalCredentials discards all unused deposits data as the signatures are invalidated.
-    /// @dev The function is restricted to the `MANAGE_WITHDRAWAL_CREDENTIALS_ROLE` role.
-    function setWithdrawalCredentials02(bytes32 _withdrawalCredentials)
-        external
-        onlyRole(MANAGE_WITHDRAWAL_CREDENTIALS_ROLE)
-    {
-        SRStorage.getRouterStorage().withdrawalCredentials02 = _withdrawalCredentials;
-        SRLib._notifyStakingModulesOfWithdrawalCredentialsChange();
-        emit WithdrawalCredentials02Set(_withdrawalCredentials, _msgSender());
+        _setWithdrawalCredentials(_withdrawalCredentials);
     }
 
     /// @notice Returns current credentials to withdraw ETH on Consensus Layer side.
@@ -1088,15 +1057,16 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRStorage.getRouterStorage().withdrawalCredentials;
     }
 
-    /// @notice Returns current 0x02 credentials to withdraw ETH on Consensus Layer side.
-    /// @return Withdrawal credentials.
-    function getWithdrawalCredentials02() public view returns (bytes32) {
-        return SRStorage.getRouterStorage().withdrawalCredentials02;
+    function _setWithdrawalCredentials(bytes32 wc) internal {
+        if (wc == 0) revert EmptyWithdrawalsCredentials();
+        SRStorage.getRouterStorage().withdrawalCredentials = wc;
+        SRLib._notifyStakingModulesOfWithdrawalCredentialsChange();
+        emit WithdrawalCredentialsSet(wc, _msgSender());
     }
 
     function _getWithdrawalCredentialsWithType(StakingModuleType moduleType) internal view returns (bytes32) {
         bytes32 wc = getWithdrawalCredentials();
-        if (wc == 0) revert EmptyWithdrawalsCredentials();
+        // if (wc == 0) revert EmptyWithdrawalsCredentials();
         return wc.setType(SRUtils._getModuleWCType(moduleType));
     }
 
@@ -1116,7 +1086,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         view
         returns (uint256 allocated, uint256 allocation)
     {
-        (allocated, allocation) = SRLib._getDepositAllocation(moduleId, amountToAllocate);
+        return SRLib._getDepositAllocation(moduleId, amountToAllocate);
     }
 
     function _getTargetDepositsAllocations(uint256[] memory moduleIds, uint256 amountToAllocate)
@@ -1124,7 +1094,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         view
         returns (uint256 allocated, uint256[] memory allocations)
     {
-        (allocated, allocations) = SRLib._getDepositAllocations(moduleIds, amountToAllocate);
+        return SRLib._getDepositAllocations(moduleIds, amountToAllocate);
     }
 
     /// module wrapper

@@ -17,8 +17,10 @@ library SRUtils {
     /// @dev Restrict the name size with 31 bytes to storage in a single slot.
     uint256 public constant MAX_STAKING_MODULE_NAME_LENGTH = 31;
 
-    uint256 public constant MAX_EFFECTIVE_BALANCE_01 = 32 ether;
-    uint256 public constant MAX_EFFECTIVE_BALANCE_02 = 2048 ether;
+    // Max Effective Balance for Withdrawal Credentials types
+    uint256 public constant MAX_EFFECTIVE_BALANCE_WC_TYPE_01 = 32 ether;
+    uint256 public constant MAX_EFFECTIVE_BALANCE_WC_TYPE_02 = 2048 ether;
+    // Withdrawal Credentials types
     uint8 public constant WC_TYPE_01 = 0x01;
     uint8 public constant WC_TYPE_02 = 0x02;
 
@@ -105,9 +107,9 @@ library SRUtils {
 
     function _getModuleMEB(StakingModuleType moduleType) internal pure returns (uint256) {
         if (moduleType == StakingModuleType.Legacy) {
-            return MAX_EFFECTIVE_BALANCE_01;
+            return MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
         } else if (moduleType == StakingModuleType.New) {
-            return MAX_EFFECTIVE_BALANCE_02;
+            return MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
         } else {
             revert InvalidStakingModuleType();
         }

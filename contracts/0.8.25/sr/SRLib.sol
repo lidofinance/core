@@ -146,9 +146,6 @@ library SRLib {
 
         // migrate WC
         SRStorage.getRouterStorage().withdrawalCredentials = WITHDRAWAL_CREDENTIALS_POSITION.getBytes32Slot().value;
-        // bytes32 wc = WITHDRAWAL_CREDENTIALS_POSITION.getBytes32Slot().value;
-        // SRStorage.getRouterStorage().withdrawalCredentials = wc.to01();
-        // SRStorage.getRouterStorage().withdrawalCredentials02 = wc.to02();
         delete WITHDRAWAL_CREDENTIALS_POSITION.getBytes32Slot().value;
 
         uint256 modulesCount = STAKING_MODULES_COUNT_POSITION.getUint256Slot().value;
@@ -233,7 +230,7 @@ library SRLib {
         // the exitedValidatorsCount with the one that the staking router is aware of.
         uint256 activeCount = depositedValidatorsCount - Math.max(routerExitedValidatorsCount, exitedValidatorsCount);
 
-        return SRUtils._toGwei(activeCount * SRUtils.MAX_EFFECTIVE_BALANCE_01);
+        return SRUtils._toGwei(activeCount * SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
     }
 
     /// @dev recalculate and update modules STAS metric values
