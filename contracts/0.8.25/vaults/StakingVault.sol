@@ -388,11 +388,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         if (_pubkeys.length % PUBLIC_KEY_LENGTH != 0) revert InvalidPubkeysLength();
         if (_excessRefundRecipient == address(0)) revert ZeroArgument("_excessRefundRecipient");
 
-        // If amounts array is not empty, validate its length matches pubkeys
-        if (_amountsInGwei.length > 0 && _pubkeys.length / PUBLIC_KEY_LENGTH != _amountsInGwei.length) {
-            revert PubkeyLengthDoesNotMatchAmountLength();
-        }
-
         uint256 feePerRequest = TriggerableWithdrawals.getWithdrawalRequestFee();
         uint256 totalFee = (_pubkeys.length / PUBLIC_KEY_LENGTH) * feePerRequest;
         if (msg.value < totalFee) revert InsufficientValidatorWithdrawalFee(msg.value, totalFee);
@@ -734,11 +729,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Thrown when the vault is already ossified
      */
     error VaultOssified();
-
-    /**
-     * @notice Thrown when the length of the validator public keys does not match the length of the amounts
-     */
-    error PubkeyLengthDoesNotMatchAmountLength();
 
     /**
      * @notice thrown when trying to recover ETH (via EIP-7528 address) using collectERC20

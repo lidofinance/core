@@ -501,7 +501,7 @@ describe("StakingVault.sol", () => {
         stakingVault
           .connect(vaultOwner)
           .triggerValidatorWithdrawals(SAMPLE_PUBKEY, [ether("1"), ether("2")], vaultOwner, { value: 1n }),
-      ).to.be.revertedWithCustomError(stakingVault, "PubkeyLengthDoesNotMatchAmountLength");
+      ).to.be.revertedWithCustomError(stakingVault, "MismatchedArrayLengths");
     });
 
     it("reverts if the fee is less than the required fee", async () => {
