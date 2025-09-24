@@ -46,8 +46,7 @@ contract NodeOperatorFee is Permissions {
      *
      * @dev 0x6470e27e201957ff09f8915f1ac3c0d7395b57d35de180f25140acf2bee42ef2
      */
-    bytes32 public constant UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE =
-        keccak256("vaults.NodeOperatorFee.UnguaranteedBeaconChainDepositRole");
+    bytes32 public constant NODE_OPERATOR_PDG_BYPASS_ROLE = keccak256("vaults.NodeOperatorFee.PdgBypassRole");
 
     // ==================== Packed Storage Slot 1 ====================
     /**
@@ -92,16 +91,6 @@ contract NodeOperatorFee is Permissions {
     bool public isApprovedToConnect;
 
     /**
-     * @notice Flag indicating whether unguaranteed deposits are allowed.
-     * Unguaranteed deposits bypass the PredepositGuarantee rigorous process in favor of simple 1-step deposits.
-     * This works by withdrawing the deposit amount from the StakingVault, performing a direct deposit
-     * to the Beacon chain deposit contract and correcting the settled growth by the deposit amount.
-     * However, because the validity of such deposits is not guaranteed, this simplified workflow assumes trust
-     * between the vault owner and node operator and, thus, requires the owner's (DEFAULT_ADMIN_ROLE) explicit permission.
-     */
-    bool public unguaranteedDepositsAllowed;
-
-    /**
      * @notice Passes the address of the vault hub up the inheritance chain.
      * @param _vaultHub The address of the vault hub.
      * @param _lidoLocator The address of the Lido locator.
@@ -134,7 +123,7 @@ contract NodeOperatorFee is Permissions {
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_EXEMPT_ROLE, NODE_OPERATOR_MANAGER_ROLE);
-        _setRoleAdmin(UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE, NODE_OPERATOR_MANAGER_ROLE);
+        _setRoleAdmin(NODE_OPERATOR_PDG_BYPASS_ROLE, NODE_OPERATOR_MANAGER_ROLE);
     }
 
     /**
@@ -176,7 +165,7 @@ contract NodeOperatorFee is Permissions {
      * @param _isApproved True to approve, False to forbid
      */
     function setApprovedToConnect(bool _isApproved) external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
-       _setApprovedToConnect(_isApproved);
+        _setApprovedToConnect(_isApproved);
     }
 
     /**
@@ -198,24 +187,6 @@ contract NodeOperatorFee is Permissions {
 
         VAULT_HUB.withdraw(address(_stakingVault()), feeRecipient, fee);
         emit FeeDisbursed(msg.sender, fee);
-    }
-
-    /**
-     * @notice Enables unguaranteed deposits.
-     */
-    function allowUnguaranteedDeposits() external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
-        unguaranteedDepositsAllowed = true;
-
-        emit UnguaranteedDepositsAllowed();
-    }
-
-    /**
-     * @notice Disables unguaranteed deposits.
-     */
-    function disallowUnguaranteedDeposits() external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
-        unguaranteedDepositsAllowed = false;
-
-        emit UnguaranteedDepositsDisallowed();
     }
 
     /**
@@ -345,7 +316,7 @@ contract NodeOperatorFee is Permissions {
         int128 unsettledGrowth = growth - settledGrowth;
 
         if (unsettledGrowth > 0) {
-            fee = uint256(uint128(unsettledGrowth)) * uint256(feeRate) / TOTAL_BASIS_POINTS;
+            fee = (uint256(uint128(unsettledGrowth)) * uint256(feeRate)) / TOTAL_BASIS_POINTS;
         }
     }
 
@@ -369,19 +340,6 @@ contract NodeOperatorFee is Permissions {
         emit FeeRecipientSet(msg.sender, oldFeeRecipient, _newFeeRecipient);
     }
 
-    /**
-     * @dev Withdraws ether from vault to this contract for unguaranteed deposit to validators
-     * Requires the caller to have the `UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE`
-     * and the unguaranteed deposits to be allowed.
-     */
-    function _withdrawForUnguaranteedDepositToBeaconChain(
-        uint256 _ether
-    ) internal onlyRoleMemberOrAdmin(UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE) {
-        if (!unguaranteedDepositsAllowed) revert UnguaranteedDepositsDisallowedByAdmin();
-
-        VAULT_HUB.withdraw(address(_stakingVault()), address(this), _ether);
-    }
-
     // ==================== Events ====================
 
     /**
@@ -403,11 +361,7 @@ contract NodeOperatorFee is Permissions {
      * @param oldFeeRecipient the old node operator fee recipient
      * @param newFeeRecipient the new node operator fee recipient
      */
-    event FeeRecipientSet(
-        address indexed sender,
-        address oldFeeRecipient,
-        address newFeeRecipient
-    );
+    event FeeRecipientSet(address indexed sender, address oldFeeRecipient, address newFeeRecipient);
 
     /**
      * @dev Emitted when the settled growth is set.
@@ -426,17 +380,6 @@ contract NodeOperatorFee is Permissions {
      * @dev Emitted when the node operator approves/forbids to connect to VaultHub.
      */
     event ApprovedToConnectSet(bool isApproved);
-
-    /**
-     * @dev Emitted when the unguaranteed deposits are enabled.
-     */
-    event UnguaranteedDepositsAllowed();
-
-    /**
-     * @dev Emitted when the unguaranteed deposits are disabled.
-     */
-    event UnguaranteedDepositsDisallowed();
-
 
     // ==================== Errors ====================
 
@@ -479,9 +422,4 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the vault is quarantined.
      */
     error VaultQuarantined();
-
-    /**
-     * @dev Error emitted when the unguaranteed deposits are disallowed.
-     */
-    error UnguaranteedDepositsDisallowedByAdmin();
 }

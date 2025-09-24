@@ -236,7 +236,7 @@ describe("Dashboard.sol", () => {
     const dashboardCreatedEvent = findEvents(createVaultReceipt, "DashboardCreated")[0];
     const dashboardAddress = dashboardCreatedEvent.args.dashboard;
     dashboard = await ethers.getContractAt("Dashboard", dashboardAddress, vaultOwner);
-    await dashboard.connect(vaultOwner).allowUnguaranteedDeposits();
+    await dashboard.connect(vaultOwner).bypassPDG(true);
 
     originalState = await Snapshot.take();
   });
@@ -1105,6 +1105,13 @@ describe("Dashboard.sol", () => {
     ];
 
     it("reverts if called by a non-admin", async () => {
+      await dashboard.bypassPDG(false);
+      await expect(
+        dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG(witnesses),
+      ).to.be.revertedWithCustomError(dashboard, "PDGNotBypassed");
+    });
+
+    it("reverts if called by a non-admin", async () => {
       await expect(dashboard.connect(stranger).proveUnknownValidatorsToPDG(witnesses)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
@@ -1112,7 +1119,10 @@ describe("Dashboard.sol", () => {
     });
 
     it("proves unknown validators to PDG", async () => {
-      await expect(dashboard.proveUnknownValidatorsToPDG(witnesses)).to.emit(hub, "Mock__ValidatorProvedToPDG");
+      await expect(dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG(witnesses)).to.emit(
+        hub,
+        "Mock__ValidatorProvedToPDG",
+      );
     });
   });
 
@@ -1339,6 +1349,15 @@ describe("Dashboard.sol", () => {
       },
     ];
 
+    it("reverts if PDG is not bypassed", async () => {
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
+      await dashboard.connect(vaultOwner).bypassPDG(false);
+
+      await expect(
+        dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits),
+      ).to.be.revertedWithCustomError(dashboard, "PDGNotBypassed");
+    });
+
     it("reverts if the total amount exceeds the withdrawable value", async () => {
       await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
 
@@ -1352,7 +1371,7 @@ describe("Dashboard.sol", () => {
 
       await expect(dashboard.connect(stranger).unguaranteedDepositToBeaconChain(deposits))
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE());
+        .withArgs(stranger, await dashboard.NODE_OPERATOR_PDG_BYPASS_ROLE());
     });
 
     it("performs unguaranteed deposit", async () => {
@@ -1372,6 +1391,24 @@ describe("Dashboard.sol", () => {
           deposits[0].signature,
           deposits[0].depositDataRoot,
         );
+    });
+  });
+
+  context("bypassPDG", () => {
+    it("reverts if the caller is not a member of the node operator manager role", async () => {
+      await expect(dashboard.connect(stranger).bypassPDG(true))
+        .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await dashboard.DEFAULT_ADMIN_ROLE());
+    });
+
+    it("sets bypass to true", async () => {
+      await expect(dashboard.connect(vaultOwner).bypassPDG(true)).to.emit(dashboard, "PDGBypassed").withArgs(true);
+      expect(await dashboard.isPDGBypassed()).to.be.true;
+    });
+
+    it("sets bypass to false", async () => {
+      await expect(dashboard.connect(vaultOwner).bypassPDG(false)).to.emit(dashboard, "PDGBypassed").withArgs(false);
+      expect(await dashboard.isPDGBypassed()).to.be.false;
     });
   });
 

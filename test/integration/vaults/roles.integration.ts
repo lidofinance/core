@@ -219,11 +219,11 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           await testMethod(
             "proveUnknownValidatorsToPDG",
             {
-              successUsers: [roles.unknownValidatorProver, owner],
-              failingUsers: Object.values(roles).filter((r) => r !== roles.unknownValidatorProver && r !== owner),
+              successUsers: [roles.pdgBypasser, owner],
+              failingUsers: Object.values(roles).filter((r) => r !== roles.pdgBypasser && r !== owner),
             },
             [SAMPLE_PUBKEY, stranger],
-            await dashboard.PDG_PROVE_VALIDATOR_ROLE(),
+            await dashboard.NODE_OPERATOR_PDG_BYPASS_ROLE(),
           );
         });
 

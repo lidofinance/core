@@ -80,10 +80,6 @@ contract Permissions__Harness is Permissions {
         _acceptOwnership();
     }
 
-    function proveUnknownValidatorToPDG(IPredepositGuarantee.ValidatorWitness[] calldata _witnesses) external {
-        _proveUnknownValidatorsToPDG(_witnesses);
-    }
-
     function changeTier(uint256 _tierId, uint256 _requestedShareLimit) external {
         _changeTier(_tierId, _requestedShareLimit);
     }

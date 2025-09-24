@@ -256,7 +256,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     await dashboard.connect(owner).grantRole(await dashboard.FUND_ROLE(), proxy);
 
     await reportVaultDataWithProof(ctx, stakingVault);
-    await dashboard.connect(owner).allowUnguaranteedDeposits();
+    await dashboard.connect(owner).bypassPDG(true);
 
     // 4. The stVault's owner deposits 1 ETH from the vault balance directly to the validator, bypassing the PDG.
     //    Method called: Dashboard.unguaranteedDepositToBeaconChain(deposits).
@@ -270,7 +270,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     const { witnesses, postdeposit } = await getProofAndDepositData(ctx, validator, withdrawalCredentials, ether("99"));
 
     // 5. The stVault's owner submits a Merkle proof of the validator's appearing on the Consensus Layer to the Dashboard contract.
-    await expect(dashboard.connect(owner).proveUnknownValidatorsToPDG([witnesses[0]]))
+    await expect(dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG([witnesses[0]]))
       .to.emit(predepositGuarantee, "ValidatorProven")
       .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials);
 

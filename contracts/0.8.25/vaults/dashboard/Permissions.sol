@@ -89,13 +89,6 @@ abstract contract Permissions is AccessControlConfirmable {
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
 
     /**
-     * @notice Permission for proving valid vault validators unknown to the PDG
-     */
-    /// @dev 0xb850402129bccae797798069a8cf3147a0cb7c3193f70558a75f7df0b8651c30
-    bytes32 public constant PDG_PROVE_VALIDATOR_ROLE = keccak256("vaults.Permissions.PDGProveValidator");
-
-
-    /**
      * @dev Permission for vault configuration operations on the OperatorGrid (tier changes, tier sync, share limit updates).
      */
     /// @dev 0x25482e7dc9e29f6da5bd70b6d19d17bbf44021da51ba0664a9f430c94a09c674
@@ -315,17 +308,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _acceptOwnership() internal onlyRole(DEFAULT_ADMIN_ROLE) {
         _stakingVault().acceptOwnership();
-    }
-
-    /**
-     * @dev Proves validators unknown to PDG that have correct vault WC
-     */
-    function _proveUnknownValidatorsToPDG(
-        IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
-    ) internal onlyRoleMemberOrAdmin(PDG_PROVE_VALIDATOR_ROLE) {
-        for (uint256 i = 0; i < _witnesses.length; i++) {
-            VAULT_HUB.proveUnknownValidatorToPDG(address(_stakingVault()), _witnesses[i]);
-        }
     }
 
     /**
