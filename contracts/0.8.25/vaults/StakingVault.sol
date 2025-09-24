@@ -10,6 +10,7 @@ import {TriggerableWithdrawals} from "contracts/common/lib/TriggerableWithdrawal
 import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
 
 import {PinnedBeaconUtils} from "./lib/PinnedBeaconUtils.sol";
+import {RecoverTokens} from "./lib/RecoverTokens.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 
 /**
@@ -80,9 +81,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @dev ERC-7201: Namespaced Storage Layout
      */
     struct Storage {
+        // 1st slot
         address nodeOperator;
+        // 2nd slot
         address depositor;
         bool beaconChainDepositsPaused;
+        // 3rd slot
+        uint256 stagedBalance;
     }
 
     /*
@@ -192,6 +197,22 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         return _numberOfKeys * TriggerableWithdrawals.getWithdrawalRequestFee();
     }
 
+    /**
+     * @notice Calculates the balance that is available for withdrawal (does not account the balances staged for activations)
+     * @return amount of ether available for withdrawal in Wei
+     */
+    function availableBalance() public view returns (uint256) {
+        return address(this).balance - _storage().stagedBalance;
+    }
+
+    /**
+     * @notice Returns the amount of ether on the balance that was staged by depositor for validator activations
+     * @return the amount of staged ether in Wei
+     */
+    function stagedBalance() external view returns (uint256) {
+        return _storage().stagedBalance;
+    }
+
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
@@ -222,7 +243,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     function withdraw(address _recipient, uint256 _ether) external onlyOwner {
         if (_recipient == address(0)) revert ZeroArgument("_recipient");
         if (_ether == 0) revert ZeroArgument("_ether");
-        if (_ether > address(this).balance) revert InsufficientBalance(address(this).balance, _ether);
+        if (_ether > availableBalance()) revert InsufficientBalance(availableBalance(), _ether);
 
         (bool success, ) = _recipient.call{value: _ether}("");
         if (!success) revert TransferFailed(_recipient, _ether);
@@ -270,38 +291,53 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Performs deposits to the beacon chain
-     * @param _deposits Array of validator deposits
+     * @notice Performs deposit to the beacon chain using ether from available balance
+     * @param _deposit validator deposit struct
      */
-    function depositToBeaconChain(Deposit[] calldata _deposits) external {
-        if (_deposits.length == 0) revert ZeroArgument("_deposits");
-        Storage storage $ = _storage();
-        if ($.beaconChainDepositsPaused) revert BeaconChainDepositsOnPause();
-        if (msg.sender != $.depositor) revert SenderNotDepositor();
+    function depositToBeaconChain(Deposit calldata _deposit) external onlyDepositor whenDepositsNotPaused {
+        _depositToBeaconChain(_deposit, bytes.concat(withdrawalCredentials()));
+    }
 
-        uint256 numberOfDeposits = _deposits.length;
+    /**
+     * @notice Puts aside some ether from the balance to deposit it later
+     * @param _ether the amount of ether to stage in Wei
+     */
+    function stage(uint256 _ether) external onlyDepositor whenDepositsNotPaused {
+        if (_ether == 0) revert ZeroArgument("_ether");
+        uint256 balance = availableBalance();
+        if (balance < _ether) revert InsufficientBalance(balance, _ether);
 
-        uint256 totalAmount;
-        for (uint256 i = 0; i < numberOfDeposits; i++) {
-            totalAmount += _deposits[i].amount;
+        _storage().stagedBalance += _ether;
+
+        emit EtherStaged(_ether);
+    }
+
+    /**
+     * @notice Returns the ether staged for deposits back to available balance
+     * @param _ether the amount of ether to remove from stage in Wei
+     */
+    function unstage(uint256 _ether) public onlyDepositor {
+        if (_ether == 0) revert ZeroArgument("_ether");
+        uint256 staged = _storage().stagedBalance;
+        if (staged < _ether) revert InsufficientStaged(staged, _ether);
+
+        _storage().stagedBalance = staged - _ether;
+        emit EtherUnstaged(_ether);
+    }
+
+    /**
+     * @notice Performs deposits to the beacon chain using the staged and available ether.
+     * @param _deposit struct
+     * @param _additionalAmount amount of ether that should be taken from available balance for this deposit
+     * @dev NB! this deposit is not affected by pause if _additionalDeposit == 0
+     */
+    function depositFromStaged(Deposit calldata _deposit, uint256 _additionalAmount) external onlyDepositor {
+        if (_additionalAmount > 0) {
+            if (_storage().beaconChainDepositsPaused) revert BeaconChainDepositsOnPause();
         }
+        unstage(_deposit.amount - _additionalAmount);
 
-        if (totalAmount > address(this).balance) revert InsufficientBalance(address(this).balance, totalAmount);
-
-        bytes memory withdrawalCredentials_ = bytes.concat(withdrawalCredentials());
-
-        for (uint256 i = 0; i < numberOfDeposits; i++) {
-            Deposit calldata deposit = _deposits[i];
-
-            DEPOSIT_CONTRACT.deposit{value: deposit.amount}(
-                deposit.pubkey,
-                withdrawalCredentials_,
-                deposit.signature,
-                deposit.depositDataRoot
-            );
-        }
-
-        emit DepositedToBeaconChain(numberOfDeposits, totalAmount);
+        _depositToBeaconChain(_deposit, bytes.concat(withdrawalCredentials()));
     }
 
     /*
@@ -453,6 +489,28 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         PinnedBeaconUtils.ossify();
     }
 
+
+    /**
+     * @notice collects ERC20 tokens from the Staking Vault to the recipient
+     * @param _token Address of the token to recover
+     * @param _recipient Address of collection recipient
+     * @param _amount Amount of tokens to recover
+     */
+    function collectERC20(
+        address _token,
+        address _recipient,
+        uint256 _amount
+    ) external onlyOwner {
+        if (_token == address(0)) revert ZeroArgument("_token");
+        if (_recipient == address(0)) revert ZeroArgument("_recipient");
+        if (_amount == 0) revert ZeroArgument("_amount");
+        if (_token == RecoverTokens.ETH) {
+            revert EthCollectionNotAllowed();
+        }
+
+        RecoverTokens._recoverERC20(_token, _recipient, _amount);
+    }
+
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
@@ -471,6 +529,18 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         }
     }
 
+    function _depositToBeaconChain(Deposit calldata _deposit, bytes memory _withdrawalCredentials) internal {
+        uint256 balance = availableBalance();
+        if (_deposit.amount > balance) revert InsufficientBalance(balance, _deposit.amount);
+
+        DEPOSIT_CONTRACT.deposit{value: _deposit.amount}(
+            _deposit.pubkey,
+            _withdrawalCredentials,
+            _deposit.signature,
+            _deposit.depositDataRoot
+        );
+    }
+
     /**
      * @dev Sets the depositor address in the `StakingVault`
      * @param _depositor Address of the new depositor
@@ -481,6 +551,16 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address previousDepositor = _storage().depositor;
         _storage().depositor = _depositor;
         emit DepositorSet(previousDepositor, _depositor);
+    }
+
+    modifier whenDepositsNotPaused {
+        if (_storage().beaconChainDepositsPaused) revert BeaconChainDepositsOnPause();
+        _;
+    }
+
+    modifier onlyDepositor {
+        if (_storage().depositor != msg.sender) revert SenderNotDepositor();
+        _;
     }
 
     /*
@@ -528,13 +608,6 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     event BeaconChainDepositsResumed();
 
     /**
-     * @notice Emitted when ether is deposited to `DepositContract`.
-     * @param _deposits Number of validator deposits made.
-     * @param _totalAmount Total amount of ether deposited.
-     */
-    event DepositedToBeaconChain(uint256 _deposits, uint256 _totalAmount);
-
-    /**
      * @notice Emitted when vault owner requests node operator to exit validators from the beacon chain
      * @param pubkey Indexed public key of the validator to exit
      * @param pubkeyRaw Raw public key of the validator to exit
@@ -568,6 +641,18 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         address indexed refundRecipient
     );
 
+    /**
+     * Emitted when ether is put aside from available balance
+     * @param amount Amount of ether being staged in Wei
+     */
+    event EtherStaged(uint256 amount);
+
+    /**
+     * Emitted when ether is returned back to available balance
+     * @param amount amount of ether being unstaged in Wei
+     */
+    event EtherUnstaged(uint256 amount);
+
     /*
      * ╔══════════════════════════════════════════════════╗
      * ║ ┌──────────────────────────────────────────────┐ ║
@@ -588,6 +673,13 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @param _required Amount of ether required
      */
     error InsufficientBalance(uint256 _balance, uint256 _required);
+
+    /**
+     * @notice Thrown when the amount of ether in stage is not sufficient
+     * @param _staged Stashed amount on the vault
+     * @param _requested Amount of ether requested to unstage
+     */
+    error InsufficientStaged(uint256 _staged, uint256 _requested);
 
     /**
      * @notice Thrown when the transfer of ether to a recipient fails
@@ -647,4 +739,9 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Thrown when the length of the validator public keys does not match the length of the amounts
      */
     error PubkeyLengthDoesNotMatchAmountLength();
+
+    /**
+     * @notice thrown when trying to recover ETH (via EIP-7528 address) using collectERC20
+     */
+    error EthCollectionNotAllowed();
 }
