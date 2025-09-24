@@ -109,7 +109,7 @@ contract NodeOperatorFee is Permissions {
 
         super._initialize(_defaultAdmin, _confirmExpiry);
 
-        _setNodeOperatorFeeRate(_nodeOperatorFeeRate.toUint16());
+        _setNodeOperatorFeeRate(_nodeOperatorFeeRate);
         _setNodeOperatorFeeRecipient(_nodeOperatorFeeRecipient);
 
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
@@ -202,7 +202,7 @@ contract NodeOperatorFee is Permissions {
         disburseNodeOperatorFee();
 
         // uint16.max < uint256.max = safe cast needed
-        _setNodeOperatorFeeRate(_newNodeOperatorFeeRate.toUint16());
+        _setNodeOperatorFeeRate(_newNodeOperatorFeeRate);
 
         return true;
     }
@@ -328,13 +328,15 @@ contract NodeOperatorFee is Permissions {
         }
     }
 
-    function _setNodeOperatorFeeRate(uint16 _newNodeOperatorFeeRate) internal {
+    function _setNodeOperatorFeeRate(uint256 _newNodeOperatorFeeRate) internal {
         if (_newNodeOperatorFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
 
         uint16 oldNodeOperatorFeeRate = nodeOperatorFeeRate;
-        nodeOperatorFeeRate = _newNodeOperatorFeeRate;
+        uint16 newNodeOperatorFeeRate = uint16(_newNodeOperatorFeeRate);
 
-        emit NodeOperatorFeeRateSet(msg.sender, oldNodeOperatorFeeRate, _newNodeOperatorFeeRate);
+        nodeOperatorFeeRate = newNodeOperatorFeeRate;
+
+        emit NodeOperatorFeeRateSet(msg.sender, oldNodeOperatorFeeRate, newNodeOperatorFeeRate);
     }
 
     function _setNodeOperatorFeeRecipient(address _newNodeOperatorFeeRecipient) internal {
