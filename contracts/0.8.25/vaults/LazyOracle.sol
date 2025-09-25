@@ -106,7 +106,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     struct VaultInfo {
         address vault;
-        uint256 balance; // includes availableBalance and stagedBalance
+        uint256 aggregatedBalance; // includes availableBalance and stagedBalance
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
