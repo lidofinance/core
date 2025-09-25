@@ -129,52 +129,10 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the stETH share limit of the vault
-     */
-    function shareLimit() external view returns (uint256) {
-        return vaultConnection().shareLimit;
-    }
-
-    /**
      * @notice Returns the number of stETH shares minted
      */
     function liabilityShares() public view returns (uint256) {
         return VAULT_HUB.liabilityShares(address(_stakingVault()));
-    }
-
-    /**
-     * @notice Returns the reserve ratio of the vault in basis points
-     */
-    function reserveRatioBP() public view returns (uint16) {
-        return vaultConnection().reserveRatioBP;
-    }
-
-    /**
-     * @notice Returns the rebalance threshold of the vault in basis points.
-     */
-    function forcedRebalanceThresholdBP() external view returns (uint16) {
-        return vaultConnection().forcedRebalanceThresholdBP;
-    }
-
-    /**
-     * @notice Returns the infra fee basis points.
-     */
-    function infraFeeBP() external view returns (uint16) {
-        return vaultConnection().infraFeeBP;
-    }
-
-    /**
-     * @notice Returns the liquidity fee basis points.
-     */
-    function liquidityFeeBP() external view returns (uint16) {
-        return vaultConnection().liquidityFeeBP;
-    }
-
-    /**
-     * @notice Returns the reservation fee basis points.
-     */
-    function reservationFeeBP() external view returns (uint16) {
-        return vaultConnection().reservationFeeBP;
     }
 
     /**

@@ -369,36 +369,6 @@ describe("Dashboard.sol", () => {
       const connection_ = await dashboard.vaultConnection();
       expect(connection_).to.deep.equal(Object.values(connection));
     });
-
-    it("shareLimit", async () => {
-      const shareLimit = await dashboard.shareLimit();
-      expect(shareLimit).to.equal(connection.shareLimit);
-    });
-
-    it("reserveRatioBP", async () => {
-      const reserveRatioBP = await dashboard.reserveRatioBP();
-      expect(reserveRatioBP).to.equal(connection.reserveRatioBP);
-    });
-
-    it("forcedRebalanceThresholdBP", async () => {
-      const forcedRebalanceThresholdBP = await dashboard.forcedRebalanceThresholdBP();
-      expect(forcedRebalanceThresholdBP).to.equal(connection.forcedRebalanceThresholdBP);
-    });
-
-    it("infraFeeBP", async () => {
-      const infraFeeBP = await dashboard.infraFeeBP();
-      expect(infraFeeBP).to.equal(connection.infraFeeBP);
-    });
-
-    it("liquidityFeeBP", async () => {
-      const liquidityFeeBP = await dashboard.liquidityFeeBP();
-      expect(liquidityFeeBP).to.equal(connection.liquidityFeeBP);
-    });
-
-    it("reservationFeeBP", async () => {
-      const reservationFeeBP = await dashboard.reservationFeeBP();
-      expect(reservationFeeBP).to.equal(connection.reservationFeeBP);
-    });
   });
 
   context("connection+record views", () => {
