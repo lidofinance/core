@@ -3,55 +3,68 @@
 
 pragma solidity 0.8.25;
 
-import {TransientStorage} from "contracts/common/lib/TransientStorage.sol";
+import {TransientSession} from "contracts/common/lib/TransientSession.sol";
 
 library DepositsTempStorage {
-    using TransientStorage for bytes32;
+    using TransientSession for bytes32;
 
     bytes32 private constant OPERATORS = keccak256("lido.DepositsTempStorage.operatorIds");
     bytes32 private constant COUNTS = keccak256("lido.DepositsTempStorage.depositCounts");
+
+    modifier _sessionBegin() {
+        TransientSession._invalidateSession();
+        _;
+    }
+
+    modifier _sessionEnd() {
+        _;
+        TransientSession._invalidateSession();
+    }
+
     /// need to store operators and allocations
     /// allocations or counts
 
-    function storeOperators(uint256[] memory operators) public {
-        OPERATORS.__storeArray(operators);
+    // function storeOperators(uint256[] memory operators) public {
+    //     OPERATORS._storeArray(operators);
+    // }
+
+    // function storeCounts(uint256[] memory counts) public {
+    //     COUNTS._storeArray(counts);
+    // }
+
+    /// @dev store new values from current session
+    function storeOperatorCounts(uint256[] memory operators, uint256[] memory counts) public _sessionBegin {
+        OPERATORS._storeArray(operators);
+        COUNTS._storeArray(counts);
     }
 
-    function storeCounts(uint256[] memory counts) public {
-        COUNTS.__storeArray(counts);
-    }
+    // function getOperators() public view returns (uint256[] memory operators) {
+    //     return OPERATORS._readArray();
+    // }
 
-    function storeOperatorCounts(uint256[] memory operators, uint256[] memory counts) public {
-        OPERATORS.__storeArray(operators);
-        COUNTS.__storeArray(counts);
-    }
+    // function getCounts() public view returns (uint256[] memory operators) {
+    //     return COUNTS._readArray();
+    // }
 
-    function getOperators() public view returns (uint256[] memory operators) {
-        return OPERATORS.__readArray();
-    }
-
-    function getCounts() public view returns (uint256[] memory operators) {
-        return COUNTS.__readArray();
-    }
-
+    /// @dev read values from current session
     function getOperatorCounts() public view returns (uint256[] memory operators, uint256[] memory counts) {
-        operators = OPERATORS.__readArray();
-        counts = COUNTS.__readArray();
+        operators = OPERATORS._readArray();
+        counts = COUNTS._readArray();
     }
 
-    function clearOperators() public {
-        OPERATORS.__clearArray();
-    }
+    // function clearOperators() public {
+    //     OPERATORS._clearArray();
+    // }
 
-    function clearCounts() public {
-        COUNTS.__clearArray();
-    }
+    // function clearCounts() public {
+    //     COUNTS._clearArray();
+    // }
 
     /// @notice Clear all transient storage data at once
-    /// @dev Should be called at the end of transactions to maintain composability
-    function clearOperatorCounts() public {
-        OPERATORS.__clearArray();
-        COUNTS.__clearArray();
+    /// @dev Should be called at the end of transactions as it invalidates the session
+    function clearOperatorCounts() public _sessionEnd {
+        OPERATORS._clearArray();
+        COUNTS._clearArray();
     }
 
     /// TODO: need to store {operator_id, module_id} =>  allocations
