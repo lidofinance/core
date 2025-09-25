@@ -71,7 +71,7 @@ describe("VaultHub.sol:redemptions", () => {
     it("allows to set redemption shares fully up to liability shares", async () => {
       const liabilityShares = ether("2");
 
-      await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("3") }); //
+      await vaultsContext.reportVault({ vault: connectedVault, totalValue: ether("3") });
       await vaultHub.connect(user).mintShares(connectedVault, user, liabilityShares);
 
       await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(connectedVault, 0n))
@@ -139,6 +139,12 @@ describe("VaultHub.sol:redemptions", () => {
       await expect(vaultHub.forceRebalance(disconnectedVault))
         .to.be.revertedWithCustomError(vaultHub, "NotConnectedToHub")
         .withArgs(disconnectedVault);
+    });
+
+    it("reverts if report is stale", async () => {
+      await expect(vaultHub.forceRebalance(connectedVault))
+        .to.be.revertedWithCustomError(vaultHub, "VaultReportStale")
+        .withArgs(connectedVault);
     });
 
     it("settles obligations and unpauses deposits if they are paused", async () => {

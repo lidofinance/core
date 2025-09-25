@@ -13,6 +13,7 @@ import {
   ProtocolContext,
   setupLidoForVaults,
 } from "lib/protocol";
+import { setStakingLimit } from "lib/protocol/helpers";
 import { ether } from "lib/units";
 
 import { Snapshot } from "test/suite";
@@ -90,6 +91,75 @@ describe("Integration: VaultHub ", () => {
           ether("10"),
           await calculateLockedValue(ctx, stakingVault, { liabilitySharesIncrease: ether("10") }),
         );
+    });
+  });
+
+  describe("Minting vs Staking Limit", () => {
+    let maxStakeLimit: bigint;
+
+    beforeEach(async () => {
+      const { lido } = ctx.contracts;
+
+      ({ maxStakeLimit } = await lido.getStakeLimitFullInfo());
+
+      await setStakingLimit(ctx, maxStakeLimit, 0n); // to avoid increasing staking limit
+
+      await dashboard.connect(owner).fund({ value: ether("10") });
+    });
+
+    it("Minting should decrease staking limit", async () => {
+      const { lido } = ctx.contracts;
+
+      const shares = ether("1");
+
+      const stakingLimitBefore = await lido.getCurrentStakeLimit();
+
+      const amountToMint = await lido.getPooledEthByShares(shares);
+      await vaultHub.mintShares(stakingVault, owner, shares);
+
+      const stakingLimitInfoAfter = await lido.getCurrentStakeLimit();
+      const expectedLimit = stakingLimitBefore - amountToMint;
+
+      expect(stakingLimitInfoAfter).to.equal(expectedLimit);
+    });
+
+    it("Burning should increase staking limit", async () => {
+      const { lido } = ctx.contracts;
+
+      const shares = ether("1");
+      await vaultHub.mintShares(stakingVault, vaultHub, shares);
+
+      const stakingLimitBefore = await lido.getCurrentStakeLimit();
+
+      const amountToBurn = await lido.getPooledEthByShares(shares);
+      await vaultHub.burnShares(stakingVault, shares);
+
+      const stakingLimitAfter = await lido.getCurrentStakeLimit();
+      const expectedLimit = stakingLimitBefore + amountToBurn;
+
+      expect(stakingLimitAfter).to.equal(expectedLimit > maxStakeLimit ? maxStakeLimit : expectedLimit);
+    });
+
+    it("Minting and burning should not change staking limit", async () => {
+      const { lido } = ctx.contracts;
+
+      const shares = ether("1");
+      const stakingLimitBeforeAll = await lido.getCurrentStakeLimit();
+
+      for (let i = 0n; i < 500n; i++) {
+        const stakingLimitBefore = await lido.getCurrentStakeLimit();
+
+        await vaultHub.mintShares(stakingVault, vaultHub, shares + i);
+        await vaultHub.burnShares(stakingVault, shares + i);
+
+        const stakingLimitAfter = await lido.getCurrentStakeLimit();
+        const expectedLimit = stakingLimitBefore;
+
+        expect(stakingLimitAfter).to.equal(expectedLimit > maxStakeLimit ? maxStakeLimit : expectedLimit);
+      }
+
+      const stakingLimitAfterAll = await lido.getCurrentStakeLimit();
+      expect(stakingLimitAfterAll).to.equal(stakingLimitBeforeAll);
     });
   });
 });

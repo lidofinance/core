@@ -2,6 +2,8 @@ import { BytesLike } from "ethers";
 
 import { SecretKey } from "@chainsafe/blst";
 
+import { ether } from "lib";
+
 export function generateConsolidationRequestPayload(numberOfRequests: number): {
   sourcePubkeys: BytesLike[];
   targetPubkeys: BytesLike[];
@@ -12,18 +14,19 @@ export function generateConsolidationRequestPayload(numberOfRequests: number): {
   const targetPubkeys: BytesLike[] = [];
   let adjustmentIncrease: bigint = 0n;
   let totalSourcePubkeysCount = 0;
-  const numberOfSourcePubkeys = 50;
+  const numberOfSourcePubkeysMax = 50;
   for (let i = 1; i <= numberOfRequests; i++) {
     let tempSourcePubkeys: Uint8Array = new Uint8Array();
+    const numberOfSourcePubkeys = Math.floor(Math.random() * numberOfSourcePubkeysMax) + 1;
     totalSourcePubkeysCount += numberOfSourcePubkeys;
     for (let j = 1; j <= numberOfSourcePubkeys; j++) {
       const publicKey = generateRandomPublicKey(i * j);
       tempSourcePubkeys = concatUint8Arrays([tempSourcePubkeys, publicKey]);
+      adjustmentIncrease += ether("17");
     }
     sourcePubkeys.push(tempSourcePubkeys);
     const publicKey = generateRandomPublicKey(i * numberOfSourcePubkeys + 1);
     targetPubkeys.push(publicKey);
-    adjustmentIncrease += 32n;
   }
 
   return {
