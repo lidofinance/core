@@ -1,11 +1,12 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { Dashboard, PinnedBeaconProxy, StakingVault } from "typechain-types";
+import { Dashboard, DepositContract, PinnedBeaconProxy, StakingVault } from "typechain-types";
 
-import { addressToWC, ether, generatePredeposit, generateValidator, ONE_ETHER } from "lib";
+import { addressToWC, ether, generatePredeposit, generateValidator, ONE_ETHER, toGwei, toLittleEndian64 } from "lib";
 import {
   createVaultWithDashboard,
   generatePredepositData,
@@ -24,6 +25,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
   let originalSnapshot: string;
 
   let stakingVault: StakingVault;
+  let depositContract: DepositContract;
   let dashboard: Dashboard;
   let proxy: PinnedBeaconProxy;
   let owner: HardhatEthersSigner;
@@ -52,6 +54,8 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     ));
 
     agent = await ctx.getSigner("agent");
+
+    depositContract = await ethers.getContractAt("DepositContract", await stakingVault.DEPOSIT_CONTRACT());
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -82,7 +86,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     const { witnesses, postdeposit } = await getProofAndDepositData(ctx, validator, withdrawalCredentials);
 
     await expect(
-      predepositGuarantee.connect(nodeOperator).proveAndDeposit(witnesses, [postdeposit], stakingVault),
+      predepositGuarantee.connect(nodeOperator).proveWCActivateAndTopUpValidators(witnesses, [postdeposit.amount]),
     ).to.be.revertedWithCustomError(pdg, "ResumedExpected");
 
     await expect(pdg.connect(stranger).resume()).to.emit(pdg, "Resumed");
@@ -129,10 +133,16 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
           .connect(nodeOperator)
           .predeposit(stakingVault, [predepositData.deposit], [predepositData.depositY]),
       )
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(1, ether("1"))
         .to.emit(predepositGuarantee, "BalanceLocked")
-        .withArgs(nodeOperator, ether("1"), ether("1"));
+        .withArgs(nodeOperator, ether("1"), ether("1"))
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(
+          predepositData.deposit.pubkey,
+          withdrawalCredentials,
+          toLittleEndian64(toGwei(predepositData.deposit.amount)),
+          predepositData.deposit.signature,
+          anyValue,
+        );
 
       const { witnesses, postdeposit } = await getProofAndDepositData(
         ctx,
@@ -144,11 +154,19 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       // 6. Anyone (permissionless) submits a Merkle proof of the validator's appearing on the Consensus Layer to the PDG contract with the withdrawal credentials corresponding to the stVault's address.
       //    6.1. Upon successful verification, 1 ETH of the Node Operator's guarantee collateral is unlocked from the PDG balance
       //    — making it available for withdrawal or reuse for the next validator predeposit.
-      await expect(predepositGuarantee.connect(stranger).proveValidatorWC(witnesses[0]))
+      await expect(predepositGuarantee.connect(stranger).proveWCActivateAndTopUpValidators(witnesses, [0]))
         .to.emit(predepositGuarantee, "ValidatorProven")
         .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials)
         .to.emit(predepositGuarantee, "BalanceUnlocked")
-        .withArgs(nodeOperator, ether("1"), ether("0"));
+        .withArgs(nodeOperator, ether("1"), ether("0"))
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(
+          postdeposit.pubkey,
+          withdrawalCredentials,
+          toLittleEndian64(toGwei(await predepositGuarantee.ACTIVATION_DEPOSIT_AMOUNT())),
+          anyValue,
+          anyValue,
+        );
 
       // 7. The Node Operator's guarantor withdraws the 1 ETH from the PDG contract or retains it for reuse with future validators.
       const balanceBefore = await ethers.provider.getBalance(guarantor);
@@ -171,9 +189,15 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
 
       // 8. The Node Operator makes a top-up deposit of the remaining 99 ETH from the vault balance to the validator through the PDG.
       //    Method called: PredepositGuarantee.depositToBeaconChain(stakingVault, deposits).
-      await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(1, ether("99"));
+      await expect(predepositGuarantee.connect(nodeOperator).topUpExistingValidators([postdeposit]))
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(
+          postdeposit.pubkey,
+          await stakingVault.withdrawalCredentials(),
+          toLittleEndian64(toGwei(postdeposit.amount)),
+          anyValue, // todo: check if this is correct
+          anyValue,
+        );
     });
 
     it("Works with vaults deposit pauses", async () => {
@@ -189,7 +213,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       // 9. The Node Operator tries to deposit the remaining 99 ETH from the vault balance to the validator through the PDG.
       //    This reverts with the "BeaconChainDepositsOnPause" error.
       await expect(
-        predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]),
+        predepositGuarantee.connect(nodeOperator).topUpExistingValidators([postdeposit]),
       ).to.be.revertedWithCustomError(stakingVault, "BeaconChainDepositsOnPause");
 
       // 10. The stVault's owner resumes the vault's deposits.
@@ -199,9 +223,15 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
       );
 
       // 11. The Node Operator deposits the remaining 99 ETH from the vault balance to the validator through the PDG.
-      await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(1, ether("99"));
+      await expect(predepositGuarantee.connect(nodeOperator).topUpExistingValidators([postdeposit]))
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(
+          postdeposit.pubkey,
+          await stakingVault.withdrawalCredentials(),
+          toLittleEndian64(toGwei(postdeposit.amount)),
+          anyValue, // todo: check if this is correct
+          anyValue,
+        );
     });
   });
 
@@ -247,9 +277,15 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     // (This is handled by the protocol, no actual code needed)
 
     // 7. The Node Operator deposits the remaining 99 ETH from the vault balance to the validator through the PDG.
-    await expect(predepositGuarantee.connect(nodeOperator).depositToBeaconChain(stakingVault, [postdeposit]))
-      .to.emit(stakingVault, "DepositedToBeaconChain")
-      .withArgs(1, ether("99"));
+    await expect(predepositGuarantee.connect(nodeOperator).topUpExistingValidators([postdeposit]))
+      .to.emit(depositContract, "DepositEvent")
+      .withArgs(
+        postdeposit.pubkey,
+        await stakingVault.withdrawalCredentials(),
+        toLittleEndian64(toGwei(postdeposit.amount)),
+        anyValue, // todo: check if this is correct
+        anyValue,
+      );
   });
 
   describe("Disproven pubkey compensation", () => {
@@ -287,8 +323,14 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
           .connect(nodeOperator)
           .predeposit(stakingVault, [invalidPredeposit.deposit], [invalidPredeposit.depositY]),
       )
-        .to.emit(stakingVault, "DepositedToBeaconChain")
-        .withArgs(1, ether("1"))
+        .to.emit(depositContract, "DepositEvent")
+        .withArgs(
+          invalidPredeposit.deposit.pubkey,
+          await stakingVault.withdrawalCredentials(),
+          toLittleEndian64(toGwei(invalidPredeposit.deposit.amount)),
+          invalidPredeposit.deposit.signature,
+          anyValue,
+        )
         .to.emit(predepositGuarantee, "BalanceLocked")
         .withArgs(nodeOperator, ether("1"), ether("1"));
 

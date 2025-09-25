@@ -31,5 +31,6 @@ interface IPredepositGuarantee {
         uint64 proposerIndex;
     }
 
+    function pendingPredeposits(IStakingVault _vault) external view returns (uint256);
     function proveUnknownValidator(ValidatorWitness calldata _witness, IStakingVault _stakingVault) external;
 }

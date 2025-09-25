@@ -158,7 +158,8 @@ struct ModuleStateDeposits {
 
 struct ModuleStateAccounting {
     /// @notice Effective balance of the staking module, in Gwei.
-    uint128 effectiveBalanceGwei;
+    uint96 clBalanceGwei;
+    uint96 activeBalanceGwei;
     /// @notice Number of exited validators for Legacy modules
     uint64 exitedValidatorsCount;
 }
@@ -178,9 +179,9 @@ struct RouterStorage {
     // moduleId => ModuleState
     mapping(uint256 => ModuleState) moduleStates;
     STASStorage stas;
-    uint256 totalEffectiveBalanceGwei;
+    uint96 totalClBalanceGwei;
+    uint96 totalActiveBalanceGwei;
     bytes32 withdrawalCredentials;
-    bytes32 withdrawalCredentials02;
     address lido;
     uint24 lastModuleId;
 }

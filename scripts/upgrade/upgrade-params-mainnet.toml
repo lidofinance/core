@@ -88,6 +88,11 @@ maxExitRequestsLimit = 13000          # Maximum number of exit requests that can
 exitsPerFrame = 1                     # Number of exits processed per frame
 frameDurationInSec = 48               # Duration of each processing frame in seconds
 
+[consolidationGateway]
+maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
+consolidationsPerFrame = 1            # Number of consolidations processed per frame
+frameDurationInSec = 48               # Duration of each processing frame in seconds
+
 # TW Exit management configuration
 [triggerableWithdrawals]
 exit_events_lookback_window_in_slots = 7200  # Lookback window for exit events in slots (1 day)

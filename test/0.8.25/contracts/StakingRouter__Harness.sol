@@ -35,14 +35,12 @@ contract StakingRouter__Harness is StakingRouter {
 
     /// @notice FOR TEST: write operators & counts into the router's transient storage.
     function mock_storeTemp(uint256[] calldata operators, uint256[] calldata counts) external {
-        DepositsTempStorage.storeOperators(operators);
-        DepositsTempStorage.storeCounts(counts);
+        DepositsTempStorage.storeOperatorCounts(operators, counts);
     }
 
     /// @notice FOR TEST: clear temp
     function mock_clearTemp() external {
-        DepositsTempStorage.clearOperators();
-        DepositsTempStorage.clearCounts();
+        DepositsTempStorage.clearOperatorCounts();
     }
 
     /// @notice method for testing migrateUpgrade_v4
@@ -71,18 +69,25 @@ contract StakingRouter__Harness is StakingRouter {
 
     function testing_setStakingModuleAccounting(
         uint256 _stakingModuleId,
-        uint128 effBalanceGwei,
+        uint96 clBalanceGwei,
+        uint96 activeBalanceGwei,
         uint64 exitedValidatorsCount
     ) external {
         ModuleStateAccounting storage stateAcc = SRStorage.getStateAccounting(
             SRStorage.getModuleState(_stakingModuleId)
         );
 
-        uint256 totalEffectiveBalanceGwei = SRStorage.getRouterStorage().totalEffectiveBalanceGwei;
-        totalEffectiveBalanceGwei -= stateAcc.effectiveBalanceGwei;
-        SRStorage.getRouterStorage().totalEffectiveBalanceGwei = totalEffectiveBalanceGwei + effBalanceGwei;
+        uint96 totalClBalanceGwei = SRStorage.getRouterStorage().totalClBalanceGwei;
+        SRStorage.getRouterStorage().totalClBalanceGwei = totalClBalanceGwei - stateAcc.clBalanceGwei + clBalanceGwei;
 
-        stateAcc.effectiveBalanceGwei = effBalanceGwei;
+        uint96 totalActiveBalanceGwei = SRStorage.getRouterStorage().totalActiveBalanceGwei;
+        SRStorage.getRouterStorage().totalActiveBalanceGwei =
+            totalActiveBalanceGwei -
+            stateAcc.activeBalanceGwei +
+            activeBalanceGwei;
+
+        stateAcc.clBalanceGwei = clBalanceGwei;
+        stateAcc.activeBalanceGwei = activeBalanceGwei;
         stateAcc.exitedValidatorsCount = exitedValidatorsCount;
     }
 

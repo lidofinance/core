@@ -17,8 +17,10 @@ library SRUtils {
     /// @dev Restrict the name size with 31 bytes to storage in a single slot.
     uint256 public constant MAX_STAKING_MODULE_NAME_LENGTH = 31;
 
-    uint256 public constant MAX_EFFECTIVE_BALANCE_01 = 32 ether;
-    uint256 public constant MAX_EFFECTIVE_BALANCE_02 = 2048 ether;
+    // Max Effective Balance for Withdrawal Credentials types
+    uint256 public constant MAX_EFFECTIVE_BALANCE_WC_TYPE_01 = 32 ether;
+    uint256 public constant MAX_EFFECTIVE_BALANCE_WC_TYPE_02 = 2048 ether;
+    // Withdrawal Credentials types
     uint8 public constant WC_TYPE_01 = 0x01;
     uint8 public constant WC_TYPE_02 = 0x02;
 
@@ -31,6 +33,7 @@ library SRUtils {
     error InvalidPriorityExitShareThreshold();
     error InvalidMinDepositBlockDistance();
     error InvalidMaxDepositPerBlockValue();
+    error InvalidAmountGwei();
     error InvalidStakeShareLimit();
     error InvalidFeeSum();
 
@@ -67,6 +70,12 @@ library SRUtils {
         if (_maxDepositsPerBlock > type(uint64).max) revert InvalidMaxDepositPerBlockValue();
     }
 
+    function _validateAmountGwei(uint256 _amountGwei) internal pure {
+        if (_amountGwei > type(uint96).max) {
+            revert InvalidAmountGwei();
+        }
+    }
+
     function _validateModuleType(uint256 _moduleType) internal pure {
         /// @dev check module type
         if (_moduleType != uint8(StakingModuleType.Legacy) && _moduleType != uint8(StakingModuleType.New)) {
@@ -98,9 +107,9 @@ library SRUtils {
 
     function _getModuleMEB(StakingModuleType moduleType) internal pure returns (uint256) {
         if (moduleType == StakingModuleType.Legacy) {
-            return MAX_EFFECTIVE_BALANCE_01;
+            return MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
         } else if (moduleType == StakingModuleType.New) {
-            return MAX_EFFECTIVE_BALANCE_02;
+            return MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
         } else {
             revert InvalidStakingModuleType();
         }
@@ -127,16 +136,24 @@ library SRUtils {
 
     ///  @dev get current balance of the module in ETH
     function _getModuleBalance(uint256 moduleId) internal view returns (uint256) {
-        uint256 effectiveBalance = moduleId.getModuleState().getStateAccounting().effectiveBalanceGwei * 1 gwei;
+        uint256 clBalance = _fromGwei(moduleId.getModuleState().getStateAccounting().clBalanceGwei);
         uint256 pendingDeposits = SRStorage.getStakingModuleTrackerStorage(moduleId).getDepositedEthUpToLastSlot();
-        return effectiveBalance + pendingDeposits;
+        return clBalance + pendingDeposits;
+    }
+
+    function _getModuleActiveBalance(uint256 moduleId) internal view returns (uint256) {
+        return _fromGwei(moduleId.getModuleState().getStateAccounting().activeBalanceGwei);
     }
 
     ///  @dev get total balance of all modules + deposit tracker in ETH
-    function _getModulesTotalBalance() internal view returns (uint256) {
-        uint256 totalEffectiveBalance = SRStorage.getRouterStorage().totalEffectiveBalanceGwei * 1 gwei;
+    function _getTotalModulesBalance() internal view returns (uint256) {
+        uint256 totalClBalance = _fromGwei(SRStorage.getRouterStorage().totalClBalanceGwei);
         uint256 pendingDeposits = SRStorage.getLidoDepositTrackerStorage().getDepositedEthUpToLastSlot();
-        return totalEffectiveBalance + pendingDeposits;
+        return totalClBalance + pendingDeposits;
+    }
+
+    function _getTotalModulesActiveBalance() internal view returns (uint256) {
+        return _fromGwei(SRStorage.getRouterStorage().totalActiveBalanceGwei);
     }
 
     ///  @dev calculate module capacity in ETH
@@ -146,5 +163,15 @@ library SRUtils {
         returns (uint256)
     {
         return availableKeysCount * _getModuleMEB(moduleType);
+    }
+
+    function _toGwei(uint256 amount) internal pure returns (uint96) {
+        amount /= 1 gwei;
+        _validateAmountGwei(amount);
+        return uint96(amount);
+    }
+
+    function _fromGwei(uint256 amount) internal pure returns (uint256) {
+        return amount * 1 gwei;
     }
 }

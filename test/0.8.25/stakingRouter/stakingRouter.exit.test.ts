@@ -27,7 +27,6 @@ describe("StakingRouter.sol:exit", () => {
 
   const lido = certainAddress("test:staking-router:lido");
   const withdrawalCredentials = hexlify(randomBytes(32));
-  const withdrawalCredentials02 = hexlify(randomBytes(32));
   const STAKE_SHARE_LIMIT = 1_00n;
   const PRIORITY_EXIT_SHARE_THRESHOLD = STAKE_SHARE_LIMIT;
   const MODULE_FEE = 5_00n;
@@ -43,7 +42,7 @@ describe("StakingRouter.sol:exit", () => {
     ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter({ deployer, admin, user }));
 
     // Initialize StakingRouter
-    await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials, withdrawalCredentials02);
+    await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials);
 
     // Deploy mock staking module
     stakingModule = await ethers.deployContract("StakingModule__MockForTriggerableWithdrawals", deployer);

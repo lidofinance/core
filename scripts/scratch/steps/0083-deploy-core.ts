@@ -178,17 +178,11 @@ export async function main() {
     },
   );
   const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
-  const withdrawalCredentials02 = `0x020000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
   const stakingRouterAdmin = deployer;
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouter_.address);
-  await makeTx(
-    stakingRouter,
-    "initialize",
-    [stakingRouterAdmin, lidoAddress, withdrawalCredentials, withdrawalCredentials02],
-    {
-      from: deployer,
-    },
-  );
+  await makeTx(stakingRouter, "initialize", [stakingRouterAdmin, lidoAddress, withdrawalCredentials], {
+    from: deployer,
+  });
 
   //
   // Deploy or use predefined DepositSecurityModule
@@ -220,7 +214,7 @@ export async function main() {
     "Accounting",
     proxyContractsOwner,
     deployer,
-    [locator.address, lidoAddress, chainSpec.genesisTime, chainSpec.secondsPerSlot],
+    [locator.address, lidoAddress, chainSpec.secondsPerSlot, chainSpec.genesisTime],
     null,
     true,
   );
