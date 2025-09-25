@@ -1,12 +1,11 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
 // SPDX-License-Identifier: GPL-3.0
 
-// solhint-disable-next-line
 pragma solidity 0.8.25;
 
 library DepositsTempStorage {
-    bytes32 private constant OPERATORS = keccak256("lido.DepositsTempStorage.operators.validators.creation");
-    bytes32 private constant COUNTS = keccak256("lido.DepositsTempStorage.operators.new.validators.count");
+    bytes32 private constant OPERATORS = keccak256("lido.DepositsTempStorage.operatorIds");
+    bytes32 private constant COUNTS = keccak256("lido.DepositsTempStorage.depositCounts");
     /// need to store operators and allocations
     /// allocations or counts
 
@@ -18,6 +17,11 @@ library DepositsTempStorage {
         _storeArray(COUNTS, counts);
     }
 
+    function storeOperatorCounts(uint256[] memory operators, uint256[] memory counts) public {
+        _storeArray(OPERATORS, operators);
+        _storeArray(COUNTS, counts);
+    }
+
     function getOperators() public view returns (uint256[] memory operators) {
         return _readArray(OPERATORS);
     }
@@ -26,11 +30,23 @@ library DepositsTempStorage {
         return _readArray(COUNTS);
     }
 
-    function clearOperators() internal {
+    function getOperatorCounts() public view returns (uint256[] memory operators, uint256[] memory counts) {
+        operators = _readArray(OPERATORS);
+        counts = _readArray(COUNTS);
+    }
+
+    function clearOperators() public {
         _clearArray(OPERATORS);
     }
 
-    function clearCounts() internal {
+    function clearCounts() public {
+        _clearArray(COUNTS);
+    }
+
+    /// @notice Clear all transient storage data at once
+    /// @dev Should be called at the end of transactions to maintain composability
+    function clearOperatorCounts() public {
+        _clearArray(OPERATORS);
         _clearArray(COUNTS);
     }
 

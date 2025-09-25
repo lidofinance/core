@@ -748,8 +748,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             (depositsCount, counts) = _getNewDepositsCount02(stakingModuleDepositableEthAmount, operatorAllocations);
 
             // this will be read and clean in deposit method
-            DepositsTempStorage.storeOperators(operators);
-            DepositsTempStorage.storeCounts(counts);
+            DepositsTempStorage.storeOperatorCounts(operators, counts);
 
             depositsAmount = _getInitialDepositAmountByCount(depositsCount);
         } else if (stateConfig.moduleType == StakingModuleType.Legacy) {
@@ -804,7 +803,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
                     // if allocation 32 - 1 (enough for initial deposit)
                     // if less than 32 - 0 (not enough for initial deposit)
                     // if allocation 2050 - 1 (= 2048 (enough for 1st key: initial deposit 32 and rest deposit 2016) + 2 (not enough even for initial deposit) )
-                    uint256 depositsCount = 1 + (allocation - INITIAL_DEPOSIT_SIZE) / SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
+                    uint256 depositsCount =
+                        1 + (allocation - INITIAL_DEPOSIT_SIZE) / SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
                     counts[i] = depositsCount;
                     totalCount += depositsCount;
                 }
@@ -1028,12 +1028,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (moduleType == StakingModuleType.Legacy) {
             return IStakingModule(stakingModuleAddress).obtainDepositData(depositsCount, depositCalldata);
         } else {
-            (keys, signatures) = IStakingModuleV2(stakingModuleAddress).getOperatorAvailableKeys(
-                DepositsTempStorage.getOperators(), DepositsTempStorage.getCounts()
-            );
+            (uint256[] memory operators, uint256[] memory counts) = DepositsTempStorage.getOperatorCounts();
+            (keys, signatures) = IStakingModuleV2(stakingModuleAddress).getOperatorAvailableKeys(operators, counts);
 
-            DepositsTempStorage.clearOperators();
-            DepositsTempStorage.clearCounts();
+            DepositsTempStorage.clearOperatorCounts();
         }
     }
 

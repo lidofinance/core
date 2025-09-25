@@ -18,14 +18,12 @@ contract StakingRouter__Harness is StakingRouter {
 
     /// @notice FOR TEST: write operators & counts into the router's transient storage.
     function mock_storeTemp(uint256[] calldata operators, uint256[] calldata counts) external {
-        DepositsTempStorage.storeOperators(operators);
-        DepositsTempStorage.storeCounts(counts);
+        DepositsTempStorage.storeOperatorCounts(operators, counts);
     }
 
     /// @notice FOR TEST: clear temp
     function mock_clearTemp() external {
-        DepositsTempStorage.clearOperators();
-        DepositsTempStorage.clearCounts();
+        DepositsTempStorage.clearOperatorCounts();
     }
 
     function testing_setVersion(uint256 version) external {
