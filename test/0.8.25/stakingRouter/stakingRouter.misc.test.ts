@@ -25,7 +25,6 @@ describe("StakingRouter.sol:misc", () => {
 
   const lido = certainAddress("test:staking-router:lido");
   const withdrawalCredentials = hexlify(randomBytes(32));
-  const withdrawalCredentials02 = hexlify(randomBytes(32));
 
   const GENESIS_TIME = 1606824023n;
 
@@ -47,27 +46,21 @@ describe("StakingRouter.sol:misc", () => {
 
   context("initialize", () => {
     it("Reverts if admin is zero address", async () => {
-      await expect(
-        stakingRouter.initialize(ZeroAddress, lido, withdrawalCredentials, withdrawalCredentials02),
-      ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddressAdmin");
+      await expect(stakingRouter.initialize(ZeroAddress, lido, withdrawalCredentials)).to.be.revertedWithCustomError(
+        stakingRouter,
+        "ZeroAddressAdmin",
+      );
     });
 
     it("Reverts if lido is zero address", async () => {
       await expect(
-        stakingRouter.initialize(
-          stakingRouterAdmin.address,
-          ZeroAddress,
-          withdrawalCredentials,
-          withdrawalCredentials02,
-        ),
+        stakingRouter.initialize(stakingRouterAdmin.address, ZeroAddress, withdrawalCredentials),
       ).to.be.revertedWithCustomError(stakingRouter, "ZeroAddressLido");
     });
 
     it("Initializes the contract version, sets up roles and variables", async () => {
       // TODO: add version check
-      await expect(
-        stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials, withdrawalCredentials02),
-      )
+      await expect(stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials))
         .to.emit(stakingRouter, "Initialized")
         .withArgs(4)
         .and.to.emit(stakingRouter, "RoleGranted")
@@ -93,7 +86,7 @@ describe("StakingRouter.sol:misc", () => {
 
     beforeEach(async () => {
       // initialize staking router
-      await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials, withdrawalCredentials02);
+      await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials);
       // grant roles
       await stakingRouter
         .connect(stakingRouterAdmin)
@@ -178,7 +171,7 @@ describe("StakingRouter.sol:misc", () => {
     });
 
     it("Returns lido address after initialization", async () => {
-      await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials, withdrawalCredentials02);
+      await stakingRouter.initialize(stakingRouterAdmin.address, lido, withdrawalCredentials);
 
       expect(await stakingRouter.getLido()).to.equal(lido);
     });

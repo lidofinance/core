@@ -93,6 +93,8 @@ contract Accounting {
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
         uint256 postTotalPooledEther;
+        /// @notice amount of ether deposited to the protocol since the last report and up to current report slot
+        uint256 depositedSinceLastReport;
     }
 
     /// @notice precalculated numbers of shares that should be minted as fee to NO
@@ -133,25 +135,6 @@ contract Accounting {
         LIDO = _lido;
         GENESIS_TIME = _genesisTime;
         SECONDS_PER_SLOT = _secondsPerSlot;
-    }
-
-    /// @notice Internal function to get deposits between slots
-    /// @param fromSlot the starting slot
-    /// @param toSlot the ending slot
-    /// @return the amount of ETH deposited between the slots
-    // solhint-disable-next-line
-    function _getDepositedEthBetweenSlots(uint256 fromSlot, uint256 toSlot) internal view returns (uint256) {
-        // TODO: add optimization for slot range queries (DepositsTracker.moveCursorToSlot)
-        // uint256 depositsAtTo = DepositsTracker.getDepositedEthUpToSlot(
-        //     DEPOSITS_TRACKER_POSITION,
-        //     toSlot
-        // );
-        // uint256 depositsAtFrom = DepositsTracker.getDepositedEthUpToSlot(
-        //     DEPOSITS_TRACKER_POSITION,
-        //     fromSlot
-        // );
-        // return depositsAtTo > depositsAtFrom ? depositsAtTo - depositsAtFrom : 0;
-        return 0;
     }
 
     /// @notice calculates all the state changes that is required to apply the report
@@ -208,11 +191,11 @@ contract Accounting {
         );
 
         // Calculate deposits made since last report
-        uint256 depositedSinceLastReport = _contracts.stakingRouter.getDepositAmountFromLastSlot(
+        update.depositedSinceLastReport = _contracts.stakingRouter.getDepositAmountFromLastSlot(
             (_report.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT
         );
         // Principal CL balance is sum of previous balances and new deposits
-        update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance + depositedSinceLastReport;
+        update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance + update.depositedSinceLastReport;
 
         // Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in EL rewards vault or withdrawals vault
@@ -427,7 +410,7 @@ contract Accounting {
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
 
-        // move cursor for deposits tracker
+         // move cursor for deposit trackers
         _contracts.stakingRouter.onAccountingReport((_report.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT);
 
         LIDO.emitTokenRebase(

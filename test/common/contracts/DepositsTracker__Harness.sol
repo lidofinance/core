@@ -2,11 +2,7 @@
 // for testing purposes only
 pragma solidity 0.8.25;
 
-import {
-    SlotDeposit,
-    SlotDepositPacking,
-    DepositsTracker
-} from "contracts/common/lib/DepositsTracker.sol";
+import {SlotDeposit, SlotDepositPacking, DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
 import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
 
 contract SlotDepositPacking__Harness {
@@ -25,14 +21,13 @@ contract DepositsTracker__Harness {
 
     DepositedState private S;
 
-
     // bytes32 public constant TEST_POSITION = keccak256("deposits.tracker.test.position");
 
     function insertSlotDeposit(uint256 slot, uint256 amount) external {
         DepositsTracker.insertSlotDeposit(S, slot, amount);
     }
 
-   function getDepositedEthUpToSlot(uint256 slot) external view returns (uint256) {
+    function getDepositedEthUpToSlot(uint256 slot) external view returns (uint256) {
         return DepositsTracker.getDepositedEthUpToSlot(S, slot);
     }
 
@@ -61,11 +56,10 @@ contract DepositsTracker__Harness {
         uint256 len = S.slotsDeposits.length;
         slots = new uint64[](len);
         cumulatives = new uint192[](len);
-        for (uint256 i = 0; i < len; ) {
+        for (uint256 i = 0; i < len; ++i) {
             (uint64 slot_, uint192 cum_) = SlotDepositPacking.unpack(S.slotsDeposits[i]);
             slots[i] = slot_;
             cumulatives[i] = cum_;
-            unchecked { ++i; }
         }
     }
 }
