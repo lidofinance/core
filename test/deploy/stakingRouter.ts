@@ -36,13 +36,13 @@ export async function deployStakingRouter(
 
   const beaconChainDepositor = await ethers.deployContract("BeaconChainDepositor", deployer);
   const depositsTempStorage = await ethers.deployContract("DepositsTempStorage", deployer);
-  const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
+  // const depositsTracker = await ethers.deployContract("DepositsTracker", deployer);
   const srLib = await ethers.deployContract("SRLib", deployer);
   const stakingRouterFactory = await ethers.getContractFactory("StakingRouter__Harness", {
     libraries: {
       ["contracts/0.8.25/lib/BeaconChainDepositor.sol:BeaconChainDepositor"]: await beaconChainDepositor.getAddress(),
       ["contracts/common/lib/DepositsTempStorage.sol:DepositsTempStorage"]: await depositsTempStorage.getAddress(),
-      ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
+      // ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositsTracker.getAddress(),
       ["contracts/0.8.25/sr/SRLib.sol:SRLib"]: await srLib.getAddress(),
     },
   });

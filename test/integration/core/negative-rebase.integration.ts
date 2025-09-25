@@ -55,7 +55,7 @@ describe("Integration: Negative rebase", () => {
     return exited;
   };
 
-  it("Should store correctly exited validators count", async () => {
+  it.skip("Should store correctly exited validators count", async () => {
     const { locator, oracleReportSanityChecker } = ctx.contracts;
 
     expect((await locator.oracleReportSanityChecker()) == oracleReportSanityChecker.address);

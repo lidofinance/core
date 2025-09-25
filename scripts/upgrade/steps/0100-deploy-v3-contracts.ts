@@ -65,6 +65,8 @@ export async function main() {
   const accounting = await deployBehindOssifiableProxy(Sk.accounting, "Accounting", proxyContractsOwner, deployer, [
     locatorAddress,
     lidoAddress,
+    Number(chainSpec.secondsPerSlot),
+    Number(chainSpec.genesisTime),
   ]);
 
   //

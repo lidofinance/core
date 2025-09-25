@@ -149,7 +149,7 @@ export async function main() {
 
   // deploy deposit tracker
 
-  const depositsTracker = await deployWithoutProxy(Sk.depositsTracker, "DepositsTracker", deployer);
+  // const depositsTracker = await deployWithoutProxy(Sk.depositsTracker, "DepositsTracker", deployer);
 
   // deploy temporary storage
   const depositsTempStorage = await deployWithoutProxy(Sk.depositsTempStorage, "DepositsTempStorage", deployer);
@@ -170,7 +170,7 @@ export async function main() {
     true,
     {
       libraries: {
-        DepositsTracker: depositsTracker.address,
+        // DepositsTracker: depositsTracker.address,
         BeaconChainDepositor: beaconChainDepositor.address,
         DepositsTempStorage: depositsTempStorage.address,
         SRLib: srLib.address,
@@ -178,17 +178,11 @@ export async function main() {
     },
   );
   const withdrawalCredentials = `0x010000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
-  const withdrawalCredentials02 = `0x020000000000000000000000${withdrawalsManagerProxy.address.slice(2)}`;
   const stakingRouterAdmin = deployer;
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouter_.address);
-  await makeTx(
-    stakingRouter,
-    "initialize",
-    [stakingRouterAdmin, lidoAddress, withdrawalCredentials, withdrawalCredentials02],
-    {
-      from: deployer,
-    },
-  );
+  await makeTx(stakingRouter, "initialize", [stakingRouterAdmin, lidoAddress, withdrawalCredentials], {
+    from: deployer,
+  });
 
   //
   // Deploy or use predefined DepositSecurityModule
@@ -223,11 +217,6 @@ export async function main() {
     [locator.address, lidoAddress, chainSpec.secondsPerSlot, chainSpec.genesisTime],
     null,
     true,
-    {
-      libraries: {
-        DepositsTracker: depositsTracker.address,
-      },
-    },
   );
 
   //

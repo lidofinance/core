@@ -16,6 +16,7 @@ import {VaultHub} from "./VaultHub.sol";
 import {OperatorGrid} from "./OperatorGrid.sol";
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IPredepositGuarantee} from "./interfaces/IPredepositGuarantee.sol";
 
 import {DoubleRefSlotCache, DOUBLE_CACHE_LENGTH} from "./lib/RefSlotCache.sol";
 
@@ -105,7 +106,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     struct VaultInfo {
         address vault;
-        uint256 balance;
+        uint256 aggregateBalance; // includes pendingPredeposits, availableBalance and stagedBalance
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
@@ -230,7 +231,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             VaultHub.VaultRecord memory record = vaultHub.vaultRecord(vaultAddress);
             batch[i] = VaultInfo(
                 vaultAddress,
-                address(vault).balance,
+                vault.availableBalance() + vault.stagedBalance() + pendingPredeposits(vault),
                 record.inOutDelta.currentValue(),
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
@@ -391,7 +392,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             revert CumulativeLidoFeesTooLow(_cumulativeLidoFees, previousCumulativeLidoFees);
         }
 
-        uint256 maxLidoFees = (_storage().vaultsDataTimestamp - record.report.timestamp) * uint256(_storage().maxLidoFeeRatePerSecond);
+        uint256 maxLidoFees = (_reportTimestamp - record.report.timestamp) * uint256(_storage().maxLidoFeeRatePerSecond);
         if (_cumulativeLidoFees - previousCumulativeLidoFees > maxLidoFees) {
             revert CumulativeLidoFeesTooLarge(_cumulativeLidoFees - previousCumulativeLidoFees, maxLidoFees);
         }
@@ -496,10 +497,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             uint256 totalValueIncrease = _reportedTotalValue > onchainTotalValueOnRefSlot
                 ? _reportedTotalValue - onchainTotalValueOnRefSlot
                 : 0;
-            uint256 maxIncreaseWithRewards = quarantinedValue +
-                (onchainTotalValueOnRefSlot + quarantinedValue) * $.maxRewardRatioBP / TOTAL_BASIS_POINTS;
+            uint256 quarantineThresholdWithRewards = quarantineThreshold + quarantinedValue
+                * (TOTAL_BASIS_POINTS + $.maxRewardRatioBP) / TOTAL_BASIS_POINTS;
 
-            if (_reportedTotalValue <= quarantineThreshold || totalValueIncrease <= maxIncreaseWithRewards) {
+            if (_reportedTotalValue <= quarantineThresholdWithRewards) {
                 // Transition: QUARANTINE_EXPIRED → NO_QUARANTINE (release and accept all)
                 delete $.vaultQuarantines[_vault];
                 emit QuarantineReleased(_vault, _reportedTotalValue <= quarantineThreshold ? 0 : totalValueIncrease);
@@ -559,6 +560,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         assembly {
             $.slot := LAZY_ORACLE_STORAGE_LOCATION
         }
+    }
+
+    function pendingPredeposits(IStakingVault _vault) internal view returns (uint256) {
+        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee()).pendingPredeposits(_vault);
     }
 
     function _vaultHub() internal view returns (VaultHub) {

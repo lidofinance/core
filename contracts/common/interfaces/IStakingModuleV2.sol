@@ -14,8 +14,8 @@ struct KeyData {
 interface IStakingModuleV2 {
     /// @notice Hook to notify module about deposit on operator
     /// @param operatorId - Id of operator
-    /// @param amount - Eth deposit amount
-    function depositedEth(uint256 operatorId, uint256 amount) external;
+    /// @param amountInWei - Wei deposit amount
+    function onDeposit(uint256 operatorId, uint256 amountInWei) external;
 
     // Flow of creation of validators
 

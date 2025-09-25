@@ -181,6 +181,13 @@
       "frameDurationInSec": 48
     }
   },
+  "consolidationGateway": {
+    "deployParameters": {
+      "maxConsolidationRequestsLimit": 8000,
+      "consolidationsPerFrame": 1,
+      "frameDurationInSec": 48
+    }
+  },
   "predepositGuarantee": {
     "deployParameters": {
       "gIndex": "0x0000000000000000000000000000000000000000000000000096000000000028",

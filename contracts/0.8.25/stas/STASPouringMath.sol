@@ -34,8 +34,9 @@ library STASPouringMath {
             // nothing to do or nothing to distribute
             return (imbalance, fills, inflow);
         }
-
+        // new target total volume after allocation
         totalAmount = totalAmount + inflow;
+        // calculate imbalance only for entities that not exceed their target share of the new total volume
         _calcImbalanceInflow({
             imbalance: imbalance,
             shares: shares,
@@ -63,10 +64,11 @@ library STASPouringMath {
         imbalance = new uint256[](n);
         fills = new uint256[](n);
 
+        // new target total volume after deallocation
         unchecked {
             totalAmount = totalAmount < outflow ? 0 : totalAmount - outflow;
         }
-
+        // calculate imbalance only for entities that exceed their target share of the new total volume
         _calcImbalanceOutflow({
             imbalance: imbalance,
             shares: shares,
@@ -163,19 +165,15 @@ library STASPouringMath {
     {
         uint256 n = targets.length;
         if (fills.length != n) revert STASCore.LengthMismatch();
+        rest = inflow;
 
-        // 0) Пустой массив
-        if (n == 0) {
+        // nothing to do or nothing to distribute
+        if (n == 0 || rest == 0) {
             return rest;
         }
 
-        // Water-fill loop: distribute left across remaining deficits roughly evenly.
-        // Complexity: O(k * n) where k is number of rounds; in worst case k <= max(deficit) when per==1.
-        // bool[] memory active = new bool[](n);
         uint256 total;
         uint256 count;
-        rest = inflow;
-
         unchecked {
             for (uint256 i; i < n; ++i) {
                 uint256 t = targets[i];
@@ -186,15 +184,13 @@ library STASPouringMath {
             }
         }
 
-        // console.log("total %d, rest %d, count %d", total, rest, count);
-        if (total == 0 || rest == 0) {
-            // console.log("early exit 1 - total %d, rest %d", total, rest);
-            // nothing to do or nothing to distribute
+        // all targets are zero
+        if (total == 0) {
             return rest;
         }
 
+        // can satisfy all deficits outright
         if (rest >= total) {
-            // Can satisfy all deficits outright
             unchecked {
                 for (uint256 i; i < n; ++i) {
                     fills[i] = targets[i];
@@ -202,28 +198,25 @@ library STASPouringMath {
                 }
                 rest -= total;
             }
-            // console.log("early exit 2 - total %d, rest %d", total, rest);
             return rest;
         }
 
-        while (rest != 0 && count != 0) {
+        // simple Water-fill loop: distribute `rest` across remaining deficits roughly evenly.
+        // Complexity: O(k * n) where k is number of rounds; in worst case k <= max(deficit) when per==1.
+        while (rest > 0 && count > 0) {
             uint256 per = rest / count;
             if (per == 0) per = 1;
 
             unchecked {
-                for (uint256 i; i < n && rest != 0; ++i) {
-                    // console.log("i %d, count %d, rest %d", i, count, rest);
+                for (uint256 i; i < n && rest > 0; ++i) {
                     uint256 need = targets[i];
-                    // console.log("need %d", need);
-                    if (need == 0) continue; // уже закрыт
+                    if (need == 0) continue; // already filled
 
                     uint256 use = need < per ? need : per;
                     if (use > rest) use = rest;
-                    // console.log("use %d", use);
                     fills[i] += use;
-                    targets[i] = need - use; // уменьшаем дефицит прямо в targets
+                    targets[i] = need - use; // reduce deficit directly in targets
                     rest -= use;
-                    // console.log("targets[%d] %d, rest %d", i, targets[i], inflow);
 
                     if (targets[i] == 0) --count;
                 }
@@ -238,20 +231,22 @@ library STASPouringMath {
     {
         uint256 n = targets.length;
         if (fills.length != n) revert STASCore.LengthMismatch();
+        rest = inflow;
 
-        // 0) Empty array
-        if (n == 0) {
-            rest = inflow;
+        // nothing to do or nothing to distribute
+        if (n == 0 || rest == 0) {
             return rest;
         }
 
         // 1) One element
         if (n == 1) {
             uint256 t = targets[0];
-            uint256 pay = inflow >= t ? t : inflow;
-            fills[0] = pay;
-            rest = inflow > pay ? inflow - pay : 0;
-            return (rest);
+            uint256 fill = rest >= t ? t : rest;
+            fills[0] = fill;
+            unchecked {
+                rest -= fill;
+            }
+            return rest;
         }
 
         // 1) create array ofSortIndexedTarget
@@ -268,7 +263,6 @@ library STASPouringMath {
         // 3) Compute prefix sums and quick path if inflow >= total
         uint256 total;
         uint256[] memory prefix = new uint256[](n);
-
         unchecked {
             for (uint256 i; i < n; ++i) {
                 total += items[i].target;
@@ -276,10 +270,11 @@ library STASPouringMath {
             }
         }
         if (total == 0) {
-            rest = inflow;
             return rest;
-        } else if (inflow >= total) {
-            // всем платим full target
+        }
+
+        // can satisfy all deficits outright
+        if (rest >= total) {
             unchecked {
                 for (uint256 i; i < n; ++i) {
                     uint256 t = items[i].target;
@@ -288,7 +283,7 @@ library STASPouringMath {
                         // targets[i] = 0;
                     }
                 }
-                rest = inflow - total;
+                rest -= total;
             }
             return rest;
         }
@@ -310,27 +305,25 @@ library STASPouringMath {
         }
 
         // 5) final pass: fill = max(0, cap - L)
-        uint256 used;
+        uint256 filled;
         unchecked {
             for (uint256 i; i < n; ++i) {
                 uint256 t = items[i].target;
-                uint256 pay = t > level ? t - level : 0;
-                // console.log("items[%d].target %d", i, t);
-                // console.log("pay %d", pay);
-                // // console.log("imbalance[2] %d", imbalance[2]);
-                if (pay > 0) {
+                uint256 fill = t > level ? t - level : 0;
+                if (fill > 0) {
                     uint256 idx = items[i].idx;
-                    fills[idx] = pay;
-                    targets[idx] = t - pay;
-                    used += pay;
+                    fills[idx] = fill;
+                    targets[idx] = t - fill;
+                    filled += fill;
                 }
             }
-            rest = inflow > used ? inflow - used : 0;
+            assert(filled <= inflow);
+            rest -= filled;
         }
     }
 
     // forge-lint: disable-start(unsafe-typecast)
-    /// @dev In-place quicksort onSortIndexedTarget {[] by target DESC, tiebreaker idx ASC.
+    /// @dev In-place quicksort on SortIndexedTarget[] by target DESC, tiebreaker idx ASC.
     function _quickSort(SortIndexedTarget[] memory arr, int256 left, int256 right) internal pure {
         if (left >= right) return;
         int256 i = left;
@@ -352,7 +345,7 @@ library STASPouringMath {
             }
             if (i <= j) {
                 // swap arr[i] <-> arr[j]
-                //SortIndexedTarget {memory tmp = arr[uint256(i)];
+                // SortIndexedTarget memory tmp = arr[uint256(i)];
                 // arr[uint256(i)] = arr[uint256(j)];
                 // arr[uint256(j)] = tmp;
                 (arr[uint256(i)], arr[uint256(j)]) = (arr[uint256(j)], arr[uint256(i)]);

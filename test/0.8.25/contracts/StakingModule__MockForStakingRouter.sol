@@ -43,7 +43,7 @@ contract StakingModule__MockForStakingRouter is IStakingModule {
         depositableValidatorsCount = depositableValidatorsCount__mocked;
     }
 
-    function mock__setStakingModuleSummary(
+    function mock__getStakingModuleSummary(
         uint256 totalExitedValidators,
         uint256 totalDepositedValidators,
         uint256 depositableValidatorsCount

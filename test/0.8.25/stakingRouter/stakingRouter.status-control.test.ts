@@ -11,7 +11,7 @@ import { certainAddress, StakingModuleType } from "lib";
 
 import { Snapshot } from "test/suite";
 
-import { deployStakingRouter } from "../../deploy/stakingRouter";
+import { deployStakingRouter, StakingRouterWithLib } from "../../deploy/stakingRouter";
 enum Status {
   Active,
   DepositsPaused,
@@ -24,25 +24,24 @@ context("StakingRouter.sol:status-control", () => {
   let user: HardhatEthersSigner;
 
   let stakingRouter: StakingRouter__Harness;
+  let stakingRouterWithLib: StakingRouterWithLib;
   let moduleId: bigint;
 
   let originalState: string;
 
   const lido = certainAddress("test:staking-router-status:lido");
   const withdrawalCredentials = hexlify(randomBytes(32));
-  const withdrawalCredentials02 = hexlify(randomBytes(32));
 
   before(async () => {
     [deployer, admin, user] = await ethers.getSigners();
 
     // deploy staking router
-    ({ stakingRouter } = await deployStakingRouter({ deployer, admin }));
+    ({ stakingRouter, stakingRouterWithLib } = await deployStakingRouter({ deployer, admin }));
 
     await stakingRouter.initialize(
       admin,
       lido, // mock lido address
       withdrawalCredentials,
-      withdrawalCredentials02,
     );
 
     // give the necessary role to the admin
@@ -87,7 +86,7 @@ context("StakingRouter.sol:status-control", () => {
 
     it("Updates the status of staking module", async () => {
       await expect(stakingRouter.setStakingModuleStatus(moduleId, Status.DepositsPaused))
-        .to.emit(stakingRouter, "StakingModuleStatusSet")
+        .to.emit(stakingRouterWithLib, "StakingModuleStatusSet")
         .withArgs(moduleId, Status.DepositsPaused, admin.address);
     });
 
@@ -95,7 +94,7 @@ context("StakingRouter.sol:status-control", () => {
       await stakingRouter.setStakingModuleStatus(moduleId, Status.DepositsPaused);
 
       await expect(stakingRouter.testing_setStakingModuleStatus(moduleId, Status.DepositsPaused)).to.not.emit(
-        stakingRouter,
+        stakingRouterWithLib,
         "StakingModuleStatusSet",
       );
       expect(await stakingRouter.getStakingModuleStatus(moduleId)).to.equal(Status.DepositsPaused);

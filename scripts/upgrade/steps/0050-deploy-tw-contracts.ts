@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import { join } from "path";
 import { readUpgradeParameters } from "scripts/utils/upgrade";
 
-import { LidoLocator, TriggerableWithdrawalsGateway } from "typechain-types";
+import { ConsolidationGateway, LidoLocator, TriggerableWithdrawalsGateway } from "typechain-types";
 
 import {
   cy,
@@ -59,6 +59,7 @@ export async function main() {
   const parameters = readUpgradeParameters();
   const validatorExitDelayVerifierParams = parameters.validatorExitDelayVerifier;
   const triggerableWithdrawalsGatewayParams = parameters.triggerableWithdrawalsGateway;
+  const consolidationGatewayParams = parameters.consolidationGateway;
   persistNetworkState(state);
 
   const chainSpec = state[Sk.chainSpec];
@@ -87,33 +88,50 @@ export async function main() {
   log.success(`ValidatorsExitBusOracle address: ${validatorsExitBusOracle.address}`);
   log.emptyLine();
 
-  const minFirstAllocationStrategyAddress = getAddress(Sk.minFirstAllocationStrategy, state);
-  const libraries = {
-    MinFirstAllocationStrategy: minFirstAllocationStrategyAddress,
-  };
-
   //
   // Staking Router
   //
 
-  const DEPOSIT_CONTRACT_ADDRESS = parameters.chainSpec.depositContract;
-  log(`Deposit contract address: ${DEPOSIT_CONTRACT_ADDRESS}`);
+  // deploy temporary storage
+  const depositsTempStorage = await deployWithoutProxy(Sk.depositsTempStorage, "DepositsTempStorage", deployer);
+
+  // deploy beacon chain depositor
+  const beaconChainDepositor = await deployWithoutProxy(Sk.beaconChainDepositor, "BeaconChainDepositor", deployer);
+
+  // deploy SRLib
+  const srLib = await deployWithoutProxy(Sk.srLib, "SRLib", deployer);
+
+  const depositContract = parameters.chainSpec.depositContract;
+  log(`Deposit contract address: ${depositContract}`);
   const stakingRouterAddress = await deployImplementation(
     Sk.stakingRouter,
     "StakingRouter",
     deployer,
-    [DEPOSIT_CONTRACT_ADDRESS],
-    { libraries },
+    [depositContract, chainSpec.secondsPerSlot, chainSpec.genesisTime],
+    {
+      libraries: {
+        // DepositsTracker: depositsTracker.address,
+        BeaconChainDepositor: beaconChainDepositor.address,
+        DepositsTempStorage: depositsTempStorage.address,
+        SRLib: srLib.address,
+      },
+    },
   );
 
+  log(`DepositsTempStorage library address: ${depositsTempStorage.address}`);
+  log(`BeaconChainDepositor library address: ${beaconChainDepositor.address}`);
+  log(`SRLib library address: ${srLib.address}`);
   log(`StakingRouter implementation address: ${stakingRouterAddress.address}`);
 
   //
   // Node Operators Registry
   //
 
+  const minFirstAllocationStrategyAddress = getAddress(Sk.minFirstAllocationStrategy, state);
   const NOR = await deployImplementation(Sk.appNodeOperatorsRegistry, "NodeOperatorsRegistry", deployer, [], {
-    libraries,
+    libraries: {
+      MinFirstAllocationStrategy: minFirstAllocationStrategyAddress,
+    },
   });
 
   log.success(`NOR implementation address: ${NOR.address}`);
@@ -182,10 +200,44 @@ export async function main() {
   await makeTx(triggerableWithdrawalsGateway, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
 
   //
+  // Deploy Consolidation Gateway
+  //
+
+  const consolidationGateway_ = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
+    deployer,
+    locator.address,
+    consolidationGatewayParams.maxConsolidationRequestsLimit,
+    consolidationGatewayParams.consolidationsPerFrame,
+    consolidationGatewayParams.frameDurationInSec,
+  ]);
+
+  const consolidationGateway = await loadContract<ConsolidationGateway>(
+    "ConsolidationGateway",
+    consolidationGateway_.address,
+  );
+
+  // ToDo: Grant ADD_CONSOLIDATION_REQUEST_ROLE to MessageBus address instead of deployer
+  // ADD_CONSOLIDATION_REQUEST_ROLE granted to deployer for testing convenience
+  await makeTx(
+    consolidationGateway,
+    "grantRole",
+    [await consolidationGateway.ADD_CONSOLIDATION_REQUEST_ROLE(), deployer],
+    { from: deployer },
+  );
+  await makeTx(consolidationGateway, "grantRole", [DEFAULT_ADMIN_ROLE, agent], { from: deployer });
+  await makeTx(consolidationGateway, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+
+  //
   // Withdrawal Vault
   //
 
-  const withdrawalVaultArgs = [LIDO_PROXY, TREASURY_PROXY, triggerableWithdrawalsGateway_.address];
+  const withdrawalVaultArgs = [
+    LIDO_PROXY,
+    TREASURY_PROXY,
+    triggerableWithdrawalsGateway.address,
+    consolidationGateway.address,
+  ];
+
   const withdrawalVault = await deployImplementation(
     Sk.withdrawalVault,
     "WithdrawalVault",

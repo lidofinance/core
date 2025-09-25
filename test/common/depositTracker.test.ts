@@ -1,42 +1,40 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { DepositsTracker, DepositsTracker__Harness, SlotDepositPacking__Harness } from "typechain-types";
+import type { DepositsTracker, DepositsTracker__Harness, SlotDepositPacking__Harness } from "typechain-types";
 
-describe("DepositTracker.sol", () => {
+describe("DepositsTracker.sol", () => {
   let slotDepositPacking: SlotDepositPacking__Harness;
   let depositTracker: DepositsTracker__Harness;
   let depositTrackerLib: DepositsTracker;
 
   beforeEach(async () => {
     slotDepositPacking = await ethers.deployContract("SlotDepositPacking__Harness");
+    // deploy the library so the matcher can reference its custom errors ABI
     depositTrackerLib = await ethers.deployContract("DepositsTracker");
-    depositTracker = await ethers.deployContract("DepositsTracker__Harness", {
-      libraries: {
-        ["contracts/common/lib/DepositsTracker.sol:DepositsTracker"]: await depositTrackerLib.getAddress(),
-      },
-    });
+    // harness does internal calls; no library linking needed
+    depositTracker = await ethers.deployContract("DepositsTracker__Harness");
   });
 
   context("SlotDepositPacking", () => {
     it("Min values", async () => {
       const packed = await slotDepositPacking.pack(0n, 0n);
-      const unpacked = await slotDepositPacking.unpack(packed);
-      expect(unpacked.slot).to.equal(0);
-      expect(unpacked.cumulativeEth).to.equal(0);
+      const [slot, cumulativeEth] = await slotDepositPacking.unpack(packed);
+      expect(slot).to.equal(0n);
+      expect(cumulativeEth).to.equal(0n);
     });
 
     it("Max values", async () => {
       const MAX_SLOT = 2n ** 64n - 1n;
       const MAX_CUMULATIVE = 2n ** 192n - 1n;
       const packed = await slotDepositPacking.pack(MAX_SLOT, MAX_CUMULATIVE);
-      const unpacked = await slotDepositPacking.unpack(packed);
-      expect(unpacked.slot).to.equal(MAX_SLOT);
-      expect(unpacked.cumulativeEth).to.equal(MAX_CUMULATIVE);
+      const [slot, cumulativeEth] = await slotDepositPacking.unpack(packed);
+      expect(slot).to.equal(MAX_SLOT);
+      expect(cumulativeEth).to.equal(MAX_CUMULATIVE);
     });
   });
 
-  context("DepositTracker", () => {
+  context("DepositsTracker", () => {
     context("insertSlotDeposit", () => {
       it("reverts on slot too large", async () => {
         const TOO_BIG_SLOT = 2n ** 64n;
@@ -46,7 +44,7 @@ describe("DepositTracker.sol", () => {
         );
       });
 
-      it("Revert on amount too large", async () => {
+      it("reverts on amount too large", async () => {
         const TOO_BIG_AMT = 2n ** 128n;
         await expect(depositTracker.insertSlotDeposit(1, TOO_BIG_AMT)).to.be.revertedWithCustomError(
           depositTrackerLib,
@@ -54,32 +52,29 @@ describe("DepositTracker.sol", () => {
         );
       });
 
-      it("Reverts on zero amount", async () => {
+      it("reverts on zero amount", async () => {
         await expect(depositTracker.insertSlotDeposit(1, 0)).to.be.revertedWithCustomError(
           depositTrackerLib,
           "ZeroValue",
         );
       });
 
-      it("Creates single entry and sets cumulative", async () => {
+      it("creates single entry and sets cumulative; cursor starts at 0 (next-to-read)", async () => {
         await depositTracker.insertSlotDeposit(1000, 5);
         const [slots, cumulatives] = await depositTracker.getSlotsDepositsUnpacked();
-        expect(slots.length).to.equal(1);
-        expect(slots[0]).to.equal(1000);
-        expect(cumulatives[0]).to.equal(5);
-        expect(await depositTracker.getCursor()).to.equal(ethers.MaxUint256);
+        expect(slots).to.deep.equal([1000n]);
+        expect(cumulatives).to.deep.equal([5n]);
+        expect(await depositTracker.getCursor()).to.equal(0);
       });
 
-      it("Creates single entry and increase cumulative", async () => {
+      it("same-slot deposit increases cumulative", async () => {
         await depositTracker.insertSlotDeposit(1000, 5);
         await depositTracker.insertSlotDeposit(1000, 7);
-        const [slots, cumulatives] = await depositTracker.getSlotsDepositsUnpacked();
-        expect(slots.length).to.equal(1);
-        expect(slots[0]).to.equal(1000);
-        expect(cumulatives[0]).to.equal(12);
+        const [, cumulatives] = await depositTracker.getSlotsDepositsUnpacked();
+        expect(cumulatives).to.deep.equal([12n]);
       });
 
-      it("New slot insert: appends slot and increase total", async () => {
+      it("new slot appends and cumulative increases", async () => {
         await depositTracker.insertSlotDeposit(1000, 5);
         await depositTracker.insertSlotDeposit(1002, 3);
         const [slots, cumulatives] = await depositTracker.getSlotsDepositsUnpacked();
@@ -96,71 +91,77 @@ describe("DepositTracker.sol", () => {
       });
     });
 
-    context("getDepositedEth", () => {
+    context("getDepositedEthUpToSlot / moveCursorToSlot", () => {
       it("returns 0 when no entries", async () => {
-        const r = await depositTracker.getDepositedEthUpToSlot(1234);
-        expect(r).to.equal(0);
+        expect(await depositTracker.getDepositedEthUpToSlot(1234)).to.equal(0);
       });
 
-      it("reads deposited eth in the range and advances cursor only when moveCursorToSlot is called", async () => {
+      it("reads ranges; cursor advances only via moveCursorToSlot", async () => {
         await depositTracker.insertSlotDeposit(1000, 5);
         await depositTracker.insertSlotDeposit(1001, 7);
         await depositTracker.insertSlotDeposit(1003, 3);
 
-        expect(await depositTracker.getCursor()).to.equal(ethers.MaxUint256);
+        expect(await depositTracker.getCursor()).to.equal(0);
 
         expect(await depositTracker.getDepositedEthUpToSlot(1000)).to.equal(5);
 
-        await depositTracker.moveCursorToSlot(1000, 5);
-        expect(await depositTracker.getCursor()).to.equal(0);
+        await depositTracker.moveCursorToSlot(1000);
+        expect(await depositTracker.getCursor()).to.equal(1);
 
         expect(await depositTracker.getDepositedEthUpToSlot(1001)).to.equal(7);
 
-        await depositTracker.moveCursorToSlot(1001, 12);
-        expect(await depositTracker.getCursor()).to.equal(1);
+        await depositTracker.moveCursorToSlot(1001);
+        expect(await depositTracker.getCursor()).to.equal(2);
 
         expect(await depositTracker.getDepositedEthUpToSlot(10_000)).to.equal(3);
 
-        await depositTracker.moveCursorToSlot(1003, 15);
-        expect(await depositTracker.getCursor()).to.equal(2);
+        await depositTracker.moveCursorToSlot(1003); // _slot >= last.slot -> cursor = len
+        expect(await depositTracker.getCursor()).to.equal(3);
 
         expect(await depositTracker.getDepositedEthUpToSlot(10_000)).to.equal(0);
       });
 
-      it("sums up to but not beyond _slot (inclusive)", async () => {
+      it("sums up to but not beyond _slot (inclusive) and reverts if _slot < first unread", async () => {
         await depositTracker.insertSlotDeposit(10, 1);
         await depositTracker.insertSlotDeposit(20, 2);
         await depositTracker.insertSlotDeposit(30, 3);
 
+        // From cursor=0, sum up to 25 => 1+2
         expect(await depositTracker.getDepositedEthUpToSlot(25)).to.equal(3);
 
-        await depositTracker.moveCursorToSlot(20, 3);
-        expect(await depositTracker.getCursor()).to.equal(1);
+        // Move to first element > 20 -> index 2 (slot 30)
+        await depositTracker.moveCursorToSlot(20);
+        expect(await depositTracker.getCursor()).to.equal(2);
 
-        expect(await depositTracker.getDepositedEthUpToSlot(25)).to.equal(0);
+        // Now first unread is slot 30; asking up to 25 should revert
+        await expect(depositTracker.getDepositedEthUpToSlot(25)).to.be.revertedWithCustomError(
+          depositTrackerLib,
+          "SlotOutOfRange",
+        );
 
+        // Up to 30 includes only the last unread (3)
         expect(await depositTracker.getDepositedEthUpToSlot(30)).to.equal(3);
 
-        await depositTracker.moveCursorToSlot(30, 6);
-        expect(await depositTracker.getCursor()).to.equal(2);
+        await depositTracker.moveCursorToSlot(30);
+        expect(await depositTracker.getCursor()).to.equal(3);
       });
 
-      it("aggregated same-slot deposit is counted once and included", async () => {
+      it("aggregated same-slot deposit counted once", async () => {
         await depositTracker.insertSlotDeposit(1000, 5);
         await depositTracker.insertSlotDeposit(1000, 7);
 
         expect(await depositTracker.getDepositedEthUpToSlot(1000)).to.equal(12);
 
-        await depositTracker.moveCursorToSlot(1000, 12);
-        expect(await depositTracker.getCursor()).to.equal(0);
+        await depositTracker.moveCursorToSlot(1000);
+        expect(await depositTracker.getCursor()).to.equal(1);
       });
 
-      it("reverts with SlotOutOfRange if _slot is behind the cursor slot", async () => {
+      it("reverts with SlotOutOfRange if _slot is behind first unread", async () => {
         await depositTracker.insertSlotDeposit(10, 1);
         await depositTracker.insertSlotDeposit(20, 2);
         await depositTracker.insertSlotDeposit(30, 3);
 
-        await depositTracker.moveCursorToSlot(30, 6);
+        await depositTracker.moveCursorToSlot(20); // cursor -> 2 (first unread slot 30)
         expect(await depositTracker.getCursor()).to.equal(2);
 
         await expect(depositTracker.getDepositedEthUpToSlot(15)).to.be.revertedWithCustomError(
@@ -169,14 +170,45 @@ describe("DepositTracker.sol", () => {
         );
       });
 
-      it("returns 0 if cursor is already at the last element", async () => {
+      it("returns 0 if everything was read (cursor == len)", async () => {
         await depositTracker.insertSlotDeposit(1, 10);
         await depositTracker.insertSlotDeposit(2, 20);
 
-        await depositTracker.moveCursorToSlot(2, 30);
-        expect(await depositTracker.getCursor()).to.equal(1);
+        await depositTracker.moveCursorToSlot(2); // cursor == len
+        expect(await depositTracker.getCursor()).to.equal(2);
 
         expect(await depositTracker.getDepositedEthUpToSlot(999_999)).to.equal(0);
+      });
+
+      it("moveCursorToSlot reverts only when _slot < current cursor slot; otherwise moves or marks all-read", async () => {
+        await depositTracker.insertSlotDeposit(10, 1);
+        await depositTracker.insertSlotDeposit(20, 2);
+        await depositTracker.insertSlotDeposit(30, 3);
+
+        // starting state
+        expect(await depositTracker.getCursor()).to.equal(0);
+
+        // _slot == cursor slot -> cursor++
+        await depositTracker.moveCursorToSlot(10);
+        expect(await depositTracker.getCursor()).to.equal(1);
+
+        // _slot < cursor slot -> revert
+        await expect(depositTracker.moveCursorToSlot(9)).to.be.revertedWithCustomError(
+          depositTrackerLib,
+          "SlotOutOfOrder",
+        );
+
+        // find first > 25 -> slot 30 (index 2)
+        await depositTracker.moveCursorToSlot(25);
+        expect(await depositTracker.getCursor()).to.equal(2);
+
+        // _slot >= last slot -> cursor = len (3)
+        await depositTracker.moveCursorToSlot(30);
+        expect(await depositTracker.getCursor()).to.equal(3);
+
+        // already all read; no-op
+        await depositTracker.moveCursorToSlot(5);
+        expect(await depositTracker.getCursor()).to.equal(3);
       });
     });
   });

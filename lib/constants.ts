@@ -103,15 +103,15 @@ export const getModuleWCType = (moduleType: StakingModuleType): WithdrawalCreden
   }
 };
 
-export const MAX_EFFECTIVE_BALANCE_WC0x01 = 32n * 10n ** 18n; // 32 ETH
-export const MAX_EFFECTIVE_BALANCE_WC0x02 = 2048n * 10n ** 18n; // 2048 ETH
+export const MAX_EFFECTIVE_BALANCE_WC_TYPE_01 = 32n * 10n ** 18n; // 32 ETH
+export const MAX_EFFECTIVE_BALANCE_WC_TYPE_02 = 2048n * 10n ** 18n; // 2048 ETH
 
 export const getModuleMEB = (moduleType: StakingModuleType): bigint => {
   switch (moduleType) {
     case StakingModuleType.Legacy:
-      return MAX_EFFECTIVE_BALANCE_WC0x01;
+      return MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
     case StakingModuleType.New:
-      return MAX_EFFECTIVE_BALANCE_WC0x02;
+      return MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
     default: {
       const _exhaustive: never = moduleType;
       return _exhaustive;

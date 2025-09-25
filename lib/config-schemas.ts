@@ -79,6 +79,13 @@ const TriggerableWithdrawalsGatewaySchema = z.object({
   frameDurationInSec: PositiveIntSchema,
 });
 
+// Consolidation gateway schema
+const ConsolidationGatewaySchema = z.object({
+  maxConsolidationRequestsLimit: PositiveIntSchema,
+  consolidationsPerFrame: PositiveIntSchema,
+  frameDurationInSec: PositiveIntSchema,
+});
+
 // Oracle versions schema
 const OracleVersionsSchema = z.object({
   vebo_consensus_version: PositiveIntSchema,
@@ -118,6 +125,7 @@ export const UpgradeParametersSchema = z.object({
   oracleVersions: OracleVersionsSchema.optional(),
   aragonAppVersions: AragonAppVersionsSchema.optional(),
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
+  consolidationGateway: ConsolidationGatewaySchema,
   triggerableWithdrawals: z.object({
     exit_events_lookback_window_in_slots: PositiveIntSchema,
     nor_exit_deadline_in_sec: PositiveIntSchema,
@@ -265,6 +273,7 @@ export const ScratchParametersSchema = z.object({
   withdrawalQueueERC721: WithdrawalQueueERC721Schema,
   validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
+  consolidationGateway: ConsolidationGatewaySchema,
   predepositGuarantee: PredepositGuaranteeSchema.omit({ genesisForkVersion: true }),
   operatorGrid: OperatorGridSchema,
 });

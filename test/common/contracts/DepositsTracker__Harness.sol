@@ -2,19 +2,15 @@
 // for testing purposes only
 pragma solidity 0.8.25;
 
-import {
-    DepositedEthState,
-    SlotDeposit,
-    SlotDepositPacking,
-    DepositsTracker
-} from "contracts/common/lib/DepositsTracker.sol";
+import {SlotDeposit, SlotDepositPacking, DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
+import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
 
 contract SlotDepositPacking__Harness {
     function pack(uint64 slot, uint192 cumulative) external pure returns (uint256) {
-        return SlotDepositPacking.pack(SlotDeposit(slot, cumulative));
+        return SlotDepositPacking.pack(slot, cumulative);
     }
 
-    function unpack(uint256 value) external pure returns (SlotDeposit memory slotDeposit) {
+    function unpack(uint256 value) external pure returns (uint64 slot, uint192 cumulative) {
         return SlotDepositPacking.unpack(value);
     }
 }
@@ -23,50 +19,47 @@ contract DepositsTracker__Harness {
     using SlotDepositPacking for SlotDeposit;
     using SlotDepositPacking for uint256;
 
-    // Dedicated storage position for tests
-    bytes32 public constant TEST_POSITION = keccak256("deposits.tracker.test.position");
+    DepositedState private S;
 
-    // Expose the library functions
+    // bytes32 public constant TEST_POSITION = keccak256("deposits.tracker.test.position");
+
     function insertSlotDeposit(uint256 slot, uint256 amount) external {
-        DepositsTracker.insertSlotDeposit(TEST_POSITION, slot, amount);
+        DepositsTracker.insertSlotDeposit(S, slot, amount);
     }
 
     function getDepositedEthUpToSlot(uint256 slot) external view returns (uint256) {
-        return DepositsTracker.getDepositedEthUpToSlot(TEST_POSITION, slot);
+        return DepositsTracker.getDepositedEthUpToSlot(S, slot);
     }
 
-    function moveCursorToSlot(uint256 slot, uint256 cumulative) external {
-        DepositsTracker.moveCursorToSlot(TEST_POSITION, slot, cumulative);
+    function getDepositedEthUpToLastSlot() external view returns (uint256) {
+        return DepositsTracker.getDepositedEthUpToLastSlot(S);
     }
 
-    // helpers
+    function moveCursorToSlot(uint256 slot) external {
+        DepositsTracker.moveCursorToSlot(S, slot);
+    }
 
+    // function moveCursorToLastSlot() external {
+    //     DepositsTracker.moveCursorToLastSlot(TEST_POSITION);
+    // }
+
+    // === Helpers for assertions ===
     function getCursor() external view returns (uint256) {
-        return _getDataStorage(TEST_POSITION).cursor;
+        return S.cursor;
     }
 
     function getSlotsDepositsRaw() external view returns (uint256[] memory arr) {
-        return _getDataStorage(TEST_POSITION).slotsDeposits;
+        return S.slotsDeposits;
     }
 
     function getSlotsDepositsUnpacked() external view returns (uint64[] memory slots, uint192[] memory cumulatives) {
-        DepositedEthState storage s = _getDataStorage(TEST_POSITION);
-        uint256 len = s.slotsDeposits.length;
+        uint256 len = S.slotsDeposits.length;
         slots = new uint64[](len);
         cumulatives = new uint192[](len);
-        for (uint256 i = 0; i < len; ) {
-            SlotDeposit memory d = s.slotsDeposits[i].unpack();
-            slots[i] = d.slot;
-            cumulatives[i] = d.cumulativeEth;
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _getDataStorage(bytes32 _position) private pure returns (DepositedEthState storage $) {
-        assembly {
-            $.slot := _position
+        for (uint256 i = 0; i < len; ++i) {
+            (uint64 slot_, uint192 cum_) = SlotDepositPacking.unpack(S.slotsDeposits[i]);
+            slots[i] = slot_;
+            cumulatives[i] = cum_;
         }
     }
 }

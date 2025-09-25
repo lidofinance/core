@@ -9,4 +9,7 @@ contract Vault__MockForLazyOracle {
     function withdrawalCredentials() external pure returns (bytes32) {
         return bytes32(0);
     }
+
+    function availableBalance() external view returns (uint256) {}
+    function stagedBalance() external view returns (uint256) {}
 }

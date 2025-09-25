@@ -10,7 +10,6 @@ import {IOracleReportSanityChecker} from "contracts/common/interfaces/IOracleRep
 import {ILido} from "contracts/common/interfaces/ILido.sol";
 import {ReportValues} from "contracts/common/interfaces/ReportValues.sol";
 import {IVaultHub} from "contracts/common/interfaces/IVaultHub.sol";
-import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
 
 import {IPostTokenRebaseReceiver} from "./interfaces/IPostTokenRebaseReceiver.sol";
 
@@ -29,6 +28,8 @@ interface IStakingRouter {
         );
 
     function reportRewardsMinted(uint256[] calldata _stakingModuleIds, uint256[] calldata _totalShares) external;
+    function onAccountingReport(uint256 slot) external;
+    function getDepositAmountFromLastSlot(uint256 slot) external view returns (uint256);
 }
 
 /// @title Lido Accounting contract
@@ -92,6 +93,8 @@ contract Accounting {
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
         uint256 postTotalPooledEther;
+        /// @notice amount of ether deposited to the protocol since the last report and up to current report slot
+        uint256 depositedSinceLastReport;
     }
 
     /// @notice precalculated numbers of shares that should be minted as fee to NO
@@ -105,10 +108,6 @@ contract Accounting {
 
     /// @notice deposit size in wei (for pre-maxEB accounting)
     uint256 private constant DEPOSIT_SIZE = 32 ether;
-
-    /// @notice storage position for protocol deposit tracking
-    bytes32 internal constant DEPOSITS_TRACKER_POSITION =
-        keccak256("lido.Accounting.depositsTracker");
 
     ILidoLocator public immutable LIDO_LOCATOR;
     ILido public immutable LIDO;
@@ -125,43 +124,13 @@ contract Accounting {
     constructor(
         ILidoLocator _lidoLocator,
         ILido _lido,
-        uint64 _genesisTime,
-        uint64 _secondsPerSlot
+        uint64 _secondsPerSlot,
+        uint64 _genesisTime
     ) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
         GENESIS_TIME = _genesisTime;
         SECONDS_PER_SLOT = _secondsPerSlot;
-    }
-
-    /// @notice Function to record deposits (called by Lido)
-    /// @param amount the amount of ETH deposited
-    function recordDeposit(uint256 amount) external {
-        if (msg.sender != address(LIDO)) revert NotAuthorized("recordDeposit", msg.sender);
-
-        uint256 currentSlot = (block.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
-        DepositsTracker.insertSlotDeposit(
-            DEPOSITS_TRACKER_POSITION,
-            currentSlot,
-            amount
-        );
-    }
-
-    /// @notice Internal function to get deposits between slots
-    /// @param fromSlot the starting slot
-    /// @param toSlot the ending slot
-    /// @return the amount of ETH deposited between the slots
-    function _getDepositedEthBetweenSlots(uint256 fromSlot, uint256 toSlot) internal view returns (uint256) {
-        // TODO: add optimization for slot range queries (DepositsTracker.moveCursorToSlot)
-        uint256 depositsAtTo = DepositsTracker.getDepositedEthUpToSlot(
-            DEPOSITS_TRACKER_POSITION,
-            toSlot
-        );
-        uint256 depositsAtFrom = DepositsTracker.getDepositedEthUpToSlot(
-            DEPOSITS_TRACKER_POSITION,
-            fromSlot
-        );
-        return depositsAtTo > depositsAtFrom ? depositsAtTo - depositsAtFrom : 0;
     }
 
     /// @notice calculates all the state changes that is required to apply the report
@@ -218,10 +187,11 @@ contract Accounting {
         );
 
         // Calculate deposits made since last report
-        uint256 depositedSinceLastReport = _getDepositedEthSinceLastReport(_report.timestamp, _report.timeElapsed);
-
+        update.depositedSinceLastReport = _contracts.stakingRouter.getDepositAmountFromLastSlot(
+            (_report.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT
+        );
         // Principal CL balance is sum of previous balances and new deposits
-        update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance + depositedSinceLastReport;
+        update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance + update.depositedSinceLastReport;
 
         // Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in EL rewards vault or withdrawals vault
@@ -436,6 +406,9 @@ contract Accounting {
 
         _notifyRebaseObserver(_contracts.postTokenRebaseReceiver, _report, _pre, _update);
 
+         // move cursor for deposit trackers
+        _contracts.stakingRouter.onAccountingReport((_report.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT);
+
         LIDO.emitTokenRebase(
             _report.timestamp,
             _report.timeElapsed,
@@ -551,34 +524,6 @@ contract Accounting {
                 IStakingRouter(stakingRouter),
                 IVaultHub(vaultHub)
             );
-    }
-
-    /**
-     * @dev Calculates ETH deposited since the last report
-     * @param reportTimestamp Current report timestamp
-     * @param timeElapsed Time elapsed since the previous report
-     * @return Amount of ETH deposited between reports
-     */
-    function _getDepositedEthSinceLastReport(
-        uint256 reportTimestamp,
-        uint256 timeElapsed
-    ) internal view returns (uint256) {
-        // Calculate slots from report timestamp and timeElapsed
-        uint256 currentSlot = (reportTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
-        uint256 prevTimestamp = reportTimestamp - timeElapsed;
-
-        // Handle first report or timeElapsed too large scenarios
-        if (prevTimestamp >= GENESIS_TIME) {
-            uint256 prevSlot = (prevTimestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
-            if (prevSlot == currentSlot) {
-                return DepositsTracker.getDepositedEthUpToSlot(DEPOSITS_TRACKER_POSITION, currentSlot);
-            }
-            return _getDepositedEthBetweenSlots(prevSlot, currentSlot);
-        } else {
-            // First report - track all deposits since GENESIS_TIME
-            uint256 genesisSlot = 0;
-            return _getDepositedEthBetweenSlots(genesisSlot, currentSlot);
-        }
     }
 
     error NotAuthorized(string operation, address addr);

@@ -9,6 +9,7 @@ import {AccessControlEnumerableUpgradeable} from
     "contracts/openzeppelin/5.2/upgradeable/access/extensions/AccessControlEnumerableUpgradeable.sol";
 import {BeaconChainDepositor, IDepositContract} from "contracts/0.8.25/lib/BeaconChainDepositor.sol";
 import {DepositsTracker} from "contracts/common/lib/DepositsTracker.sol";
+import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
 import {DepositsTempStorage} from "contracts/common/lib/DepositsTempStorage.sol";
 import {WithdrawalCredentials} from "contracts/common/lib/WithdrawalCredentials.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
@@ -20,7 +21,6 @@ import {SRStorage} from "./SRStorage.sol";
 import {SRUtils} from "./SRUtils.sol";
 
 import {
-    RouterStorage,
     ModuleState,
     StakingModuleType,
     StakingModuleStatus,
@@ -42,6 +42,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     using WithdrawalCredentials for bytes32;
     using SRStorage for ModuleState;
     using SRStorage for uint256; // for module IDs
+    using DepositsTracker for DepositedState;
 
     /// @dev Events
 
@@ -58,12 +59,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     event StakingModuleMinDepositBlockDistanceSet(
         uint256 indexed stakingModuleId, uint256 minDepositBlockDistance, address setBy
     );
-    event StakingModuleExitedValidatorsIncompleteReporting(
-        uint256 indexed stakingModuleId, uint256 unreportedExitedValidatorsCount
-    );
-
     event WithdrawalCredentialsSet(bytes32 withdrawalCredentials, address setBy);
-    event WithdrawalCredentials02Set(bytes32 withdrawalCredentials02, address setBy);
 
     /// Emitted when the StakingRouter received ETH
     event StakingRouterETHDeposited(uint256 indexed stakingModuleId, uint256 amount);
@@ -74,7 +70,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @dev Identical for both 0x01 and 0x02 types.
     ///      For 0x02, the validator may later be topped up.
     ///      Top-ups are not supported for 0x01.
-    uint256 public constant INITIAL_DEPOSIT_SIZE = 32 ether;
+    uint256 public constant INITIAL_DEPOSIT_SIZE = SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
 
     /// @dev Module trackers will be derived from this position
     bytes32 internal constant DEPOSITS_TRACKER = keccak256("lido.StakingRouter.depositTracker");
@@ -88,13 +84,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     bytes32 public constant REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE = keccak256("REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE");
     bytes32 public constant UNSAFE_SET_EXITED_VALIDATORS_ROLE = keccak256("UNSAFE_SET_EXITED_VALIDATORS_ROLE");
     bytes32 public constant REPORT_REWARDS_MINTED_ROLE = keccak256("REPORT_REWARDS_MINTED_ROLE");
+    bytes32 public constant ACCOUNTING_REPORT_ROLE = keccak256("ACCOUNTING_REPORT_ROLE");
 
     /// Chain specification
     uint64 internal immutable SECONDS_PER_SLOT;
     uint64 internal immutable GENESIS_TIME;
     IDepositContract public immutable DEPOSIT_CONTRACT;
 
-    error WrongWithdrawalCredentialsType();
     error ZeroAddressLido();
     error ZeroAddressAdmin();
     error StakingModuleNotActive();
@@ -140,12 +136,8 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @param _admin Lido DAO Aragon agent contract address.
     /// @param _lido Lido address.
     /// @param _withdrawalCredentials 0x01 credentials to withdraw ETH on Consensus Layer side.
-    /// @param _withdrawalCredentials02 0x02 Credentials to withdraw ETH on Consensus Layer side
     /// @dev Proxy initialization method.
-    function initialize(address _admin, address _lido, bytes32 _withdrawalCredentials, bytes32 _withdrawalCredentials02)
-        external
-        reinitializer(4)
-    {
+    function initialize(address _admin, address _lido, bytes32 _withdrawalCredentials) external reinitializer(4) {
         if (_admin == address(0)) revert ZeroAddressAdmin();
         if (_lido == address(0)) revert ZeroAddressLido();
 
@@ -154,14 +146,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         _initializeSTAS();
 
-        RouterStorage storage rs = SRStorage.getRouterStorage();
-        rs.lido = _lido;
+        SRStorage.getRouterStorage().lido = _lido;
 
         // TODO: maybe store withdrawalVault
-        rs.withdrawalCredentials = _withdrawalCredentials;
-        rs.withdrawalCredentials02 = _withdrawalCredentials02;
-        emit WithdrawalCredentialsSet(_withdrawalCredentials, _msgSender());
-        emit WithdrawalCredentials02Set(_withdrawalCredentials02, _msgSender());
+        _setWithdrawalCredentials(_withdrawalCredentials);
     }
 
     /// @dev Prohibit direct transfer to contract.
@@ -193,12 +181,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         _initializeSTAS();
         // migrate current modules to new storage
         SRLib._migrateStorage();
-
-        // emit STASInitialized();
-
-        RouterStorage storage rs = SRStorage.getRouterStorage();
-        emit WithdrawalCredentialsSet(rs.withdrawalCredentials, _msgSender());
-        emit WithdrawalCredentials02Set(rs.withdrawalCredentials02, _msgSender());
     }
 
     /// @notice Returns Lido contract address.
@@ -325,6 +307,16 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRLib._updateExitedValidatorsCountByStakingModule(_stakingModuleIds, _exitedValidatorsCounts);
     }
 
+    /// @dev The function is restricted to the same role as `updateExitedValidatorsCountByStakingModule`,
+    /// i.e. `REPORT_EXITED_VALIDATORS_ROLE` role.
+    function reportActiveBalancesByStakingModule(
+        uint256[] calldata _stakingModuleIds,
+        uint256[] calldata _activeBalancesGwei,
+        uint256[] calldata _pendingBalancesGwei
+    ) external onlyRole(REPORT_EXITED_VALIDATORS_ROLE) {
+        SRLib._reportActiveBalancesByStakingModule(_stakingModuleIds, _activeBalancesGwei, _pendingBalancesGwei);
+    }
+
     /// @dev See {SRLib._reportStakingModuleExitedValidatorsCountByNodeOperator}.
     ///
     /// @dev The function is restricted to the `REPORT_EXITED_VALIDATORS_ROLE` role.
@@ -414,6 +406,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         SRLib._onValidatorExitTriggered(validatorExitData, _withdrawalRequestPaidFee, _exitType);
     }
 
+    /// @notice Hook for AO report
+    function onAccountingReport(uint256 slot) external onlyRole(ACCOUNTING_REPORT_ROLE) {
+        // move cursor for global deposit tracker
+        SRStorage.getLidoDepositTrackerStorage().moveCursorToSlot(slot);
+        // move cursor for all module's deposits trackers
+        _updateModulesTrackers(slot);
+    }
+
     // TODO replace with new method in SanityChecker, V3TemporaryAdmin etc
     /// @dev DEPRECATED, use getStakingModuleStates() instead
     /// @notice Returns all registered staking modules.
@@ -451,11 +451,11 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     function getStakingModuleStateAccounting(uint256 _stakingModuleId)
         external
         view
-        returns (uint128 effectiveBalanceGwei, uint64 exitedValidatorsCount)
+        returns (uint96 clBalanceGwei, uint96 activeBalanceGwei, uint64 exitedValidatorsCount)
     {
         (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
         ModuleStateAccounting memory stateAccounting = state.getStateAccounting();
-        return (stateAccounting.effectiveBalanceGwei, stateAccounting.exitedValidatorsCount);
+        return (stateAccounting.clBalanceGwei, stateAccounting.activeBalanceGwei, stateAccounting.exitedValidatorsCount);
     }
 
     /// @notice Returns the ids of all registered staking modules.
@@ -608,6 +608,14 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         }
     }
 
+    /// @notice Return deposit amount in wei
+    /// @param slot - slot
+    /// @return deposit amount since last time cursor was moved
+    function getDepositAmountFromLastSlot(uint256 slot) public view returns (uint256) {
+        DepositedState storage state = SRStorage.getLidoDepositTrackerStorage();
+        return state.getDepositedEthUpToSlot(slot);
+    }
+
     /// @notice Sets the staking module status flag for participation in further deposits and/or reward distribution.
     /// @param _stakingModuleId Id of the staking module to be updated.
     /// @param _status New status of the staking module.
@@ -678,9 +686,9 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     /// @return Max deposits count per block for the staking module.
     function getStakingModuleMaxDepositsAmountPerBlock(uint256 _stakingModuleId) external view returns (uint256) {
         // TODO: maybe will be defined via staking module config
-        // MAX_EFFECTIVE_BALANCE_01 here is old deposit value per validator
+        // MAX_EFFECTIVE_BALANCE_WC_TYPE_01 here is old deposit value per validator
         (ModuleState storage state,) = _validateAndGetModuleState(_stakingModuleId);
-        return (state.getStateDeposits().maxDepositsPerBlock * SRUtils.MAX_EFFECTIVE_BALANCE_01);
+        return (state.getStateDeposits().maxDepositsPerBlock * SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01);
     }
 
     /// @notice Returns active validators count for the staking module.
@@ -700,16 +708,15 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
     /// @notice Returns withdrawal credentials type
     /// @param _stakingModuleId Id of the staking module to be deposited.
-    /// @return module type: 0 - Legacy (WC type 0x01) or 1 - New (WC type 0x02)
-    function getStakingModuleWithdrawalCredentialType(uint256 _stakingModuleId) external view returns (uint8) {
-        (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
-        return SRUtils._getModuleWCType(stateConfig.moduleType);
+    /// @return withdrawal credentials: 0x01... - for Legacy modules, 0x02... - for New modules
+    function getStakingModuleWithdrawalCredentials(uint256 _stakingModuleId) external view returns (bytes32) {
+        return _getWithdrawalCredentialsWithType(getStakingModuleType(_stakingModuleId));
     }
 
     /// @notice Returns the staking module type: Legacy or New, i.e. balance-based (uses 0x02 withdrawal credentials)
     /// @param _stakingModuleId Id of the staking module
-    /// @return Staking module type
-    function getStakingModuleType(uint256 _stakingModuleId) external view returns (StakingModuleType) {
+    /// @return Staking module type: 0 - Legacy (WC type 0x01) or 1 - New (WC type 0x02)
+    function getStakingModuleType(uint256 _stakingModuleId) public view returns (StakingModuleType) {
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
         return stateConfig.moduleType;
     }
@@ -725,36 +732,37 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     {
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
 
-        // TODO: is it correct?
-        if (stateConfig.status != StakingModuleStatus.Active) return (0, 0);
+        // get max eth amount that can be deposited into the module, capped by its capacity (depositable validators count)
+        // If module is not active, then it capacity is 0, so stakingModuleDepositableEthAmount will be 0.
+        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _depositableEth);
+
+        if (stakingModuleDepositableEthAmount == 0) return (0, 0);
 
         if (stateConfig.moduleType == StakingModuleType.New) {
-            (, uint256 stakingModuleTargetEthAmount) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
-            (uint256[] memory operators, uint256[] memory allocations) =
-                IStakingModuleV2(stateConfig.moduleAddress).getAllocation(stakingModuleTargetEthAmount);
+            // get operators and their available operatorAllocations for deposits. In general case, not all depositable validators
+            // will be used for deposits, due to Module can apply its own rules to limit deposits per operator
+            (uint256[] memory operators, uint256[] memory operatorAllocations) =
+                IStakingModuleV2(stateConfig.moduleAddress).getAllocation(stakingModuleDepositableEthAmount);
 
             uint256[] memory counts;
-            (depositsCount, counts) =
-                _getNewDepositsCount02(stakingModuleTargetEthAmount, allocations, INITIAL_DEPOSIT_SIZE);
+            (depositsCount, counts) = _getNewDepositsCount02(stakingModuleDepositableEthAmount, operatorAllocations);
 
             // this will be read and clean in deposit method
-            DepositsTempStorage.storeOperators(operators);
-            DepositsTempStorage.storeCounts(counts);
+            DepositsTempStorage.storeOperatorCounts(operators, counts);
 
-            depositsAmount = depositsCount * INITIAL_DEPOSIT_SIZE;
+            depositsAmount = _getInitialDepositAmountByCount(depositsCount);
         } else if (stateConfig.moduleType == StakingModuleType.Legacy) {
-            depositsCount = getStakingModuleMaxDepositsCount(_stakingModuleId, _depositableEth);
-
-            depositsAmount = depositsCount * INITIAL_DEPOSIT_SIZE;
+            depositsCount = _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount);
+            depositsAmount = _getInitialDepositAmountByCount(depositsCount);
         } else {
-            revert WrongWithdrawalCredentialsType();
+            revert SRUtils.InvalidStakingModuleType();
         }
     }
 
     /// @notice DEPRECATED: use getStakingModuleMaxInitialDepositsAmount
     /// This method only for the legacy modules
     function getStakingModuleMaxDepositsCount(uint256 _stakingModuleId, uint256 _depositableEth)
-        public
+        external
         view
         returns (uint256)
     {
@@ -765,46 +773,41 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             revert LegacyStakingModuleRequired();
         }
 
-        (, uint256 stakingModuleTargetEthAmount) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
-
-        uint256 countKeys = stakingModuleTargetEthAmount / SRUtils.MAX_EFFECTIVE_BALANCE_01;
-        // todo move up
-        if (stateConfig.status != StakingModuleStatus.Active) return 0;
-
-        // todo: remove, as stakingModuleTargetEthAmount is already capped by depositableValidatorsCount
-        (,, uint256 depositableValidatorsCount) = _getStakingModuleSummary(_stakingModuleId);
-        return Math256.min(depositableValidatorsCount, countKeys);
+        // If module is not active, then it capacity is 0, so stakingModuleDepositableEthAmount will be 0.
+        // Module capacity is calculated based on the depositableValidatorsCount (from getStakingModuleSummary), so
+        // stakingModuleDepositableEthAmount is already capped by the module capacity and represents the max ETH amount possible to deposit.
+        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _depositableEth);
+        return _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount);
     }
 
-    function _getNewDepositsCount02(
-        uint256 stakingModuleTargetEthAmount,
-        uint256[] memory allocations,
-        uint256 initialDeposit
-    ) internal pure returns (uint256 totalCount, uint256[] memory counts) {
-        uint256 len = allocations.length;
+    function _getNewDepositsCount02(uint256 moduleMaxAllocation, uint256[] memory operatorAllocations)
+        internal
+        pure
+        returns (uint256 totalCount, uint256[] memory counts)
+    {
+        uint256 len = operatorAllocations.length;
         counts = new uint256[](len);
         unchecked {
             for (uint256 i = 0; i < len; ++i) {
-                uint256 allocation = allocations[i];
+                uint256 allocation = operatorAllocations[i];
 
-                // should sum of uint256[] memory allocations be <= stakingModuleTargetEthAmount?
-                if (allocation > stakingModuleTargetEthAmount) {
+                // sum of all `operatorAllocations` items should be <= moduleMaxAllocation
+                if (allocation > moduleMaxAllocation) {
                     revert AllocationExceedsTarget();
                 }
 
-                stakingModuleTargetEthAmount -= allocation;
-                uint256 depositsCount;
+                moduleMaxAllocation -= allocation;
 
-                if (allocation >= initialDeposit) {
-                    // if allocation is 4000 - 2
-                    // if allocation 32 - 1
-                    // if less than 32 - 0
-                    // is it correct situation if allocation 32 for new type of keys?
-                    depositsCount = 1 + (allocation - initialDeposit) / SRUtils.MAX_EFFECTIVE_BALANCE_02;
+                if (allocation >= INITIAL_DEPOSIT_SIZE) {
+                    // if allocation is 4000 - 2 (= 2048 (enough for 1st key: initial deposit 32 and rest deposit 2016) +  1952 (enough for 2nd key: initial deposit 32 and rest deposit 1920) )
+                    // if allocation 32 - 1 (enough for initial deposit)
+                    // if less than 32 - 0 (not enough for initial deposit)
+                    // if allocation 2050 - 1 (= 2048 (enough for 1st key: initial deposit 32 and rest deposit 2016) + 2 (not enough even for initial deposit) )
+                    uint256 depositsCount =
+                        1 + (allocation - INITIAL_DEPOSIT_SIZE) / SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
+                    counts[i] = depositsCount;
+                    totalCount += depositsCount;
                 }
-
-                counts[i] = depositsCount;
-                totalCount += depositsCount;
             }
         }
     }
@@ -844,7 +847,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
             uint256 precisionPoints
         )
     {
-        uint256 totalActiveBalance = SRUtils._getModulesTotalBalance();
+        uint256 totalActiveBalance = SRUtils._getTotalModulesActiveBalance();
 
         uint256[] memory moduleIds = SRStorage.getModuleIds();
         uint256 stakingModulesCount = totalActiveBalance == 0 ? 0 : moduleIds.length;
@@ -863,7 +866,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         for (uint256 i; i < stakingModulesCount; ++i) {
             uint256 moduleId = moduleIds[i];
-            uint256 allocation = SRUtils._getModuleBalance(moduleId);
+            uint256 allocation = SRUtils._getModuleActiveBalance(moduleId);
 
             /// @dev Skip staking modules which have no active balance.
             if (allocation == 0) continue;
@@ -901,6 +904,15 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         }
 
         return (recipients, stakingModuleIds, stakingModuleFees, totalFee, precisionPoints);
+    }
+
+    function getStakingModuleBalance(uint256 moduleId) external view returns (uint256) {
+        SRUtils._validateModuleId(moduleId);
+        return SRUtils._getModuleBalance(moduleId);
+    }
+
+    function getTotalStakingModulesBalance() external view returns (uint256) {
+        return SRUtils._getTotalModulesBalance();
     }
 
     function _computeModuleFee(uint256 activeBalance, uint256 totalActiveBalance, ModuleStateConfig memory stateConfig)
@@ -952,7 +964,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         view
         returns (uint256 allocated, uint256[] memory allocations)
     {
-        (allocated, allocations) = _getTargetDepositsAllocations(SRStorage.getModuleIds(), _depositAmount);
+        return _getTargetDepositAllocations(SRStorage.getModuleIds(), _depositAmount);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.
@@ -981,7 +993,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         uint256 etherBalanceBeforeDeposits = address(this).balance;
 
-        uint256 depositsCount = depositsValue / INITIAL_DEPOSIT_SIZE;
+        uint256 depositsCount = _getInitialDepositCountByAmount(depositsValue);
 
         (bytes memory publicKeysBatch, bytes memory signaturesBatch) =
             _getOperatorAvailableKeys(stateConfig.moduleType, stakingModuleAddress, depositsCount, _depositCalldata);
@@ -1016,12 +1028,10 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (moduleType == StakingModuleType.Legacy) {
             return IStakingModule(stakingModuleAddress).obtainDepositData(depositsCount, depositCalldata);
         } else {
-            (keys, signatures) = IStakingModuleV2(stakingModuleAddress).getOperatorAvailableKeys(
-                DepositsTempStorage.getOperators(), DepositsTempStorage.getCounts()
-            );
+            (uint256[] memory operators, uint256[] memory counts) = DepositsTempStorage.getOperatorCounts();
+            (keys, signatures) = IStakingModuleV2(stakingModuleAddress).getOperatorAvailableKeys(operators, counts);
 
-            DepositsTempStorage.clearOperators();
-            DepositsTempStorage.clearCounts();
+            DepositsTempStorage.clearOperatorCounts();
         }
     }
 
@@ -1033,22 +1043,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         external
         onlyRole(MANAGE_WITHDRAWAL_CREDENTIALS_ROLE)
     {
-        SRStorage.getRouterStorage().withdrawalCredentials = _withdrawalCredentials;
-        SRLib._notifyStakingModulesOfWithdrawalCredentialsChange();
-        emit WithdrawalCredentialsSet(_withdrawalCredentials, _msgSender());
-    }
-
-    /// @notice Set 0x02 credentials to withdraw ETH on Consensus Layer side.
-    /// @param _withdrawalCredentials 0x02 withdrawal credentials field as defined in the Consensus Layer specs.
-    /// @dev Note that setWithdrawalCredentials discards all unused deposits data as the signatures are invalidated.
-    /// @dev The function is restricted to the `MANAGE_WITHDRAWAL_CREDENTIALS_ROLE` role.
-    function setWithdrawalCredentials02(bytes32 _withdrawalCredentials)
-        external
-        onlyRole(MANAGE_WITHDRAWAL_CREDENTIALS_ROLE)
-    {
-        SRStorage.getRouterStorage().withdrawalCredentials02 = _withdrawalCredentials;
-        SRLib._notifyStakingModulesOfWithdrawalCredentialsChange();
-        emit WithdrawalCredentials02Set(_withdrawalCredentials, _msgSender());
+        _setWithdrawalCredentials(_withdrawalCredentials);
     }
 
     /// @notice Returns current credentials to withdraw ETH on Consensus Layer side.
@@ -1057,15 +1052,16 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRStorage.getRouterStorage().withdrawalCredentials;
     }
 
-    /// @notice Returns current 0x02 credentials to withdraw ETH on Consensus Layer side.
-    /// @return Withdrawal credentials.
-    function getWithdrawalCredentials02() public view returns (bytes32) {
-        return SRStorage.getRouterStorage().withdrawalCredentials02;
+    function _setWithdrawalCredentials(bytes32 wc) internal {
+        if (wc == 0) revert EmptyWithdrawalsCredentials();
+        SRStorage.getRouterStorage().withdrawalCredentials = wc;
+        SRLib._notifyStakingModulesOfWithdrawalCredentialsChange();
+        emit WithdrawalCredentialsSet(wc, _msgSender());
     }
 
     function _getWithdrawalCredentialsWithType(StakingModuleType moduleType) internal view returns (bytes32) {
         bytes32 wc = getWithdrawalCredentials();
-        if (wc == 0) revert EmptyWithdrawalsCredentials();
+        // if (wc == 0) revert EmptyWithdrawalsCredentials();
         return wc.setType(SRUtils._getModuleWCType(moduleType));
     }
 
@@ -1077,23 +1073,28 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         emit StakingRouterETHDeposited(stakingModuleId, depositsValue);
     }
 
-    /// @notice Allocation for module based on target share
-    /// @param moduleId - Id of staking module
-    /// @param amountToAllocate - Eth amount that can be deposited in module
-    function _getTargetDepositsAllocation(uint256 moduleId, uint256 amountToAllocate)
+    /// @notice Allocation for single module based on target share
+    /// @param moduleId Id of staking module
+    /// @param amountToAllocate Eth amount that can be deposited in module
+    /// @return allocation Eth amount that can be deposited in module with id `moduleId` (can be less than `amountToAllocate`)
+    function _getTargetDepositAllocation(uint256 moduleId, uint256 amountToAllocate)
         internal
         view
-        returns (uint256 allocated, uint256 allocation)
+        returns (uint256 allocation)
     {
-        (allocated, allocation) = SRLib._getDepositAllocation(moduleId, amountToAllocate);
+        uint256[] memory moduleIds = new uint256[](1);
+        moduleIds[0] = moduleId;
+        // here we can ignore second return value, as allocate to single module and
+        // `allocated` amount always equal to 1st element of `operatorAllocations` array
+        (allocation,) = _getTargetDepositAllocations(moduleIds, amountToAllocate);
     }
 
-    function _getTargetDepositsAllocations(uint256[] memory moduleIds, uint256 amountToAllocate)
+    function _getTargetDepositAllocations(uint256[] memory moduleIds, uint256 amountToAllocate)
         internal
         view
-        returns (uint256 allocated, uint256[] memory allocations)
+        returns (uint256 allocated, uint256[] memory operatorAllocations)
     {
-        (allocated, allocations) = SRLib._getDepositAllocations(moduleIds, amountToAllocate);
+        return SRLib._getDepositAllocations(moduleIds, amountToAllocate);
     }
 
     /// module wrapper
@@ -1204,11 +1205,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         return SRStorage.getRouterStorage().lido;
     }
 
-    function _getStakingModuleTrackerPosition(uint256 stakingModuleId) internal pure returns (bytes32) {
-        // Mirrors mapping slot formula: keccak256(abi.encode(key, baseSlot))
-        return keccak256(abi.encode(stakingModuleId, DEPOSITS_TRACKER));
-    }
-
     // Helpers
 
     function _getCurrentSlot() internal view returns (uint256) {
@@ -1219,14 +1215,34 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     //     return uint64((timestamp - GENESIS_TIME) / SECONDS_PER_SLOT);
     // }
 
+    /// @notice Internal function to move cursor to slot
+    /// @param slot Slot
+    function _updateModulesTrackers(uint256 slot) internal {
+        uint256[] memory moduleIds = SRStorage.getModuleIds();
+
+        for (uint256 i; i < moduleIds.length; ++i) {
+            SRStorage.getStakingModuleTrackerStorage(moduleIds[i]).moveCursorToSlot(slot);
+        }
+    }
+
     /// @dev Track deposits for staking module and overall.
     /// @param _stakingModuleId Id of the staking module to track deposits for
     /// @param _depositsValue the amount of ETH deposited
     function _trackDeposit(uint256 _stakingModuleId, uint256 _depositsValue) internal {
         uint256 slot = _getCurrentSlot();
         // track total deposited amount for all modules
-        DepositsTracker.insertSlotDeposit(DEPOSITS_TRACKER, slot, _depositsValue);
+        DepositedState storage state = SRStorage.getLidoDepositTrackerStorage();
+        state.insertSlotDeposit(slot, _depositsValue);
         // track deposited amount for module
-        DepositsTracker.insertSlotDeposit(_getStakingModuleTrackerPosition(_stakingModuleId), slot, _depositsValue);
+        DepositedState storage moduleState = SRStorage.getStakingModuleTrackerStorage(_stakingModuleId);
+        moduleState.insertSlotDeposit(slot, _depositsValue);
+    }
+
+    function _getInitialDepositAmountByCount(uint256 depositsCount) internal pure returns (uint256) {
+        return depositsCount * INITIAL_DEPOSIT_SIZE;
+    }
+
+    function _getInitialDepositCountByAmount(uint256 depositsAmount) internal pure returns (uint256) {
+        return depositsAmount / INITIAL_DEPOSIT_SIZE;
     }
 }

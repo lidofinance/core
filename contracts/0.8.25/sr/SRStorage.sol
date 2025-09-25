@@ -4,6 +4,7 @@ pragma solidity 0.8.25;
 import {EnumerableSet} from "@openzeppelin/contracts-v5.2/utils/structs/EnumerableSet.sol";
 import {IStakingModule} from "contracts/common/interfaces/IStakingModule.sol";
 import {IStakingModuleV2} from "contracts/common/interfaces/IStakingModuleV2.sol";
+import {DepositedState} from "contracts/common/interfaces/DepositedState.sol";
 import {
     ModuleState,
     ModuleStateConfig,
@@ -27,6 +28,10 @@ library SRStorage {
     bytes32 internal constant STAS_STORAGE_POSITION = keccak256(
         abi.encode(uint256(keccak256(abi.encodePacked("lido.StakingRouter.stasStorage"))) - 1)
     ) & ~bytes32(uint256(0xff));
+
+    /// @dev Module trackers will be derived from this position
+    bytes32 internal constant DEPOSITS_TRACKER = keccak256("lido.StakingRouter.depositTracker");
+
 
     function getIStakingModule(uint256 _moduleId) internal view returns (IStakingModule) {
         return _moduleId.getModuleState().getIStakingModule();
@@ -76,6 +81,20 @@ library SRStorage {
     function getRouterStorage() internal pure returns (RouterStorage storage $) {
         bytes32 _position = ROUTER_STORAGE_POSITION;
         assembly ("memory-safe") {
+            $.slot := _position
+        }
+    }
+
+    function getStakingModuleTrackerStorage(uint256 stakingModuleId) internal pure returns (DepositedState storage $) {
+      return _getDepositTrackerStorage(keccak256(abi.encode(stakingModuleId, DEPOSITS_TRACKER)));
+    }
+    
+    function getLidoDepositTrackerStorage() internal pure returns (DepositedState storage $) {
+      return _getDepositTrackerStorage(DEPOSITS_TRACKER);
+    }
+
+    function _getDepositTrackerStorage(bytes32 _position) private pure returns (DepositedState storage $) {
+        assembly {
             $.slot := _position
         }
     }

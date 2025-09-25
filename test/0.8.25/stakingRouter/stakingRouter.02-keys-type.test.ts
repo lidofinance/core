@@ -41,7 +41,6 @@ describe("StakingRouter.sol:keys-02-type", () => {
   let moduleId: bigint;
   let stakingModuleAddress: string;
   const withdrawalCredentials = hexlify(randomBytes(32));
-  const withdrawalCredentials02 = hexlify(randomBytes(32));
 
   before(async () => {
     [deployer, admin] = await ethers.getSigners();
@@ -57,7 +56,7 @@ describe("StakingRouter.sol:keys-02-type", () => {
     const depositCallerWrapperAddress = await depositCallerWrapper.getAddress();
 
     // initialize staking router
-    await stakingRouter.initialize(admin, depositCallerWrapperAddress, withdrawalCredentials, withdrawalCredentials02);
+    await stakingRouter.initialize(admin, depositCallerWrapperAddress, withdrawalCredentials);
 
     // grant roles
 
@@ -81,14 +80,6 @@ describe("StakingRouter.sol:keys-02-type", () => {
     };
 
     await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);
-
-    const newWithdrawalCredentials = hexlify(randomBytes(32));
-
-    // set withdrawal credentials for 0x02 type
-    await expect(stakingRouter.setWithdrawalCredentials02(newWithdrawalCredentials))
-      .to.emit(stakingRouter, "WithdrawalCredentials02Set")
-      .withArgs(newWithdrawalCredentials, admin.address)
-      .and.to.emit(stakingModuleV2, "Mock__WithdrawalCredentialsChanged");
 
     moduleId = await stakingRouter.getStakingModulesCount();
   });
@@ -134,12 +125,11 @@ describe("StakingRouter.sol:keys-02-type", () => {
       // 2 keys + 2 keys + 0 + 1
       const opIds = [1, 2, 3, 4];
       const opAllocs = [ether("4096"), ether("4000"), ether("31"), ether("32")];
-      const totalAlloc = opAllocs.reduce((a, b) => a + b, 0n);
       await stakingModuleV2.mock_getAllocation(opIds, opAllocs);
-      await stakingRouter.testing_setStakingModuleAccounting(moduleId, totalAlloc, 0n);
+      await stakingModuleV2.mock__getStakingModuleSummary(moduleId, 0n, 100n);
 
       const depositableEth = ether("10242");
-      // _getTargetDepositsAllocation mocked currently to return the same amount it received
+      // _getTargetDepositAllocation mocked currently to return the same amount it received
       const [moduleDepositEth, moduleDepositCount] =
         await stakingRouter.getStakingModuleMaxInitialDepositsAmount.staticCall(moduleId, depositableEth);
 
