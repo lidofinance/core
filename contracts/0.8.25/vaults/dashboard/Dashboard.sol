@@ -51,20 +51,22 @@ contract Dashboard is NodeOperatorFee {
         0x7408b7b034fda7051615c19182918ecb91d753231cffd86f81a45d996d63e038;
 
     /**
-     * @notice Flag indicating whether non-DPG deposits are allowed.
-     * When set to True, the node operator will be able to perform unguaranteed deposits and prove unknown
-     * validators to PDG.
-     *
-     * Unguaranteed deposits bypass the PredepositGuarantee rigorous process in favor of simple 1-step deposits.
-     * This works by withdrawing the deposit amount from the StakingVault, performing a direct deposit
-     * to the Beacon chain deposit contract and correcting the settled growth by the deposit amount.
-     *
-     * Further, the validator can be proved to PDG and will be cleared to accept additional top-ups through PDG.
-     *
-     * However, because the validity of such deposits is not guaranteed, this simplified workflow assumes trust
-     * between the vault owner and node operator and, thus, requires the owner's (DEFAULT_ADMIN_ROLE) explicit permission.
+     * @notice The PDG policy modes.
+     * "STRICT": deposits require the full PDG process.
+     * "ALLOW_PROVE": allows the node operator to prove unknown validators to PDG.
+     * "ALLOW_DEPOSIT_AND_PROVE": allows the node operator to perform unguaranteed deposits
+     * (bypassing the predeposit requirement) and proving unknown validators.
      */
-    bool public isPDGBypassed;
+    enum PDGPolicy {
+        STRICT,
+        ALLOW_PROVE,
+        ALLOW_DEPOSIT_AND_PROVE
+    }
+
+    /**
+     * @notice Current active PDG policy set by `DEFAULT_ADMIN_ROLE`.
+     */
+    PDGPolicy public pdgPolicy = PDGPolicy.STRICT;
 
     /**
      * @notice Constructor sets the stETH, and WSTETH token addresses,
@@ -435,14 +437,15 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Allows/forbids the node operator to bypass PDG process for 
-     * unguaranteed deposits and proving unknown validators.
-     * @param _bypass amount of ether to rebalance
+     * @notice Changes the PDG policy
+     * @param _pdgPolicy new PDG policy
      */
-    function bypassPDG(bool _bypass) external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
-        isPDGBypassed = _bypass;
+    function setPDGPolicy(PDGPolicy _pdgPolicy) external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
+        if (_pdgPolicy == pdgPolicy) revert PDGPolicyAlreadyActive();
 
-        emit PDGBypassed(isPDGBypassed);
+        pdgPolicy = _pdgPolicy;
+
+        emit PDGPolicyEnacted(_pdgPolicy);
     }
 
     /**
@@ -451,13 +454,14 @@ contract Dashboard is NodeOperatorFee {
      *          clearing them for future deposits via `PDG.depositToBeaconChain`
      * @param _deposits array of IStakingVault.Deposit structs containing deposit data
      * @return totalAmount total amount of ether deposited to beacon chain
-     * @dev requires the caller to have the `UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE`
+     * @dev requires the PDG policy set to `ALLOW_DEPOSIT_AND_PROVE`
+     * @dev requires the caller to have the `NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE`
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
     function unguaranteedDepositToBeaconChain(
         IStakingVault.Deposit[] calldata _deposits
     ) external returns (uint256 totalAmount) {
-        if (!isPDGBypassed) revert PDGNotBypassed();
+        if (pdgPolicy != PDGPolicy.ALLOW_DEPOSIT_AND_PROVE) revert ForbiddenByPDGPolicy();
 
         IStakingVault stakingVault_ = _stakingVault();
         IDepositContract depositContract = stakingVault_.DEPOSIT_CONTRACT();
@@ -497,10 +501,11 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Proves validators with correct vault WC if they are unknown to PDG
      * @param _witnesses array of IPredepositGuarantee.ValidatorWitness structs containing proof data for validators
-     * @dev requires the caller to have the `PDG_PROVE_VALIDATOR_ROLE`
+     * @dev requires the PDG policy set to `ALLOW_PROVE` or `ALLOW_DEPOSIT_AND_PROVE`
+     * @dev requires the caller to have the `NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE`
      */
     function proveUnknownValidatorsToPDG(IPredepositGuarantee.ValidatorWitness[] calldata _witnesses) external {
-        if (!isPDGBypassed) revert PDGNotBypassed();
+        if (pdgPolicy == PDGPolicy.STRICT) revert ForbiddenByPDGPolicy();
 
         _proveUnknownValidatorsToPDG(_witnesses);
     }
@@ -707,21 +712,21 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @dev Withdraws ether from vault to this contract for unguaranteed deposit to validators
-     * Requires the caller to have the `NODE_OPERATOR_PDG_BYPASS_ROLE`.
+     * Requires the caller to have the `NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE`.
      */
     function _withdrawForUnguaranteedDepositToBeaconChain(
         uint256 _ether
-    ) internal onlyRoleMemberOrAdmin(NODE_OPERATOR_PDG_BYPASS_ROLE) {
+    ) internal onlyRoleMemberOrAdmin(NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE) {
         VAULT_HUB.withdraw(address(_stakingVault()), address(this), _ether);
     }
 
     /**
      * @dev Proves validators unknown to PDG that have correct vault WC
-     * Requires the caller to have the `NODE_OPERATOR_PDG_BYPASS_ROLE`.
+     * Requires the caller to have the `NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE`.
      */
     function _proveUnknownValidatorsToPDG(
         IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
-    ) internal onlyRoleMemberOrAdmin(NODE_OPERATOR_PDG_BYPASS_ROLE) {
+    ) internal onlyRoleMemberOrAdmin(NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE) {
         for (uint256 i = 0; i < _witnesses.length; i++) {
             VAULT_HUB.proveUnknownValidatorToPDG(address(_stakingVault()), _witnesses[i]);
         }
@@ -738,10 +743,9 @@ contract Dashboard is NodeOperatorFee {
     event UnguaranteedDeposits(address indexed stakingVault, uint256 deposits, uint256 totalAmount);
 
     /**
-     * @notice Emitted when the PDG process is allowed/forbidden to bypass for
-     * unguaranteed deposits and proving unknown validators.
+     * @notice Emitted when the PDG policy is updated.
      */
-    event PDGBypassed(bool bypass);
+    event PDGPolicyEnacted(PDGPolicy pdgPolicy);
 
     // ==================== Errors ====================
 
@@ -773,8 +777,13 @@ contract Dashboard is NodeOperatorFee {
     error DashboardNotAllowed();
 
     /**
-     * @notice Error when attempting to perform unguaranteed deposits or prove unknown validator
-     * without the appropriate permission from the DEFAULT_ADMIN_ROLE.
+     * @notice Error when attempting to set the same PDG policy that is already active.
      */
-    error PDGNotBypassed();
+    error PDGPolicyAlreadyActive();
+
+    /**
+     * @notice Error when attempting to perform an operation that is not allowed
+     * by the current active PDG policy.
+     */
+    error ForbiddenByPDGPolicy();
 }

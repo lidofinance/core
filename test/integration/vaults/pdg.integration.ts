@@ -6,7 +6,16 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, DepositContract, PinnedBeaconProxy, StakingVault } from "typechain-types";
 
-import { addressToWC, ether, generatePredeposit, generateValidator, ONE_ETHER, toGwei, toLittleEndian64 } from "lib";
+import {
+  addressToWC,
+  ether,
+  generatePredeposit,
+  generateValidator,
+  ONE_ETHER,
+  PDGPolicy,
+  toGwei,
+  toLittleEndian64,
+} from "lib";
 import {
   createVaultWithDashboard,
   generatePredepositData,
@@ -256,7 +265,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     await dashboard.connect(owner).grantRole(await dashboard.FUND_ROLE(), proxy);
 
     await reportVaultDataWithProof(ctx, stakingVault);
-    await dashboard.connect(owner).bypassPDG(true);
+    await dashboard.connect(owner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
 
     // 4. The stVault's owner deposits 1 ETH from the vault balance directly to the validator, bypassing the PDG.
     //    Method called: Dashboard.unguaranteedDepositToBeaconChain(deposits).

@@ -31,6 +31,7 @@ import {
   ether,
   findEvents,
   impersonate,
+  PDGPolicy,
   randomValidatorPubkey,
 } from "lib";
 
@@ -236,7 +237,7 @@ describe("Dashboard.sol", () => {
     const dashboardCreatedEvent = findEvents(createVaultReceipt, "DashboardCreated")[0];
     const dashboardAddress = dashboardCreatedEvent.args.dashboard;
     dashboard = await ethers.getContractAt("Dashboard", dashboardAddress, vaultOwner);
-    await dashboard.connect(vaultOwner).bypassPDG(true);
+    await dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
 
     originalState = await Snapshot.take();
   });
@@ -1104,21 +1105,32 @@ describe("Dashboard.sol", () => {
       },
     ];
 
-    it("reverts if called by a non-admin", async () => {
-      await dashboard.bypassPDG(false);
+    it("reverts if the PDG policy is set to STRICT", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
+
       await expect(
         dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG(witnesses),
-      ).to.be.revertedWithCustomError(dashboard, "PDGNotBypassed");
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
     });
 
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).proveUnknownValidatorsToPDG(witnesses)).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
+      await expect(dashboard.connect(stranger).proveUnknownValidatorsToPDG(witnesses))
+        .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await dashboard.NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE());
+    });
+
+    it("proves unknown validators to PDG when policy is set to ALLOW_DEPOSIT_AND_PROVE", async () => {
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+
+      await expect(dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG(witnesses)).to.emit(
+        hub,
+        "Mock__ValidatorProvedToPDG",
       );
     });
 
-    it("proves unknown validators to PDG", async () => {
+    it("proves unknown validators to PDG when policy is set to ALLOW_PROVE", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+
       await expect(dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG(witnesses)).to.emit(
         hub,
         "Mock__ValidatorProvedToPDG",
@@ -1349,13 +1361,31 @@ describe("Dashboard.sol", () => {
       },
     ];
 
-    it("reverts if PDG is not bypassed", async () => {
+    it("reverts if PDG policy is set to STRICT", async () => {
       await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
-      await dashboard.connect(vaultOwner).bypassPDG(false);
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
 
       await expect(
         dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits),
-      ).to.be.revertedWithCustomError(dashboard, "PDGNotBypassed");
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
+    });
+
+    it("reverts if PDG policy is set to ALLOW_PROVE", async () => {
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
+      await dashboard.setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+
+      await expect(
+        dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits),
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
+    });
+
+    it("reverts if PDG policy is set to ALLOW_PROVE", async () => {
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
+      await dashboard.setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+
+      await expect(
+        dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits),
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
     });
 
     it("reverts if the total amount exceeds the withdrawable value", async () => {
@@ -1371,7 +1401,7 @@ describe("Dashboard.sol", () => {
 
       await expect(dashboard.connect(stranger).unguaranteedDepositToBeaconChain(deposits))
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await dashboard.NODE_OPERATOR_PDG_BYPASS_ROLE());
+        .withArgs(stranger, await dashboard.NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE());
     });
 
     it("performs unguaranteed deposit", async () => {
@@ -1394,21 +1424,36 @@ describe("Dashboard.sol", () => {
     });
   });
 
-  context("bypassPDG", () => {
+  context("setPDGPolicy", () => {
     it("reverts if the caller is not a member of the node operator manager role", async () => {
-      await expect(dashboard.connect(stranger).bypassPDG(true))
+      await expect(dashboard.connect(stranger).setPDGPolicy(PDGPolicy.ALLOW_PROVE))
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
         .withArgs(stranger, await dashboard.DEFAULT_ADMIN_ROLE());
     });
 
-    it("sets bypass to true", async () => {
-      await expect(dashboard.connect(vaultOwner).bypassPDG(true)).to.emit(dashboard, "PDGBypassed").withArgs(true);
-      expect(await dashboard.isPDGBypassed()).to.be.true;
+    it("sets PDG Policy to ALLOW_PROVE", async () => {
+      await expect(dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_PROVE))
+        .to.emit(dashboard, "PDGPolicyEnacted")
+        .withArgs(PDGPolicy.ALLOW_PROVE);
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_PROVE);
     });
 
-    it("sets bypass to false", async () => {
-      await expect(dashboard.connect(vaultOwner).bypassPDG(false)).to.emit(dashboard, "PDGBypassed").withArgs(false);
-      expect(await dashboard.isPDGBypassed()).to.be.false;
+    it("sets PDG Policy to ALLOW_DEPOSIT_AND_PROVE", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
+
+      await expect(dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE))
+        .to.emit(dashboard, "PDGPolicyEnacted")
+        .withArgs(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+    });
+
+    it("reverts when setting the same policy", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
+
+      await expect(dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.STRICT)).to.be.revertedWithCustomError(
+        dashboard,
+        "PDGPolicyAlreadyActive",
+      );
     });
   });
 
