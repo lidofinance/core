@@ -63,21 +63,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         mapping(address stakingVault => uint256 balance) pendingPredeposits;
     }
 
-    /**
-     * @notice represents validator stages in PDG flow
-     * @param NONE - initial stage
-     * @param PREDEPOSITED - PREDEPOSIT_AMOUNT is deposited to this validator by the vault
-     * @param PROVEN - validator is proven to be valid and can be used to deposit to beacon chain
-     * @param ACTIVATED - validator is proven and the ACTIVATION_DEPOSIT_AMOUNT is deposited to this validator
-     * @param COMPENSATED - disproven validator has its PREDEPOSIT_AMOUNT ether compensated to staking vault owner and validator cannot be used in PDG anymore
-     */
-    enum ValidatorStage {
-        NONE,
-        PREDEPOSITED,
-        PROVEN,
-        ACTIVATED,
-        COMPENSATED
-    }
+
 
     /**
      * @notice represents NO balance in PDG
@@ -88,18 +74,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     struct NodeOperatorBalance {
         uint128 total;
         uint128 locked;
-    }
-
-    /**
-     * @notice represents status of the validator in PDG
-     * @param stage represents validator stage in PDG flow
-     * @param stakingVault pins validator to specific StakingVault
-     * @param nodeOperator pins validator to specific NO
-     */
-    struct ValidatorStatus {
-        ValidatorStage stage;
-        IStakingVault stakingVault;
-        address nodeOperator;
     }
 
     /**
@@ -220,7 +194,9 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _validatorPubkey to check status for
      * @return struct of ValidatorStatus
      */
-    function validatorStatus(bytes calldata _validatorPubkey) external view returns (ValidatorStatus memory) {
+    function validatorStatus(
+        bytes calldata _validatorPubkey
+    ) external view override returns (ValidatorStatus memory) {
         return _storage().validatorStatus[_validatorPubkey];
     }
 

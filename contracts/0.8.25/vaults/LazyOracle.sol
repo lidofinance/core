@@ -107,7 +107,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     struct VaultInfo {
         address vault;
         uint256 balance; // includes availableBalance and stagedBalance
-        uint256 pendingPredeposits;
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
@@ -233,7 +232,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             batch[i] = VaultInfo(
                 vaultAddress,
                 vault.availableBalance() + vault.stagedBalance(),
-                pendingPredeposits(vault),
                 record.inOutDelta.currentValue(),
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
@@ -249,6 +247,16 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             );
         }
         return batch;
+    }
+
+    function batchValidatorStages(
+        bytes[] calldata _pubkeys
+    ) external view returns (IPredepositGuarantee.ValidatorStage[] memory batch) {
+        batch = new IPredepositGuarantee.ValidatorStage[](_pubkeys.length);
+
+        for (uint256 i = 0; i < _pubkeys.length; i++) {
+            batch[i] = predepositGuarantee().validatorStatus(_pubkeys[i]).stage;
+        }
     }
 
     /// @notice update the sanity parameters
@@ -564,8 +572,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         }
     }
 
-    function pendingPredeposits(IStakingVault _vault) internal view returns (uint256) {
-        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee()).pendingPredeposits(_vault);
+    function predepositGuarantee() internal view returns (IPredepositGuarantee) {
+        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee());
     }
 
     function _vaultHub() internal view returns (VaultHub) {
