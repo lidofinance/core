@@ -87,7 +87,13 @@ contract Dashboard is NodeOperatorFee {
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry
     ) external {
-        super._initialize(_defaultAdmin, _nodeOperatorManager, _nodeOperatorFeeRecipient, _nodeOperatorFeeBP, _confirmExpiry);
+        super._initialize(
+            _defaultAdmin,
+            _nodeOperatorManager,
+            _nodeOperatorFeeRecipient,
+            _nodeOperatorFeeBP,
+            _confirmExpiry
+        );
 
         // reduces gas cost for `mintWsteth`
         // invariant: dashboard does not hold stETH on its balance
@@ -197,7 +203,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function maxLockableValue() external view returns (uint256) {
         uint256 maxLockableValue_ = VAULT_HUB.maxLockableValue(address(_stakingVault()));
-        uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
+        uint256 nodeOperatorFee = accruedFee();
 
         return maxLockableValue_ > nodeOperatorFee ? maxLockableValue_ - nodeOperatorFee : 0;
     }
@@ -206,7 +212,7 @@ contract Dashboard is NodeOperatorFee {
      * @notice Returns the overall capacity for stETH shares that can be minted by the vault
      */
     function totalMintingCapacityShares() external view returns (uint256) {
-        return _totalMintingCapacityShares(-int256(nodeOperatorDisbursableFee()));
+        return _totalMintingCapacityShares(-int256(accruedFee()));
     }
 
     /**
@@ -216,7 +222,7 @@ contract Dashboard is NodeOperatorFee {
      * @return the number of shares that can be minted using additional ether
      */
     function remainingMintingCapacityShares(uint256 _etherToFund) public view returns (uint256) {
-        int256 deltaValue = int256(_etherToFund) - int256(nodeOperatorDisbursableFee());
+        int256 deltaValue = int256(_etherToFund) - int256(accruedFee());
         uint256 vaultTotalMintingCapacityShares = _totalMintingCapacityShares(deltaValue);
         uint256 vaultLiabilityShares = liabilityShares();
 
@@ -231,7 +237,7 @@ contract Dashboard is NodeOperatorFee {
      */
     function withdrawableValue() public view returns (uint256) {
         uint256 withdrawable = VAULT_HUB.withdrawableValue(address(_stakingVault()));
-        uint256 nodeOperatorFee = nodeOperatorDisbursableFee();
+        uint256 nodeOperatorFee = accruedFee();
 
         return withdrawable > nodeOperatorFee ? withdrawable - nodeOperatorFee : 0;
     }
@@ -260,8 +266,7 @@ contract Dashboard is NodeOperatorFee {
      *         or abandonDashboard() to transfer the ownership to a new owner.
      */
     function voluntaryDisconnect() external {
-        disburseNodeOperatorFee();
-
+        disburseFee();
         _voluntaryDisconnect();
     }
 
@@ -292,9 +297,14 @@ contract Dashboard is NodeOperatorFee {
      * @notice Connects to VaultHub, transferring ownership to VaultHub.
      */
     function connectToVaultHub() public payable {
+        if (!isApprovedToConnect) revert ForbiddenToConnectByNodeOperator();
+
         if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
+
+        // node operator approval is one time only and is reset after connect
+        _setApprovedToConnect(false);
     }
 
     /**
@@ -437,7 +447,7 @@ contract Dashboard is NodeOperatorFee {
         // Instead of relying on auto-reset at the end of the transaction,
         // re-enable fund-on-receive manually to restore the default receive() behavior in the same transaction
         _enableFundOnReceive();
-        _setRewardsAdjustment(rewardsAdjustment.amount + totalAmount);
+        _addFeeExemption(totalAmount);
 
         bytes memory withdrawalCredentials = bytes.concat(stakingVault_.withdrawalCredentials());
 
@@ -673,7 +683,6 @@ contract Dashboard is NodeOperatorFee {
      * @param totalAmount the total amount of ether deposited to beacon chain
      */
     event UnguaranteedDeposits(address indexed stakingVault, uint256 deposits, uint256 totalAmount);
-
 
     // ==================== Errors ====================
 

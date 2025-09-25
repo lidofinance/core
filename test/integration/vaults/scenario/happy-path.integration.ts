@@ -343,18 +343,18 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(vaultReportedEvent.args?.reportLiabilityShares).to.equal(stakingVaultMaxMintingShares);
     // TODO: add assertions for fees
 
-    expect(await dashboard.nodeOperatorDisbursableFee()).to.be.gt(0n);
+    expect(await dashboard.accruedFee()).to.be.gt(0n);
   });
 
   it("Should allow Operator to claim performance fees", async () => {
-    const performanceFee = await dashboard.nodeOperatorDisbursableFee();
+    const performanceFee = await dashboard.accruedFee();
     log.debug("Staking Vault stats", {
       "Staking Vault performance fee": ethers.formatEther(performanceFee),
     });
 
     const operatorBalanceBefore = await ethers.provider.getBalance(nodeOperator);
 
-    const claimPerformanceFeesTx = await dashboard.connect(nodeOperator).disburseNodeOperatorFee();
+    const claimPerformanceFeesTx = await dashboard.connect(nodeOperator).disburseFee();
     const claimPerformanceFeesTxReceipt = (await claimPerformanceFeesTx.wait()) as ContractTransactionReceipt;
 
     const operatorBalanceAfter = await ethers.provider.getBalance(nodeOperator);

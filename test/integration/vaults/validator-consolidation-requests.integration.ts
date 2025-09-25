@@ -49,10 +49,10 @@ describe("Integration: ValidatorConsolidationRequests", () => {
     const dashboardAddress = await dashboard.getAddress();
     await dashboard
       .connect(nodeOperator)
-      .grantRole(await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), validatorConsolidationRequests);
+      .grantRole(await dashboard.NODE_OPERATOR_FEE_EXEMPT_ROLE(), validatorConsolidationRequests);
 
-    const { adjustmentIncreaseEncodedCall, consolidationRequestEncodedCalls } =
-      await validatorConsolidationRequests.getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+    const { feeExemptionEncodedCall, consolidationRequestEncodedCalls } =
+      await validatorConsolidationRequests.getConsolidationRequestsAndFeeExemptionEncodedCalls(
         sourcePubkeys,
         targetPubkeys,
         dashboardAddress,
@@ -73,9 +73,9 @@ describe("Integration: ValidatorConsolidationRequests", () => {
           k++;
         }
       }
-      const iface = new ethers.Interface(["function increaseRewardsAdjustment(uint256)"]);
-      const calldata = iface.encodeFunctionData("increaseRewardsAdjustment", [adjustmentIncrease]);
-      expect(adjustmentIncreaseEncodedCall).to.equal(calldata);
+      const iface = new ethers.Interface(["function addFeeExemption(uint256)"]);
+      const calldata = iface.encodeFunctionData("addFeeExemption", [adjustmentIncrease]);
+      expect(feeExemptionEncodedCall).to.equal(calldata);
     }
   });
 });

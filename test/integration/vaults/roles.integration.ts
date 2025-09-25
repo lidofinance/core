@@ -79,7 +79,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       describe("Dashboard methods", () => {
         it("setNodeOperatorFeeRecipient", async () => {
           await testGrantingRole(
-            "setNodeOperatorFeeRecipient",
+            "setFeeRecipient",
             await dashboard.NODE_OPERATOR_MANAGER_ROLE(),
             [stranger],
             nodeOperatorManager,
@@ -103,7 +103,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
       describe("Dashboard methods", () => {
         it("setNodeOperatorFeeRecipient", async () => {
           await testGrantingRole(
-            "setNodeOperatorFeeRecipient",
+            "setFeeRecipient",
             await dashboard.NODE_OPERATOR_MANAGER_ROLE(),
             [stranger],
             nodeOperatorManager,
@@ -120,7 +120,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     });
 
     it("Allows anyone to read public metrics of the vault", async () => {
-      expect(await dashboard.connect(stranger).nodeOperatorDisbursableFee()).to.equal(0);
+      expect(await dashboard.connect(stranger).accruedFee()).to.equal(0);
       expect(await dashboard.connect(stranger).withdrawableValue()).to.equal(ether("1"));
     });
 
@@ -228,17 +228,17 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
         });
 
         // requires prepared state for this test to pass, skipping for now
-        it("increaseRewardsAdjustment", async () => {
+        it("addFeeExemption", async () => {
           await testMethod(
-            "increaseRewardsAdjustment",
+            "addFeeExemption",
             {
-              successUsers: [roles.nodeOperatorRewardAdjuster, nodeOperatorManager],
+              successUsers: [roles.nodeOperatorFeeExemptor, nodeOperatorManager],
               failingUsers: Object.values(roles).filter(
-                (r) => r !== roles.nodeOperatorRewardAdjuster && r !== nodeOperatorManager,
+                (r) => r !== roles.nodeOperatorFeeExemptor && r !== nodeOperatorManager,
               ),
             },
             [100n],
-            await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+            await dashboard.NODE_OPERATOR_FEE_EXEMPT_ROLE(),
           );
         });
 
@@ -359,17 +359,11 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
 
     describe("Verify ACL for methods that require confirmations", () => {
       it("setNodeOperatorFeeBP", async () => {
-        await expect(dashboard.connect(owner).setNodeOperatorFeeRate(1n)).not.to.emit(
-          dashboard,
-          "NodeOperatorFeeRateSet",
-        );
-        await expect(dashboard.connect(nodeOperatorManager).setNodeOperatorFeeRate(1n)).to.emit(
-          dashboard,
-          "NodeOperatorFeeRateSet",
-        );
+        await expect(dashboard.connect(owner).setFeeRate(1n)).not.to.emit(dashboard, "FeeRateSet");
+        await expect(dashboard.connect(nodeOperatorManager).setFeeRate(1n)).to.emit(dashboard, "FeeRateSet");
 
         await testMethodConfirmedRoles(
-          "setNodeOperatorFeeRate",
+          "setFeeRate",
           {
             successUsers: [],
             failingUsers: Object.values(roles).filter((r) => r !== owner && r !== nodeOperatorManager),
@@ -397,7 +391,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     });
 
     it("Allows anyone to read public metrics of the vault", async () => {
-      expect(await dashboard.connect(stranger).nodeOperatorDisbursableFee()).to.equal(0);
+      expect(await dashboard.connect(stranger).accruedFee()).to.equal(0);
       expect(await dashboard.connect(stranger).withdrawableValue()).to.equal(ether("1"));
     });
 

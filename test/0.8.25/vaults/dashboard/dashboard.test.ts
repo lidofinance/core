@@ -317,6 +317,12 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.STETH()).to.equal(steth);
       expect(await dashboard.WSTETH()).to.equal(wsteth);
       expect(await dashboard.LIDO_LOCATOR()).to.equal(lidoLocator);
+      expect(await dashboard.settledGrowth()).to.equal(0n);
+      expect(await dashboard.latestCorrectionTimestamp()).to.equal(0n);
+      expect(await dashboard.isApprovedToConnect()).to.be.false;
+      expect(await dashboard.feeRate()).to.equal(nodeOperatorFeeBP);
+      expect(await dashboard.feeRecipient()).to.equal(nodeOperator);
+      expect(await dashboard.getConfirmExpiry()).to.equal(confirmExpiry);
       // dashboard roles
       expect(await dashboard.hasRole(await dashboard.DEFAULT_ADMIN_ROLE(), vaultOwner)).to.be.true;
       expect(await dashboard.getRoleMemberCount(await dashboard.DEFAULT_ADMIN_ROLE())).to.equal(1);
@@ -619,7 +625,7 @@ describe("Dashboard.sol", () => {
 
     beforeEach(async () => {
       const defaultAdminRoles = await Promise.all([
-        { role: await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), account: nodeOperator.address },
+        { role: await dashboard.NODE_OPERATOR_FEE_EXEMPT_ROLE(), account: nodeOperator.address },
       ]);
 
       // Create a new vault without hub connection
@@ -648,13 +654,23 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await expect(newDashboard.connect(stranger).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
         newDashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
+    it("reverts if connect is not approved by node operator", async () => {
+      expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+        newDashboard,
+        "ForbiddenToConnectByNodeOperator",
+      );
+    });
+
     it("reverts if change tier is not confirmed by node operator", async () => {
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
         newDashboard,
         "TierChangeNotConfirmed",
@@ -662,6 +678,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("works", async () => {
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
       await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.emit(hub, "Mock__VaultConnected");
     });
@@ -669,6 +686,7 @@ describe("Dashboard.sol", () => {
     it("works with connection deposit", async () => {
       const connectDeposit = await hub.CONNECT_DEPOSIT();
 
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
       await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, { value: connectDeposit }))
         .to.emit(hub, "Mock__VaultConnected")
@@ -1426,9 +1444,147 @@ describe("Dashboard.sol", () => {
       expect(await vault.owner()).to.equal(vaultOwner);
 
       // reconnect
+      await dashboard.connect(nodeOperator).setApprovedToConnect(true);
       await vault.connect(vaultOwner).transferOwnership(dashboard);
       await dashboard.reconnectToVaultHub();
       expect(await vault.owner()).to.equal(hub);
+    });
+  });
+
+  context("Approval to Connect", () => {
+    let newVault: StakingVault;
+    let newDashboard: Dashboard;
+
+    beforeEach(async () => {
+      // Create a new vault without hub connection for each test
+      const createVaultTx = await factory.createVaultWithDashboardWithoutConnectingToVaultHub(
+        vaultOwner.address,
+        nodeOperator.address,
+        nodeOperator.address,
+        nodeOperatorFeeBP,
+        confirmExpiry,
+        [],
+      );
+      const createVaultReceipt = await createVaultTx.wait();
+      if (!createVaultReceipt) throw new Error("Vault creation receipt not found");
+
+      const vaultCreatedEvents = findEvents(createVaultReceipt, "VaultCreated");
+      expect(vaultCreatedEvents.length).to.equal(1);
+
+      const newVaultAddress = vaultCreatedEvents[0].args.vault;
+      newVault = await ethers.getContractAt("StakingVault", newVaultAddress, vaultOwner);
+
+      const dashboardCreatedEvents = findEvents(createVaultReceipt, "DashboardCreated");
+      expect(dashboardCreatedEvents.length).to.equal(1);
+
+      const newDashboardAddress = dashboardCreatedEvents[0].args.dashboard;
+      newDashboard = await ethers.getContractAt("Dashboard", newDashboardAddress, vaultOwner);
+    });
+
+    context("Initial state", () => {
+      it("should have isApprovedToConnect set to false initially", async () => {
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      });
+    });
+
+    context("approveToConnect", () => {
+      it("allows node operator to approve connection", async () => {
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(true))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(true);
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+      });
+
+      it("reverts if called by a stranger", async () => {
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+
+        await expect(newDashboard.connect(stranger).setApprovedToConnect(true))
+          .to.be.revertedWithCustomError(newDashboard, "AccessControlUnauthorizedAccount")
+          .withArgs(stranger, await newDashboard.NODE_OPERATOR_MANAGER_ROLE());
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      });
+
+      it("should allow multiple calls to approveToConnect", async () => {
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+
+        // Should not revert when called again
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(true))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(true);
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+      });
+    });
+
+    context("forbidToConnect", () => {
+      beforeEach(async () => {
+        // First approve to connect
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+      });
+
+      it("allows node operator to forbid connection", async () => {
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(false))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(false);
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      });
+
+      it("reverts when called by a stranger", async () => {
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+
+        await expect(newDashboard.connect(stranger).setApprovedToConnect(false))
+          .to.be.revertedWithCustomError(newDashboard, "AccessControlUnauthorizedAccount")
+          .withArgs(stranger, await newDashboard.NODE_OPERATOR_MANAGER_ROLE());
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+      });
+
+      it("allows multiple calls to forbidToConnect", async () => {
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(false);
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+
+        // Should not revert when called again
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(false))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(false);
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      });
+    });
+
+    context("connectToVaultHub approval requirements", () => {
+      it("reverts when not approved to connect", async () => {
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+
+        await expect(newDashboard.connectToVaultHub()).to.be.revertedWithCustomError(
+          newDashboard,
+          "ForbiddenToConnectByNodeOperator",
+        );
+      });
+
+      it("succeeds when approved to connect", async () => {
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+
+        await expect(newDashboard.connectToVaultHub()).to.emit(hub, "Mock__VaultConnected").withArgs(newVault);
+      });
+
+      it("resets approval after successful connection", async () => {
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+
+        await newDashboard.connectToVaultHub();
+
+        // Approval should be reset to false after connection
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      });
     });
   });
 });
