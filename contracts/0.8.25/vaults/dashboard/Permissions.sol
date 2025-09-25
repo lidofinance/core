@@ -9,7 +9,6 @@ import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConf
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
-import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {OperatorGrid} from "../OperatorGrid.sol";
 import {VaultHub} from "../VaultHub.sol";
 
