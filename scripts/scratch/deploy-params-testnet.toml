@@ -169,6 +169,11 @@ maxExitRequestsLimit = 13000          # Maximum number of exit requests that can
 exitsPerFrame = 1                     # Number of exits processed per frame
 frameDurationInSec = 48               # Duration of each processing frame in seconds
 
+[consolidationGateway]
+maxConsolidationRequestsLimit = 8000  # Maximum number of consolidations requests that can be processed
+consolidationsPerFrame = 1            # Number of consolidations processed per frame
+frameDurationInSec = 48               # Duration of each processing frame in seconds
+
 # Predeposit guarantee configuration for validator deposit guarantees
 [predepositGuarantee]
 gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification

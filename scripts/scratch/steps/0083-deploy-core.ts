@@ -214,7 +214,7 @@ export async function main() {
     "Accounting",
     proxyContractsOwner,
     deployer,
-    [locator.address, lidoAddress, chainSpec.genesisTime, chainSpec.secondsPerSlot],
+    [locator.address, lidoAddress, chainSpec.secondsPerSlot, chainSpec.genesisTime],
     null,
     true,
   );

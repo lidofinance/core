@@ -109,10 +109,6 @@ contract Accounting {
     /// @notice deposit size in wei (for pre-maxEB accounting)
     uint256 private constant DEPOSIT_SIZE = 32 ether;
 
-    /// @notice storage position for protocol deposit tracking
-    bytes32 internal constant DEPOSITS_TRACKER_POSITION =
-        keccak256("lido.Accounting.depositsTracker");
-
     ILidoLocator public immutable LIDO_LOCATOR;
     ILido public immutable LIDO;
 
@@ -128,8 +124,8 @@ contract Accounting {
     constructor(
         ILidoLocator _lidoLocator,
         ILido _lido,
-        uint64 _genesisTime,
-        uint64 _secondsPerSlot
+        uint64 _secondsPerSlot,
+        uint64 _genesisTime
     ) {
         LIDO_LOCATOR = _lidoLocator;
         LIDO = _lido;
