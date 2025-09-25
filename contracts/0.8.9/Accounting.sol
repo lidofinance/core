@@ -93,6 +93,8 @@ contract Accounting {
         uint256 postTotalShares;
         /// @notice amount of ether under the protocol after the report is applied
         uint256 postTotalPooledEther;
+        /// @notice amount of ether deposited to the protocol since the last report and up to current report slot
+        uint256 depositedSinceLastReport;
     }
 
     /// @notice precalculated numbers of shares that should be minted as fee to NO
@@ -189,11 +191,11 @@ contract Accounting {
         );
 
         // Calculate deposits made since last report
-        uint256 depositedSinceLastReport = _contracts.stakingRouter.getDepositAmountFromLastSlot(
+        update.depositedSinceLastReport = _contracts.stakingRouter.getDepositAmountFromLastSlot(
             (_report.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT
         );
         // Principal CL balance is sum of previous balances and new deposits
-        update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance + depositedSinceLastReport;
+        update.principalClBalance = _pre.clActiveBalance + _pre.clPendingBalance + update.depositedSinceLastReport;
 
         // Limit the rebase to avoid oracle frontrunning
         // by leaving some ether to sit in EL rewards vault or withdrawals vault
