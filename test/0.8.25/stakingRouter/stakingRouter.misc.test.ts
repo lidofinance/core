@@ -78,7 +78,6 @@ describe("StakingRouter.sol:misc", () => {
       expect(await stakingRouter.getContractVersion()).to.equal(4);
       expect(await stakingRouter.getLido()).to.equal(lido);
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(withdrawalCredentials);
-      expect(await stakingRouter.getWithdrawalCredentials02()).to.equal(withdrawalCredentials02);
 
       // fails with InvalidInitialization error when called on deployed from scratch SRv3
       await expect(stakingRouter.migrateUpgrade_v4()).to.be.revertedWithCustomError(impl, "InvalidInitialization");
@@ -100,7 +99,6 @@ describe("StakingRouter.sol:misc", () => {
       await expect(stakingRouter.migrateUpgrade_v4()).to.emit(stakingRouter, "Initialized").withArgs(4);
       expect(await stakingRouter.getContractVersion()).to.be.equal(4);
       expect(await stakingRouter.getWithdrawalCredentials()).to.equal(await stakingRouter.WC_01_MOCK());
-      expect(await stakingRouter.getWithdrawalCredentials02()).to.equal(await stakingRouter.WC_02_MOCK());
       expect(await stakingRouter.getLido()).to.equal(await stakingRouter.getLido());
       expect(await stakingRouter.testing_getLastModuleId()).to.equal(await stakingRouter.LAST_STAKING_MODULE_ID_MOCK());
     });
