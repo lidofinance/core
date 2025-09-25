@@ -353,9 +353,8 @@ contract VaultHub is PausableUntilWithRoles {
         if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
         if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(_predepositGuarantee())) revert PDGNotDepositor(_vault);
-        // for each pending predeposit, vault should have an activation amount staged in StakingVault
-        // 1 predeposit is 1 ether and activation amount is 31 ether
-        if (vault_.stagedBalance() != 31 * _predepositGuarantee().pendingPredeposits(vault_)) {
+        // we need vault to match staged balance with pendingActivations
+        if (vault_.stagedBalance() != _predepositGuarantee().pendingActivations(vault_) * 31 ether) {
             revert InsufficientStagedBalance(_vault);
         }
 

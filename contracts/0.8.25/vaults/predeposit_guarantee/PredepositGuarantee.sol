@@ -60,10 +60,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         mapping(address guarantor => uint256 claimableEther) guarantorClaimableEther;
         mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) validatorStatus;
         mapping(address nodeOperator => address depositor) nodeOperatorDepositor;
-        mapping(address stakingVault => uint256 balance) pendingPredeposits;
+        mapping(address stakingVault => uint256 number) pendingActivations;
     }
-
-
 
     /**
      * @notice represents NO balance in PDG
@@ -205,8 +203,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _vault staking vault address
      * @return amount of ether in wei
      */
-    function pendingPredeposits(IStakingVault _vault) external view returns (uint256) {
-        return _storage().pendingPredeposits[address(_vault)];
+    function pendingActivations(IStakingVault _vault) external view returns (uint256) {
+        return _storage().pendingActivations[address(_vault)];
     }
 
     /**
@@ -391,7 +389,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         balance.locked += uint128(totalDepositAmount);
         emit BalanceLocked(nodeOperator, balance.total, balance.locked);
 
-        $.pendingPredeposits[address(_stakingVault)] += _deposits.length * PREDEPOSIT_AMOUNT;
+        $.pendingActivations[address(_stakingVault)] += _deposits.length;
 
         mapping(bytes validatorPubkey => ValidatorStatus) storage validatorByPubkey = _storage().validatorStatus;
 
@@ -545,7 +543,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[nodeOperator];
         balance.total -= PREDEPOSIT_AMOUNT;
         balance.locked -= PREDEPOSIT_AMOUNT;
-        $.pendingPredeposits[address(stakingVault)] -= PREDEPOSIT_AMOUNT;
+        $.pendingActivations[address(stakingVault)] -= 1;
 
         // unlocking the staged amount if possible as we are not activating this validator
         if (stakingVault.depositor() == address(this) && stakingVault.stagedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
@@ -654,7 +652,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         NodeOperatorBalance storage balance = _storage().nodeOperatorBalance[_nodeOperator];
         balance.locked -= PREDEPOSIT_AMOUNT;
-        _storage().pendingPredeposits[address(_vault)] -= PREDEPOSIT_AMOUNT;
 
         emit BalanceUnlocked(_nodeOperator, balance.total, balance.locked);
         emit ValidatorProven(_witness.pubkey, _nodeOperator, address(_vault), _withdrawalCredentials);
@@ -667,6 +664,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         bytes32 _withdrawalCredentials,
         address _nodeOperator
     ) internal {
+        _storage().pendingActivations[address(_stakingVault)] -= 1;
         uint256 depositAmount = ACTIVATION_DEPOSIT_AMOUNT + _additionalDeposit;
 
         IStakingVault.Deposit memory deposit = IStakingVault.Deposit({
