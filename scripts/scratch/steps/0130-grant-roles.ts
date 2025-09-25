@@ -29,6 +29,7 @@ export async function main() {
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
   const triggerableWithdrawalsGatewayAddress = state[Sk.triggerableWithdrawalsGateway].address;
+  const validatorExitDelayVerifierAddress = state[Sk.validatorExitDelayVerifier].address;
 
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
@@ -54,6 +55,13 @@ export async function main() {
     stakingRouter,
     "grantRole",
     [await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(), triggerableWithdrawalsGatewayAddress],
+    { from: deployer },
+  );
+
+  await makeTx(
+    stakingRouter,
+    "grantRole",
+    [await stakingRouter.REPORT_VALIDATOR_EXITING_STATUS_ROLE(), validatorExitDelayVerifierAddress],
     { from: deployer },
   );
 
