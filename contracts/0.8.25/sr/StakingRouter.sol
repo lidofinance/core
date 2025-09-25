@@ -92,7 +92,6 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     uint64 internal immutable GENESIS_TIME;
     IDepositContract public immutable DEPOSIT_CONTRACT;
 
-    error WrongWithdrawalCredentialsType();
     error ZeroAddressLido();
     error ZeroAddressAdmin();
     error StakingModuleNotActive();
@@ -734,37 +733,38 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
     {
         (, ModuleStateConfig storage stateConfig) = _validateAndGetModuleState(_stakingModuleId);
 
-        // TODO: is it correct?
-        if (stateConfig.status != StakingModuleStatus.Active) return (0, 0);
+        // get max eth amount that can be deposited into the module, capped by its capacity (depositable validators count)
+        // If module is not active, then it capacity is 0, so stakingModuleDepositableEthAmount will be 0.
+        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _depositableEth);
+
+        if (stakingModuleDepositableEthAmount == 0) return (0, 0);
 
         if (stateConfig.moduleType == StakingModuleType.New) {
-            (, uint256 stakingModuleDepositableEthAmount) =
-                _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
-
-            (uint256[] memory operators, uint256[] memory allocations) =
+            // get operators and their available operatorAllocations for deposits. In general case, not all depositable validators
+            // will be used for deposits, due to Module can apply its own rules to limit deposits per operator
+            (uint256[] memory operators, uint256[] memory operatorAllocations) =
                 IStakingModuleV2(stateConfig.moduleAddress).getAllocation(stakingModuleDepositableEthAmount);
 
             uint256[] memory counts;
-            (depositsCount, counts) = _getNewDepositsCount02(stakingModuleDepositableEthAmount, allocations);
+            (depositsCount, counts) = _getNewDepositsCount02(stakingModuleDepositableEthAmount, operatorAllocations);
 
             // this will be read and clean in deposit method
             DepositsTempStorage.storeOperators(operators);
             DepositsTempStorage.storeCounts(counts);
 
-            depositsAmount = depositsCount * INITIAL_DEPOSIT_SIZE;
+            depositsAmount = _getInitialDepositAmountByCount(depositsCount);
         } else if (stateConfig.moduleType == StakingModuleType.Legacy) {
-            depositsCount = getStakingModuleMaxDepositsCount(_stakingModuleId, _depositableEth);
-
-            depositsAmount = depositsCount * INITIAL_DEPOSIT_SIZE;
+            depositsCount = _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount);
+            depositsAmount = _getInitialDepositAmountByCount(depositsCount);
         } else {
-            revert WrongWithdrawalCredentialsType();
+            revert SRUtils.InvalidStakingModuleType();
         }
     }
 
     /// @notice DEPRECATED: use getStakingModuleMaxInitialDepositsAmount
     /// This method only for the legacy modules
     function getStakingModuleMaxDepositsCount(uint256 _stakingModuleId, uint256 _depositableEth)
-        public
+        external
         view
         returns (uint256)
     {
@@ -774,40 +774,38 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         if (stateConfig.moduleType != StakingModuleType.Legacy) {
             revert LegacyStakingModuleRequired();
         }
-        // todo remove, as stakingModuleDepositableEthAmount should be 0 if module is not active,
-        // and therefore capacity will be 0
-        if (stateConfig.status != StakingModuleStatus.Active) return 0;
 
-        (, uint256 stakingModuleDepositableEthAmount) = _getTargetDepositsAllocation(_stakingModuleId, _depositableEth);
-
-        return stakingModuleDepositableEthAmount / SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_01;
+        // If module is not active, then it capacity is 0, so stakingModuleDepositableEthAmount will be 0.
+        // Module capacity is calculated based on the depositableValidatorsCount (from getStakingModuleSummary), so
+        // stakingModuleDepositableEthAmount is already capped by the module capacity and represents the max ETH amount possible to deposit.
+        uint256 stakingModuleDepositableEthAmount = _getTargetDepositAllocation(_stakingModuleId, _depositableEth);
+        return _getInitialDepositCountByAmount(stakingModuleDepositableEthAmount);
     }
 
-    function _getNewDepositsCount02(uint256 stakingModuleTargetEthAmount, uint256[] memory allocations)
+    function _getNewDepositsCount02(uint256 moduleMaxAllocation, uint256[] memory operatorAllocations)
         internal
         pure
         returns (uint256 totalCount, uint256[] memory counts)
     {
-        uint256 len = allocations.length;
+        uint256 len = operatorAllocations.length;
         counts = new uint256[](len);
-        uint256 initialDeposit = INITIAL_DEPOSIT_SIZE;
         unchecked {
             for (uint256 i = 0; i < len; ++i) {
-                uint256 allocation = allocations[i];
+                uint256 allocation = operatorAllocations[i];
 
-                // sum of all `allocations` items should be <= stakingModuleTargetEthAmount
-                if (allocation > stakingModuleTargetEthAmount) {
+                // sum of all `operatorAllocations` items should be <= moduleMaxAllocation
+                if (allocation > moduleMaxAllocation) {
                     revert AllocationExceedsTarget();
                 }
 
-                stakingModuleTargetEthAmount -= allocation;
+                moduleMaxAllocation -= allocation;
 
-                if (allocation >= initialDeposit) {
-                    // if allocation is 4000 - 2
-                    // if allocation 32 - 1
-                    // if less than 32 - 0
-                    // is it correct situation if allocation 32 for new type of keys?
-                    uint256 depositsCount = 1 + (allocation - initialDeposit) / SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
+                if (allocation >= INITIAL_DEPOSIT_SIZE) {
+                    // if allocation is 4000 - 2 (= 2048 (enough for 1st key: initial deposit 32 and rest deposit 2016) +  1952 (enough for 2nd key: initial deposit 32 and rest deposit 1920) )
+                    // if allocation 32 - 1 (enough for initial deposit)
+                    // if less than 32 - 0 (not enough for initial deposit)
+                    // if allocation 2050 - 1 (= 2048 (enough for 1st key: initial deposit 32 and rest deposit 2016) + 2 (not enough even for initial deposit) )
+                    uint256 depositsCount = 1 + (allocation - INITIAL_DEPOSIT_SIZE) / SRUtils.MAX_EFFECTIVE_BALANCE_WC_TYPE_02;
                     counts[i] = depositsCount;
                     totalCount += depositsCount;
                 }
@@ -967,7 +965,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         view
         returns (uint256 allocated, uint256[] memory allocations)
     {
-        return _getTargetDepositsAllocations(SRStorage.getModuleIds(), _depositAmount);
+        return _getTargetDepositAllocations(SRStorage.getModuleIds(), _depositAmount);
     }
 
     /// @notice Invokes a deposit call to the official Deposit contract.
@@ -996,7 +994,7 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
 
         uint256 etherBalanceBeforeDeposits = address(this).balance;
 
-        uint256 depositsCount = depositsValue / INITIAL_DEPOSIT_SIZE;
+        uint256 depositsCount = _getInitialDepositCountByAmount(depositsValue);
 
         (bytes memory publicKeysBatch, bytes memory signaturesBatch) =
             _getOperatorAvailableKeys(stateConfig.moduleType, stakingModuleAddress, depositsCount, _depositCalldata);
@@ -1078,21 +1076,26 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         emit StakingRouterETHDeposited(stakingModuleId, depositsValue);
     }
 
-    /// @notice Allocation for module based on target share
-    /// @param moduleId - Id of staking module
-    /// @param amountToAllocate - Eth amount that can be deposited in module
-    function _getTargetDepositsAllocation(uint256 moduleId, uint256 amountToAllocate)
+    /// @notice Allocation for single module based on target share
+    /// @param moduleId Id of staking module
+    /// @param amountToAllocate Eth amount that can be deposited in module
+    /// @return allocation Eth amount that can be deposited in module with id `moduleId` (can be less than `amountToAllocate`)
+    function _getTargetDepositAllocation(uint256 moduleId, uint256 amountToAllocate)
         internal
         view
-        returns (uint256 allocated, uint256 allocation)
+        returns (uint256 allocation)
     {
-        return SRLib._getDepositAllocation(moduleId, amountToAllocate);
+        uint256[] memory moduleIds = new uint256[](1);
+        moduleIds[0] = moduleId;
+        // here we can ignore second return value, as allocate to single module and
+        // `allocated` amount always equal to 1st element of `operatorAllocations` array
+        (allocation,) = _getTargetDepositAllocations(moduleIds, amountToAllocate);
     }
 
-    function _getTargetDepositsAllocations(uint256[] memory moduleIds, uint256 amountToAllocate)
+    function _getTargetDepositAllocations(uint256[] memory moduleIds, uint256 amountToAllocate)
         internal
         view
-        returns (uint256 allocated, uint256[] memory allocations)
+        returns (uint256 allocated, uint256[] memory operatorAllocations)
     {
         return SRLib._getDepositAllocations(moduleIds, amountToAllocate);
     }
@@ -1236,5 +1239,13 @@ contract StakingRouter is AccessControlEnumerableUpgradeable {
         // track deposited amount for module
         DepositedState storage moduleState = SRStorage.getStakingModuleTrackerStorage(_stakingModuleId);
         moduleState.insertSlotDeposit(slot, _depositsValue);
+    }
+
+    function _getInitialDepositAmountByCount(uint256 depositsCount) internal pure returns (uint256) {
+        return depositsCount * INITIAL_DEPOSIT_SIZE;
+    }
+
+    function _getInitialDepositCountByAmount(uint256 depositsAmount) internal pure returns (uint256) {
+        return depositsAmount / INITIAL_DEPOSIT_SIZE;
     }
 }

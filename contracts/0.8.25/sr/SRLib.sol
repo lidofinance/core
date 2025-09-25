@@ -389,20 +389,6 @@ library SRLib {
         // else capacity = 0
     }
 
-    /// @notice Deposit allocation for module
-    /// @param _moduleId - Id of staking module
-    /// @param _allocateAmount - Eth amount that can be deposited in module
-    function _getDepositAllocation(uint256 _moduleId, uint256 _allocateAmount)
-        public
-        view
-        returns (uint256 allocated, uint256 allocation)
-    {
-        uint256[] memory allocations;
-        (allocated, allocations) = _getDepositAllocations(_asSingletonArray(_moduleId), _allocateAmount);
-
-        return (allocated, allocations[0]);
-    }
-
     /// @notice Deposit allocation for modules
     /// @param _moduleIds - IDs of staking modules
     /// @param _allocateAmount - Eth amount that should be allocated into modules
@@ -449,8 +435,6 @@ library SRLib {
 
         deallocated = _deallocateAmount - notDeallocated;
     }
-
-
 
     /// @dev old storage ref. for staking modules mapping, remove after 1st migration
     function _getStorageStakingModulesMapping()

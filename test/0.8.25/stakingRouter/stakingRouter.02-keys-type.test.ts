@@ -129,7 +129,7 @@ describe("StakingRouter.sol:keys-02-type", () => {
       await stakingModuleV2.mock__getStakingModuleSummary(moduleId, 0n, 100n);
 
       const depositableEth = ether("10242");
-      // _getTargetDepositsAllocation mocked currently to return the same amount it received
+      // _getTargetDepositAllocation mocked currently to return the same amount it received
       const [moduleDepositEth, moduleDepositCount] =
         await stakingRouter.getStakingModuleMaxInitialDepositsAmount.staticCall(moduleId, depositableEth);
 

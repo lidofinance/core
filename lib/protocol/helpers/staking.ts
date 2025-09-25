@@ -168,7 +168,6 @@ export const depositAndReportValidators = async (ctx: ProtocolContext, moduleId:
     const currentStatus = await stakingRouter.getStakingModuleStatus(mId);
     if (currentStatus === BigInt(originalStatus)) continue;
     await stakingRouter.connect(managerSigner).setStakingModuleStatus(mId, originalStatus);
-    console.log("!!staking.ts>depositAndReportValidators: unpause module:", mId, originalStatus);
   }
 
   const before = await lido.getBeaconStat();
