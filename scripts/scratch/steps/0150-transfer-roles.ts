@@ -34,7 +34,9 @@ export async function main() {
   for (const contract of ozAdminTransfers) {
     const contractInstance = await loadContract(contract.name, contract.address);
     await makeTx(contractInstance, "grantRole", [DEFAULT_ADMIN_ROLE, agent], { from: deployer });
-    await makeTx(contractInstance, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+    if (process.env.DG_DEPLOYMENT_ENABLED == "false" || contract.name !== "WithdrawalQueueERC721") {
+      await makeTx(contractInstance, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+    }
   }
 
   // Change admin for OssifiableProxy contracts

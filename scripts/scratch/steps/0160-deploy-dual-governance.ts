@@ -4,7 +4,11 @@ import util from "node:util";
 
 import { ethers } from "hardhat";
 
+import { LidoTemplate, WithdrawalQueueERC721 } from "typechain-types";
+
 import { log } from "lib";
+import { loadContract } from "lib/contract";
+import { makeTx } from "lib/deploy";
 import { DeploymentState, getAddress, readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
 const DG_INSTALL_DIR = `${process.cwd()}/dg`;
@@ -13,6 +17,7 @@ const DG_DEPLOY_ARTIFACTS_DIR = `${DG_INSTALL_DIR}/deploy-artifacts`;
 export async function main() {
   if (process.env.DG_DEPLOYMENT_ENABLED == "false") {
     log.header("DG deployment disabled");
+    await finalizePermissionsWithoutDGDeployment();
     return;
   }
 
@@ -70,33 +75,102 @@ AND
     etherscanApiKey = process.env.ETHERSCAN_API_KEY;
   }
 
+  await unpauseWithdrawalQueue(deployer, state);
+
   await runCommand(
     `DEPLOY_CONFIG_FILE_NAME="${dgDeployConfigFilename}" RPC_URL="${process.env.LOCAL_RPC_URL}" ETHERSCAN_API_KEY="${etherscanApiKey}" DEPLOYER_ADDRESS="${deployer}" npm run forge:script scripts/deploy/DeployConfigurable.s.sol -- --broadcast --slow ${etherscanVerifyOption} --private-key ${deployerPrivateKey}`,
     DG_INSTALL_DIR,
   );
 
-  await runDGRegressionTests(chainId, state, process.env.LOCAL_RPC_URL);
-
   const dgDeployArtifacts = await getDGDeployArtifacts(chainId);
+
+  await transferRoles(deployer, dgDeployArtifacts, state);
+
+  await prepareDGRegressionTestsRun(chainId, state, process.env.LOCAL_RPC_URL);
 
   saveDGNetworkState(dgDeployArtifacts);
 }
 
-async function runDGRegressionTests(networkChainId: string, networkState: DeploymentState, rpcUrl: string) {
-  log.header("Run DG regression tests");
+async function finalizePermissionsWithoutDGDeployment() {
+  const deployer = (await ethers.provider.getSigner()).address;
+  const networkState = readNetworkState({ deployer });
+
+  const lidoTemplateAddress = getAddress(Sk.lidoTemplate, networkState);
+  const lidoTemplate = await loadContract<LidoTemplate>("LidoTemplate", lidoTemplateAddress);
+
+  await makeTx(lidoTemplate, "finalizePermissionsWithoutDGDeployment", [], { from: deployer });
+}
+
+async function transferRoles(deployer: string, dgDeployArtifacts: DGDeployArtifacts, networkState: DeploymentState) {
+  const aragonAgentAddress = getAddress(Sk.appAgent, networkState);
+  const votingAddress = getAddress(Sk.appVoting, networkState);
+  const withdrawalQueueAddress = getAddress(Sk.withdrawalQueueERC721, networkState);
+  const lidoTemplateAddress = getAddress(Sk.lidoTemplate, networkState);
+
+  const lidoTemplate = await loadContract<LidoTemplate>("LidoTemplate", lidoTemplateAddress);
+  const withdrawalQueue = await loadContract<WithdrawalQueueERC721>("WithdrawalQueueERC721", withdrawalQueueAddress);
+
+  const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
+
+  await makeTx(withdrawalQueue, "grantRole", [DEFAULT_ADMIN_ROLE, aragonAgentAddress], {
+    from: deployer,
+  });
+
+  await makeTx(
+    withdrawalQueue,
+    "grantRole",
+    [await withdrawalQueue.PAUSE_ROLE(), votingAddress /* = reseal_committee */],
+    {
+      from: deployer,
+    },
+  );
+
+  await makeTx(
+    withdrawalQueue,
+    "grantRole",
+    [await withdrawalQueue.RESUME_ROLE(), votingAddress /* = reseal_committee */],
+    {
+      from: deployer,
+    },
+  );
+
+  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.PAUSE_ROLE(), dgDeployArtifacts.reseal_manager], {
+    from: deployer,
+  });
+
+  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.RESUME_ROLE(), dgDeployArtifacts.reseal_manager], {
+    from: deployer,
+  });
+
+  await makeTx(withdrawalQueue, "renounceRole", [await withdrawalQueue.DEFAULT_ADMIN_ROLE(), deployer], {
+    from: deployer,
+  });
+
+  await makeTx(lidoTemplate, "finalizePermissionsAfterDGDeployment", [dgDeployArtifacts.admin_executor], {
+    from: deployer,
+  });
+}
+
+async function unpauseWithdrawalQueue(deployer: string, networkState: DeploymentState) {
+  const withdrawalQueueAddress = getAddress(Sk.withdrawalQueueERC721, networkState);
+  const withdrawalQueue = await loadContract<WithdrawalQueueERC721>("WithdrawalQueueERC721", withdrawalQueueAddress);
+
+  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.RESUME_ROLE(), deployer], {
+    from: deployer,
+  });
+
+  await makeTx(withdrawalQueue, "resume", [], {
+    from: deployer,
+  });
+}
+
+async function prepareDGRegressionTestsRun(networkChainId: string, networkState: DeploymentState, rpcUrl: string) {
+  log.header("Prepare DG regression tests run: update DG .env file");
 
   const deployArtifactFilename = await getLatestDGDeployArtifactFilename(networkChainId);
 
   const dotEnvFile = getDGDotEnvFile(deployArtifactFilename, networkState, rpcUrl);
   await writeDGDotEnvFile(dotEnvFile);
-
-  try {
-    await runCommand("npm run test:regressions", DG_INSTALL_DIR);
-  } catch (error) {
-    // TODO: some of regression tests don't work at the moment, need to fix it.
-    log.error("DG regression tests run failed");
-    log(`${error}`);
-  }
 }
 
 async function runCommand(command: string, workingDirectory: string) {
@@ -168,7 +242,7 @@ function getDGConfig(chainId: string, networkState: DeploymentState) {
     dual_governance: {
       admin_proposer: daoVoting,
       proposals_canceller: daoVoting,
-      sealable_withdrawal_blockers: [], // TODO: add withdrawalQueue
+      sealable_withdrawal_blockers: [withdrawalQueue],
       reseal_committee: daoVoting,
       tiebreaker_activation_timeout:
         networkState[Sk.dualGovernanceConfig].dual_governance.tiebreaker_activation_timeout,
@@ -266,6 +340,7 @@ function getDGDotEnvFile(deployArtifactFilename: string, networkState: Deploymen
   const elRewardsVault = getAddress(Sk.executionLayerRewardsVault, networkState);
   const withdrawalVault = getAddress(Sk.withdrawalVault, networkState);
   const oracleReportSanityChecker = getAddress(Sk.oracleReportSanityChecker, networkState);
+  const stakingRouter = getAddress(Sk.stakingRouter, networkState);
   const acl = getAddress(Sk.aragonAcl, networkState);
   const ldo = getAddress(Sk.ldo, networkState);
   const daoAgent = getAddress(Sk.appAgent, networkState);
@@ -283,11 +358,13 @@ DG_TESTS_LIDO_ACCOUNTING_ORACLE=${accountingOracle}
 DG_TESTS_LIDO_EL_REWARDS_VAULT=${elRewardsVault}
 DG_TESTS_LIDO_WITHDRAWAL_VAULT=${withdrawalVault}
 DG_TESTS_LIDO_ORACLE_REPORT_SANITY_CHECKER=${oracleReportSanityChecker}
+DG_TESTS_LIDO_STAKING_ROUTER=${stakingRouter}
 DG_TESTS_LIDO_DAO_ACL=${acl}
 DG_TESTS_LIDO_LDO_TOKEN=${ldo}
 DG_TESTS_LIDO_DAO_AGENT=${daoAgent}
 DG_TESTS_LIDO_DAO_VOTING=${daoVoting}
 DG_TESTS_LIDO_DAO_TOKEN_MANAGER=${daoTokenManager}
+DG_DISABLE_REGRESSION_TESTS_FOR_SCRATCH_DEPLOY=true
 `;
 }
 
@@ -357,7 +434,6 @@ async function getDGDeployArtifacts(networkChainId: string): Promise<DGDeployArt
 
   (Object.keys(contractsAddressesRe) as (keyof DGDeployArtifacts)[]).forEach((key) => {
     const address = deployArtifactFile.match(contractsAddressesRe[key]);
-    log("ADDRESS", (address && address[0]) || "", (address && address[1]) || "");
     if (!address || address.length < 2 || !address[1].length) {
       throw new Error(`DG deploy artifact file corrupted: ${key} not found`);
     }

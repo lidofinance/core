@@ -22,3 +22,10 @@ yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
 
 # Run acceptance tests
 yarn test:integration:fork:local
+
+# If Dual Governance was deployed
+if grep "dg:dual_governance" $NETWORK_STATE_FILE -q; then
+  # Run DG regression tests
+  echo "Run Dual Governance regression tests"
+  (cd dg && npm run test:regressions)
+fi
