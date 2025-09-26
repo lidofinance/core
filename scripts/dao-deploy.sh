@@ -17,6 +17,8 @@ echo "NETWORK is $NETWORK"
 
 rm -f "${NETWORK_STATE_FILE}"
 
+yarn dg:install
+
 # Compile contracts
 yarn compile
 

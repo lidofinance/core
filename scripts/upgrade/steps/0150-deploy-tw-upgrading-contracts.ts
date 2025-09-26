@@ -16,7 +16,7 @@ export async function main() {
 
   await deployWithoutProxy(Sk.twVoteScript, "TWVoteScript", deployer, [
     state[Sk.appVoting].proxy.address,
-    state[Sk.dgDualGovernance].proxy.address,
+    state[Sk.dgDualGovernance].address,
     {
       // Contract addresses
       agent: getAddress(Sk.appAgent, state),

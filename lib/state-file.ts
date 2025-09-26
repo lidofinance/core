@@ -108,8 +108,15 @@ export enum Sk {
   lazyOracle = "lazyOracle",
   v3TemporaryAdmin = "v3TemporaryAdmin",
   // Dual Governance
+  dualGovernanceConfig = "dualGovernanceConfig",
+  dgAdminExecutor = "dg:admin_executor",
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
+  dgConfigProvider = "dg:dual_governance_config_provider",
+  dgEmergencyGovernance = "dg:emergency_governance",
+  dgEscrowMasterCopy = "dg:escrow_master_copy",
+  dgResealManager = "dg:reseal_manager",
+  dgTiebreakerCoreCommittee = "dg:tiebreaker_core_committee",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -140,8 +147,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.appSimpleDvt:
     case Sk.predepositGuarantee:
     case Sk.vaultHub:
-    case Sk.dgDualGovernance:
-    case Sk.dgEmergencyProtectedTimelock:
       return state[contractKey].proxy.address;
     case Sk.apmRegistryFactory:
     case Sk.callsScript:
@@ -172,6 +177,14 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorConsolidationRequests:
     case Sk.twVoteScript:
     case Sk.v3VoteScript:
+    case Sk.dgAdminExecutor:
+    case Sk.dgConfigProvider:
+    case Sk.dgEmergencyGovernance:
+    case Sk.dgEscrowMasterCopy:
+    case Sk.dgResealManager:
+    case Sk.dgTiebreakerCoreCommittee:
+    case Sk.dgDualGovernance:
+    case Sk.dgEmergencyProtectedTimelock:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);

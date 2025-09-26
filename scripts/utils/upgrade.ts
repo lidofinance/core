@@ -57,7 +57,7 @@ export async function mockDGAragonVoting(
   const voting = await loadContract<Voting>("Voting", votingAddress);
   const timelock = await loadContract<IEmergencyProtectedTimelock>(
     "IEmergencyProtectedTimelock",
-    state[Sk.dgEmergencyProtectedTimelock].proxy.address,
+    state[Sk.dgEmergencyProtectedTimelock].proxy.address, // TODO: del!
   );
   const afterSubmitDelay = await timelock.getAfterSubmitDelay();
   const afterScheduleDelay = await timelock.getAfterScheduleDelay();
@@ -75,10 +75,7 @@ export async function mockDGAragonVoting(
   const executeReceipt = (await executeTx.wait())!;
   log.success("Voting executed: gas used", executeReceipt.gasUsed);
 
-  const dualGovernance = await loadContract<IDualGovernance>(
-    "IDualGovernance",
-    state[Sk.dgDualGovernance].proxy.address,
-  );
+  const dualGovernance = await loadContract<IDualGovernance>("IDualGovernance", state[Sk.dgDualGovernance].address);
   const events = findEventsWithInterfaces(executeReceipt, "ProposalSubmitted", [dualGovernance.interface]);
   const proposalId = events[0].args.id;
   log.success("Proposal submitted: proposalId", proposalId);

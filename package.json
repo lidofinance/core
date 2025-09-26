@@ -42,6 +42,7 @@
     "upgrade:mock-voting": "STEPS_FILE=upgrade/steps-mock-voting.json UPGRADE_PARAMETERS_FILE=scripts/upgrade/upgrade-params-mainnet.toml yarn hardhat --network custom run scripts/utils/migrate.ts",
     "validate:configs": "yarn hardhat validate-configs",
     "typecheck": "tsc --noEmit",
+    "dg:install": "yarn ts-node lib/dg-installation.ts",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed",
     "postinstall": "husky"
