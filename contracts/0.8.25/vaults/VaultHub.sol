@@ -993,6 +993,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 vaultBalance = _availableBalance(_vault);
         if (vaultBalance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, vaultBalance, CONNECT_DEPOSIT);
 
+        IStakingVault vault = IStakingVault(_vault);
+
         // Connecting a new vault with totalValue == balance
         VaultRecord memory record = VaultRecord({
             report: Report({
@@ -1010,7 +1012,7 @@ contract VaultHub is PausableUntilWithRoles {
         });
 
         connection = VaultConnection({
-            owner: IStakingVault(_vault).owner(),
+            owner: vault.owner(),
             shareLimit: uint96(_shareLimit),
             vaultIndex: uint96(_storage().vaults.length),
             disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
@@ -1019,7 +1021,7 @@ contract VaultHub is PausableUntilWithRoles {
             infraFeeBP: uint16(_infraFeeBP),
             liquidityFeeBP: uint16(_liquidityFeeBP),
             reservationFeeBP: uint16(_reservationFeeBP),
-            isBeaconDepositsManuallyPaused: false
+            isBeaconDepositsManuallyPaused: vault.beaconChainDepositsPaused()
         });
 
         _addVault(_vault, connection, record);
