@@ -6,7 +6,16 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard, DepositContract, PinnedBeaconProxy, StakingVault } from "typechain-types";
 
-import { addressToWC, ether, generatePredeposit, generateValidator, ONE_ETHER, toGwei, toLittleEndian64 } from "lib";
+import {
+  addressToWC,
+  ether,
+  generatePredeposit,
+  generateValidator,
+  ONE_ETHER,
+  PDGPolicy,
+  toGwei,
+  toLittleEndian64,
+} from "lib";
 import {
   createVaultWithDashboard,
   generatePredepositData,
@@ -256,12 +265,13 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     await dashboard.connect(owner).grantRole(await dashboard.FUND_ROLE(), proxy);
 
     await reportVaultDataWithProof(ctx, stakingVault);
+    await dashboard.connect(owner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
 
     // 4. The stVault's owner deposits 1 ETH from the vault balance directly to the validator, bypassing the PDG.
     //    Method called: Dashboard.unguaranteedDepositToBeaconChain(deposits).
     //    4.1. As a result, the stVault's total value is temporarily reduced by 1 ETH until the next oracle report delivered containing the appeared validator's balance.
     // todo: this step fails, BUT this is the point of the test!
-    await expect(dashboard.connect(owner).unguaranteedDepositToBeaconChain([predepositData.deposit]))
+    await expect(dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain([predepositData.deposit]))
       .to.emit(dashboard, "UnguaranteedDeposits")
       .withArgs(await stakingVault.getAddress(), 1, predepositData.deposit.amount);
     // check that emit the event from deposit contract
@@ -269,7 +279,7 @@ describe("Integration: Predeposit Guarantee core functionality", () => {
     const { witnesses, postdeposit } = await getProofAndDepositData(ctx, validator, withdrawalCredentials, ether("99"));
 
     // 5. The stVault's owner submits a Merkle proof of the validator's appearing on the Consensus Layer to the Dashboard contract.
-    await expect(dashboard.connect(owner).proveUnknownValidatorsToPDG([witnesses[0]]))
+    await expect(dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG([witnesses[0]]))
       .to.emit(predepositGuarantee, "ValidatorProven")
       .withArgs(witnesses[0].pubkey, nodeOperator, await stakingVault.getAddress(), withdrawalCredentials);
 

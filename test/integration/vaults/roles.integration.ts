@@ -7,7 +7,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { Dashboard } from "typechain-types";
 
-import { days, ether } from "lib";
+import { days, ether, PDGPolicy, randomValidatorPubkey } from "lib";
 import {
   autofillRoles,
   createVaultWithDashboard,
@@ -20,8 +20,6 @@ import {
 import { vaultRoleKeys } from "lib/protocol/helpers/vaults";
 
 import { Snapshot } from "test/suite";
-
-const SAMPLE_PUBKEY = "0x" + "ab".repeat(48);
 
 type Methods<T> = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,6 +57,7 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
     ));
 
     await dashboard.connect(owner).fund({ value: ether("1") });
+    await dashboard.connect(owner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
   });
 
   beforeEach(async () => (snapshot = await Snapshot.take()));
@@ -214,16 +213,51 @@ describe("Integration: Staking Vaults Dashboard Roles Initial Setup", () => {
           );
         });
 
-        // requires prepared state for this test to pass, skipping for now
-        it.skip("proveUnknownValidatorsToPDG", async () => {
+        it("unguaranteedDepositToBeaconChain", async () => {
+          await testMethod(
+            "unguaranteedDepositToBeaconChain",
+            {
+              successUsers: [roles.unguaranteedDepositor, nodeOperatorManager],
+              failingUsers: Object.values(roles).filter(
+                (r) => r !== roles.unguaranteedDepositor && r !== nodeOperatorManager,
+              ),
+            },
+            [
+              [
+                {
+                  pubkey: randomValidatorPubkey(),
+                  amount: ether("1"),
+                  signature: new Uint8Array(32),
+                  depositDataRoot: new Uint8Array(32),
+                },
+              ],
+            ],
+            await dashboard.NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE(),
+          );
+        });
+
+        it("proveUnknownValidatorsToPDG", async () => {
           await testMethod(
             "proveUnknownValidatorsToPDG",
             {
-              successUsers: [roles.unknownValidatorProver, owner],
-              failingUsers: Object.values(roles).filter((r) => r !== roles.unknownValidatorProver && r !== owner),
+              successUsers: [roles.unknownValidatorProver, nodeOperatorManager],
+              failingUsers: Object.values(roles).filter(
+                (r) => r !== roles.unknownValidatorProver && r !== nodeOperatorManager,
+              ),
             },
-            [SAMPLE_PUBKEY, stranger],
-            await dashboard.PDG_PROVE_VALIDATOR_ROLE(),
+            [
+              [
+                {
+                  proof: ["0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"],
+                  pubkey: "0x",
+                  validatorIndex: 0n,
+                  childBlockTimestamp: 0n,
+                  slot: 0n,
+                  proposerIndex: 0n,
+                },
+              ],
+            ],
+            await dashboard.NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE(),
           );
         });
 
