@@ -815,6 +815,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     /// @dev requires the fresh report
+    /// @dev NB: in case of outstanding obligations, this function will not resume beacon chain deposits, but will only
+    ///          remove the manual pause flag, allowing automatic resumption later
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         if (!connection.isBeaconDepositsManuallyPaused) revert PausedExpected();
@@ -822,14 +824,10 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        if (record.redemptionShares > 0) revert HasRedemptionsCannotDeposit(_vault);
-        if (_unsettledLidoFeesValue(record) >= MIN_BEACON_DEPOSIT) revert FeesTooHighCannotDeposit(_vault);
-        if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
-
         connection.isBeaconDepositsManuallyPaused = false;
         emit BeaconChainDepositsResumedByOwner(_vault);
 
-        _resumeBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
+        _updateBeaconChainDepositsPause(_vault, record, connection);
     }
 
     /// @notice Emits a request event for the node operator to perform validator exit
@@ -1707,9 +1705,6 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultReportStale(address vault);
     error PDGNotDepositor(address vault);
     error VaultHubNotPendingOwner(address vault);
-    error HasRedemptionsCannotDeposit(address vault);
-    error FeesTooHighCannotDeposit(address vault);
-    error UnhealthyVaultCannotDeposit(address vault);
     error VaultIsDisconnecting(address vault);
     error PartialValidatorWithdrawalNotAllowed();
     error ForcedValidatorExitNotAllowed();
