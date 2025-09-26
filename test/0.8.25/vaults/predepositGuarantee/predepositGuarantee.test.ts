@@ -851,7 +851,7 @@ describe("PredepositGuarantee.sol", () => {
         };
 
         // stage NONE
-        await expect(pdg.proveWC(witness))
+        await expect(pdg.proveWCAndActivate(witness))
           .to.be.revertedWithCustomError(pdg, "ValidatorNotPreDeposited")
           .withArgs(validator.container.pubkey, 0n);
 
@@ -859,19 +859,21 @@ describe("PredepositGuarantee.sol", () => {
         const { deposit, depositY } = await generatePredeposit(validator);
         await pdg.predeposit(stakingVault, [deposit], [depositY]);
 
-        const proveTx = await pdg.proveWC(witness);
+        const proveTx = await pdg.proveWCAndActivate(witness);
         await expect(proveTx)
           .to.emit(pdg, "BalanceUnlocked")
           .withArgs(vaultOperator.address, balance, 0)
           .to.emit(pdg, "ValidatorProven")
+          .withArgs(validator.container.pubkey, vaultOperator.address, await stakingVault.getAddress(), wc)
+          .to.emit(pdg, "ValidatorActivated")
           .withArgs(validator.container.pubkey, vaultOperator.address, await stakingVault.getAddress(), wc);
 
-        expect((await pdg.validatorStatus(validator.container.pubkey)).stage).to.equal(2n);
+        expect((await pdg.validatorStatus(validator.container.pubkey)).stage).to.equal(3n); // 3n is ACTIVATED
 
-        // stage PROVEN
-        await expect(pdg.proveWC(witness))
+        // stage ACTIVATED
+        await expect(pdg.proveWCAndActivate(witness))
           .to.be.revertedWithCustomError(pdg, "ValidatorNotPreDeposited")
-          .withArgs(validator.container.pubkey, 2n);
+          .withArgs(validator.container.pubkey, 3n); // 3n is ACTIVATED
       });
 
       it("allows NO to proveValidatorWC", async () => {
@@ -918,16 +920,18 @@ describe("PredepositGuarantee.sol", () => {
           proposerIndex: beaconBlockHeader.proposerIndex,
         };
 
-        const proveValidatorWCTX = pdg.connect(vaultOwner).proveWC(witness);
+        const proveValidatorWCTX = pdg.connect(vaultOwner).proveWCAndActivate(witness);
 
         await expect(proveValidatorWCTX)
           .to.emit(pdg, "BalanceUnlocked")
           .withArgs(vaultOperator, ether("1"), ether("0"))
           .to.emit(pdg, "ValidatorProven")
+          .withArgs(validator.container.pubkey, vaultOperator, stakingVault, vaultWC)
+          .to.emit(pdg, "ValidatorActivated")
           .withArgs(validator.container.pubkey, vaultOperator, stakingVault, vaultWC);
 
         const validatorStatus = await pdg.validatorStatus(validator.container.pubkey);
-        expect(validatorStatus.stage).to.equal(2n);
+        expect(validatorStatus.stage).to.equal(3n); // 3n is ACTIVATED
         expect(validatorStatus.stakingVault).to.equal(stakingVault);
         expect(validatorStatus.nodeOperator).to.equal(vaultOperator);
       });
@@ -1017,7 +1021,7 @@ describe("PredepositGuarantee.sol", () => {
         const sameNoProof = [...sameNoValidatorProof.proof, ...sameNoStateProof, ...beaconProof];
 
         // prove
-        await pdg.proveWC({
+        await pdg.proveWCAndActivate({
           proof: mainProof,
           pubkey: mainValidator.container.pubkey,
           validatorIndex: mainValidatorIndex,
@@ -1025,9 +1029,8 @@ describe("PredepositGuarantee.sol", () => {
           slot: beaconHeader.slot,
           proposerIndex: beaconHeader.proposerIndex,
         });
-        await pdg.activateValidator(mainValidator.container.pubkey);
 
-        await pdg.proveWC({
+        await pdg.proveWCAndActivate({
           proof: sideProof,
           pubkey: sideValidator.container.pubkey,
           validatorIndex: sideValidatorIndex,
@@ -1035,9 +1038,8 @@ describe("PredepositGuarantee.sol", () => {
           slot: beaconHeader.slot,
           proposerIndex: beaconHeader.proposerIndex,
         });
-        await pdg.activateValidator(sideValidator.container.pubkey);
 
-        await pdg.proveWC({
+        await pdg.proveWCAndActivate({
           proof: sameNoProof,
           pubkey: sameNOValidator.container.pubkey,
           validatorIndex: sameNoValidatorIndex,
@@ -1045,7 +1047,6 @@ describe("PredepositGuarantee.sol", () => {
           slot: beaconHeader.slot,
           proposerIndex: beaconHeader.proposerIndex,
         });
-        await pdg.activateValidator(sameNOValidator.container.pubkey);
 
         expect((await pdg.validatorStatus(mainValidator.container.pubkey)).stage).to.equal(3n); // 3n is ACTIVATED
         expect((await pdg.validatorStatus(sideValidator.container.pubkey)).stage).to.equal(3n); // 3n is ACTIVATED
@@ -1233,10 +1234,10 @@ describe("PredepositGuarantee.sol", () => {
         ).to.revertedWithCustomError(pdg, "WithdrawalCredentialsMatch");
 
         // proving
-        await pdg.proveWC(validNotPredepostedValidatorWitness);
+        await pdg.proveWCAndActivate(validNotPredepostedValidatorWitness);
         await expect(pdg.connect(vaultOperator).proveInvalidValidatorWC(validNotPredepostedValidatorWitness, validWC))
           .to.revertedWithCustomError(pdg, "ValidatorNotPreDeposited")
-          .withArgs(validNotPredepostedValidator.container.pubkey, 2n);
+          .withArgs(validNotPredepostedValidator.container.pubkey, 3n); // 3n is ACTIVATED
       });
 
       it("reverts when trying to prove valid validator", async () => {
@@ -1413,7 +1414,7 @@ describe("PredepositGuarantee.sol", () => {
       };
 
       await expect(pdg.predeposit(stakingVault, [], [])).to.revertedWithCustomError(pdg, "ResumedExpected");
-      await expect(pdg.proveWC(witness)).to.revertedWithCustomError(pdg, "ResumedExpected");
+      await expect(pdg.proveWCAndActivate(witness)).to.revertedWithCustomError(pdg, "ResumedExpected");
       await expect(pdg.activateValidator(witness.pubkey)).to.revertedWithCustomError(pdg, "ResumedExpected");
       await expect(pdg.topUpExistingValidators([])).to.revertedWithCustomError(pdg, "ResumedExpected");
       await expect(pdg.proveWCActivateAndTopUpValidators([], [])).to.revertedWithCustomError(pdg, "ResumedExpected");

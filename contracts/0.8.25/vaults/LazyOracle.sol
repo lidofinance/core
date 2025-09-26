@@ -249,6 +249,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         return batch;
     }
 
+    /**
+     * @notice batch method to mass check the validator stages in PredepositGuarantee contract
+     * @param _pubkeys the array of validator's pubkeys to check
+     */
     function batchValidatorStages(
         bytes[] calldata _pubkeys
     ) external view returns (IPredepositGuarantee.ValidatorStage[] memory batch) {

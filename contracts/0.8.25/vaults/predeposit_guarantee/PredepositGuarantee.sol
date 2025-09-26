@@ -199,9 +199,9 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     }
 
     /**
-     * @notice returns the current amount of ether that is predeposited to a given vault
+     * @notice returns the number of validators in PREDEPOSITED and PROVEN states but not ACTIVATED yet
      * @param _vault staking vault address
-     * @return amount of ether in wei
+     * @return the number of validators yet-to-be-activated
      */
     function pendingActivations(IStakingVault _vault) external view returns (uint256) {
         return _storage().pendingActivations[address(_vault)];
@@ -420,12 +420,13 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     }
 
     /**
-     * @notice permissionless method to prove correct Withdrawal Credentials for the validator
+     * @notice permissionless method to prove correct Withdrawal Credentials and activate validator if possible
      * @param _witness object containing validator pubkey, Merkle proof and timestamp for Beacon Block root child block
      * @dev will revert if proof is invalid or misformed or validator is not predeposited
-     * @dev transition PREDEPOSITED => PROVEN
+     * @dev transition PREDEPOSITED => PROVEN [=> ACTIVATED]
+     * @dev if activation is impossible, it can be done later by calling activateValidator() explicitly
      */
-    function proveWC(ValidatorWitness calldata _witness) external whenResumed {
+    function proveWCAndActivate(ValidatorWitness calldata _witness) external whenResumed {
         ValidatorStatus storage validator = _storage().validatorStatus[_witness.pubkey];
 
         if (validator.stage != ValidatorStage.PREDEPOSITED) {
@@ -434,9 +435,19 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         IStakingVault stakingVault = validator.stakingVault;
         bytes32 withdrawalCredentials = _checkVaultWC(stakingVault);
+        address nodeOperator = validator.nodeOperator;
 
-        validator.stage = ValidatorStage.PROVEN;
-        _proveWC(_witness, stakingVault, withdrawalCredentials, validator.nodeOperator);
+        _proveWC(_witness, stakingVault, withdrawalCredentials, nodeOperator);
+
+        // activate validator if possible
+        if (stakingVault.depositor() == address(this) && stakingVault.stagedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
+            _activateValidator(_witness.pubkey, 0, stakingVault, withdrawalCredentials, nodeOperator);
+            validator.stage = ValidatorStage.ACTIVATED;
+        } else {
+            // only if validator is disconnected
+            // because on connection we check depositor and staged balance
+            validator.stage = ValidatorStage.PROVEN;
+        }
     }
 
     /**
