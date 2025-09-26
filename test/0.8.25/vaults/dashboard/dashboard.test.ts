@@ -31,6 +31,7 @@ import {
   ether,
   findEvents,
   impersonate,
+  PDGPolicy,
   randomValidatorPubkey,
 } from "lib";
 
@@ -236,6 +237,7 @@ describe("Dashboard.sol", () => {
     const dashboardCreatedEvent = findEvents(createVaultReceipt, "DashboardCreated")[0];
     const dashboardAddress = dashboardCreatedEvent.args.dashboard;
     dashboard = await ethers.getContractAt("Dashboard", dashboardAddress, vaultOwner);
+    await dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
 
     originalState = await Snapshot.take();
   });
@@ -366,36 +368,6 @@ describe("Dashboard.sol", () => {
     it("returns the correct vault connection data", async () => {
       const connection_ = await dashboard.vaultConnection();
       expect(connection_).to.deep.equal(Object.values(connection));
-    });
-
-    it("shareLimit", async () => {
-      const shareLimit = await dashboard.shareLimit();
-      expect(shareLimit).to.equal(connection.shareLimit);
-    });
-
-    it("reserveRatioBP", async () => {
-      const reserveRatioBP = await dashboard.reserveRatioBP();
-      expect(reserveRatioBP).to.equal(connection.reserveRatioBP);
-    });
-
-    it("forcedRebalanceThresholdBP", async () => {
-      const forcedRebalanceThresholdBP = await dashboard.forcedRebalanceThresholdBP();
-      expect(forcedRebalanceThresholdBP).to.equal(connection.forcedRebalanceThresholdBP);
-    });
-
-    it("infraFeeBP", async () => {
-      const infraFeeBP = await dashboard.infraFeeBP();
-      expect(infraFeeBP).to.equal(connection.infraFeeBP);
-    });
-
-    it("liquidityFeeBP", async () => {
-      const liquidityFeeBP = await dashboard.liquidityFeeBP();
-      expect(liquidityFeeBP).to.equal(connection.liquidityFeeBP);
-    });
-
-    it("reservationFeeBP", async () => {
-      const reservationFeeBP = await dashboard.reservationFeeBP();
-      expect(reservationFeeBP).to.equal(connection.reservationFeeBP);
     });
   });
 
@@ -1103,15 +1075,36 @@ describe("Dashboard.sol", () => {
       },
     ];
 
+    it("reverts if the PDG policy is set to STRICT", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
+
+      await expect(
+        dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG(witnesses),
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
+    });
+
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).proveUnknownValidatorsToPDG(witnesses)).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
+      await expect(dashboard.connect(stranger).proveUnknownValidatorsToPDG(witnesses))
+        .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await dashboard.NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE());
+    });
+
+    it("proves unknown validators to PDG when policy is set to ALLOW_DEPOSIT_AND_PROVE", async () => {
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+
+      await expect(dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG(witnesses)).to.emit(
+        hub,
+        "Mock__ValidatorProvedToPDG",
       );
     });
 
-    it("proves unknown validators to PDG", async () => {
-      await expect(dashboard.proveUnknownValidatorsToPDG(witnesses)).to.emit(hub, "Mock__ValidatorProvedToPDG");
+    it("proves unknown validators to PDG when policy is set to ALLOW_PROVE", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+
+      await expect(dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG(witnesses)).to.emit(
+        hub,
+        "Mock__ValidatorProvedToPDG",
+      );
     });
   });
 
@@ -1338,10 +1331,37 @@ describe("Dashboard.sol", () => {
       },
     ];
 
+    it("reverts if PDG policy is set to STRICT", async () => {
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
+
+      await expect(
+        dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits),
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
+    });
+
+    it("reverts if PDG policy is set to ALLOW_PROVE", async () => {
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
+      await dashboard.setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+
+      await expect(
+        dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits),
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
+    });
+
+    it("reverts if PDG policy is set to ALLOW_PROVE", async () => {
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
+      await dashboard.setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+
+      await expect(
+        dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits),
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
+    });
+
     it("reverts if the total amount exceeds the withdrawable value", async () => {
       await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
 
-      await expect(dashboard.unguaranteedDepositToBeaconChain(deposits))
+      await expect(dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits))
         .to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable")
         .withArgs(ether("1"), ether("0.9"));
     });
@@ -1351,7 +1371,7 @@ describe("Dashboard.sol", () => {
 
       await expect(dashboard.connect(stranger).unguaranteedDepositToBeaconChain(deposits))
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE());
+        .withArgs(stranger, await dashboard.NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE());
     });
 
     it("performs unguaranteed deposit", async () => {
@@ -1359,7 +1379,7 @@ describe("Dashboard.sol", () => {
       await setBalance(await hub.getAddress(), ether("100"));
       await hub.mock__setSendWithdraw(true);
 
-      await expect(dashboard.unguaranteedDepositToBeaconChain(deposits))
+      await expect(dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits))
         .to.emit(hub, "Mock__Withdrawn")
         .withArgs(vault, dashboard, ether("1"))
         .and.to.emit(dashboard, "UnguaranteedDeposits")
@@ -1371,6 +1391,39 @@ describe("Dashboard.sol", () => {
           deposits[0].signature,
           deposits[0].depositDataRoot,
         );
+    });
+  });
+
+  context("setPDGPolicy", () => {
+    it("reverts if the caller is not a member of the node operator manager role", async () => {
+      await expect(dashboard.connect(stranger).setPDGPolicy(PDGPolicy.ALLOW_PROVE))
+        .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await dashboard.DEFAULT_ADMIN_ROLE());
+    });
+
+    it("sets PDG Policy to ALLOW_PROVE", async () => {
+      await expect(dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_PROVE))
+        .to.emit(dashboard, "PDGPolicyEnacted")
+        .withArgs(PDGPolicy.ALLOW_PROVE);
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_PROVE);
+    });
+
+    it("sets PDG Policy to ALLOW_DEPOSIT_AND_PROVE", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
+
+      await expect(dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE))
+        .to.emit(dashboard, "PDGPolicyEnacted")
+        .withArgs(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+    });
+
+    it("reverts when setting the same policy", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
+
+      await expect(dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.STRICT)).to.be.revertedWithCustomError(
+        dashboard,
+        "PDGPolicyAlreadyActive",
+      );
     });
   });
 

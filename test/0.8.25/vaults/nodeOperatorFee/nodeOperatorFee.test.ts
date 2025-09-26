@@ -133,6 +133,12 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_FEE_EXEMPT_ROLE())).to.equal(
         await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE(),
       );
+      expect(
+        await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE()),
+      ).to.equal(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE());
+      expect(
+        await nodeOperatorFee.getRoleAdmin(await nodeOperatorFee.NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE()),
+      ).to.equal(await nodeOperatorFee.NODE_OPERATOR_MANAGER_ROLE());
 
       expect(await nodeOperatorFee.getConfirmExpiry()).to.equal(initialConfirmExpiry);
       expect(await nodeOperatorFee.feeRate()).to.equal(nodeOperatorFeeRate);

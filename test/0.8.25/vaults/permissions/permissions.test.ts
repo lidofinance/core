@@ -7,7 +7,6 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   DepositContract__MockForStakingVault,
-  IPredepositGuarantee,
   LidoLocator,
   OperatorGrid__MockForPermissions,
   Permissions__Harness,
@@ -191,11 +190,6 @@ describe("Permissions", () => {
       await checkSoleMember(rebalancer, await permissions.REBALANCE_ROLE());
       await checkSoleMember(depositPauser, await permissions.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE());
       await checkSoleMember(depositResumer, await permissions.RESUME_BEACON_CHAIN_DEPOSITS_ROLE());
-      await checkSoleMember(unknownValidatorProver, await permissions.PDG_PROVE_VALIDATOR_ROLE());
-      await checkSoleMember(
-        unguaranteedBeaconChainDepositor,
-        await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(),
-      );
       await checkSoleMember(validatorExitRequester, await permissions.REQUEST_VALIDATOR_EXIT_ROLE());
       await checkSoleMember(validatorWithdrawalTriggerer, await permissions.TRIGGER_VALIDATOR_WITHDRAWAL_ROLE());
       await checkSoleMember(disconnecter, await permissions.VOLUNTARY_DISCONNECT_ROLE());
@@ -831,95 +825,6 @@ describe("Permissions", () => {
       await expect(permissions.connect(stranger).acceptOwnership())
         .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
         .withArgs(stranger, await permissions.DEFAULT_ADMIN_ROLE());
-    });
-  });
-
-  context("proveUnknownValidatorToPDG()", () => {
-    it("proves the unknown validator to PDG", async () => {
-      const witness: IPredepositGuarantee.ValidatorWitnessStruct = {
-        pubkey: "0x" + "beef".repeat(24),
-        proof: ["0x" + "ab".repeat(32)],
-        validatorIndex: 0,
-        childBlockTimestamp: 0,
-        slot: 0,
-        proposerIndex: 0,
-      };
-
-      await expect(permissions.connect(unknownValidatorProver).proveUnknownValidatorToPDG([witness])).to.emit(
-        vaultHub,
-        "Mock__ProveUnknownValidatorToPDG",
-      );
-    });
-
-    it("can be called by the admin of the role", async () => {
-      // does not have the explicit role but is the role admin
-      expect(await permissions.hasRole(await permissions.PDG_PROVE_VALIDATOR_ROLE(), defaultAdmin)).to.be.false;
-      expect(await permissions.getRoleAdmin(await permissions.PDG_PROVE_VALIDATOR_ROLE())).to.equal(
-        await permissions.DEFAULT_ADMIN_ROLE(),
-      );
-
-      const witness: IPredepositGuarantee.ValidatorWitnessStruct = {
-        pubkey: "0x" + "beef".repeat(24),
-        proof: ["0x" + "ab".repeat(32)],
-        validatorIndex: 0,
-        childBlockTimestamp: 0,
-        slot: 0,
-        proposerIndex: 0,
-      };
-
-      await expect(permissions.connect(defaultAdmin).proveUnknownValidatorToPDG([witness])).to.emit(
-        vaultHub,
-        "Mock__ProveUnknownValidatorToPDG",
-      );
-    });
-
-    it("reverts if the caller is not a member of the prove unknown validator to PDG role", async () => {
-      expect(await permissions.hasRole(await permissions.PDG_PROVE_VALIDATOR_ROLE(), stranger)).to.be.false;
-
-      const witness: IPredepositGuarantee.ValidatorWitnessStruct = {
-        pubkey: "0x" + "beef".repeat(24),
-        proof: ["0x" + "ab".repeat(32)],
-        validatorIndex: 0,
-        childBlockTimestamp: 0,
-        slot: 0,
-        proposerIndex: 0,
-      };
-
-      await expect(permissions.connect(stranger).proveUnknownValidatorToPDG([witness]))
-        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.PDG_PROVE_VALIDATOR_ROLE());
-    });
-  });
-
-  context("withdrawForUnguaranteedDepositToBeaconChain()", () => {
-    it("withdraws the StakingVault", async () => {
-      await expect(
-        permissions.connect(unguaranteedBeaconChainDepositor).withdrawForUnguaranteedDepositToBeaconChain(ether("1")),
-      )
-        .to.emit(vaultHub, "Mock__Withdrawn")
-        .withArgs(stakingVault, permissions, ether("1"));
-    });
-
-    it("can be called by the admin of the role", async () => {
-      // does not have the explicit role but is the role admin
-      expect(await permissions.hasRole(await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(), defaultAdmin)).to.be
-        .false;
-      expect(await permissions.getRoleAdmin(await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE())).to.equal(
-        await permissions.DEFAULT_ADMIN_ROLE(),
-      );
-
-      await expect(permissions.connect(defaultAdmin).withdrawForUnguaranteedDepositToBeaconChain(ether("1")))
-        .to.emit(vaultHub, "Mock__Withdrawn")
-        .withArgs(stakingVault, permissions, ether("1"));
-    });
-
-    it("reverts if the caller is not a member of the withdraw for unguaranteed deposit to beacon chain role", async () => {
-      expect(await permissions.hasRole(await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE(), stranger)).to.be
-        .false;
-
-      await expect(permissions.connect(stranger).withdrawForUnguaranteedDepositToBeaconChain(ether("1")))
-        .to.be.revertedWithCustomError(permissions, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await permissions.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE());
     });
   });
 

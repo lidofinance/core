@@ -51,6 +51,24 @@ contract Dashboard is NodeOperatorFee {
         0x7408b7b034fda7051615c19182918ecb91d753231cffd86f81a45d996d63e038;
 
     /**
+     * @notice The PDG policy modes.
+     * "STRICT": deposits require the full PDG process.
+     * "ALLOW_PROVE": allows the node operator to prove unknown validators to PDG.
+     * "ALLOW_DEPOSIT_AND_PROVE": allows the node operator to perform unguaranteed deposits
+     * (bypassing the predeposit requirement) and proving unknown validators.
+     */
+    enum PDGPolicy {
+        STRICT,
+        ALLOW_PROVE,
+        ALLOW_DEPOSIT_AND_PROVE
+    }
+
+    /**
+     * @notice Current active PDG policy set by `DEFAULT_ADMIN_ROLE`.
+     */
+    PDGPolicy public pdgPolicy = PDGPolicy.STRICT;
+
+    /**
      * @notice Constructor sets the stETH, and WSTETH token addresses,
      * and passes the address of the vault hub up the inheritance chain.
      * @param _stETH Address of the stETH token contract.
@@ -111,52 +129,10 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Returns the stETH share limit of the vault
-     */
-    function shareLimit() external view returns (uint256) {
-        return vaultConnection().shareLimit;
-    }
-
-    /**
      * @notice Returns the number of stETH shares minted
      */
     function liabilityShares() public view returns (uint256) {
         return VAULT_HUB.liabilityShares(address(_stakingVault()));
-    }
-
-    /**
-     * @notice Returns the reserve ratio of the vault in basis points
-     */
-    function reserveRatioBP() public view returns (uint16) {
-        return vaultConnection().reserveRatioBP;
-    }
-
-    /**
-     * @notice Returns the rebalance threshold of the vault in basis points.
-     */
-    function forcedRebalanceThresholdBP() external view returns (uint16) {
-        return vaultConnection().forcedRebalanceThresholdBP;
-    }
-
-    /**
-     * @notice Returns the infra fee basis points.
-     */
-    function infraFeeBP() external view returns (uint16) {
-        return vaultConnection().infraFeeBP;
-    }
-
-    /**
-     * @notice Returns the liquidity fee basis points.
-     */
-    function liquidityFeeBP() external view returns (uint16) {
-        return vaultConnection().liquidityFeeBP;
-    }
-
-    /**
-     * @notice Returns the reservation fee basis points.
-     */
-    function reservationFeeBP() external view returns (uint16) {
-        return vaultConnection().reservationFeeBP;
     }
 
     /**
@@ -419,17 +395,32 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
+     * @notice Changes the PDG policy
+     * @param _pdgPolicy new PDG policy
+     */
+    function setPDGPolicy(PDGPolicy _pdgPolicy) external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
+        if (_pdgPolicy == pdgPolicy) revert PDGPolicyAlreadyActive();
+
+        pdgPolicy = _pdgPolicy;
+
+        emit PDGPolicyEnacted(_pdgPolicy);
+    }
+
+    /**
      * @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
      *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
      *          clearing them for future deposits via `PDG.depositToBeaconChain`
      * @param _deposits array of IStakingVault.Deposit structs containing deposit data
      * @return totalAmount total amount of ether deposited to beacon chain
-     * @dev requires the caller to have the `UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE`
+     * @dev requires the PDG policy set to `ALLOW_DEPOSIT_AND_PROVE`
+     * @dev requires the caller to have the `NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE`
      * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
      */
     function unguaranteedDepositToBeaconChain(
         IStakingVault.Deposit[] calldata _deposits
     ) external returns (uint256 totalAmount) {
+        if (pdgPolicy != PDGPolicy.ALLOW_DEPOSIT_AND_PROVE) revert ForbiddenByPDGPolicy();
+
         IStakingVault stakingVault_ = _stakingVault();
         IDepositContract depositContract = stakingVault_.DEPOSIT_CONTRACT();
 
@@ -468,9 +459,12 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Proves validators with correct vault WC if they are unknown to PDG
      * @param _witnesses array of IPredepositGuarantee.ValidatorWitness structs containing proof data for validators
-     * @dev requires the caller to have the `PDG_PROVE_VALIDATOR_ROLE`
+     * @dev requires the PDG policy set to `ALLOW_PROVE` or `ALLOW_DEPOSIT_AND_PROVE`
+     * @dev requires the caller to have the `NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE`
      */
     function proveUnknownValidatorsToPDG(IPredepositGuarantee.ValidatorWitness[] calldata _witnesses) external {
+        if (pdgPolicy == PDGPolicy.STRICT) revert ForbiddenByPDGPolicy();
+
         _proveUnknownValidatorsToPDG(_witnesses);
     }
 
@@ -674,6 +668,28 @@ contract Dashboard is NodeOperatorFee {
         }
     }
 
+    /**
+     * @dev Withdraws ether from vault to this contract for unguaranteed deposit to validators
+     * Requires the caller to have the `NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE`.
+     */
+    function _withdrawForUnguaranteedDepositToBeaconChain(
+        uint256 _ether
+    ) internal onlyRoleMemberOrAdmin(NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE) {
+        VAULT_HUB.withdraw(address(_stakingVault()), address(this), _ether);
+    }
+
+    /**
+     * @dev Proves validators unknown to PDG that have correct vault WC
+     * Requires the caller to have the `NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE`.
+     */
+    function _proveUnknownValidatorsToPDG(
+        IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
+    ) internal onlyRoleMemberOrAdmin(NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE) {
+        for (uint256 i = 0; i < _witnesses.length; i++) {
+            VAULT_HUB.proveUnknownValidatorToPDG(address(_stakingVault()), _witnesses[i]);
+        }
+    }
+
     // ==================== Events ====================
 
     /**
@@ -683,6 +699,11 @@ contract Dashboard is NodeOperatorFee {
      * @param totalAmount the total amount of ether deposited to beacon chain
      */
     event UnguaranteedDeposits(address indexed stakingVault, uint256 deposits, uint256 totalAmount);
+
+    /**
+     * @notice Emitted when the PDG policy is updated.
+     */
+    event PDGPolicyEnacted(PDGPolicy pdgPolicy);
 
     // ==================== Errors ====================
 
@@ -712,4 +733,15 @@ contract Dashboard is NodeOperatorFee {
      * @notice Error when attempting to abandon the Dashboard contract itself.
      */
     error DashboardNotAllowed();
+
+    /**
+     * @notice Error when attempting to set the same PDG policy that is already active.
+     */
+    error PDGPolicyAlreadyActive();
+
+    /**
+     * @notice Error when attempting to perform an operation that is not allowed
+     * by the current active PDG policy.
+     */
+    error ForbiddenByPDGPolicy();
 }

@@ -40,6 +40,24 @@ contract NodeOperatorFee is Permissions {
      */
     bytes32 public constant NODE_OPERATOR_FEE_EXEMPT_ROLE = keccak256("vaults.NodeOperatorFee.FeeExemptRole");
 
+    /**
+     * @notice Node operator's sub-role for unguaranteed deposit
+     * Managed by `NODE_OPERATOR_MANAGER_ROLE`.
+     *
+     * @dev 0x5c17b14b08ace6dda14c9642528ae92de2a73d59eacb65c71f39f309a5611063
+     */
+    bytes32 public constant NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE =
+        keccak256("vaults.NodeOperatorFee.UnguaranteedDepositRole");
+
+    /**
+     * @notice Node operator's sub-role for proving unknown validators.
+     * Managed by `NODE_OPERATOR_MANAGER_ROLE`.
+     *
+     * @dev 0x7b564705f4e61596c4a9469b6884980f89e475befabdb849d69719f0791628be
+     */
+    bytes32 public constant NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE =
+        keccak256("vaults.NodeOperatorFee.ProveUnknownValidatorsRole");
+
     // ==================== Packed Storage Slot 1 ====================
     /**
      * @notice Address that receives node operator fee disbursements.
@@ -115,6 +133,8 @@ contract NodeOperatorFee is Permissions {
         _grantRole(NODE_OPERATOR_MANAGER_ROLE, _nodeOperatorManager);
         _setRoleAdmin(NODE_OPERATOR_MANAGER_ROLE, NODE_OPERATOR_MANAGER_ROLE);
         _setRoleAdmin(NODE_OPERATOR_FEE_EXEMPT_ROLE, NODE_OPERATOR_MANAGER_ROLE);
+        _setRoleAdmin(NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE, NODE_OPERATOR_MANAGER_ROLE);
+        _setRoleAdmin(NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE, NODE_OPERATOR_MANAGER_ROLE);
     }
 
     /**
@@ -156,7 +176,7 @@ contract NodeOperatorFee is Permissions {
      * @param _isApproved True to approve, False to forbid
      */
     function setApprovedToConnect(bool _isApproved) external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
-       _setApprovedToConnect(_isApproved);
+        _setApprovedToConnect(_isApproved);
     }
 
     /**
@@ -307,7 +327,7 @@ contract NodeOperatorFee is Permissions {
         int128 unsettledGrowth = growth - settledGrowth;
 
         if (unsettledGrowth > 0) {
-            fee = uint256(uint128(unsettledGrowth)) * uint256(feeRate) / TOTAL_BASIS_POINTS;
+            fee = (uint256(uint128(unsettledGrowth)) * uint256(feeRate)) / TOTAL_BASIS_POINTS;
         }
     }
 
@@ -352,11 +372,7 @@ contract NodeOperatorFee is Permissions {
      * @param oldFeeRecipient the old node operator fee recipient
      * @param newFeeRecipient the new node operator fee recipient
      */
-    event FeeRecipientSet(
-        address indexed sender,
-        address oldFeeRecipient,
-        address newFeeRecipient
-    );
+    event FeeRecipientSet(address indexed sender, address oldFeeRecipient, address newFeeRecipient);
 
     /**
      * @dev Emitted when the settled growth is set.

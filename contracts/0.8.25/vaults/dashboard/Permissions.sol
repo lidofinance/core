@@ -9,7 +9,6 @@ import {AccessControlConfirmable} from "contracts/0.8.25/utils/AccessControlConf
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
 import {IStakingVault} from "../interfaces/IStakingVault.sol";
-import {IPredepositGuarantee} from "../interfaces/IPredepositGuarantee.sol";
 import {OperatorGrid} from "../OperatorGrid.sol";
 import {VaultHub} from "../VaultHub.sol";
 
@@ -87,19 +86,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     /// @dev 0x9586321ac05f110e4b4a0a42aba899709345af0ca78910e8832ddfd71fed2bf4
     bytes32 public constant VOLUNTARY_DISCONNECT_ROLE = keccak256("vaults.Permissions.VoluntaryDisconnect");
-
-    /**
-     * @notice Permission for proving valid vault validators unknown to the PDG
-     */
-    /// @dev 0xb850402129bccae797798069a8cf3147a0cb7c3193f70558a75f7df0b8651c30
-    bytes32 public constant PDG_PROVE_VALIDATOR_ROLE = keccak256("vaults.Permissions.PDGProveValidator");
-
-    /**
-     * @notice Permission for unguaranteed deposit to trusted validators
-     */
-    /// @dev 0xea6487df651bb740150364c496e1c7403dd62063c96e44906cc98c6a919a9d88
-    bytes32 public constant UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE =
-        keccak256("vaults.Permissions.UnguaranteedBeaconChainDeposit");
 
     /**
      * @dev Permission for vault configuration operations on the OperatorGrid (tier changes, tier sync, share limit updates).
@@ -321,26 +307,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     function _acceptOwnership() internal onlyRole(DEFAULT_ADMIN_ROLE) {
         _stakingVault().acceptOwnership();
-    }
-
-    /**
-     * @dev Proves validators unknown to PDG that have correct vault WC
-     */
-    function _proveUnknownValidatorsToPDG(
-        IPredepositGuarantee.ValidatorWitness[] calldata _witnesses
-    ) internal onlyRoleMemberOrAdmin(PDG_PROVE_VALIDATOR_ROLE) {
-        for (uint256 i = 0; i < _witnesses.length; i++) {
-            VAULT_HUB.proveUnknownValidatorToPDG(address(_stakingVault()), _witnesses[i]);
-        }
-    }
-
-    /**
-     * @dev Withdraws ether from vault to this contract for unguaranteed deposit to validators
-     */
-    function _withdrawForUnguaranteedDepositToBeaconChain(
-        uint256 _ether
-    ) internal onlyRoleMemberOrAdmin(UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE) {
-        VAULT_HUB.withdraw(address(_stakingVault()), address(this), _ether);
     }
 
     /**
