@@ -815,6 +815,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     /// @dev requires the fresh report
+    /// @dev requires no redemptions, low fees, and healthy vault
+    /// @dev use setBeaconDepositsManuallyPaused(false) to allow automatic resumption when conditions become favorable
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         if (!connection.isBeaconDepositsManuallyPaused) revert PausedExpected();
@@ -830,6 +832,35 @@ contract VaultHub is PausableUntilWithRoles {
         emit BeaconChainDepositsResumedByOwner(_vault);
 
         _resumeBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
+    }
+
+    /// @notice Sets the manual beacon chain deposits pause flag for the vault
+    /// @param _vault vault address
+    /// @param _paused whether to set the manual pause flag
+    /// @dev msg.sender should be vault's owner
+    /// @dev allows setting the flag to false even when deposits cannot be resumed immediately,
+    ///      enabling automatic resumption when conditions become favorable
+    function setBeaconDepositsManuallyPaused(address _vault, bool _paused) external {
+        VaultConnection storage connection = _checkConnectionAndOwner(_vault);
+        
+        if (connection.isBeaconDepositsManuallyPaused == _paused) {
+            if (_paused) {
+                revert ResumedExpected();
+            } else {
+                revert PausedExpected();
+            }
+        }
+
+        connection.isBeaconDepositsManuallyPaused = _paused;
+        
+        if (_paused) {
+            emit BeaconChainDepositsPausedByOwner(_vault);
+            _pauseBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
+        } else {
+            emit BeaconChainDepositsResumedByOwner(_vault);
+            // Try to resume deposits if conditions allow, but don't revert if they don't
+            _tryResumeBeaconChainDeposits(_vault, connection);
+        }
     }
 
     /// @notice Emits a request event for the node operator to perform validator exit
@@ -1590,6 +1621,26 @@ contract VaultHub is PausableUntilWithRoles {
     function _resumeBeaconChainDepositsIfNotAlready(IStakingVault _vault) internal {
         if (_isBeaconChainDepositsPaused(_vault)) {
             _vault.resumeBeaconChainDeposits();
+        }
+    }
+
+    function _tryResumeBeaconChainDeposits(address _vault, VaultConnection storage _connection) internal {
+        // Only try to resume if conditions allow and manual pause flag is false
+        if (!_connection.isBeaconDepositsManuallyPaused) {
+            VaultRecord storage record = _vaultRecord(_vault);
+            
+            // Check if we can resume deposits without reverting
+            bool canResume = true;
+            
+            // Check all conditions that would prevent resumption
+            if (record.redemptionShares > 0) canResume = false;
+            if (_unsettledLidoFeesValue(record) >= MIN_BEACON_DEPOSIT) canResume = false;
+            if (!_isVaultHealthy(_connection, record)) canResume = false;
+            
+            // Try to resume if conditions allow
+            if (canResume) {
+                _resumeBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
+            }
         }
     }
 

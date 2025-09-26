@@ -180,4 +180,59 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       expect((await vaultHub.vaultConnection(stakingVaultAddress)).isBeaconDepositsManuallyPaused).to.be.false;
     });
   });
+
+  context("New setBeaconDepositsManuallyPaused function", () => {
+    it("Allows manual pause flag control independently of resumption conditions", async () => {
+      // Create scenario with redemptions that would block normal resumption
+      await dashboard.fund({ value: ether("1") });
+      await dashboard.mintStETH(agentSigner, ether("1"));
+      await setBalance(await stakingVault.getAddress(), ether("0.5"));
+      
+      // Create redemptions
+      await vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(stakingVaultAddress, 0n);
+      
+      // Manually pause
+      await dashboard.pauseBeaconChainDeposits();
+      
+      // Verify we have redemptions that would block normal resumption
+      const record = await vaultHub.vaultRecord(stakingVaultAddress);
+      expect(record.redemptionShares).to.be.gt(0);
+      
+      // Old method fails
+      await expect(dashboard.resumeBeaconChainDeposits())
+        .to.be.revertedWithCustomError(vaultHub, "HasRedemptionsCannotDeposit");
+      
+      // New method succeeds - allows setting flag to false despite redemptions
+      await expect(vaultHub.connect(owner).setBeaconDepositsManuallyPaused(stakingVaultAddress, false))
+        .to.emit(vaultHub, "BeaconChainDepositsResumedByOwner");
+      
+      // Manual flag is now false, enabling automatic resumption when conditions improve
+      const connection = await vaultHub.vaultConnection(stakingVaultAddress);
+      expect(connection.isBeaconDepositsManuallyPaused).to.be.false;
+      
+      // Deposits still paused due to redemptions
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
+      
+      // Resolve redemptions
+      await dashboard.fund({ value: ether("1") });
+      await vaultHub.forceRebalance(stakingVaultAddress);
+      
+      // Now deposits should auto-resume because manual flag is false
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
+    });
+
+    it("Can be used as replacement for existing pause/resume functions", async () => {
+      // Use new function to pause
+      await expect(vaultHub.connect(owner).setBeaconDepositsManuallyPaused(stakingVaultAddress, true))
+        .to.emit(vaultHub, "BeaconChainDepositsPausedByOwner")
+        .and.to.emit(stakingVault, "BeaconChainDepositsPaused");
+      
+      // Use new function to resume
+      await expect(vaultHub.connect(owner).setBeaconDepositsManuallyPaused(stakingVaultAddress, false))
+        .to.emit(vaultHub, "BeaconChainDepositsResumedByOwner")
+        .and.to.emit(stakingVault, "BeaconChainDepositsResumed");
+      
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
+    });
+  });
 });
