@@ -60,23 +60,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         mapping(address guarantor => uint256 claimableEther) guarantorClaimableEther;
         mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) validatorStatus;
         mapping(address nodeOperator => address depositor) nodeOperatorDepositor;
-        mapping(address stakingVault => uint256 balance) pendingPredeposits;
-    }
-
-    /**
-     * @notice represents validator stages in PDG flow
-     * @param NONE - initial stage
-     * @param PREDEPOSITED - PREDEPOSIT_AMOUNT is deposited to this validator by the vault
-     * @param PROVEN - validator is proven to be valid and can be used to deposit to beacon chain
-     * @param ACTIVATED - validator is proven and the ACTIVATION_DEPOSIT_AMOUNT is deposited to this validator
-     * @param COMPENSATED - disproven validator has its PREDEPOSIT_AMOUNT ether compensated to staking vault owner and validator cannot be used in PDG anymore
-     */
-    enum ValidatorStage {
-        NONE,
-        PREDEPOSITED,
-        PROVEN,
-        ACTIVATED,
-        COMPENSATED
+        mapping(address stakingVault => uint256 number) pendingActivations;
     }
 
     /**
@@ -88,18 +72,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     struct NodeOperatorBalance {
         uint128 total;
         uint128 locked;
-    }
-
-    /**
-     * @notice represents status of the validator in PDG
-     * @param stage represents validator stage in PDG flow
-     * @param stakingVault pins validator to specific StakingVault
-     * @param nodeOperator pins validator to specific NO
-     */
-    struct ValidatorStatus {
-        ValidatorStage stage;
-        IStakingVault stakingVault;
-        address nodeOperator;
     }
 
     /**
@@ -220,17 +192,19 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _validatorPubkey to check status for
      * @return struct of ValidatorStatus
      */
-    function validatorStatus(bytes calldata _validatorPubkey) external view returns (ValidatorStatus memory) {
+    function validatorStatus(
+        bytes calldata _validatorPubkey
+    ) external view override returns (ValidatorStatus memory) {
         return _storage().validatorStatus[_validatorPubkey];
     }
 
     /**
-     * @notice returns the current amount of ether that is predeposited to a given vault
+     * @notice returns the number of validators in PREDEPOSITED and PROVEN states but not ACTIVATED yet
      * @param _vault staking vault address
-     * @return amount of ether in wei
+     * @return the number of validators yet-to-be-activated
      */
-    function pendingPredeposits(IStakingVault _vault) external view returns (uint256) {
-        return _storage().pendingPredeposits[address(_vault)];
+    function pendingActivations(IStakingVault _vault) external view returns (uint256) {
+        return _storage().pendingActivations[address(_vault)];
     }
 
     /**
@@ -415,7 +389,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         balance.locked += uint128(totalDepositAmount);
         emit BalanceLocked(nodeOperator, balance.total, balance.locked);
 
-        $.pendingPredeposits[address(_stakingVault)] += _deposits.length * PREDEPOSIT_AMOUNT;
+        $.pendingActivations[address(_stakingVault)] += _deposits.length;
 
         mapping(bytes validatorPubkey => ValidatorStatus) storage validatorByPubkey = _storage().validatorStatus;
 
@@ -446,12 +420,13 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     }
 
     /**
-     * @notice permissionless method to prove correct Withdrawal Credentials for the validator
+     * @notice permissionless method to prove correct Withdrawal Credentials and activate validator if possible
      * @param _witness object containing validator pubkey, Merkle proof and timestamp for Beacon Block root child block
      * @dev will revert if proof is invalid or misformed or validator is not predeposited
-     * @dev transition PREDEPOSITED => PROVEN
+     * @dev transition PREDEPOSITED => PROVEN [=> ACTIVATED]
+     * @dev if activation is impossible, it can be done later by calling activateValidator() explicitly
      */
-    function proveWC(ValidatorWitness calldata _witness) external whenResumed {
+    function proveWCAndActivate(ValidatorWitness calldata _witness) external whenResumed {
         ValidatorStatus storage validator = _storage().validatorStatus[_witness.pubkey];
 
         if (validator.stage != ValidatorStage.PREDEPOSITED) {
@@ -460,9 +435,19 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         IStakingVault stakingVault = validator.stakingVault;
         bytes32 withdrawalCredentials = _checkVaultWC(stakingVault);
+        address nodeOperator = validator.nodeOperator;
 
-        validator.stage = ValidatorStage.PROVEN;
-        _proveWC(_witness, stakingVault, withdrawalCredentials, validator.nodeOperator);
+        _proveWC(_witness, stakingVault, withdrawalCredentials, nodeOperator);
+
+        // activate validator if possible
+        if (stakingVault.depositor() == address(this) && stakingVault.stagedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
+            _activateAndTopUpValidator(stakingVault, _witness.pubkey, 0, new bytes(96), withdrawalCredentials, nodeOperator);
+            validator.stage = ValidatorStage.ACTIVATED;
+        } else {
+            // only if validator is disconnected
+            // because on connection we check depositor and staged balance
+            validator.stage = ValidatorStage.PROVEN;
+        }
     }
 
     /**
@@ -576,7 +561,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[nodeOperator];
         balance.total -= PREDEPOSIT_AMOUNT;
         balance.locked -= PREDEPOSIT_AMOUNT;
-        $.pendingPredeposits[address(stakingVault)] -= PREDEPOSIT_AMOUNT;
+        $.pendingActivations[address(stakingVault)] -= 1;
 
         // unlocking the staged amount if possible as we are not activating this validator
         if (stakingVault.depositor() == address(this) && stakingVault.stagedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
@@ -706,7 +691,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         NodeOperatorBalance storage balance = _storage().nodeOperatorBalance[_nodeOperator];
         balance.locked -= PREDEPOSIT_AMOUNT;
-        _storage().pendingPredeposits[address(_vault)] -= PREDEPOSIT_AMOUNT;
 
         emit BalanceUnlocked(_nodeOperator, balance.total, balance.locked);
         emit ValidatorProven(_witness.pubkey, _nodeOperator, address(_vault), _withdrawalCredentials);
@@ -720,6 +704,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         bytes32 _withdrawalCredentials,
         address _nodeOperator
     ) internal {
+        _storage().pendingActivations[address(_stakingVault)] -= 1;
         uint256 depositAmount = ACTIVATION_DEPOSIT_AMOUNT + _additionalAmount;
 
         IStakingVault.Deposit memory deposit = IStakingVault.Deposit({

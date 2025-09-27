@@ -7,7 +7,9 @@ import {IPredepositGuarantee} from "contracts/0.8.25/vaults/interfaces/IPredepos
 import {IStakingVault} from "contracts/0.8.25/vaults/interfaces/IStakingVault.sol";
 
 contract PredepositGuarantee__MockForLazyOracle is IPredepositGuarantee {
-    function pendingPredeposits(IStakingVault _vault) external view override returns (uint256) {}
+    function pendingActivations(IStakingVault _vault) external view override returns (uint256) {}
 
     function proveUnknownValidator(ValidatorWitness calldata _witness, IStakingVault _stakingVault) external override {}
+
+    function validatorStatus(bytes calldata _pubkey) external view override returns (ValidatorStatus memory) {}
 }
