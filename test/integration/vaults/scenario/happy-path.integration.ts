@@ -20,14 +20,15 @@ import {
 } from "lib";
 import { TOTAL_BASIS_POINTS } from "lib/constants";
 import {
+  calculateLockedValue,
   getProtocolContext,
   getReportTimeElapsed,
   OracleReportParams,
   ProtocolContext,
   report,
+  reportVaultDataWithProof,
   setupLidoForVaults,
 } from "lib/protocol";
-import { reportVaultDataWithProof } from "lib/protocol/helpers/vaults";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 import { ONE_DAY } from "test/suite/constants";
@@ -262,7 +263,7 @@ describe("Scenario: Staking Vaults Happy Path", () => {
       return generateTopUp(validator.container, postDepositAmount);
     });
 
-    await pdg.proveWCAndTopUpValidators(
+    await pdg.proveWCActivateAndTopUpValidators(
       witnesses,
       postdeposits.map((p) => p.amount),
     );
@@ -303,16 +304,13 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     await expect(dashboard.connect(owner).mintShares(owner, stakingVaultMaxMintingShares))
       .to.emit(vaultHub, "MintedSharesOnVault")
-      .withArgs(stakingVaultAddress, stakingVaultMaxMintingShares, funding);
+      .withArgs(
+        stakingVaultAddress,
+        stakingVaultMaxMintingShares,
+        await calculateLockedValue(ctx, stakingVault, { liabilityShares: stakingVaultMaxMintingShares }),
+      );
 
-    const lockedAfter = await vaultHub.locked(stakingVaultAddress);
-    expect(lockedAfter).to.equal(funding);
     expect(await dashboard.remainingMintingCapacityShares(0n)).to.equal(0n);
-
-    log.debug("Staking Vault", {
-      "Staking Vault Minted Shares": stakingVaultMaxMintingShares,
-      "Staking Vault Locked": lockedAfter,
-    });
   });
 
   it("Should rebase simulating 3% stETH APR", async () => {
@@ -343,18 +341,18 @@ describe("Scenario: Staking Vaults Happy Path", () => {
     expect(vaultReportedEvent.args?.reportLiabilityShares).to.equal(stakingVaultMaxMintingShares);
     // TODO: add assertions for fees
 
-    expect(await dashboard.nodeOperatorDisbursableFee()).to.be.gt(0n);
+    expect(await dashboard.accruedFee()).to.be.gt(0n);
   });
 
   it("Should allow Operator to claim performance fees", async () => {
-    const performanceFee = await dashboard.nodeOperatorDisbursableFee();
+    const performanceFee = await dashboard.accruedFee();
     log.debug("Staking Vault stats", {
       "Staking Vault performance fee": ethers.formatEther(performanceFee),
     });
 
     const operatorBalanceBefore = await ethers.provider.getBalance(nodeOperator);
 
-    const claimPerformanceFeesTx = await dashboard.connect(nodeOperator).disburseNodeOperatorFee();
+    const claimPerformanceFeesTx = await dashboard.connect(nodeOperator).disburseFee();
     const claimPerformanceFeesTxReceipt = (await claimPerformanceFeesTx.wait()) as ContractTransactionReceipt;
 
     const operatorBalanceAfter = await ethers.provider.getBalance(nodeOperator);

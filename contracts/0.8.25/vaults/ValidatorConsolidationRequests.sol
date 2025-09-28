@@ -18,7 +18,7 @@ import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
   *
   *         This contract is strictly for an account that: 
   *           - has its address as withdrawal credentials for pubkeys to consolidate from
-  *           - has the `NODE_OPERATOR_REWARDS_ADJUST_ROLE` role assigned in Dashboard.
+  *           - has the `NODE_OPERATOR_FEE_EXEMPT_ROLE` role assigned in Dashboard.
   */
 contract ValidatorConsolidationRequests {
     /// @notice EIP-7251 consolidation requests contract address.
@@ -38,15 +38,15 @@ contract ValidatorConsolidationRequests {
     }
 
     /**
-     * @notice Return the encoded calls for EIP-7251 consolidation requests and the rewards adjustment increase.
+     * @notice Return the encoded calls for EIP-7251 consolidation requests and the fee exemption.
      * 
      * Use case:
      * - If your withdrawal credentials are an EOA or multisig and you want to
      *   consolidate validator balances into staking vaults, call this method to
-     *   generate the encoded consolidation and rewards-adjustment calls.
+     *   generate the encoded consolidation and fee exemption calls.
      *   These calls can later be submitted via EIP-5792.
-     * - Rewards adjustment calls can only be executed by an account with the
-     *   `NODE_OPERATOR_REWARDS_ADJUST_ROLE`. The node operator may grant this
+     * - Fee exemption calls can only be executed by an account with the
+     *   `NODE_OPERATOR_FEE_EXEMPT_ROLE`. The node operator may grant this
      *   role to the withdrawal credentials account.
      * 
      * Recommendations:
@@ -65,11 +65,11 @@ contract ValidatorConsolidationRequests {
      *
      * @param _dashboard The address of the dashboard contract.
      * @param _allSourceValidatorBalancesWei The total balance (in wei) of all source validators.
-     *        This value is used to adjust the rewards amount before charging the node operator fee.
+     *        This value is used to exempt the source validator balances from the node operator fee base.
      *
      *        Node operator fee is applied only on rewards, which are defined as
      *        "all external ether that appeared in the vault on top of the initially deposited one".
-     *        Without this adjustment, consolidated validator balances would incorrectly
+     *        Without this exemption, consolidated validator balances would incorrectly
      *        be included in the rewards base, which would lead to overcharging.
      *
      *        By passing the sum of all source validator balances, you ensure that these
@@ -79,17 +79,17 @@ contract ValidatorConsolidationRequests {
      *        ⚠️ Note: this is not a precise method. It does not account for the future
      *        rewards that the consolidated validators may earn after this call, so in some
      *        setups additional correction may be required.
-     * @return adjustmentIncreaseEncodedCall The encoded call to increase the rewards adjustment
+     * @return feeExemptionEncodedCall The encoded call to increase the fee exemption
      *        (or empty if zero sum of source validator balances passed).
      * @return consolidationRequestEncodedCalls The encoded calls for the consolidation requests.
      */
-    function getConsolidationRequestsAndAdjustmentIncreaseEncodedCalls(
+    function getConsolidationRequestsAndFeeExemptionEncodedCalls(
         bytes[] calldata _sourcePubkeys,
         bytes[] calldata _targetPubkeys,
         address _dashboard,
         uint256 _allSourceValidatorBalancesWei
     ) external view returns (
-        bytes memory adjustmentIncreaseEncodedCall,
+        bytes memory feeExemptionEncodedCall,
         bytes[] memory consolidationRequestEncodedCalls
     ) {
         if (_sourcePubkeys.length == 0) revert ZeroArgument("sourcePubkeys");
@@ -127,8 +127,8 @@ contract ValidatorConsolidationRequests {
         );
 
         if (_allSourceValidatorBalancesWei > 0) {
-            adjustmentIncreaseEncodedCall = abi.encodeWithSelector(
-                NodeOperatorFee.increaseRewardsAdjustment.selector,
+            feeExemptionEncodedCall = abi.encodeWithSelector(
+                NodeOperatorFee.addFeeExemption.selector,
                 _allSourceValidatorBalancesWei
             );
         }

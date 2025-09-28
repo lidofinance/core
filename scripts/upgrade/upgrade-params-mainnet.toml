@@ -39,7 +39,7 @@ shardCommitteePeriodInSeconds = 98304     # Shard committee period in seconds (2
 
 # Vault hub configuration for managing staking vaults
 [vaultHub]
-relativeShareLimitBP = 1000           # Relative share limit in basis points (10%)
+relativeShareLimitBP = 3000           # Relative share limit in basis points (30%)
 
 # Lazy oracle configuration for delayed reward calculations
 [lazyOracle]
@@ -62,7 +62,7 @@ wethContract = "0x94373a4919B3240D86eA41593D5eBa789FEF3848"  # WETH contract add
 [operatorGrid]
 # Default tier parameters for operator classification and fee structure
 [operatorGrid.defaultTierParams]
-shareLimitInEther = "1000"            # Share limit per tier in ETH
+shareLimitInEther = "250"             # Share limit per tier in ETH
 reserveRatioBP = 2000                 # Reserve ratio in basis points (20%)
 forcedRebalanceThresholdBP = 1800     # Threshold for forced rebalancing in basis points (18%)
 infraFeeBP = 500                      # Infrastructure fee in basis points (5%)

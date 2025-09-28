@@ -29,7 +29,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         QUARANTINE_EXPIRED  // Quarantine period has passed
     }
 
-    /// @custom:storage-location erc7201:LazyOracle
+    /// @custom:storage-location erc7201:Lido.Vaults.LazyOracle
     struct Storage {
         /// @notice root of the vaults data tree
         bytes32 vaultsDataTreeRoot;
@@ -106,7 +106,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     struct VaultInfo {
         address vault;
-        uint256 aggregateBalance; // includes pendingPredeposits, availableBalance and stagedBalance
+        uint256 aggregatedBalance; // includes availableBalance and stagedBalance
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
@@ -121,9 +121,9 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         bool pendingDisconnect;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("LazyOracle")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("Lido.Vaults.LazyOracle")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant LAZY_ORACLE_STORAGE_LOCATION =
-        0xe5459f2b48ec5df2407caac4ec464a5cb0f7f31a1f22f649728a9579b25c1d00;
+        0x73a2a247d4b1b6fe056fe90935e9bd3694e896bafdd08f046c2afe6ec2db2100;
 
     /// @dev 0x7baf7f4a9784fa74c97162de631a3eb567edeb85878cb6965945310f2c512c63
     bytes32 public constant UPDATE_SANITY_PARAMS_ROLE = keccak256("vaults.LazyOracle.UpdateSanityParams");
@@ -231,7 +231,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             VaultHub.VaultRecord memory record = vaultHub.vaultRecord(vaultAddress);
             batch[i] = VaultInfo(
                 vaultAddress,
-                vault.availableBalance() + vault.stagedBalance() + pendingPredeposits(vault),
+                vault.availableBalance() + vault.stagedBalance(),
                 record.inOutDelta.currentValue(),
                 vault.withdrawalCredentials(),
                 record.liabilityShares,
@@ -247,6 +247,20 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             );
         }
         return batch;
+    }
+
+    /**
+     * @notice batch method to mass check the validator stages in PredepositGuarantee contract
+     * @param _pubkeys the array of validator's pubkeys to check
+     */
+    function batchValidatorStages(
+        bytes[] calldata _pubkeys
+    ) external view returns (IPredepositGuarantee.ValidatorStage[] memory batch) {
+        batch = new IPredepositGuarantee.ValidatorStage[](_pubkeys.length);
+
+        for (uint256 i = 0; i < _pubkeys.length; i++) {
+            batch[i] = predepositGuarantee().validatorStatus(_pubkeys[i]).stage;
+        }
     }
 
     /// @notice update the sanity parameters
@@ -562,8 +576,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         }
     }
 
-    function pendingPredeposits(IStakingVault _vault) internal view returns (uint256) {
-        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee()).pendingPredeposits(_vault);
+    function predepositGuarantee() internal view returns (IPredepositGuarantee) {
+        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee());
     }
 
     function _vaultHub() internal view returns (VaultHub) {

@@ -31,6 +31,7 @@ import {
   ether,
   findEvents,
   impersonate,
+  PDGPolicy,
   randomValidatorPubkey,
 } from "lib";
 
@@ -236,6 +237,7 @@ describe("Dashboard.sol", () => {
     const dashboardCreatedEvent = findEvents(createVaultReceipt, "DashboardCreated")[0];
     const dashboardAddress = dashboardCreatedEvent.args.dashboard;
     dashboard = await ethers.getContractAt("Dashboard", dashboardAddress, vaultOwner);
+    await dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
 
     originalState = await Snapshot.take();
   });
@@ -317,6 +319,12 @@ describe("Dashboard.sol", () => {
       expect(await dashboard.STETH()).to.equal(steth);
       expect(await dashboard.WSTETH()).to.equal(wsteth);
       expect(await dashboard.LIDO_LOCATOR()).to.equal(lidoLocator);
+      expect(await dashboard.settledGrowth()).to.equal(0n);
+      expect(await dashboard.latestCorrectionTimestamp()).to.equal(0n);
+      expect(await dashboard.isApprovedToConnect()).to.be.false;
+      expect(await dashboard.feeRate()).to.equal(nodeOperatorFeeBP);
+      expect(await dashboard.feeRecipient()).to.equal(nodeOperator);
+      expect(await dashboard.getConfirmExpiry()).to.equal(confirmExpiry);
       // dashboard roles
       expect(await dashboard.hasRole(await dashboard.DEFAULT_ADMIN_ROLE(), vaultOwner)).to.be.true;
       expect(await dashboard.getRoleMemberCount(await dashboard.DEFAULT_ADMIN_ROLE())).to.equal(1);
@@ -360,36 +368,6 @@ describe("Dashboard.sol", () => {
     it("returns the correct vault connection data", async () => {
       const connection_ = await dashboard.vaultConnection();
       expect(connection_).to.deep.equal(Object.values(connection));
-    });
-
-    it("shareLimit", async () => {
-      const shareLimit = await dashboard.shareLimit();
-      expect(shareLimit).to.equal(connection.shareLimit);
-    });
-
-    it("reserveRatioBP", async () => {
-      const reserveRatioBP = await dashboard.reserveRatioBP();
-      expect(reserveRatioBP).to.equal(connection.reserveRatioBP);
-    });
-
-    it("forcedRebalanceThresholdBP", async () => {
-      const forcedRebalanceThresholdBP = await dashboard.forcedRebalanceThresholdBP();
-      expect(forcedRebalanceThresholdBP).to.equal(connection.forcedRebalanceThresholdBP);
-    });
-
-    it("infraFeeBP", async () => {
-      const infraFeeBP = await dashboard.infraFeeBP();
-      expect(infraFeeBP).to.equal(connection.infraFeeBP);
-    });
-
-    it("liquidityFeeBP", async () => {
-      const liquidityFeeBP = await dashboard.liquidityFeeBP();
-      expect(liquidityFeeBP).to.equal(connection.liquidityFeeBP);
-    });
-
-    it("reservationFeeBP", async () => {
-      const reservationFeeBP = await dashboard.reservationFeeBP();
-      expect(reservationFeeBP).to.equal(connection.reservationFeeBP);
     });
   });
 
@@ -619,7 +597,7 @@ describe("Dashboard.sol", () => {
 
     beforeEach(async () => {
       const defaultAdminRoles = await Promise.all([
-        { role: await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(), account: nodeOperator.address },
+        { role: await dashboard.NODE_OPERATOR_FEE_EXEMPT_ROLE(), account: nodeOperator.address },
       ]);
 
       // Create a new vault without hub connection
@@ -648,13 +626,23 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await expect(newDashboard.connect(stranger).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
         newDashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
+    it("reverts if connect is not approved by node operator", async () => {
+      expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+        newDashboard,
+        "ForbiddenToConnectByNodeOperator",
+      );
+    });
+
     it("reverts if change tier is not confirmed by node operator", async () => {
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
         newDashboard,
         "TierChangeNotConfirmed",
@@ -662,6 +650,7 @@ describe("Dashboard.sol", () => {
     });
 
     it("works", async () => {
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
       await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.emit(hub, "Mock__VaultConnected");
     });
@@ -669,6 +658,7 @@ describe("Dashboard.sol", () => {
     it("works with connection deposit", async () => {
       const connectDeposit = await hub.CONNECT_DEPOSIT();
 
+      await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
       await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, { value: connectDeposit }))
         .to.emit(hub, "Mock__VaultConnected")
@@ -1085,15 +1075,36 @@ describe("Dashboard.sol", () => {
       },
     ];
 
+    it("reverts if the PDG policy is set to STRICT", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
+
+      await expect(
+        dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG(witnesses),
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
+    });
+
     it("reverts if called by a non-admin", async () => {
-      await expect(dashboard.connect(stranger).proveUnknownValidatorsToPDG(witnesses)).to.be.revertedWithCustomError(
-        dashboard,
-        "AccessControlUnauthorizedAccount",
+      await expect(dashboard.connect(stranger).proveUnknownValidatorsToPDG(witnesses))
+        .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await dashboard.NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE());
+    });
+
+    it("proves unknown validators to PDG when policy is set to ALLOW_DEPOSIT_AND_PROVE", async () => {
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+
+      await expect(dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG(witnesses)).to.emit(
+        hub,
+        "Mock__ValidatorProvedToPDG",
       );
     });
 
-    it("proves unknown validators to PDG", async () => {
-      await expect(dashboard.proveUnknownValidatorsToPDG(witnesses)).to.emit(hub, "Mock__ValidatorProvedToPDG");
+    it("proves unknown validators to PDG when policy is set to ALLOW_PROVE", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+
+      await expect(dashboard.connect(nodeOperator).proveUnknownValidatorsToPDG(witnesses)).to.emit(
+        hub,
+        "Mock__ValidatorProvedToPDG",
+      );
     });
   });
 
@@ -1320,10 +1331,37 @@ describe("Dashboard.sol", () => {
       },
     ];
 
+    it("reverts if PDG policy is set to STRICT", async () => {
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
+
+      await expect(
+        dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits),
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
+    });
+
+    it("reverts if PDG policy is set to ALLOW_PROVE", async () => {
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
+      await dashboard.setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+
+      await expect(
+        dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits),
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
+    });
+
+    it("reverts if PDG policy is set to ALLOW_PROVE", async () => {
+      await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
+      await dashboard.setPDGPolicy(PDGPolicy.ALLOW_PROVE);
+
+      await expect(
+        dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits),
+      ).to.be.revertedWithCustomError(dashboard, "ForbiddenByPDGPolicy");
+    });
+
     it("reverts if the total amount exceeds the withdrawable value", async () => {
       await setup({ totalValue: ether("10"), maxLiabilityShares: 0n, vaultBalance: ether("0.9") });
 
-      await expect(dashboard.unguaranteedDepositToBeaconChain(deposits))
+      await expect(dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits))
         .to.be.revertedWithCustomError(dashboard, "ExceedsWithdrawable")
         .withArgs(ether("1"), ether("0.9"));
     });
@@ -1333,7 +1371,7 @@ describe("Dashboard.sol", () => {
 
       await expect(dashboard.connect(stranger).unguaranteedDepositToBeaconChain(deposits))
         .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
-        .withArgs(stranger, await dashboard.UNGUARANTEED_BEACON_CHAIN_DEPOSIT_ROLE());
+        .withArgs(stranger, await dashboard.NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE());
     });
 
     it("performs unguaranteed deposit", async () => {
@@ -1341,7 +1379,7 @@ describe("Dashboard.sol", () => {
       await setBalance(await hub.getAddress(), ether("100"));
       await hub.mock__setSendWithdraw(true);
 
-      await expect(dashboard.unguaranteedDepositToBeaconChain(deposits))
+      await expect(dashboard.connect(nodeOperator).unguaranteedDepositToBeaconChain(deposits))
         .to.emit(hub, "Mock__Withdrawn")
         .withArgs(vault, dashboard, ether("1"))
         .and.to.emit(dashboard, "UnguaranteedDeposits")
@@ -1353,6 +1391,39 @@ describe("Dashboard.sol", () => {
           deposits[0].signature,
           deposits[0].depositDataRoot,
         );
+    });
+  });
+
+  context("setPDGPolicy", () => {
+    it("reverts if the caller is not a member of the node operator manager role", async () => {
+      await expect(dashboard.connect(stranger).setPDGPolicy(PDGPolicy.ALLOW_PROVE))
+        .to.be.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount")
+        .withArgs(stranger, await dashboard.DEFAULT_ADMIN_ROLE());
+    });
+
+    it("sets PDG Policy to ALLOW_PROVE", async () => {
+      await expect(dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_PROVE))
+        .to.emit(dashboard, "PDGPolicyEnacted")
+        .withArgs(PDGPolicy.ALLOW_PROVE);
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_PROVE);
+    });
+
+    it("sets PDG Policy to ALLOW_DEPOSIT_AND_PROVE", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
+
+      await expect(dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE))
+        .to.emit(dashboard, "PDGPolicyEnacted")
+        .withArgs(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+      expect(await dashboard.pdgPolicy()).to.equal(PDGPolicy.ALLOW_DEPOSIT_AND_PROVE);
+    });
+
+    it("reverts when setting the same policy", async () => {
+      await dashboard.setPDGPolicy(PDGPolicy.STRICT);
+
+      await expect(dashboard.connect(vaultOwner).setPDGPolicy(PDGPolicy.STRICT)).to.be.revertedWithCustomError(
+        dashboard,
+        "PDGPolicyAlreadyActive",
+      );
     });
   });
 
@@ -1426,9 +1497,147 @@ describe("Dashboard.sol", () => {
       expect(await vault.owner()).to.equal(vaultOwner);
 
       // reconnect
+      await dashboard.connect(nodeOperator).setApprovedToConnect(true);
       await vault.connect(vaultOwner).transferOwnership(dashboard);
       await dashboard.reconnectToVaultHub();
       expect(await vault.owner()).to.equal(hub);
+    });
+  });
+
+  context("Approval to Connect", () => {
+    let newVault: StakingVault;
+    let newDashboard: Dashboard;
+
+    beforeEach(async () => {
+      // Create a new vault without hub connection for each test
+      const createVaultTx = await factory.createVaultWithDashboardWithoutConnectingToVaultHub(
+        vaultOwner.address,
+        nodeOperator.address,
+        nodeOperator.address,
+        nodeOperatorFeeBP,
+        confirmExpiry,
+        [],
+      );
+      const createVaultReceipt = await createVaultTx.wait();
+      if (!createVaultReceipt) throw new Error("Vault creation receipt not found");
+
+      const vaultCreatedEvents = findEvents(createVaultReceipt, "VaultCreated");
+      expect(vaultCreatedEvents.length).to.equal(1);
+
+      const newVaultAddress = vaultCreatedEvents[0].args.vault;
+      newVault = await ethers.getContractAt("StakingVault", newVaultAddress, vaultOwner);
+
+      const dashboardCreatedEvents = findEvents(createVaultReceipt, "DashboardCreated");
+      expect(dashboardCreatedEvents.length).to.equal(1);
+
+      const newDashboardAddress = dashboardCreatedEvents[0].args.dashboard;
+      newDashboard = await ethers.getContractAt("Dashboard", newDashboardAddress, vaultOwner);
+    });
+
+    context("Initial state", () => {
+      it("should have isApprovedToConnect set to false initially", async () => {
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      });
+    });
+
+    context("approveToConnect", () => {
+      it("allows node operator to approve connection", async () => {
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(true))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(true);
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+      });
+
+      it("reverts if called by a stranger", async () => {
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+
+        await expect(newDashboard.connect(stranger).setApprovedToConnect(true))
+          .to.be.revertedWithCustomError(newDashboard, "AccessControlUnauthorizedAccount")
+          .withArgs(stranger, await newDashboard.NODE_OPERATOR_MANAGER_ROLE());
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      });
+
+      it("should allow multiple calls to approveToConnect", async () => {
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+
+        // Should not revert when called again
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(true))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(true);
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+      });
+    });
+
+    context("forbidToConnect", () => {
+      beforeEach(async () => {
+        // First approve to connect
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+      });
+
+      it("allows node operator to forbid connection", async () => {
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(false))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(false);
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      });
+
+      it("reverts when called by a stranger", async () => {
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+
+        await expect(newDashboard.connect(stranger).setApprovedToConnect(false))
+          .to.be.revertedWithCustomError(newDashboard, "AccessControlUnauthorizedAccount")
+          .withArgs(stranger, await newDashboard.NODE_OPERATOR_MANAGER_ROLE());
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+      });
+
+      it("allows multiple calls to forbidToConnect", async () => {
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(false);
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+
+        // Should not revert when called again
+        await expect(newDashboard.connect(nodeOperator).setApprovedToConnect(false))
+          .to.emit(newDashboard, "ApprovedToConnectSet")
+          .withArgs(false);
+
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      });
+    });
+
+    context("connectToVaultHub approval requirements", () => {
+      it("reverts when not approved to connect", async () => {
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+
+        await expect(newDashboard.connectToVaultHub()).to.be.revertedWithCustomError(
+          newDashboard,
+          "ForbiddenToConnectByNodeOperator",
+        );
+      });
+
+      it("succeeds when approved to connect", async () => {
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+
+        await expect(newDashboard.connectToVaultHub()).to.emit(hub, "Mock__VaultConnected").withArgs(newVault);
+      });
+
+      it("resets approval after successful connection", async () => {
+        await newDashboard.connect(nodeOperator).setApprovedToConnect(true);
+        expect(await newDashboard.isApprovedToConnect()).to.be.true;
+
+        await newDashboard.connectToVaultHub();
+
+        // Approval should be reset to false after connection
+        expect(await newDashboard.isApprovedToConnect()).to.be.false;
+      });
     });
   });
 });
