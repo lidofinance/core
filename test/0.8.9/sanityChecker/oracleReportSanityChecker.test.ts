@@ -19,12 +19,13 @@ import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { Snapshot } from "test/suite";
 
-const MAX_UINT16 = 2 ** 16;
-const MAX_UINT32 = 2 ** 32;
-const MAX_UINT64 = 2 ** 64;
+const MAX_UINT16 = BigInt(2 ** 16);
+const MAX_UINT32 = BigInt(2 ** 32);
+const MAX_UINT64 = BigInt(2 ** 64);
 
 describe("OracleReportSanityChecker.sol", () => {
   let checker: OracleReportSanityChecker;
+
   let locator: LidoLocator__MockForSanityChecker;
   let burner: Burner__MockForSanityChecker;
   let accounting: Accounting__MockForSanityChecker;
@@ -455,9 +456,8 @@ describe("OracleReportSanityChecker.sol", () => {
       );
     });
 
-    // TODO: check why this is not work, it should be reverted with `IncorrectLimitValue`
-    it.skip("reverts if limit is greater than max", async () => {
-      await expect(checker.connect(manager).setMaxPositiveTokenRebase(MAX_UINT64)).to.be.revertedWithCustomError(
+    it("reverts if limit is greater than max", async () => {
+      await expect(checker.connect(manager).setMaxPositiveTokenRebase(MAX_UINT64 + 1n)).to.be.revertedWithCustomError(
         checker,
         "IncorrectLimitValue",
       );
@@ -1261,7 +1261,7 @@ describe("OracleReportSanityChecker.sol", () => {
         .withArgs(annualBalanceIncrease);
     });
 
-    it("reverts when ammount of appeared validators is greater than possible", async () => {
+    it("reverts when amount of appeared validators is greater than possible", async () => {
       const insaneValidators = 100000n;
       await expect(
         checker
