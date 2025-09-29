@@ -1,15 +1,14 @@
-import child_process from "node:child_process";
 import fs from "node:fs/promises";
-import util from "node:util";
 
 import { ethers } from "hardhat";
 
 import { LidoTemplate, WithdrawalQueueERC721 } from "typechain-types";
 
 import { log } from "lib";
-import { loadContract } from "lib/contract";
+import { loadContract, LoadedContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
 import { DeploymentState, getAddress, readNetworkState, Sk, updateObjectInState } from "lib/state-file";
+import { runCommand } from "lib/subprocess";
 
 const DG_INSTALL_DIR = `${process.cwd()}/dg`;
 const DG_DEPLOY_ARTIFACTS_DIR = `${DG_INSTALL_DIR}/deploy-artifacts`;
@@ -99,6 +98,16 @@ async function finalizePermissionsWithoutDGDeployment() {
   const lidoTemplate = await loadContract<LidoTemplate>("LidoTemplate", lidoTemplateAddress);
 
   await makeTx(lidoTemplate, "finalizePermissionsWithoutDGDeployment", [], { from: deployer });
+
+  await transferLidoTemplateOwnershipToAgent(deployer, lidoTemplate, getAddress(Sk.appAgent, networkState));
+}
+
+async function transferLidoTemplateOwnershipToAgent(
+  deployer: string,
+  lidoTemplate: LoadedContract<LidoTemplate>,
+  aragonAgentAddress: string,
+) {
+  await makeTx(lidoTemplate, "setOwner", [aragonAgentAddress], { from: deployer });
 }
 
 async function transferRoles(deployer: string, dgDeployArtifacts: DGDeployArtifacts, networkState: DeploymentState) {
@@ -149,6 +158,8 @@ async function transferRoles(deployer: string, dgDeployArtifacts: DGDeployArtifa
   await makeTx(lidoTemplate, "finalizePermissionsAfterDGDeployment", [dgDeployArtifacts.admin_executor], {
     from: deployer,
   });
+
+  await transferLidoTemplateOwnershipToAgent(deployer, lidoTemplate, aragonAgentAddress);
 }
 
 async function unpauseWithdrawalQueue(deployer: string, networkState: DeploymentState) {
@@ -171,18 +182,6 @@ async function prepareDGRegressionTestsRun(networkChainId: string, networkState:
 
   const dotEnvFile = getDGDotEnvFile(deployArtifactFilename, networkState, rpcUrl);
   await writeDGDotEnvFile(dotEnvFile);
-}
-
-async function runCommand(command: string, workingDirectory: string) {
-  const exec = util.promisify(child_process.exec);
-
-  try {
-    const { stdout } = await exec(command, { cwd: workingDirectory });
-    log("stdout:", stdout);
-  } catch (error) {
-    log.error(`Error running command ${command}`, `${error}`);
-    throw error;
-  }
 }
 
 async function writeDGConfigFile(dgConfig: string, filename: string) {
@@ -252,60 +251,13 @@ function getDGConfig(chainId: string, networkState: DeploymentState) {
         wst_eth: wstEth,
         withdrawal_queue: withdrawalQueue,
       },
-      sanity_check_params: {
-        max_min_assets_lock_duration:
-          networkState[Sk.dualGovernanceConfig].dual_governance.sanity_check_params.max_min_assets_lock_duration,
-        max_sealable_withdrawal_blockers_count:
-          networkState[Sk.dualGovernanceConfig].dual_governance.sanity_check_params
-            .max_sealable_withdrawal_blockers_count,
-        max_tiebreaker_activation_timeout:
-          networkState[Sk.dualGovernanceConfig].dual_governance.sanity_check_params.max_tiebreaker_activation_timeout,
-        min_tiebreaker_activation_timeout:
-          networkState[Sk.dualGovernanceConfig].dual_governance.sanity_check_params.min_tiebreaker_activation_timeout,
-        min_withdrawals_batch_size:
-          networkState[Sk.dualGovernanceConfig].dual_governance.sanity_check_params.min_withdrawals_batch_size,
-      },
+      sanity_check_params: networkState[Sk.dualGovernanceConfig].dual_governance.sanity_check_params,
     },
-    dual_governance_config_provider: {
-      first_seal_rage_quit_support:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.first_seal_rage_quit_support,
-      second_seal_rage_quit_support:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.second_seal_rage_quit_support,
-      min_assets_lock_duration:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.min_assets_lock_duration,
-      rage_quit_eth_withdrawals_delay_growth:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.rage_quit_eth_withdrawals_delay_growth,
-      rage_quit_eth_withdrawals_min_delay:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.rage_quit_eth_withdrawals_min_delay,
-      rage_quit_eth_withdrawals_max_delay:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.rage_quit_eth_withdrawals_max_delay,
-      rage_quit_extension_period_duration:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.rage_quit_extension_period_duration,
-      veto_cooldown_duration:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.veto_cooldown_duration,
-      veto_signalling_deactivation_max_duration:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.veto_signalling_deactivation_max_duration,
-      veto_signalling_min_active_duration:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.veto_signalling_min_active_duration,
-      veto_signalling_min_duration:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.veto_signalling_min_duration,
-      veto_signalling_max_duration:
-        networkState[Sk.dualGovernanceConfig].dual_governance_config_provider.veto_signalling_max_duration,
-    },
+    dual_governance_config_provider: networkState[Sk.dualGovernanceConfig].dual_governance_config_provider,
     timelock: {
       after_submit_delay: networkState[Sk.dualGovernanceConfig].timelock.after_submit_delay,
       after_schedule_delay: networkState[Sk.dualGovernanceConfig].timelock.after_schedule_delay,
-      sanity_check_params: {
-        min_execution_delay: networkState[Sk.dualGovernanceConfig].timelock.sanity_check_params.min_execution_delay,
-        max_after_submit_delay:
-          networkState[Sk.dualGovernanceConfig].timelock.sanity_check_params.max_after_submit_delay,
-        max_after_schedule_delay:
-          networkState[Sk.dualGovernanceConfig].timelock.sanity_check_params.max_after_schedule_delay,
-        max_emergency_mode_duration:
-          networkState[Sk.dualGovernanceConfig].timelock.sanity_check_params.max_emergency_mode_duration,
-        max_emergency_protection_duration:
-          networkState[Sk.dualGovernanceConfig].timelock.sanity_check_params.max_emergency_protection_duration,
-      },
+      sanity_check_params: networkState[Sk.dualGovernanceConfig].timelock.sanity_check_params,
       emergency_protection: {
         emergency_activation_committee: daoVoting,
         emergency_execution_committee: daoVoting,

@@ -65,10 +65,6 @@ export async function main() {
     await makeTx(depositSecurityModule, "setOwner", [agent], { from: deployer });
   }
 
-  // Transfer ownership of LidoTemplate to agent
-  const lidoTemplate = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
-  await makeTx(lidoTemplate, "setOwner", [agent], { from: deployer });
-
   // Transfer admin for WithdrawalsManagerProxy from deployer to voting
   const withdrawalsManagerProxy = await loadContract("WithdrawalsManagerProxy", state.withdrawalVault.proxy.address);
   await makeTx(withdrawalsManagerProxy, "proxy_changeAdmin", [voting], { from: deployer });

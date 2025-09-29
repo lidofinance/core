@@ -43,6 +43,7 @@
     "validate:configs": "yarn hardhat validate-configs",
     "typecheck": "tsc --noEmit",
     "dg:install": "yarn ts-node lib/dg-installation.ts",
+    "dg:regression-tests": "yarn ts-node lib/dg-regression-tests.ts",
     "abis:extract": "hardhat abis:extract",
     "verify:deployed": "hardhat verify:deployed",
     "postinstall": "husky"

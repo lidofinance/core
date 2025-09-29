@@ -238,6 +238,66 @@ const LidoApmSchema = z.object({
   ensRegDurationSec: PositiveIntSchema,
 });
 
+// DG deployment config schemas
+const DGConfigDGSanityCheckParamsSchema = z.object({
+  max_min_assets_lock_duration: PositiveIntSchema,
+  max_sealable_withdrawal_blockers_count: PositiveIntSchema,
+  max_tiebreaker_activation_timeout: PositiveIntSchema,
+  min_tiebreaker_activation_timeout: NonNegativeIntSchema,
+  min_withdrawals_batch_size: PositiveIntSchema,
+});
+
+const DGConfigDGSchema = z.object({
+  tiebreaker_activation_timeout: NonNegativeIntSchema,
+  sanity_check_params: DGConfigDGSanityCheckParamsSchema,
+});
+
+const DGConfigDGConfigProviderSchema = z.object({
+  first_seal_rage_quit_support: BigIntStringSchema,
+  second_seal_rage_quit_support: BigIntStringSchema,
+  min_assets_lock_duration: NonNegativeIntSchema,
+  rage_quit_eth_withdrawals_delay_growth: PositiveIntSchema,
+  rage_quit_eth_withdrawals_min_delay: NonNegativeIntSchema,
+  rage_quit_eth_withdrawals_max_delay: PositiveIntSchema,
+  rage_quit_extension_period_duration: NonNegativeIntSchema,
+  veto_cooldown_duration: NonNegativeIntSchema,
+  veto_signalling_deactivation_max_duration: PositiveIntSchema,
+  veto_signalling_min_duration: NonNegativeIntSchema,
+  veto_signalling_max_duration: PositiveIntSchema,
+  veto_signalling_min_active_duration: NonNegativeIntSchema,
+});
+
+const DGConfigTimelockSanityCheckParamsSchema = z.object({
+  min_execution_delay: NonNegativeIntSchema,
+  max_after_submit_delay: PositiveIntSchema,
+  max_after_schedule_delay: PositiveIntSchema,
+  max_emergency_mode_duration: PositiveIntSchema,
+  max_emergency_protection_duration: PositiveIntSchema,
+});
+
+const DGConfigTimelockEmergencyProtectionSchema = z.object({
+  emergency_mode_duration: NonNegativeIntSchema,
+  emergency_protection_end_date: PositiveIntSchema,
+});
+
+const DGConfigTimelockSchema = z.object({
+  after_submit_delay: NonNegativeIntSchema,
+  after_schedule_delay: NonNegativeIntSchema,
+  sanity_check_params: DGConfigTimelockSanityCheckParamsSchema,
+  emergency_protection: DGConfigTimelockEmergencyProtectionSchema,
+});
+
+const DGConfigTiebreakerSchema = z.object({
+  execution_delay: NonNegativeIntSchema,
+});
+
+const DGConfigSchema = z.object({
+  dual_governance: DGConfigDGSchema,
+  dual_governance_config_provider: DGConfigDGConfigProviderSchema,
+  timelock: DGConfigTimelockSchema,
+  tiebreaker: DGConfigTiebreakerSchema,
+});
+
 // Scratch parameters schema
 export const ScratchParametersSchema = z.object({
   chainSpec: ChainSpecSchema.omit({ genesisTime: true, depositContract: true }),
@@ -267,6 +327,7 @@ export const ScratchParametersSchema = z.object({
   triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   predepositGuarantee: PredepositGuaranteeSchema.omit({ genesisForkVersion: true }),
   operatorGrid: OperatorGridSchema,
+  dualGovernanceConfig: DGConfigSchema,
 });
 
 // Inferred types from zod schemas

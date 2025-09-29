@@ -1,6 +1,6 @@
-import child_process from "node:child_process";
 import fs from "node:fs/promises";
-import util from "node:util";
+
+import { runCommand } from "./subprocess";
 
 const DG_REPOSITORY_URL = "https://github.com/lidofinance/dual-governance.git";
 const DG_REPOSITORY_BRANCH = "feature/scratch-deploy-support2"; // TODO: use release branch
@@ -29,18 +29,6 @@ async function runForgeBuild(workingDirectory: string) {
 
 async function runUnitTests(workingDirectory: string) {
   await runCommand("npm run test:unit", workingDirectory);
-}
-
-async function runCommand(command: string, workingDirectory: string) {
-  const exec = util.promisify(child_process.exec);
-
-  try {
-    const { stdout } = await exec(command, { cwd: workingDirectory });
-    console.log("stdout:", stdout);
-  } catch (error) {
-    console.error(`Error running command ${command}`, `${error}`);
-    throw error;
-  }
 }
 
 main()
