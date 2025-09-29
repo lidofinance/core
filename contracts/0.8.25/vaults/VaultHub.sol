@@ -806,9 +806,9 @@ contract VaultHub is PausableUntilWithRoles {
         if (connection.isBeaconDepositsManuallyPaused) revert ResumedExpected();
 
         connection.isBeaconDepositsManuallyPaused = true;
-        emit BeaconChainDepositsPausedByOwner(_vault);
-
         _pauseBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
+
+        emit BeaconChainDepositsPausedByOwner(_vault);
     }
 
     /// @notice resumes beacon chain deposits for the vault
@@ -825,9 +825,12 @@ contract VaultHub is PausableUntilWithRoles {
         _requireFreshReport(_vault, record);
 
         connection.isBeaconDepositsManuallyPaused = false;
-        emit BeaconChainDepositsResumedByOwner(_vault);
 
-        _updateBeaconChainDepositsPause(_vault, record, connection);
+        if (_updateBeaconChainDepositsPause(_vault, record, connection)) {
+            emit BeaconChainDepositsAllowedByOwner(_vault);
+        } else {
+            emit BeaconChainDepositsResumedByOwner(_vault);
+        }
     }
 
     /// @notice Emits a request event for the node operator to perform validator exit
@@ -1360,13 +1363,15 @@ contract VaultHub is PausableUntilWithRoles {
         address _vault,
         VaultRecord storage _record,
         VaultConnection storage _connection
-    ) internal {
+    ) internal returns (bool isPaused) {
         IStakingVault vault_ = IStakingVault(_vault);
         uint256 obligationsAmount_ = _obligationsAmount(_connection, _record);
         if (obligationsAmount_ > 0) {
             _pauseBeaconChainDepositsIfNotAlready(vault_);
+            isPaused = true;
         } else if (!_connection.isBeaconDepositsManuallyPaused) {
             _resumeBeaconChainDepositsIfNotAlready(vault_);
+            isPaused = false;
         }
     }
 
@@ -1661,6 +1666,7 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultRedemptionSharesUpdated(address indexed vault, uint256 redemptionShares);
 
     event BeaconChainDepositsPausedByOwner(address indexed vault);
+    event BeaconChainDepositsAllowedByOwner(address indexed vault);
     event BeaconChainDepositsResumedByOwner(address indexed vault);
 
     /// @dev Warning! used by Accounting Oracle to calculate fees

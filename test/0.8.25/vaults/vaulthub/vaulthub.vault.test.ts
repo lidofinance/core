@@ -669,7 +669,7 @@ describe("VaultHub.sol:owner-functions", () => {
       await reportVault({ totalValue: ether("10"), liabilityShares: ether("8.5") });
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsResumedByOwner")
+        .to.emit(vaultHub, "BeaconChainDepositsAllowedByOwner")
         .withArgs(vaultAddress)
         .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
@@ -685,7 +685,7 @@ describe("VaultHub.sol:owner-functions", () => {
       expect(await vault.beaconChainDepositsPaused()).to.be.false;
     });
 
-    it("only resets the manual pause flag when vault is has redemption obligations", async () => {
+    it("only resets the manual pause flag when vault has redemption obligations", async () => {
       await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
       await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, ether("8.5"));
 
@@ -693,7 +693,7 @@ describe("VaultHub.sol:owner-functions", () => {
       await vaultHub.connect(vaultOwner).setLiabilitySharesTarget(vaultAddress, 0n);
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsResumedByOwner")
+        .to.emit(vaultHub, "BeaconChainDepositsAllowedByOwner")
         .withArgs(vaultAddress)
         .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
@@ -713,7 +713,7 @@ describe("VaultHub.sol:owner-functions", () => {
       await reportVault({ totalValue: ether("10"), cumulativeLidoFees: ether("1") });
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsResumedByOwner")
+        .to.emit(vaultHub, "BeaconChainDepositsAllowedByOwner")
         .withArgs(vaultAddress)
         .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
