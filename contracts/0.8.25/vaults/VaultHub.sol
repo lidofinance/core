@@ -33,7 +33,7 @@ contract VaultHub is PausableUntilWithRoles {
     // -----------------------------
     //           STORAGE STRUCTS
     // -----------------------------
-    /// @custom:storage-location erc7201:VaultHub
+    /// @custom:storage-location erc7201:Lido.Vaults.VaultHub
     struct Storage {
         /// @notice accounting records for each vault
         mapping(address vault => VaultRecord) records;
@@ -112,8 +112,8 @@ contract VaultHub is PausableUntilWithRoles {
     //           CONSTANTS
     // -----------------------------
 
-    // keccak256(abi.encode(uint256(keccak256("VaultHub")) - 1)) & ~bytes32(uint256(0xff))
-    bytes32 private constant STORAGE_LOCATION = 0xb158a1a9015c52036ff69e7937a7bb424e82a8c4cbec5c5309994af06d825300;
+    // keccak256(abi.encode(uint256(keccak256("Lido.Vaults.VaultHub")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant STORAGE_LOCATION = 0x9eb73ffa4c77d08d5d1746cf5a5e50a47018b610ea5d728ea9bd9e399b76e200;
 
     /// @notice role that allows to disconnect vaults from the hub
     /// @dev 0x479bc4a51d27fbdc8e51b5b1ebd3dcd58bd229090980bff226f8930587e69ce3
@@ -353,9 +353,8 @@ contract VaultHub is PausableUntilWithRoles {
         if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
         if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(_predepositGuarantee())) revert PDGNotDepositor(_vault);
-        // for each pending predeposit, vault should have an activation amount staged in StakingVault
-        // 1 predeposit is 1 ether and activation amount is 31 ether
-        if (vault_.stagedBalance() != 31 * _predepositGuarantee().pendingPredeposits(vault_)) {
+        // we need vault to match staged balance with pendingActivations
+        if (vault_.stagedBalance() != _predepositGuarantee().pendingActivations(vault_) * 31 ether) {
             revert InsufficientStagedBalance(_vault);
         }
 

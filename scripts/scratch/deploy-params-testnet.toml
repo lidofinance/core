@@ -28,8 +28,8 @@ aragonEnsLabelName = "aragonpm"       # Aragon ENS label name
 [dao.initialSettings.voting]
 minSupportRequired = "500000000000000000"     # Minimum support required (50%)
 minAcceptanceQuorum = "50000000000000000"     # Minimum acceptance quorum (5%)
-voteDuration = 900                            # Vote duration in seconds (15 minutes)
-objectionPhaseDuration = 300                  # Objection phase duration in seconds (5 minutes)
+voteDuration = 300                            # Vote duration in seconds (5 minutes)
+objectionPhaseDuration = 60                   # Objection phase duration in seconds (1 minute)
 
 [dao.initialSettings.fee]
 totalPercent = 10                     # Total fee percentage
@@ -50,7 +50,7 @@ revokable = false                     # Whether vesting is revokable
 
 [vesting.holders]
 # Initial token holders and amounts (in wei)
-"0xCD1f9954330AF39a74Fd6e7B25781B4c24ee373f" = "760000000000000000000000" # Default LDO whale
+"0xe4dD9D749004872b68279Eda85306ada07CDB12a" = "760000000000000000000000" # Default LDO whale
 "0x51Af50A64Ec8A4F442A36Bd5dcEF1e86c127Bd51" = "60000000000000000000000" # Staking Interface DAO Voter
 "0xaa6bfBCD634EE744CB8FE522b29ADD23124593D3" = "60000000000000000000000" # LDO Voter 1
 "0xBA59A84C6440E8cccfdb5448877E26F1A431Fc8B" = "60000000000000000000000" # LDO Voter 2
@@ -69,7 +69,7 @@ epochsPerFrame = 12                   # Epochs per consensus frame
 
 # Vault hub configuration for managing staking vaults
 [vaultHub]
-maxRelativeShareLimitBP = 1000        # Maximum relative share limit in basis points (10%)
+maxRelativeShareLimitBP = 3000        # Maximum relative share limit in basis points (30%)
 
 # Lazy oracle configuration for delayed reward calculations
 [lazyOracle]
@@ -79,7 +79,7 @@ maxLidoFeeRatePerSecond = "180000000000000000" # Maximum Lido fee rate per secon
 
 # Accounting oracle configuration
 [accountingOracle]
-consensusVersion = 3                  # Consensus version
+consensusVersion = 5                  # Consensus version
 
 # Hash consensus for validators exit bus oracle
 [hashConsensusForValidatorsExitBusOracle]
@@ -88,7 +88,7 @@ epochsPerFrame = 4                    # Epochs per consensus frame
 
 # Validators exit bus oracle configuration
 [validatorsExitBusOracle]
-consensusVersion = 3                  # Consensus version
+consensusVersion = 4                  # Consensus version
 maxValidatorsPerRequest = 600         # Maximum validators per request
 maxExitRequestsLimit = 13000          # Maximum exit requests limit
 exitsPerFrame = 1                     # Exits per frame
@@ -96,9 +96,9 @@ frameDurationInSec = 48               # Frame duration in seconds
 
 # Deposit security module configuration
 [depositSecurityModule]
-maxOperatorsPerUnvetting = 200        # Maximum operators per unveiling
-pauseIntentValidityPeriodBlocks = 6646 # Pause intent validity period in blocks
-# usePredefinedAddressInstead = ""    # Use predefined address instead (empty for auto-deploy)
+maxOperatorsPerUnvetting = 200          # Maximum operators per unveiling
+pauseIntentValidityPeriodBlocks = 6646  # Pause intent validity period in blocks
+# usePredefinedAddressInstead = ""      # Use predefined address instead (empty for auto-deploy)
 
 # Oracle report sanity checker configuration
 [oracleReportSanityChecker]
@@ -184,7 +184,7 @@ changeSlot = 0                        # Slot number when the change takes effect
 [operatorGrid]
 # Default tier parameters for operator classification and fee structure
 [operatorGrid.defaultTierParams]
-shareLimitInEther = "1000"            # Share limit per tier in ETH
+shareLimitInEther = "250"             # Share limit per tier in ETH
 reserveRatioBP = 2000                 # Reserve ratio in basis points (20%)
 forcedRebalanceThresholdBP = 1800     # Threshold for forced rebalancing in basis points (18%)
 infraFeeBP = 500                      # Infrastructure fee in basis points (5%)

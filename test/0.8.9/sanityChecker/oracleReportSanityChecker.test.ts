@@ -7,6 +7,7 @@ import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
   Accounting__MockForSanityChecker,
+  AccountingOracle__MockForSanityChecker,
   Burner__MockForSanityChecker,
   LidoLocator__MockForSanityChecker,
   OracleReportSanityChecker,
@@ -19,23 +20,22 @@ import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { Snapshot } from "test/suite";
 
-const MAX_UINT16 = 2 ** 16;
-const MAX_UINT32 = 2 ** 32;
-const MAX_UINT64 = 2 ** 64;
+const MAX_UINT16 = BigInt(2 ** 16);
+const MAX_UINT32 = BigInt(2 ** 32);
+const MAX_UINT64 = BigInt(2 ** 64);
 
 // TODO: refactor after devnet-0
 describe.skip("OracleReportSanityChecker.sol", () => {
   let checker: OracleReportSanityChecker;
+
   let locator: LidoLocator__MockForSanityChecker;
   let burner: Burner__MockForSanityChecker;
   let accounting: Accounting__MockForSanityChecker;
-  let withdrawalQueueMock: WithdrawalQueue__MockForSanityChecker;
+  let withdrawalQueue: WithdrawalQueue__MockForSanityChecker;
   let stakingRouter: StakingRouter__MockForSanityChecker;
+  let accountingOracle: AccountingOracle__MockForSanityChecker;
 
-  let locatorAddress: string;
-  let withdrawalVaultAddress: string;
-  let accountingOracleAddress: string;
-  let accountingAddress: string;
+  let withdrawalVault: HardhatEthersSigner;
 
   const defaultLimits = {
     exitedValidatorsPerDayLimit: 55n,
@@ -74,16 +74,15 @@ describe.skip("OracleReportSanityChecker.sol", () => {
   let originalState: string;
 
   before(async () => {
-    [deployer, admin, elRewardsVault, stranger, manager] = await ethers.getSigners();
+    [deployer, admin, elRewardsVault, stranger, manager, withdrawalVault] = await ethers.getSigners();
 
-    withdrawalVaultAddress = randomAddress();
-    await setBalance(withdrawalVaultAddress, ether("500"));
+    await setBalance(withdrawalVault.address, ether("500"));
 
-    withdrawalQueueMock = await ethers.deployContract("WithdrawalQueue__MockForSanityChecker");
+    withdrawalQueue = await ethers.deployContract("WithdrawalQueue__MockForSanityChecker");
     burner = await ethers.deployContract("Burner__MockForSanityChecker");
     accounting = await ethers.deployContract("Accounting__MockForSanityChecker", []);
 
-    const accountingOracle = await ethers.deployContract("AccountingOracle__MockForSanityChecker", [
+    accountingOracle = await ethers.deployContract("AccountingOracle__MockForSanityChecker", [
       deployer.address,
       12, // seconds per slot
       1606824023, // genesis time
@@ -91,43 +90,40 @@ describe.skip("OracleReportSanityChecker.sol", () => {
 
     stakingRouter = await ethers.deployContract("StakingRouter__MockForSanityChecker");
 
-    accountingOracleAddress = await accountingOracle.getAddress();
-    const burnerAddress = await burner.getAddress();
-    const stakingRouterAddress = await stakingRouter.getAddress();
-    const withdrawalQueueAddress = await withdrawalQueueMock.getAddress();
-    accountingAddress = await accounting.getAddress();
+    locator = await ethers.deployContract("LidoLocator__MockForSanityChecker", [
+      {
+        lido: deployer,
+        depositSecurityModule: deployer,
+        elRewardsVault: elRewardsVault,
+        accountingOracle: accountingOracle,
+        oracleReportSanityChecker: deployer,
+        burner: burner,
+        validatorsExitBusOracle: deployer,
+        stakingRouter: stakingRouter,
+        treasury: deployer,
+        withdrawalQueue: withdrawalQueue,
+        withdrawalVault: withdrawalVault,
+        postTokenRebaseReceiver: deployer,
+        oracleDaemonConfig: deployer,
+        validatorExitDelayVerifier: deployer,
+        triggerableWithdrawalsGateway: deployer,
+        accounting: accounting,
+        predepositGuarantee: deployer,
+        wstETH: deployer,
+        vaultHub: deployer,
+        vaultFactory: deployer,
+        lazyOracle: deployer,
+        operatorGrid: deployer,
+      },
+    ]);
 
-    locator = await ethers.getContractFactory("LidoLocator__MockForSanityChecker").then((factory) =>
-      factory.deploy({
-        lido: deployer.address,
-        depositSecurityModule: deployer.address,
-        elRewardsVault: elRewardsVault.address,
-        accountingOracle: accountingOracleAddress,
-        oracleReportSanityChecker: deployer.address,
-        burner: burnerAddress,
-        validatorsExitBusOracle: deployer.address,
-        stakingRouter: stakingRouterAddress,
-        treasury: deployer.address,
-        withdrawalQueue: withdrawalQueueAddress,
-        withdrawalVault: withdrawalVaultAddress,
-        postTokenRebaseReceiver: deployer.address,
-        oracleDaemonConfig: deployer.address,
-        validatorExitDelayVerifier: deployer.address,
-        triggerableWithdrawalsGateway: deployer.address,
-        accounting: accountingAddress,
-        predepositGuarantee: deployer.address,
-        wstETH: deployer.address,
-        vaultHub: deployer.address,
-        vaultFactory: deployer.address,
-        lazyOracle: deployer.address,
-        operatorGrid: deployer.address,
-      }),
-    );
-
-    locatorAddress = await locator.getAddress();
-    checker = await ethers
-      .getContractFactory("OracleReportSanityChecker")
-      .then((f) => f.deploy(locatorAddress, accountingOracleAddress, accountingAddress, admin.address, defaultLimits));
+    checker = await ethers.deployContract("OracleReportSanityChecker", [
+      locator,
+      accountingOracle,
+      accounting,
+      admin,
+      defaultLimits,
+    ]);
   });
 
   beforeEach(async () => (originalState = await Snapshot.take()));
@@ -138,9 +134,9 @@ describe.skip("OracleReportSanityChecker.sol", () => {
     it("reverts if admin address is zero", async () => {
       await expect(
         ethers.deployContract("OracleReportSanityChecker", [
-          locatorAddress,
-          accountingOracleAddress,
-          accountingAddress,
+          locator,
+          accountingOracle,
+          accounting,
           ZeroAddress,
           defaultLimits,
         ]),
@@ -156,7 +152,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
 
   context("getLidoLocator", () => {
     it("retrieves correct locator address", async () => {
-      expect(await checker.getLidoLocator()).to.equal(locatorAddress);
+      expect(await checker.getLidoLocator()).to.equal(locator);
     });
   });
 
@@ -456,9 +452,8 @@ describe.skip("OracleReportSanityChecker.sol", () => {
       );
     });
 
-    // TODO: check why this is not work, it should be reverted with `IncorrectLimitValue`
-    it.skip("reverts if limit is greater than max", async () => {
-      await expect(checker.connect(manager).setMaxPositiveTokenRebase(MAX_UINT64)).to.be.revertedWithCustomError(
+    it("reverts if limit is greater than max", async () => {
+      await expect(checker.connect(manager).setMaxPositiveTokenRebase(MAX_UINT64 + 1n)).to.be.revertedWithCustomError(
         checker,
         "IncorrectLimitValue",
       );
@@ -1020,8 +1015,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
         expect(sharesToBurn).to.equal(9950248756218905472n);
       });
 
-      // TODO: check rounding
-      it.skip("smoothens with shares requested to burn", async () => {
+      it("smoothens with shares requested to burn", async () => {
         const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
           ...report({ ...defaultRebaseParams, sharesRequestedToBurn: ether("5") }),
         );
@@ -1029,7 +1023,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
         expect(withdrawals).to.equal(0);
         expect(elRewards).to.equal(0);
 
-        expect(sharesFromWQToBurn).to.equal(9950248756218905472n); // ether("100. - (90.5 / 1.005)")
+        expect(sharesFromWQToBurn).to.equal(9950248756218905473n); // ether("100. - (90.5 / 1.005)")
         expect(sharesToBurn).to.equal(11442786069651741293n); // ether("100. - (89. / 1.005)")
       });
     });
@@ -1091,15 +1085,14 @@ describe.skip("OracleReportSanityChecker.sol", () => {
         expect(sharesToBurn).to.equal(9615384615384615384n); // 100. - 94. / 1.04
       });
 
-      // TODO: check rounding
-      it.skip("smoothens with shares requested to burn", async () => {
+      it("smoothens with shares requested to burn", async () => {
         const { withdrawals, elRewards, sharesFromWQToBurn, sharesToBurn } = await checker.smoothenTokenRebase(
           ...report({ ...defaultRebaseParams, sharesRequestedToBurn: ether("5") }),
         );
 
         expect(withdrawals).to.equal(0);
         expect(elRewards).to.equal(0);
-        expect(sharesFromWQToBurn).to.equal(9615384615384615384n);
+        expect(sharesFromWQToBurn).to.equal(9615384615384615385n);
         expect(sharesToBurn).to.equal(11538461538461538461n); // 100. - (92. / 1.04)
       });
     });
@@ -1198,7 +1191,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
     });
 
     it("reverts when actual withdrawal vault balance is less than passed", async () => {
-      const currentWithdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVaultAddress);
+      const currentWithdrawalVaultBalance = await ethers.provider.getBalance(withdrawalVault);
 
       await expect(
         checker.connect(accountingSigher).checkAccountingOracleReport(
@@ -1262,7 +1255,7 @@ describe.skip("OracleReportSanityChecker.sol", () => {
         .withArgs(annualBalanceIncrease);
     });
 
-    it("reverts when ammount of appeared validators is greater than possible", async () => {
+    it("reverts when amount of appeared validators is greater than possible", async () => {
       const insaneValidators = 100000n;
       await expect(
         checker
@@ -1416,8 +1409,8 @@ describe.skip("OracleReportSanityChecker.sol", () => {
       correctWithdrawalQueueOracleReport.lastFinalizableRequestId = oldRequestCreationTimestamp;
       newRequestCreationTimestamp = currentBlockTimestamp - defaultLimits.requestTimestampMargin / 2n;
 
-      await withdrawalQueueMock.setRequestTimestamp(oldRequestId, oldRequestCreationTimestamp);
-      await withdrawalQueueMock.setRequestTimestamp(newRequestId, newRequestCreationTimestamp);
+      await withdrawalQueue.setRequestTimestamp(oldRequestId, oldRequestCreationTimestamp);
+      await withdrawalQueue.setRequestTimestamp(newRequestId, newRequestCreationTimestamp);
 
       await checker.connect(admin).grantRole(await checker.REQUEST_TIMESTAMP_MARGIN_MANAGER_ROLE(), manager);
     });

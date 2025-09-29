@@ -394,7 +394,7 @@ describe("VaultFactory.sol", () => {
         days(7n),
         [
           {
-            role: await dashboard.NODE_OPERATOR_REWARDS_ADJUST_ROLE(),
+            role: await dashboard.NODE_OPERATOR_FEE_EXEMPT_ROLE(),
             account: operator.address,
           },
         ],
@@ -404,7 +404,7 @@ describe("VaultFactory.sol", () => {
 
       // new instance of dashboard
       const newDashboard = await ethers.getContractAt("Dashboard", await _dashboard.getAddress());
-      expect(await newDashboard.nodeOperatorFeeRecipient()).to.eq(operator.address);
+      expect(await newDashboard.feeRecipient()).to.eq(operator.address);
 
       const vaultConnection = await vaultHub.vaultConnection(vault);
       expect(vaultConnection.vaultIndex).to.eq(0); // vault is not connected to the vaultHub
@@ -426,7 +426,7 @@ describe("VaultFactory.sol", () => {
 
       // new instance of dashboard
       const newDashboard = await ethers.getContractAt("Dashboard", await _dashboard.getAddress());
-      expect(await newDashboard.nodeOperatorFeeRecipient()).to.eq(operator.address);
+      expect(await newDashboard.feeRecipient()).to.eq(operator.address);
 
       const vaultConnection = await vaultHub.vaultConnection(vault);
       expect(vaultConnection.vaultIndex).to.eq(0);

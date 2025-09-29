@@ -60,23 +60,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         mapping(address guarantor => uint256 claimableEther) guarantorClaimableEther;
         mapping(bytes validatorPubkey => ValidatorStatus validatorStatus) validatorStatus;
         mapping(address nodeOperator => address depositor) nodeOperatorDepositor;
-        mapping(address stakingVault => uint256 balance) pendingPredeposits;
-    }
-
-    /**
-     * @notice represents validator stages in PDG flow
-     * @param NONE - initial stage
-     * @param PREDEPOSITED - PREDEPOSIT_AMOUNT is deposited to this validator by the vault
-     * @param PROVEN - validator is proven to be valid and can be used to deposit to beacon chain
-     * @param ACTIVATED - validator is proven and the ACTIVATION_DEPOSIT_AMOUNT is deposited to this validator
-     * @param COMPENSATED - disproven validator has its PREDEPOSIT_AMOUNT ether compensated to staking vault owner and validator cannot be used in PDG anymore
-     */
-    enum ValidatorStage {
-        NONE,
-        PREDEPOSITED,
-        PROVEN,
-        ACTIVATED,
-        COMPENSATED
+        mapping(address stakingVault => uint256 number) pendingActivations;
     }
 
     /**
@@ -88,18 +72,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     struct NodeOperatorBalance {
         uint128 total;
         uint128 locked;
-    }
-
-    /**
-     * @notice represents status of the validator in PDG
-     * @param stage represents validator stage in PDG flow
-     * @param stakingVault pins validator to specific StakingVault
-     * @param nodeOperator pins validator to specific NO
-     */
-    struct ValidatorStatus {
-        ValidatorStage stage;
-        IStakingVault stakingVault;
-        address nodeOperator;
     }
 
     /**
@@ -220,17 +192,19 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _validatorPubkey to check status for
      * @return struct of ValidatorStatus
      */
-    function validatorStatus(bytes calldata _validatorPubkey) external view returns (ValidatorStatus memory) {
+    function validatorStatus(
+        bytes calldata _validatorPubkey
+    ) external view override returns (ValidatorStatus memory) {
         return _storage().validatorStatus[_validatorPubkey];
     }
 
     /**
-     * @notice returns the current amount of ether that is predeposited to a given vault
+     * @notice returns the number of validators in PREDEPOSITED and PROVEN states but not ACTIVATED yet
      * @param _vault staking vault address
-     * @return amount of ether in wei
+     * @return the number of validators yet-to-be-activated
      */
-    function pendingPredeposits(IStakingVault _vault) external view returns (uint256) {
-        return _storage().pendingPredeposits[address(_vault)];
+    function pendingActivations(IStakingVault _vault) external view returns (uint256) {
+        return _storage().pendingActivations[address(_vault)];
     }
 
     /**
@@ -415,7 +389,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         balance.locked += uint128(totalDepositAmount);
         emit BalanceLocked(nodeOperator, balance.total, balance.locked);
 
-        $.pendingPredeposits[address(_stakingVault)] += _deposits.length * PREDEPOSIT_AMOUNT;
+        $.pendingActivations[address(_stakingVault)] += _deposits.length;
 
         mapping(bytes validatorPubkey => ValidatorStatus) storage validatorByPubkey = _storage().validatorStatus;
 
@@ -446,12 +420,13 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     }
 
     /**
-     * @notice permissionless method to prove correct Withdrawal Credentials for the validator
+     * @notice permissionless method to prove correct Withdrawal Credentials and activate validator if possible
      * @param _witness object containing validator pubkey, Merkle proof and timestamp for Beacon Block root child block
      * @dev will revert if proof is invalid or misformed or validator is not predeposited
-     * @dev transition PREDEPOSITED => PROVEN
+     * @dev transition PREDEPOSITED => PROVEN [=> ACTIVATED]
+     * @dev if activation is impossible, it can be done later by calling activateValidator() explicitly
      */
-    function proveWC(ValidatorWitness calldata _witness) external whenResumed {
+    function proveWCAndActivate(ValidatorWitness calldata _witness) external whenResumed {
         ValidatorStatus storage validator = _storage().validatorStatus[_witness.pubkey];
 
         if (validator.stage != ValidatorStage.PREDEPOSITED) {
@@ -460,9 +435,19 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         IStakingVault stakingVault = validator.stakingVault;
         bytes32 withdrawalCredentials = _checkVaultWC(stakingVault);
+        address nodeOperator = validator.nodeOperator;
 
-        validator.stage = ValidatorStage.PROVEN;
-        _proveWC(_witness, stakingVault, withdrawalCredentials, validator.nodeOperator);
+        _proveWC(_witness, stakingVault, withdrawalCredentials, nodeOperator);
+
+        // activate validator if possible
+        if (stakingVault.depositor() == address(this) && stakingVault.stagedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
+            _activateAndTopUpValidator(stakingVault, _witness.pubkey, 0, new bytes(96), withdrawalCredentials, nodeOperator);
+            validator.stage = ValidatorStage.ACTIVATED;
+        } else {
+            // only if validator is disconnected
+            // because on connection we check depositor and staged balance
+            validator.stage = ValidatorStage.PROVEN;
+        }
     }
 
     /**
@@ -481,7 +466,14 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         bytes32 withdrawalCredentials = _checkVaultWC(stakingVault);
 
         validator.stage = ValidatorStage.ACTIVATED;
-        _activateValidator(_pubkey, 0, stakingVault, withdrawalCredentials, validator.nodeOperator);
+        _activateAndTopUpValidator(
+            stakingVault,
+            _pubkey,
+            0, /* top-up amount */
+            new bytes(96),
+            withdrawalCredentials,
+            validator.nodeOperator
+        );
     }
 
     /**
@@ -569,7 +561,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         NodeOperatorBalance storage balance = $.nodeOperatorBalance[nodeOperator];
         balance.total -= PREDEPOSIT_AMOUNT;
         balance.locked -= PREDEPOSIT_AMOUNT;
-        $.pendingPredeposits[address(stakingVault)] -= PREDEPOSIT_AMOUNT;
+        $.pendingActivations[address(stakingVault)] -= 1;
 
         // unlocking the staged amount if possible as we are not activating this validator
         if (stakingVault.depositor() == address(this) && stakingVault.stagedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
@@ -610,14 +602,13 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
             IStakingVault vault = validator.stakingVault;
             bytes32 withdrawalCredentials = _checkVaultWC(vault);
 
-            IStakingVault.Deposit memory deposit = IStakingVault.Deposit({
-                pubkey: _topUp.pubkey,
-                signature: zeroSignature,
-                amount: _topUp.amount,
-                depositDataRoot: _depositDataRootWithZeroSig(_topUp.pubkey, _topUp.amount, withdrawalCredentials)
-            });
-
-            vault.depositToBeaconChain(deposit);
+            _topUpValidator(
+                vault,
+                _topUp.pubkey,
+                _topUp.amount,
+                zeroSignature,
+                withdrawalCredentials
+            );
         }
     }
 
@@ -629,7 +620,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * and do it for multiple validators at once
      * @param _witnesses array of ValidatorWitness structs to prove validators WCs
      * @param _amounts array of amounts of ether to deposit to proven validator on top of ACTIVATION_DEPOSIT_AMOUNT
-     * @dev transition PREDEPOSITED => PROVEN => ACTIVATED
+     * @dev transition [PREDEPOSITED =>] [PROVEN =>] ACTIVATED
      * @dev if `_amount` != 0 requires msg,sender to be the vault's depositor (or node operator)
      */
     function proveWCActivateAndTopUpValidators(
@@ -637,29 +628,51 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         uint256[] calldata _amounts
     ) external whenResumed {
         mapping(bytes => ValidatorStatus) storage validators = _storage().validatorStatus;
+        bytes memory zeroSignature = new bytes(96);
 
         for (uint256 i = 0; i < _witnesses.length; i++) {
             bytes calldata _pubkey = _witnesses[i].pubkey;
             ValidatorStatus storage validator = validators[_pubkey];
+            ValidatorStage stage = validator.stage;
 
-            if (validator.stage != ValidatorStage.PREDEPOSITED) {
-                revert ValidatorNotPreDeposited(_pubkey, validator.stage);
+            if (stage == ValidatorStage.NONE || stage == ValidatorStage.COMPENSATED) {
+                revert InvalidValidatorStage(_pubkey, validator.stage);
             }
+
+            if (_amounts[i] > MAX_TOPUP_AMOUNT) revert InvalidTopUpAmount(_amounts[i]);
 
             address nodeOperator = validator.nodeOperator;
             if (_amounts[i] > 0 && msg.sender != _depositorOf(nodeOperator)) {
                 revert NotDepositor();
             }
 
-            if (_amounts[i] > MAX_TOPUP_AMOUNT) revert InvalidTopUpAmount(_amounts[i]);
-
             IStakingVault vault = validator.stakingVault;
             bytes32 withdrawalCredentials = _checkVaultWC(vault);
 
-            validator.stage = ValidatorStage.ACTIVATED;
+            if (stage == ValidatorStage.PREDEPOSITED) {
+                _proveWC(_witnesses[i], vault, withdrawalCredentials, nodeOperator);
+                stage = ValidatorStage.PROVEN;
+            }
 
-            _proveWC(_witnesses[i], vault, withdrawalCredentials, nodeOperator);
-            _activateValidator(_pubkey, _amounts[i], vault, withdrawalCredentials, nodeOperator);
+            if (stage == ValidatorStage.PROVEN) {
+                _activateAndTopUpValidator(
+                    vault,
+                    _pubkey,
+                    _amounts[i],
+                    zeroSignature,
+                    withdrawalCredentials,
+                    nodeOperator
+                );
+                validator.stage = ValidatorStage.ACTIVATED;
+            } else if (stage == ValidatorStage.ACTIVATED) {
+                _topUpValidator(
+                    vault,
+                    _pubkey,
+                    _amounts[i],
+                    zeroSignature,
+                    withdrawalCredentials
+                );
+            }
         }
     }
 
@@ -678,31 +691,49 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         NodeOperatorBalance storage balance = _storage().nodeOperatorBalance[_nodeOperator];
         balance.locked -= PREDEPOSIT_AMOUNT;
-        _storage().pendingPredeposits[address(_vault)] -= PREDEPOSIT_AMOUNT;
 
         emit BalanceUnlocked(_nodeOperator, balance.total, balance.locked);
         emit ValidatorProven(_witness.pubkey, _nodeOperator, address(_vault), _withdrawalCredentials);
     }
 
-    function _activateValidator(
-        bytes calldata _pubkey,
-        uint256 _additionalDeposit,
+    function _activateAndTopUpValidator(
         IStakingVault _stakingVault,
+        bytes calldata _pubkey,
+        uint256 _additionalAmount,
+        bytes memory zeroSignature,
         bytes32 _withdrawalCredentials,
         address _nodeOperator
     ) internal {
-        uint256 depositAmount = ACTIVATION_DEPOSIT_AMOUNT + _additionalDeposit;
+        _storage().pendingActivations[address(_stakingVault)] -= 1;
+        uint256 depositAmount = ACTIVATION_DEPOSIT_AMOUNT + _additionalAmount;
 
         IStakingVault.Deposit memory deposit = IStakingVault.Deposit({
             pubkey: _pubkey,
-            signature: new bytes(96),
+            signature: zeroSignature,
             amount: depositAmount,
             depositDataRoot: _depositDataRootWithZeroSig(_pubkey, depositAmount, _withdrawalCredentials)
         });
 
-        _stakingVault.depositFromStaged(deposit, _additionalDeposit);
+        _stakingVault.depositFromStaged(deposit, _additionalAmount);
 
         emit ValidatorActivated(_pubkey, _nodeOperator, address(_stakingVault), _withdrawalCredentials);
+    }
+
+    function _topUpValidator(
+        IStakingVault _stakingVault,
+        bytes calldata _pubkey,
+        uint256 _amount,
+        bytes memory zeroSignature,
+        bytes32 _withdrawalCredentials
+    ) internal {
+        IStakingVault.Deposit memory deposit = IStakingVault.Deposit({
+            pubkey: _pubkey,
+            signature: zeroSignature,
+            amount: _amount,
+            depositDataRoot: _depositDataRootWithZeroSig(_pubkey, _amount, _withdrawalCredentials)
+        });
+
+        _stakingVault.depositToBeaconChain(deposit);
     }
 
     /// @dev the edge case deposit data root for zero signature and 31 ETH amount
@@ -869,6 +900,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     error ValidatorNotActivated(bytes validatorPubkey, ValidatorStage stage);
     error ValidatorNotProven(bytes validatorPubkey, ValidatorStage stage);
     error InvalidTopUpAmount(uint256 amount);
+    error InvalidValidatorStage(bytes validatorPubkey, ValidatorStage stage);
 
     // prove
     error ValidatorNotPreDeposited(bytes validatorPubkey, ValidatorStage stage);

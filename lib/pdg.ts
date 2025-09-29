@@ -226,3 +226,9 @@ export const prepareLocalMerkleTree = async (
     buildProof,
   };
 };
+
+export enum PDGPolicy {
+  STRICT,
+  ALLOW_PROVE,
+  ALLOW_DEPOSIT_AND_PROVE,
+}
