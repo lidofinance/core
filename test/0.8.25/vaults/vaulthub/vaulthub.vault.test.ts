@@ -669,7 +669,7 @@ describe("VaultHub.sol:owner-functions", () => {
       await reportVault({ totalValue: ether("10"), liabilityShares: ether("8.5") });
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsAllowedByOwner")
+        .to.emit(vaultHub, "BeaconChainDepositsPauseReleasedByOwner")
         .withArgs(vaultAddress)
         .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
@@ -693,7 +693,7 @@ describe("VaultHub.sol:owner-functions", () => {
       await vaultHub.connect(vaultOwner).setLiabilitySharesTarget(vaultAddress, 0n);
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsAllowedByOwner")
+        .to.emit(vaultHub, "BeaconChainDepositsPauseReleasedByOwner")
         .withArgs(vaultAddress)
         .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
@@ -713,7 +713,7 @@ describe("VaultHub.sol:owner-functions", () => {
       await reportVault({ totalValue: ether("10"), cumulativeLidoFees: ether("1") });
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsAllowedByOwner")
+        .to.emit(vaultHub, "BeaconChainDepositsPauseReleasedByOwner")
         .withArgs(vaultAddress)
         .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 

@@ -815,8 +815,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     /// @dev requires the fresh report
-    /// @dev NB: in case of outstanding obligations, this function will not resume beacon chain deposits, but will only
-    ///          remove the manual pause flag, allowing automatic resumption later
+    /// @dev NB: if the vault has outstanding obligations, this call will clear the manual pause flag but deposits will
+    ///         remain paused until the obligations are covered. Once covered, deposits will resume automatically
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
         if (!connection.isBeaconDepositsManuallyPaused) revert PausedExpected();
@@ -827,7 +827,8 @@ contract VaultHub is PausableUntilWithRoles {
         connection.isBeaconDepositsManuallyPaused = false;
 
         if (_updateBeaconChainDepositsPause(_vault, record, connection)) {
-            emit BeaconChainDepositsAllowedByOwner(_vault);
+            /// @dev emited only when manual pause flag is cleared, but deposits are still paused
+            emit BeaconChainDepositsPauseReleasedByOwner(_vault);
         } else {
             emit BeaconChainDepositsResumedByOwner(_vault);
         }
@@ -1666,7 +1667,7 @@ contract VaultHub is PausableUntilWithRoles {
     event VaultRedemptionSharesUpdated(address indexed vault, uint256 redemptionShares);
 
     event BeaconChainDepositsPausedByOwner(address indexed vault);
-    event BeaconChainDepositsAllowedByOwner(address indexed vault);
+    event BeaconChainDepositsPauseReleasedByOwner(address indexed vault);
     event BeaconChainDepositsResumedByOwner(address indexed vault);
 
     /// @dev Warning! used by Accounting Oracle to calculate fees

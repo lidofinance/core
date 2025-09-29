@@ -208,7 +208,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       await dashboard.fund({ value: ether("1") });
 
       await expect(dashboard.resumeBeaconChainDeposits())
-        .to.emit(vaultHub, "BeaconChainDepositsAllowedByOwner")
+        .to.emit(vaultHub, "BeaconChainDepositsPauseReleasedByOwner")
         .and.not.to.emit(stakingVault, "BeaconChainDepositsResumed");
 
       // Check that vault is resumed automatically as owner allowed it
