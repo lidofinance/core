@@ -123,6 +123,10 @@ const getCoreContracts = async (
             "TriggerableWithdrawalsGateway",
             config.get("triggerableWithdrawalsGateway") || (await locator.triggerableWithdrawalsGateway()),
           ),
+          consolidationGateway: loadContract(
+            "ConsolidationGateway",
+            config.get("consolidationGateway") || (await locator.consolidationGateway()),
+          ),
           accounting: loadContract("Accounting", config.get("accounting") || (await locator.accounting())),
         }),
   })) as CoreContracts;
@@ -243,6 +247,7 @@ export async function discover(skipV3Contracts: boolean) {
     "Burner": foundationContracts.burner.address,
     "wstETH": contracts.wstETH.address,
     "Triggered Withdrawal Gateway": contracts.triggerableWithdrawalsGateway?.address,
+    "Consolidation Gateway": contracts.consolidationGateway?.address,
     // Vaults
     "Staking Vault Factory": contracts.stakingVaultFactory?.address,
     "Staking Vault Beacon": contracts.stakingVaultBeacon?.address,

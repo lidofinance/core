@@ -29,6 +29,7 @@ async function deployDummyLocator(config?: Partial<LidoLocator.ConfigStruct>, de
     oracleDaemonConfig: certainAddress("dummy-locator:oracleDaemonConfig"),
     validatorExitDelayVerifier: certainAddress("dummy-locator:validatorExitDelayVerifier"),
     triggerableWithdrawalsGateway: certainAddress("dummy-locator:triggerableWithdrawalsGateway"),
+    consolidationGateway: certainAddress("dummy-locator:consolidationGateway"),
     accounting: certainAddress("dummy-locator:accounting"),
     predepositGuarantee: certainAddress("dummy-locator:predepositGuarantee"),
     wstETH: certainAddress("dummy-locator:wstETH"),
