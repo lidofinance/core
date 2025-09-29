@@ -57,7 +57,7 @@ export async function mockDGAragonVoting(
   const voting = await loadContract<Voting>("Voting", votingAddress);
   const timelock = await loadContract<IEmergencyProtectedTimelock>(
     "IEmergencyProtectedTimelock",
-    state[Sk.dgEmergencyProtectedTimelock].proxy.address, // TODO: del!
+    state[Sk.dgEmergencyProtectedTimelock].address,
   );
   const afterSubmitDelay = await timelock.getAfterSubmitDelay();
   const afterScheduleDelay = await timelock.getAfterScheduleDelay();
