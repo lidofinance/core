@@ -29,6 +29,7 @@ contract LidoLocator is ILidoLocator {
         address oracleDaemonConfig;
         address validatorExitDelayVerifier;
         address triggerableWithdrawalsGateway;
+        address consolidationGateway;
         address accounting;
         address predepositGuarantee;
         address wstETH;
@@ -56,6 +57,7 @@ contract LidoLocator is ILidoLocator {
     address public immutable oracleDaemonConfig;
     address public immutable validatorExitDelayVerifier;
     address public immutable triggerableWithdrawalsGateway;
+    address public immutable consolidationGateway;
     address public immutable accounting;
     address public immutable predepositGuarantee;
     address public immutable wstETH;
@@ -86,6 +88,7 @@ contract LidoLocator is ILidoLocator {
         oracleDaemonConfig = _assertNonZero(_config.oracleDaemonConfig);
         validatorExitDelayVerifier = _assertNonZero(_config.validatorExitDelayVerifier);
         triggerableWithdrawalsGateway = _assertNonZero(_config.triggerableWithdrawalsGateway);
+        consolidationGateway = _assertNonZero(_config.consolidationGateway);
         accounting = _assertNonZero(_config.accounting);
         predepositGuarantee = _assertNonZero(_config.predepositGuarantee);
         wstETH = _assertNonZero(_config.wstETH);

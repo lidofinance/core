@@ -25,6 +25,7 @@ export async function main() {
     { name: "OracleDaemonConfig", address: state[Sk.oracleDaemonConfig].address },
     { name: "OracleReportSanityChecker", address: state[Sk.oracleReportSanityChecker].address },
     { name: "TriggerableWithdrawalsGateway", address: state[Sk.triggerableWithdrawalsGateway].address },
+    { name: "ConsolidationGateway", address: state[Sk.consolidationGateway].address },
     { name: "VaultHub", address: state[Sk.vaultHub].proxy.address },
     { name: "PredepositGuarantee", address: state[Sk.predepositGuarantee].proxy.address },
     { name: "OperatorGrid", address: state[Sk.operatorGrid].proxy.address },

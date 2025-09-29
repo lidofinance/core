@@ -21,6 +21,7 @@ const services = [
   "oracleDaemonConfig",
   "validatorExitDelayVerifier",
   "triggerableWithdrawalsGateway",
+  "consolidationGateway",
   "accounting",
   "predepositGuarantee",
   "wstETH",

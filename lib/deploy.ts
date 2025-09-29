@@ -260,6 +260,7 @@ async function getLocatorConfig(locatorAddress: string) {
     "lazyOracle",
     "operatorGrid",
     "vaultFactory",
+    "consolidationGateway",
   ]) as (keyof LidoLocator.ConfigStruct)[];
 
   const config = await Promise.all(locatorKeys.map((name) => locator[name]()));
