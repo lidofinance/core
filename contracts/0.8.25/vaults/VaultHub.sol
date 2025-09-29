@@ -288,10 +288,21 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice calculate shares amount to make the vault healthy using rebalance
     /// @param _vault vault address
-    /// @return amount of shares or UINT256_MAX if it's impossible to make the vault healthy using rebalance
+    /// @return shares amount or UINT256_MAX if it's impossible to make the vault healthy using rebalance
     /// @dev returns 0 if the vault is not connected
     function healthShortfallShares(address _vault) external view returns (uint256) {
         return _healthShortfallShares(_vaultConnection(_vault), _vaultRecord(_vault));
+    }
+
+    /// @notice calculate ether amount required to cover obligations shortfall of the vault
+    /// @param _vault vault address
+    /// @return ether amount or UINT256_MAX if it's impossible to cover obligations shortfall
+    /// @dev returns 0 if the vault is not connected
+    function obligationsShortfallValue(address _vault) external view returns (uint256) {
+        VaultConnection storage connection = _vaultConnection(_vault);
+        if (connection.vaultIndex == 0) return 0;
+
+        return _obligationsShortfall(_vault, connection, _vaultRecord(_vault));
     }
 
     /// @notice returns the vault's current obligations toward the protocol

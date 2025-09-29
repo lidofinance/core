@@ -161,9 +161,18 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Returns the amount of shares to rebalance to restore vault healthiness or to cover redemptions
+     * @dev returns UINT256_MAX if it's impossible to make the vault healthy using rebalance
      */
     function healthShortfallShares() external view returns (uint256) {
         return VAULT_HUB.healthShortfallShares(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of ether required to cover obligations shortfall of the vault
+     * @dev returns UINT256_MAX if it's impossible to cover obligations shortfall
+     */
+    function obligationsShortfallValue() external view returns (uint256) {
+        return VAULT_HUB.obligationsShortfallValue(address(_stakingVault()));
     }
 
     /**
