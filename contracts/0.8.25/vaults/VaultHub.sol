@@ -140,6 +140,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev used as a threshold for the beacon chain deposits pause
     uint256 internal immutable MIN_BEACON_DEPOSIT = 1 ether;
 
+    /// @dev amount of ether required to activate a validator after PDG
+    uint256 private constant PDG_ACTIVATION_DEPOSIT = 31 ether;
 
     // -----------------------------
     //           IMMUTABLES
@@ -355,7 +357,7 @@ contract VaultHub is PausableUntilWithRoles {
         if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(_predepositGuarantee())) revert PDGNotDepositor(_vault);
         // we need vault to match staged balance with pendingActivations
-        if (vault_.stagedBalance() != _predepositGuarantee().pendingActivations(vault_) * 31 ether) {
+        if (vault_.stagedBalance() != _predepositGuarantee().pendingActivations(vault_) * PDG_ACTIVATION_DEPOSIT) {
             revert InsufficientStagedBalance(_vault);
         }
 
