@@ -42,7 +42,7 @@ contract LidoTemplate is IsContract {
     string private constant ERROR_BAD_AMOUNTS_LEN = "TMPL_BAD_AMOUNTS_LEN";
     string private constant ERROR_INVALID_ID = "TMPL_INVALID_ID";
     string private constant ERROR_UNEXPECTED_TOTAL_SUPPLY = "TMPL_UNEXPECTED_TOTAL_SUPPLY";
-    string private constant ERROR_INVALID_DG_ADMIN_EXECUTOR = "TMPL_INVALID_DG_ADMIN_EXECUTOR";
+    string private constant ERROR_INVALID_DG_ADMIN_EXECUTOR = "TMPL_0_ADDR";
 
     // Operational errors
     string private constant ERROR_PERMISSION_DENIED = "TMPL_PERMISSION_DENIED";
@@ -414,39 +414,17 @@ contract LidoTemplate is IsContract {
     function finalizePermissionsAfterDGDeployment(address dgAdminExecutor) external onlyOwner {
         require(dgAdminExecutor != address(0), ERROR_INVALID_DG_ADMIN_EXECUTOR);
 
-        DeployState memory state = deployState;
+        deployState.acl.grantPermission(dgAdminExecutor, address(deployState.agent), deployState.agent.RUN_SCRIPT_ROLE());
+        deployState.acl.grantPermission(dgAdminExecutor, address(deployState.agent), deployState.agent.EXECUTE_ROLE());
 
-        state.acl.grantPermission(dgAdminExecutor, address(state.agent), state.agent.RUN_SCRIPT_ROLE());
-        state.acl.grantPermission(dgAdminExecutor, address(state.agent), state.agent.EXECUTE_ROLE());
+        deployState.acl.revokePermission(address(deployState.voting), address(deployState.agent), deployState.agent.RUN_SCRIPT_ROLE());
+        deployState.acl.revokePermission(address(deployState.voting), address(deployState.agent), deployState.agent.EXECUTE_ROLE());
 
-        state.acl.revokePermission(address(state.voting), address(state.agent), state.agent.RUN_SCRIPT_ROLE());
-        state.acl.revokePermission(address(state.voting), address(state.agent), state.agent.EXECUTE_ROLE());
-
-        state.acl.setPermissionManager(address(state.agent), address(state.agent), state.agent.RUN_SCRIPT_ROLE());
-        state.acl.setPermissionManager(address(state.agent), address(state.agent), state.agent.EXECUTE_ROLE());
-
-        Kernel apmDAO = Kernel(state.lidoRegistry.kernel());
-        ACL apmACL = ACL(apmDAO.acl());
-        _transferPermissionFromTemplate(apmACL, apmACL, address(state.agent), apmACL.CREATE_PERMISSIONS_ROLE());
-
-        _transferPermissionFromTemplate(state.acl, address(state.acl), address(state.agent), state.acl.CREATE_PERMISSIONS_ROLE(), address(state.agent));
-
-        _resetState();
+        _finalizePermissions(address(deployState.agent));
     }
 
     function finalizePermissionsWithoutDGDeployment() external onlyOwner {
-        DeployState memory state = deployState;
-
-        state.acl.setPermissionManager(address(state.voting), address(state.agent), state.agent.RUN_SCRIPT_ROLE());
-        state.acl.setPermissionManager(address(state.voting), address(state.agent), state.agent.EXECUTE_ROLE());
-
-        Kernel apmDAO = Kernel(state.lidoRegistry.kernel());
-        ACL apmACL = ACL(apmDAO.acl());
-        _transferPermissionFromTemplate(apmACL, apmACL, address(state.agent), apmACL.CREATE_PERMISSIONS_ROLE());
-
-        _transferPermissionFromTemplate(state.acl, address(state.acl), address(state.voting), state.acl.CREATE_PERMISSIONS_ROLE(), address(state.voting));
-
-        _resetState();
+        _finalizePermissions(address(deployState.voting));
     }
 
     /* DAO AND APPS */
@@ -754,9 +732,15 @@ contract LidoTemplate is IsContract {
         return keccak256(abi.encodePacked(_apmRootNode, keccak256(abi.encodePacked(_appName))));
     }
 
-    /* STATE RESET */
+    function _finalizePermissions(address newManager) private {
+        deployState.acl.setPermissionManager(newManager, address(deployState.agent), deployState.agent.RUN_SCRIPT_ROLE());
+        deployState.acl.setPermissionManager(newManager, address(deployState.agent), deployState.agent.EXECUTE_ROLE());
 
-    function _resetState() private {
+        ACL apmACL = ACL(deployState.lidoRegistry.kernel().acl());
+        _transferPermissionFromTemplate(apmACL, apmACL, address(deployState.agent), apmACL.CREATE_PERMISSIONS_ROLE());
+
+        _transferPermissionFromTemplate(deployState.acl, address(deployState.acl), newManager, deployState.acl.CREATE_PERMISSIONS_ROLE(), newManager);
+
         delete deployState.lidoRegistryEnsNode;
         delete deployState.lidoRegistry;
         delete deployState.dao;

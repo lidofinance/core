@@ -219,6 +219,17 @@ const config: HardhatUserConfig = {
           evmVersion: "cancun",
         },
       },
+      "contracts/0.4.24/template/LidoTemplate.sol": {
+        version: "0.4.24",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 50,
+          },
+          viaIR: true,
+          evmVersion: "constantinople",
+        },
+      },
     },
   },
   tracer: {
