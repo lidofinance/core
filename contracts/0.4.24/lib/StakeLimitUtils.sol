@@ -230,26 +230,13 @@ library StakeLimitUtils {
     }
 
     /**
-     * @notice branchless greater-than comparison
-     * @param a first value
-     * @param b second value
-     * @return result 1 if a > b, 0 otherwise
-     */
-    function _constGt(uint256 a, uint256 b) internal pure returns (uint256 result) {
-        assembly {
-            result := gt(a, b)
-        }
-    }
-
-    /**
      * @notice find a minimum of two numbers with a constant gas consumption
      * @dev doesn't use branching logic inside
      * @param _lhs left hand side value
      * @param _rhs right hand side value
      */
     function _constGasMin(uint256 _lhs, uint256 _rhs) internal pure returns (uint256 min) {
-        uint256 lhsIsLess;
-        lhsIsLess = _constLt(_lhs, _rhs);
+        uint256 lhsIsLess = _constLt(_lhs, _rhs);
         min = (_lhs * lhsIsLess) + (_rhs * (1 - lhsIsLess));
     }
 
@@ -260,9 +247,8 @@ library StakeLimitUtils {
      * @param _rhs right hand side value
      */
     function _constGasMax(uint256 _lhs, uint256 _rhs) internal pure returns (uint256 max) {
-        uint256 lhsIsGreater;
-        lhsIsGreater = _constGt(_lhs, _rhs);
-        max = (_lhs * lhsIsGreater) + (_rhs * (1 - lhsIsGreater));
+        uint256 lhsIsLess = _constLt(_lhs, _rhs);
+        max = (_lhs * (1 - lhsIsLess)) + (_rhs * lhsIsLess);
     }
 
     /**
@@ -271,7 +257,7 @@ library StakeLimitUtils {
      * @param b second value
      */
     function _saturatingSub(uint256 a, uint256 b) internal pure returns (uint256 result) {
-        uint256 isUnderflow = _constGt(b, a);
+        uint256 isUnderflow = _constLt(a, b);
         result = (a - b) * (1 - isUnderflow);
     }
 }

@@ -211,17 +211,48 @@ describe("StakeLimitUtils.sol", () => {
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(staticStakeLimit);
       });
 
-      it("the full limit gets restored after growth blocks", async () => {
+      it("the full limit gets restored after growth blocks (increasing to limit)", async () => {
         prevStakeBlockNumber = BigInt(await latestBlock());
         const baseStakeLimit = 0n;
         await stakeLimitUtils.harness_setState(prevStakeBlockNumber, 0n, maxStakeLimitGrowthBlocks, maxStakeLimit);
+
+        const growthPerBlock = maxStakeLimit / maxStakeLimitGrowthBlocks;
+
         // 1 block passed due to the setter call above
-        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(maxStakeLimit / maxStakeLimitGrowthBlocks);
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(growthPerBlock);
 
         // growth blocks passed (might be not equal to maxStakeLimit yet due to rounding)
         await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks);
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(
-          baseStakeLimit + maxStakeLimitGrowthBlocks * (maxStakeLimit / maxStakeLimitGrowthBlocks),
+          baseStakeLimit + maxStakeLimitGrowthBlocks * growthPerBlock,
+        );
+
+        // move forward one more block to account for rounding and reach max
+        await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks + 1n);
+        // growth blocks mined, the limit should be full
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(maxStakeLimit);
+      });
+
+      it("the full limit gets restored after growth blocks (decreasing to limit)", async () => {
+        prevStakeBlockNumber = BigInt(await latestBlock());
+        const baseStakeLimit = maxStakeLimit * 2n;
+
+        await stakeLimitUtils.harness_setState(
+          prevStakeBlockNumber,
+          baseStakeLimit,
+          maxStakeLimitGrowthBlocks,
+          maxStakeLimit,
+        );
+
+        const growthPerBlock = maxStakeLimit / maxStakeLimitGrowthBlocks;
+
+        // 1 block passed due to the setter call above
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(baseStakeLimit - growthPerBlock);
+
+        // growth blocks passed (might be not equal to maxStakeLimit yet due to rounding)
+        await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks);
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(
+          baseStakeLimit - maxStakeLimitGrowthBlocks * growthPerBlock,
         );
 
         // move forward one more block to account for rounding and reach max
