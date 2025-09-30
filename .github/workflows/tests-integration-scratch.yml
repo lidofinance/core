@@ -82,7 +82,10 @@ jobs:
         run: forge --version
 
       - name: Set env
-        run: cp .env.example .env
+        run: cp .env.example .env && echo "DG_DEPLOYER_ACCOUNT_NETWORK_NAME=local" >> .env
+
+      - name: Create accounts.json file
+        run: cp test.accounts.json.example accounts.json
 
       - name: Run scratch deployment
         run: ./scripts/dao-deploy.sh
