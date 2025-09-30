@@ -276,14 +276,10 @@
     }
   },
   "dg:dualGovernance": {
-    "proxy": {
-      "address": "0xC1db28B3301331277e307FDCfF8DE28242A4486E"
-    }
+    "address": "0xC1db28B3301331277e307FDCfF8DE28242A4486E"
   },
   "dg:emergencyProtectedTimelock": {
-    "proxy": {
-      "address": "0xCE0425301C85c5Ea2A0873A2dEe44d78E02D2316"
-    }
+    "address": "0xCE0425301C85c5Ea2A0873A2dEe44d78E02D2316"
   },
   "dummyEmptyContract": {
     "address": "0x6F6541C2203196fEeDd14CD2C09550dA1CbEDa31",

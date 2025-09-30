@@ -24,3 +24,8 @@ yarn hardhat --network $NETWORK run --no-compile scripts/utils/mine.ts
 # Run acceptance tests
 export INTEGRATION_WITH_CSM="off"
 yarn test:integration:fork:local
+
+# If Dual Governance was deployed
+if grep "dg:escrow_master_copy" $NETWORK_STATE_FILE -q; then
+  yarn dg:regression-tests
+fi

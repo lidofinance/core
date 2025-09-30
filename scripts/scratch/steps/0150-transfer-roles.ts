@@ -34,7 +34,9 @@ export async function main() {
   for (const contract of ozAdminTransfers) {
     const contractInstance = await loadContract(contract.name, contract.address);
     await makeTx(contractInstance, "grantRole", [DEFAULT_ADMIN_ROLE, agent], { from: deployer });
-    await makeTx(contractInstance, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+    if (process.env.DG_DEPLOYMENT_ENABLED == "false" || contract.name !== "WithdrawalQueueERC721") {
+      await makeTx(contractInstance, "renounceRole", [DEFAULT_ADMIN_ROLE, deployer], { from: deployer });
+    }
   }
 
   // Change admin for OssifiableProxy contracts
@@ -62,10 +64,6 @@ export async function main() {
     const depositSecurityModule = await loadContract("DepositSecurityModule", state.depositSecurityModule.address);
     await makeTx(depositSecurityModule, "setOwner", [agent], { from: deployer });
   }
-
-  // Transfer ownership of LidoTemplate to agent
-  const lidoTemplate = await loadContract("LidoTemplate", state[Sk.lidoTemplate].address);
-  await makeTx(lidoTemplate, "setOwner", [agent], { from: deployer });
 
   // Transfer admin for WithdrawalsManagerProxy from deployer to voting
   const withdrawalsManagerProxy = await loadContract("WithdrawalsManagerProxy", state.withdrawalVault.proxy.address);

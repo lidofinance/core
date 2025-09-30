@@ -61,6 +61,7 @@ const config: HardhatUserConfig = {
     // local nodes
     "local": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
+      timeout: 120000,
     },
     "local-devnet": {
       url: process.env.LOCAL_RPC_URL || RPC_URL,
@@ -216,6 +217,17 @@ const config: HardhatUserConfig = {
           },
           viaIR: true,
           evmVersion: "cancun",
+        },
+      },
+      "contracts/0.4.24/template/LidoTemplate.sol": {
+        version: "0.4.24",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 50,
+          },
+          viaIR: true,
+          evmVersion: "constantinople",
         },
       },
     },

@@ -1,0 +1,404 @@
+import fs from "node:fs/promises";
+
+import { ethers } from "hardhat";
+
+import { LidoTemplate, WithdrawalQueueERC721 } from "typechain-types";
+
+import { log } from "lib";
+import { loadContract, LoadedContract } from "lib/contract";
+import { makeTx } from "lib/deploy";
+import { DeploymentState, getAddress, readNetworkState, Sk, updateObjectInState } from "lib/state-file";
+import { runCommand } from "lib/subprocess";
+
+const DG_INSTALL_DIR = `${process.cwd()}/dg`;
+const DG_DEPLOY_ARTIFACTS_DIR = `${DG_INSTALL_DIR}/deploy-artifacts`;
+
+export async function main() {
+  if (process.env.DG_DEPLOYMENT_ENABLED == "false") {
+    log.header("DG deployment disabled");
+    await finalizePermissionsWithoutDGDeployment();
+    return;
+  }
+
+  log.header(`Deploy DG from folder ${DG_INSTALL_DIR}`);
+  log.emptyLine();
+
+  const deployerAccountNetworkName = process.env.DG_DEPLOYER_ACCOUNT_NETWORK_NAME || "";
+  if (!deployerAccountNetworkName.length) {
+    log.error(`You need to set the env variable DG_DEPLOYER_ACCOUNT_NETWORK_NAME to run DG deployment.
+To do so, please place first a deployer private key to an accounts.json file in the next format:
+{
+  "eth": {
+    "<DG_DEPLOYER_ACCOUNT_NETWORK_NAME>": ["<private key>"]
+  }
+}
+
+Then set DG_DEPLOYER_ACCOUNT_NETWORK_NAME=<DG_DEPLOYER_ACCOUNT_NETWORK_NAME> in the .env file.
+`);
+    throw new Error("Env variable DG_DEPLOYER_ACCOUNT_NETWORK_NAME is not set.");
+  }
+
+  log.warning(`To run the deployment with the local Hardhat node you need to increase allowed memory usage to 16Gb.
+> yarn hardhat node --fork <YOUR RPC URL> --port 8555 --max-memory 16384
+
+AND
+
+> export NODE_OPTIONS=--max_old_space_size=16384
+`);
+
+  const deployer = (await ethers.provider.getSigner()).address;
+  const state = readNetworkState({ deployer });
+
+  const network = await ethers.getDefaultProvider(process.env.LOCAL_RPC_URL).getNetwork();
+  const chainId = `${network.chainId}`;
+
+  const config = getDGConfig(chainId, state);
+
+  const timestamp = `${Date.now()}`;
+  const dgDeployConfigFilename = `deploy-config-scratch-${timestamp}.json`;
+  await writeDGConfigFile(JSON.stringify(config, null, 2), dgDeployConfigFilename);
+
+  const deployerPrivateKey = await getDeployerPrivateKey(deployerAccountNetworkName);
+
+  if (!deployerPrivateKey.length) {
+    throw new Error("Deployer private key not found");
+  }
+
+  let etherscanVerifyOption = "";
+  let etherscanApiKey = "ETHERSCAN API KEY PLACEHOLDER";
+  if (process.env.DG_ETHERSCAN_VERIFY == "true") {
+    if (!process.env.ETHERSCAN_API_KEY) {
+      throw new Error("Env variable ETHERSCAN_API_KEY is not set when DG_ETHERSCAN_VERIFY is set to true");
+    }
+    etherscanVerifyOption = "--verify";
+    etherscanApiKey = process.env.ETHERSCAN_API_KEY;
+  }
+
+  await unpauseWithdrawalQueue(deployer, state);
+
+  await runCommand(
+    `DEPLOY_CONFIG_FILE_NAME="${dgDeployConfigFilename}" RPC_URL="${process.env.LOCAL_RPC_URL}" ETHERSCAN_API_KEY="${etherscanApiKey}" DEPLOYER_ADDRESS="${deployer}" npm run forge:script scripts/deploy/DeployConfigurable.s.sol -- --broadcast --slow ${etherscanVerifyOption} --private-key ${deployerPrivateKey}`,
+    DG_INSTALL_DIR,
+  );
+
+  const dgDeployArtifacts = await getDGDeployArtifacts(chainId);
+
+  await transferRoles(deployer, dgDeployArtifacts, state);
+
+  await prepareDGRegressionTestsRun(chainId, state, process.env.LOCAL_RPC_URL);
+
+  saveDGNetworkState(dgDeployArtifacts);
+}
+
+async function finalizePermissionsWithoutDGDeployment() {
+  const deployer = (await ethers.provider.getSigner()).address;
+  const networkState = readNetworkState({ deployer });
+
+  const lidoTemplateAddress = getAddress(Sk.lidoTemplate, networkState);
+  const lidoTemplate = await loadContract<LidoTemplate>("LidoTemplate", lidoTemplateAddress);
+
+  await makeTx(lidoTemplate, "finalizePermissionsWithoutDGDeployment", [], { from: deployer });
+
+  await transferLidoTemplateOwnershipToAgent(deployer, lidoTemplate, getAddress(Sk.appAgent, networkState));
+}
+
+async function transferLidoTemplateOwnershipToAgent(
+  deployer: string,
+  lidoTemplate: LoadedContract<LidoTemplate>,
+  aragonAgentAddress: string,
+) {
+  await makeTx(lidoTemplate, "setOwner", [aragonAgentAddress], { from: deployer });
+}
+
+async function transferRoles(deployer: string, dgDeployArtifacts: DGDeployArtifacts, networkState: DeploymentState) {
+  const aragonAgentAddress = getAddress(Sk.appAgent, networkState);
+  const votingAddress = getAddress(Sk.appVoting, networkState);
+  const withdrawalQueueAddress = getAddress(Sk.withdrawalQueueERC721, networkState);
+  const lidoTemplateAddress = getAddress(Sk.lidoTemplate, networkState);
+
+  const lidoTemplate = await loadContract<LidoTemplate>("LidoTemplate", lidoTemplateAddress);
+  const withdrawalQueue = await loadContract<WithdrawalQueueERC721>("WithdrawalQueueERC721", withdrawalQueueAddress);
+
+  const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
+
+  await makeTx(withdrawalQueue, "grantRole", [DEFAULT_ADMIN_ROLE, aragonAgentAddress], {
+    from: deployer,
+  });
+
+  await makeTx(
+    withdrawalQueue,
+    "grantRole",
+    [await withdrawalQueue.PAUSE_ROLE(), votingAddress /* = reseal_committee */],
+    {
+      from: deployer,
+    },
+  );
+
+  await makeTx(
+    withdrawalQueue,
+    "grantRole",
+    [await withdrawalQueue.RESUME_ROLE(), votingAddress /* = reseal_committee */],
+    {
+      from: deployer,
+    },
+  );
+
+  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.PAUSE_ROLE(), dgDeployArtifacts.reseal_manager], {
+    from: deployer,
+  });
+
+  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.RESUME_ROLE(), dgDeployArtifacts.reseal_manager], {
+    from: deployer,
+  });
+
+  await makeTx(withdrawalQueue, "renounceRole", [await withdrawalQueue.DEFAULT_ADMIN_ROLE(), deployer], {
+    from: deployer,
+  });
+
+  await makeTx(lidoTemplate, "finalizePermissionsAfterDGDeployment", [dgDeployArtifacts.admin_executor], {
+    from: deployer,
+  });
+
+  await transferLidoTemplateOwnershipToAgent(deployer, lidoTemplate, aragonAgentAddress);
+}
+
+async function unpauseWithdrawalQueue(deployer: string, networkState: DeploymentState) {
+  const withdrawalQueueAddress = getAddress(Sk.withdrawalQueueERC721, networkState);
+  const withdrawalQueue = await loadContract<WithdrawalQueueERC721>("WithdrawalQueueERC721", withdrawalQueueAddress);
+
+  await makeTx(withdrawalQueue, "grantRole", [await withdrawalQueue.RESUME_ROLE(), deployer], {
+    from: deployer,
+  });
+
+  await makeTx(withdrawalQueue, "resume", [], {
+    from: deployer,
+  });
+}
+
+async function prepareDGRegressionTestsRun(networkChainId: string, networkState: DeploymentState, rpcUrl: string) {
+  log.header("Prepare DG regression tests run: update DG .env file");
+
+  const deployArtifactFilename = await getLatestDGDeployArtifactFilename(networkChainId);
+
+  const dotEnvFile = getDGDotEnvFile(deployArtifactFilename, networkState, rpcUrl);
+  await writeDGDotEnvFile(dotEnvFile);
+}
+
+async function writeDGConfigFile(dgConfig: string, filename: string) {
+  const dgConfigFilePath = `${DG_INSTALL_DIR}/deploy-config/${filename}`;
+
+  return writeFile(dgConfig, dgConfigFilePath, "config");
+}
+
+async function writeDGDotEnvFile(fileContent: string) {
+  const dgDotEnvFilePath = `${DG_INSTALL_DIR}/.env`;
+
+  return writeFile(fileContent, dgDotEnvFilePath, ".env");
+}
+
+async function writeFile(fileContent: string, filePath: string, fileKind: string) {
+  try {
+    await fs.writeFile(filePath, fileContent, "utf8");
+    log.success(`${fileKind} file successfully saved to ${filePath}`);
+  } catch (error) {
+    log.error(`An error has occurred while writing DG ${filePath} file`, `${error}`);
+    throw error;
+  }
+}
+
+async function getLatestDGDeployArtifactFilename(networkChainId: string) {
+  const deployArtifactFilenameRe = new RegExp(`deploy-artifact-${networkChainId}-\\d+.toml`, "ig");
+
+  let files = [];
+  try {
+    files = await fs.readdir(DG_DEPLOY_ARTIFACTS_DIR);
+  } catch (error) {
+    log.error("An error has occurred while reading directory:", `${error}`);
+    throw error;
+  }
+
+  files = files.filter((file) => file.match(deployArtifactFilenameRe)).sort();
+
+  if (files.length === 0) {
+    throw new Error("No deploy artifact file found");
+  }
+
+  return files[files.length - 1];
+}
+
+function getDGConfig(chainId: string, networkState: DeploymentState) {
+  const daoVoting = getAddress(Sk.appVoting, networkState);
+  const withdrawalQueue = getAddress(Sk.withdrawalQueueERC721, networkState);
+  const stEth = getAddress(Sk.appLido, networkState);
+  const wstEth = getAddress(Sk.wstETH, networkState);
+
+  if (!networkState[Sk.dualGovernanceConfig]) {
+    throw new Error("DG deploy config is not set, please specify it in the deploy-params-testnet.toml file");
+  }
+
+  return {
+    chain_id: chainId,
+    dual_governance: {
+      admin_proposer: daoVoting,
+      proposals_canceller: daoVoting,
+      sealable_withdrawal_blockers: [withdrawalQueue],
+      reseal_committee: daoVoting,
+      tiebreaker_activation_timeout:
+        networkState[Sk.dualGovernanceConfig].dual_governance.tiebreaker_activation_timeout,
+
+      signalling_tokens: {
+        st_eth: stEth,
+        wst_eth: wstEth,
+        withdrawal_queue: withdrawalQueue,
+      },
+      sanity_check_params: networkState[Sk.dualGovernanceConfig].dual_governance.sanity_check_params,
+    },
+    dual_governance_config_provider: networkState[Sk.dualGovernanceConfig].dual_governance_config_provider,
+    timelock: {
+      after_submit_delay: networkState[Sk.dualGovernanceConfig].timelock.after_submit_delay,
+      after_schedule_delay: networkState[Sk.dualGovernanceConfig].timelock.after_schedule_delay,
+      sanity_check_params: networkState[Sk.dualGovernanceConfig].timelock.sanity_check_params,
+      emergency_protection: {
+        emergency_activation_committee: daoVoting,
+        emergency_execution_committee: daoVoting,
+        emergency_governance_proposer: daoVoting,
+        emergency_mode_duration:
+          networkState[Sk.dualGovernanceConfig].timelock.emergency_protection.emergency_mode_duration,
+        emergency_protection_end_date:
+          networkState[Sk.dualGovernanceConfig].timelock.emergency_protection.emergency_protection_end_date,
+      },
+    },
+    tiebreaker: {
+      execution_delay: networkState[Sk.dualGovernanceConfig].tiebreaker.execution_delay,
+      committees_count: 1,
+      quorum: 1,
+      committees: [
+        {
+          members: [daoVoting],
+          quorum: 1,
+        },
+      ],
+    },
+  };
+}
+
+function getDGDotEnvFile(deployArtifactFilename: string, networkState: DeploymentState, rpcUrl: string) {
+  const stEth = getAddress(Sk.appLido, networkState);
+  const wstEth = getAddress(Sk.wstETH, networkState);
+  const withdrawalQueue = getAddress(Sk.withdrawalQueueERC721, networkState);
+  const hashConsensus = getAddress(Sk.hashConsensusForAccountingOracle, networkState);
+  const burner = getAddress(Sk.burner, networkState);
+  const accountingOracle = getAddress(Sk.accountingOracle, networkState);
+  const elRewardsVault = getAddress(Sk.executionLayerRewardsVault, networkState);
+  const withdrawalVault = getAddress(Sk.withdrawalVault, networkState);
+  const oracleReportSanityChecker = getAddress(Sk.oracleReportSanityChecker, networkState);
+  const stakingRouter = getAddress(Sk.stakingRouter, networkState);
+  const acl = getAddress(Sk.aragonAcl, networkState);
+  const ldo = getAddress(Sk.ldo, networkState);
+  const daoAgent = getAddress(Sk.appAgent, networkState);
+  const daoVoting = getAddress(Sk.appVoting, networkState);
+  const daoTokenManager = getAddress(Sk.appTokenManager, networkState);
+
+  return `MAINNET_RPC_URL=${rpcUrl}
+DEPLOY_ARTIFACT_FILE_NAME=${deployArtifactFilename}
+DG_TESTS_LIDO_ST_ETH=${stEth}
+DG_TESTS_LIDO_WST_ETH=${wstEth}
+DG_TESTS_LIDO_WITHDRAWAL_QUEUE=${withdrawalQueue}
+DG_TESTS_LIDO_HASH_CONSENSUS=${hashConsensus}
+DG_TESTS_LIDO_BURNER=${burner}
+DG_TESTS_LIDO_ACCOUNTING_ORACLE=${accountingOracle}
+DG_TESTS_LIDO_EL_REWARDS_VAULT=${elRewardsVault}
+DG_TESTS_LIDO_WITHDRAWAL_VAULT=${withdrawalVault}
+DG_TESTS_LIDO_ORACLE_REPORT_SANITY_CHECKER=${oracleReportSanityChecker}
+DG_TESTS_LIDO_STAKING_ROUTER=${stakingRouter}
+DG_TESTS_LIDO_DAO_ACL=${acl}
+DG_TESTS_LIDO_LDO_TOKEN=${ldo}
+DG_TESTS_LIDO_DAO_AGENT=${daoAgent}
+DG_TESTS_LIDO_DAO_VOTING=${daoVoting}
+DG_TESTS_LIDO_DAO_TOKEN_MANAGER=${daoTokenManager}
+DG_DISABLE_REGRESSION_TESTS_FOR_SCRATCH_DEPLOY=true
+`;
+}
+
+async function checkFileExists(path: string) {
+  return fs
+    .access(path)
+    .then(() => true)
+    .catch(() => false);
+}
+
+async function getDeployerPrivateKey(networkName: string): Promise<string> {
+  const accountsFilePath = `${process.cwd()}/accounts.json`;
+
+  const accountsFileExists = await checkFileExists(accountsFilePath);
+  if (!accountsFileExists) {
+    log.error(`accounts.json file not found at ${accountsFilePath}`);
+    return "";
+  }
+
+  log(`accounts.json file found at ${accountsFilePath}`);
+
+  const accountsFile = (await fs.readFile(accountsFilePath)).toString();
+  let accountsJson;
+  try {
+    accountsJson = JSON.parse(accountsFile);
+  } catch (error) {
+    log.error("accounts.json is not a valid JSON file", `${error}`);
+    return "";
+  }
+
+  const privateKeys = accountsJson.eth && accountsJson.eth[networkName];
+  return Array.isArray(privateKeys) ? privateKeys[0] : "";
+}
+
+interface DGDeployArtifacts {
+  admin_executor: string;
+  dualGovernance: string;
+  dual_governance_config_provider: string;
+  emergency_governance: string;
+  escrow_master_copy: string;
+  reseal_manager: string;
+  tiebreaker_core_committee: string;
+  emergencyProtectedTimelock: string;
+}
+
+async function getDGDeployArtifacts(networkChainId: string): Promise<DGDeployArtifacts> {
+  const deployArtifactFilename = await getLatestDGDeployArtifactFilename(networkChainId);
+  const deployArtifactFilePath = `${DG_DEPLOY_ARTIFACTS_DIR}/${deployArtifactFilename}`;
+
+  log(`Reading DG deploy artifact file: ${deployArtifactFilePath}`);
+
+  const deployArtifactFile = (await fs.readFile(deployArtifactFilePath)).toString();
+
+  const contractsAddressesRe = {
+    admin_executor: /admin_executor = "(.+)"/,
+    dualGovernance: /dual_governance = "(.+)"/,
+    dual_governance_config_provider: /dual_governance_config_provider = "(.+)"/,
+    emergency_governance: /emergency_governance = "(.+)"/,
+    escrow_master_copy: /escrow_master_copy = "(.+)"/,
+    reseal_manager: /reseal_manager = "(.+)"/,
+    tiebreaker_core_committee: /tiebreaker_core_committee = "(.+)"/,
+    // TODO: tiebreaker_sub_committees ?
+    emergencyProtectedTimelock: /timelock = "(.+)"/,
+  } as Record<keyof DGDeployArtifacts, RegExp>;
+
+  const result = {} as DGDeployArtifacts;
+
+  (Object.keys(contractsAddressesRe) as (keyof DGDeployArtifacts)[]).forEach((key) => {
+    const address = deployArtifactFile.match(contractsAddressesRe[key]);
+    if (!address || address.length < 2 || !address[1].length) {
+      throw new Error(`DG deploy artifact file corrupted: ${key} not found`);
+    }
+
+    result[key] = address[1];
+  });
+
+  return result;
+}
+
+function saveDGNetworkState(dgDeployArtifacts: DGDeployArtifacts) {
+  (Object.keys(dgDeployArtifacts) as (keyof DGDeployArtifacts)[]).forEach((key) => {
+    // TODO: sync operation!
+    updateObjectInState(`dg:${key}` as Sk, { address: dgDeployArtifacts[key] });
+  });
+}

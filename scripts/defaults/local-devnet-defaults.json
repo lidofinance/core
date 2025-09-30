@@ -166,5 +166,49 @@
       "gIndexAfterChange": "0x0000000000000000000000000000000000000000000000000096000000000028",
       "changeSlot": 0
     }
+  },
+  "dualGovernanceConfig": {
+    "dual_governance": {
+      "tiebreaker_activation_timeout": 900,
+      "sanity_check_params": {
+        "max_min_assets_lock_duration": 3600,
+        "max_sealable_withdrawal_blockers_count": 255,
+        "max_tiebreaker_activation_timeout": 1800,
+        "min_tiebreaker_activation_timeout": 300,
+        "min_withdrawals_batch_size": 1
+      }
+    },
+    "dual_governance_config_provider": {
+      "first_seal_rage_quit_support": "10000000000000000",
+      "second_seal_rage_quit_support": "100000000000000000",
+      "min_assets_lock_duration": 300,
+      "rage_quit_eth_withdrawals_delay_growth": 1296000,
+      "rage_quit_eth_withdrawals_min_delay": 300,
+      "rage_quit_eth_withdrawals_max_delay": 1800,
+      "rage_quit_extension_period_duration": 300,
+      "veto_cooldown_duration": 300,
+      "veto_signalling_deactivation_max_duration": 1800,
+      "veto_signalling_min_active_duration": 300,
+      "veto_signalling_min_duration": 300,
+      "veto_signalling_max_duration": 1500
+    },
+    "timelock": {
+      "after_submit_delay": 300,
+      "after_schedule_delay": 300,
+      "sanity_check_params": {
+        "min_execution_delay": 300,
+        "max_after_submit_delay": 1800,
+        "max_after_schedule_delay": 1800,
+        "max_emergency_mode_duration": 1800,
+        "max_emergency_protection_duration": 31536000
+      },
+      "emergency_protection": {
+        "emergency_mode_duration": 900,
+        "emergency_protection_end_date": 1781913600
+      }
+    },
+    "tiebreaker": {
+      "execution_delay": 900
+    }
   }
 }

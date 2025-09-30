@@ -185,3 +185,46 @@ forcedRebalanceThresholdBP = 1800     # Threshold for forced rebalancing in basi
 infraFeeBP = 500                      # Infrastructure fee in basis points (5%)
 liquidityFeeBP = 400                  # Liquidity provision fee in basis points (4%)
 reservationFeeBP = 100                # Reservation fee in basis points (1%)
+
+[dualGovernanceConfig]
+[dualGovernanceConfig.dual_governance]
+tiebreaker_activation_timeout = 900                                           # 15 minutes
+
+[dualGovernanceConfig.dual_governance.sanity_check_params]
+max_min_assets_lock_duration = 3600                                           # 1 hour
+max_sealable_withdrawal_blockers_count = 255
+max_tiebreaker_activation_timeout = 1800                                      # 30 minutes
+min_tiebreaker_activation_timeout = 300                                       # 5 minutes
+min_withdrawals_batch_size = 1
+
+[dualGovernanceConfig.dual_governance_config_provider]
+first_seal_rage_quit_support = "10000000000000000"
+second_seal_rage_quit_support = "100000000000000000"
+min_assets_lock_duration = 300                                                # 5 minutes
+rage_quit_eth_withdrawals_delay_growth = 1296000                              #
+rage_quit_eth_withdrawals_min_delay = 300                                     # 5 minutes
+rage_quit_eth_withdrawals_max_delay = 1800                                    # 30 minutes
+rage_quit_extension_period_duration = 300                                     # 5 minutes
+veto_cooldown_duration = 300                                                  # 5 minutes
+veto_signalling_deactivation_max_duration = 1800                              # 30 minutes
+veto_signalling_min_duration = 300                                            # 5 minutes
+veto_signalling_max_duration = 1500                                           # 25 minutes
+veto_signalling_min_active_duration = 300                                     # 5 minutes
+
+[dualGovernanceConfig.timelock]
+after_submit_delay = 300                                                      # 5 minutes
+after_schedule_delay = 300                                                    # 5 minutes
+
+[dualGovernanceConfig.timelock.sanity_check_params]
+min_execution_delay = 300                                                     # 5 minutes
+max_after_submit_delay = 1800                                                 # 30 minutes
+max_after_schedule_delay = 1800                                               # 30 minutes
+max_emergency_mode_duration = 1800                                            # 30 minutes
+max_emergency_protection_duration = 31536000                                  # 1 year
+
+[dualGovernanceConfig.timelock.emergency_protection]
+emergency_mode_duration = 900                                                 # 15 minutes
+emergency_protection_end_date = 1781913600                                    # Sat, June 20, 2026 12:00:00 AM GMT+00:00
+
+[dualGovernanceConfig.tiebreaker]
+execution_delay = 900                                                         # 15 minutes
