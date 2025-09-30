@@ -227,6 +227,100 @@ describe("LazyOracle.sol", () => {
     });
   });
 
+  context("vaultInfo", () => {
+    it("returns the vault info for a single vault", async () => {
+      const vault1 = await createVault();
+      await vaultHub.mock__addVault(vault1);
+
+      await vaultHub.mock__setVaultConnection(vault1, {
+        owner: randomAddress(),
+        shareLimit: 2000n,
+        vaultIndex: 1,
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
+        reserveRatioBP: 5000,
+        forcedRebalanceThresholdBP: 8000,
+        infraFeeBP: 1500,
+        liquidityFeeBP: 2500,
+        reservationFeeBP: 3500,
+        isBeaconDepositsManuallyPaused: false,
+      });
+
+      await vaultHub.mock__setVaultRecord(vault1, {
+        report: {
+          totalValue: 0n, // Set to 0 to make mintableStETH calculation return 0
+          inOutDelta: 3000000000000000000n,
+          timestamp: 2000000000n,
+        },
+        maxLiabilityShares: 8n,
+        liabilityShares: 6n,
+        inOutDelta: [
+          {
+            value: 10n,
+            valueOnRefSlot: 12n,
+            refSlot: 9n,
+          },
+          {
+            value: 0n,
+            valueOnRefSlot: 0n,
+            refSlot: 0n,
+          },
+        ],
+        minimalReserve: 0n,
+        redemptionShares: 0n,
+        cumulativeLidoFees: 0n,
+        settledLidoFees: 0n,
+      });
+
+      const vaultInfo = await lazyOracle.vaultInfo(vault1);
+
+      expect(vaultInfo.vault).to.equal(vault1);
+      expect(vaultInfo.aggregatedBalance).to.equal(0n);
+      expect(vaultInfo.inOutDelta).to.equal(10n);
+      expect(vaultInfo.withdrawalCredentials).to.equal(ZERO_BYTES32);
+      expect(vaultInfo.liabilityShares).to.equal(6n);
+      expect(vaultInfo.maxLiabilityShares).to.equal(8n);
+      expect(vaultInfo.mintableStETH).to.equal(0n);
+      expect(vaultInfo.shareLimit).to.equal(2000n);
+      expect(vaultInfo.reserveRatioBP).to.equal(5000);
+      expect(vaultInfo.forcedRebalanceThresholdBP).to.equal(8000);
+      expect(vaultInfo.infraFeeBP).to.equal(1500);
+      expect(vaultInfo.liquidityFeeBP).to.equal(2500);
+      expect(vaultInfo.reservationFeeBP).to.equal(3500);
+      expect(vaultInfo.pendingDisconnect).to.equal(false);
+    });
+
+    it("reverts with VaultNotConnected for non-existent vault", async () => {
+      const nonExistentVault = randomAddress();
+
+      // The contract will revert with VaultNotConnected error for non-connected vaults
+      await expect(lazyOracle.vaultInfo(nonExistentVault)).to.be.revertedWithCustomError(
+        lazyOracle,
+        "VaultNotConnected",
+      );
+    });
+
+    it("reverts with VaultNotConnected for vault with zero vaultIndex", async () => {
+      const vault = await createVault();
+      await vaultHub.mock__addVault(vault);
+
+      // Set connection with vaultIndex = 0 (means not connected)
+      await vaultHub.mock__setVaultConnection(vault, {
+        owner: randomAddress(),
+        shareLimit: 1000n,
+        vaultIndex: 0, // This means vault is not connected
+        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
+        reserveRatioBP: 10000,
+        forcedRebalanceThresholdBP: 10000,
+        infraFeeBP: 10000,
+        liquidityFeeBP: 10000,
+        reservationFeeBP: 10000,
+        isBeaconDepositsManuallyPaused: false,
+      });
+
+      await expect(lazyOracle.vaultInfo(vault)).to.be.revertedWithCustomError(lazyOracle, "VaultNotConnected");
+    });
+  });
+
   context("getter functions", () => {
     it("return latest report data", async () => {
       const reportData = await lazyOracle.latestReportData();
