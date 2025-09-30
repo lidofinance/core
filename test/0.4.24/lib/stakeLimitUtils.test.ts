@@ -235,24 +235,19 @@ describe("StakeLimitUtils.sol", () => {
 
       it("the full limit gets restored after growth blocks (decreasing to limit)", async () => {
         prevStakeBlockNumber = BigInt(await latestBlock());
-        const baseStakeLimit = maxStakeLimit * 2n;
+        const initial = maxStakeLimit * 2n;
 
-        await stakeLimitUtils.harness_setState(
-          prevStakeBlockNumber,
-          baseStakeLimit,
-          maxStakeLimitGrowthBlocks,
-          maxStakeLimit,
-        );
+        await stakeLimitUtils.harness_setState(prevStakeBlockNumber, initial, maxStakeLimitGrowthBlocks, maxStakeLimit);
 
         const growthPerBlock = maxStakeLimit / maxStakeLimitGrowthBlocks;
 
         // 1 block passed due to the setter call above
-        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(baseStakeLimit - growthPerBlock);
+        expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(initial - growthPerBlock);
 
         // growth blocks passed (might be not equal to maxStakeLimit yet due to rounding)
         await mineUpTo(BigInt(prevStakeBlockNumber) + maxStakeLimitGrowthBlocks);
         expect(await stakeLimitUtils.calculateCurrentStakeLimit()).to.equal(
-          baseStakeLimit - maxStakeLimitGrowthBlocks * growthPerBlock,
+          initial - maxStakeLimitGrowthBlocks * growthPerBlock,
         );
 
         // move forward one more block to account for rounding and reach max

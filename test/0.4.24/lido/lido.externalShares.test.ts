@@ -499,11 +499,11 @@ describe("Lido.sol:externalShares", () => {
 
       for (let i = 1n; i <= 500n; i++) {
         await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, i);
-
         await lido.connect(vaultHubSigner).burnExternalShares(i);
-        await advanceChainTime(1n);
       }
 
+      // need to mine a block to update the stake limit otherwise it will be 1000n + 100n (after burning)
+      await advanceChainTime(1n);
       expect(await lido.getCurrentStakeLimit()).to.equal(1000n);
     });
   });
