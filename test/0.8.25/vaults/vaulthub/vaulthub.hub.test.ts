@@ -701,6 +701,13 @@ describe("VaultHub.sol:hub", () => {
       await vault.connect(user).transferOwnership(vaultHub);
     });
 
+    it("reverts if called by non-owner", async () => {
+      await expect(vaultHub.connect(stranger).connectVault(vault)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NotAuthorized",
+      );
+    });
+
     it("reverts if vault is not factory deployed", async () => {
       const randomVault = certainAddress("randomVault");
       await expect(vaultHub.connect(user).connectVault(randomVault))
@@ -711,9 +718,10 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if vault is already connected", async () => {
       const { vault: connectedVault } = await createAndConnectVault(vaultFactory);
 
-      await expect(vaultHub.connect(user).connectVault(connectedVault))
-        .to.be.revertedWithCustomError(vaultHub, "VaultHubNotPendingOwner")
-        .withArgs(connectedVault);
+      await expect(vaultHub.connect(user).connectVault(connectedVault)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NotAuthorized",
+      );
     });
 
     it("connects the vault", async () => {
