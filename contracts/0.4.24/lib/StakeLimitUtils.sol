@@ -93,7 +93,8 @@ library StakeLimitUnstructuredStorage {
 library StakeLimitUtils {
     /**
     * @notice Calculate stake limit for the current block.
-    * @dev using `_constGasMin` to make gas consumption independent of the current block number
+    * @dev using `_constGasMin`, `_constGasMax`, `_saturatingSub`, `_constLt` to make gas consumption independent
+    *      of the current block number
     */
     function calculateCurrentStakeLimit(StakeLimitState.Data memory _data) internal view returns(uint256 limit) {
         uint256 stakeLimitIncPerBlock;
@@ -102,12 +103,13 @@ library StakeLimitUtils {
         }
 
         uint256 blocksPassed = block.number - _data.prevStakeBlockNumber;
-        uint256 projectedLimit = _data.prevStakeLimit + blocksPassed * stakeLimitIncPerBlock;
+        uint256 change = blocksPassed * stakeLimitIncPerBlock;
 
-        limit = _constGasMin(
-            projectedLimit,
-            _data.maxStakeLimit
-        );
+        uint256 increasedLimit = _constGasMin(_data.prevStakeLimit + change, _data.maxStakeLimit);
+        uint256 decreasedLimit = _constGasMax(_saturatingSub(_data.prevStakeLimit, change), _data.maxStakeLimit);
+
+        uint256 isIncreasing = _constLt(_data.prevStakeLimit, _data.maxStakeLimit);
+        limit = (increasedLimit * isIncreasing) + (decreasedLimit * (1 - isIncreasing));
     }
 
     /**
@@ -216,6 +218,30 @@ library StakeLimitUtils {
     }
 
     /**
+     * @notice branchless less-than comparison
+     * @param a first value
+     * @param b second value
+     * @return result 1 if a < b, 0 otherwise
+     */
+    function _constLt(uint256 a, uint256 b) internal pure returns (uint256 result) {
+        assembly {
+            result := lt(a, b)
+        }
+    }
+
+    /**
+     * @notice branchless greater-than comparison
+     * @param a first value
+     * @param b second value
+     * @return result 1 if a > b, 0 otherwise
+     */
+    function _constGt(uint256 a, uint256 b) internal pure returns (uint256 result) {
+        assembly {
+            result := gt(a, b)
+        }
+    }
+
+    /**
      * @notice find a minimum of two numbers with a constant gas consumption
      * @dev doesn't use branching logic inside
      * @param _lhs left hand side value
@@ -223,9 +249,29 @@ library StakeLimitUtils {
      */
     function _constGasMin(uint256 _lhs, uint256 _rhs) internal pure returns (uint256 min) {
         uint256 lhsIsLess;
-        assembly {
-            lhsIsLess := lt(_lhs, _rhs) // lhsIsLess = (_lhs < _rhs) ? 1 : 0
-        }
+        lhsIsLess = _constLt(_lhs, _rhs);
         min = (_lhs * lhsIsLess) + (_rhs * (1 - lhsIsLess));
+    }
+
+    /**
+     * @notice find a maximum of two numbers with a constant gas consumption
+     * @dev doesn't use branching logic inside
+     * @param _lhs left hand side value
+     * @param _rhs right hand side value
+     */
+    function _constGasMax(uint256 _lhs, uint256 _rhs) internal pure returns (uint256 max) {
+        uint256 lhsIsGreater;
+        lhsIsGreater = _constGt(_lhs, _rhs);
+        max = (_lhs * lhsIsGreater) + (_rhs * (1 - lhsIsGreater));
+    }
+
+    /**
+     * @notice unsigned saturating subtraction, bounds to zero instead of overflowing
+     * @param a first value
+     * @param b second value
+     */
+    function _saturatingSub(uint256 a, uint256 b) internal pure returns (uint256 result) {
+        uint256 isUnderflow = _constGt(b, a);
+        result = (a - b) * (1 - isUnderflow);
     }
 }
