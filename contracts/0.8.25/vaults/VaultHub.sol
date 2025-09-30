@@ -642,7 +642,7 @@ contract VaultHub is PausableUntilWithRoles {
             // by the Accounting Oracle during the report
             _storage().badDebtToInternalize = _storage().badDebtToInternalize.withValueIncrease({
                 _consensus: CONSENSUS_CONTRACT,
-                _increment: uint104(badDebtToInternalize_)
+                _increment: SafeCast.toUint104(badDebtToInternalize_)
             });
 
             emit BadDebtWrittenOffToBeInternalized(_badDebtVault, badDebtToInternalize_);
