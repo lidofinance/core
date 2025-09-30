@@ -190,9 +190,7 @@
     "implementation": {
       "contract": "@aragon/os/contracts/kernel/Kernel.sol",
       "address": "0x2b33CF282f867A7FF693A66e11B0FcC5552e4425",
-      "constructorArgs": [
-        true
-      ]
+      "constructorArgs": [true]
     },
     "proxy": {
       "address": "0xb8FFC3Cd6e7Cf5a098A1c92F48009765B24088Dc",
@@ -262,16 +260,6 @@
       "pauseIntentValidityPeriodBlocks": 6646
     }
   },
-  "dg:dualGovernance": {
-    "proxy": {
-      "address": "0xcdF49b058D606AD34c5789FD8c3BF8B3E54bA2db"
-    }
-  },
-  "dg:emergencyProtectedTimelock": {
-    "proxy": {
-      "address": "0xCE0425301C85c5Ea2A0873A2dEe44d78E02D2316"
-    }
-  },
   "dummyEmptyContract": {
     "address": "0x6F6541C2203196fEeDd14CD2C09550dA1CbEDa31",
     "contract": "contracts/0.8.9/utils/DummyEmptyContract.sol",
@@ -282,9 +270,7 @@
     "address": "0x8F73e4C2A6D852bb4ab2A45E6a9CF5715b3228B7",
     "contract": "contracts/0.8.9/EIP712StETH.sol",
     "deployTx": "0xecb5010620fb13b0e2bbc98b8a0c82de0d7385491452cd36cf303cd74216ed91",
-    "constructorArgs": [
-      "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"
-    ]
+    "constructorArgs": ["0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"]
   },
   "ensAddress": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
   "executionLayerRewardsVault": {
@@ -410,10 +396,7 @@
     "address": "0xbf05A929c3D7885a6aeAd833a992dA6E5ac23b09",
     "contract": "contracts/0.8.9/OracleDaemonConfig.sol",
     "deployTx": "0xa4f380b8806f5a504ef67fce62989e09be5a48bf114af63483c01c22f0c9a36f",
-    "constructorArgs": [
-      "0x8Ea83AD72396f1E0cD2f8E72b1461db8Eb6aF7B5",
-      []
-    ],
+    "constructorArgs": ["0x8Ea83AD72396f1E0cD2f8E72b1461db8Eb6aF7B5", []],
     "deployParameters": {
       "NORMALIZED_CL_REWARD_PER_EPOCH": 64,
       "NORMALIZED_CL_REWARD_MISTAKE_RATE_BP": 1000,
@@ -433,20 +416,7 @@
     "constructorArgs": [
       "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb",
       "0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c",
-      [
-        9000,
-        43200,
-        1000,
-        50,
-        600,
-        8,
-        24,
-        7680,
-        750000,
-        1000,
-        101,
-        50
-      ]
+      [9000, 43200, 1000, 50, 600, 8, 24, 7680, 750000, 1000, 101, 50]
     ],
     "deployParameters": {
       "churnValidatorsPerDayLimit": 20000,
@@ -475,9 +445,7 @@
     "implementation": {
       "contract": "contracts/0.8.9/StakingRouter.sol",
       "address": "0x226f9265CBC37231882b7409658C18bB7738173A",
-      "constructorArgs": [
-        "0x00000000219ab540356cBB839Cbe05303d7705Fa"
-      ]
+      "constructorArgs": ["0x00000000219ab540356cBB839Cbe05303d7705Fa"]
     }
   },
   "triggerableWithdrawalsGateway": {
@@ -532,11 +500,7 @@
     "implementation": {
       "contract": "contracts/0.8.9/oracle/ValidatorsExitBusOracle.sol",
       "address": "0x905A211eD6830Cfc95643f0bE2ff64E7f3bf9b94",
-      "constructorArgs": [
-        12,
-        1606824023,
-        "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"
-      ]
+      "constructorArgs": [12, 1606824023, "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"]
     }
   },
   "vestingParams": {
@@ -623,11 +587,7 @@
       "address": "0xE42C659Dc09109566720EA8b2De186c2Be7D94D9",
       "contract": "contracts/0.8.9/WithdrawalQueueERC721.sol",
       "deployTx": "0x6ab0151735c01acdef518421358d41a08752169bc383c57d57f5bfa135ac6eb1",
-      "constructorArgs": [
-        "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
-        "Lido: stETH Withdrawal NFT",
-        "unstETH"
-      ],
+      "constructorArgs": ["0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", "Lido: stETH Withdrawal NFT", "unstETH"],
       "deployParameters": {
         "name": "Lido: stETH Withdrawal NFT",
         "symbol": "unstETH"
@@ -652,8 +612,16 @@
     "address": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
     "contract": "contracts/0.6.12/WstETH.sol",
     "deployTx": "0xaf2c1a501d2b290ef1e84ddcfc7beb3406f8ece2c46dee14e212e8233654ff05",
-    "constructorArgs": [
-      "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"
-    ]
+    "constructorArgs": ["0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"]
+  },
+  "dg:dualGovernance": {
+    "proxy": {
+      "address": "0xC1db28B3301331277e307FDCfF8DE28242A4486E"
+    }
+  },
+  "dg:emergencyProtectedTimelock": {
+    "proxy": {
+      "address": "0xCE0425301C85c5Ea2A0873A2dEe44d78E02D2316"
+    }
   }
 }
