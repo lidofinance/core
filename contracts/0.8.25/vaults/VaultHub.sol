@@ -367,7 +367,7 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 infraFeeBP,
             uint256 liquidityFeeBP,
             uint256 reservationFeeBP
-        ) = _operatorGrid().vaultInfo(_vault);
+        ) = _operatorGrid().vaultTierInfo(_vault);
 
         _connectVault(_vault,
             shareLimit,

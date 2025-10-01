@@ -1078,7 +1078,7 @@ describe("OperatorGrid.sol", () => {
 
       const group = await operatorGrid.group(nodeOperator1);
 
-      const vaultTier = await operatorGrid.vaultInfo(vault_NO1_V1);
+      const vaultTier = await operatorGrid.vaultTierInfo(vault_NO1_V1);
       const tier = await operatorGrid.tier(vaultTier.tierId);
 
       expect(group.liabilityShares).to.equal(tierShareLimit);
@@ -1216,8 +1216,8 @@ describe("OperatorGrid.sol", () => {
       const group = await operatorGrid.group(nodeOperator1);
       const group2 = await operatorGrid.group(nodeOperator2);
 
-      const vaultTier = await operatorGrid.vaultInfo(vault_NO1_V1);
-      const vaultTier2 = await operatorGrid.vaultInfo(vault_NO2_V2);
+      const vaultTier = await operatorGrid.vaultTierInfo(vault_NO1_V1);
+      const vaultTier2 = await operatorGrid.vaultTierInfo(vault_NO2_V2);
 
       const tier = await operatorGrid.tier(vaultTier.tierId);
       const tier2 = await operatorGrid.tier(vaultTier2.tierId);
@@ -1729,8 +1729,8 @@ describe("OperatorGrid.sol", () => {
 
       const group = await operatorGrid.group(nodeOperator1);
 
-      const vaultTier = await operatorGrid.vaultInfo(vault_NO1_V1);
-      const vaultTier2 = await operatorGrid.vaultInfo(vault_NO1_V2);
+      const vaultTier = await operatorGrid.vaultTierInfo(vault_NO1_V1);
+      const vaultTier2 = await operatorGrid.vaultTierInfo(vault_NO1_V2);
 
       const tier = await operatorGrid.tier(vaultTier.tierId);
       const tier2 = await operatorGrid.tier(vaultTier2.tierId);
@@ -1800,7 +1800,7 @@ describe("OperatorGrid.sol", () => {
         retInfraFee,
         retLiquidityFee,
         retReservationFee,
-      ] = await operatorGrid.vaultInfo(vault_NO1_V1);
+      ] = await operatorGrid.vaultTierInfo(vault_NO1_V1);
 
       expect(retGroupOperator).to.equal(nodeOperator1);
       expect(retTierIndex).to.equal(tier_NO1_Id1);
@@ -1821,12 +1821,12 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("does nothing if vault is already in default tier", async () => {
-      const vaultTierBefore = await operatorGrid.vaultInfo(vault_NO1_V1);
+      const vaultTierBefore = await operatorGrid.vaultTierInfo(vault_NO1_V1);
       expect(vaultTierBefore.tierId).to.equal(await operatorGrid.DEFAULT_TIER_ID());
 
       await operatorGrid.connect(vaultHubAsSigner).resetVaultTier(vault_NO1_V1);
 
-      const vaultTierAfter = await operatorGrid.vaultInfo(vault_NO1_V1);
+      const vaultTierAfter = await operatorGrid.vaultTierInfo(vault_NO1_V1);
       expect(vaultTierAfter.tierId).to.equal(await operatorGrid.DEFAULT_TIER_ID());
     });
 
@@ -1847,14 +1847,14 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
       await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit);
 
-      const vaultTierBefore = await operatorGrid.vaultInfo(vault_NO1_V1);
+      const vaultTierBefore = await operatorGrid.vaultTierInfo(vault_NO1_V1);
       expect(vaultTierBefore.tierId).to.equal(1);
 
       // Reset tier
       await operatorGrid.connect(vaultHubAsSigner).resetVaultTier(vault_NO1_V1);
 
       // Check final state
-      const vaultTierAfter = await operatorGrid.vaultInfo(vault_NO1_V1);
+      const vaultTierAfter = await operatorGrid.vaultTierInfo(vault_NO1_V1);
       expect(vaultTierAfter.tierId).to.equal(await operatorGrid.DEFAULT_TIER_ID());
     });
   });
