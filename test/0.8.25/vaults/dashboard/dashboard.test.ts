@@ -116,7 +116,7 @@ describe("Dashboard.sol", () => {
     infraFeeBP: 1000n,
     liquidityFeeBP: 400n,
     reservationFeeBP: 100n,
-    isBeaconDepositsManuallyPaused: false,
+    beaconChainDepositsPauseIntent: false,
   };
 
   const setup = async ({

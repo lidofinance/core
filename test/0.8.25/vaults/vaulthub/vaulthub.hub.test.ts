@@ -262,7 +262,7 @@ describe("VaultHub.sol:hub", () => {
       expect(connection.infraFeeBP).to.equal(0n);
       expect(connection.liquidityFeeBP).to.equal(0n);
       expect(connection.reservationFeeBP).to.equal(0n);
-      expect(connection.isBeaconDepositsManuallyPaused).to.equal(false);
+      expect(connection.beaconChainDepositsPauseIntent).to.equal(false);
     });
 
     it("returns the connection values if the vault is connected", async () => {
@@ -277,7 +277,7 @@ describe("VaultHub.sol:hub", () => {
       expect(connection.infraFeeBP).to.equal(TIER_PARAMS.infraFeeBP);
       expect(connection.liquidityFeeBP).to.equal(TIER_PARAMS.liquidityFeeBP);
       expect(connection.reservationFeeBP).to.equal(TIER_PARAMS.reservationFeeBP);
-      expect(connection.isBeaconDepositsManuallyPaused).to.equal(false);
+      expect(connection.beaconChainDepositsPauseIntent).to.equal(false);
     });
   });
 
@@ -887,7 +887,7 @@ describe("VaultHub.sol:hub", () => {
       await expect(vaultHub.connect(user).connectVault(vault)).to.emit(vaultHub, "VaultConnected");
 
       const connection = await vaultHub.vaultConnection(vault);
-      expect(connection.isBeaconDepositsManuallyPaused).to.be.true;
+      expect(connection.beaconChainDepositsPauseIntent).to.be.true;
     });
   });
 

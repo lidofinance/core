@@ -69,8 +69,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 liquidityFeeBP;
         /// @notice reservation fee in basis points
         uint16 reservationFeeBP;
-        /// @notice if true, vault owner manually paused the beacon chain deposits
-        bool isBeaconDepositsManuallyPaused;
+        /// @notice if true, vault owner intentionally paused the beacon chain deposits.
+        bool beaconChainDepositsPauseIntent;
         /// 24 bits gap
     }
 
@@ -813,12 +813,12 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev msg.sender should be vault's owner
     function pauseBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
-        if (connection.isBeaconDepositsManuallyPaused) revert ResumedExpected();
+        if (connection.beaconChainDepositsPauseIntent) revert ResumedExpected();
 
-        connection.isBeaconDepositsManuallyPaused = true;
+        connection.beaconChainDepositsPauseIntent = true;
+        emit BeaconChainDepositsPauseIntentSet(_vault, true);
+
         _pauseBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
-
-        emit BeaconChainDepositsPausedByOwner(_vault);
     }
 
     /// @notice resumes beacon chain deposits for the vault
@@ -829,19 +829,15 @@ contract VaultHub is PausableUntilWithRoles {
     ///         remain paused until the obligations are covered. Once covered, deposits will resume automatically
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
-        if (!connection.isBeaconDepositsManuallyPaused) revert PausedExpected();
+        if (!connection.beaconChainDepositsPauseIntent) revert PausedExpected();
 
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        connection.isBeaconDepositsManuallyPaused = false;
+        connection.beaconChainDepositsPauseIntent = false;
+        emit BeaconChainDepositsPauseIntentSet(_vault, false);
 
-        if (_updateBeaconChainDepositsPause(_vault, record, connection)) {
-            /// @dev emited only when manual pause flag is cleared, but deposits are still paused
-            emit BeaconChainDepositsPauseReleasedByOwner(_vault);
-        } else {
-            emit BeaconChainDepositsResumedByOwner(_vault);
-        }
+        _updateBeaconChainDepositsPause(_vault, record, connection);
     }
 
     /// @notice Emits a request event for the node operator to perform validator exit
@@ -1033,7 +1029,7 @@ contract VaultHub is PausableUntilWithRoles {
             infraFeeBP: uint16(_infraFeeBP),
             liquidityFeeBP: uint16(_liquidityFeeBP),
             reservationFeeBP: uint16(_reservationFeeBP),
-            isBeaconDepositsManuallyPaused: vault.beaconChainDepositsPaused()
+            beaconChainDepositsPauseIntent: vault.beaconChainDepositsPaused()
         });
 
         _addVault(_vault, connection, record);
@@ -1374,15 +1370,13 @@ contract VaultHub is PausableUntilWithRoles {
         address _vault,
         VaultRecord storage _record,
         VaultConnection storage _connection
-    ) internal returns (bool isPaused) {
+    ) internal {
         IStakingVault vault_ = IStakingVault(_vault);
         uint256 obligationsAmount_ = _obligationsAmount(_connection, _record);
         if (obligationsAmount_ > 0) {
             _pauseBeaconChainDepositsIfNotAlready(vault_);
-            isPaused = true;
-        } else if (!_connection.isBeaconDepositsManuallyPaused) {
+        } else if (!_connection.beaconChainDepositsPauseIntent) {
             _resumeBeaconChainDepositsIfNotAlready(vault_);
-            isPaused = false;
         }
     }
 
@@ -1676,9 +1670,7 @@ contract VaultHub is PausableUntilWithRoles {
     event LidoFeesSettled(address indexed vault, uint256 transferred, uint256 cumulativeLidoFees, uint256 settledLidoFees);
     event VaultRedemptionSharesUpdated(address indexed vault, uint256 redemptionShares);
 
-    event BeaconChainDepositsPausedByOwner(address indexed vault);
-    event BeaconChainDepositsPauseReleasedByOwner(address indexed vault);
-    event BeaconChainDepositsResumedByOwner(address indexed vault);
+    event BeaconChainDepositsPauseIntentSet(address indexed vault, bool pauseIntent);
 
     /// @dev Warning! used by Accounting Oracle to calculate fees
     event BadDebtSocialized(address indexed vaultDonor, address indexed vaultAcceptor, uint256 badDebtShares);

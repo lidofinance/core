@@ -136,7 +136,7 @@ describe("LazyOracle.sol", () => {
         infraFeeBP: 10000,
         liquidityFeeBP: 10000,
         reservationFeeBP: 10000,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       await vaultHub.mock__setVaultRecord(vault1, {
@@ -242,7 +242,7 @@ describe("LazyOracle.sol", () => {
         infraFeeBP: 1500,
         liquidityFeeBP: 2500,
         reservationFeeBP: 3500,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       await vaultHub.mock__setVaultRecord(vault1, {

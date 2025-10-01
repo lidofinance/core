@@ -602,8 +602,8 @@ describe("VaultHub.sol:owner-functions", () => {
       expect(await vault.beaconChainDepositsPaused()).to.be.false;
 
       await expect(vaultHub.connect(vaultOwner).pauseBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsPausedByOwner")
-        .withArgs(vaultAddress)
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(vaultAddress, true)
         .and.to.emit(vault, "Mock__BeaconChainDepositsPaused");
 
       expect(await vault.beaconChainDepositsPaused()).to.be.true;
@@ -652,9 +652,9 @@ describe("VaultHub.sol:owner-functions", () => {
       expect(await vault.beaconChainDepositsPaused()).to.be.true;
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsResumedByOwner")
-        .withArgs(vaultAddress)
-        .and.to.emit(vault, "Mock__BeaconChainDepositsResumed");
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(vaultAddress, false)
+        .to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
       expect(await vault.beaconChainDepositsPaused()).to.be.false;
     });
@@ -669,13 +669,13 @@ describe("VaultHub.sol:owner-functions", () => {
       await reportVault({ totalValue: ether("10"), liabilityShares: ether("8.5") });
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsPauseReleasedByOwner")
-        .withArgs(vaultAddress)
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(vaultAddress, false)
         .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
       // Check that the manual pause flag is reset
       const connection = await vaultHub.vaultConnection(vaultAddress);
-      expect(connection.isBeaconDepositsManuallyPaused).to.be.false;
+      expect(connection.beaconChainDepositsPauseIntent).to.be.false;
 
       expect(await vault.beaconChainDepositsPaused()).to.be.true;
 
@@ -693,13 +693,13 @@ describe("VaultHub.sol:owner-functions", () => {
       await vaultHub.connect(vaultOwner).setLiabilitySharesTarget(vaultAddress, 0n);
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsPauseReleasedByOwner")
-        .withArgs(vaultAddress)
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(vaultAddress, false)
         .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
       // Check that the manual pause flag is reset
       const connection = await vaultHub.vaultConnection(vaultAddress);
-      expect(connection.isBeaconDepositsManuallyPaused).to.be.false;
+      expect(connection.beaconChainDepositsPauseIntent).to.be.false;
 
       expect(await vault.beaconChainDepositsPaused()).to.be.true;
 
@@ -713,13 +713,13 @@ describe("VaultHub.sol:owner-functions", () => {
       await reportVault({ totalValue: ether("10"), cumulativeLidoFees: ether("1") });
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsPauseReleasedByOwner")
-        .withArgs(vaultAddress)
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(vaultAddress, false)
         .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
       // Check that the manual pause flag is reset
       const connection = await vaultHub.vaultConnection(vaultAddress);
-      expect(connection.isBeaconDepositsManuallyPaused).to.be.false;
+      expect(connection.beaconChainDepositsPauseIntent).to.be.false;
 
       expect(await vault.beaconChainDepositsPaused()).to.be.true;
 
