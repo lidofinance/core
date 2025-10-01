@@ -69,8 +69,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 liquidityFeeBP;
         /// @notice reservation fee in basis points
         uint16 reservationFeeBP;
-        /// @notice if true, vault owner manually paused the beacon chain deposits
-        bool isBeaconDepositsManuallyPaused;
+        /// @notice if true, vault owner intends to pause the beacon chain deposits
+        bool beaconChainDepositsPauseIntent;
         /// 24 bits gap
     }
 
@@ -813,10 +813,10 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev msg.sender should be vault's owner
     function pauseBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
-        if (connection.isBeaconDepositsManuallyPaused) revert ResumedExpected();
+        if (connection.beaconChainDepositsPauseIntent) revert PauseIntentAlreadySet();
 
-        connection.isBeaconDepositsManuallyPaused = true;
-        emit BeaconChainDepositsPausedByOwner(_vault);
+        connection.beaconChainDepositsPauseIntent = true;
+        emit BeaconChainDepositsPauseIntentSet(_vault, true);
 
         _pauseBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
     }
@@ -825,21 +825,19 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault vault address
     /// @dev msg.sender should be vault's owner
     /// @dev requires the fresh report
+    /// @dev NB: if the vault has outstanding obligations, this call will clear the manual pause flag but deposits will
+    ///         remain paused until the obligations are covered. Once covered, deposits will resume automatically
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
-        if (!connection.isBeaconDepositsManuallyPaused) revert PausedExpected();
+        if (!connection.beaconChainDepositsPauseIntent) revert PauseIntentAlreadyUnset();
 
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        if (record.redemptionShares > 0) revert HasRedemptionsCannotDeposit(_vault);
-        if (_unsettledLidoFeesValue(record) >= MIN_BEACON_DEPOSIT) revert FeesTooHighCannotDeposit(_vault);
-        if (!_isVaultHealthy(connection, record)) revert UnhealthyVaultCannotDeposit(_vault);
+        connection.beaconChainDepositsPauseIntent = false;
+        emit BeaconChainDepositsPauseIntentSet(_vault, false);
 
-        connection.isBeaconDepositsManuallyPaused = false;
-        emit BeaconChainDepositsResumedByOwner(_vault);
-
-        _resumeBeaconChainDepositsIfNotAlready(IStakingVault(_vault));
+        _updateBeaconChainDepositsPause(_vault, record, connection);
     }
 
     /// @notice Emits a request event for the node operator to perform validator exit
@@ -1003,6 +1001,8 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 vaultBalance = _availableBalance(_vault);
         if (vaultBalance < CONNECT_DEPOSIT) revert VaultInsufficientBalance(_vault, vaultBalance, CONNECT_DEPOSIT);
 
+        IStakingVault vault = IStakingVault(_vault);
+
         // Connecting a new vault with totalValue == balance
         VaultRecord memory record = VaultRecord({
             report: Report({
@@ -1020,7 +1020,7 @@ contract VaultHub is PausableUntilWithRoles {
         });
 
         connection = VaultConnection({
-            owner: IStakingVault(_vault).owner(),
+            owner: vault.owner(),
             shareLimit: uint96(_shareLimit),
             vaultIndex: uint96(_storage().vaults.length),
             disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
@@ -1029,7 +1029,7 @@ contract VaultHub is PausableUntilWithRoles {
             infraFeeBP: uint16(_infraFeeBP),
             liquidityFeeBP: uint16(_liquidityFeeBP),
             reservationFeeBP: uint16(_reservationFeeBP),
-            isBeaconDepositsManuallyPaused: false
+            beaconChainDepositsPauseIntent: vault.beaconChainDepositsPaused()
         });
 
         _addVault(_vault, connection, record);
@@ -1375,7 +1375,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 obligationsAmount_ = _obligationsAmount(_connection, _record);
         if (obligationsAmount_ > 0) {
             _pauseBeaconChainDepositsIfNotAlready(vault_);
-        } else if (!_connection.isBeaconDepositsManuallyPaused) {
+        } else if (!_connection.beaconChainDepositsPauseIntent) {
             _resumeBeaconChainDepositsIfNotAlready(vault_);
         }
     }
@@ -1670,8 +1670,7 @@ contract VaultHub is PausableUntilWithRoles {
     event LidoFeesSettled(address indexed vault, uint256 transferred, uint256 cumulativeLidoFees, uint256 settledLidoFees);
     event VaultRedemptionSharesUpdated(address indexed vault, uint256 redemptionShares);
 
-    event BeaconChainDepositsPausedByOwner(address indexed vault);
-    event BeaconChainDepositsResumedByOwner(address indexed vault);
+    event BeaconChainDepositsPauseIntentSet(address indexed vault, bool pauseIntent);
 
     /// @dev Warning! used by Accounting Oracle to calculate fees
     event BadDebtSocialized(address indexed vaultDonor, address indexed vaultAcceptor, uint256 badDebtShares);
@@ -1681,6 +1680,9 @@ contract VaultHub is PausableUntilWithRoles {
     // -----------------------------
     //           ERRORS
     // -----------------------------
+
+    error PauseIntentAlreadySet();
+    error PauseIntentAlreadyUnset();
 
     error AmountExceedsTotalValue(address vault, uint256 totalValue, uint256 withdrawAmount);
     error AmountExceedsWithdrawableValue(address vault, uint256 withdrawable, uint256 requested);
@@ -1715,9 +1717,6 @@ contract VaultHub is PausableUntilWithRoles {
     error VaultReportStale(address vault);
     error PDGNotDepositor(address vault);
     error VaultHubNotPendingOwner(address vault);
-    error HasRedemptionsCannotDeposit(address vault);
-    error FeesTooHighCannotDeposit(address vault);
-    error UnhealthyVaultCannotDeposit(address vault);
     error VaultIsDisconnecting(address vault);
     error PartialValidatorWithdrawalNotAllowed();
     error ForcedValidatorExitNotAllowed();

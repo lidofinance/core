@@ -117,7 +117,7 @@ contract AccountingOracle is BaseOracle {
 
         _initialize(admin, consensusContract, consensusVersion, lastProcessingRefSlot);
         _updateContractVersion(2);
-        _updateContractVersion(3); // ¯\_(ツ)_/¯
+        _updateContractVersion(3);
     }
 
     function finalizeUpgrade_v3(uint256 consensusVersion) external {

@@ -116,7 +116,7 @@ contract VaultHub__MockForDashboard {
             infraFeeBP: 100,
             liquidityFeeBP: 100,
             reservationFeeBP: 100,
-            isBeaconDepositsManuallyPaused: false
+            beaconChainDepositsPauseIntent: false
         });
 
         IStakingVault(vault).acceptOwnership();

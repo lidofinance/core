@@ -602,8 +602,8 @@ describe("VaultHub.sol:owner-functions", () => {
       expect(await vault.beaconChainDepositsPaused()).to.be.false;
 
       await expect(vaultHub.connect(vaultOwner).pauseBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsPausedByOwner")
-        .withArgs(vaultAddress)
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(vaultAddress, true)
         .and.to.emit(vault, "Mock__BeaconChainDepositsPaused");
 
       expect(await vault.beaconChainDepositsPaused()).to.be.true;
@@ -614,7 +614,7 @@ describe("VaultHub.sol:owner-functions", () => {
 
       await expect(vaultHub.connect(vaultOwner).pauseBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
-        "ResumedExpected",
+        "PauseIntentAlreadySet",
       );
     });
 
@@ -632,15 +632,11 @@ describe("VaultHub.sol:owner-functions", () => {
       await reportVault({ totalValue: ether("1") });
     });
 
-    it("resumes beacon chain deposits", async () => {
-      expect(await vault.beaconChainDepositsPaused()).to.be.true;
-
-      await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.emit(vaultHub, "BeaconChainDepositsResumedByOwner")
-        .withArgs(vaultAddress)
-        .and.to.emit(vault, "Mock__BeaconChainDepositsResumed");
-
-      expect(await vault.beaconChainDepositsPaused()).to.be.false;
+    it("reverts when called by non-owner", async () => {
+      await expect(vaultHub.connect(stranger).resumeBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NotAuthorized",
+      );
     });
 
     it("reverts when report is stale", async () => {
@@ -652,7 +648,27 @@ describe("VaultHub.sol:owner-functions", () => {
       );
     });
 
-    it("reverts when vault is unhealthy", async () => {
+    it("reverts when already resumed", async () => {
+      await vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress);
+
+      await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "PauseIntentAlreadyUnset",
+      );
+    });
+
+    it("resumes beacon chain deposits", async () => {
+      expect(await vault.beaconChainDepositsPaused()).to.be.true;
+
+      await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(vaultAddress, false)
+        .to.emit(vault, "Mock__BeaconChainDepositsResumed");
+
+      expect(await vault.beaconChainDepositsPaused()).to.be.false;
+    });
+
+    it("only resets the manual pause flag when vault is unhealthy", async () => {
       // Make vault unhealthy
       await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
       await reportVault({ totalValue: ether("11") });
@@ -662,11 +678,23 @@ describe("VaultHub.sol:owner-functions", () => {
       await reportVault({ totalValue: ether("10"), liabilityShares: ether("8.5") });
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.be.revertedWithCustomError(vaultHub, "UnhealthyVaultCannotDeposit")
-        .withArgs(vaultAddress);
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(vaultAddress, false)
+        .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
+
+      // Check that the manual pause flag is reset
+      const connection = await vaultHub.vaultConnection(vaultAddress);
+      expect(connection.beaconChainDepositsPauseIntent).to.be.false;
+
+      expect(await vault.beaconChainDepositsPaused()).to.be.true;
+
+      // Check that the deposits are automatically resumed after vault becomes healthy
+      await reportVault({ totalValue: ether("11"), liabilityShares: ether("8.5") });
+
+      expect(await vault.beaconChainDepositsPaused()).to.be.false;
     });
 
-    it("reverts when vault is has redemption obligations", async () => {
+    it("only resets the manual pause flag when vault has redemption obligations", async () => {
       await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
       await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, ether("8.5"));
 
@@ -674,22 +702,40 @@ describe("VaultHub.sol:owner-functions", () => {
       await vaultHub.connect(vaultOwner).setLiabilitySharesTarget(vaultAddress, 0n);
 
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.be.revertedWithCustomError(vaultHub, "HasRedemptionsCannotDeposit")
-        .withArgs(vaultAddress);
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(vaultAddress, false)
+        .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
+
+      // Check that the manual pause flag is reset
+      const connection = await vaultHub.vaultConnection(vaultAddress);
+      expect(connection.beaconChainDepositsPauseIntent).to.be.false;
+
+      expect(await vault.beaconChainDepositsPaused()).to.be.true;
+
+      // Check that the deposits are automatically resumed after vault becomes healthy
+      await vaultHub.connect(vaultOwner).forceRebalance(vaultAddress);
+
+      expect(await vault.beaconChainDepositsPaused()).to.be.false;
     });
 
-    it("reverts when vault has unsettled lido fees over minimum beacon deposit", async () => {
-      await reportVault({ totalValue: ether("10"), cumulativeLidoFees: ether("10") });
+    it("only resets the manual pause flag when vault has unsettled lido fees equal to minimum beacon deposit", async () => {
+      await reportVault({ totalValue: ether("10"), cumulativeLidoFees: ether("1") });
+
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress))
-        .to.be.revertedWithCustomError(vaultHub, "FeesTooHighCannotDeposit")
-        .withArgs(vaultAddress);
-    });
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(vaultAddress, false)
+        .and.not.to.emit(vault, "Mock__BeaconChainDepositsResumed");
 
-    it("reverts when called by non-owner", async () => {
-      await expect(vaultHub.connect(stranger).resumeBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
-        vaultHub,
-        "NotAuthorized",
-      );
+      // Check that the manual pause flag is reset
+      const connection = await vaultHub.vaultConnection(vaultAddress);
+      expect(connection.beaconChainDepositsPauseIntent).to.be.false;
+
+      expect(await vault.beaconChainDepositsPaused()).to.be.true;
+
+      // Check that the deposits are automatically resumed after vault becomes healthy
+      await vaultHub.connect(vaultOwner).settleLidoFees(vaultAddress);
+
+      expect(await vault.beaconChainDepositsPaused()).to.be.false;
     });
   });
 

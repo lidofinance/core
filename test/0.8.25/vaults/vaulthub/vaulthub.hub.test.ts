@@ -262,7 +262,7 @@ describe("VaultHub.sol:hub", () => {
       expect(connection.infraFeeBP).to.equal(0n);
       expect(connection.liquidityFeeBP).to.equal(0n);
       expect(connection.reservationFeeBP).to.equal(0n);
-      expect(connection.isBeaconDepositsManuallyPaused).to.equal(false);
+      expect(connection.beaconChainDepositsPauseIntent).to.equal(false);
     });
 
     it("returns the connection values if the vault is connected", async () => {
@@ -277,7 +277,7 @@ describe("VaultHub.sol:hub", () => {
       expect(connection.infraFeeBP).to.equal(TIER_PARAMS.infraFeeBP);
       expect(connection.liquidityFeeBP).to.equal(TIER_PARAMS.liquidityFeeBP);
       expect(connection.reservationFeeBP).to.equal(TIER_PARAMS.reservationFeeBP);
-      expect(connection.isBeaconDepositsManuallyPaused).to.equal(false);
+      expect(connection.beaconChainDepositsPauseIntent).to.equal(false);
     });
   });
 
@@ -831,6 +831,7 @@ describe("VaultHub.sol:hub", () => {
           RESERVATION_FEE_BP,
         );
     });
+
     it("allows to connect the vault with 0 reservation fee", async () => {
       await vault.connect(user).fund({ value: ether("1") });
 
@@ -863,6 +864,30 @@ describe("VaultHub.sol:hub", () => {
           LIQUIDITY_FEE_BP,
           0n,
         );
+    });
+
+    it("provision beacon deposits manually paused state from the vault", async () => {
+      await vault.connect(user).fund({ value: ether("1") });
+
+      expect(await vault.beaconChainDepositsPaused()).to.be.false;
+
+      // change to non default value
+      await expect(vault.connect(user).pauseBeaconChainDeposits()).to.emit(vault, "Mock__BeaconChainDepositsPaused");
+      expect(await vault.beaconChainDepositsPaused()).to.be.true;
+
+      await operatorGridMock.changeVaultTierParams(vault, {
+        shareLimit: SHARE_LIMIT,
+        reserveRatioBP: RESERVE_RATIO_BP,
+        forcedRebalanceThresholdBP: FORCED_REBALANCE_THRESHOLD_BP,
+        infraFeeBP: INFRA_FEE_BP,
+        liquidityFeeBP: LIQUIDITY_FEE_BP,
+        reservationFeeBP: 0n,
+      });
+
+      await expect(vaultHub.connect(user).connectVault(vault)).to.emit(vaultHub, "VaultConnected");
+
+      const connection = await vaultHub.vaultConnection(vault);
+      expect(connection.beaconChainDepositsPauseIntent).to.be.true;
     });
   });
 
