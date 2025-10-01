@@ -293,31 +293,7 @@ describe("LazyOracle.sol", () => {
       const nonExistentVault = randomAddress();
 
       // The contract will revert with VaultNotConnected error for non-connected vaults
-      await expect(lazyOracle.vaultInfo(nonExistentVault)).to.be.revertedWithCustomError(
-        lazyOracle,
-        "VaultNotConnected",
-      );
-    });
-
-    it("reverts with VaultNotConnected for vault with zero vaultIndex", async () => {
-      const vault = await createVault();
-      await vaultHub.mock__addVault(vault);
-
-      // Set connection with vaultIndex = 0 (means not connected)
-      await vaultHub.mock__setVaultConnection(vault, {
-        owner: randomAddress(),
-        shareLimit: 1000n,
-        vaultIndex: 0, // This means vault is not connected
-        disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        reserveRatioBP: 10000,
-        forcedRebalanceThresholdBP: 10000,
-        infraFeeBP: 10000,
-        liquidityFeeBP: 10000,
-        reservationFeeBP: 10000,
-        isBeaconDepositsManuallyPaused: false,
-      });
-
-      await expect(lazyOracle.vaultInfo(vault)).to.be.revertedWithCustomError(lazyOracle, "VaultNotConnected");
+      await expect(lazyOracle.vaultInfo(nonExistentVault)).to.be.reverted;
     });
   });
 

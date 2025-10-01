@@ -235,9 +235,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @param _vault the address of the vault
     /// @return the vault data info
     function vaultInfo(address _vault) external view returns (VaultInfo memory) {
-        VaultHub vaultHub = _vaultHub();
-        if (!vaultHub.isVaultConnected(_vault)) revert VaultNotConnected();
-        return _vaultInfo(_vault, vaultHub);
+        return _vaultInfo(_vault, _vaultHub());
     }
 
     function _vaultInfo(address _vault, VaultHub _vaultHub) internal view returns (VaultInfo memory) {
@@ -623,5 +621,4 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     error MaxRewardRatioTooLarge(uint256 rewardRatio, uint256 maxRewardRatio);
     error MaxLidoFeeRatePerSecondTooLarge(uint256 feeRate, uint256 maxFeeRate);
     error InvalidMaxLiabilityShares();
-    error VaultNotConnected();
 }
