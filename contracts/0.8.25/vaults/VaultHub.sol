@@ -288,10 +288,21 @@ contract VaultHub is PausableUntilWithRoles {
 
     /// @notice calculate shares amount to make the vault healthy using rebalance
     /// @param _vault vault address
-    /// @return amount of shares or UINT256_MAX if it's impossible to make the vault healthy using rebalance
+    /// @return shares amount or UINT256_MAX if it's impossible to make the vault healthy using rebalance
     /// @dev returns 0 if the vault is not connected
     function healthShortfallShares(address _vault) external view returns (uint256) {
         return _healthShortfallShares(_vaultConnection(_vault), _vaultRecord(_vault));
+    }
+
+    /// @notice calculate ether amount required to cover obligations shortfall of the vault
+    /// @param _vault vault address
+    /// @return ether amount or UINT256_MAX if it's impossible to cover obligations shortfall
+    /// @dev returns 0 if the vault is not connected
+    function obligationsShortfallValue(address _vault) external view returns (uint256) {
+        VaultConnection storage connection = _vaultConnection(_vault);
+        if (connection.vaultIndex == 0) return 0;
+
+        return _obligationsShortfallValue(_vault, connection, _vaultRecord(_vault));
     }
 
     /// @notice returns the vault's current obligations toward the protocol
@@ -353,9 +364,8 @@ contract VaultHub is PausableUntilWithRoles {
         if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
         if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(_predepositGuarantee())) revert PDGNotDepositor(_vault);
-        // for each pending predeposit, vault should have an activation amount staged in StakingVault
-        // 1 predeposit is 1 ether and activation amount is 31 ether
-        if (vault_.stagedBalance() != 31 * _predepositGuarantee().pendingPredeposits(vault_)) {
+        // we need vault to match staged balance with pendingActivations
+        if (vault_.stagedBalance() != _predepositGuarantee().pendingActivations(vault_) * 31 ether) {
             revert InsufficientStagedBalance(_vault);
         }
 
@@ -368,7 +378,7 @@ contract VaultHub is PausableUntilWithRoles {
             uint256 infraFeeBP,
             uint256 liquidityFeeBP,
             uint256 reservationFeeBP
-        ) = _operatorGrid().vaultInfo(_vault);
+        ) = _operatorGrid().vaultTierInfo(_vault);
 
         _connectVault(_vault,
             shareLimit,
@@ -874,8 +884,8 @@ contract VaultHub is PausableUntilWithRoles {
             ///      vault owner from clogging the consensus layer withdrawal queue by front-running and delaying the
             ///      forceful validator exits required for rebalancing the vault. Partial withdrawals only allowed if
             ///      the requested amount of withdrawals is enough to cover the uncovered obligations.
-            uint256 obligationsShortfall = _obligationsShortfall(_vault, connection, record);
-            if (obligationsShortfall > 0 && minPartialAmountInGwei * 1e9 < obligationsShortfall) {
+            uint256 obligationsShortfallAmount = _obligationsShortfallValue(_vault, connection, record);
+            if (obligationsShortfallAmount > 0 && minPartialAmountInGwei * 1e9 < obligationsShortfallAmount) {
                 revert PartialValidatorWithdrawalNotAllowed();
             }
         }
@@ -900,8 +910,8 @@ contract VaultHub is PausableUntilWithRoles {
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
 
-        uint256 obligationsShortfall = _obligationsShortfall(_vault, connection, record);
-        if (obligationsShortfall == 0) revert ForcedValidatorExitNotAllowed();
+        uint256 obligationsShortfallAmount = _obligationsShortfallValue(_vault, connection, record);
+        if (obligationsShortfallAmount == 0) revert ForcedValidatorExitNotAllowed();
 
         uint64[] memory amountsInGwei = new uint64[](0);
         _triggerVaultValidatorWithdrawals(_vault, msg.value, _pubkeys, amountsInGwei, _refundRecipient);
@@ -1292,7 +1302,7 @@ contract VaultHub is PausableUntilWithRoles {
     }
 
     /// @return the ether shortfall required to fully cover all outstanding obligations amount of the vault
-    function _obligationsShortfall(
+    function _obligationsShortfallValue(
         address _vault,
         VaultConnection storage _connection,
         VaultRecord storage _record

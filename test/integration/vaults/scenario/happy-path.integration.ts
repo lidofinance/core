@@ -20,14 +20,15 @@ import {
 } from "lib";
 import { TOTAL_BASIS_POINTS } from "lib/constants";
 import {
+  calculateLockedValue,
   getProtocolContext,
   getReportTimeElapsed,
   OracleReportParams,
   ProtocolContext,
   report,
+  reportVaultDataWithProof,
   setupLidoForVaults,
 } from "lib/protocol";
-import { reportVaultDataWithProof } from "lib/protocol/helpers/vaults";
 
 import { bailOnFailure, Snapshot } from "test/suite";
 import { ONE_DAY } from "test/suite/constants";
@@ -303,16 +304,13 @@ describe("Scenario: Staking Vaults Happy Path", () => {
 
     await expect(dashboard.connect(owner).mintShares(owner, stakingVaultMaxMintingShares))
       .to.emit(vaultHub, "MintedSharesOnVault")
-      .withArgs(stakingVaultAddress, stakingVaultMaxMintingShares, funding);
+      .withArgs(
+        stakingVaultAddress,
+        stakingVaultMaxMintingShares,
+        await calculateLockedValue(ctx, stakingVault, { liabilityShares: stakingVaultMaxMintingShares }),
+      );
 
-    const lockedAfter = await vaultHub.locked(stakingVaultAddress);
-    expect(lockedAfter).to.equal(funding);
     expect(await dashboard.remainingMintingCapacityShares(0n)).to.equal(0n);
-
-    log.debug("Staking Vault", {
-      "Staking Vault Minted Shares": stakingVaultMaxMintingShares,
-      "Staking Vault Locked": lockedAfter,
-    });
   });
 
   it("Should rebase simulating 3% stETH APR", async () => {

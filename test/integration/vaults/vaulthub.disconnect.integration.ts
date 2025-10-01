@@ -65,7 +65,7 @@ describe("Integration: VaultHub", () => {
           .to.emit(vaultHub, "VaultDisconnectInitiated")
           .withArgs(stakingVault);
 
-        expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(tierId);
+        expect((await operatorGrid.vaultTierInfo(stakingVault)).tierId).to.be.equal(tierId);
         expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
         expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
         expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
@@ -120,7 +120,7 @@ describe("Integration: VaultHub", () => {
         .to.emit(vaultHub, "VaultDisconnectCompleted")
         .withArgs(stakingVault);
 
-      expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(0n);
+      expect((await operatorGrid.vaultTierInfo(stakingVault)).tierId).to.be.equal(0n);
       expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.false;
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
       expect(await vaultHub.locked(stakingVault)).to.be.equal(0n);
@@ -154,7 +154,7 @@ describe("Integration: VaultHub", () => {
         .to.emit(vaultHub, "VaultDisconnectAborted")
         .withArgs(stakingVault, ether("1"));
 
-      expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(tierId);
+      expect((await operatorGrid.vaultTierInfo(stakingVault)).tierId).to.be.equal(tierId);
       expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.false;
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
       expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));

@@ -106,7 +106,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
     struct VaultInfo {
         address vault;
-        uint256 aggregateBalance; // includes pendingPredeposits, availableBalance and stagedBalance
+        uint256 aggregatedBalance; // includes availableBalance and stagedBalance
         int256 inOutDelta;
         bytes32 withdrawalCredentials;
         uint256 liabilityShares;
@@ -226,27 +226,52 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         VaultInfo[] memory batch = new VaultInfo[](batchSize);
         for (uint256 i = 0; i < batchSize; i++) {
             address vaultAddress = vaultHub.vaultByIndex(_offset + i + 1);
-            IStakingVault vault = IStakingVault(vaultAddress);
-            VaultHub.VaultConnection memory connection = vaultHub.vaultConnection(vaultAddress);
-            VaultHub.VaultRecord memory record = vaultHub.vaultRecord(vaultAddress);
-            batch[i] = VaultInfo(
-                vaultAddress,
-                vault.availableBalance() + vault.stagedBalance() + pendingPredeposits(vault),
-                record.inOutDelta.currentValue(),
-                vault.withdrawalCredentials(),
-                record.liabilityShares,
-                record.maxLiabilityShares,
-                _mintableStETH(vaultAddress),
-                connection.shareLimit,
-                connection.reserveRatioBP,
-                connection.forcedRebalanceThresholdBP,
-                connection.infraFeeBP,
-                connection.liquidityFeeBP,
-                connection.reservationFeeBP,
-                vaultHub.isPendingDisconnect(vaultAddress)
-            );
+            batch[i] = _vaultInfo(vaultAddress, vaultHub);
         }
         return batch;
+    }
+
+    /// @notice returns the vault data info
+    /// @param _vault the address of the vault
+    /// @return the vault data info
+    function vaultInfo(address _vault) external view returns (VaultInfo memory) {
+        return _vaultInfo(_vault, _vaultHub());
+    }
+
+    function _vaultInfo(address _vault, VaultHub _vaultHub) internal view returns (VaultInfo memory) {
+        IStakingVault vault = IStakingVault(_vault);
+        VaultHub.VaultConnection memory connection = _vaultHub.vaultConnection(_vault);
+        VaultHub.VaultRecord memory record = _vaultHub.vaultRecord(_vault);
+        return VaultInfo(
+            _vault,
+            vault.availableBalance() + vault.stagedBalance(),
+            record.inOutDelta.currentValue(),
+            vault.withdrawalCredentials(),
+            record.liabilityShares,
+            record.maxLiabilityShares,
+            _mintableStETH(_vault),
+            connection.shareLimit,
+            connection.reserveRatioBP,
+            connection.forcedRebalanceThresholdBP,
+            connection.infraFeeBP,
+            connection.liquidityFeeBP,
+            connection.reservationFeeBP,
+            _vaultHub.isPendingDisconnect(_vault)
+        );
+    }
+
+    /**
+     * @notice batch method to mass check the validator stages in PredepositGuarantee contract
+     * @param _pubkeys the array of validator's pubkeys to check
+     */
+    function batchValidatorStages(
+        bytes[] calldata _pubkeys
+    ) external view returns (IPredepositGuarantee.ValidatorStage[] memory batch) {
+        batch = new IPredepositGuarantee.ValidatorStage[](_pubkeys.length);
+
+        for (uint256 i = 0; i < _pubkeys.length; i++) {
+            batch[i] = predepositGuarantee().validatorStatus(_pubkeys[i]).stage;
+        }
     }
 
     /// @notice update the sanity parameters
@@ -562,8 +587,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         }
     }
 
-    function pendingPredeposits(IStakingVault _vault) internal view returns (uint256) {
-        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee()).pendingPredeposits(_vault);
+    function predepositGuarantee() internal view returns (IPredepositGuarantee) {
+        return IPredepositGuarantee(LIDO_LOCATOR.predepositGuarantee());
     }
 
     function _vaultHub() internal view returns (VaultHub) {
