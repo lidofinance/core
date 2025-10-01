@@ -87,6 +87,10 @@ contract VaultHub__MockForLazyOracle {
         return false;
     }
 
+    function isVaultConnected(address _vault) external view returns (bool) {
+        return mock__vaultConnections[_vault].vaultIndex != 0;
+    }
+
     function totalMintingCapacityShares(address _vault, int256 _deltaValue) external view returns (uint256) {
         uint256 base = mock__vaultRecords[_vault].report.totalValue;
         uint256 maxLockableValue = _deltaValue >= 0 ? base + uint256(_deltaValue) : base - uint256(-_deltaValue);

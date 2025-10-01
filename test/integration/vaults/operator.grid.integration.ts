@@ -95,7 +95,7 @@ describe("Integration: OperatorGrid", () => {
       ]);
 
       // Initially vault is in default tier (0)
-      const beforeInfo = await operatorGrid.vaultInfo(stakingVault);
+      const beforeInfo = await operatorGrid.vaultTierInfo(stakingVault);
       expect(beforeInfo.tierId).to.equal(0n);
 
       const requestedTierId = 1n;
@@ -110,7 +110,7 @@ describe("Integration: OperatorGrid", () => {
         operatorGrid.connect(nodeOperator).changeTier(stakingVault, requestedTierId, requestedShareLimit),
       ).to.emit(vaultHub, "VaultConnectionUpdated");
 
-      const afterInfo = await operatorGrid.vaultInfo(stakingVault);
+      const afterInfo = await operatorGrid.vaultTierInfo(stakingVault);
       expect(afterInfo.tierId).to.equal(requestedTierId);
 
       const connection = await vaultHub.vaultConnection(stakingVault);
@@ -258,7 +258,7 @@ describe("Integration: OperatorGrid", () => {
 
     it("reverts when requested share limit exceeds tier limit", async () => {
       // Default tier case
-      const info = await operatorGrid.vaultInfo(stakingVault);
+      const info = await operatorGrid.vaultTierInfo(stakingVault);
       const over = info.shareLimit + 1n;
       await expect(dashboard.updateShareLimit(over)).to.be.revertedWithCustomError(
         operatorGrid,
@@ -330,7 +330,7 @@ describe("Integration: OperatorGrid", () => {
       await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
 
       // Get initial tier
-      const initialVaultInfo = await operatorGrid.vaultInfo(stakingVault);
+      const initialVaultInfo = await operatorGrid.vaultTierInfo(stakingVault);
       expect(initialVaultInfo.tierId).to.equal(0); // Should be default tier
 
       // Change tier from default (0) to tier 1
@@ -338,7 +338,7 @@ describe("Integration: OperatorGrid", () => {
       await dashboard.connect(owner).changeTier(1, ether("1000"));
 
       // Verify tier changed
-      const updatedVaultInfo = await operatorGrid.vaultInfo(stakingVault);
+      const updatedVaultInfo = await operatorGrid.vaultTierInfo(stakingVault);
       expect(updatedVaultInfo.tierId).to.equal(1);
 
       // Verify jail status is preserved after tier change
