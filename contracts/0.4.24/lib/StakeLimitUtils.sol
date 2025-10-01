@@ -105,11 +105,9 @@ library StakeLimitUtils {
         uint256 blocksPassed = block.number - _data.prevStakeBlockNumber;
         uint256 change = blocksPassed * stakeLimitIncPerBlock;
 
-        uint256 increasedLimit = _constGasMin(_data.prevStakeLimit + change, _data.maxStakeLimit);
-        uint256 decreasedLimit = _constGasMax(_saturatingSub(_data.prevStakeLimit, change), _data.maxStakeLimit);
-
-        uint256 isIncreasing = _constLt(_data.prevStakeLimit, _data.maxStakeLimit);
-        limit = (increasedLimit * isIncreasing) + (decreasedLimit * (1 - isIncreasing));
+        limit = _data.prevStakeLimit < _data.maxStakeLimit ?
+            _constGasMin(_data.prevStakeLimit + change, _data.maxStakeLimit) :
+            _constGasMax(_saturatingSub(_data.prevStakeLimit, change), _data.maxStakeLimit);
     }
 
     /**
@@ -223,7 +221,7 @@ library StakeLimitUtils {
      * @param b second value
      * @return result 1 if a < b, 0 otherwise
      */
-    function _constLt(uint256 a, uint256 b) internal pure returns (uint256 result) {
+    function _constGasLt(uint256 a, uint256 b) internal pure returns (uint256 result) {
         assembly {
             result := lt(a, b)
         }
@@ -236,7 +234,7 @@ library StakeLimitUtils {
      * @param _rhs right hand side value
      */
     function _constGasMin(uint256 _lhs, uint256 _rhs) internal pure returns (uint256 min) {
-        uint256 lhsIsLess = _constLt(_lhs, _rhs);
+        uint256 lhsIsLess = _constGasLt(_lhs, _rhs);
         min = (_lhs * lhsIsLess) + (_rhs * (1 - lhsIsLess));
     }
 
@@ -247,7 +245,7 @@ library StakeLimitUtils {
      * @param _rhs right hand side value
      */
     function _constGasMax(uint256 _lhs, uint256 _rhs) internal pure returns (uint256 max) {
-        uint256 lhsIsLess = _constLt(_lhs, _rhs);
+        uint256 lhsIsLess = _constGasLt(_lhs, _rhs);
         max = (_lhs * (1 - lhsIsLess)) + (_rhs * lhsIsLess);
     }
 
@@ -257,7 +255,7 @@ library StakeLimitUtils {
      * @param b second value
      */
     function _saturatingSub(uint256 a, uint256 b) internal pure returns (uint256 result) {
-        uint256 isUnderflow = _constLt(a, b);
+        uint256 isUnderflow = _constGasLt(a, b);
         result = (a - b) * (1 - isUnderflow);
     }
 }
