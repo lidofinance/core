@@ -93,7 +93,7 @@ library StakeLimitUnstructuredStorage {
 library StakeLimitUtils {
     /**
     * @notice Calculate stake limit for the current block.
-    * @dev using `_constGasMin`, `_constGasMax`, `_saturatingSub`, `_constLt` to make gas consumption independent
+    * @dev using `_constGasMin`, `_constGasMax`, `_saturatingSub`, `_constGasLt` to make gas consumption independent
     *      of the current block number
     */
     function calculateCurrentStakeLimit(StakeLimitState.Data memory _data) internal view returns(uint256 limit) {
