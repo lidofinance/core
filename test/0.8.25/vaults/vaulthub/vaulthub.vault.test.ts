@@ -614,7 +614,7 @@ describe("VaultHub.sol:owner-functions", () => {
 
       await expect(vaultHub.connect(vaultOwner).pauseBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
-        "ResumedExpected",
+        "PauseIntentAlreadySet",
       );
     });
 
@@ -645,6 +645,15 @@ describe("VaultHub.sol:owner-functions", () => {
       await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "VaultReportStale",
+      );
+    });
+
+    it("reverts when already resumed", async () => {
+      await vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress);
+
+      await expect(vaultHub.connect(vaultOwner).resumeBeaconChainDeposits(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "PauseIntentAlreadyUnset",
       );
     });
 

@@ -69,7 +69,7 @@ contract VaultHub is PausableUntilWithRoles {
         uint16 liquidityFeeBP;
         /// @notice reservation fee in basis points
         uint16 reservationFeeBP;
-        /// @notice if true, vault owner intentionally paused the beacon chain deposits.
+        /// @notice if true, vault owner intends to pause the beacon chain deposits
         bool beaconChainDepositsPauseIntent;
         /// 24 bits gap
     }
@@ -813,7 +813,7 @@ contract VaultHub is PausableUntilWithRoles {
     /// @dev msg.sender should be vault's owner
     function pauseBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
-        if (connection.beaconChainDepositsPauseIntent) revert ResumedExpected();
+        if (connection.beaconChainDepositsPauseIntent) revert PauseIntentAlreadySet();
 
         connection.beaconChainDepositsPauseIntent = true;
         emit BeaconChainDepositsPauseIntentSet(_vault, true);
@@ -829,7 +829,7 @@ contract VaultHub is PausableUntilWithRoles {
     ///         remain paused until the obligations are covered. Once covered, deposits will resume automatically
     function resumeBeaconChainDeposits(address _vault) external {
         VaultConnection storage connection = _checkConnectionAndOwner(_vault);
-        if (!connection.beaconChainDepositsPauseIntent) revert PausedExpected();
+        if (!connection.beaconChainDepositsPauseIntent) revert PauseIntentAlreadyUnset();
 
         VaultRecord storage record = _vaultRecord(_vault);
         _requireFreshReport(_vault, record);
@@ -1680,6 +1680,9 @@ contract VaultHub is PausableUntilWithRoles {
     // -----------------------------
     //           ERRORS
     // -----------------------------
+
+    error PauseIntentAlreadySet();
+    error PauseIntentAlreadyUnset();
 
     error AmountExceedsTotalValue(address vault, uint256 totalValue, uint256 withdrawAmount);
     error AmountExceedsWithdrawableValue(address vault, uint256 withdrawable, uint256 requested);
