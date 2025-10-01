@@ -86,7 +86,10 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       const connection = await vaultHub.vaultConnection(stakingVaultAddress);
       expect(connection.beaconChainDepositsPauseIntent).to.be.true;
 
-      await expect(dashboard.pauseBeaconChainDeposits()).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
+      await expect(dashboard.pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vaultHub,
+        "PauseIntentAlreadySet",
+      );
     });
 
     it("Resume beacon deposits manually", async () => {
@@ -102,7 +105,10 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       const connection = await vaultHub.vaultConnection(stakingVaultAddress);
       expect(connection.beaconChainDepositsPauseIntent).to.be.false;
 
-      await expect(dashboard.resumeBeaconChainDeposits()).to.be.revertedWithCustomError(vaultHub, "PausedExpected");
+      await expect(dashboard.resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vaultHub,
+        "PauseIntentAlreadyUnset",
+      );
     });
   });
 
