@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4884"  lines-covered="4660"  line-rate="0.9541"  branches-valid="2288"  branches-covered="2111"  branch-rate="0.9226000000000001"  timestamp="1759270864852" complexity="0" version="0.1">
+<coverage lines-valid="4881"  lines-covered="4657"  line-rate="0.9541"  branches-valid="2290"  branches-covered="2113"  branch-rate="0.9227"  timestamp="1759304378728" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -874,34 +874,34 @@
 				<lines><line number="99"  hits="1140" /></lines>
 			</method>
 			<method name="isStakingPaused"  hits="674"  signature="()V" >
-				<lines><line number="118"  hits="674" /></lines>
+				<lines><line number="116"  hits="674" /></lines>
 			</method>
 			<method name="isStakingLimitSet"  hits="1165"  signature="()V" >
-				<lines><line number="125"  hits="1165" /></lines>
+				<lines><line number="123"  hits="1165" /></lines>
 			</method>
 			<method name="setStakingLimit"  hits="23"  signature="()V" >
-				<lines><line number="136"  hits="23" /></lines>
+				<lines><line number="134"  hits="23" /></lines>
 			</method>
 			<method name="removeStakingLimit"  hits="2"  signature="()V" >
-				<lines><line number="178"  hits="2" /></lines>
+				<lines><line number="176"  hits="2" /></lines>
 			</method>
 			<method name="updatePrevStakeLimit"  hits="1012"  signature="()V" >
-				<lines><line number="192"  hits="1012" /></lines>
+				<lines><line number="190"  hits="1012" /></lines>
 			</method>
 			<method name="setStakeLimitPauseState"  hits="80"  signature="()V" >
-				<lines><line number="211"  hits="80" /></lines>
+				<lines><line number="209"  hits="80" /></lines>
 			</method>
-			<method name="_constLt"  hits="4565"  signature="()V" >
-				<lines><line number="226"  hits="4565" /></lines>
+			<method name="_constGasLt"  hits="1672"  signature="()V" >
+				<lines><line number="224"  hits="1672" /></lines>
 			</method>
-			<method name="_constGasMin"  hits="1145"  signature="()V" >
-				<lines><line number="238"  hits="1145" /></lines>
+			<method name="_constGasMin"  hits="618"  signature="()V" >
+				<lines><line number="236"  hits="618" /></lines>
 			</method>
-			<method name="_constGasMax"  hits="1140"  signature="()V" >
-				<lines><line number="249"  hits="1140" /></lines>
+			<method name="_constGasMax"  hits="527"  signature="()V" >
+				<lines><line number="247"  hits="527" /></lines>
 			</method>
-			<method name="_saturatingSub"  hits="1140"  signature="()V" >
-				<lines><line number="259"  hits="1140" /></lines>
+			<method name="_saturatingSub"  hits="527"  signature="()V" >
+				<lines><line number="257"  hits="527" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -917,38 +917,35 @@
 			<line number="105"  hits="1140"  branch="false" />
 			<line number="106"  hits="1140"  branch="false" />
 			<line number="108"  hits="1140"  branch="false" />
-			<line number="109"  hits="1140"  branch="false" />
-			<line number="111"  hits="1140"  branch="false" />
-			<line number="112"  hits="1140"  branch="false" />
-			<line number="119"  hits="674"  branch="false" />
-			<line number="126"  hits="1165"  branch="false" />
-			<line number="141"  hits="23"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="142"  hits="22"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="143"  hits="21"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="144"  hits="20"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="151"  hits="19"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="159"  hits="17"  branch="false" />
-			<line number="161"  hits="19"  branch="false" />
-			<line number="164"  hits="19"  branch="false" />
-			<line number="166"  hits="19"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="167"  hits="17"  branch="false" />
-			<line number="170"  hits="19"  branch="false" />
+			<line number="117"  hits="674"  branch="false" />
+			<line number="124"  hits="1165"  branch="false" />
+			<line number="139"  hits="23"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="140"  hits="22"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="141"  hits="21"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="142"  hits="20"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="149"  hits="19"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="157"  hits="17"  branch="false" />
+			<line number="159"  hits="19"  branch="false" />
+			<line number="162"  hits="19"  branch="false" />
+			<line number="164"  hits="19"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="165"  hits="17"  branch="false" />
+			<line number="168"  hits="19"  branch="false" />
+			<line number="179"  hits="2"  branch="false" />
 			<line number="181"  hits="2"  branch="false" />
-			<line number="183"  hits="2"  branch="false" />
-			<line number="196"  hits="1012"  branch="false" />
-			<line number="197"  hits="1011"  branch="false" />
-			<line number="199"  hits="1010"  branch="false" />
+			<line number="194"  hits="1012"  branch="false" />
+			<line number="195"  hits="1011"  branch="false" />
+			<line number="197"  hits="1010"  branch="false" />
+			<line number="198"  hits="1010"  branch="false" />
 			<line number="200"  hits="1010"  branch="false" />
-			<line number="202"  hits="1010"  branch="false" />
+			<line number="213"  hits="80"  branch="false" />
 			<line number="215"  hits="80"  branch="false" />
-			<line number="217"  hits="80"  branch="false" />
-			<line number="227"  hits="4565"  branch="false" />
-			<line number="239"  hits="1145"  branch="false" />
-			<line number="240"  hits="1145"  branch="false" />
-			<line number="250"  hits="1140"  branch="false" />
-			<line number="251"  hits="1140"  branch="false" />
-			<line number="260"  hits="1140"  branch="false" />
-			<line number="261"  hits="1140"  branch="false" />
+			<line number="225"  hits="1672"  branch="false" />
+			<line number="237"  hits="618"  branch="false" />
+			<line number="238"  hits="618"  branch="false" />
+			<line number="248"  hits="527"  branch="false" />
+			<line number="249"  hits="527"  branch="false" />
+			<line number="258"  hits="527"  branch="false" />
+			<line number="259"  hits="527"  branch="false" />
 		</lines>
 		</class>
 	</classes>
@@ -2930,10 +2927,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="10"  branch="false" />
-			<line number="173"  hits="10"  branch="false" />
-			<line number="175"  hits="10"  branch="false" />
-			<line number="176"  hits="10"  branch="false" />
+			<line number="172"  hits="48"  branch="false" />
+			<line number="173"  hits="48"  branch="false" />
+			<line number="175"  hits="48"  branch="false" />
+			<line number="176"  hits="48"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
