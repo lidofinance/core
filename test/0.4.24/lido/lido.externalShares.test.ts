@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ACL, Lido, LidoLocator } from "typechain-types";
 
-import { ether, impersonate, MAX_UINT256 } from "lib";
+import { advanceChainTime, ether, impersonate, MAX_UINT256 } from "lib";
 import { TOTAL_BASIS_POINTS } from "lib/constants";
 
 import { deployLidoDao } from "test/deploy";
@@ -386,17 +386,20 @@ describe("Lido.sol:externalShares", () => {
 
     it("Increases staking limit when burning", async () => {
       await lido.setMaxExternalRatioBP(maxExternalRatioBP);
-      await lido.setStakingLimit(10n, 1n);
+      await lido.setStakingLimit(10n, 10n);
 
       await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, 1n);
 
-      expect(await lido.getCurrentStakeLimit()).to.equal(9n);
+      let limit = 9n;
+      expect(await lido.getCurrentStakeLimit()).to.equal(limit);
 
       await lido.connect(vaultHubSigner).burnExternalShares(1n);
-      expect(await lido.getCurrentStakeLimit()).to.equal(10n);
+      limit += 1n; // for mining block with burning
+
+      expect(await lido.getCurrentStakeLimit()).to.equal(limit + 1n);
     });
 
-    it("Restores staking limit to max when burning more", async () => {
+    it("Bypasses staking limit when burning more than staking limit", async () => {
       await lido.setMaxExternalRatioBP(maxExternalRatioBP);
       await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, 5n);
 
@@ -407,10 +410,15 @@ describe("Lido.sol:externalShares", () => {
       const amountToMint = await lido.getPooledEthByShares(sharesToMint);
       await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, sharesToMint);
 
-      expect(await lido.getCurrentStakeLimit()).to.equal(10n - amountToMint);
+      let limit = 10n - amountToMint;
+      expect(await lido.getCurrentStakeLimit()).to.equal(limit);
 
-      await lido.connect(vaultHubSigner).burnExternalShares(10n);
-      expect(await lido.getCurrentStakeLimit()).to.equal(10n);
+      const sharesToBurn = 10n;
+      const amountToBurn = await lido.getPooledEthByShares(sharesToBurn);
+      await lido.connect(vaultHubSigner).burnExternalShares(sharesToBurn);
+      limit += 1n; // for mining block with burning
+
+      expect(await lido.getCurrentStakeLimit()).to.equal(limit + amountToBurn);
     });
   });
 
@@ -487,18 +495,16 @@ describe("Lido.sol:externalShares", () => {
 
     it("Can mint and burn external shares without limit change after multiple loops", async () => {
       await lido.setMaxExternalRatioBP(maxExternalRatioBP);
-      await lido.setStakingLimit(1000n, 1n);
+      await lido.setStakingLimit(1000n, 100n);
 
       for (let i = 1n; i <= 500n; i++) {
-        const stakingLimitBefore = await lido.getCurrentStakeLimit();
-        expect(stakingLimitBefore).to.equal(1000n);
-
         await lido.connect(vaultHubSigner).mintExternalShares(vaultHubSigner, i);
         await lido.connect(vaultHubSigner).burnExternalShares(i);
-
-        const stakingLimitAfter = await lido.getCurrentStakeLimit();
-        expect(stakingLimitAfter).to.equal(stakingLimitBefore);
       }
+
+      // need to mine a block to update the stake limit otherwise it will be 1000n + 100n (after burning)
+      await advanceChainTime(1n);
+      expect(await lido.getCurrentStakeLimit()).to.equal(1000n);
     });
   });
 

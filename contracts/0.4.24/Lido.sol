@@ -1141,10 +1141,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         StakeLimitState.Data memory stakeLimitData = STAKING_STATE_POSITION.getStorageStakeLimitStruct();
         if (stakeLimitData.isStakingLimitSet()) {
             uint256 newStakeLimit = stakeLimitData.calculateCurrentStakeLimit() + _amount;
-            uint256 maxStakeLimit = stakeLimitData.maxStakeLimit;
 
             STAKING_STATE_POSITION.setStorageStakeLimitStruct(
-                stakeLimitData.updatePrevStakeLimit(newStakeLimit > maxStakeLimit ? maxStakeLimit : newStakeLimit)
+                stakeLimitData.updatePrevStakeLimit(newStakeLimit)
             );
         }
     }
