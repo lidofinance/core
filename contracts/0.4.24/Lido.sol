@@ -316,6 +316,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      */
     function pauseStaking() external {
         _auth(STAKING_PAUSE_ROLE);
+        require(!STAKING_STATE_POSITION.getStorageStakeLimitStruct().isStakingPaused(), "ALREADY_PAUSED");
 
         _pauseStaking();
     }
@@ -331,6 +332,7 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _auth(STAKING_CONTROL_ROLE);
         require(hasInitialized(), "NOT_INITIALIZED");
         _whenNotStopped();
+        require(STAKING_STATE_POSITION.getStorageStakeLimitStruct().isStakingPaused(), "ALREADY_RESUMED");
 
         _resumeStaking();
     }
