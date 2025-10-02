@@ -247,9 +247,9 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Accepts the ownership over the StakingVault transferred from VaultHub on disconnect
-     * and immediately transfers it to a new pending owner. This new owner will have to accept the ownership
-     * on the StakingVault contract.
+     * @notice Accepts the ownership over the disconnected StakingVault transferred from VaultHub
+     *         and immediately passes it to a new pending owner. This new owner will have to accept the ownership
+     *         on the StakingVault contract.
      * @param _newOwner The address to transfer the StakingVault ownership to.
      */
     function abandonDashboard(address _newOwner) external {
