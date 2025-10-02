@@ -54,7 +54,7 @@ contract V3Addresses {
 
         // EasyTrack addresses
         address evmScriptExecutor;
-        address vaultHubAdapter;
+        address vaultsAdapter;
 
         // Existing proxies and contracts
         address kernel;
@@ -107,7 +107,7 @@ contract V3Addresses {
     // -------- EasyTrack addresses --------
     //
     address public immutable EVM_SCRIPT_EXECUTOR;
-    address public immutable VAULT_HUB_ADAPTER;
+    address public immutable VAULTS_ADAPTER;
 
     //
     // -------- Unchanged contracts --------
@@ -155,7 +155,7 @@ contract V3Addresses {
         DASHBOARD_IMPL = params.dashboardImpl;
         GATE_SEAL = params.gateSealForVaults;
         EVM_SCRIPT_EXECUTOR = params.evmScriptExecutor;
-        VAULT_HUB_ADAPTER = params.vaultHubAdapter;
+        VAULTS_ADAPTER = params.vaultsAdapter;
 
         //
         // Discovered via other contracts
