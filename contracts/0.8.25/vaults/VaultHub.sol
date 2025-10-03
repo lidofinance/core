@@ -1167,46 +1167,34 @@ contract VaultHub is PausableUntilWithRoles {
         VaultConnection storage _connection,
         VaultRecord storage _record
     ) internal view returns (uint256) {
-        uint256 totalValue_ = _totalValue(_record);
-        uint256 liabilityShares_ = _record.liabilityShares;
-
-        bool isHealthy = !_isThresholdBreached(
-            totalValue_,
-            liabilityShares_,
-            _connection.forcedRebalanceThresholdBP
+        return _minimumRebalanceShares(
+            _getSharesByPooledEth(_totalValue(_record)),
+            _record.liabilityShares,
+            _connection.reserveRatioBP
         );
+    }
 
-        // Health vault do not need to rebalance
-        if (isHealthy) {
-            return 0;
-        }
-
-        uint256 reserveRatioBP = _connection.reserveRatioBP;
-        uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
-        uint256 sharesByTotalValue = _getSharesByPooledEth(totalValue_);
-
-        // Impossible to rebalance a vault with bad debt
-        if (liabilityShares_ >= sharesByTotalValue) {
+    function _minimumRebalanceShares(
+        uint256 _totalValueShares,
+        uint256 _liabilityShares,
+        uint256 _reserveRatioBP
+    ) internal pure returns (uint256) {
+        // bad debt: no amount of rebalancing will help
+        if (_liabilityShares >= _totalValueShares) {
             return type(uint256).max;
         }
 
-        // Solve the equation for X:
-        // LS - liabilityShares, TV - sharesByTotalValue
-        // MR - maxMintableRatio, 100 - TOTAL_BASIS_POINTS, RR - reserveRatio
-        // X - amount of shares that should be withdrawn (TV - X) and used to repay the debt (LS - X)
-        // to reduce the LS/TVS ratio back to MR
+        // healthy vault
+        uint256 mintRatio = TOTAL_BASIS_POINTS - _reserveRatioBP;
+        if (_liabilityShares * TOTAL_BASIS_POINTS <= _totalValueShares * mintRatio) {
+            return 0;
+        }
 
-        // (LS - X) / (TV - X) = MR / 100
-        // (LS - X) * 100 = (TV - X) * MR
-        // LS * 100 - X * 100 = TV * MR - X * MR
-        // X * MR - X * 100 = TV * MR - LS * 100
-        // X * (MR - 100) = TV * MR - LS * 100
-        // X = (TV * MR - LS * 100) / (MR - 100)
-        // X = (LS * 100 - TV * MR) / (100 - MR)
-        // RR = 100 - MR
-        // X = (LS * 100 - TV * MR) / RR
-
-        return (liabilityShares_ * TOTAL_BASIS_POINTS - sharesByTotalValue * maxMintableRatio) / reserveRatioBP;
+        // unhealthy but rebalanceable vault
+        return 
+            (_liabilityShares * TOTAL_BASIS_POINTS - _totalValueShares * mintRatio + mintRatio + _reserveRatioBP - 1) /
+            _reserveRatioBP;
+ 
     }
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
@@ -1266,8 +1254,11 @@ contract VaultHub is PausableUntilWithRoles {
         uint256 _vaultLiabilityShares,
         uint256 _thresholdBP
     ) internal view returns (bool) {
-        uint256 liability = _getPooledEthBySharesRoundUp(_vaultLiabilityShares);
-        return liability > _vaultTotalValue * (TOTAL_BASIS_POINTS - _thresholdBP) / TOTAL_BASIS_POINTS;
+        return _minimumRebalanceShares(
+            _getSharesByPooledEth(_vaultTotalValue),
+            _vaultLiabilityShares,
+            _thresholdBP
+            ) > 0;
     }
 
     /// @return the total amount of ether needed to fully cover all outstanding obligations of the vault, including:

@@ -81,7 +81,7 @@ async function createMockStakingVaultAndConnect(
   return vault;
 }
 
-async function reportVault(
+export async function reportVault(
   lazyOracle: LazyOracle__MockForVaultHub,
   vaultHub: VaultHub,
   {
