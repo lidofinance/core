@@ -99,29 +99,6 @@ describe.only("Integration: VaultHub ", () => {
   afterEach(async () => await Snapshot.restore(snapshot));
   after(async () => await Snapshot.restore(originalSnapshot));
 
-  // Helpers for precise threshold targeting with rounding accounted for
-  const B = 10000n; // basis points base
-
-  function ceilDiv(a: bigint, b: bigint) {
-    return (a + b - 1n) / b;
-  }
-
-  // Returns { liabETH, frtBP } for the current state
-  async function currentLiabilityEthAndFRT(ctx: ProtocolContext, vaultHub: VaultHub, stakingVault: StakingVault) {
-    const liabShares = await vaultHub.liabilityShares(stakingVault);
-    const liabETH = await ctx.contracts.lido.getPooledEthBySharesRoundUp(liabShares);
-    const { forcedRebalanceThresholdBP: frtBP } = await vaultHub.vaultConnection(stakingVault);
-    return { liabETH, frtBP };
-  }
-
-  // TV boundary s.t. vault is healthy when TV >= boundary, unhealthy when TV < boundary:
-  // liabilityETH <= TV * (B - T) / B  =>  TV >= ceil(liabilityETH * B / (B - T))
-  async function thresholdBoundaryTV(ctx: ProtocolContext, vaultHub: VaultHub, stakingVault: StakingVault) {
-    const { liabETH, frtBP } = await currentLiabilityEthAndFRT(ctx, vaultHub, stakingVault);
-    const denom = B - frtBP;
-    return ceilDiv(liabETH * B, denom);
-  }
-
   describe("Shortfall", () => {
     it("Works on larger numbers", async () => {
       ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 2000n }));
@@ -132,7 +109,7 @@ describe.only("Integration: VaultHub ", () => {
       await dashboard.mintShares(owner, ether("0.689"));
 
       await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: ether("1"), // slash 5%
+        totalValue: ether("1"),
         waitForNextRefSlot: true,
       });
 
@@ -154,7 +131,7 @@ describe.only("Integration: VaultHub ", () => {
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.true;
 
       await reportVaultDataWithProof(ctx, stakingVault, {
-        totalValue: (ether("10") * 95n) / 100n, // slash 5%
+        totalValue: (ether("10") * 95n) / 100n,
         waitForNextRefSlot: true,
       });
 
