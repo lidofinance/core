@@ -111,6 +111,7 @@ contract VaultHub is PausableUntilWithRoles {
     // -----------------------------
     //           CONSTANTS
     // -----------------------------
+    // some constants are immutables to save bytecode
 
     // keccak256(abi.encode(uint256(keccak256("Lido.Vaults.VaultHub")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_LOCATION = 0x9eb73ffa4c77d08d5d1746cf5a5e50a47018b610ea5d728ea9bd9e399b76e200;
@@ -132,14 +133,16 @@ contract VaultHub is PausableUntilWithRoles {
     uint256 public constant CONNECT_DEPOSIT = 1 ether;
     /// @notice The time delta for report freshness check
     uint256 public constant REPORT_FRESHNESS_DELTA = 2 days;
+
     /// @dev basis points base
-    uint256 internal immutable TOTAL_BASIS_POINTS = 100_00;
+    uint256 internal constant TOTAL_BASIS_POINTS = 100_00;
     /// @dev special value for `disconnectTimestamp` storage means the vault is not marked for disconnect
-    uint48 internal immutable DISCONNECT_NOT_INITIATED = type(uint48).max;
+    uint48 internal constant DISCONNECT_NOT_INITIATED = type(uint48).max;
     /// @notice minimum amount of ether that is required for the beacon chain deposit
     /// @dev used as a threshold for the beacon chain deposits pause
-    uint256 internal immutable MIN_BEACON_DEPOSIT = 1 ether;
-
+    uint256 internal constant MIN_BEACON_DEPOSIT = 1 ether;
+    /// @dev amount of ether required to activate a validator after PDG
+    uint256 internal constant PDG_ACTIVATION_DEPOSIT = 31 ether;
 
     // -----------------------------
     //           IMMUTABLES
@@ -361,11 +364,12 @@ contract VaultHub is PausableUntilWithRoles {
 
         if (!IVaultFactory(LIDO_LOCATOR.vaultFactory()).deployedVaults(_vault)) revert VaultNotFactoryDeployed(_vault);
         IStakingVault vault_ = IStakingVault(_vault);
+        _requireSender(vault_.owner());
         if (vault_.pendingOwner() != address(this)) revert VaultHubNotPendingOwner(_vault);
         if (IPinnedBeaconProxy(address(vault_)).isOssified()) revert VaultOssified(_vault);
         if (vault_.depositor() != address(_predepositGuarantee())) revert PDGNotDepositor(_vault);
         // we need vault to match staged balance with pendingActivations
-        if (vault_.stagedBalance() != _predepositGuarantee().pendingActivations(vault_) * 31 ether) {
+        if (vault_.stagedBalance() != _predepositGuarantee().pendingActivations(vault_) * PDG_ACTIVATION_DEPOSIT) {
             revert InsufficientStagedBalance(_vault);
         }
 
@@ -650,7 +654,7 @@ contract VaultHub is PausableUntilWithRoles {
             // by the Accounting Oracle during the report
             _storage().badDebtToInternalize = _storage().badDebtToInternalize.withValueIncrease({
                 _consensus: CONSENSUS_CONTRACT,
-                _increment: uint104(badDebtToInternalize_)
+                _increment: SafeCast.toUint104(badDebtToInternalize_)
             });
 
             emit BadDebtWrittenOffToBeInternalized(_badDebtVault, badDebtToInternalize_);
