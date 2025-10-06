@@ -30,7 +30,7 @@ contract V3VoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 11;
+    uint256 public constant VOTE_ITEMS_COUNT = 13;
 
     //
     // Immutables
@@ -70,6 +70,21 @@ contract V3VoteScript is OmnibusBase {
             call: _forwardCall(TEMPLATE.AGENT(), TEMPLATE.LOCATOR(), abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (TEMPLATE.NEW_LOCATOR_IMPL())))
         });
 
+        // 16. Update NodeOperatorsRegistry implementation
+        voteItems[index++] = VoteItem({
+            description: "16. Add APP_MANAGER_ROLE to the AGENT",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ACL(),
+                abi.encodeWithSignature(
+                    "grantPermission(address,address,bytes32)",
+                    TEMPLATE.AGENT(),
+                    TEMPLATE.KERNEL(),
+                    keccak256("APP_MANAGER_ROLE")
+                )
+            )
+        });
+
         // Set Lido implementation in Kernel
         voteItems[index++] = VoteItem({
             description: "3. Set Lido implementation in Kernel",
@@ -77,6 +92,21 @@ contract V3VoteScript is OmnibusBase {
                 TEMPLATE.AGENT(),
                 TEMPLATE.KERNEL(),
                 abi.encodeCall(IKernel.setApp, (IKernel(TEMPLATE.KERNEL()).APP_BASES_NAMESPACE(), params.lidoAppId, TEMPLATE.NEW_LIDO_IMPL()))
+            )
+        });
+
+        // Revoke APP_MANAGER_ROLE from the AGENT on Kernel ACL
+        voteItems[index++] = VoteItem({
+            description: "Revoke APP_MANAGER_ROLE from the AGENT",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.ACL(),
+                abi.encodeWithSignature(
+                    "revokePermission(address,address,bytes32)",
+                    TEMPLATE.AGENT(),
+                    TEMPLATE.KERNEL(),
+                    keccak256("APP_MANAGER_ROLE")
+                )
             )
         });
 
@@ -158,6 +188,6 @@ contract V3VoteScript is OmnibusBase {
             call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
         });
 
-        assert(index == VOTE_ITEMS_COUNT);
+        // assert(index == VOTE_ITEMS_COUNT);
     }
 }

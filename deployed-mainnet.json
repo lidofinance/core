@@ -143,6 +143,11 @@
       "contentURI": "0x697066733a516d656138394d5533504852503763513157616b3672327355654d554146324c39727132624c6d5963644b764c57"
     }
   },
+  "aragon-acl": {
+    "proxy": {
+      "address": "0x9895f0f17cc1d1891b6f18ee0b483b6f221b37bb"
+    }
+  },
   "app:simple-dvt": {
     "stakingRouterModuleParams": {
       "moduleName": "SimpleDVT",
@@ -466,6 +471,9 @@
       "constructorArgs": ["0x00000000219ab540356cBB839Cbe05303d7705Fa"]
     }
   },
+  "triggerableWithdrawalsGateway": {
+    "address": "0xDC00116a0D3E064427dA2600449cfD2566B3037B"
+  },
   "validatorsExitBusOracle": {
     "proxy": {
       "address": "0x0De4Ea0184c2ad0BacA7183356Aea5B8d5Bf5c6e",
@@ -486,6 +494,9 @@
         "consensusVersion": 1
       }
     }
+  },
+  "validatorExitDelayVerifier": {
+    "address": "0xbDb567672c867DB533119C2dcD4FB9d8b44EC82f"
   },
   "vestingParams": {
     "unvestedTokensAmount": "363197500000000000000000000",

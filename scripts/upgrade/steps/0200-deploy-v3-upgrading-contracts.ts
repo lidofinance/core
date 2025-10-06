@@ -50,6 +50,7 @@ export async function main() {
     getAddress(Sk.lidoLocator, state),
     getAddress(Sk.appVoting, state),
     getAddress(Sk.dgDualGovernance, state),
+    getAddress(Sk.aragonAcl, state),
   ];
 
   const template = await deployWithoutProxy(Sk.v3Template, "V3Template", deployer, [addressesParams]);
