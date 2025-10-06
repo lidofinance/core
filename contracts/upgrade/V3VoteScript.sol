@@ -50,7 +50,7 @@ contract V3VoteScript is OmnibusBase {
         params = _params;
     }
 
-    function getVotingVoteItems() public view override returns (VoteItem[] memory votingVoteItems) {
+    function getVotingVoteItems() public pure override returns (VoteItem[] memory votingVoteItems) {
         votingVoteItems = new VoteItem[](0);
     }
 
@@ -70,9 +70,9 @@ contract V3VoteScript is OmnibusBase {
             call: _forwardCall(TEMPLATE.AGENT(), TEMPLATE.LOCATOR(), abi.encodeCall(IOssifiableProxy.proxy__upgradeTo, (TEMPLATE.NEW_LOCATOR_IMPL())))
         });
 
-        // 16. Update NodeOperatorsRegistry implementation
+        // Grant APP_MANAGER_ROLE to the AGENT
         voteItems[index++] = VoteItem({
-            description: "16. Add APP_MANAGER_ROLE to the AGENT",
+            description: "3. Grant APP_MANAGER_ROLE to the AGENT",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ACL(),
@@ -87,7 +87,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Set Lido implementation in Kernel
         voteItems[index++] = VoteItem({
-            description: "3. Set Lido implementation in Kernel",
+            description: "4. Set Lido implementation in Kernel",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.KERNEL(),
@@ -97,7 +97,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Revoke APP_MANAGER_ROLE from the AGENT on Kernel ACL
         voteItems[index++] = VoteItem({
-            description: "Revoke APP_MANAGER_ROLE from the AGENT",
+            description: "5. Revoke APP_MANAGER_ROLE from the AGENT",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ACL(),
@@ -113,7 +113,7 @@ contract V3VoteScript is OmnibusBase {
         // Revoke REQUEST_BURN_SHARES_ROLE from Lido
         bytes32 requestBurnSharesRole = IBurner(TEMPLATE.OLD_BURNER()).REQUEST_BURN_SHARES_ROLE();
         voteItems[index++] = VoteItem({
-            description: "4. Revoke REQUEST_BURN_SHARES_ROLE from Lido",
+            description: "6. Revoke REQUEST_BURN_SHARES_ROLE from Lido",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -123,7 +123,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Revoke REQUEST_BURN_SHARES_ROLE from Curated staking modules (NodeOperatorsRegistry)
         voteItems[index++] = VoteItem({
-            description: "5. Revoke REQUEST_BURN_SHARES_ROLE from Curated staking module",
+            description: "7. Revoke REQUEST_BURN_SHARES_ROLE from Curated staking module",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -133,7 +133,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT
         voteItems[index++] = VoteItem({
-            description: "6. Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT",
+            description: "8. Revoke REQUEST_BURN_SHARES_ROLE from SimpleDVT",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -143,7 +143,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Revoke REQUEST_BURN_SHARES_ROLE from CS Accounting
         voteItems[index++] = VoteItem({
-            description: "7. Revoke REQUEST_BURN_SHARES_ROLE from Community Staking Accounting",
+            description: "9. Revoke REQUEST_BURN_SHARES_ROLE from Community Staking Accounting",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.OLD_BURNER(),
@@ -153,7 +153,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Upgrade AccountingOracle implementation
         voteItems[index++] = VoteItem({
-            description: "8. Upgrade AccountingOracle implementation",
+            description: "10. Upgrade AccountingOracle implementation",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.ACCOUNTING_ORACLE(),
@@ -164,7 +164,7 @@ contract V3VoteScript is OmnibusBase {
         // Revoke REPORT_REWARDS_MINTED_ROLE from Lido
         bytes32 reportRewardsMintedRole = IStakingRouter(TEMPLATE.STAKING_ROUTER()).REPORT_REWARDS_MINTED_ROLE();
         voteItems[index++] = VoteItem({
-            description: "9. Revoke REPORT_REWARDS_MINTED_ROLE from Lido",
+            description: "11. Revoke REPORT_REWARDS_MINTED_ROLE from Lido",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.STAKING_ROUTER(),
@@ -174,7 +174,7 @@ contract V3VoteScript is OmnibusBase {
 
         // Grant REPORT_REWARDS_MINTED_ROLE to Accounting
         voteItems[index++] = VoteItem({
-            description: "10. Grant REPORT_REWARDS_MINTED_ROLE to Accounting",
+            description: "12. Grant REPORT_REWARDS_MINTED_ROLE to Accounting",
             call: _forwardCall(
                 TEMPLATE.AGENT(),
                 TEMPLATE.STAKING_ROUTER(),
@@ -184,10 +184,10 @@ contract V3VoteScript is OmnibusBase {
 
         // Finish the upgrade process
         voteItems[index++] = VoteItem({
-            description: "11. Call UpgradeTemplateV3.finishUpgrade",
+            description: "13. Call UpgradeTemplateV3.finishUpgrade",
             call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
         });
 
-        // assert(index == VOTE_ITEMS_COUNT);
+        assert(index == VOTE_ITEMS_COUNT);
     }
 }
