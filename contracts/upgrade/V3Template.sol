@@ -38,7 +38,7 @@ interface ILidoWithFinalizeUpgrade is ILido {
 }
 
 interface IAccountingOracle is IBaseOracle {
-    function finalizeUpgrade_v3(uint256 consensusVersion) external;
+    function finalizeUpgrade_v4(uint256 consensusVersion) external;
 }
 
 interface IAragonAppRepo {
@@ -86,7 +86,7 @@ contract V3Template is V3Addresses {
     //
 
     uint256 public constant EXPECTED_FINAL_LIDO_VERSION = 3;
-    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 3;
+    uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_VERSION = 4;
     uint256 public constant EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION = 5;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
@@ -160,7 +160,7 @@ contract V3Template is V3Addresses {
 
         ILidoWithFinalizeUpgrade(LIDO).finalizeUpgrade_v3(OLD_BURNER, contractsWithBurnerAllowances);
 
-        IAccountingOracle(ACCOUNTING_ORACLE).finalizeUpgrade_v3(EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION);
+        IAccountingOracle(ACCOUNTING_ORACLE).finalizeUpgrade_v4(EXPECTED_FINAL_ACCOUNTING_ORACLE_CONSENSUS_VERSION);
 
         _assertPostUpgradeState();
 
