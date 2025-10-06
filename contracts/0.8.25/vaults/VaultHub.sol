@@ -1216,7 +1216,14 @@ contract VaultHub is PausableUntilWithRoles {
         // RR = 100 - MR
         // X = (LS * 100 - TV * MR) / RR
 
-        return (liabilityShares_ * TOTAL_BASIS_POINTS - sharesByTotalValue * maxMintableRatio) / reserveRatioBP;
+        uint256 candidateShortfall = (liabilityShares_ * TOTAL_BASIS_POINTS - sharesByTotalValue * maxMintableRatio) / reserveRatioBP;
+        uint256 rebalanceEth = _getPooledEthBySharesRoundUp(candidateShortfall);
+
+        if (_isThresholdBreached(totalValue_ - rebalanceEth, liabilityShares_ - candidateShortfall, reserveRatioBP)) {
+            candidateShortfall += 1;
+        }
+
+        return candidateShortfall;
     }
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {

@@ -590,7 +590,17 @@ describe("VaultHub.sol:hub", () => {
 
       const record = await vaultHub.vaultRecord(vault);
       const sharesByTotalValue = await lido.getSharesByPooledEth(await vaultHub.totalValue(vault));
-      const shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
+
+      let shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
+      const rebalanceEth = await lido.getPooledEthBySharesRoundUp(shortfall);
+      const postRebalanceLiabilityShares = record.liabilityShares - shortfall;
+      const postRebalanceLiability = await lido.getPooledEthBySharesRoundUp(postRebalanceLiabilityShares);
+      const postRebalanceTotalValue = (await vaultHub.totalValue(vault)) - rebalanceEth;
+
+      if (postRebalanceLiability > (postRebalanceTotalValue * (TOTAL_BASIS_POINTS - 50_00n)) / TOTAL_BASIS_POINTS) {
+        shortfall += 1n;
+      }
+
       expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfall);
     });
   });
@@ -665,7 +675,16 @@ describe("VaultHub.sol:hub", () => {
 
       const record = await vaultHub.vaultRecord(vault);
       const sharesByTotalValue = await lido.getSharesByPooledEth(await vaultHub.totalValue(vault));
-      const shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
+      let shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
+      const rebalanceEth = await lido.getPooledEthBySharesRoundUp(shortfall);
+      const postRebalanceLiabilityShares = record.liabilityShares - shortfall;
+      const postRebalanceLiability = await lido.getPooledEthBySharesRoundUp(postRebalanceLiabilityShares);
+      const postRebalanceTotalValue = (await vaultHub.totalValue(vault)) - rebalanceEth;
+
+      if (postRebalanceLiability > (postRebalanceTotalValue * (TOTAL_BASIS_POINTS - 50_00n)) / TOTAL_BASIS_POINTS) {
+        shortfall += 1n;
+      }
+
       expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfall);
     });
   });
