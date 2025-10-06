@@ -441,7 +441,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
         // activate validator if possible
         if (stakingVault.depositor() == address(this) && stakingVault.stagedBalance() >= ACTIVATION_DEPOSIT_AMOUNT) {
-             validator.stage = ValidatorStage.ACTIVATED;
+            validator.stage = ValidatorStage.ACTIVATED;
             _activateAndTopUpValidator(stakingVault, _witness.pubkey, 0, new bytes(96), withdrawalCredentials, nodeOperator);
         } else {
             // only if validator is disconnected
