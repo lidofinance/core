@@ -1057,8 +1057,14 @@ contract VaultHub is PausableUntilWithRoles {
                 revert NoUnsettledLidoFeesShouldBeLeft(_vault, unsettledLidoFees);
             }
 
-            uint256 withdrawable = Math256.min(unsettledLidoFees, _vaultBalance);
-            _settleLidoFees(_vault, _record, _connection, withdrawable);
+            uint256 withdrawable = Math256.min(
+                Math256.min(_vaultBalance, _totalValue(_record)),
+                unsettledLidoFees
+            );
+
+            if (withdrawable > 0) {
+                _settleLidoFees(_vault, _record, _connection, withdrawable);
+            }
         }
 
         _connection.disconnectInitiatedTs = uint48(block.timestamp);
