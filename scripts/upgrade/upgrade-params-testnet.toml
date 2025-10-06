@@ -1,0 +1,59 @@
+# Lido Protocol Upgrade Parameters - Hoodi Configuration
+# This file contains deployment parameters for upgrading Lido protocol contracts on Ethereum Hoodi testnet
+
+[chainSpec]
+# Ethereum consensus layer specifications
+slotsPerEpoch = 32                    # Number of slots per epoch in Ethereum consensus
+secondsPerSlot = 12                   # Duration of each slot in seconds
+genesisTime = 1742213400              # Ethereum Hoodi testnet genesis timestamp
+depositContract = "0x00000000219ab540356cBB839Cbe05303d7705Fa"  # Ethereum Hoodi testnet deposit contract
+
+# Gate seal configuration for vault operations
+[gateSealForVaults]
+address = "0x0000000000000000000000000000000f00f00F00"  # TODO: update the placeholder
+
+[easyTrack]
+# https://docs.lido.fi/deployed-contracts/hoodi/#easy-track
+evmScriptExecutor = "0x79a20FD0FA36453B2F45eAbab19bfef43575Ba9E"
+# see https://github.com/lidofinance/easy-track/pull/86/files
+vaultHubAdapter = "0x0000000000000000000000000000000F00F00F77" # TODO: update the placeholder
+
+# Vault hub configuration for managing staking vaults
+[vaultHub]
+relativeShareLimitBP = 300           # Relative share limit in basis points (3%)
+
+# Lazy oracle configuration for delayed reward calculations
+[lazyOracle]
+quarantinePeriod = 259200                      # Quarantine period in seconds (3 days) before rewards are distributed
+maxRewardRatioBP = 350                         # Maximum reward ratio in basis points (3.5%)
+maxLidoFeeRatePerSecond = "180000000000000000" # Maximum Lido fee rate per second, in wei (0.18 ETH)
+
+# Predeposit guarantee configuration for validator deposit guarantees
+[predepositGuarantee]
+genesisForkVersion = "0x10000910"     # Ethereum Hoodi testnet genesis fork version
+gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  # Generalized index for state verification
+gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028"
+changeSlot = 0                        # Slot number when the change takes effect
+
+# Delegation module configuration for liquid delegation
+[delegation]
+wethContract = "0x2387fd72c1da19f6486b843f5da562679fbb4057"  # WETH contract address for wrapped ETH operations
+
+# Operator grid configuration for managing staking operators
+[operatorGrid]
+# Default tier parameters for operator classification and fee structure
+[operatorGrid.defaultTierParams]
+shareLimitInEther = "0"               # Share limit per tier in ETH
+reserveRatioBP = 5000                 # Reserve ratio in basis points (50%)
+forcedRebalanceThresholdBP = 4950     # Threshold for forced rebalancing in basis points (49.50%)
+infraFeeBP = 100                      # Infrastructure fee in basis points (1%)
+liquidityFeeBP = 650                  # Liquidity provision fee in basis points (6.5%)
+reservationFeeBP = 0                  # Reservation fee in basis points (0%)
+
+[burner]
+isMigrationAllowed = true             # Must be on for the upgrade to work (for scratch is it false)
+
+# Oracle and consensus version configuration
+[oracleVersions]
+vebo_consensus_version = 4            # Validators Exit Bus Oracle consensus version
+ao_consensus_version = 4              # Accounting Oracle consensus version
