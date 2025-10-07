@@ -239,17 +239,17 @@ contract V3Template is V3Addresses {
         _assertProxyAdmin(IOssifiableProxy(VAULT_HUB), AGENT);
         _assertSingleOZRoleHolder(VAULT_HUB, DEFAULT_ADMIN_ROLE, AGENT);
 
-        _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT, VAULT_HUB_ADAPTER);
-        _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE(), AGENT, EVM_SCRIPT_EXECUTOR);
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VAULT_MASTER_ROLE(), AGENT);
+        _assertTwoOZRoleHolders(VAULT_HUB, VaultHub(VAULT_HUB).REDEMPTION_MASTER_ROLE(), AGENT, VAULTS_ADAPTER);
 
-        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULT_HUB_ADAPTER);
-        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULT_HUB_ADAPTER);
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).VALIDATOR_EXIT_ROLE(), VAULTS_ADAPTER);
+        _assertSingleOZRoleHolder(VAULT_HUB, VaultHub(VAULT_HUB).BAD_DEBT_MASTER_ROLE(), VAULTS_ADAPTER);
         _assertSingleOZRoleHolder(VAULT_HUB, PausableUntilWithRoles(VAULT_HUB).PAUSE_ROLE(), GATE_SEAL);
 
         // OperatorGrid
         _assertProxyAdmin(IOssifiableProxy(OPERATOR_GRID), AGENT);
         _assertSingleOZRoleHolder(OPERATOR_GRID, DEFAULT_ADMIN_ROLE, AGENT);
-        _assertTwoOZRoleHolders(OPERATOR_GRID, OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), AGENT, EVM_SCRIPT_EXECUTOR);
+        _assertThreeOZRoleHolders(OPERATOR_GRID, OperatorGrid(OPERATOR_GRID).REGISTRY_ROLE(), AGENT, EVM_SCRIPT_EXECUTOR, VAULTS_ADAPTER);
 
         // LazyOracle
         _assertProxyAdmin(IOssifiableProxy(LAZY_ORACLE), AGENT);
@@ -370,6 +370,16 @@ contract V3Template is V3Addresses {
         address[] memory holders = new address[](2);
         holders[0] = _holder1;
         holders[1] = _holder2;
+        _assertOZRoleHolders(_accessControlled, _role, holders);
+    }
+
+    function _assertThreeOZRoleHolders(
+        address _accessControlled, bytes32 _role, address _holder1, address _holder2, address _holder3
+    ) internal view {
+        address[] memory holders = new address[](3);
+        holders[0] = _holder1;
+        holders[1] = _holder2;
+        holders[2] = _holder3;
         _assertOZRoleHolders(_accessControlled, _role, holders);
     }
 

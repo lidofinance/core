@@ -112,13 +112,13 @@ contract V3TemporaryAdmin {
      * @dev This is the main external function that should be called after deployment
      * @param _lidoLocatorImpl The new LidoLocator implementation address
      * @param _evmScriptExecutor The EVM script executor address from easyTrack
-     * @param _vaultHubAdapter The vault hub adapter address from easyTrack
+     * @param _vaultsAdapter The vaults' adapter address from easyTrack
      */
-    function completeSetup(address _lidoLocatorImpl, address _evmScriptExecutor, address _vaultHubAdapter) external {
+    function completeSetup(address _lidoLocatorImpl, address _evmScriptExecutor, address _vaultsAdapter) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
         if (_lidoLocatorImpl == address(0)) revert ZeroLidoLocator();
         if (_evmScriptExecutor == address(0)) revert ZeroEvmScriptExecutor();
-        if (_vaultHubAdapter == address(0)) revert ZeroVaultHubAdapter();
+        if (_vaultsAdapter == address(0)) revert ZeroVaultsAdapter();
 
         isSetupComplete = true;
 
@@ -128,19 +128,18 @@ contract V3TemporaryAdmin {
 
         _setupPredepositGuarantee(locator.predepositGuarantee());
         _setupLazyOracle(locator.lazyOracle());
-        _setupOperatorGrid(locator.operatorGrid(), _evmScriptExecutor);
+        _setupOperatorGrid(locator.operatorGrid(), _evmScriptExecutor, _vaultsAdapter);
         _setupBurner(locator.burner(), locator.accounting(), csmAccounting);
-        _setupVaultHub(locator.vaultHub(), _evmScriptExecutor, _vaultHubAdapter);
+        _setupVaultHub(locator.vaultHub(), _vaultsAdapter);
     }
 
 
     /**
      * @notice Setup VaultHub with all required roles and transfer admin to agent
      * @param _vaultHub The VaultHub contract address
-     * @param _evmScriptExecutor The EVM script executor address
-     * @param _vaultHubAdapter The vault hub adapter address
+     * @param _vaultsAdapter The vaults' adapter address
      */
-    function _setupVaultHub(address _vaultHub, address _evmScriptExecutor, address _vaultHubAdapter) private {
+    function _setupVaultHub(address _vaultHub, address _vaultsAdapter) private {
         // Get roles from the contract
         bytes32 pauseRole = IPausableUntil(_vaultHub).PAUSE_ROLE();
         bytes32 vaultMasterRole = IVaultHub(_vaultHub).VAULT_MASTER_ROLE();
@@ -153,11 +152,9 @@ contract V3TemporaryAdmin {
         IAccessControl(_vaultHub).grantRole(vaultMasterRole, AGENT);
         IAccessControl(_vaultHub).grantRole(redemptionMasterRole, AGENT);
 
-        IAccessControl(_vaultHub).grantRole(vaultMasterRole, _vaultHubAdapter);
-        IAccessControl(_vaultHub).grantRole(validatorExitRole, _vaultHubAdapter);
-        IAccessControl(_vaultHub).grantRole(badDebtMasterRole, _vaultHubAdapter);
-
-        IAccessControl(_vaultHub).grantRole(redemptionMasterRole, _evmScriptExecutor);
+        IAccessControl(_vaultHub).grantRole(validatorExitRole, _vaultsAdapter);
+        IAccessControl(_vaultHub).grantRole(badDebtMasterRole, _vaultsAdapter);
+        IAccessControl(_vaultHub).grantRole(redemptionMasterRole, _vaultsAdapter);
 
         _transferAdminToAgent(_vaultHub);
     }
@@ -186,11 +183,13 @@ contract V3TemporaryAdmin {
      * @notice Setup OperatorGrid with required roles and transfer admin to agent
      * @param _operatorGrid The OperatorGrid contract address
      * @param _evmScriptExecutor The EVM script executor address
+     * @param _vaultsAdapter The vaults' adapter address
      */
-    function _setupOperatorGrid(address _operatorGrid, address _evmScriptExecutor) private {
+    function _setupOperatorGrid(address _operatorGrid, address _evmScriptExecutor, address _vaultsAdapter) private {
         bytes32 registryRole = IOperatorGrid(_operatorGrid).REGISTRY_ROLE();
         IAccessControl(_operatorGrid).grantRole(registryRole, AGENT);
         IAccessControl(_operatorGrid).grantRole(registryRole, _evmScriptExecutor);
+        IAccessControl(_operatorGrid).grantRole(registryRole, _vaultsAdapter);
         _transferAdminToAgent(_operatorGrid);
     }
 
@@ -222,7 +221,7 @@ contract V3TemporaryAdmin {
     error ZeroLidoLocator();
     error ZeroStakingRouter();
     error ZeroEvmScriptExecutor();
-    error ZeroVaultHubAdapter();
+    error ZeroVaultsAdapter();
     error CsmModuleNotFound();
     error SetupAlreadyCompleted();
 }
