@@ -41,7 +41,7 @@ export async function main() {
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
   const gateSealAddress = parameters.gateSealForVaults.address;
   const evmScriptExecutorAddress = parameters.easyTrack.evmScriptExecutor;
-  const vaultHubAdapterAddress = parameters.easyTrack.vaultHubAdapter;
+  const vaultsAdapterAddress = parameters.easyTrack.vaultsAdapter;
 
   //
   // Deploy V3TemporaryAdmin
@@ -348,7 +348,7 @@ export async function main() {
   await makeTx(
     v3TemporaryAdminContract,
     "completeSetup",
-    [lidoLocatorImpl.address, evmScriptExecutorAddress, vaultHubAdapterAddress],
+    [lidoLocatorImpl.address, evmScriptExecutorAddress, vaultsAdapterAddress],
     {
       from: deployer,
     },

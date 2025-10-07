@@ -102,7 +102,7 @@ export const UpgradeParametersSchema = z.object({
   }),
   easyTrack: z.object({
     evmScriptExecutor: EthereumAddressSchema,
-    vaultHubAdapter: EthereumAddressSchema,
+    vaultsAdapter: EthereumAddressSchema,
   }),
   validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   vaultHub: VaultHubSchema,

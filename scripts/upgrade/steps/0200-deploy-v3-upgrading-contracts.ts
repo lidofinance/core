@@ -41,7 +41,7 @@ export async function main() {
 
     // EasyTrack addresses
     parameters.easyTrack.evmScriptExecutor,
-    parameters.easyTrack.vaultHubAdapter,
+    parameters.easyTrack.vaultsAdapter,
 
     // Existing proxies and contracts
     getAddress(Sk.aragonKernel, state),
