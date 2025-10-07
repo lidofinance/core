@@ -318,6 +318,9 @@
     "expiryTimestamp": 1788908579,
     "sealingCommittee": "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C"
   },
+  "gateSealFactory": {
+    "address": "0x6c82877cac5a7a739f16ca0a89c0a328b8764a24"
+  },
   "gateSealTW": {
     "factoryAddress": "0x6c82877cac5a7a739f16ca0a89c0a328b8764a24",
     "sealDuration": 1209600,

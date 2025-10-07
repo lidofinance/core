@@ -1,5 +1,4 @@
 import { ethers } from "hardhat";
-import { readUpgradeParameters } from "scripts/utils/upgrade";
 
 import { IAragonAppRepo, IOssifiableProxy, OssifiableProxy__factory } from "typechain-types";
 
@@ -10,7 +9,6 @@ import { getAddress, readNetworkState, Sk } from "lib/state-file";
 export async function main() {
   const deployerSigner = await ethers.provider.getSigner();
   const deployer = deployerSigner.address;
-  const parameters = readUpgradeParameters();
   const state = readNetworkState();
 
   const locatorProxy = OssifiableProxy__factory.connect(getAddress(Sk.lidoLocator, state), deployerSigner);
@@ -37,7 +35,7 @@ export async function main() {
     state[Sk.stakingVaultBeacon].address,
     state[Sk.stakingVaultImplementation].address,
     state[Sk.dashboardImpl].address,
-    parameters.gateSealForVaults.address,
+    getAddress(Sk.gateSealV3, state),
 
     // EasyTrack addresses
     getAddress(Sk.vaultsAdapter, state),

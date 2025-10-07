@@ -79,16 +79,13 @@ contract V3TemporaryAdmin {
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
     address public immutable AGENT;
-    address public immutable GATE_SEAL;
     bool public immutable IS_HOODI;
 
     bool public isSetupComplete;
 
-    constructor(address _agent, address _gateSeal, bool _isHoodi) {
+    constructor(address _agent, bool _isHoodi) {
         if (_agent == address(0)) revert ZeroAddress();
-        if (_gateSeal == address(0)) revert ZeroAddress();
         AGENT = _agent;
-        GATE_SEAL = _gateSeal;
         IS_HOODI = _isHoodi;
     }
 
@@ -119,7 +116,7 @@ contract V3TemporaryAdmin {
      * @param _lidoLocatorImpl The new LidoLocator implementation address
      * @param _vaultsAdapter The vaults' adapter address from easyTrack
      */
-    function completeSetup(address _lidoLocatorImpl, address _vaultsAdapter) external {
+    function completeSetup(address _lidoLocatorImpl, address _vaultsAdapter, address _gateSeal) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
         if (_lidoLocatorImpl == address(0)) revert ZeroLidoLocator();
         if (_vaultsAdapter == address(0)) revert ZeroVaultsAdapter();
@@ -130,11 +127,11 @@ contract V3TemporaryAdmin {
 
         address csmAccounting = getCsmAccountingAddress(locator.stakingRouter());
 
-        _setupPredepositGuarantee(locator.predepositGuarantee());
+        _setupPredepositGuarantee(locator.predepositGuarantee(), _gateSeal);
         _setupLazyOracle(locator.lazyOracle());
         _setupOperatorGrid(locator.operatorGrid(), IVaultsAdapter(_vaultsAdapter).evmScriptExecutor(), _vaultsAdapter);
         _setupBurner(locator.burner(), locator.accounting(), csmAccounting);
-        _setupVaultHub(locator.vaultHub(), _vaultsAdapter);
+        _setupVaultHub(locator.vaultHub(), _vaultsAdapter, _gateSeal);
     }
 
 
@@ -143,7 +140,7 @@ contract V3TemporaryAdmin {
      * @param _vaultHub The VaultHub contract address
      * @param _vaultsAdapter The vaults' adapter address
      */
-    function _setupVaultHub(address _vaultHub, address _vaultsAdapter) private {
+    function _setupVaultHub(address _vaultHub, address _vaultsAdapter, address _gateSeal) private {
         // Get roles from the contract
         bytes32 pauseRole = IPausableUntil(_vaultHub).PAUSE_ROLE();
         bytes32 vaultMasterRole = IVaultHub(_vaultHub).VAULT_MASTER_ROLE();
@@ -151,7 +148,7 @@ contract V3TemporaryAdmin {
         bytes32 validatorExitRole = IVaultHub(_vaultHub).VALIDATOR_EXIT_ROLE();
         bytes32 badDebtMasterRole = IVaultHub(_vaultHub).BAD_DEBT_MASTER_ROLE();
 
-        IAccessControl(_vaultHub).grantRole(pauseRole, GATE_SEAL);
+        IAccessControl(_vaultHub).grantRole(pauseRole, _gateSeal);
 
         IAccessControl(_vaultHub).grantRole(vaultMasterRole, AGENT);
         IAccessControl(_vaultHub).grantRole(redemptionMasterRole, AGENT);
@@ -167,9 +164,9 @@ contract V3TemporaryAdmin {
      * @notice Setup PredepositGuarantee with PAUSE_ROLE for gateSeal and transfer admin to agent
      * @param _predepositGuarantee The PredepositGuarantee contract address
      */
-    function _setupPredepositGuarantee(address _predepositGuarantee) private {
+    function _setupPredepositGuarantee(address _predepositGuarantee, address _gateSeal) private {
         bytes32 pauseRole = IPausableUntil(_predepositGuarantee).PAUSE_ROLE();
-        IAccessControl(_predepositGuarantee).grantRole(pauseRole, GATE_SEAL);
+        IAccessControl(_predepositGuarantee).grantRole(pauseRole, _gateSeal);
         _transferAdminToAgent(_predepositGuarantee);
     }
 

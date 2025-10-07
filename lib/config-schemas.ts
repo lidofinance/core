@@ -99,7 +99,8 @@ export const UpgradeParametersSchema = z.object({
     isHoodi: z.boolean(),
   }),
   gateSealForVaults: z.object({
-    address: EthereumAddressSchema,
+    sealDuration: PositiveIntSchema,
+    sealingCommittee: EthereumAddressSchema,
   }),
   vaultHub: VaultHubSchema,
   lazyOracle: LazyOracleSchema,
