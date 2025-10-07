@@ -318,16 +318,18 @@ contract NodeOperatorFee is Permissions {
      * @dev fee exemption can only be positive
      */
     function _addFeeExemption(uint256 _amount) internal {
-        _correctSettledGrowth(settledGrowth + _amount.toInt256());
+        if (_amount > type(uint104).max) revert UnexpectedFeeExemptionAmount();
+
+        _correctSettledGrowth(settledGrowth + int256(_amount));
     }
 
     function _calculateFee() internal view returns (uint256 fee, int128 growth) {
         VaultHub.Report memory report = latestReport();
-        growth = int128(int256(uint256(report.totalValue))) - int128(report.inOutDelta);
-        int128 unsettledGrowth = growth - settledGrowth;
+        growth = int128(uint128(report.totalValue)) - int128(report.inOutDelta);
+        int256 unsettledGrowth = growth - settledGrowth;
 
         if (unsettledGrowth > 0) {
-            fee = (uint256(uint128(unsettledGrowth)) * uint256(feeRate)) / TOTAL_BASIS_POINTS;
+            fee = (uint256(unsettledGrowth) * feeRate) / TOTAL_BASIS_POINTS;
         }
     }
 
@@ -423,6 +425,11 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the settled growth does not match the expected value.
      */
     error UnexpectedSettledGrowth();
+
+    /**
+     * @dev Error emitted when the fee exemption amount does not match the expected value
+     */
+    error UnexpectedFeeExemptionAmount();
 
     /**
      * @dev Error emitted when the settled growth is pending manual adjustment.
