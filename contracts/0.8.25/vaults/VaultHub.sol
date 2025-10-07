@@ -861,6 +861,9 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _refundRecipient address that will receive the refund for transaction costs
     /// @dev msg.sender should be vault's owner
     /// @dev requires the fresh report (in case of partial withdrawals)
+    /// @dev NB! msg.value is spent to pay EIP-7002 withdrawal fee, leftover is refunded to `_refundRecipient`
+    ///      fee amount is unknown beforehand and can be changed rapidly, so, please, choose `msg.value` wisely
+    ///      to avoid overspending
     function triggerValidatorWithdrawals(
         address _vault,
         bytes calldata _pubkeys,
@@ -901,6 +904,9 @@ contract VaultHub is PausableUntilWithRoles {
     ///         exit the beacon chain. This returns the vault's deposited ETH back to vault's balance and allows to
     ///         rebalance the vault
     /// @dev requires the fresh report
+    /// @dev NB! msg.value is spent to pay EIP-7002 withdrawal fee, leftover is refunded to `_refundRecipient`
+    ///      fee amount is unknown beforehand and can be changed rapidly, so, please, choose `msg.value` wisely
+    ///      to avoid overspending
     function forceValidatorExit(
         address _vault,
         bytes calldata _pubkeys,
