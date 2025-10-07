@@ -807,8 +807,10 @@ describe("VaultHub.sol:owner-functions", () => {
       // Make vault in bad debt
       await vaultHub.connect(vaultOwner).fund(vaultAddress, { value: ether("10") });
       await reportVault({ totalValue: ether("11") });
-      await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, ether("8.5"));
-      await reportVault({ totalValue: ether("8.5"), liabilityShares: ether("8.5") });
+      const totalValue = ether("8.5");
+      const liabilityShares = ether("8.5") + 1n;
+      await vaultHub.connect(vaultOwner).mintShares(vaultAddress, vaultOwner, liabilityShares);
+      await reportVault({ totalValue, liabilityShares });
 
       await expect(
         vaultHub

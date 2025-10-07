@@ -1193,13 +1193,13 @@ contract VaultHub is PausableUntilWithRoles {
 
         uint256 reserveRatioBP = _connection.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
-        uint256 sharesByTotalValue = _getSharesByPooledEth(totalValue_);
+        uint256 liability = _getPooledEthBySharesRoundUp(liabilityShares_);
 
         // Impossible to rebalance a vault with bad debt
-        if (liabilityShares_ >= sharesByTotalValue) {
+        if (liability > totalValue_) {
             return type(uint256).max;
         }
-        
+
         // Rebalancing is reducing both liability and totalValue by the same amount
         // so that:
         //  liability / total value = maxMintableRatio / TOTAL_BASIS_POINTS
