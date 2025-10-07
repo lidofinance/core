@@ -238,10 +238,10 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         return _vaultInfo(_vault, _vaultHub());
     }
 
-    function _vaultInfo(address _vault, VaultHub _vaultHub) internal view returns (VaultInfo memory) {
+    function _vaultInfo(address _vault, VaultHub _vh) internal view returns (VaultInfo memory) {
         IStakingVault vault = IStakingVault(_vault);
-        VaultHub.VaultConnection memory connection = _vaultHub.vaultConnection(_vault);
-        VaultHub.VaultRecord memory record = _vaultHub.vaultRecord(_vault);
+        VaultHub.VaultConnection memory connection = _vh.vaultConnection(_vault);
+        VaultHub.VaultRecord memory record = _vh.vaultRecord(_vault);
         return VaultInfo(
             _vault,
             vault.availableBalance() + vault.stagedBalance(),
@@ -256,7 +256,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
             connection.infraFeeBP,
             connection.liquidityFeeBP,
             connection.reservationFeeBP,
-            _vaultHub.isPendingDisconnect(_vault)
+            _vh.isPendingDisconnect(_vault)
         );
     }
 

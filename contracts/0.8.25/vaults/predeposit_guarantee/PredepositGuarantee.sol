@@ -95,6 +95,39 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
     uint256 public constant MAX_TOPUP_AMOUNT = 2048 ether - ACTIVATION_DEPOSIT_AMOUNT - PREDEPOSIT_AMOUNT;
 
+    //    Scheme of Validator Container Tree:
+    //
+    //                         Validator Container Root                      **DEPTH = 0
+    //                                     │
+    //                     ┌───────────────┴───────────────┐
+    //                     │                               │
+    //                 node                            proof[1]              **DEPTH = 1
+    //                     │                               │
+    //             ┌───────┴───────┐               ┌───────┴───────┐
+    //             │               │               │               │
+    //      PARENT TO PROVE      proof[0]        node             node       **DEPTH = 2
+    //             │               │               │               │
+    //       ┌─────┴─────┐   ┌─────┴─────┐   ┌─────┴─────┐   ┌─────┴─────┐
+    //       │           │   │           │   │           │   │           │
+    //    [pubkeyRoot]  [wc]  [EB] [slashed] [AEE]      [AE] [EE]       [WE] **DEPTH = 3
+    //    {.................}
+    //             ↑
+    //    data to be proven
+    //
+    // ```
+    // bytes32 FAR_FUTURE_EPOCH_SSZ = 0xffffffffffffffff000000000000000000000000000000000000000000000000;
+    // bytes32 hash = sha256(bytes.concat(
+    //      sha256(bytes.concat(FAR_FUTURE_EPOCH_SSZ, FAR_FUTURE_EPOCH_SSZ)),
+    //      sha256(bytes.concat(FAR_FUTURE_EPOCH_SSZ, FAR_FUTURE_EPOCH_SSZ))
+    // ))
+    // ```
+    // Here we are relying on activation_eligibility_epoch being set first during the validator lifecycle
+    // thus if activation_eligibility_epoch is FAR_FUTURE_EPOCH, all other epochs
+    // (activation_epoch, exit_epoch, withdrawable_epoch) is also set to FAR_FUTURE_EPOCH
+    // so we can prove them together
+    bytes32 internal constant UNSET_VALIDATOR_EPOCHS_PROOF_NODE
+        = 0x2c84ba62dc4e7011c24fb0878e3ef2245a9e2cf2cacbbaf2978a4efa47037283;
+
     /**
      * @notice computed DEPOSIT_DOMAIN for current chain
      * @dev changes between chains and testnets depending on GENESIS_FORK_VERSION
@@ -491,14 +524,10 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     ) external whenResumed {
         if (_stakingVault.owner() != msg.sender) revert NotStakingVaultOwner();
 
-        // Filter out validators not eligible for activation (all epochs are set to FAR_FUTURE_EPOCH)
-        //
-        // sha256(
-        //  sha256(FAR_FUTURE_EPOCH|FAR_FUTURE_EPOCH) |  // activation_eligibility_epoch | activation_epoch
-        //  sha256(FAR_FUTURE_EPOCH|FAR_FUTURE_EPOCH)    // exit_epoch  | withdrawable_epoch
-        // )
-        // see CLProofVerifier.sol for Validator Container Root scheme that explains the proof positioning
-        if (_witness.proof[1] == 0x2c84ba62dc4e7011c24fb0878e3ef2245a9e2cf2cacbbaf2978a4efa47037283) {
+        // Forbid adding side-deposited validators that are not eligible for activation
+        // because it won't be available for triggerable withdrawal without additional deposits
+        // see CLProofValidator.sol to see why we check the 1st node in the proof array
+        if (_witness.proof[1] == UNSET_VALIDATOR_EPOCHS_PROOF_NODE) {
             revert ValidatorNotEligibleForActivation(_witness.pubkey);
         }
 
