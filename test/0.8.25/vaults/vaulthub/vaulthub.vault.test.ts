@@ -20,6 +20,7 @@ import {
 import { advanceChainTime, days, ether, getCurrentBlockTimestamp, impersonate } from "lib";
 import { ONE_GWEI, TOTAL_BASIS_POINTS } from "lib/constants";
 import { findEvents } from "lib/event";
+import { ceilDiv } from "lib/protocol";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
@@ -884,7 +885,7 @@ describe("VaultHub.sol:owner-functions", () => {
 
       const healthShortfallShares = await vaultHub.healthShortfallShares(vaultAddress);
       const rebalanceShortfallValue = await lido.getPooledEthBySharesRoundUp(healthShortfallShares);
-      const amount = rebalanceShortfallValue / ONE_GWEI;
+      const amount = ceilDiv(rebalanceShortfallValue, ONE_GWEI);
 
       expect(await vaultHub.isVaultHealthy(vaultAddress)).to.be.false;
       await expect(

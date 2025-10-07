@@ -589,17 +589,21 @@ describe("VaultHub.sol:hub", () => {
       await reportVault({ vault });
 
       const record = await vaultHub.vaultRecord(vault);
-      const sharesByTotalValue = await lido.getSharesByPooledEth(await vaultHub.totalValue(vault));
 
-      let shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
-      const rebalanceEth = await lido.getPooledEthBySharesRoundUp(shortfall);
-      const postRebalanceLiabilityShares = record.liabilityShares - shortfall;
-      const postRebalanceLiability = await lido.getPooledEthBySharesRoundUp(postRebalanceLiabilityShares);
-      const postRebalanceTotalValue = (await vaultHub.totalValue(vault)) - rebalanceEth;
+      const totalPooledEther = await lido.getTotalPooledEther();
+      const totalShares = await lido.getTotalShares();
+      const maxMintableRatio = TOTAL_BASIS_POINTS - 50_00n;
+      const liabilityShares_ = record.liabilityShares;
+      const totalValue_ = await vaultHub.totalValue(vault);
 
-      if (postRebalanceLiability > (postRebalanceTotalValue * (TOTAL_BASIS_POINTS - 50_00n)) / TOTAL_BASIS_POINTS) {
-        shortfall += 1n;
-      }
+      const shortfall =
+        (totalPooledEther * TOTAL_BASIS_POINTS * liabilityShares_ +
+          TOTAL_BASIS_POINTS * totalShares +
+          maxMintableRatio * totalShares -
+          TOTAL_BASIS_POINTS -
+          maxMintableRatio * totalShares * totalValue_ -
+          maxMintableRatio) /
+        (totalPooledEther * (TOTAL_BASIS_POINTS - maxMintableRatio));
 
       expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfall);
     });
@@ -673,17 +677,20 @@ describe("VaultHub.sol:hub", () => {
 
       await reportVault({ vault });
 
-      const record = await vaultHub.vaultRecord(vault);
-      const sharesByTotalValue = await lido.getSharesByPooledEth(await vaultHub.totalValue(vault));
-      let shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
-      const rebalanceEth = await lido.getPooledEthBySharesRoundUp(shortfall);
-      const postRebalanceLiabilityShares = record.liabilityShares - shortfall;
-      const postRebalanceLiability = await lido.getPooledEthBySharesRoundUp(postRebalanceLiabilityShares);
-      const postRebalanceTotalValue = (await vaultHub.totalValue(vault)) - rebalanceEth;
+      const totalPooledEther = await lido.getTotalPooledEther();
+      const totalShares = await lido.getTotalShares();
+      const maxMintableRatio = TOTAL_BASIS_POINTS - 50_00n;
+      const liabilityShares_ = (await vaultHub.vaultRecord(vault)).liabilityShares;
+      const totalValue_ = await vaultHub.totalValue(vault);
 
-      if (postRebalanceLiability > (postRebalanceTotalValue * (TOTAL_BASIS_POINTS - 50_00n)) / TOTAL_BASIS_POINTS) {
-        shortfall += 1n;
-      }
+      const shortfall =
+        (totalPooledEther * TOTAL_BASIS_POINTS * liabilityShares_ +
+          TOTAL_BASIS_POINTS * totalShares +
+          maxMintableRatio * totalShares -
+          TOTAL_BASIS_POINTS -
+          maxMintableRatio * totalShares * totalValue_ -
+          maxMintableRatio) /
+        (totalPooledEther * (TOTAL_BASIS_POINTS - maxMintableRatio));
 
       expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfall);
     });

@@ -1199,33 +1199,78 @@ contract VaultHub is PausableUntilWithRoles {
         if (liabilityShares_ >= sharesByTotalValue) {
             return type(uint256).max;
         }
+        
+        // Rebalancing is reducing both liability and totalValue by the same amount
+        // so that:
+        //  liability / total value = maxMintableRatio / TOTAL_BASIS_POINTS
+        // 
+        // So we need to find some amount of shares (X)
+        // to reduce liability by and withdraw equivalent amount of ETH from the vault.
+        //
+        // The vault is considered healthy when:
+        // ceil(liabilityShares * shareRate) <= totalValue * mintRate
+        //
+        // Rebalancing operation does the following:
+        //
+        // liabilityShares = liabilityShares - X
+        // totalValue = totalValue - ceil(X * shareRate)
+        // 
+        // So the health equation including rounding looks like this:
+        //
+        // ceil((L - X) * shareRate) / totalValue - ceil(X * shareRate) <= maxMintableRatio / TOTAL_BASIS_POINTS
+        //
+        // To convert shares to ether rounding up:
+        // ethRoundedUp = (shares * totalPooledEther + totalShares - 1) / totalShares
+        // 
+        // So with that in mind, the health equation in pure algebraic terms:
+        // 
+        //     ((liabilityShares - X) * totalPooledEther + totalShares - 1) / totalShares       maxMintableRatio
+        //    ---------------------------------------------------------------------------- = ---------------------
+        //       totalValue - ((X * totalPooledEther + totalShares - 1) / totalShares)         TOTAL_BASIS_POINTS
+        //
+        // For brevity, let's denote:
+        // E = totalPooledEther
+        // S = totalShares
+        // V = totalValue
+        // M = maxMintableRatio
+        // B = TOTAL_BASIS_POINTS
+        // L = liabilityShares
+        // 
+        // So the equation becomes:
+        //      ((L - X) * E + S - 1) / S        M
+        //    ------------------------------ = ----- 
+        //      V - ((X * E + S - 1) / S)        B
+        //
+        //      ((LE - XE + S - 1) / S           M
+        //    ------------------------------ = ----- 
+        //      V - (XE + S - 1) / S)            B
+        //
+        // Now if we solve for X, we get:
+        //
+        //      EBL + BS + MS - B - MSV - M
+        // X = ------------------------------
+        //              E(B - M)
 
-        // (((L * E + S - 1) / S) - ((X * E + S - 1) / S)) / V - ((X * E + S - 1) / S) = M / B
+        // int256 E = int256(LIDO.getTotalPooledEther());
+        // int256 S = int256(LIDO.getTotalShares());
+        // int256 V = int256(totalValue_);
+        // int256 R = int256(reserveRatioBP);
+        // int256 L = int256(liabilityShares_);
+        // int256 B = int256(TOTAL_BASIS_POINTS);
 
-        // Solve the equation for X:
-        // LS - liabilityShares, TV - sharesByTotalValue
-        // MR - maxMintableRatio, 100 - TOTAL_BASIS_POINTS, RR - reserveRatio
-        // X - amount of shares that should be withdrawn (TV - X) and used to repay the debt (LS - X)
-        // to reduce the LS/TVS ratio back to MR
+        uint256 totalPooledEther = LIDO.getTotalPooledEther();
+        uint256 totalShares = LIDO.getTotalShares();
 
-        // (LS - X) / (TV - X) = MR / 100
-        // (LS - X) * 100 = (TV - X) * MR
-        // LS * 100 - X * 100 = TV * MR - X * MR
-        // X * MR - X * 100 = TV * MR - LS * 100
-        // X * (MR - 100) = TV * MR - LS * 100
-        // X = (TV * MR - LS * 100) / (MR - 100)
-        // X = (LS * 100 - TV * MR) / (100 - MR)
-        // RR = 100 - MR
-        // X = (LS * 100 - TV * MR) / RR
-
-        int256 E = int256(LIDO.getTotalPooledEther());
-        int256 S = int256(LIDO.getTotalShares());
-        int256 V = int256(totalValue_);
-        int256 M = int256(maxMintableRatio);
-        int256 L = int256(liabilityShares_);
-        int256 B = int256(TOTAL_BASIS_POINTS);
-
-        return uint256(((E * B * L) + (B * S) - B - (M * S * V) + (M * S) - M) / (E * (B - M)));
+        return (
+            totalPooledEther * TOTAL_BASIS_POINTS * liabilityShares_ +
+            TOTAL_BASIS_POINTS * totalShares +
+            maxMintableRatio * totalShares -
+            TOTAL_BASIS_POINTS -
+            maxMintableRatio * totalShares * totalValue_ -
+            maxMintableRatio
+        ) / (
+            totalPooledEther * (TOTAL_BASIS_POINTS - maxMintableRatio)
+        );
     }
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
