@@ -49,6 +49,7 @@ export async function main() {
   const v3TemporaryAdmin = await deployWithoutProxy(Sk.v3TemporaryAdmin, "V3TemporaryAdmin", deployer, [
     agentAddress,
     gateSealAddress,
+    parameters.chainSpec.isHoodi,
   ]);
 
   //
@@ -80,7 +81,7 @@ export async function main() {
   //
 
   // Prepare initialization data for Burner.initialize(address admin, bool isMigrationAllowed)
-  const isMigrationAllowed = parameters.burner?.isMigrationAllowed ?? true;
+  const isMigrationAllowed = parameters.burner.isMigrationAllowed;
   const burnerInterface = await ethers.getContractFactory("Burner");
   const burnerInitData = burnerInterface.interface.encodeFunctionData("initialize", [
     v3TemporaryAdmin.address,

@@ -14,7 +14,6 @@ if (!EVM_SCRIPT_EXECUTOR) {
 
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
-  // readNetworkState();
 
   const vaultsAdapterMock_ = await deployWithoutProxy(Sk.vaultsAdapter, "VaultsAdapterMock", deployer, [
     EVM_SCRIPT_EXECUTOR,

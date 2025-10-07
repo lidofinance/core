@@ -80,14 +80,16 @@ contract V3TemporaryAdmin {
 
     address public immutable AGENT;
     address public immutable GATE_SEAL;
+    bool public immutable IS_HOODI;
 
     bool public isSetupComplete;
 
-    constructor(address _agent, address _gateSeal) {
+    constructor(address _agent, address _gateSeal, bool _isHoodi) {
         if (_agent == address(0)) revert ZeroAddress();
         if (_gateSeal == address(0)) revert ZeroAddress();
         AGENT = _agent;
         GATE_SEAL = _gateSeal;
+        IS_HOODI = _isHoodi;
     }
 
     /**
@@ -100,10 +102,10 @@ contract V3TemporaryAdmin {
 
         IStakingRouter.StakingModule[] memory stakingModules = IStakingRouter(_stakingRouter).getStakingModules();
 
-        // Find the Community Staking module (index 2)
+        // Find the Community Staking module (index 2 or 3 on Hoodi)
         if (stakingModules.length <= 2) revert CsmModuleNotFound();
 
-        IStakingRouter.StakingModule memory csm = stakingModules[2];
+        IStakingRouter.StakingModule memory csm = stakingModules[IS_HOODI ? 3 : 2];
         if (keccak256(bytes(csm.name)) != keccak256(bytes("Community Staking"))) {
             revert CsmModuleNotFound();
         }
@@ -198,6 +200,7 @@ contract V3TemporaryAdmin {
     /**
      * @notice Setup Burner with required roles and transfer admin to agent
      * @param _burner The Burner contract address
+     * @param _accounting The Accounting contract address
      * @param _csmAccounting The CSM Accounting contract address
      */
     function _setupBurner(

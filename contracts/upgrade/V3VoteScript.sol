@@ -30,7 +30,7 @@ contract V3VoteScript is OmnibusBase {
     //
     // Constants
     //
-    uint256 public constant VOTE_ITEMS_COUNT = 13;
+    uint256 public constant VOTE_ITEMS_COUNT = 14;
 
     //
     // Immutables
@@ -186,6 +186,16 @@ contract V3VoteScript is OmnibusBase {
         voteItems[index++] = VoteItem({
             description: "13. Call UpgradeTemplateV3.finishUpgrade",
             call: _forwardCall(TEMPLATE.AGENT(), params.upgradeTemplate, abi.encodeCall(V3Template.finishUpgrade, ()))
+        });
+
+        // Revoke REQUEST_BURN_SHARES_ROLE from Hoodi Sandbox module (only on Hoodi)
+        voteItems[index++] = VoteItem({
+            description: "14. Revoke REQUEST_BURN_SHARES_ROLE from Hoodi Sandbox",
+            call: _forwardCall(
+                TEMPLATE.AGENT(),
+                TEMPLATE.OLD_BURNER(),
+                abi.encodeCall(IAccessControl.revokeRole, (requestBurnSharesRole, TEMPLATE.HOODI_SANDBOX_MODULE()))
+            )
         });
 
         assert(index == VOTE_ITEMS_COUNT);

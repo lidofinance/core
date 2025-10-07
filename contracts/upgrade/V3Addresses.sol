@@ -130,6 +130,7 @@ contract V3Addresses {
     address public immutable NODE_OPERATORS_REGISTRY;
     address public immutable SIMPLE_DVT;
     address public immutable CSM_ACCOUNTING;
+    address public immutable HOODI_SANDBOX_MODULE;
 
     constructor(
         V3AddressesParams memory params
@@ -196,9 +197,18 @@ contract V3Addresses {
             IStakingRouter.StakingModule memory simpleDvt = stakingModules[1];
             if (_hash(simpleDvt.name) != _hash(SIMPLE_DVT_MODULE_NAME)) revert IncorrectStakingModuleName(simpleDvt.name);
             SIMPLE_DVT = simpleDvt.stakingModuleAddress;
-            IStakingRouter.StakingModule memory csm = stakingModules[2];
+
+            // NB: there is additional module on Hoodi before CSM
+            uint256 csmIndex = stakingModules.length - 1;
+            IStakingRouter.StakingModule memory csm = stakingModules[csmIndex];
             if (_hash(csm.name) != _hash(CSM_MODULE_NAME)) revert IncorrectStakingModuleName(csm.name);
             CSM_ACCOUNTING = ICSModule(csm.stakingModuleAddress).accounting();
+
+            if (stakingModules.length == 4) {
+                IStakingRouter.StakingModule memory hoodiSandbox = stakingModules[2];
+                if (_hash(hoodiSandbox.name) != _hash("Sandbox")) revert IncorrectStakingModuleName(hoodiSandbox.name);
+                HOODI_SANDBOX_MODULE = hoodiSandbox.stakingModuleAddress;
+            }
         }
     }
 

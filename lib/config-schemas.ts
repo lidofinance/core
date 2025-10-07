@@ -96,11 +96,11 @@ export const UpgradeParametersSchema = z.object({
   chainSpec: ChainSpecSchema.extend({
     genesisTime: z.number().int(),
     depositContract: EthereumAddressSchema,
+    isHoodi: z.boolean(),
   }),
   gateSealForVaults: z.object({
     address: EthereumAddressSchema,
   }),
-  validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   vaultHub: VaultHubSchema,
   lazyOracle: LazyOracleSchema,
   predepositGuarantee: PredepositGuaranteeSchema.extend({
@@ -113,11 +113,6 @@ export const UpgradeParametersSchema = z.object({
   burner: BurnerSchema,
   oracleVersions: OracleVersionsSchema.optional(),
   aragonAppVersions: AragonAppVersionsSchema.optional(),
-  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
-  triggerableWithdrawals: z.object({
-    exit_events_lookback_window_in_slots: PositiveIntSchema,
-    nor_exit_deadline_in_sec: PositiveIntSchema,
-  }),
 });
 
 // Gate seal schema (for scratch deployment)

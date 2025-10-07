@@ -271,6 +271,11 @@
       "constructorArgs": ["0xEEf274E065964Ec22Bd44ddEbE7557c6638b368C"]
     }
   },
+  "aragon-lido-app-repo": {
+    "proxy": {
+      "address": "0xd3545AC0286A94970BacC41D3AF676b89606204F"
+    }
+  },
   "aragon-repo-base": {
     "contract": "@aragon/os/contracts/apm/Repo.sol",
     "address": "0x41734bEBDe003976DF1B5Cf1D727Ede0222df783",
@@ -311,7 +316,7 @@
     "slotsPerEpoch": 32,
     "secondsPerSlot": 12,
     "genesisTime": 1742213400,
-    "depositContract": "0x00000000219ab540356cBB839Cbe05303d7705Fa"
+    "depositContractAddress": "0x00000000219ab540356cBB839Cbe05303d7705Fa"
   },
   "createAppReposTx": "0xda42173c8a2bd75956437d03e275d32d583650cf4673693716d20c72ac94c137",
   "daoAragonId": "lido-dao",
@@ -358,6 +363,16 @@
       200
     ]
   },
+  "dg:dualGovernance": {
+    "proxy": {
+      "address": "0x9CAaCCc62c66d817CC59c44780D1b722359795bF"
+    }
+  },
+  "dg:emergencyProtectedTimelock": {
+    "proxy": {
+      "address": "0x0A5E22782C0Bd4AddF10D771f0bF0406B038282d"
+    }
+  },
   "dummyEmptyContract": {
     "contract": "contracts/0.8.9/utils/DummyEmptyContract.sol",
     "address": "0x3Ff49B57A7cc523c26567AF97F51C09f572A200A",
@@ -388,6 +403,9 @@
       "address": "0x656a075aa26ed21253C3184B29F6a3EB1CA0fa4c",
       "constructorArgs": []
     }
+  },
+  "easyTrackEVMScriptExecutor": {
+    "address": "0x79a20FD0FA36453B2F45eAbab19bfef43575Ba9E"
   },
   "evmScriptRegistryFactory": {
     "contract": "@aragon/os/contracts/factory/EVMScriptRegistryFactory.sol",
@@ -605,42 +623,38 @@
     }
   },
   "triggerableWithdrawalsGateway": {
-    "implementation": {
-      "contract": "contracts/0.8.9/TriggerableWithdrawalsGateway.sol",
-      "address": "0x6679090D92b08a2a686eF8614feECD8cDFE209db",
-      "constructorArgs": [
-        "0x0534aA41907c9631fae990960bCC72d75fA7cfeD",
-        "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
-        11200,
-        1,
-        48
-      ]
-    }
+    "contract": "contracts/0.8.9/TriggerableWithdrawalsGateway.sol",
+    "address": "0x6679090D92b08a2a686eF8614feECD8cDFE209db",
+    "constructorArgs": [
+      "0x0534aA41907c9631fae990960bCC72d75fA7cfeD",
+      "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
+      11200,
+      1,
+      48
+    ]
   },
   "validatorExitDelayVerifier": {
-    "implementation": {
-      "contract": "contracts/0.8.25/ValidatorExitDelayVerifier.sol",
-      "address": "0xa5F5A9360275390fF9728262a29384399f38d2f0",
-      "constructorArgs": [
-        "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
-        {
-          "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
-          "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
-          "gIFirstHistoricalSummaryPrev": "0x000000000000000000000000000000000000000000000000000000b600000018",
-          "gIFirstHistoricalSummaryCurr": "0x000000000000000000000000000000000000000000000000000000b600000018",
-          "gIFirstBlockRootInSummaryPrev": "0x000000000000000000000000000000000000000000000000000000000040000d",
-          "gIFirstBlockRootInSummaryCurr": "0x000000000000000000000000000000000000000000000000000000000040000d"
-        },
-        1,
-        1,
-        0,
-        8192,
-        32,
-        12,
-        1742213400,
-        98304
-      ]
-    }
+    "contract": "contracts/0.8.25/ValidatorExitDelayVerifier.sol",
+    "address": "0xa5F5A9360275390fF9728262a29384399f38d2f0",
+    "constructorArgs": [
+      "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
+      {
+        "gIFirstValidatorPrev": "0x0000000000000000000000000000000000000000000000000096000000000028",
+        "gIFirstValidatorCurr": "0x0000000000000000000000000000000000000000000000000096000000000028",
+        "gIFirstHistoricalSummaryPrev": "0x000000000000000000000000000000000000000000000000000000b600000018",
+        "gIFirstHistoricalSummaryCurr": "0x000000000000000000000000000000000000000000000000000000b600000018",
+        "gIFirstBlockRootInSummaryPrev": "0x000000000000000000000000000000000000000000000000000000000040000d",
+        "gIFirstBlockRootInSummaryCurr": "0x000000000000000000000000000000000000000000000000000000000040000d"
+      },
+      1,
+      1,
+      0,
+      8192,
+      32,
+      12,
+      1742213400,
+      98304
+    ]
   },
   "validatorsExitBusOracle": {
     "deployParameters": {
