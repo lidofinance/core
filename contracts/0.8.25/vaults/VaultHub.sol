@@ -1052,16 +1052,12 @@ contract VaultHub is PausableUntilWithRoles {
 
         uint256 unsettledLidoFees = _unsettledLidoFeesValue(_record);
         if (unsettledLidoFees > 0) {
-            uint256 _vaultBalance = _availableBalance(_vault);
-            if (_vaultBalance < unsettledLidoFees && _forceFullFeesSettlement) {
+            uint256 balance = Math256.min(_availableBalance(_vault), _totalValue(_record));
+            if (balance < unsettledLidoFees && _forceFullFeesSettlement) {
                 revert NoUnsettledLidoFeesShouldBeLeft(_vault, unsettledLidoFees);
             }
 
-            uint256 withdrawable = Math256.min(
-                Math256.min(_vaultBalance, _totalValue(_record)),
-                unsettledLidoFees
-            );
-
+            uint256 withdrawable = Math256.min(balance, unsettledLidoFees);
             if (withdrawable > 0) {
                 _settleLidoFees(_vault, _record, _connection, withdrawable);
             }
