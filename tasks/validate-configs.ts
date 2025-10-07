@@ -86,6 +86,10 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     reason: "Deposit contract address is set via environment variables in scratch deployment",
   },
   {
+    path: "chainSpec.isHoodi",
+    reason: "Scratch is on fork",
+  },
+  {
     path: "gateSealForVaults.address",
     reason: "Gate seal configuration differs between upgrade and scratch contexts",
   },
