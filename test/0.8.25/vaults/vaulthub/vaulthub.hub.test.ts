@@ -1115,6 +1115,34 @@ describe("VaultHub.sol:hub", () => {
       );
     });
 
+    it("reverts if unsettled lido fees are greater than the balance", async () => {
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
+
+      const totalValue = await vaultHub.totalValue(vaultAddress);
+      const cumulativeLidoFees = totalValue - 1n;
+      await reportVault({ vault, totalValue, cumulativeLidoFees });
+
+      await setBalance(vaultAddress, cumulativeLidoFees - 1n);
+
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NoUnsettledLidoFeesShouldBeLeft",
+      );
+    });
+
+    it("reverts if unsettled lido fees are greater than the total value", async () => {
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
+
+      const totalValue = await vaultHub.totalValue(vaultAddress);
+      const cumulativeLidoFees = totalValue + 1n;
+      await reportVault({ vault, totalValue, cumulativeLidoFees });
+
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NoUnsettledLidoFeesShouldBeLeft",
+      );
+    });
+
     it("disconnects the vault", async () => {
       await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress))
         .to.emit(vaultHub, "VaultDisconnectInitiated")
