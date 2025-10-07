@@ -1200,6 +1200,8 @@ contract VaultHub is PausableUntilWithRoles {
             return type(uint256).max;
         }
 
+        // (((L * E + S - 1) / S) - ((X * E + S - 1) / S)) / V - ((X * E + S - 1) / S) = M / B
+
         // Solve the equation for X:
         // LS - liabilityShares, TV - sharesByTotalValue
         // MR - maxMintableRatio, 100 - TOTAL_BASIS_POINTS, RR - reserveRatio
@@ -1216,14 +1218,14 @@ contract VaultHub is PausableUntilWithRoles {
         // RR = 100 - MR
         // X = (LS * 100 - TV * MR) / RR
 
-        uint256 candidateShortfall = (liabilityShares_ * TOTAL_BASIS_POINTS - sharesByTotalValue * maxMintableRatio) / reserveRatioBP;
-        uint256 rebalanceEth = _getPooledEthBySharesRoundUp(candidateShortfall);
+        int256 E = int256(LIDO.getTotalPooledEther());
+        int256 S = int256(LIDO.getTotalShares());
+        int256 V = int256(totalValue_);
+        int256 M = int256(maxMintableRatio);
+        int256 L = int256(liabilityShares_);
+        int256 B = int256(TOTAL_BASIS_POINTS);
 
-        if (_isThresholdBreached(totalValue_ - rebalanceEth, liabilityShares_ - candidateShortfall, reserveRatioBP)) {
-            candidateShortfall += 1;
-        }
-
-        return candidateShortfall;
+        return uint256(((E * B * L) + (B * S) - B - (M * S * V) + (M * S) - M) / (E * (B - M)));
     }
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
