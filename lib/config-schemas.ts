@@ -100,10 +100,6 @@ export const UpgradeParametersSchema = z.object({
   gateSealForVaults: z.object({
     address: EthereumAddressSchema,
   }),
-  easyTrack: z.object({
-    evmScriptExecutor: EthereumAddressSchema,
-    vaultsAdapter: EthereumAddressSchema,
-  }),
   validatorExitDelayVerifier: ValidatorExitDelayVerifierSchema,
   vaultHub: VaultHubSchema,
   lazyOracle: LazyOracleSchema,

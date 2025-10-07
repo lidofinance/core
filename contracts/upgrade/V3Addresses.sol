@@ -4,6 +4,10 @@ pragma solidity 0.8.25;
 import {IAccessControlEnumerable} from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
+interface IVaultsAdapter {
+    function evmScriptExecutor() external view returns (address);
+}
+
 interface IStakingRouter is IAccessControlEnumerable {
     struct StakingModule {
         uint24 id;
@@ -53,7 +57,6 @@ contract V3Addresses {
         address gateSealForVaults;
 
         // EasyTrack addresses
-        address evmScriptExecutor;
         address vaultsAdapter;
 
         // Existing proxies and contracts
@@ -107,8 +110,8 @@ contract V3Addresses {
     //
     // -------- EasyTrack addresses --------
     //
-    address public immutable EVM_SCRIPT_EXECUTOR;
     address public immutable VAULTS_ADAPTER;
+    address public immutable EVM_SCRIPT_EXECUTOR;
 
     //
     // -------- Unchanged contracts --------
@@ -157,7 +160,7 @@ contract V3Addresses {
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;
         GATE_SEAL = params.gateSealForVaults;
-        EVM_SCRIPT_EXECUTOR = params.evmScriptExecutor;
+        EVM_SCRIPT_EXECUTOR = IVaultsAdapter(params.vaultsAdapter).evmScriptExecutor();
         VAULTS_ADAPTER = params.vaultsAdapter;
 
         //

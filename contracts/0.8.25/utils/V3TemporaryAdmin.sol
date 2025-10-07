@@ -54,6 +54,10 @@ interface ICSModule {
     function accounting() external view returns (address);
 }
 
+interface IVaultsAdapter {
+    function evmScriptExecutor() external view returns (address);
+}
+
 interface ILidoLocator {
     function vaultHub() external view returns (address);
     function predepositGuarantee() external view returns (address);
@@ -111,13 +115,11 @@ contract V3TemporaryAdmin {
      * @notice Complete setup for all contracts - grants all roles and transfers admin to agent
      * @dev This is the main external function that should be called after deployment
      * @param _lidoLocatorImpl The new LidoLocator implementation address
-     * @param _evmScriptExecutor The EVM script executor address from easyTrack
      * @param _vaultsAdapter The vaults' adapter address from easyTrack
      */
-    function completeSetup(address _lidoLocatorImpl, address _evmScriptExecutor, address _vaultsAdapter) external {
+    function completeSetup(address _lidoLocatorImpl, address _vaultsAdapter) external {
         if (isSetupComplete) revert SetupAlreadyCompleted();
         if (_lidoLocatorImpl == address(0)) revert ZeroLidoLocator();
-        if (_evmScriptExecutor == address(0)) revert ZeroEvmScriptExecutor();
         if (_vaultsAdapter == address(0)) revert ZeroVaultsAdapter();
 
         isSetupComplete = true;
@@ -128,7 +130,7 @@ contract V3TemporaryAdmin {
 
         _setupPredepositGuarantee(locator.predepositGuarantee());
         _setupLazyOracle(locator.lazyOracle());
-        _setupOperatorGrid(locator.operatorGrid(), _evmScriptExecutor, _vaultsAdapter);
+        _setupOperatorGrid(locator.operatorGrid(), IVaultsAdapter(_vaultsAdapter).evmScriptExecutor(), _vaultsAdapter);
         _setupBurner(locator.burner(), locator.accounting(), csmAccounting);
         _setupVaultHub(locator.vaultHub(), _vaultsAdapter);
     }

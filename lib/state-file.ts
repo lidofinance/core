@@ -110,6 +110,8 @@ export enum Sk {
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
+  // Easy Track
+  vaultsAdapter = "vaultsAdapter",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -172,6 +174,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorConsolidationRequests:
     case Sk.twVoteScript:
     case Sk.v3VoteScript:
+    case Sk.vaultsAdapter:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);

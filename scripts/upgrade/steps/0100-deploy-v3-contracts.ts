@@ -40,8 +40,7 @@ export async function main() {
   const wstethAddress = state[Sk.wstETH].address;
   const locator = await loadContract<LidoLocator>("LidoLocator", locatorAddress);
   const gateSealAddress = parameters.gateSealForVaults.address;
-  const evmScriptExecutorAddress = parameters.easyTrack.evmScriptExecutor;
-  const vaultsAdapterAddress = parameters.easyTrack.vaultsAdapter;
+  const vaultsAdapterAddress = getAddress(Sk.vaultsAdapter, state);
 
   //
   // Deploy V3TemporaryAdmin
@@ -345,12 +344,7 @@ export async function main() {
   // Complete setup: set allowed codehash, grant all roles to agent, transfer admin
   //
   const v3TemporaryAdminContract = await loadContract<V3TemporaryAdmin>("V3TemporaryAdmin", v3TemporaryAdmin.address);
-  await makeTx(
-    v3TemporaryAdminContract,
-    "completeSetup",
-    [lidoLocatorImpl.address, evmScriptExecutorAddress, vaultsAdapterAddress],
-    {
-      from: deployer,
-    },
-  );
+  await makeTx(v3TemporaryAdminContract, "completeSetup", [lidoLocatorImpl.address, vaultsAdapterAddress], {
+    from: deployer,
+  });
 }

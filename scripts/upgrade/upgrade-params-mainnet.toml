@@ -14,12 +14,7 @@ depositContract = "0x00000000219ab540356cBB839Cbe05303d7705Fa"  # Official ETH2 
 address = "0x0000000000000000000000000000000f00f00F00"  # TODO: update the placeholder
 
 [easyTrack]
-# TODO: maybe take the address from vaultsAdapter.evmScriptExecutor()
-evmScriptExecutor = "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977" # see https://docs.lido.fi/deployed-contracts/#easy-track
-
-# see https://github.com/lidofinance/easy-track/pull/86/files#diff-53d787db7bce77eb7c0d871e63d490e4ccdc31a407f27acba8125a69a2d94139
-# TODO: update the placeholder
-vaultsAdapter = "0x0000000000000000000000000000000F00F00F77"
+# TODO
 
 # Validator exit delay verifier configuration for managing validator exits
 [validatorExitDelayVerifier]

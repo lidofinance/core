@@ -40,8 +40,7 @@ export async function main() {
     parameters.gateSealForVaults.address,
 
     // EasyTrack addresses
-    parameters.easyTrack.evmScriptExecutor,
-    parameters.easyTrack.vaultsAdapter,
+    getAddress(Sk.vaultsAdapter, state),
 
     // Existing proxies and contracts
     getAddress(Sk.aragonKernel, state),

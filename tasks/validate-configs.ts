@@ -90,10 +90,6 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     reason: "Gate seal configuration differs between upgrade and scratch contexts",
   },
   {
-    path: "easyTrack.evmScriptExecutor",
-    reason: "EasyTrack configuration is upgrade-specific",
-  },
-  {
     path: "easyTrack.vaultsAdapter",
     reason: "EasyTrack configuration is upgrade-specific",
   },

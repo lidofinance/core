@@ -661,6 +661,11 @@
       "constructorArgs": [12, 1742213400, "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"]
     }
   },
+  "vaultsAdapter": {
+    "contract": "contracts/upgrade/mocks/VaultsAdapterMock.sol",
+    "address": "0xa0E4a274926d356a1208834Ef64c0E29e2206642",
+    "constructorArgs": ["0xbf91a57E194c2c7a758247eC12648Fc5651478db"]
+  },
   "vestingParams": {
     "unvestedTokensAmount": "0",
     "holders": {

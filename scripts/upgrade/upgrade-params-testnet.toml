@@ -13,10 +13,7 @@ depositContract = "0x00000000219ab540356cBB839Cbe05303d7705Fa"  # Ethereum Hoodi
 address = "0x0000000000000000000000000000000f00f00F00"  # TODO: update the placeholder
 
 [easyTrack]
-# https://docs.lido.fi/deployed-contracts/hoodi/#easy-track
-evmScriptExecutor = "0x79a20FD0FA36453B2F45eAbab19bfef43575Ba9E"
-# see https://github.com/lidofinance/easy-track/pull/86/files
-vaultHubAdapter = "0x0000000000000000000000000000000F00F00F77" # TODO: update the placeholder
+# TODO
 
 # Vault hub configuration for managing staking vaults
 [vaultHub]
