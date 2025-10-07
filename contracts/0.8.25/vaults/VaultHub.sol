@@ -1251,13 +1251,6 @@ contract VaultHub is PausableUntilWithRoles {
         // X = ------------------------------
         //              E(B - M)
 
-        // int256 E = int256(LIDO.getTotalPooledEther());
-        // int256 S = int256(LIDO.getTotalShares());
-        // int256 V = int256(totalValue_);
-        // int256 R = int256(reserveRatioBP);
-        // int256 L = int256(liabilityShares_);
-        // int256 B = int256(TOTAL_BASIS_POINTS);
-
         uint256 totalPooledEther = LIDO.getTotalPooledEther();
         uint256 totalShares = LIDO.getTotalShares();
 
