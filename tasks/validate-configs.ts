@@ -94,7 +94,31 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     reason: "Gate seal configuration differs between upgrade and scratch contexts",
   },
   {
+    path: "gateSealForVaults.sealingCommittee",
+    reason: "Gate seal configuration differs between upgrade and scratch contexts",
+  },
+  {
+    path: "gateSealForVaults.sealDuration",
+    reason: "Gate seal configuration differs between upgrade and scratch contexts",
+  },
+  {
     path: "easyTrack.vaultsAdapter",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.trustedCaller",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.initialValidatorExitFeeLimit",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.maxGroupShareLimit",
+    reason: "EasyTrack configuration is upgrade-specific",
+  },
+  {
+    path: "easyTrack.maxDefaultTierShareLimit",
     reason: "EasyTrack configuration is upgrade-specific",
   },
   {
