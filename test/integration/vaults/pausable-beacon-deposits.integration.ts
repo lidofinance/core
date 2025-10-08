@@ -77,30 +77,38 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
 
       await expect(dashboard.pauseBeaconChainDeposits())
-        .to.emit(stakingVault, "BeaconChainDepositsPaused")
-        .and.to.emit(vaultHub, "BeaconChainDepositsPausedByOwner");
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(stakingVaultAddress, true)
+        .to.emit(stakingVault, "BeaconChainDepositsPaused");
 
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
       const connection = await vaultHub.vaultConnection(stakingVaultAddress);
-      expect(connection.isBeaconDepositsManuallyPaused).to.be.true;
+      expect(connection.beaconChainDepositsPauseIntent).to.be.true;
 
-      await expect(dashboard.pauseBeaconChainDeposits()).to.be.revertedWithCustomError(vaultHub, "ResumedExpected");
+      await expect(dashboard.pauseBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vaultHub,
+        "PauseIntentAlreadySet",
+      );
     });
 
     it("Resume beacon deposits manually", async () => {
       await dashboard.pauseBeaconChainDeposits(); // Pause first
 
       await expect(dashboard.resumeBeaconChainDeposits())
-        .to.emit(stakingVault, "BeaconChainDepositsResumed")
-        .and.to.emit(vaultHub, "BeaconChainDepositsResumedByOwner");
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(stakingVaultAddress, false)
+        .to.emit(stakingVault, "BeaconChainDepositsResumed");
 
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
 
       const connection = await vaultHub.vaultConnection(stakingVaultAddress);
-      expect(connection.isBeaconDepositsManuallyPaused).to.be.false;
+      expect(connection.beaconChainDepositsPauseIntent).to.be.false;
 
-      await expect(dashboard.resumeBeaconChainDeposits()).to.be.revertedWithCustomError(vaultHub, "PausedExpected");
+      await expect(dashboard.resumeBeaconChainDeposits()).to.be.revertedWithCustomError(
+        vaultHub,
+        "PauseIntentAlreadyUnset",
+      );
     });
   });
 
@@ -113,7 +121,7 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
       const connection = await vaultHub.vaultConnection(stakingVaultAddress);
-      expect(connection.isBeaconDepositsManuallyPaused).to.be.false;
+      expect(connection.beaconChainDepositsPauseIntent).to.be.false;
     });
 
     it("Pause and resume beacon deposits on redemptions accruance and rebalancing", async () => {
@@ -150,15 +158,16 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
 
       const connection = await vaultHub.vaultConnection(stakingVaultAddress);
-      expect(connection.isBeaconDepositsManuallyPaused).to.be.false;
+      expect(connection.beaconChainDepositsPauseIntent).to.be.false;
 
       // Pause by owner
       await expect(dashboard.pauseBeaconChainDeposits())
-        .to.emit(vaultHub, "BeaconChainDepositsPausedByOwner")
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(stakingVaultAddress, true)
         .and.not.emit(stakingVault, "BeaconChainDepositsPaused"); // already paused by report
 
       // Check that owner now pauses the vault
-      expect((await vaultHub.vaultConnection(stakingVaultAddress)).isBeaconDepositsManuallyPaused).to.be.true;
+      expect((await vaultHub.vaultConnection(stakingVaultAddress)).beaconChainDepositsPauseIntent).to.be.true;
 
       await dashboard.fund({ value: ether("1") });
 
@@ -169,15 +178,56 @@ describe("Integration: Vault hub beacon deposits pause flows", () => {
       );
 
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
-      expect((await vaultHub.vaultConnection(stakingVaultAddress)).isBeaconDepositsManuallyPaused).to.be.true;
+      expect((await vaultHub.vaultConnection(stakingVaultAddress)).beaconChainDepositsPauseIntent).to.be.true;
 
       // Check that owner can resume beacon deposits
       await expect(dashboard.resumeBeaconChainDeposits())
-        .to.emit(stakingVault, "BeaconChainDepositsResumed") // should not be resumed by report
-        .and.to.emit(vaultHub, "BeaconChainDepositsResumedByOwner");
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(stakingVaultAddress, false)
+        .to.emit(stakingVault, "BeaconChainDepositsResumed"); // should not be resumed by report
 
       expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
-      expect((await vaultHub.vaultConnection(stakingVaultAddress)).isBeaconDepositsManuallyPaused).to.be.false;
+      expect((await vaultHub.vaultConnection(stakingVaultAddress)).beaconChainDepositsPauseIntent).to.be.false;
+    });
+
+    it("Correctly handles paused beacon deposits when allowed by owner", async () => {
+      await dashboard.fund({ value: ether("1") });
+      await dashboard.mintStETH(agentSigner, ether("1"));
+
+      await setBalance(await stakingVault.getAddress(), ether("1") - 1n); // simulate lower than redemption balance
+
+      // +1n to make sure to have >= 1 ether to pause the vault beacon deposits
+      await expect(vaultHub.connect(redemptionMaster).setLiabilitySharesTarget(stakingVaultAddress, 0n)).to.emit(
+        stakingVault,
+        "BeaconChainDepositsPaused",
+      );
+
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.true;
+
+      const connection = await vaultHub.vaultConnection(stakingVaultAddress);
+      expect(connection.beaconChainDepositsPauseIntent).to.be.false;
+
+      // Pause by owner
+      await expect(dashboard.pauseBeaconChainDeposits())
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(stakingVaultAddress, true)
+        .and.not.emit(stakingVault, "BeaconChainDepositsPaused"); // already paused by report
+
+      // Check that owner now pauses the vault
+      expect((await vaultHub.vaultConnection(stakingVaultAddress)).beaconChainDepositsPauseIntent).to.be.true;
+
+      await dashboard.fund({ value: ether("1") });
+
+      await expect(dashboard.resumeBeaconChainDeposits())
+        .to.emit(vaultHub, "BeaconChainDepositsPauseIntentSet")
+        .withArgs(stakingVaultAddress, false)
+        .and.not.to.emit(stakingVault, "BeaconChainDepositsResumed");
+
+      // Check that vault is resumed automatically as owner allowed it
+      await expect(vaultHub.forceRebalance(stakingVaultAddress)).to.emit(stakingVault, "BeaconChainDepositsResumed");
+
+      expect(await stakingVault.beaconChainDepositsPaused()).to.be.false;
+      expect((await vaultHub.vaultConnection(stakingVaultAddress)).beaconChainDepositsPauseIntent).to.be.false;
     });
   });
 });

@@ -13,9 +13,9 @@ library UnstructuredStorageExt {
     using UnstructuredStorage for bytes32;
 
     uint256 constant internal UINT128_LOW_MASK = ~uint128(0);
-    uint256 constant internal UINT128_HIGH_MASK = UINT128_LOW_MASK << 128;
+    uint256 constant internal UINT128_HIGH_MASK = ~uint256(0) << 128;
     uint256 constant internal UINT160_LOW_MASK = ~uint160(0);
-    uint256 constant internal UINT96_HIGH_MASK = UINT160_LOW_MASK << 160;
+    uint256 constant internal UINT96_HIGH_MASK = ~uint256(0) << 160;
 
     function getLowUint128(bytes32 position) internal view returns (uint256) {
         return position.getStorageUint256() & UINT128_LOW_MASK;

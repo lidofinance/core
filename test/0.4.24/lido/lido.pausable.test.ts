@@ -52,12 +52,17 @@ describe("Lido.sol:pausable", () => {
       await expect(lido.resumeStaking()).to.emit(lido, "StakingResumed");
       expect(await lido.isStakingPaused()).to.equal(false);
     });
+
+    it("Reverts if staking is already resumed", async () => {
+      await lido.resume();
+
+      await expect(lido.resumeStaking()).to.be.revertedWith("ALREADY_RESUMED");
+    });
   });
 
   context("pauseStaking", () => {
     beforeEach(async () => {
       await lido.resume();
-      await expect(lido.resumeStaking()).to.emit(lido, "StakingResumed");
       expect(await lido.isStakingPaused()).to.equal(false);
     });
 
@@ -68,6 +73,12 @@ describe("Lido.sol:pausable", () => {
 
     it("Reverts if the caller is unauthorized", async () => {
       await expect(lido.connect(stranger).pauseStaking()).to.be.revertedWith("APP_AUTH_FAILED");
+    });
+
+    it("Reverts if staking is already paused", async () => {
+      await lido.pauseStaking();
+
+      await expect(lido.pauseStaking()).to.be.revertedWith("ALREADY_PAUSED");
     });
   });
 

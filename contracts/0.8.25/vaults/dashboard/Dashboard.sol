@@ -161,9 +161,20 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Returns the amount of shares to rebalance to restore vault healthiness or to cover redemptions
+     * @dev returns UINT256_MAX if it's impossible to make the vault healthy using rebalance
      */
     function healthShortfallShares() external view returns (uint256) {
         return VAULT_HUB.healthShortfallShares(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of ether required to cover obligations shortfall of the vault
+     * @dev returns UINT256_MAX if it's impossible to cover obligations shortfall
+     * @dev NB: obligationsShortfallValue includes healthShortfallShares converted to ether and any unsettled Lido fees
+     *          in case they are greater than the minimum beacon deposit
+     */
+    function obligationsShortfallValue() external view returns (uint256) {
+        return VAULT_HUB.obligationsShortfallValue(address(_stakingVault()));
     }
 
     /**
@@ -247,9 +258,9 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Accepts the ownership over the StakingVault transferred from VaultHub on disconnect
-     * and immediately transfers it to a new pending owner. This new owner will have to accept the ownership
-     * on the StakingVault contract.
+     * @notice Accepts the ownership over the disconnected StakingVault transferred from VaultHub
+     *         and immediately passes it to a new pending owner. This new owner will have to accept the ownership
+     *         on the StakingVault contract.
      * @param _newOwner The address to transfer the StakingVault ownership to.
      */
     function abandonDashboard(address _newOwner) external {

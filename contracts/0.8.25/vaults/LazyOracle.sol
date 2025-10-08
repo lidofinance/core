@@ -226,27 +226,38 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         VaultInfo[] memory batch = new VaultInfo[](batchSize);
         for (uint256 i = 0; i < batchSize; i++) {
             address vaultAddress = vaultHub.vaultByIndex(_offset + i + 1);
-            IStakingVault vault = IStakingVault(vaultAddress);
-            VaultHub.VaultConnection memory connection = vaultHub.vaultConnection(vaultAddress);
-            VaultHub.VaultRecord memory record = vaultHub.vaultRecord(vaultAddress);
-            batch[i] = VaultInfo(
-                vaultAddress,
-                vault.availableBalance() + vault.stagedBalance(),
-                record.inOutDelta.currentValue(),
-                vault.withdrawalCredentials(),
-                record.liabilityShares,
-                record.maxLiabilityShares,
-                _mintableStETH(vaultAddress),
-                connection.shareLimit,
-                connection.reserveRatioBP,
-                connection.forcedRebalanceThresholdBP,
-                connection.infraFeeBP,
-                connection.liquidityFeeBP,
-                connection.reservationFeeBP,
-                vaultHub.isPendingDisconnect(vaultAddress)
-            );
+            batch[i] = _vaultInfo(vaultAddress, vaultHub);
         }
         return batch;
+    }
+
+    /// @notice returns the vault data info
+    /// @param _vault the address of the vault
+    /// @return the vault data info
+    function vaultInfo(address _vault) external view returns (VaultInfo memory) {
+        return _vaultInfo(_vault, _vaultHub());
+    }
+
+    function _vaultInfo(address _vault, VaultHub _vh) internal view returns (VaultInfo memory) {
+        IStakingVault vault = IStakingVault(_vault);
+        VaultHub.VaultConnection memory connection = _vh.vaultConnection(_vault);
+        VaultHub.VaultRecord memory record = _vh.vaultRecord(_vault);
+        return VaultInfo(
+            _vault,
+            vault.availableBalance() + vault.stagedBalance(),
+            record.inOutDelta.currentValue(),
+            vault.withdrawalCredentials(),
+            record.liabilityShares,
+            record.maxLiabilityShares,
+            _mintableStETH(_vault),
+            connection.shareLimit,
+            connection.reserveRatioBP,
+            connection.forcedRebalanceThresholdBP,
+            connection.infraFeeBP,
+            connection.liquidityFeeBP,
+            connection.reservationFeeBP,
+            _vh.isPendingDisconnect(_vault)
+        );
     }
 
     /**

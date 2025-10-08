@@ -310,7 +310,7 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Checks the confirming roles and sets the owner on the StakingVault.
+     * @dev Checks the confirming roles and transfer the ownership of the vault without disconnecting it from the hub
      * @param _newOwner The address to set the owner to.
      */
     function _transferVaultOwnership(address _newOwner) internal {

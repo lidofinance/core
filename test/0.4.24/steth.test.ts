@@ -495,4 +495,28 @@ describe("StETH.sol:non-ERC-20 behavior", () => {
       );
     });
   });
+
+  context("_mintShares", () => {
+    it("Reverts when minting to zero address", async () => {
+      await expect(steth.harness__mintShares(ZeroAddress, 1000n)).to.be.revertedWith("MINT_TO_ZERO_ADDR");
+    });
+
+    it("Reverts when minting to stETH contract", async () => {
+      await expect(steth.harness__mintShares(steth, 1000n)).to.be.revertedWith("MINT_TO_STETH_CONTRACT");
+    });
+
+    it("Reverts when minting shares overflow 128 bits", async () => {
+      await expect(steth.harness__mintShares(holder, 2n ** 128n)).to.be.revertedWith("SHARES_OVERFLOW");
+    });
+
+    it("Reverts when minting shares overflow 256 bits", async () => {
+      await expect(steth.harness__mintShares(holder, 2n ** 256n - 1n)).to.be.revertedWith("MATH_ADD_OVERFLOW");
+    });
+
+    it("Mints shares to the recipient", async () => {
+      const balanceOfHolderBefore = await steth.balanceOf(holder);
+      await expect(steth.harness__mintShares(holder, 1000n)).to.not.be.reverted;
+      expect(await steth.sharesOf(holder)).to.equal(balanceOfHolderBefore + 1000n);
+    });
+  });
 });

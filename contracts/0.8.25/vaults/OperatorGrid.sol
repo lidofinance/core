@@ -674,7 +674,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         emit VaultJailStatusUpdated(_vault, _isInJail);
     }
 
-    /// @notice Get vault limits
+    /// @notice Get vault's tier limits
     /// @param _vault address of the vault
     /// @return nodeOperator node operator of the vault
     /// @return tierId tier id of the vault
@@ -684,7 +684,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @return infraFeeBP infra fee of the vault
     /// @return liquidityFeeBP liquidity fee of the vault
     /// @return reservationFeeBP reservation fee of the vault
-    function vaultInfo(address _vault)
+    function vaultTierInfo(address _vault)
         external
         view
         returns (
