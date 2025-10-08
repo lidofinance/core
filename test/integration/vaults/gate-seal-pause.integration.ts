@@ -48,11 +48,14 @@ describe("Integration: GateSeal pause functionality for VaultHub and PredepositG
   let agent: HardhatEthersSigner;
   let stranger: HardhatEthersSigner;
 
-  before(async () => {
+  before(async function () {
     ctx = await getProtocolContext();
 
     originalSnapshot = await Snapshot.take();
 
+    if (ctx.isScratch) {
+      this.skip();
+    }
     await setupLidoForVaults(ctx);
 
     [owner, nodeOperator, stranger] = await ethers.getSigners();
