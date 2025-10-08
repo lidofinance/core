@@ -79,6 +79,14 @@ const TriggerableWithdrawalsGatewaySchema = z.object({
   frameDurationInSec: PositiveIntSchema,
 });
 
+// Easy track schema
+const EasyTrackSchema = z.object({
+  trustedCaller: EthereumAddressSchema,
+  initialValidatorExitFeeLimit: BigIntStringSchema,
+  maxGroupShareLimit: BigIntStringSchema,
+  maxDefaultTierShareLimit: NonNegativeIntSchema,
+});
+
 // Oracle versions schema
 const OracleVersionsSchema = z.object({
   ao_consensus_version: PositiveIntSchema,
@@ -101,6 +109,7 @@ export const UpgradeParametersSchema = z.object({
     sealDuration: PositiveIntSchema,
     sealingCommittee: EthereumAddressSchema,
   }),
+  easyTrack: EasyTrackSchema,
   vaultHub: VaultHubSchema,
   lazyOracle: LazyOracleSchema,
   predepositGuarantee: PredepositGuaranteeSchema.extend({
