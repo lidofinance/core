@@ -15,7 +15,6 @@ isHoodi = false
 address = "0x0000000000000000000000000000000f00f00F00"  # TODO: update the placeholder
 
 [easyTrack]
-locatorContract = "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"   # Lido Locator contract
 trustedCaller = "0x0000000000000000000000000000000000000000"     # Address of stVaults EasyTrack committee # TODO: update the placeholder
 initialValidatorExitFeeLimit = "100000000000000000"              # Max validator exit fee which can be spend for single key exit request
 # Phase 1: Pilot (starts with Lido V3 upgrade enacted) - https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665

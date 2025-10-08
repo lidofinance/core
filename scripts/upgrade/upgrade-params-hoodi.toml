@@ -15,7 +15,6 @@ sealDuration = 1209600  # 14 days
 sealingCommittee = "0x83BCE68B4e8b7071b2a664a26e6D3Bc17eEe3102"
 
 [easyTrack]
-locatorContract = "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"   # Lido Locator contract
 trustedCaller = "0xeBe5948787Bb3a565F67ccD93cb85A91960c472a"     # Address of stVaults EasyTrack committee
 initialValidatorExitFeeLimit = "100000000000000000"              #  Max validator exit fee which can be spend for single key exit request
 # Phase 1: Pilot (starts with Lido V3 upgrade enacted) - https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665
