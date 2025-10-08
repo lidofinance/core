@@ -23,7 +23,7 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
   if (isScratch) {
     await deployScratchProtocol();
   } else if (process.env.UPGRADE) {
-    await deployUpgrade(hre.network.name, "upgrade/steps-upgrade-for-tests.json");
+    await deployUpgrade(hre.network.name, process.env.STEPS_FILE!);
   }
 
   const { contracts, signers } = await discover(skipV3Contracts);
