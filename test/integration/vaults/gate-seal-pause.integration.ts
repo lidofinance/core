@@ -95,7 +95,10 @@ describe("Integration: GateSeal pause functionality for VaultHub and PredepositG
   afterEach(async () => await Snapshot.restore(snapshot));
   after(async () => await Snapshot.restore(originalSnapshot));
 
-  it("GateSeal can pause VaultHub", async () => {
+  it("GateSeal can pause VaultHub", async function () {
+    if (ctx.isScratch) {
+      this.skip();
+    }
     // Verify VaultHub is not paused initially
     expect(await vaultHub.isPaused()).to.equal(false);
 
@@ -115,7 +118,10 @@ describe("Integration: GateSeal pause functionality for VaultHub and PredepositG
     );
   });
 
-  it("GateSeal can pause PredepositGuarantee", async () => {
+  it("GateSeal can pause PredepositGuarantee", async function () {
+    if (ctx.isScratch) {
+      this.skip();
+    }
     // Verify PDG is not paused initially
     expect(await predepositGuarantee.isPaused()).to.equal(false);
 
@@ -154,7 +160,10 @@ describe("Integration: GateSeal pause functionality for VaultHub and PredepositG
     ).to.be.revertedWithCustomError(predepositGuarantee, "ResumedExpected");
   });
 
-  it("GateSeal can pause both VaultHub and PredepositGuarantee simultaneously", async () => {
+  it("GateSeal can pause both VaultHub and PredepositGuarantee simultaneously", async function () {
+    if (ctx.isScratch) {
+      this.skip();
+    }
     // Verify both are not paused initially
     expect(await vaultHub.isPaused()).to.equal(false);
     expect(await predepositGuarantee.isPaused()).to.equal(false);
@@ -202,7 +211,10 @@ describe("Integration: GateSeal pause functionality for VaultHub and PredepositG
     ).to.be.revertedWithCustomError(predepositGuarantee, "ResumedExpected");
   });
 
-  it("Operations resume after RESUME_ROLE holder resumes the contracts", async () => {
+  it("Operations resume after RESUME_ROLE holder resumes the contracts", async function () {
+    if (ctx.isScratch) {
+      this.skip();
+    }
     // Grant RESUME_ROLE to agent for both contracts
     await vaultHub.connect(agent).grantRole(await vaultHub.RESUME_ROLE(), agent);
     await predepositGuarantee.connect(agent).grantRole(await predepositGuarantee.RESUME_ROLE(), agent);
@@ -236,14 +248,20 @@ describe("Integration: GateSeal pause functionality for VaultHub and PredepositG
       .withArgs(nodeOperator, nodeOperator, ether("1"));
   });
 
-  it("Non-sealing committee member cannot seal", async () => {
+  it("Non-sealing committee member cannot seal", async function () {
+    if (ctx.isScratch) {
+      this.skip();
+    }
     // Attempt to seal with unauthorized address should fail
     // Note: The actual error will depend on the GateSeal implementation
     // This test verifies that access control is working
     await expect(gateSeal.connect(stranger).seal([await vaultHub.getAddress()])).to.be.reverted;
   });
 
-  it("Cannot seal when VaultHub is already paused", async () => {
+  it("Cannot seal when VaultHub is already paused", async function () {
+    if (ctx.isScratch) {
+      this.skip();
+    }
     // First, pause VaultHub manually using PAUSE_ROLE
     await vaultHub.connect(agent).grantRole(await vaultHub.PAUSE_ROLE(), agent);
     await vaultHub.connect(agent).pauseFor(1000);
@@ -255,7 +273,10 @@ describe("Integration: GateSeal pause functionality for VaultHub and PredepositG
     await expect(gateSeal.connect(sealingCommittee).seal([await vaultHub.getAddress()])).to.be.reverted;
   });
 
-  it("Cannot seal when PredepositGuarantee is already paused", async () => {
+  it("Cannot seal when PredepositGuarantee is already paused", async function () {
+    if (ctx.isScratch) {
+      this.skip();
+    }
     // First, pause PDG manually using PAUSE_ROLE
     await predepositGuarantee.connect(agent).grantRole(await predepositGuarantee.PAUSE_ROLE(), agent);
     await predepositGuarantee.connect(agent).pauseFor(1000);
