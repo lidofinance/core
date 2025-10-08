@@ -34,10 +34,6 @@ gIndex = "0x0000000000000000000000000000000000000000000000000096000000000028"  #
 gIndexAfterChange = "0x0000000000000000000000000000000000000000000000000096000000000028"
 changeSlot = 0                        # Slot number when the change takes effect
 
-# Delegation module configuration for liquid delegation
-[delegation]
-wethContract = "0x94373a4919B3240D86eA41593D5eBa789FEF3848"  # WETH contract address for wrapped ETH operations
-
 # Operator grid configuration for managing staking operators
 [operatorGrid]
 # Default tier parameters for operator classification and fee structure
@@ -54,5 +50,4 @@ isMigrationAllowed = true             # Must be on for the upgrade to work (for 
 
 # Oracle and consensus version configuration
 [oracleVersions]
-vebo_consensus_version = 4            # Validators Exit Bus Oracle consensus version
 ao_consensus_version = 4              # Accounting Oracle consensus version

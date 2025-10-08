@@ -81,7 +81,6 @@ const TriggerableWithdrawalsGatewaySchema = z.object({
 
 // Oracle versions schema
 const OracleVersionsSchema = z.object({
-  vebo_consensus_version: PositiveIntSchema,
   ao_consensus_version: PositiveIntSchema,
 });
 
@@ -106,9 +105,6 @@ export const UpgradeParametersSchema = z.object({
   lazyOracle: LazyOracleSchema,
   predepositGuarantee: PredepositGuaranteeSchema.extend({
     genesisForkVersion: HexStringSchema,
-  }),
-  delegation: z.object({
-    wethContract: EthereumAddressSchema,
   }),
   operatorGrid: OperatorGridSchema,
   burner: BurnerSchema,
