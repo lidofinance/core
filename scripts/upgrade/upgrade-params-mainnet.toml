@@ -15,13 +15,18 @@ isHoodi = false
 address = "0x0000000000000000000000000000000f00f00F00"  # TODO: update the placeholder
 
 [easyTrack]
-# TODO
+locatorContract = "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"   # Lido Locator contract
+trustedCaller = "0x0000000000000000000000000000000000000000"     # Address of stVaults EasyTrack committee # TODO: update the placeholder
+initialValidatorExitFeeLimit = "100000000000000000"              # Max validator exit fee which can be spend for single key exit request
+# Phase 1: Pilot (starts with Lido V3 upgrade enacted) - https://research.lido.fi/t/lido-v3-design-implementation-proposal/10665
+maxGroupShareLimit = "250000000000000000000000"                  # Max share limit which can be set for group by EasyTrack
+maxDefaultTierShareLimit = 0                                     # Max share limit which can be set for default tier by EasyTrack
 
 # Vault hub configuration for managing staking vaults
 [vaultHub]
 relativeShareLimitBP = 3000           # Relative share limit in basis points (30%)
 
-# Lazy oracle configuration for delayed reward calculations
+# Lazy oracle configuration for delayed reward calculations - https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-32.md
 [lazyOracle]
 quarantinePeriod = 259200                      # Quarantine period in seconds (3 days) before rewards are distributed
 maxRewardRatioBP = 350                         # Maximum reward ratio in basis points (3.5%)
