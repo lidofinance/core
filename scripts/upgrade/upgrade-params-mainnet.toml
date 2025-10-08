@@ -12,7 +12,8 @@ isHoodi = false
 
 # Gate seal configuration for vault operations
 [gateSealForVaults]
-address = "0x0000000000000000000000000000000f00f00F00"  # TODO: update the placeholder
+sealDuration = 1209600  # 14 days
+sealingCommittee = "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C"
 
 [easyTrack]
 trustedCaller = "0x0000000000000000000000000000000000000000"     # Address of stVaults EasyTrack committee # TODO: update the placeholder
