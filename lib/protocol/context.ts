@@ -17,6 +17,32 @@ export const withCSM = () => {
   return process.env.INTEGRATION_WITH_CSM !== "off";
 };
 
+export const ensureVaultsShareLimit = async (ctx: ProtocolContext) => {
+  const { operatorGrid } = ctx.contracts;
+
+  const agent = await ctx.getSigner("agent");
+
+  const defaultTierId = await operatorGrid.DEFAULT_TIER_ID();
+
+  const defaultTierParams = await operatorGrid.tier(defaultTierId);
+
+  if (defaultTierParams.shareLimit === 0n) {
+    await operatorGrid.connect(agent).alterTiers(
+      [defaultTierId],
+      [
+        {
+          shareLimit: ether("250"),
+          reserveRatioBP: defaultTierParams.reserveRatioBP,
+          forcedRebalanceThresholdBP: defaultTierParams.forcedRebalanceThresholdBP,
+          infraFeeBP: defaultTierParams.infraFeeBP,
+          liquidityFeeBP: defaultTierParams.liquidityFeeBP,
+          reservationFeeBP: defaultTierParams.reservationFeeBP,
+        },
+      ],
+    );
+  }
+};
+
 export const getProtocolContext = async (skipV3Contracts: boolean = false): Promise<ProtocolContext> => {
   const isScratch = getMode() === "scratch";
 
@@ -51,6 +77,8 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
 
   if (isScratch) {
     await provision(context);
+  } else if (process.env.UPGRADE) {
+    await ensureVaultsShareLimit(context);
   }
 
   return context;
