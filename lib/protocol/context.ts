@@ -77,7 +77,7 @@ export const getProtocolContext = async (skipV3Contracts: boolean = false): Prom
 
   if (isScratch) {
     await provision(context);
-  } else if (process.env.UPGRADE) {
+  } else {
     await ensureVaultsShareLimit(context);
   }
 
