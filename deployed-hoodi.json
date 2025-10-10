@@ -676,6 +676,11 @@
       ["9000", "43200", "1000", "50", "600", "8", "24", "128", "750000", "1000", "101", "50"]
     ]
   },
+  "pinnedBeaconProxy": {
+    "contract": "contracts/0.8.25/vaults/PinnedBeaconProxy.sol",
+    "address": "0x3e144aEd003b5AE6953A99B78dD34154CF3F8c76",
+    "constructorArgs": ["0xb3e6a8B6A752d3bb905A1B3Ef12bbdeE77E8160e", "0x"]
+  },
   "predepositGuarantee": {
     "proxy": {
       "contract": "contracts/0.8.9/proxy/OssifiableProxy.sol",
