@@ -251,9 +251,11 @@ contract Dashboard is NodeOperatorFee {
      * @notice Disconnects the underlying StakingVault from the hub and passing its ownership to Dashboard.
      *         After receiving the final report, one can call reconnectToVaultHub() to reconnect to the hub
      *         or abandonDashboard() to transfer the ownership to a new owner.
+     *         Resets the settled growth to 0 to encourage correction before reconnection.
      */
     function voluntaryDisconnect() external {
         disburseFee();
+        if (settledGrowth != 0) _setSettledGrowth(0);
         _voluntaryDisconnect();
     }
 
@@ -284,14 +286,9 @@ contract Dashboard is NodeOperatorFee {
      * @notice Connects to VaultHub, transferring ownership to VaultHub.
      */
     function connectToVaultHub() public payable {
-        if (!isApprovedToConnect) revert ForbiddenToConnectByNodeOperator();
-
         if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
-
-        // node operator approval is one time only and is reset after connect
-        _setApprovedToConnect(false);
     }
 
     /**

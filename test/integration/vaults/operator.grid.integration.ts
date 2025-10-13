@@ -381,7 +381,6 @@ describe("Integration: OperatorGrid", () => {
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
 
       // Reconnect vault
-      await dashboard.connect(nodeOperator).setApprovedToConnect(true);
       await dashboard.connect(owner).reconnectToVaultHub();
 
       // Verify vault is reconnected

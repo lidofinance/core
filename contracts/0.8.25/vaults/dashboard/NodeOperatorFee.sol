@@ -94,13 +94,6 @@ contract NodeOperatorFee is Permissions {
     uint64 public latestCorrectionTimestamp;
 
     /**
-     * @notice Flag indicating whether the vault is approved by the node operator to connect to VaultHub.
-     * The node operator's approval is needed to confirm the validity of fee calculations,
-     * particularly the settled growth.
-     */
-    bool public isApprovedToConnect;
-
-    /**
      * @notice Passes the address of the vault hub up the inheritance chain.
      * @param _vaultHub The address of the vault hub.
      * @param _lidoLocator The address of the Lido locator.
@@ -168,15 +161,6 @@ contract NodeOperatorFee is Permissions {
      */
     function accruedFee() public view returns (uint256 fee) {
         (fee, ) = _calculateFee();
-    }
-
-    /**
-     * @notice Approves/forbids connection to VaultHub. Approval implies that the node operator agrees
-     * with the current fee parameters, particularly the settled growth used as baseline for fee calculations.
-     * @param _isApproved True to approve, False to forbid
-     */
-    function setApprovedToConnect(bool _isApproved) external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
-        _setApprovedToConnect(_isApproved);
     }
 
     /**
@@ -284,13 +268,7 @@ contract NodeOperatorFee is Permissions {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
-    function _setApprovedToConnect(bool _isApproved) internal {
-        isApprovedToConnect = _isApproved;
-
-        emit ApprovedToConnectSet(_isApproved);
-    }
-
-    function _setSettledGrowth(int256 _newSettledGrowth) private {
+    function _setSettledGrowth(int256 _newSettledGrowth) internal {
         int128 oldSettledGrowth = settledGrowth;
         if (oldSettledGrowth == _newSettledGrowth) revert SameSettledGrowth();
 
@@ -389,11 +367,6 @@ contract NodeOperatorFee is Permissions {
      */
     event CorrectionTimestampUpdated(uint64 timestamp);
 
-    /**
-     * @dev Emitted when the node operator approves/forbids to connect to VaultHub.
-     */
-    event ApprovedToConnectSet(bool isApproved);
-
     // ==================== Errors ====================
 
     /**
@@ -430,11 +403,6 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the fee exemption amount does not match the expected value
      */
     error UnexpectedFeeExemptionAmount();
-
-    /**
-     * @dev Error emitted when the settled growth is pending manual adjustment.
-     */
-    error ForbiddenToConnectByNodeOperator();
 
     /**
      * @dev Error emitted when the vault is quarantined.

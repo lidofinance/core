@@ -145,7 +145,6 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.accruedFee()).to.equal(0n);
       expect(await nodeOperatorFee.settledGrowth()).to.equal(0n);
       expect(await nodeOperatorFee.latestCorrectionTimestamp()).to.equal(0n);
-      expect(await nodeOperatorFee.isApprovedToConnect()).to.be.false;
     });
   });
 
@@ -527,8 +526,6 @@ describe("NodeOperatorFee.sol", () => {
           msgData,
         );
 
-      expect(await nodeOperatorFee.isApprovedToConnect()).to.be.false;
-
       expect(await nodeOperatorFee.settledGrowth()).to.equal(currentSettledGrowth);
 
       confirmTimestamp = await getNextBlockTimestamp();
@@ -547,7 +544,6 @@ describe("NodeOperatorFee.sol", () => {
 
       expect(await nodeOperatorFee.settledGrowth()).to.deep.equal(newSettledGrowth);
       expect(await nodeOperatorFee.latestCorrectionTimestamp()).to.deep.equal(timestamp);
-      expect(await nodeOperatorFee.isApprovedToConnect()).to.be.false;
     });
   });
 
