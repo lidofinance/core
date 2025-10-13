@@ -1,6 +1,12 @@
 import { ethers } from "hardhat";
 
-import { Burner, StakingRouter, ValidatorsExitBusOracle, WithdrawalQueueERC721 } from "typechain-types";
+import {
+  Burner,
+  StakingRouter,
+  TriggerableWithdrawalsGateway,
+  ValidatorsExitBusOracle,
+  WithdrawalQueueERC721,
+} from "typechain-types";
 
 import { loadContract } from "lib/contract";
 import { makeTx } from "lib/deploy";
@@ -22,6 +28,8 @@ export async function main() {
   const accountingOracleAddress = state[Sk.accountingOracle].proxy.address;
   const validatorsExitBusOracleAddress = state[Sk.validatorsExitBusOracle].proxy.address;
   const depositSecurityModuleAddress = state[Sk.depositSecurityModule].address;
+  const triggerableWithdrawalsGatewayAddress = state[Sk.triggerableWithdrawalsGateway].address;
+  const validatorExitDelayVerifierAddress = state[Sk.validatorExitDelayVerifier].address;
 
   // StakingRouter
   const stakingRouter = await loadContract<StakingRouter>("StakingRouter", stakingRouterAddress);
@@ -43,6 +51,19 @@ export async function main() {
   await makeTx(stakingRouter, "grantRole", [await stakingRouter.STAKING_MODULE_MANAGE_ROLE(), agentAddress], {
     from: deployer,
   });
+  await makeTx(
+    stakingRouter,
+    "grantRole",
+    [await stakingRouter.REPORT_VALIDATOR_EXIT_TRIGGERED_ROLE(), triggerableWithdrawalsGatewayAddress],
+    { from: deployer },
+  );
+
+  await makeTx(
+    stakingRouter,
+    "grantRole",
+    [await stakingRouter.REPORT_VALIDATOR_EXITING_STATUS_ROLE(), validatorExitDelayVerifierAddress],
+    { from: deployer },
+  );
 
   // ValidatorsExitBusOracle
   if (gateSealAddress) {
@@ -57,6 +78,18 @@ export async function main() {
     log(`GateSeal is not specified or deployed: skipping assigning PAUSE_ROLE of validatorsExitBusOracle`);
     log.emptyLine();
   }
+
+  // TriggerableWithdrawalsGateway
+  const triggerableWithdrawalsGateway = await loadContract<TriggerableWithdrawalsGateway>(
+    "TriggerableWithdrawalsGateway",
+    triggerableWithdrawalsGatewayAddress,
+  );
+  await makeTx(
+    triggerableWithdrawalsGateway,
+    "grantRole",
+    [await triggerableWithdrawalsGateway.ADD_FULL_WITHDRAWAL_REQUEST_ROLE(), validatorsExitBusOracleAddress],
+    { from: deployer },
+  );
 
   // WithdrawalQueue
   const withdrawalQueue = await loadContract<WithdrawalQueueERC721>("WithdrawalQueueERC721", withdrawalQueueAddress);

@@ -49,7 +49,7 @@ export async function main() {
     [
       lidoLocatorAddress,
       encodeStakingModuleTypeId(nodeOperatorsRegistryParams.stakingModuleTypeId),
-      nodeOperatorsRegistryParams.stuckPenaltyDelay,
+      nodeOperatorsRegistryParams.exitDeadlineThresholdInSeconds,
     ],
     { from: deployer },
   );
@@ -61,7 +61,7 @@ export async function main() {
     [
       lidoLocatorAddress,
       encodeStakingModuleTypeId(simpleDvtRegistryParams.stakingModuleTypeId),
-      simpleDvtRegistryParams.stuckPenaltyDelay,
+      simpleDvtRegistryParams.exitDeadlineThresholdInSeconds,
     ],
     { from: deployer },
   );
@@ -96,6 +96,10 @@ export async function main() {
 
   // Initialize ValidatorsExitBusOracle
   const validatorsExitBusOracle = await loadContract("ValidatorsExitBusOracle", ValidatorsExitBusOracleAddress);
+  const maxValidatorsPerBatch = 600;
+  const maxExitRequestsLimit = 13000;
+  const exitsPerFrame = 1;
+  const frameDurationInSec = 48;
   await makeTx(
     validatorsExitBusOracle,
     "initialize",
@@ -104,13 +108,13 @@ export async function main() {
       hashConsensusForValidatorsExitBusOracleAddress,
       validatorsExitBusOracleParams.consensusVersion,
       zeroLastProcessingRefSlot,
+      maxValidatorsPerBatch,
+      maxExitRequestsLimit,
+      exitsPerFrame,
+      frameDurationInSec,
     ],
     { from: deployer },
   );
-
-  // Initialize WithdrawalVault
-  const withdrawalVault = await loadContract("WithdrawalVault", withdrawalVaultAddress);
-  await makeTx(withdrawalVault, "initialize", [], { from: deployer });
 
   // Initialize WithdrawalQueue
   const withdrawalQueue = await loadContract("WithdrawalQueueERC721", withdrawalQueueAddress);

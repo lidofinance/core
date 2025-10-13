@@ -12,6 +12,15 @@ import {
 import { log } from "lib/log";
 import { readNetworkState, Sk, updateObjectInState } from "lib/state-file";
 
+function getEnvVariable(name: string, defaultValue?: string): string {
+  const value = process.env[name] ?? defaultValue;
+  if (value === undefined) {
+    throw new Error(`Environment variable ${name} is required`);
+  }
+  log(`${name} = ${value}`);
+  return value;
+}
+
 export async function main() {
   const deployer = (await ethers.provider.getSigner()).address;
   const state = readNetworkState({ deployer });
@@ -57,6 +66,18 @@ export async function main() {
     dummyContract.address,
   );
 
+  // Deploy Triggerable Withdrawals Gateway
+  const maxExitRequestsLimit = 13000;
+  const exitsPerFrame = 1;
+  const frameDurationInSec = 48;
+
+  const triggerableWithdrawalsGateway = await deployWithoutProxy(
+    Sk.triggerableWithdrawalsGateway,
+    "TriggerableWithdrawalsGateway",
+    deployer,
+    [admin, locator.address, maxExitRequestsLimit, exitsPerFrame, frameDurationInSec],
+  );
+
   // Deploy EIP712StETH
   await deployWithoutProxy(Sk.eip712StETH, "EIP712StETH", deployer, [lidoAddress]);
 
@@ -76,6 +97,7 @@ export async function main() {
   const withdrawalVaultImpl = await deployImplementation(Sk.withdrawalVault, "WithdrawalVault", deployer, [
     lidoAddress,
     treasuryAddress,
+    triggerableWithdrawalsGateway.address,
   ]);
 
   const withdrawalsManagerProxyConstructorArgs = [votingAddress, withdrawalVaultImpl.address];
@@ -190,6 +212,51 @@ export async function main() {
     burnerParams.totalCoverSharesBurnt,
     burnerParams.totalNonCoverSharesBurnt,
   ]);
+  const GI_FIRST_VALIDATOR_PREV = "0x0000000000000000000000000000000000000000000000000096000000000028";
+  const GI_FIRST_VALIDATOR_CURR = "0x0000000000000000000000000000000000000000000000000096000000000028";
+  const GI_FIRST_HISTORICAL_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000b600000018";
+  const GI_FIRST_HISTORICAL_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000b600000018";
+  const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV = "0x000000000000000000000000000000000000000000000000000000000040000d";
+  const GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR = "0x000000000000000000000000000000000000000000000000000000000040000d";
+
+  // Mainnet values
+  // Pectra hardfork slot
+  // https://github.com/ethereum/consensus-specs/blob/365320e778965631cbef11fd93328e82a746b1f6/specs/electra/fork.md#configuration
+  const FIRST_SUPPORTED_SLOT = 11649024;
+  const PIVOT_SLOT = 11649024;
+  // Capella hardfork slot
+  // https://github.com/ethereum/consensus-specs/blob/365320e778965631cbef11fd93328e82a746b1f6/specs/capella/fork.md#configuration
+  const CAPELLA_SLOT = 194048 * 32;
+  // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters
+  const SLOTS_PER_HISTORICAL_ROOT = 8192;
+
+  // Deploy ValidatorExitDelayVerifier
+  const validatorExitDelayVerifier = await deployWithoutProxy(
+    Sk.validatorExitDelayVerifier,
+    "ValidatorExitDelayVerifier",
+    deployer,
+    [
+      locator.address,
+      {
+        gIFirstValidatorPrev: GI_FIRST_VALIDATOR_PREV,
+        gIFirstValidatorCurr: GI_FIRST_VALIDATOR_CURR,
+        gIFirstHistoricalSummaryPrev: GI_FIRST_HISTORICAL_SUMMARY_PREV,
+        gIFirstHistoricalSummaryCurr: GI_FIRST_HISTORICAL_SUMMARY_CURR,
+        gIFirstBlockRootInSummaryPrev: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_PREV,
+        gIFirstBlockRootInSummaryCurr: GI_FIRST_BLOCK_ROOT_IN_SUMMARY_CURR,
+      },
+      FIRST_SUPPORTED_SLOT, // uint64 firstSupportedSlot,
+      PIVOT_SLOT, // uint64 pivotSlot,
+      // TODO: update this to the actual Capella slot for e2e testing in mainnet-fork
+      CAPELLA_SLOT, // uint64 capellaSlot,
+      SLOTS_PER_HISTORICAL_ROOT, // uint64 slotsPerHistoricalRoot,
+      chainSpec.slotsPerEpoch, // uint32 slotsPerEpoch,
+      chainSpec.secondsPerSlot, // uint32 secondsPerSlot,
+      parseInt(getEnvVariable("GENESIS_TIME")), // uint64 genesisTime,
+      // https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#time-parameters-1
+      2 ** 8 * 32 * 12, // uint32 shardCommitteePeriodInSeconds
+    ],
+  );
 
   // Update LidoLocator with valid implementation
   const locatorConfig: string[] = [
@@ -207,6 +274,8 @@ export async function main() {
     withdrawalQueueERC721.address,
     withdrawalVaultAddress,
     oracleDaemonConfig.address,
+    validatorExitDelayVerifier.address,
+    triggerableWithdrawalsGateway.address,
   ];
   await updateProxyImplementation(Sk.lidoLocator, "LidoLocator", locator.address, proxyContractsOwner, [locatorConfig]);
 }
