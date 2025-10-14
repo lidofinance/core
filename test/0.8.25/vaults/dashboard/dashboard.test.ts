@@ -661,16 +661,8 @@ describe("Dashboard.sol", () => {
     });
 
     it("invokes the voluntaryDisconnect function on the vault hub", async () => {
-      // set settled growth
-      await dashboard.connect(vaultOwner).correctSettledGrowth(1000n, 0n);
-      await dashboard.connect(nodeOperator).correctSettledGrowth(1000n, 0n);
-      expect(await dashboard.settledGrowth()).to.equal(1000n);
-
       await dashboard.connect(vaultOwner).grantRole(await dashboard.VOLUNTARY_DISCONNECT_ROLE(), vaultOwner);
       await expect(dashboard.voluntaryDisconnect()).to.emit(hub, "Mock__VaultDisconnectInitiated").withArgs(vault);
-
-      // settled growth is reset
-      expect(await dashboard.settledGrowth()).to.equal(0n);
     });
   });
 
@@ -1465,11 +1457,20 @@ describe("Dashboard.sol", () => {
       await setup({ isConnected: false });
       const hubSigner = await impersonate(await hub.getAddress(), ether("1"));
       await vault.connect(hubSigner).transferOwnership(dashboard);
+
+      // set settled growth
+      await dashboard.connect(vaultOwner).correctSettledGrowth(1000n, 0n);
+      await dashboard.connect(nodeOperator).correctSettledGrowth(1000n, 0n);
+      expect(await dashboard.settledGrowth()).to.equal(1000n);
+
       await expect(dashboard.connect(vaultOwner).abandonDashboard(vaultOwner))
         .to.emit(vault, "OwnershipTransferred")
         .withArgs(hub, dashboard)
         .and.to.emit(vault, "OwnershipTransferStarted")
         .withArgs(dashboard, vaultOwner);
+
+      // settled growth is reset
+      expect(await dashboard.settledGrowth()).to.equal(0n);
     });
   });
 
