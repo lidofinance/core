@@ -205,12 +205,12 @@ abstract contract Confirmations {
     /**
      * @dev Emitted when a role member confirms.
      * @param member The address of the confirming member.
-     * @param role The role of the confirming member.
+     * @param roleOrAddress The role or address of the confirming member.
      * @param confirmTimestamp The timestamp of the confirmation.
      * @param expiryTimestamp The timestamp when this confirmation expires.
      * @param data The msg.data of the confirmation (selector + arguments).
      */
-    event RoleMemberConfirmed(address indexed member, bytes32 indexed role, uint256 confirmTimestamp, uint256 expiryTimestamp, bytes data);
+    event RoleMemberConfirmed(address indexed member, bytes32 indexed roleOrAddress, uint256 confirmTimestamp, uint256 expiryTimestamp, bytes data);
 
     /**
      * @dev Thrown when attempting to set confirmation expiry out of bounds.
