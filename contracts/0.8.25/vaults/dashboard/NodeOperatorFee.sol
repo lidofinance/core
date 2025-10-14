@@ -186,6 +186,8 @@ contract NodeOperatorFee is Permissions {
      * 4. Withdraws fee amount from vault to node operator recipient
      */
     function disburseFee() public {
+        if (feeDisbursementPaused) revert FeeDisbursementOnPause();
+
         (uint256 fee, int128 growth, uint256 pauseThreshold) = _calculateFee();
 
         // it's important not to revert here so as not to block disconnect
@@ -420,6 +422,11 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the combined feeBPs exceed 100%.
      */
     error FeeValueExceed100Percent();
+
+    /**
+     * @dev Error emitted when trying to disburse fee while it's paused
+     */
+    error FeeDisbursementOnPause();
 
     /**
      * @dev Error emitted when trying to resume fee disbursement while it's not paused
