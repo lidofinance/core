@@ -57,6 +57,12 @@ contract NodeOperatorFee is Permissions {
      */
     bytes32 public constant NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE =
         keccak256("vaults.NodeOperatorFee.ProveUnknownValidatorsRole");
+    
+    /**
+     * @notice A sane maximum fee ratio to total value, in basis points (1 bp = 0.01%).
+     * Blocks fee disbursement if the fee exceeds this value, 1% of total value.
+     */
+    uint256 constant internal MAX_SANE_RELATIVE_FEE_BP = 1_00; 
 
     // ==================== Packed Storage Slot 1 ====================
     /**
@@ -70,6 +76,13 @@ contract NodeOperatorFee is Permissions {
      * Cannot exceed 100.00% (10000 basis points).
      */
     uint16 public feeRate;
+
+    /**
+     * @notice Indicates if fee disbursement is paused.
+     * When true, the `disburseFee` function will not transfer any fees.
+     * Triggered when the fee exceeds the sane maximum fee ratio to total value.
+     */
+    bool public feeDisbursementPaused;
 
     // ==================== Packed Storage Slot 2 ====================
     /**
@@ -160,7 +173,7 @@ contract NodeOperatorFee is Permissions {
      * @return fee The amount of ETH accrued as fee
      */
     function accruedFee() public view returns (uint256 fee) {
-        (fee, ) = _calculateFee();
+        (fee,, ) = _calculateFee();
     }
 
     /**
@@ -173,15 +186,37 @@ contract NodeOperatorFee is Permissions {
      * 4. Withdraws fee amount from vault to node operator recipient
      */
     function disburseFee() public {
-        (uint256 fee, int128 growth) = _calculateFee();
+        (uint256 fee, int128 growth, uint256 pauseThreshold) = _calculateFee();
 
         // it's important not to revert here so as not to block disconnect
         if (fee == 0) return;
+
+        // pause fee disbursement if the fee is abnormally high
+        if (fee > pauseThreshold) {
+            feeDisbursementPaused = true;
+            emit FeeDisbursementPaused();
+            return;
+        }
 
         _setSettledGrowth(growth);
 
         VAULT_HUB.withdraw(address(_stakingVault()), feeRecipient, fee);
         emit FeeDisbursed(msg.sender, fee);
+    }
+
+    /**
+     * @notice Resumes fee disbursement after being paused due to excessive fee ratio.
+     * Requires dual confirmation from admin and node operator manager.
+     * @return bool True if fee disbursement was resumed, false if still awaiting confirmations
+     */
+    function resumeFeeDisbursement() external returns (bool) {
+        if (!feeDisbursementPaused) revert FeeDisbursementNotPaused();
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
+
+        feeDisbursementPaused = false;
+        emit FeeDisbursementResumed();
+
+        return true;
     }
 
     /**
@@ -301,7 +336,7 @@ contract NodeOperatorFee is Permissions {
         _correctSettledGrowth(settledGrowth + int256(_amount));
     }
 
-    function _calculateFee() internal view returns (uint256 fee, int128 growth) {
+    function _calculateFee() internal view returns (uint256 fee, int128 growth, uint256 pauseThreshold) {
         VaultHub.Report memory report = latestReport();
         growth = int128(uint128(report.totalValue)) - int128(report.inOutDelta);
         int256 unsettledGrowth = growth - settledGrowth;
@@ -309,6 +344,8 @@ contract NodeOperatorFee is Permissions {
         if (unsettledGrowth > 0) {
             fee = (uint256(unsettledGrowth) * feeRate) / TOTAL_BASIS_POINTS;
         }
+
+        pauseThreshold = (report.totalValue * MAX_SANE_RELATIVE_FEE_BP) / TOTAL_BASIS_POINTS;
     }
 
     function _setFeeRate(uint256 _newFeeRate) internal {
@@ -367,12 +404,27 @@ contract NodeOperatorFee is Permissions {
      */
     event CorrectionTimestampUpdated(uint64 timestamp);
 
+    /**
+     * @dev Emitted when fee disbursement is paused due to abnormally high fee.
+     */
+    event FeeDisbursementPaused();
+
+    /**
+     * @dev Emitted when fee disbursement is resumed.
+     */
+    event FeeDisbursementResumed();
+
     // ==================== Errors ====================
 
     /**
      * @dev Error emitted when the combined feeBPs exceed 100%.
      */
     error FeeValueExceed100Percent();
+
+    /**
+     * @dev Error emitted when trying to resume fee disbursement while it's not paused
+     */
+    error FeeDisbursementNotPaused();
 
     /**
      * @dev Error emitted when trying to set same value for recipient
