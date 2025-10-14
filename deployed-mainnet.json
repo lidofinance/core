@@ -143,11 +143,6 @@
       "contentURI": "0x697066733a516d656138394d5533504852503763513157616b3672327355654d554146324c39727132624c6d5963644b764c57"
     }
   },
-  "aragon-acl": {
-    "proxy": {
-      "address": "0x9895f0f17cc1d1891b6f18ee0b483b6f221b37bb"
-    }
-  },
   "app:simple-dvt": {
     "stakingRouterModuleParams": {
       "moduleName": "SimpleDVT",
@@ -189,6 +184,11 @@
       "contract": "contracts/0.4.24/nos/NodeOperatorsRegistry.sol",
       "address": "0x1770044a38402e3CfCa2Fcfa0C84a093c9B42135",
       "constructorArgs": []
+    }
+  },
+  "aragon-acl": {
+    "proxy": {
+      "address": "0x9895f0f17cc1d1891b6f18ee0b483b6f221b37bb"
     }
   },
   "aragon-kernel": {
@@ -296,6 +296,9 @@
     "deployTx": "0x9d76786f639bd18365f10c087444761db5dafd0edc85c5c1a3e90219f2d1331d",
     "constructorArgs": []
   },
+  "easyTrackEVMScriptExecutor": {
+    "address": "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977"
+  },
   "eip712StETH": {
     "address": "0x8F73e4C2A6D852bb4ab2A45E6a9CF5715b3228B7",
     "contract": "contracts/0.8.9/EIP712StETH.sol",
@@ -303,9 +306,6 @@
     "constructorArgs": ["0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84"]
   },
   "ensAddress": "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
-  "easyTrackEVMScriptExecutor": {
-    "address": "0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977"
-  },
   "executionLayerRewardsVault": {
     "address": "0x388C818CA8B9251b393131C08a736A67ccB19297",
     "contract": "contracts/0.8.9/LidoExecutionLayerRewardsVault.sol",
@@ -317,6 +317,9 @@
     "sealDuration": 1209600,
     "expiryTimestamp": 1788908579,
     "sealingCommittee": "0x8772E3a2D86B9347A2688f9bc1808A6d8917760C"
+  },
+  "gateSealFactory": {
+    "address": "0x6c82877cac5a7a739f16ca0a89c0a328b8764a24"
   },
   "gateSealTW": {
     "factoryAddress": "0x6c82877cac5a7a739f16ca0a89c0a328b8764a24",
@@ -530,6 +533,11 @@
       "address": "0x905A211eD6830Cfc95643f0bE2ff64E7f3bf9b94",
       "constructorArgs": [12, 1606824023, "0xC1d0b3DE6792Bf6b4b37EccdcC24e45978Cfd2Eb"]
     }
+  },
+  "vaultsAdapter": {
+    "contract": "contracts/upgrade/mocks/VaultsAdapterMock.sol",
+    "address": "0x9c2778e5eb0ccEbF062e8eDB4a3A9dB535D26910",
+    "constructorArgs": ["0xFE5986E06210aC1eCC1aDCafc0cc7f8D63B3F977"]
   },
   "vestingParams": {
     "unvestedTokensAmount": "363197500000000000000000000",

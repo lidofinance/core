@@ -77,6 +77,11 @@ const config: HardhatUserConfig = {
       chainId: 560048,
       accounts: loadAccounts("hoodi"),
     },
+    "mainnet": {
+      url: RPC_URL,
+      chainId: 1,
+      accounts: loadAccounts("mainnet"),
+    },
     // forks
     "mainnet-fork": {
       url: process.env.MAINNET_RPC_URL || RPC_URL,

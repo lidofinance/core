@@ -34,14 +34,19 @@ describe("ValidatorExitDelayVerifier.sol", () => {
     await Snapshot.restore(originalState);
   });
 
-  const FIRST_SUPPORTED_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
-  const PIVOT_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
+  // Mainnet values
+  // Pectra hardfork slot
+  // https://github.com/ethereum/consensus-specs/blob/365320e778965631cbef11fd93328e82a746b1f6/specs/electra/fork.md#configuration
+  const FIRST_SUPPORTED_SLOT = 11649024;
+  const PIVOT_SLOT = 11649024;
+  // Capella hardfork slot
+  // https://github.com/ethereum/consensus-specs/blob/365320e778965631cbef11fd93328e82a746b1f6/specs/capella/fork.md#configuration
+  const CAPELLA_SLOT = 194048 * 32;
   const SLOTS_PER_EPOCH = 32;
   const SECONDS_PER_SLOT = 12;
   const GENESIS_TIME = 1606824000;
   const SHARD_COMMITTEE_PERIOD_IN_SECONDS = 8192;
   const LIDO_LOCATOR = "0x0000000000000000000000000000000000000001";
-  const CAPELLA_SLOT = ACTIVE_VALIDATOR_PROOF.beaconBlockHeader.slot;
   const SLOTS_PER_HISTORICAL_ROOT = 8192;
 
   describe("ValidatorExitDelayVerifier Constructor", () => {

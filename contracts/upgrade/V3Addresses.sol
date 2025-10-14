@@ -4,6 +4,10 @@ pragma solidity 0.8.25;
 import {IAccessControlEnumerable} from "@openzeppelin/contracts-v4.4/access/AccessControlEnumerable.sol";
 import {ILidoLocator} from "contracts/common/interfaces/ILidoLocator.sol";
 
+interface IVaultsAdapter {
+    function evmScriptExecutor() external view returns (address);
+}
+
 interface IStakingRouter is IAccessControlEnumerable {
     struct StakingModule {
         uint24 id;
@@ -53,7 +57,6 @@ contract V3Addresses {
         address gateSealForVaults;
 
         // EasyTrack addresses
-        address evmScriptExecutor;
         address vaultsAdapter;
 
         // Existing proxies and contracts
@@ -107,8 +110,8 @@ contract V3Addresses {
     //
     // -------- EasyTrack addresses --------
     //
-    address public immutable EVM_SCRIPT_EXECUTOR;
     address public immutable VAULTS_ADAPTER;
+    address public immutable EVM_SCRIPT_EXECUTOR;
 
     //
     // -------- Unchanged contracts --------
@@ -127,6 +130,7 @@ contract V3Addresses {
     address public immutable NODE_OPERATORS_REGISTRY;
     address public immutable SIMPLE_DVT;
     address public immutable CSM_ACCOUNTING;
+    address public immutable HOODI_SANDBOX_MODULE;
 
     constructor(
         V3AddressesParams memory params
@@ -157,7 +161,7 @@ contract V3Addresses {
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;
         GATE_SEAL = params.gateSealForVaults;
-        EVM_SCRIPT_EXECUTOR = params.evmScriptExecutor;
+        EVM_SCRIPT_EXECUTOR = IVaultsAdapter(params.vaultsAdapter).evmScriptExecutor();
         VAULTS_ADAPTER = params.vaultsAdapter;
 
         //
@@ -193,9 +197,18 @@ contract V3Addresses {
             IStakingRouter.StakingModule memory simpleDvt = stakingModules[1];
             if (_hash(simpleDvt.name) != _hash(SIMPLE_DVT_MODULE_NAME)) revert IncorrectStakingModuleName(simpleDvt.name);
             SIMPLE_DVT = simpleDvt.stakingModuleAddress;
-            IStakingRouter.StakingModule memory csm = stakingModules[2];
+
+            // NB: there is additional module on Hoodi before CSM
+            uint256 csmIndex = stakingModules.length - 1;
+            IStakingRouter.StakingModule memory csm = stakingModules[csmIndex];
             if (_hash(csm.name) != _hash(CSM_MODULE_NAME)) revert IncorrectStakingModuleName(csm.name);
             CSM_ACCOUNTING = ICSModule(csm.stakingModuleAddress).accounting();
+
+            if (stakingModules.length == 4) {
+                IStakingRouter.StakingModule memory hoodiSandbox = stakingModules[2];
+                if (_hash(hoodiSandbox.name) != _hash("Sandbox")) revert IncorrectStakingModuleName(hoodiSandbox.name);
+                HOODI_SANDBOX_MODULE = hoodiSandbox.stakingModuleAddress;
+            }
         }
     }
 

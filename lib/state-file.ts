@@ -67,6 +67,8 @@ export enum Sk {
   vestingParams = "vestingParams",
   withdrawalVault = "withdrawalVault",
   gateSeal = "gateSeal",
+  gateSealV3 = "gateSealV3",
+  gateSealFactory = "gateSealFactory",
   gateSealTW = "gateSealTW",
   stakingRouter = "stakingRouter",
   burner = "burner",
@@ -93,7 +95,6 @@ export enum Sk {
   // Triggerable withdrawals
   validatorExitDelayVerifier = "validatorExitDelayVerifier",
   triggerableWithdrawalsGateway = "triggerableWithdrawalsGateway",
-  twVoteScript = "twVoteScript",
   // Vaults
   predepositGuarantee = "predepositGuarantee",
   stakingVaultImplementation = "stakingVaultImplementation",
@@ -110,6 +111,8 @@ export enum Sk {
   // Dual Governance
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
+  // Easy Track
+  vaultsAdapter = "vaultsAdapter",
 }
 
 export function getAddress(contractKey: Sk, state: DeploymentState): string {
@@ -154,6 +157,7 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.evmScriptRegistryFactory:
     case Sk.executionLayerRewardsVault:
     case Sk.gateSeal:
+    case Sk.gateSealV3:
     case Sk.hashConsensusForAccountingOracle:
     case Sk.hashConsensusForValidatorsExitBusOracle:
     case Sk.ldo:
@@ -170,8 +174,9 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.stakingVaultFactory:
     case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:
-    case Sk.twVoteScript:
     case Sk.v3VoteScript:
+    case Sk.vaultsAdapter:
+    case Sk.gateSealFactory:
       return state[contractKey].address;
     default:
       throw new Error(`Unsupported contract entry key ${contractKey}`);

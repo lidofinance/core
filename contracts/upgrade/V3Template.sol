@@ -129,6 +129,10 @@ contract V3Template is V3Addresses {
         contractsWithBurnerAllowances.push(CSM_ACCOUNTING);
     }
 
+    function isHoodi() internal view returns (bool) {
+        return HOODI_SANDBOX_MODULE != address(0);
+    }
+
     /// @notice Must be called before LidoLocator is upgraded
     function startUpgrade() external {
         if (msg.sender != AGENT) revert OnlyAgentCanUpgrade();
@@ -224,7 +228,11 @@ contract V3Template is V3Addresses {
     function _assertFinalACL() internal view {
         // Burner
         bytes32 requestBurnSharesRole = IBurner(BURNER).REQUEST_BURN_SHARES_ROLE();
-        _assertZeroOZRoleHolders(OLD_BURNER, requestBurnSharesRole);
+        if (isHoodi()) {
+            _assertSingleOZRoleHolder(OLD_BURNER, requestBurnSharesRole, HOODI_SANDBOX_MODULE);
+        } else {
+            _assertZeroOZRoleHolders(OLD_BURNER, requestBurnSharesRole);
+        }
 
         _assertProxyAdmin(IOssifiableProxy(BURNER), AGENT);
         _assertSingleOZRoleHolder(BURNER, DEFAULT_ADMIN_ROLE, AGENT);
