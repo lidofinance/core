@@ -59,10 +59,23 @@ contract NodeOperatorFee is Permissions {
         keccak256("vaults.NodeOperatorFee.ProveUnknownValidatorsRole");
     
     /**
-     * @notice A sane maximum fee ratio to total value, in basis points (1 bp = 0.01%).
-     * Blocks fee disbursement if the fee exceeds this value, 1% of total value.
+     * @notice If the accrued fee exceeds this BP of the total value, it is considered abnormally high.
+     * An abnormally high fee can only be disbursed with dual confirmation.
+     * This threshold is to prevent accidental overpayment due to outdated settled growth.
+     *
+     * Why 1% threshold?
+     *
+     * - Assume a very generous annual staking APR of ~5% (≈3% CL + 2% EL).
+     * - In the extreme case where the node operator fee rate is 100% of rewards 
+     *   (unrealistic, but technically possible), this translates to a 5% annual fee.
+     * - A 1% fee threshold would therefore be reached in ~73 days (365 / 5).
+     * - Meaning: as long as the operator disburses fees at least once every ~2 months,
+     *   the threshold will never be hit.
+     *
+     * Since these assumptions are highly conservative, in practice the operator
+     * would need to disburse even less frequently before approaching the limit.
      */
-    uint256 constant internal MAX_SANE_RELATIVE_FEE_BP = 1_00; 
+    uint256 constant internal ABNORMALLY_HIGH_FEE_THRESHOLD_BP = 1_00; 
 
     // ==================== Packed Storage Slot 1 ====================
     /**
@@ -339,7 +352,7 @@ contract NodeOperatorFee is Permissions {
             fee = (uint256(unsettledGrowth) * feeRate) / TOTAL_BASIS_POINTS;
         }
 
-        relativeThreshold = (report.totalValue * MAX_SANE_RELATIVE_FEE_BP) / TOTAL_BASIS_POINTS;
+        relativeThreshold = (report.totalValue * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
     }
 
     function _setFeeRate(uint256 _newFeeRate) internal {

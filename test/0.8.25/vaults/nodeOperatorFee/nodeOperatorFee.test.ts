@@ -17,13 +17,13 @@ import {
 } from "typechain-types";
 
 import {
+  ABNORMALLY_HIGH_FEE_THRESHOLD_BP,
   advanceChainTime,
   days,
   ether,
   findEvents,
   getCurrentBlockTimestamp,
   getNextBlockTimestamp,
-  MAX_SANE_RELATIVE_FEE_BP,
   TOTAL_BASIS_POINTS,
 } from "lib";
 
@@ -352,12 +352,14 @@ describe("NodeOperatorFee.sol", () => {
     it("reverts if the fee is abnormally high", async () => {
       const feeRate = await nodeOperatorFee.feeRate();
       const totalValue = ether("100");
-      const pauseThreshold = (totalValue * MAX_SANE_RELATIVE_FEE_BP) / TOTAL_BASIS_POINTS;
+      const pauseThreshold = (totalValue * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
       const valueOverThreshold = 10n;
       const rewards = (pauseThreshold * TOTAL_BASIS_POINTS) / feeRate + valueOverThreshold;
       const inOutDelta = totalValue - rewards;
       const expectedFee = (rewards * nodeOperatorFeeRate) / BP_BASE;
-      expect(expectedFee).to.be.greaterThan(((inOutDelta + rewards) * MAX_SANE_RELATIVE_FEE_BP) / TOTAL_BASIS_POINTS);
+      expect(expectedFee).to.be.greaterThan(
+        ((inOutDelta + rewards) * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS,
+      );
 
       await hub.setReport(
         {
@@ -375,12 +377,14 @@ describe("NodeOperatorFee.sol", () => {
     it("disburse abnormally high fee", async () => {
       const feeRate = await nodeOperatorFee.feeRate();
       const totalValue = ether("100");
-      const pauseThreshold = (totalValue * MAX_SANE_RELATIVE_FEE_BP) / TOTAL_BASIS_POINTS;
+      const pauseThreshold = (totalValue * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
       const valueOverThreshold = 10n;
       const rewards = (pauseThreshold * TOTAL_BASIS_POINTS) / feeRate + valueOverThreshold;
       const inOutDelta = totalValue - rewards;
       const expectedFee = (rewards * nodeOperatorFeeRate) / BP_BASE;
-      expect(expectedFee).to.be.greaterThan(((inOutDelta + rewards) * MAX_SANE_RELATIVE_FEE_BP) / TOTAL_BASIS_POINTS);
+      expect(expectedFee).to.be.greaterThan(
+        ((inOutDelta + rewards) * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS,
+      );
 
       await hub.setReport(
         {
