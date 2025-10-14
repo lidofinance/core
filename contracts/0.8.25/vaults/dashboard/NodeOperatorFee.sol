@@ -77,12 +77,6 @@ contract NodeOperatorFee is Permissions {
      */
     uint16 public feeRate;
 
-    /**
-     * @notice Indicates if fee disbursement is paused.
-     * When true, the `disburseFee` function will not transfer any fees.
-     * Triggered when the fee exceeds the sane maximum fee ratio to total value.
-     */
-    bool public feeDisbursementPaused;
 
     // ==================== Packed Storage Slot 2 ====================
     /**
@@ -177,7 +171,8 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice Permissionless function to disburse node operator fees.
+     * @notice Disburses node operator fees permissionlessly.
+     * Can be called by anyone as long as fee is not abnormally high.
      *
      * Fee disbursement steps:
      * 1. Calculate current vault growth from latest report
@@ -186,37 +181,24 @@ contract NodeOperatorFee is Permissions {
      * 4. Withdraws fee amount from vault to node operator recipient
      */
     function disburseFee() public {
-        if (feeDisbursementPaused) revert FeeDisbursementOnPause();
+        (uint256 fee, int128 growth, uint256 relativeThreshold) = _calculateFee();
+        if (fee > relativeThreshold) revert AbnormallyHighFee();
 
-        (uint256 fee, int128 growth, uint256 pauseThreshold) = _calculateFee();
-
-        // it's important not to revert here so as not to block disconnect
-        if (fee == 0) return;
-
-        // pause fee disbursement if the fee is abnormally high
-        if (fee > pauseThreshold) {
-            feeDisbursementPaused = true;
-            emit FeeDisbursementPaused();
-            return;
-        }
-
-        _setSettledGrowth(growth);
-
-        VAULT_HUB.withdraw(address(_stakingVault()), feeRecipient, fee);
-        emit FeeDisbursed(msg.sender, fee);
+       _disburseFee(fee, growth);
     }
 
     /**
-     * @notice Resumes fee disbursement after being paused due to excessive fee ratio.
-     * Requires dual confirmation from admin and node operator manager.
-     * @return bool True if fee disbursement was resumed, false if still awaiting confirmations
+     * @notice Disburses an abnormally high fee with dual confirmation.
+     * Before calling this function, both parties must ensure that the high fee is expected,
+     * and the settled growth (used as baseline for fee) is set correctly.
+     * @return bool True if fee was disbursed, false if still awaiting confirmations
      */
-    function resumeFeeDisbursement() external returns (bool) {
-        if (!feeDisbursementPaused) revert FeeDisbursementNotPaused();
+    function disburseAbnormallyHighFee() external returns (bool) {
         if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
-
-        feeDisbursementPaused = false;
-        emit FeeDisbursementResumed();
+        
+        (uint256 fee, int128 growth,) = _calculateFee();
+       
+       _disburseFee(fee, growth);
 
         return true;
     }
@@ -305,6 +287,16 @@ contract NodeOperatorFee is Permissions {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
+    function _disburseFee(uint256 fee, int128 growth) internal {
+        // it's important not to revert here so as not to block disconnect
+        if (fee == 0) return;
+
+        _setSettledGrowth(growth);
+
+        VAULT_HUB.withdraw(address(_stakingVault()), feeRecipient, fee);
+        emit FeeDisbursed(msg.sender, fee);
+    }
+
     function _setSettledGrowth(int256 _newSettledGrowth) internal {
         int128 oldSettledGrowth = settledGrowth;
         if (oldSettledGrowth == _newSettledGrowth) revert SameSettledGrowth();
@@ -338,7 +330,7 @@ contract NodeOperatorFee is Permissions {
         _correctSettledGrowth(settledGrowth + int256(_amount));
     }
 
-    function _calculateFee() internal view returns (uint256 fee, int128 growth, uint256 pauseThreshold) {
+    function _calculateFee() internal view returns (uint256 fee, int128 growth, uint256 relativeThreshold) {
         VaultHub.Report memory report = latestReport();
         growth = int128(uint128(report.totalValue)) - int128(report.inOutDelta);
         int256 unsettledGrowth = growth - settledGrowth;
@@ -347,7 +339,7 @@ contract NodeOperatorFee is Permissions {
             fee = (uint256(unsettledGrowth) * feeRate) / TOTAL_BASIS_POINTS;
         }
 
-        pauseThreshold = (report.totalValue * MAX_SANE_RELATIVE_FEE_BP) / TOTAL_BASIS_POINTS;
+        relativeThreshold = (report.totalValue * MAX_SANE_RELATIVE_FEE_BP) / TOTAL_BASIS_POINTS;
     }
 
     function _setFeeRate(uint256 _newFeeRate) internal {
@@ -406,16 +398,6 @@ contract NodeOperatorFee is Permissions {
      */
     event CorrectionTimestampUpdated(uint64 timestamp);
 
-    /**
-     * @dev Emitted when fee disbursement is paused due to abnormally high fee.
-     */
-    event FeeDisbursementPaused();
-
-    /**
-     * @dev Emitted when fee disbursement is resumed.
-     */
-    event FeeDisbursementResumed();
-
     // ==================== Errors ====================
 
     /**
@@ -424,14 +406,9 @@ contract NodeOperatorFee is Permissions {
     error FeeValueExceed100Percent();
 
     /**
-     * @dev Error emitted when trying to disburse fee while it's paused
+     * @dev Error emitted when trying to disburse an abnormally high fee.
      */
-    error FeeDisbursementOnPause();
-
-    /**
-     * @dev Error emitted when trying to resume fee disbursement while it's not paused
-     */
-    error FeeDisbursementNotPaused();
+    error AbnormallyHighFee();
 
     /**
      * @dev Error emitted when trying to set same value for recipient
