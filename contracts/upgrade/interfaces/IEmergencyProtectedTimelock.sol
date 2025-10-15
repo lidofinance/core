@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2025 Lido <info@lido.fi>
+// SPDX-License-Identifier: UNLICENSED
 
 // See contracts/COMPILERS.md
 // solhint-disable-next-line lido/fixed-compiler-version
