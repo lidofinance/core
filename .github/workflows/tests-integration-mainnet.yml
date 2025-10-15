@@ -41,7 +41,7 @@ jobs:
           GAS_PRIORITY_FEE: 1
           GAS_MAX_FEE: 100
           NETWORK_STATE_FILE: deployed-mainnet-upgrade.json
-          UPGRADE_PARAMETERS_FILE: upgrade-parameters-mainnet.toml
+          UPGRADE_PARAMETERS_FILE: upgrade-params-mainnet.toml
 
       - name: Mock Aragon voting
         run: yarn upgrade:mock-voting
