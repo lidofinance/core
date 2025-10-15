@@ -656,6 +656,8 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
         ValidatorWitness[] calldata _witnesses,
         uint256[] calldata _amounts
     ) external whenResumed {
+        if (_witnesses.length != _amounts.length) revert ArrayLengthsNotMatch();
+
         mapping(bytes => ValidatorStatus) storage validators = _storage().validatorStatus;
         bytes memory zeroSignature = new bytes(96);
 
@@ -948,4 +950,5 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
     // general
     error ZeroArgument(string argument);
+    error ArrayLengthsNotMatch();
 }
