@@ -338,7 +338,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Mints stETH tokens backed by the vault to the recipient.
-     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
+     * !NB: this will revert with `ZeroArgument()` if the amount of stETH is less than 1 share
      * @param _recipient Address of the recipient
      * @param _amountOfStETH Amount of stETH to mint
      */
@@ -372,7 +372,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Burns stETH tokens from the sender backed by the vault. Expects stETH amount approved to this contract.
-     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
+     * !NB: this will revert with `ZeroArgument()` if the amount of stETH is less than 1 share
      * @param _amountOfStETH Amount of stETH tokens to burn
      */
     function burnStETH(uint256 _amountOfStETH) external {
@@ -381,7 +381,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Burns wstETH tokens from the sender backed by the vault. Expects wstETH amount approved to this contract.
-     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` on 1 wei of wstETH due to rounding inside wstETH unwrap method
+     * !NB: this will revert with `ZeroArgument()` on 1 wei of wstETH due to rounding inside wstETH unwrap method
      * @param _amountOfWstETH Amount of wstETH tokens to burn
 
      */
@@ -549,9 +549,12 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountsInGwei Withdrawal amounts in Gwei for each validator key. Must match _pubkeys length.
      *         Set amount to 0 for a full validator exit. For partial withdrawals, amounts may be trimmed to keep
      *         MIN_ACTIVATION_BALANCE on the validator to avoid deactivation.
-     * @param _refundRecipient Address to receive any fee refunds, if zero, refunds go to msg.sender.
+     * @param _refundRecipient Address to receive any fee refunds
      * @dev    A withdrawal fee must be paid via msg.value.
-     *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee for the current block.
+     *         You can use `StakingVault.calculateValidatorWithdrawalFee` to calculate the fee but it's accurate only
+     *         for the current block. The fee may change when the tx is included, so it's recommended to send fee
+     *         with some surplus. The exact amount required will be paid and the excess will be refunded to
+     *         `_refundRecipient` address.
      */
     function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,

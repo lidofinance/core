@@ -76,7 +76,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
     /**
      * @notice encodes parameters for method "topUpExistingValidators"
-     * @param pubkey public key of the validator to top up. It should have the PROVEN status
+     * @param pubkey public key of the validator to top up. It should have the ACTIVATED status
      * @param amount amount of ether to deposit to this validator
      */
     struct ValidatorTopUp {
@@ -203,7 +203,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     }
 
     /**
-     * @notice returns address of the depositor for the NO
+     * @notice returns address of the depositor for the node operator (by default it is node operator itself)
      * @param _nodeOperator to check depositor for
      * @return address of depositor for the NO
      */
@@ -214,7 +214,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /**
      * @notice returns amount of ether refund that guarantor can claim
      * @param _guarantor address of the guarantor
-     * @return amount of ether that guarantor can claim by calling `claimGuarantorRefund(amount)`
+     * @return amount of ether that guarantor will claim by calling `claimGuarantorRefund()`
      */
     function claimableRefund(address _guarantor) external view returns (uint256) {
         return _storage().guarantorClaimableEther[_guarantor];
@@ -335,7 +335,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
 
             $.guarantorClaimableEther[prevGuarantor] += refund;
 
-            emit BalanceRefunded(msg.sender, _newGuarantor);
+            emit BalanceRefunded(msg.sender, prevGuarantor);
             emit GuarantorRefundAdded(prevGuarantor, msg.sender, refund);
         }
 
@@ -390,7 +390,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _stakingVault address of the StakingVault to deposit validators from and use as withdrawal credentials
      * @param _deposits array of Deposit structs (amounts should be set to PREDEPOSIT_AMOUNT)
      * @param _depositsY array of uncompressed pubkey data to verify the signature for each deposit
-     * @dev requires msg.sender to be designated depositor address or StakingVault's node operator
+     * @dev requires msg.sender to be designated depositor address
      * @dev transition NONE => PREDEPOSITED
      */
     function predeposit(
@@ -607,7 +607,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     /**
      * @notice deposits ether to activated validators from respective staking vaults
      * @param _topUps array of ValidatorTopUp structs with pubkey and amounts
-     * @dev only callable by the vault's depositor (or node operator)
+     * @dev only callable by the vault's depositor
      */
     function topUpExistingValidators(ValidatorTopUp[] calldata _topUps) external whenResumed {
         mapping(bytes => ValidatorStatus) storage validators = _storage().validatorStatus;
@@ -650,7 +650,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param _witnesses array of ValidatorWitness structs to prove validators WCs
      * @param _amounts array of amounts of ether to deposit to proven validator on top of ACTIVATION_DEPOSIT_AMOUNT
      * @dev transition [PREDEPOSITED =>] [PROVEN =>] ACTIVATED
-     * @dev if `_amount` != 0 requires msg,sender to be the vault's depositor (or node operator)
+     * @dev if `_amount` != 0 requires msg.sender to be the depositor
      */
     function proveWCActivateAndTopUpValidators(
         ValidatorWitness[] calldata _witnesses,
@@ -869,7 +869,6 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
     event BalanceWithdrawn(address indexed nodeOperator, address indexed recipient, uint256 amount);
     event BalanceLocked(address indexed nodeOperator, uint128 total, uint128 locked);
     event BalanceUnlocked(address indexed nodeOperator, uint128 total, uint128 locked);
-    event BalanceCompensated(address indexed nodeOperator, address indexed to, uint128 total, uint128 locked);
     event BalanceRefunded(address indexed nodeOperator, address indexed to);
 
     /// NO delegate events

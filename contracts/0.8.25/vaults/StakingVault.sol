@@ -330,7 +330,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Performs deposits to the beacon chain using the staged and available ether.
      * @param _deposit struct
      * @param _additionalAmount amount of ether that should be taken from available balance for this deposit
-     * @dev NB! this deposit is not affected by pause if _additionalDeposit == 0
+     * @dev NB! this deposit is not affected by pause if _additionalAmount == 0
      */
     function depositFromStaged(Deposit calldata _deposit, uint256 _additionalAmount) external onlyDepositor {
         if (_additionalAmount > 0) {
