@@ -109,8 +109,7 @@ describe("Integration: VaultHub ", () => {
 
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
       const shortfall = await vaultHub.healthShortfallShares(stakingVault);
-      console.log(shortfall);
-      await dashboard.connect(owner).rebalanceVaultWithShares(shortfall);
+      await dashboard.connect(owner).rebalanceVaultWithShares(shortfall + 1n);
       const shortfall2 = await vaultHub.healthShortfallShares(stakingVault);
       expect(shortfall2).to.equal(0n);
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.true;
@@ -155,6 +154,50 @@ describe("Integration: VaultHub ", () => {
 
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
       const shortfall = await vaultHub.healthShortfallShares(stakingVault);
+      await dashboard.connect(owner).rebalanceVaultWithShares(shortfall);
+      const shortfall2 = await vaultHub.healthShortfallShares(stakingVault);
+      expect(shortfall2).to.equal(0n);
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.true;
+    });
+
+    it("Works on really small numbers", async () => {
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 2000n }));
+
+      await vaultHub.fund(stakingVault, { value: ether("1") });
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
+
+      await dashboard.mintShares(owner, 1n);
+
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: 2n,
+        waitForNextRefSlot: true,
+      });
+
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
+      const shortfall = await vaultHub.healthShortfallShares(stakingVault);
+      expect(shortfall).to.equal(1n);
+      await dashboard.connect(owner).rebalanceVaultWithShares(shortfall);
+      const shortfall2 = await vaultHub.healthShortfallShares(stakingVault);
+      expect(shortfall2).to.equal(0n);
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.true;
+    });
+
+    it("Works on really small numbers", async () => {
+      ({ stakingVault, dashboard, vaultHub } = await setup({ rr: 2000n, frt: 2000n }));
+
+      await vaultHub.fund(stakingVault, { value: ether("1") });
+      expect(await vaultHub.totalValue(stakingVault)).to.equal(ether("2"));
+
+      await dashboard.mintShares(owner, 7n);
+
+      await reportVaultDataWithProof(ctx, stakingVault, {
+        totalValue: 10n,
+        waitForNextRefSlot: true,
+      });
+
+      expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
+      const shortfall = await vaultHub.healthShortfallShares(stakingVault);
+      expect(shortfall).to.equal(3n);
       await dashboard.connect(owner).rebalanceVaultWithShares(shortfall);
       const shortfall2 = await vaultHub.healthShortfallShares(stakingVault);
       expect(shortfall2).to.equal(0n);
