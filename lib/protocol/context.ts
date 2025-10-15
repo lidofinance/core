@@ -19,6 +19,7 @@ export const withCSM = () => {
 
 export const ensureVaultsShareLimit = async (ctx: ProtocolContext) => {
   const { operatorGrid } = ctx.contracts;
+  if (!operatorGrid) return;
 
   const agent = await ctx.getSigner("agent");
 
