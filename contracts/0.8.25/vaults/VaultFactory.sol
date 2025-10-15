@@ -81,7 +81,7 @@ contract VaultFactory {
         // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
         dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
-        dashboard.connectToVaultHub{value: msg.value}();
+        dashboard.connectToVaultHub{value: msg.value}(0);
         
         // _roleAssignments can only include DEFAULT_ADMIN_ROLE's subroles,
         // which is why it's important to revoke the NODE_OPERATOR_MANAGER_ROLE BEFORE granting roles

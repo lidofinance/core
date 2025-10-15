@@ -426,6 +426,11 @@ contract NodeOperatorFee is Permissions {
     error SameSettledGrowth();
 
     /**
+     * @dev Error emitted when the settled growth does not match the expected value during connection.
+     */
+    error SettledGrowthMismatch();
+
+    /**
      * @dev Error emitted when the report is stale.
      */
     error ReportStale();

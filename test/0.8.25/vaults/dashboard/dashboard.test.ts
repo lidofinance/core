@@ -625,14 +625,14 @@ describe("Dashboard.sol", () => {
     });
 
     it("reverts if called by a non-admin", async () => {
-      await expect(newDashboard.connect(stranger).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+      await expect(newDashboard.connect(stranger).connectAndAcceptTier(1, 1n, 0n)).to.be.revertedWithCustomError(
         newDashboard,
         "AccessControlUnauthorizedAccount",
       );
     });
 
     it("reverts if change tier is not confirmed by node operator", async () => {
-      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.be.revertedWithCustomError(
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, 0n)).to.be.revertedWithCustomError(
         newDashboard,
         "TierChangeNotConfirmed",
       );
@@ -640,14 +640,17 @@ describe("Dashboard.sol", () => {
 
     it("works", async () => {
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
-      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n)).to.emit(hub, "Mock__VaultConnected");
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, 0n)).to.emit(
+        hub,
+        "Mock__VaultConnected",
+      );
     });
 
     it("works with connection deposit", async () => {
       const connectDeposit = await hub.CONNECT_DEPOSIT();
 
       await operatorGrid.connect(nodeOperator).changeTier(newVault, 1, 1n);
-      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, { value: connectDeposit }))
+      await expect(newDashboard.connect(vaultOwner).connectAndAcceptTier(1, 1n, 0n, { value: connectDeposit }))
         .to.emit(hub, "Mock__VaultConnected")
         .withArgs(newVault);
     });
@@ -1477,7 +1480,7 @@ describe("Dashboard.sol", () => {
   context("reconnectToVaultHub", () => {
     it("reverts if called by a non-admin", async () => {
       await setup({ isConnected: false });
-      await expect(dashboard.connect(stranger).reconnectToVaultHub()).to.be.revertedWithCustomError(
+      await expect(dashboard.connect(stranger).reconnectToVaultHub(0n)).to.be.revertedWithCustomError(
         dashboard,
         "AccessControlUnauthorizedAccount",
       );
@@ -1494,7 +1497,7 @@ describe("Dashboard.sol", () => {
 
       // reconnect
       await vault.connect(vaultOwner).transferOwnership(dashboard);
-      await dashboard.reconnectToVaultHub();
+      await dashboard.reconnectToVaultHub(0n);
       expect(await vault.owner()).to.equal(hub);
     });
   });

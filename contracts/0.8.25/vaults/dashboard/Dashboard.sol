@@ -276,16 +276,21 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Accepts the ownership over the StakingVault and connects to VaultHub. Can be called to reconnect
      *         to the hub after voluntaryDisconnect()
+     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
      */
-    function reconnectToVaultHub() external {
+    function reconnectToVaultHub(uint256 _currentSettledGrowth) external {
         _acceptOwnership();
-        connectToVaultHub();
+        connectToVaultHub(_currentSettledGrowth);
     }
 
     /**
      * @notice Connects to VaultHub, transferring ownership to VaultHub.
+     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
      */
-    function connectToVaultHub() public payable {
+    function connectToVaultHub(uint256 _currentSettledGrowth) public payable {
+        if (settledGrowth != int256(_currentSettledGrowth)) {
+            revert SettledGrowthMismatch();
+        }
         if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
@@ -295,9 +300,10 @@ contract Dashboard is NodeOperatorFee {
      * @notice Changes the tier of the vault and connects to VaultHub
      * @param _tierId The tier to change to
      * @param _requestedShareLimit The requested share limit
+     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
      */
-    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit) external payable {
-        connectToVaultHub();
+    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit, uint256 _currentSettledGrowth) external payable {
+        connectToVaultHub(_currentSettledGrowth);
         if (!_changeTier(_tierId, _requestedShareLimit)) {
             revert TierChangeNotConfirmed();
         }
