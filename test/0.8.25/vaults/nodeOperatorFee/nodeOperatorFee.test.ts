@@ -398,13 +398,8 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.accruedFee()).to.equal(expectedFee);
       await expect(nodeOperatorFee.connect(vaultOwner).disburseAbnormallyHighFee()).to.emit(
         nodeOperatorFee,
-        "RoleMemberConfirmed",
+        "FeeDisbursed",
       );
-      expect(await nodeOperatorFee.accruedFee()).to.equal(expectedFee);
-
-      await expect(nodeOperatorFee.connect(nodeOperatorManager).disburseAbnormallyHighFee())
-        .to.emit(nodeOperatorFee, "RoleMemberConfirmed")
-        .and.to.emit(nodeOperatorFee, "FeeDisbursed");
       expect(await nodeOperatorFee.accruedFee()).to.equal(0n);
     });
   });

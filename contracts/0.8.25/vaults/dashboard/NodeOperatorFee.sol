@@ -60,20 +60,19 @@ contract NodeOperatorFee is Permissions {
     
     /**
      * @notice If the accrued fee exceeds this BP of the total value, it is considered abnormally high.
-     * An abnormally high fee can only be disbursed with dual confirmation.
+     * An abnormally high fee can only be disbursed by `DEFAULT_ADMIN_ROLE`.
      * This threshold is to prevent accidental overpayment due to outdated settled growth.
      *
      * Why 1% threshold?
      *
-     * - Assume a very generous annual staking APR of ~5% (≈3% CL + 2% EL).
-     * - In the extreme case where the node operator fee rate is 100% of rewards 
-     *   (unrealistic, but technically possible), this translates to a 5% annual fee.
-     * - A 1% fee threshold would therefore be reached in ~73 days (365 / 5).
-     * - Meaning: as long as the operator disburses fees at least once every ~2 months,
+     * - Assume a very generous annual staking APR of ~5% (3% CL + 2% EL).
+     * - A very high node operator fee rate of 10% translates to a 0.5% annual fee.
+     * - Thus, a 1% fee threshold would therefore be reached in 2 years.
+     * - Meaning: as long as the operator disburses fees at least once every 2 years,
      *   the threshold will never be hit.
      *
      * Since these assumptions are highly conservative, in practice the operator
-     * would need to disburse even less frequently before approaching the limit.
+     * would need to disburse even less frequently before approaching the threshold.
      */
     uint256 constant internal ABNORMALLY_HIGH_FEE_THRESHOLD_BP = 1_00; 
 
@@ -89,7 +88,6 @@ contract NodeOperatorFee is Permissions {
      * Cannot exceed 100.00% (10000 basis points).
      */
     uint16 public feeRate;
-
 
     // ==================== Packed Storage Slot 2 ====================
     /**
@@ -201,19 +199,13 @@ contract NodeOperatorFee is Permissions {
     }
 
     /**
-     * @notice Disburses an abnormally high fee with dual confirmation.
-     * Before calling this function, both parties must ensure that the high fee is expected,
+     * @notice Disburses an abnormally high fee as `DEFAULT_ADMIN_ROLE`.
+     * Before calling this function, the caller must ensure that the high fee is expected,
      * and the settled growth (used as baseline for fee) is set correctly.
-     * @return bool True if fee was disbursed, false if still awaiting confirmations
      */
-    function disburseAbnormallyHighFee() external returns (bool) {
-        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
-        
+    function disburseAbnormallyHighFee() external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
         (uint256 fee, int128 growth,) = _calculateFee();
-       
-       _disburseFee(fee, growth);
-
-        return true;
+        _disburseFee(fee, growth);
     }
 
     /**
