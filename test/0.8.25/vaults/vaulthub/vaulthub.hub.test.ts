@@ -692,6 +692,13 @@ describe("VaultHub.sol:hub", () => {
       await vault.connect(user).transferOwnership(vaultHub);
     });
 
+    it("reverts if called by non-owner", async () => {
+      await expect(vaultHub.connect(stranger).connectVault(vault)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NotAuthorized",
+      );
+    });
+
     it("reverts if vault is not factory deployed", async () => {
       const randomVault = certainAddress("randomVault");
       await expect(vaultHub.connect(user).connectVault(randomVault))
@@ -702,9 +709,10 @@ describe("VaultHub.sol:hub", () => {
     it("reverts if vault is already connected", async () => {
       const { vault: connectedVault } = await createAndConnectVault(vaultFactory);
 
-      await expect(vaultHub.connect(user).connectVault(connectedVault))
-        .to.be.revertedWithCustomError(vaultHub, "VaultHubNotPendingOwner")
-        .withArgs(connectedVault);
+      await expect(vaultHub.connect(user).connectVault(connectedVault)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NotAuthorized",
+      );
     });
 
     it("connects the vault", async () => {
@@ -1118,6 +1126,34 @@ describe("VaultHub.sol:hub", () => {
       await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
         vaultHub,
         "NoLiabilitySharesShouldBeLeft",
+      );
+    });
+
+    it("reverts if unsettled lido fees are greater than the balance", async () => {
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
+
+      const totalValue = await vaultHub.totalValue(vaultAddress);
+      const cumulativeLidoFees = totalValue - 1n;
+      await reportVault({ vault, totalValue, cumulativeLidoFees });
+
+      await setBalance(vaultAddress, cumulativeLidoFees - 1n);
+
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NoUnsettledLidoFeesShouldBeLeft",
+      );
+    });
+
+    it("reverts if unsettled lido fees are greater than the total value", async () => {
+      await vaultHub.connect(user).fund(vault, { value: ether("1") });
+
+      const totalValue = await vaultHub.totalValue(vaultAddress);
+      const cumulativeLidoFees = totalValue + 1n;
+      await reportVault({ vault, totalValue, cumulativeLidoFees });
+
+      await expect(vaultHub.connect(user).voluntaryDisconnect(vaultAddress)).to.be.revertedWithCustomError(
+        vaultHub,
+        "NoUnsettledLidoFeesShouldBeLeft",
       );
     });
 

@@ -94,7 +94,7 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     reason: "EasyTrack configuration is upgrade-specific",
   },
   {
-    path: "easyTrack.vaultHubAdapter",
+    path: "easyTrack.vaultsAdapter",
     reason: "EasyTrack configuration is upgrade-specific",
   },
   {

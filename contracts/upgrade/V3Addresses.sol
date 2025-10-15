@@ -54,7 +54,7 @@ contract V3Addresses {
 
         // EasyTrack addresses
         address evmScriptExecutor;
-        address vaultHubAdapter;
+        address vaultsAdapter;
 
         // Existing proxies and contracts
         address kernel;
@@ -63,6 +63,7 @@ contract V3Addresses {
         address locator;
         address voting;
         address dualGovernance;
+        address acl;
     }
 
     string public constant CURATED_MODULE_NAME = "curated-onchain-v1";
@@ -107,7 +108,7 @@ contract V3Addresses {
     // -------- EasyTrack addresses --------
     //
     address public immutable EVM_SCRIPT_EXECUTOR;
-    address public immutable VAULT_HUB_ADAPTER;
+    address public immutable VAULTS_ADAPTER;
 
     //
     // -------- Unchanged contracts --------
@@ -117,6 +118,7 @@ contract V3Addresses {
     address public immutable ARAGON_APP_LIDO_REPO;
     address public immutable VOTING;
     address public immutable DUAL_GOVERNANCE;
+    address public immutable ACL;
     address public immutable EL_REWARDS_VAULT;
     address public immutable STAKING_ROUTER;
     address public immutable VALIDATORS_EXIT_BUS_ORACLE;
@@ -150,12 +152,13 @@ contract V3Addresses {
         ARAGON_APP_LIDO_REPO = params.aragonAppLidoRepo;
         VOTING = params.voting;
         DUAL_GOVERNANCE = params.dualGovernance;
+        ACL = params.acl;
         UPGRADEABLE_BEACON = params.upgradeableBeacon;
         STAKING_VAULT_IMPL = params.stakingVaultImpl;
         DASHBOARD_IMPL = params.dashboardImpl;
         GATE_SEAL = params.gateSealForVaults;
         EVM_SCRIPT_EXECUTOR = params.evmScriptExecutor;
-        VAULT_HUB_ADAPTER = params.vaultHubAdapter;
+        VAULTS_ADAPTER = params.vaultsAdapter;
 
         //
         // Discovered via other contracts

@@ -377,6 +377,12 @@ describe("NodeOperatorFee.sol", () => {
       );
     });
 
+    it("reverts if the amount is too large", async () => {
+      await expect(
+        nodeOperatorFee.connect(nodeOperatorFeeExempter).addFeeExemption(2n ** 104n + 1n),
+      ).to.be.revertedWithCustomError(nodeOperatorFee, "UnexpectedFeeExemptionAmount");
+    });
+
     it("adjuster can addFeeExemption", async () => {
       const increase = ether("10");
 
