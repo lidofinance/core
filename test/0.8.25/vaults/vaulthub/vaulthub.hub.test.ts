@@ -597,7 +597,7 @@ describe("VaultHub.sol:hub", () => {
       const totalValue_ = await vaultHub.totalValue(vault);
 
       const shortfallEth = ceilDiv(liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio, 50_00n);
-      const shortfallShares = await lido.getSharesByPooledEth(shortfallEth);
+      const shortfallShares = (await lido.getSharesByPooledEth(shortfallEth)) + 10n;
 
       expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfallShares);
     });
@@ -678,7 +678,7 @@ describe("VaultHub.sol:hub", () => {
       const totalValue_ = await vaultHub.totalValue(vault);
 
       const shortfallEth = ceilDiv(liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio, 50_00n);
-      const shortfallShares = await lido.getSharesByPooledEth(shortfallEth);
+      const shortfallShares = (await lido.getSharesByPooledEth(shortfallEth)) + 10n;
 
       expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfallShares);
     });
