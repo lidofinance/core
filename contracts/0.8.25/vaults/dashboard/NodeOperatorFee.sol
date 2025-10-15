@@ -192,8 +192,8 @@ contract NodeOperatorFee is Permissions {
      * 4. Withdraws fee amount from vault to node operator recipient
      */
     function disburseFee() public {
-        (uint256 fee, int128 growth, uint256 relativeThreshold) = _calculateFee();
-        if (fee > relativeThreshold) revert AbnormallyHighFee();
+        (uint256 fee, int128 growth, uint256 abnormallyHighFeeThreshold) = _calculateFee();
+        if (fee > abnormallyHighFeeThreshold) revert AbnormallyHighFee();
 
        _disburseFee(fee, growth);
     }
@@ -335,7 +335,7 @@ contract NodeOperatorFee is Permissions {
         _correctSettledGrowth(settledGrowth + int256(_amount));
     }
 
-    function _calculateFee() internal view returns (uint256 fee, int128 growth, uint256 relativeThreshold) {
+    function _calculateFee() internal view returns (uint256 fee, int128 growth, uint256 abnormallyHighFeeThreshold) {
         VaultHub.Report memory report = latestReport();
         growth = int128(uint128(report.totalValue)) - int128(report.inOutDelta);
         int256 unsettledGrowth = growth - settledGrowth;
@@ -344,7 +344,7 @@ contract NodeOperatorFee is Permissions {
             fee = (uint256(unsettledGrowth) * feeRate) / TOTAL_BASIS_POINTS;
         }
 
-        relativeThreshold = (report.totalValue * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
+        abnormallyHighFeeThreshold = (report.totalValue * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
     }
 
     function _setFeeRate(uint256 _newFeeRate) internal {
