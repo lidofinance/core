@@ -52,7 +52,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
      * @param guarantorClaimableEther - ether that guarantor can claim back if NO has changed guarantor with balance
      * @param validatorStatus - status of the validators in PDG
      * @param nodeOperatorDepositor - address delegated by the node operator to be the depositor
-     * @param pendingPredeposits - amount of ether that is pending as predeposits but not proved yet
+     * @param pendingActivations - number of validators that are pending for activation
      */
     struct ERC7201Storage {
         mapping(address nodeOperator => NodeOperatorBalance balance) nodeOperatorBalance;
