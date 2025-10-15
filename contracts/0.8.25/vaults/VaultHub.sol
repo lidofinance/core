@@ -1674,7 +1674,7 @@ contract VaultHub is PausableUntilWithRoles {
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     /**
-     * @notice Emitted when the manager is set
+     * @notice Emitted when the vault ownership is changed
      * @param vault The address of the vault
      * @param newOwner The address of the new owner
      * @param oldOwner The address of the old owner
