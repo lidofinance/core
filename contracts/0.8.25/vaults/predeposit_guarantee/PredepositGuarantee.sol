@@ -693,7 +693,7 @@ contract PredepositGuarantee is IPredepositGuarantee, CLProofVerifier, PausableU
                     withdrawalCredentials,
                     nodeOperator
                 );
-            } else if (stage == ValidatorStage.ACTIVATED) {
+            } else if (stage == ValidatorStage.ACTIVATED && _amounts[i] > 0) {
                 _topUpValidator(
                     vault,
                     _pubkey,
