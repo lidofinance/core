@@ -861,9 +861,12 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _refundRecipient address that will receive the refund for transaction costs
     /// @dev msg.sender should be vault's owner
     /// @dev requires the fresh report (in case of partial withdrawals)
-    /// @dev NB! msg.value is spent to pay EIP-7002 withdrawal fee, leftover is refunded to `_refundRecipient`
-    ///      fee amount is unknown beforehand and can be changed rapidly, so, please, choose `msg.value` wisely
-    ///      to avoid overspending
+    /// @dev A withdrawal fee must be paid via msg.value.
+    ///      `StakingVault.calculateValidatorWithdrawalFee()` can be used to calculate the approximate fee amount but
+    ///      it's accurate only for the current block. The fee may change when the tx is included, so it's recommended
+    ///      to send some surplus. The exact amount required will be paid and the excess will be refunded to the
+    ///      `_refundRecipient` address. The fee required can grow exponentially, so limit msg.value wisely to avoid
+    ///      overspending.
     function triggerValidatorWithdrawals(
         address _vault,
         bytes calldata _pubkeys,
@@ -900,13 +903,16 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault address of the vault to exit validators from
     /// @param _pubkeys array of public keys of the validators to exit
     /// @param _refundRecipient address that will receive the refund for transaction costs
-    /// @dev    In case the vault has obligations shortfall, trusted actor with the role can force its validators to
-    ///         exit the beacon chain. This returns the vault's deposited ETH back to vault's balance and allows to
-    ///         rebalance the vault
+    /// @dev In case the vault has obligations shortfall, trusted actor with the role can force its validators to
+    ///      exit the beacon chain. This returns the vault's deposited ETH back to vault's balance and allows to
+    ///      rebalance the vault
     /// @dev requires the fresh report
-    /// @dev NB! msg.value is spent to pay EIP-7002 withdrawal fee, leftover is refunded to `_refundRecipient`
-    ///      fee amount is unknown beforehand and can be changed rapidly, so, please, choose `msg.value` wisely
-    ///      to avoid overspending
+    /// @dev A withdrawal fee must be paid via msg.value.
+    ///      `StakingVault.calculateValidatorWithdrawalFee()` can be used to calculate the approximate fee amount but
+    ///      it's accurate only for the current block. The fee may change when the tx is included, so it's recommended
+    ///      to send some surplus. The exact amount required will be paid and the excess will be refunded to the
+    ///      `_refundRecipient` address. The fee required can grow exponentially, so limit msg.value wisely to avoid
+    ///      overspending.
     function forceValidatorExit(
         address _vault,
         bytes calldata _pubkeys,
@@ -982,8 +988,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _token address of the ERC20 token to collect
     /// @param _recipient address to send collected tokens to
     /// @param _amount amount of tokens to collect
-    /// @dev will revert with StakingVault.ZeroArgument if _token, _recipient or _amount is zero
-    /// @dev will revert with StakingVault.EthCollectionNotAllowed if _token is ETH (via EIP-7528 address)
+    /// @dev will revert with ZeroArgument() if _token, _recipient or _amount is zero
+    /// @dev will revert with EthCollectionNotAllowed() if _token is ETH (via EIP-7528 address)
     function collectERC20FromVault(
         address _vault,
         address _token,
