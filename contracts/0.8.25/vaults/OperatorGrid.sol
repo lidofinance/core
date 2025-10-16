@@ -420,7 +420,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _requestedShareLimit share limit to set
     /// @return bool Whether the tier change was executed.
     /// @dev Requires vault to be connected to VaultHub to finalize tier change.
-    /// @dev Both vault owner and node operator confirmations are required.
+    /// @dev Both vault owner (via Dashboard) and node operator confirmations are required.
     function changeTier(
         address _vault,
         uint256 _requestedTierId,
@@ -494,7 +494,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _vault address of the vault
     /// @return bool Whether the sync was executed.
     /// @dev Requires vault to be connected to VaultHub.
-    /// @dev Both vault owner and node operator confirmations are required.
+    /// @dev Both vault owner (via Dashboard) and node operator confirmations are required.
     function syncTier(address _vault) external returns (bool) {
         (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection,
         address vaultOwner, address nodeOperator, uint256 vaultTierId) = _getVaultContextForConnectedVault(_vault);
@@ -532,6 +532,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _requestedShareLimit share limit to set
     /// @return bool Whether the update was executed.
     /// @dev Requires vault to be connected to VaultHub.
+    /// @dev Both vault owner (via Dashboard) and node operator confirmations are required.
     function updateVaultShareLimit(address _vault, uint256 _requestedShareLimit) external returns (bool) {
         (VaultHub vaultHub, VaultHub.VaultConnection memory vaultConnection,
         address vaultOwner, address nodeOperator, uint256 vaultTierId) = _getVaultContextForConnectedVault(_vault);

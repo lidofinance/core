@@ -587,7 +587,7 @@ contract Dashboard is NodeOperatorFee {
      * @dev Tier sync confirmation logic:
      *      - Both vault owner (via this function) AND node operator (via OperatorGrid) confirmations are required
      *      - First call returns false (pending), second call with both confirmations completes the operation
-     *      - Confirmations expire after the configured period
+     *      - Confirmations expire after the configured period (default: 1 day)
      */
     function syncTier() external returns (bool) {
         return _syncTier();
@@ -600,7 +600,7 @@ contract Dashboard is NodeOperatorFee {
      * @dev Share limit update confirmation logic:
      *      - Both vault owner (via this function) AND node operator (via OperatorGrid) confirmations required
      *      - First call returns false (pending), second call with node operator confirmation completes the operation
-     *      - Confirmations expire after the configured period
+     *      - Confirmations expire after the configured period (default: 1 day)
      */
     function updateShareLimit(uint256 _requestedShareLimit) external returns (bool) {
         return _updateVaultShareLimit(_requestedShareLimit);
