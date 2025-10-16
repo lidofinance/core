@@ -15,9 +15,9 @@ abstract contract Confirmations {
      * @notice Tracks confirmations
      * @custom:storage-location erc7201:Lido.Utils.Confirmations
      * @dev We cannot set confirmExpiry to 0 because this means that all confirmations have to be in the same block,
-     *      which can never be guaranteed. And, more importantly, if the `_setConfirmExpiry` is restricted by
-     *      the `onlyConfirmed` modifier, the confirmation expiry will be tricky to change.
-     *      This is why confirmExpiry is private, set to a default value of 1 hour and cannot be set to 0.
+     *      which can never be guaranteed. And, more importantly, if the `_setConfirmExpiry` requires confirmation,
+     *      the confirmation expiry will be tricky to change.
+     *      This is why confirmExpiry is private, set to a default value of 1 days and cannot be set to 0.
      *
      * Storage layout:
      * - callData: msg.data of the call (selector + arguments)
