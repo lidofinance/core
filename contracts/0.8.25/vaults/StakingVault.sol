@@ -472,7 +472,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
     /**
      * @notice Override the OwnableUpgradeable function to revert
      */
-    function renounceOwnership() public onlyOwner override(OwnableUpgradeable) {
+    function renounceOwnership() public view onlyOwner override(OwnableUpgradeable) {
         revert RenouncementNotAllowed();
     }
 
