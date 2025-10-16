@@ -197,6 +197,13 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         );
     }
 
+    /// @notice Sets the confirmation expiry period
+    /// @param _newConfirmExpiry The new confirmation expiry period in seconds
+    function setConfirmExpiry(uint256 _newConfirmExpiry) external onlyRole(REGISTRY_ROLE) {
+        _validateConfirmExpiry(_newConfirmExpiry);
+        _setConfirmExpiry(_newConfirmExpiry);
+    }
+
     /// @notice Registers a new group
     /// @param _nodeOperator address of the node operator
     /// @param _shareLimit Maximum share limit for the group
