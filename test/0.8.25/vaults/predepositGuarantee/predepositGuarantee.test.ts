@@ -264,7 +264,7 @@ describe("PredepositGuarantee.sol", () => {
 
         await expect(setGuarantorTx)
           .to.emit(pdg, "BalanceRefunded")
-          .withArgs(vaultOperator, vaultOperatorGuarantor)
+          .withArgs(vaultOperator, vaultOperator)
           .to.emit(pdg, "GuarantorRefundAdded")
           .withArgs(vaultOperator, vaultOperator, balance)
           .to.emit(pdg, "GuarantorSet")
@@ -296,7 +296,7 @@ describe("PredepositGuarantee.sol", () => {
         const returnTx = pdg.setNodeOperatorGuarantor(vaultOperator);
         await expect(returnTx)
           .to.emit(pdg, "BalanceRefunded")
-          .withArgs(vaultOperator, vaultOperator)
+          .withArgs(vaultOperator, vaultOperatorGuarantor)
           .to.emit(pdg, "GuarantorRefundAdded")
           .withArgs(vaultOperatorGuarantor, vaultOperator, balance)
           .to.emit(pdg, "GuarantorSet")
@@ -337,7 +337,7 @@ describe("PredepositGuarantee.sol", () => {
         const returnTx = pdg.setNodeOperatorGuarantor(vaultOperator);
         await expect(returnTx)
           .to.emit(pdg, "BalanceRefunded")
-          .withArgs(vaultOperator, vaultOperator)
+          .withArgs(vaultOperator, vaultOperatorGuarantor)
           .to.emit(pdg, "GuarantorRefundAdded")
           .withArgs(vaultOperatorGuarantor, vaultOperator, balance)
           .to.emit(pdg, "GuarantorSet")
