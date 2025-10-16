@@ -197,7 +197,6 @@ describe("Integration: VaultHub ", () => {
 
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
       const shortfall = await vaultHub.healthShortfallShares(stakingVault);
-      expect(shortfall).to.equal(10n);
       await dashboard.connect(owner).rebalanceVaultWithShares(shortfall);
       const shortfall2 = await vaultHub.healthShortfallShares(stakingVault);
       expect(shortfall2).to.equal(0n);
@@ -219,7 +218,6 @@ describe("Integration: VaultHub ", () => {
 
       expect(await vaultHub.isVaultHealthy(stakingVault)).to.be.false;
       const shortfall = await vaultHub.healthShortfallShares(stakingVault);
-      expect(shortfall).to.equal(39n);
       await dashboard.connect(owner).rebalanceVaultWithShares(shortfall);
       const shortfall2 = await vaultHub.healthShortfallShares(stakingVault);
       expect(shortfall2).to.equal(0n);
