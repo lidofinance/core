@@ -183,8 +183,7 @@ abstract contract Permissions is AccessControlConfirmable {
     }
 
     /**
-     * @dev Returns an array of roles that need to confirm the call
-     *      used for the `onlyConfirmed` modifier.
+     * @dev Returns an array of roles that need to confirm the calls that require confirmations
      * @return The roles that need to confirm the call.
      */
     function confirmingRoles() public pure virtual returns (bytes32[] memory);
@@ -308,9 +307,10 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev Checks the confirming roles and transfer the ownership of the vault without disconnecting it from the hub
      * @param _newOwner The address to set the owner to.
      */
-    function _transferVaultOwnership(address _newOwner) internal {
-        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return;
+    function _transferVaultOwnership(address _newOwner) internal returns (bool) {
+        if (!_collectAndCheckConfirmations(msg.data, confirmingRoles())) return false;
         VAULT_HUB.transferVaultOwnership(address(_stakingVault()), _newOwner);
+        return true;
     }
 
     /**

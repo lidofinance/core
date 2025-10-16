@@ -242,9 +242,10 @@ contract Dashboard is NodeOperatorFee {
      * @notice Transfers the ownership of the underlying StakingVault from this contract to a new owner
      *         without disconnecting it from the hub
      * @param _newOwner Address of the new owner.
+     * @return bool True if the ownership transfer was executed, false if pending for confirmation
      */
-    function transferVaultOwnership(address _newOwner) external {
-        _transferVaultOwnership(_newOwner);
+    function transferVaultOwnership(address _newOwner) external returns (bool) {
+        return _transferVaultOwnership(_newOwner);
     }
 
     /**
