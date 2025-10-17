@@ -13,16 +13,18 @@ import {VaultHub} from "./VaultHub.sol";
 import {Permissions} from "./dashboard/Permissions.sol";
 import {Dashboard} from "./dashboard/Dashboard.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
+import {IVaultFactory} from "./interfaces/IVaultFactory.sol";
 
 /**
  * @title VaultFactory
  * @author Lido
  * @notice The factory contract for StakingVaults
  */
-contract VaultFactory {
+contract VaultFactory is IVaultFactory {
     address public immutable LIDO_LOCATOR;
     address public immutable BEACON;
     address public immutable DASHBOARD_IMPL;
+    address public immutable PREVIOUS_FACTORY;
 
     /**
      * @notice mapping of vaults deployed by this factory
@@ -30,14 +32,20 @@ contract VaultFactory {
      *      This ensures that the vault storage has not been tampered with
      *      before connecting to VaultHub.
      */
-    mapping(address vault => bool) public deployedVaults;
+    mapping(address vault => bool) private deployedByThisFactory;
 
     /**
      * @param _lidoLocator The address of the LidoLocator contract
      * @param _beacon The address of the Beacon contract for StakingVaults
      * @param _dashboardImpl The address of the Dashboard implementation contract
+     * @param _previousFactory the address of the previous factory (can be zero address)
      */
-    constructor(address _lidoLocator, address _beacon, address _dashboardImpl) {
+    constructor(
+        address _lidoLocator,
+        address _beacon,
+        address _dashboardImpl,
+        address _previousFactory
+    ) {
         if (_lidoLocator == address(0)) revert ZeroArgument("_lidoLocator");
         if (_beacon == address(0)) revert ZeroArgument("_beacon");
         if (_dashboardImpl == address(0)) revert ZeroArgument("_dashboardImpl");
@@ -45,6 +53,16 @@ contract VaultFactory {
         LIDO_LOCATOR = _lidoLocator;
         BEACON = _beacon;
         DASHBOARD_IMPL = _dashboardImpl;
+        PREVIOUS_FACTORY = _previousFactory;
+    }
+
+    /**
+     * Returns true if the vault was deployed by this factory or PREVIOUS_FACTORY
+     * @param _vault address of the vault
+     */
+    function deployedVaults(address _vault) external view returns (bool) {
+        return deployedByThisFactory[_vault] ||
+            (PREVIOUS_FACTORY != address(0) && IVaultFactory(PREVIOUS_FACTORY).deployedVaults(_vault));
     }
 
     /**
@@ -87,8 +105,8 @@ contract VaultFactory {
 
         dashboard.grantRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), _nodeOperatorManager);
         dashboard.revokeRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), address(this));
-        
-        // _roleAssignments can only include DEFAULT_ADMIN_ROLE's subroles,
+
+        // _roleAssignments can only include DEFAULT_ADMIN_ROLE's sub-roles,
         // which is why it's important to revoke the NODE_OPERATOR_MANAGER_ROLE BEFORE granting roles
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
 
@@ -143,7 +161,7 @@ contract VaultFactory {
 
     function _deployVault() internal returns (address vault) {
         vault = address(new PinnedBeaconProxy(BEACON, ""));
-        deployedVaults[vault] = true;
+        deployedByThisFactory[vault] = true;
     }
 
     /**
