@@ -97,14 +97,9 @@ contract VaultFactory is IVaultFactory {
         vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
-        dashboard.initialize(address(this), address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
+        dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
-        // connection must be pre-approved by the node operator manager
-        dashboard.setApprovedToConnect(true);
-        dashboard.connectToVaultHub{value: msg.value}();
-
-        dashboard.grantRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), _nodeOperatorManager);
-        dashboard.revokeRole(dashboard.NODE_OPERATOR_MANAGER_ROLE(), address(this));
+        dashboard.connectToVaultHub{value: msg.value}(0);
 
         // _roleAssignments can only include DEFAULT_ADMIN_ROLE's sub-roles,
         // which is why it's important to revoke the NODE_OPERATOR_MANAGER_ROLE BEFORE granting roles

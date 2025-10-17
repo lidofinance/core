@@ -493,6 +493,6 @@ export async function calculateLockedValue(
   return liability + (reserve > minimalReserve ? reserve : minimalReserve);
 }
 
-function ceilDiv(a: bigint, b: bigint): bigint {
+export function ceilDiv(a: bigint, b: bigint): bigint {
   return (a + b - 1n) / b;
 }

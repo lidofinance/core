@@ -1213,30 +1213,33 @@ contract VaultHub is PausableUntilWithRoles {
 
         uint256 reserveRatioBP = _connection.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
-        uint256 sharesByTotalValue = _getSharesByPooledEth(totalValue_);
+        uint256 liability = _getPooledEthBySharesRoundUp(liabilityShares_);
 
         // Impossible to rebalance a vault with bad debt
-        if (liabilityShares_ >= sharesByTotalValue) {
+        if (liability > totalValue_) {
             return type(uint256).max;
         }
 
         // Solve the equation for X:
-        // LS - liabilityShares, TV - sharesByTotalValue
+        // L - liability, TV - totalValue
         // MR - maxMintableRatio, 100 - TOTAL_BASIS_POINTS, RR - reserveRatio
         // X - amount of shares that should be withdrawn (TV - X) and used to repay the debt (LS - X)
-        // to reduce the LS/TVS ratio back to MR
-
-        // (LS - X) / (TV - X) = MR / 100
-        // (LS - X) * 100 = (TV - X) * MR
-        // LS * 100 - X * 100 = TV * MR - X * MR
-        // X * MR - X * 100 = TV * MR - LS * 100
-        // X * (MR - 100) = TV * MR - LS * 100
-        // X = (TV * MR - LS * 100) / (MR - 100)
-        // X = (LS * 100 - TV * MR) / (100 - MR)
+        // to reduce the L/TV ratio back to MR
+        // (L - X) / (TV - X) = MR / 100
+        // (L - X) * 100 = (TV - X) * MR
+        // L * 100 - X * 100 = TV * MR - X * MR
+        // X * MR - X * 100 = TV * MR - L * 100
+        // X * (MR - 100) = TV * MR - L * 100
+        // X = (TV * MR - L * 100) / (MR - 100)
+        // X = (L * 100 - TV * MR) / (100 - MR)
         // RR = 100 - MR
-        // X = (LS * 100 - TV * MR) / RR
+        // X = (L * 100 - TV * MR) / RR
+        uint256 shortfallEth = (liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio) / reserveRatioBP;
 
-        return (liabilityShares_ * TOTAL_BASIS_POINTS - sharesByTotalValue * maxMintableRatio) / reserveRatioBP;
+        // Add 10 extra shares to avoid dealing with rounding/precision issues
+        uint256 shortfallShares = _getSharesByPooledEth(shortfallEth) + 10;
+
+        return Math256.min(shortfallShares, liabilityShares_);
     }
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {

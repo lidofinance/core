@@ -57,6 +57,24 @@ contract NodeOperatorFee is Permissions {
      */
     bytes32 public constant NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE =
         keccak256("vaults.NodeOperatorFee.ProveUnknownValidatorsRole");
+    
+    /**
+     * @notice If the accrued fee exceeds this BP of the total value, it is considered abnormally high.
+     * An abnormally high fee can only be disbursed by `DEFAULT_ADMIN_ROLE`.
+     * This threshold is to prevent accidental overpayment due to outdated settled growth.
+     *
+     * Why 1% threshold?
+     *
+     * - Assume a very generous annual staking APR of ~5% (3% CL + 2% EL).
+     * - A very high node operator fee rate of 10% translates to a 0.5% annual fee.
+     * - Thus, a 1% fee threshold would therefore be reached in 2 years.
+     * - Meaning: as long as the operator disburses fees at least once every 2 years,
+     *   the threshold will never be hit.
+     *
+     * Since these assumptions are highly conservative, in practice the operator
+     * would need to disburse even less frequently before approaching the threshold.
+     */
+    uint256 constant internal ABNORMALLY_HIGH_FEE_THRESHOLD_BP = 1_00; 
 
     // ==================== Packed Storage Slot 1 ====================
     /**
@@ -92,13 +110,6 @@ contract NodeOperatorFee is Permissions {
      * Regular fee disbursements do not update this timestamp.
      */
     uint64 public latestCorrectionTimestamp;
-
-    /**
-     * @notice Flag indicating whether the vault is approved by the node operator to connect to VaultHub.
-     * The node operator's approval is needed to confirm the validity of fee calculations,
-     * particularly the settled growth.
-     */
-    bool public isApprovedToConnect;
 
     /**
      * @notice Passes the address of the vault hub up the inheritance chain.
@@ -167,20 +178,12 @@ contract NodeOperatorFee is Permissions {
      * @return fee The amount of ETH accrued as fee
      */
     function accruedFee() public view returns (uint256 fee) {
-        (fee, ) = _calculateFee();
+        (fee,, ) = _calculateFee();
     }
 
     /**
-     * @notice Approves/forbids connection to VaultHub. Approval implies that the node operator agrees
-     * with the current fee parameters, particularly the settled growth used as baseline for fee calculations.
-     * @param _isApproved True to approve, False to forbid
-     */
-    function setApprovedToConnect(bool _isApproved) external onlyRoleMemberOrAdmin(NODE_OPERATOR_MANAGER_ROLE) {
-        _setApprovedToConnect(_isApproved);
-    }
-
-    /**
-     * @notice Permissionless function to disburse node operator fees.
+     * @notice Disburses node operator fees permissionlessly.
+     * Can be called by anyone as long as fee is not abnormally high.
      *
      * Fee disbursement steps:
      * 1. Calculate current vault growth from latest report
@@ -189,15 +192,20 @@ contract NodeOperatorFee is Permissions {
      * 4. Withdraws fee amount from vault to node operator recipient
      */
     function disburseFee() public {
-        (uint256 fee, int128 growth) = _calculateFee();
+        (uint256 fee, int128 growth, uint256 abnormallyHighFeeThreshold) = _calculateFee();
+        if (fee > abnormallyHighFeeThreshold) revert AbnormallyHighFee();
 
-        // it's important not to revert here so as not to block disconnect
-        if (fee == 0) return;
+       _disburseFee(fee, growth);
+    }
 
-        _setSettledGrowth(growth);
-
-        VAULT_HUB.withdraw(address(_stakingVault()), feeRecipient, fee);
-        emit FeeDisbursed(msg.sender, fee);
+    /**
+     * @notice Disburses an abnormally high fee as `DEFAULT_ADMIN_ROLE`.
+     * Before calling this function, the caller must ensure that the high fee is expected,
+     * and the settled growth (used as baseline for fee) is set correctly.
+     */
+    function disburseAbnormallyHighFee() external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
+        (uint256 fee, int128 growth,) = _calculateFee();
+        _disburseFee(fee, growth);
     }
 
     /**
@@ -284,13 +292,17 @@ contract NodeOperatorFee is Permissions {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
-    function _setApprovedToConnect(bool _isApproved) internal {
-        isApprovedToConnect = _isApproved;
+    function _disburseFee(uint256 fee, int128 growth) internal {
+        // it's important not to revert here so as not to block disconnect
+        if (fee == 0) return;
 
-        emit ApprovedToConnectSet(_isApproved);
+        _setSettledGrowth(growth);
+
+        VAULT_HUB.withdraw(address(_stakingVault()), feeRecipient, fee);
+        emit FeeDisbursed(msg.sender, fee);
     }
 
-    function _setSettledGrowth(int256 _newSettledGrowth) private {
+    function _setSettledGrowth(int256 _newSettledGrowth) internal {
         int128 oldSettledGrowth = settledGrowth;
         if (oldSettledGrowth == _newSettledGrowth) revert SameSettledGrowth();
 
@@ -323,7 +335,7 @@ contract NodeOperatorFee is Permissions {
         _correctSettledGrowth(settledGrowth + int256(_amount));
     }
 
-    function _calculateFee() internal view returns (uint256 fee, int128 growth) {
+    function _calculateFee() internal view returns (uint256 fee, int128 growth, uint256 abnormallyHighFeeThreshold) {
         VaultHub.Report memory report = latestReport();
         growth = int128(uint128(report.totalValue)) - int128(report.inOutDelta);
         int256 unsettledGrowth = growth - settledGrowth;
@@ -331,6 +343,8 @@ contract NodeOperatorFee is Permissions {
         if (unsettledGrowth > 0) {
             fee = (uint256(unsettledGrowth) * feeRate) / TOTAL_BASIS_POINTS;
         }
+
+        abnormallyHighFeeThreshold = (report.totalValue * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
     }
 
     function _setFeeRate(uint256 _newFeeRate) internal {
@@ -389,17 +403,17 @@ contract NodeOperatorFee is Permissions {
      */
     event CorrectionTimestampUpdated(uint64 timestamp);
 
-    /**
-     * @dev Emitted when the node operator approves/forbids to connect to VaultHub.
-     */
-    event ApprovedToConnectSet(bool isApproved);
-
     // ==================== Errors ====================
 
     /**
      * @dev Error emitted when the combined feeBPs exceed 100%.
      */
     error FeeValueExceed100Percent();
+
+    /**
+     * @dev Error emitted when trying to disburse an abnormally high fee.
+     */
+    error AbnormallyHighFee();
 
     /**
      * @dev Error emitted when trying to set same value for recipient
@@ -410,6 +424,11 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when trying to set same value for settled growth
      */
     error SameSettledGrowth();
+
+    /**
+     * @dev Error emitted when the settled growth does not match the expected value during connection.
+     */
+    error SettledGrowthMismatch();
 
     /**
      * @dev Error emitted when the report is stale.
@@ -430,11 +449,6 @@ contract NodeOperatorFee is Permissions {
      * @dev Error emitted when the fee exemption amount does not match the expected value
      */
     error UnexpectedFeeExemptionAmount();
-
-    /**
-     * @dev Error emitted when the settled growth is pending manual adjustment.
-     */
-    error ForbiddenToConnectByNodeOperator();
 
     /**
      * @dev Error emitted when the vault is quarantined.
