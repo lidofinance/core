@@ -262,11 +262,13 @@ contract Dashboard is NodeOperatorFee {
      * @notice Accepts the ownership over the disconnected StakingVault transferred from VaultHub
      *         and immediately passes it to a new pending owner. This new owner will have to accept the ownership
      *         on the StakingVault contract.
+     *         Resets the settled growth to 0 to encourage correction before reconnection.
      * @param _newOwner The address to transfer the StakingVault ownership to.
      */
     function abandonDashboard(address _newOwner) external {
         if (VAULT_HUB.isVaultConnected(address(_stakingVault()))) revert ConnectedToVaultHub();
         if (_newOwner == address(this)) revert DashboardNotAllowed();
+        if (settledGrowth != 0) _setSettledGrowth(0);
 
         _acceptOwnership();
         _transferOwnership(_newOwner);
@@ -275,33 +277,34 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Accepts the ownership over the StakingVault and connects to VaultHub. Can be called to reconnect
      *         to the hub after voluntaryDisconnect()
+     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
      */
-    function reconnectToVaultHub() external {
+    function reconnectToVaultHub(uint256 _currentSettledGrowth) external {
         _acceptOwnership();
-        connectToVaultHub();
+        connectToVaultHub(_currentSettledGrowth);
     }
 
     /**
      * @notice Connects to VaultHub, transferring underlying StakingVault ownership to VaultHub.
+     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
      */
-    function connectToVaultHub() public payable {
-        if (!isApprovedToConnect) revert ForbiddenToConnectByNodeOperator();
-
+    function connectToVaultHub(uint256 _currentSettledGrowth) public payable {
+        if (settledGrowth != int256(_currentSettledGrowth)) {
+            revert SettledGrowthMismatch();
+        }
         if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
-
-        // node operator approval is one time only and is reset after connect
-        _setApprovedToConnect(false);
     }
 
     /**
      * @notice Changes the tier of the vault and connects to VaultHub
      * @param _tierId The tier to change to
      * @param _requestedShareLimit The requested share limit
+     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
      */
-    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit) external payable {
-        connectToVaultHub();
+    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit, uint256 _currentSettledGrowth) external payable {
+        connectToVaultHub(_currentSettledGrowth);
         if (!_changeTier(_tierId, _requestedShareLimit)) {
             revert TierChangeNotConfirmed();
         }
