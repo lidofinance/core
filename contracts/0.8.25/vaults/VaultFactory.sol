@@ -82,7 +82,7 @@ contract VaultFactory {
         dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
 
         dashboard.connectToVaultHub{value: msg.value}(0);
-        
+
         // _roleAssignments can only include DEFAULT_ADMIN_ROLE's subroles,
         // which is why it's important to revoke the NODE_OPERATOR_MANAGER_ROLE BEFORE granting roles
         if (_roleAssignments.length > 0) dashboard.grantRoles(_roleAssignments);
