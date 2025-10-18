@@ -85,6 +85,11 @@ const OracleVersionsSchema = z.object({
   ao_consensus_version: PositiveIntSchema,
 });
 
+// V3 vote script params
+const V3VoteScriptSchema = z.object({
+  expiryTimestamp: NonNegativeIntSchema,
+});
+
 // Aragon app versions schema
 const AragonAppVersionsSchema = z.object({
   nor_version: z.array(z.number()).length(3),
@@ -117,6 +122,7 @@ export const UpgradeParametersSchema = z.object({
   burner: BurnerSchema,
   oracleVersions: OracleVersionsSchema.optional(),
   aragonAppVersions: AragonAppVersionsSchema.optional(),
+  v3VoteScript: V3VoteScriptSchema,
 });
 
 // Gate seal schema (for scratch deployment)

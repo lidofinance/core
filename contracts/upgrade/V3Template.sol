@@ -91,10 +91,10 @@ contract V3Template is V3Addresses {
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
-    // Timestamp since startUpgrade() and finishUpgrade() revert with Expired()
-    // This behavior is introduced to disarm the template if the upgrade voting creation or enactment didn't
-    // happen in proper time period
-    uint256 public constant EXPIRE_SINCE_INCLUSIVE = 1761868800; // 2025-10-31 00:00:00 UTC
+    // Timestamp since which startUpgrade()
+    // This behavior is introduced to disarm the template if the upgrade voting creation or enactment
+    // didn't happen in proper time period
+    uint256 public immutable EXPIRE_SINCE_INCLUSIVE;
 
     // Initial value of upgradeBlockNumber storage variable
     uint256 public constant UPGRADE_NOT_STARTED = 0;
@@ -123,7 +123,9 @@ contract V3Template is V3Addresses {
 
 
     /// @param _params Params required to initialize the addresses contract
-    constructor(V3AddressesParams memory _params) V3Addresses(_params) {
+    /// @param _expireSinceInclusive Unix timestamp after which upgrade actions revert
+    constructor(V3AddressesParams memory _params, uint256 _expireSinceInclusive) V3Addresses(_params) {
+        EXPIRE_SINCE_INCLUSIVE = _expireSinceInclusive;
         contractsWithBurnerAllowances.push(WITHDRAWAL_QUEUE);
         // NB: NOR and SIMPLE_DVT allowances are set to 0 in TW upgrade, so they are not migrated
         contractsWithBurnerAllowances.push(CSM_ACCOUNTING);

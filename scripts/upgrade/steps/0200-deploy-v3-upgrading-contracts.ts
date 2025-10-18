@@ -53,7 +53,10 @@ export async function main() {
     getAddress(Sk.aragonAcl, state),
   ];
 
-  const template = await deployWithoutProxy(Sk.v3Template, "V3Template", deployer, [addressesParams]);
+  const template = await deployWithoutProxy(Sk.v3Template, "V3Template", deployer, [
+    addressesParams,
+    parameters.v3VoteScript.expiryTimestamp,
+  ]);
 
   await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [
     [template.address, state[Sk.appLido].aragonApp.id],
