@@ -127,6 +127,7 @@ contract V3Addresses {
     address public immutable NODE_OPERATORS_REGISTRY;
     address public immutable SIMPLE_DVT;
     address public immutable CSM_ACCOUNTING;
+    address public immutable ORACLE_DAEMON_CONFIG;
 
     constructor(
         V3AddressesParams memory params
@@ -159,7 +160,6 @@ contract V3Addresses {
         GATE_SEAL = params.gateSealForVaults;
         EVM_SCRIPT_EXECUTOR = params.evmScriptExecutor;
         VAULTS_ADAPTER = params.vaultsAdapter;
-
         //
         // Discovered via other contracts
         //
@@ -183,6 +183,7 @@ contract V3Addresses {
         VALIDATORS_EXIT_BUS_ORACLE = newLocatorImpl.validatorsExitBusOracle();
         WITHDRAWAL_QUEUE = newLocatorImpl.withdrawalQueue();
         WSTETH = newLocatorImpl.wstETH();
+        ORACLE_DAEMON_CONFIG = newLocatorImpl.oracleDaemonConfig();
 
         {
             // Retrieve contracts with burner allowances to migrate: NOR, SDVT and CSM ACCOUNTING
