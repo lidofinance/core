@@ -5,7 +5,6 @@
 // solhint-disable-next-line lido/fixed-compiler-version
 pragma solidity >=0.8.0;
 
-import {IDepositContract} from "contracts/common/interfaces/IDepositContract.sol";
 
 /**
  * @title IStakingVault
@@ -28,7 +27,7 @@ interface IStakingVault {
         bytes32 depositDataRoot;
     }
 
-    function DEPOSIT_CONTRACT() external view returns (IDepositContract);
+    function DEPOSIT_CONTRACT() external view returns (address);
     function initialize(address _owner, address _nodeOperator, address _depositor) external;
     function version() external pure returns (uint64);
     function getInitializedVersion() external view returns (uint64);

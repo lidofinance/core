@@ -586,8 +586,8 @@ contract Lido is Versioned, StETHPermit, AragonApp {
     /**
      * @return the Lido Locator address
      */
-    function getLidoLocator() external view returns (ILidoLocator) {
-        return _getLidoLocator();
+    function getLidoLocator() external view returns (address) {
+        return address(_getLidoLocator());
     }
 
     /**

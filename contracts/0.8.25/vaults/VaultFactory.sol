@@ -63,20 +63,20 @@ contract VaultFactory {
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry,
         Permissions.RoleAssignment[] calldata _roleAssignments
-    ) external payable returns (IStakingVault vault, Dashboard dashboard) {
+    ) external payable returns (address vault, Dashboard dashboard) {
         // check if the msg.value is enough to cover the connect deposit
         ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
         if (msg.value < VaultHub(payable(locator.vaultHub())).CONNECT_DEPOSIT()) revert InsufficientFunds();
 
         // create the vault proxy
-        vault = IStakingVault(_deployVault());
+        vault = _deployVault();
 
         // create the dashboard proxy
         bytes memory immutableArgs = abi.encode(address(vault));
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
         // initialize StakingVault with the dashboard address as the owner
-        vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
+        IStakingVault(vault).initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the factory address as the default admin, grant optional roles and connect to VaultHub
         dashboard.initialize(address(this), _nodeOperatorManager, _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);
@@ -111,18 +111,18 @@ contract VaultFactory {
         uint256 _nodeOperatorFeeBP,
         uint256 _confirmExpiry,
         Permissions.RoleAssignment[] calldata _roleAssignments
-    ) external returns (IStakingVault vault, Dashboard dashboard) {
+    ) external returns (address vault, Dashboard dashboard) {
         ILidoLocator locator = ILidoLocator(LIDO_LOCATOR);
 
         // create the vault proxy
-        vault = IStakingVault(_deployVault());
+        vault = _deployVault();
 
         // create the dashboard proxy
         bytes memory immutableArgs = abi.encode(address(vault));
         dashboard = Dashboard(payable(Clones.cloneWithImmutableArgs(DASHBOARD_IMPL, immutableArgs)));
 
         // initialize StakingVault with the dashboard address as the owner
-        vault.initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
+        IStakingVault(vault).initialize(address(dashboard), _nodeOperator, locator.predepositGuarantee());
 
         // initialize Dashboard with the _defaultAdmin as the default admin, grant optional node operator managed roles
         dashboard.initialize(_defaultAdmin, address(this), _nodeOperatorManager, _nodeOperatorFeeBP, _confirmExpiry);

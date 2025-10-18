@@ -25,7 +25,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, Ownable2StepUpgra
      */
     uint64 private constant _VERSION = 2;
 
-    IDepositContract public immutable DEPOSIT_CONTRACT;
+    address public immutable DEPOSIT_CONTRACT;
 
     bytes32 private constant ERC7201_STORAGE_LOCATION =
         0x2ec50241a851d8d3fea472e7057288d4603f7a7f78e6d18a9c12cad84552b100;
@@ -33,7 +33,7 @@ contract StakingVault__HarnessForTestUpgrade is IStakingVault, Ownable2StepUpgra
     constructor(address _beaconChainDepositContract) {
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
 
-        DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
+        DEPOSIT_CONTRACT = _beaconChainDepositContract;
 
         // Prevents reinitialization of the implementation
         _disableInitializers();

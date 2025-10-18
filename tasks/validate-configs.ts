@@ -113,6 +113,10 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     path: "oracleVersions.ao_consensus_version",
     reason: "Oracle versions are upgrade-specific configuration",
   },
+  {
+    path: "v3VoteScript.expiryTimestamp",
+    reason: "V3 vote script expiry timestamp is upgrade-specific configuration",
+  },
 ];
 
 // Special mappings where the same concept has different names

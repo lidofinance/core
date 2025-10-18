@@ -439,7 +439,7 @@ contract Dashboard is NodeOperatorFee {
         if (pdgPolicy != PDGPolicy.ALLOW_DEPOSIT_AND_PROVE) revert ForbiddenByPDGPolicy();
 
         IStakingVault stakingVault_ = _stakingVault();
-        IDepositContract depositContract = stakingVault_.DEPOSIT_CONTRACT();
+        IDepositContract depositContract = IDepositContract(stakingVault_.DEPOSIT_CONTRACT());
 
         for (uint256 i = 0; i < _deposits.length; i++) {
             totalAmount += _deposits[i].amount;
