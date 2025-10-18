@@ -77,18 +77,6 @@ isMigrationAllowed = true             # Must be on for the upgrade to work (for 
 vebo_consensus_version = 4            # Validators Exit Bus Oracle consensus version
 ao_consensus_version = 4              # Accounting Oracle consensus version
 
-# ================================================================================================
-# TRIGGERABLE WITHDRAWALS (TW) UPGRADE PARAMETERS
-# ================================================================================================
-# All parameters related to the Triggerable Withdrawals upgrade are grouped here for easy access
 
-# TW Gateway configuration for managing validator exit requests
-[triggerableWithdrawalsGateway]
-maxExitRequestsLimit = 13000          # Maximum number of exit requests that can be processed
-exitsPerFrame = 1                     # Number of exits processed per frame
-frameDurationInSec = 48               # Duration of each processing frame in seconds
-
-# TW Exit management configuration
-[triggerableWithdrawals]
-exit_events_lookback_window_in_slots = 7200  # Lookback window for exit events in slots (1 day)
-nor_exit_deadline_in_sec = 1800       # Node operator registry exit deadline in seconds (30 minutes)
+# Sources (todo)
+# - https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504

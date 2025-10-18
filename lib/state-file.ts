@@ -170,7 +170,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.stakingVaultFactory:
     case Sk.minFirstAllocationStrategy:
     case Sk.validatorConsolidationRequests:
-    case Sk.twVoteScript:
     case Sk.v3VoteScript:
       return state[contractKey].address;
     default:

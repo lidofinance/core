@@ -113,14 +113,6 @@ const EXPECTED_MISSING_IN_SCRATCH = [
     path: "oracleVersions.ao_consensus_version",
     reason: "Oracle versions are upgrade-specific configuration",
   },
-  {
-    path: "triggerableWithdrawals.exit_events_lookback_window_in_slots",
-    reason: "TODO",
-  },
-  {
-    path: "triggerableWithdrawals.nor_exit_deadline_in_sec",
-    reason: "TODO",
-  },
 ];
 
 // Special mappings where the same concept has different names

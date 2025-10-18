@@ -33,7 +33,7 @@
     "test:integration:upgrade": "yarn test:integration:upgrade:helper test/integration/**/*.ts",
     "test:integration:upgrade:helper": "cp deployed-mainnet.json deployed-mainnet-upgrade.json && NETWORK_STATE_FILE=deployed-mainnet-upgrade.json UPGRADE_PARAMETERS_FILE=scripts/upgrade/upgrade-params-mainnet.toml MODE=forking UPGRADE=true GAS_PRIORITY_FEE=1 GAS_MAX_FEE=100 DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 hardhat test --trace --disabletracer",
     "test:integration:upgrade-template": "cp deployed-mainnet.json deployed-mainnet-upgrade.json && NETWORK_STATE_FILE=deployed-mainnet-upgrade.json UPGRADE_PARAMETERS_FILE=scripts/upgrade/upgrade-params-mainnet.toml MODE=forking TEMPLATE_TEST=true GAS_PRIORITY_FEE=1 GAS_MAX_FEE=100 DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 hardhat test test/integration/upgrade/*.ts --fulltrace --disabletracer",
-    "test:integration:scratch": "yarn test:integration:scratch:helper test/integration/**/*.ts",
+    "test:integration:scratch": "DEPLOYER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 SKIP_INTERFACES_CHECK=true SKIP_CONTRACT_SIZE=true SKIP_GAS_REPORT=true GENESIS_TIME=1639659600 GAS_PRIORITY_FEE=1 GAS_MAX_FEE=100 yarn test:integration:scratch:helper test/integration/**/*.ts",
     "test:integration:scratch:helper": "MODE=scratch hardhat test",
     "test:integration:scratch:trace": "MODE=scratch hardhat test test/integration/**/*.ts --trace --disabletracer",
     "test:integration:scratch:fulltrace": "MODE=scratch hardhat test test/integration/**/*.ts --fulltrace --disabletracer",
