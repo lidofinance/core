@@ -32,6 +32,7 @@ import {
   impersonate,
 } from "lib";
 import { DISCONNECT_NOT_INITIATED, MAX_UINT256, TOTAL_BASIS_POINTS } from "lib/constants";
+import { ceilDiv } from "lib/protocol";
 
 import { deployLidoDao, updateLidoLocatorImplementation } from "test/deploy";
 import { Snapshot, VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP } from "test/suite";
@@ -589,9 +590,16 @@ describe("VaultHub.sol:hub", () => {
       await reportVault({ vault });
 
       const record = await vaultHub.vaultRecord(vault);
-      const sharesByTotalValue = await lido.getSharesByPooledEth(await vaultHub.totalValue(vault));
-      const shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
-      expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfall);
+
+      const maxMintableRatio = TOTAL_BASIS_POINTS - 50_00n;
+      const liabilityShares_ = record.liabilityShares;
+      const liability = await lido.getPooledEthBySharesRoundUp(liabilityShares_);
+      const totalValue_ = await vaultHub.totalValue(vault);
+
+      const shortfallEth = ceilDiv(liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio, 50_00n);
+      const shortfallShares = (await lido.getSharesByPooledEth(shortfallEth)) + 10n;
+
+      expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfallShares);
     });
   });
 
@@ -664,9 +672,15 @@ describe("VaultHub.sol:hub", () => {
       await reportVault({ vault });
 
       const record = await vaultHub.vaultRecord(vault);
-      const sharesByTotalValue = await lido.getSharesByPooledEth(await vaultHub.totalValue(vault));
-      const shortfall = (record.liabilityShares * TOTAL_BASIS_POINTS - sharesByTotalValue * 50_00n) / 50_00n;
-      expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfall);
+      const maxMintableRatio = TOTAL_BASIS_POINTS - 50_00n;
+      const liabilityShares_ = record.liabilityShares;
+      const liability = await lido.getPooledEthBySharesRoundUp(liabilityShares_);
+      const totalValue_ = await vaultHub.totalValue(vault);
+
+      const shortfallEth = ceilDiv(liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio, 50_00n);
+      const shortfallShares = (await lido.getSharesByPooledEth(shortfallEth)) + 10n;
+
+      expect(await vaultHub.healthShortfallShares(vault)).to.equal(shortfallShares);
     });
   });
 

@@ -153,6 +153,8 @@ contract VaultHub is PausableUntilWithRoles {
 
     ILido public immutable LIDO;
     ILidoLocator public immutable LIDO_LOCATOR;
+    /// @dev it's cached as immutable to save the gas, but it's add some rigidity to the contract structure
+    /// and will require update of the VaultHub if HashConsensus changes
     IHashConsensus public immutable CONSENSUS_CONTRACT;
 
     /// @param _locator Lido Locator contract
@@ -861,9 +863,12 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _refundRecipient address that will receive the refund for transaction costs
     /// @dev msg.sender should be vault's owner
     /// @dev requires the fresh report (in case of partial withdrawals)
-    /// @dev NB! msg.value is spent to pay EIP-7002 withdrawal fee, leftover is refunded to `_refundRecipient`
-    ///      fee amount is unknown beforehand and can be changed rapidly, so, please, choose `msg.value` wisely
-    ///      to avoid overspending
+    /// @dev A withdrawal fee must be paid via msg.value.
+    ///      `StakingVault.calculateValidatorWithdrawalFee()` can be used to calculate the approximate fee amount but
+    ///      it's accurate only for the current block. The fee may change when the tx is included, so it's recommended
+    ///      to send some surplus. The exact amount required will be paid and the excess will be refunded to the
+    ///      `_refundRecipient` address. The fee required can grow exponentially, so limit msg.value wisely to avoid
+    ///      overspending.
     function triggerValidatorWithdrawals(
         address _vault,
         bytes calldata _pubkeys,
@@ -900,13 +905,16 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _vault address of the vault to exit validators from
     /// @param _pubkeys array of public keys of the validators to exit
     /// @param _refundRecipient address that will receive the refund for transaction costs
-    /// @dev    In case the vault has obligations shortfall, trusted actor with the role can force its validators to
-    ///         exit the beacon chain. This returns the vault's deposited ETH back to vault's balance and allows to
-    ///         rebalance the vault
+    /// @dev In case the vault has obligations shortfall, trusted actor with the role can force its validators to
+    ///      exit the beacon chain. This returns the vault's deposited ETH back to vault's balance and allows to
+    ///      rebalance the vault
     /// @dev requires the fresh report
-    /// @dev NB! msg.value is spent to pay EIP-7002 withdrawal fee, leftover is refunded to `_refundRecipient`
-    ///      fee amount is unknown beforehand and can be changed rapidly, so, please, choose `msg.value` wisely
-    ///      to avoid overspending
+    /// @dev A withdrawal fee must be paid via msg.value.
+    ///      `StakingVault.calculateValidatorWithdrawalFee()` can be used to calculate the approximate fee amount but
+    ///      it's accurate only for the current block. The fee may change when the tx is included, so it's recommended
+    ///      to send some surplus. The exact amount required will be paid and the excess will be refunded to the
+    ///      `_refundRecipient` address. The fee required can grow exponentially, so limit msg.value wisely to avoid
+    ///      overspending.
     function forceValidatorExit(
         address _vault,
         bytes calldata _pubkeys,
@@ -982,8 +990,8 @@ contract VaultHub is PausableUntilWithRoles {
     /// @param _token address of the ERC20 token to collect
     /// @param _recipient address to send collected tokens to
     /// @param _amount amount of tokens to collect
-    /// @dev will revert with StakingVault.ZeroArgument if _token, _recipient or _amount is zero
-    /// @dev will revert with StakingVault.EthCollectionNotAllowed if _token is ETH (via EIP-7528 address)
+    /// @dev will revert with ZeroArgument() if _token, _recipient or _amount is zero
+    /// @dev will revert with EthCollectionNotAllowed() if _token is ETH (via EIP-7528 address)
     function collectERC20FromVault(
         address _vault,
         address _token,
@@ -1207,30 +1215,33 @@ contract VaultHub is PausableUntilWithRoles {
 
         uint256 reserveRatioBP = _connection.reserveRatioBP;
         uint256 maxMintableRatio = (TOTAL_BASIS_POINTS - reserveRatioBP);
-        uint256 sharesByTotalValue = _getSharesByPooledEth(totalValue_);
+        uint256 liability = _getPooledEthBySharesRoundUp(liabilityShares_);
 
         // Impossible to rebalance a vault with bad debt
-        if (liabilityShares_ >= sharesByTotalValue) {
+        if (liability > totalValue_) {
             return type(uint256).max;
         }
 
         // Solve the equation for X:
-        // LS - liabilityShares, TV - sharesByTotalValue
+        // L - liability, TV - totalValue
         // MR - maxMintableRatio, 100 - TOTAL_BASIS_POINTS, RR - reserveRatio
         // X - amount of shares that should be withdrawn (TV - X) and used to repay the debt (LS - X)
-        // to reduce the LS/TVS ratio back to MR
-
-        // (LS - X) / (TV - X) = MR / 100
-        // (LS - X) * 100 = (TV - X) * MR
-        // LS * 100 - X * 100 = TV * MR - X * MR
-        // X * MR - X * 100 = TV * MR - LS * 100
-        // X * (MR - 100) = TV * MR - LS * 100
-        // X = (TV * MR - LS * 100) / (MR - 100)
-        // X = (LS * 100 - TV * MR) / (100 - MR)
+        // to reduce the L/TV ratio back to MR
+        // (L - X) / (TV - X) = MR / 100
+        // (L - X) * 100 = (TV - X) * MR
+        // L * 100 - X * 100 = TV * MR - X * MR
+        // X * MR - X * 100 = TV * MR - L * 100
+        // X * (MR - 100) = TV * MR - L * 100
+        // X = (TV * MR - L * 100) / (MR - 100)
+        // X = (L * 100 - TV * MR) / (100 - MR)
         // RR = 100 - MR
-        // X = (LS * 100 - TV * MR) / RR
+        // X = (L * 100 - TV * MR) / RR
+        uint256 shortfallEth = (liability * TOTAL_BASIS_POINTS - totalValue_ * maxMintableRatio) / reserveRatioBP;
 
-        return (liabilityShares_ * TOTAL_BASIS_POINTS - sharesByTotalValue * maxMintableRatio) / reserveRatioBP;
+        // Add 10 extra shares to avoid dealing with rounding/precision issues
+        uint256 shortfallShares = _getSharesByPooledEth(shortfallEth) + 10;
+
+        return Math256.min(shortfallShares, liabilityShares_);
     }
 
     function _totalValue(VaultRecord storage _record) internal view returns (uint256) {
@@ -1674,7 +1685,7 @@ contract VaultHub is PausableUntilWithRoles {
     event ForcedValidatorExitTriggered(address indexed vault, bytes pubkeys, address refundRecipient);
 
     /**
-     * @notice Emitted when the manager is set
+     * @notice Emitted when the vault ownership is changed
      * @param vault The address of the vault
      * @param newOwner The address of the new owner
      * @param oldOwner The address of the old owner

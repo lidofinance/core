@@ -10,7 +10,6 @@ import {
   LazyOracle__MockForNodeOperatorFee,
   LidoLocator,
   OperatorGrid,
-  OssifiableProxy,
   PredepositGuarantee__HarnessForFactory,
   StakingVault,
   StakingVault__HarnessForTestUpgrade,
@@ -38,13 +37,12 @@ describe("VaultFactory.sol", () => {
   let vaultOwner2: HardhatEthersSigner;
 
   let depositContract: DepositContract__MockForBeaconChainDepositor;
-  let proxy: OssifiableProxy;
   let beacon: UpgradeableBeacon;
-  let vaultHubImpl: VaultHub;
   let vaultHub: VaultHub;
-  let implOld: StakingVault;
-  let implNew: StakingVault__HarnessForTestUpgrade;
-  let dashboard: Dashboard;
+  let vaultImpl: StakingVault;
+  let vaultImplUpgrade: StakingVault__HarnessForTestUpgrade;
+  let dashboardImpl: Dashboard;
+
   let vaultFactory: VaultFactory;
 
   let steth: StETH__HarnessForVaultHub;
@@ -88,8 +86,12 @@ describe("VaultFactory.sol", () => {
 
     // OperatorGrid
     operatorGridImpl = await ethers.deployContract("OperatorGrid", [locator], { from: deployer });
-    proxy = await ethers.deployContract("OssifiableProxy", [operatorGridImpl, deployer, new Uint8Array()], deployer);
-    operatorGrid = await ethers.getContractAt("OperatorGrid", proxy, deployer);
+    const operatorGridProxy = await ethers.deployContract(
+      "OssifiableProxy",
+      [operatorGridImpl, deployer, new Uint8Array()],
+      deployer,
+    );
+    operatorGrid = await ethers.getContractAt("OperatorGrid", operatorGridProxy, deployer);
 
     const defaultTierParams = {
       shareLimit: ether("1"),
@@ -103,38 +105,35 @@ describe("VaultFactory.sol", () => {
     await operatorGrid.connect(admin).grantRole(await operatorGrid.REGISTRY_ROLE(), admin);
 
     // Accounting
-    vaultHubImpl = await ethers.deployContract("VaultHub", [
+    const vaultHubImpl = await ethers.deployContract("VaultHub", [
       locator,
       steth,
       ZeroAddress,
       VAULTS_MAX_RELATIVE_SHARE_LIMIT_BP,
     ]);
-    proxy = await ethers.deployContract("OssifiableProxy", [vaultHubImpl, admin, new Uint8Array()], admin);
-    vaultHub = await ethers.getContractAt("VaultHub", proxy, deployer);
+    const vaultHubProxy = await ethers.deployContract(
+      "OssifiableProxy",
+      [vaultHubImpl, admin, new Uint8Array()],
+      admin,
+    );
+    vaultHub = await ethers.getContractAt("VaultHub", vaultHubProxy, deployer);
     await vaultHub.initialize(admin);
 
     //vault implementation
-    implOld = await ethers.deployContract("StakingVault", [depositContract], { from: deployer });
-    implNew = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [depositContract], {
-      from: deployer,
-    });
+    vaultImpl = await ethers.deployContract("StakingVault", [depositContract]);
+    vaultImplUpgrade = await ethers.deployContract("StakingVault__HarnessForTestUpgrade", [depositContract]);
 
     //beacon
-    beacon = await ethers.deployContract("UpgradeableBeacon", [implOld, admin]);
+    beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, admin]);
 
-    dashboard = await ethers.deployContract("Dashboard", [steth, wsteth, vaultHub, locator], { from: deployer });
-    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, dashboard], {
-      from: deployer,
-    });
-
-    //add VAULT_MASTER_ROLE role to allow admin to connect the Vaults to the vault Hub
-    await vaultHub.connect(admin).grantRole(await vaultHub.VAULT_MASTER_ROLE(), admin);
+    dashboardImpl = await ethers.deployContract("Dashboard", [steth, wsteth, vaultHub, locator]);
+    vaultFactory = await ethers.deployContract("VaultFactory", [locator, beacon, dashboardImpl, ZeroAddress]);
 
     await updateLidoLocatorImplementation(await locator.getAddress(), { vaultHub, operatorGrid, vaultFactory });
 
     //the initialize() function cannot be called on a contract
-    await expect(implOld.initialize(stranger, operator, predepositGuarantee)).to.revertedWithCustomError(
-      implOld,
+    await expect(vaultImpl.initialize(stranger, operator, predepositGuarantee)).to.revertedWithCustomError(
+      vaultImpl,
       "InvalidInitialization",
     );
   });
@@ -144,48 +143,90 @@ describe("VaultFactory.sol", () => {
   afterEach(async () => await Snapshot.restore(originalState));
 
   context("constructor", () => {
-    it("reverts if `_owner` is zero address", async () => {
-      await expect(ethers.deployContract("UpgradeableBeacon", [ZeroAddress, admin], { from: deployer }))
-        .to.be.revertedWithCustomError(beacon, "BeaconInvalidImplementation")
-        .withArgs(ZeroAddress);
-    });
-    it("reverts if `_owner` is zero address", async () => {
-      await expect(ethers.deployContract("UpgradeableBeacon", [implOld, ZeroAddress], { from: deployer }))
-        .to.be.revertedWithCustomError(beacon, "OwnableInvalidOwner")
-        .withArgs(ZeroAddress);
-    });
+    context("UpgradeableBeacon", () => {
+      it("reverts if `_owner` is zero address", async () => {
+        await expect(ethers.deployContract("UpgradeableBeacon", [ZeroAddress, admin], { from: deployer }))
+          .to.be.revertedWithCustomError(beacon, "BeaconInvalidImplementation")
+          .withArgs(ZeroAddress);
+      });
 
-    it("reverts if `_lidoLocator` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [ZeroAddress, beacon, dashboard], { from: deployer }))
-        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_lidoLocator");
-    });
+      it("reverts if `_owner` is zero address", async () => {
+        await expect(ethers.deployContract("UpgradeableBeacon", [vaultImpl, ZeroAddress], { from: deployer }))
+          .to.be.revertedWithCustomError(beacon, "OwnableInvalidOwner")
+          .withArgs(ZeroAddress);
+      });
 
-    it("reverts if `_beacon` is zero address", async () => {
-      await expect(
-        ethers.deployContract("VaultFactory", [locator, ZeroAddress, dashboard], {
-          from: deployer,
-        }),
-      )
-        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_beacon");
+      it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {
+        const tx = beacon.deploymentTransaction();
+
+        await expect(tx)
+          .to.emit(beacon, "OwnershipTransferred")
+          .withArgs(ZeroAddress, await admin.getAddress());
+        await expect(tx)
+          .to.emit(beacon, "Upgraded")
+          .withArgs(await vaultImpl.getAddress());
+      });
     });
 
-    it("reverts if `_dashboard` is zero address", async () => {
-      await expect(ethers.deployContract("VaultFactory", [locator, beacon, ZeroAddress], { from: deployer }))
-        .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
-        .withArgs("_dashboardImpl");
+    context("VaultFactory", () => {
+      it("reverts if `_lidoLocator` is zero address", async () => {
+        await expect(
+          ethers.deployContract("VaultFactory", [ZeroAddress, beacon, dashboardImpl, ZeroAddress], { from: deployer }),
+        )
+          .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
+          .withArgs("_lidoLocator");
+      });
+
+      it("reverts if `_beacon` is zero address", async () => {
+        await expect(
+          ethers.deployContract("VaultFactory", [locator, ZeroAddress, dashboardImpl, ZeroAddress], {
+            from: deployer,
+          }),
+        )
+          .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
+          .withArgs("_beacon");
+      });
+
+      it("reverts if `_dashboard` is zero address", async () => {
+        await expect(
+          ethers.deployContract("VaultFactory", [locator, beacon, ZeroAddress, ZeroAddress], { from: deployer }),
+        )
+          .to.be.revertedWithCustomError(vaultFactory, "ZeroArgument")
+          .withArgs("_dashboardImpl");
+      });
+    });
+  });
+
+  context("getters", () => {
+    it("returns the addresses of the LidoLocator, Beacon, DashboardImpl, and PreviousFactory", async () => {
+      expect(await vaultFactory.LIDO_LOCATOR()).to.eq(await locator.getAddress());
+      expect(await vaultFactory.BEACON()).to.eq(await beacon.getAddress());
+      expect(await vaultFactory.DASHBOARD_IMPL()).to.eq(await dashboardImpl.getAddress());
+      expect(await vaultFactory.PREVIOUS_FACTORY()).to.eq(ZeroAddress);
+    });
+  });
+
+  context("deployedVaults()", () => {
+    let vault: StakingVault;
+    beforeEach(async () => {
+      ({ vault } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator));
     });
 
-    it("works and emit `OwnershipTransferred`, `Upgraded` events", async () => {
-      const tx = beacon.deploymentTransaction();
+    it("returns true if the vault was deployed by this factory", async () => {
+      expect(await vaultFactory.deployedVaults(vault)).to.be.true;
+    });
 
-      await expect(tx)
-        .to.emit(beacon, "OwnershipTransferred")
-        .withArgs(ZeroAddress, await admin.getAddress());
-      await expect(tx)
-        .to.emit(beacon, "Upgraded")
-        .withArgs(await implOld.getAddress());
+    it("newFactory returns true if the vault was deployed by the previous factory", async () => {
+      const newFactory = await ethers.deployContract("VaultFactory", [locator, beacon, dashboardImpl, vaultFactory]);
+      expect(await newFactory.deployedVaults(vault)).to.be.true;
+
+      const { vault: anotherVault } = await createVaultProxyWithoutConnectingToVaultHub(
+        vaultOwner1,
+        newFactory,
+        vaultOwner1,
+        operator,
+      );
+      expect(await newFactory.deployedVaults(anotherVault)).to.be.true;
     });
   });
 
@@ -196,47 +237,36 @@ describe("VaultFactory.sol", () => {
       ).to.revertedWithCustomError(vaultFactory, "InsufficientFunds");
     });
 
-    it("works with empty `params`", async () => {
-      const {
-        tx,
-        vault,
-        dashboard: dashboard_,
-      } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [
-        {
-          role: await dashboard.PAUSE_BEACON_CHAIN_DEPOSITS_ROLE(),
-          account: vaultOwner1.address,
-        },
-      ]);
+    it("reverts if trying to assign a role that is not a sub-role of the DEFAULT_ADMIN_ROLE", async () => {
+      await expect(
+        createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator, operator, 200n, days(7n), [
+          { role: await dashboardImpl.NODE_OPERATOR_FEE_EXEMPT_ROLE(), account: vaultOwner1.address },
+        ]),
+      ).to.revertedWithCustomError(dashboardImpl, "AccessControlUnauthorizedAccount");
+    });
+
+    it("works with empty `roleAssignments`", async () => {
+      const { tx, vault, dashboard } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator);
+
+      await expect(tx)
+        .to.emit(vaultFactory, "VaultCreated")
+        .withArgs(vault)
+        .and.to.emit(vaultFactory, "DashboardCreated")
+        .withArgs(dashboard, vault, vaultOwner1);
 
       expect(await vaultFactory.deployedVaults(vault)).to.be.true;
-
-      await expect(tx).to.emit(vaultFactory, "VaultCreated").withArgs(vault);
-
-      await expect(tx).to.emit(vaultFactory, "DashboardCreated").withArgs(dashboard_, vault, vaultOwner1);
-
-      const vaultConnection = await vaultHub.vaultConnection(vault);
-
-      expect(await dashboard_.getAddress()).to.eq(vaultConnection.owner);
+      expect((await vaultHub.vaultConnection(vault)).owner).to.eq(dashboard);
     });
 
     it("check `version()`", async () => {
-      const { vault } = await createVaultProxy(
-        vaultOwner1,
-        vaultFactory,
-        vaultOwner1,
-        operator,
-        operator,
-        200n,
-        days(7n),
-        [],
-      );
+      const { vault } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator);
       expect(await vaultFactory.deployedVaults(vault)).to.be.true;
       expect(await vault.version()).to.eq(1);
     });
   });
 
-  context("connect", () => {
-    it("connect ", async () => {
+  context("upgradeability", () => {
+    it("vaults can be upgraded", async () => {
       const vaultsBefore = await vaultHub.vaultsCount();
       expect(vaultsBefore).to.eq(0);
 
@@ -273,14 +303,14 @@ describe("VaultFactory.sol", () => {
       const proxy1ImplBefore = await proxy1.implementation();
 
       const implBefore = await beacon.implementation();
-      expect(implBefore).to.eq(await implOld.getAddress());
-      expect(proxy1ImplBefore).to.eq(await implOld.getAddress());
+      expect(implBefore).to.eq(await vaultImpl.getAddress());
+      expect(proxy1ImplBefore).to.eq(await vaultImpl.getAddress());
 
       //upgrade beacon to new implementation
-      await beacon.connect(admin).upgradeTo(implNew);
+      await beacon.connect(admin).upgradeTo(vaultImplUpgrade);
 
       const implAfter = await beacon.implementation();
-      expect(implAfter).to.eq(await implNew.getAddress());
+      expect(implAfter).to.eq(await vaultImplUpgrade.getAddress());
 
       //create new vault with new implementation
       const { vault: vault3 } = await createVaultProxy(
@@ -295,7 +325,7 @@ describe("VaultFactory.sol", () => {
       );
 
       const proxy1ImplAfter = await proxy1.implementation();
-      expect(proxy1ImplAfter).to.eq(await implNew.getAddress());
+      expect(proxy1ImplAfter).to.eq(await vaultImplUpgrade.getAddress());
 
       const vault1WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault1, deployer);
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
@@ -333,18 +363,9 @@ describe("VaultFactory.sol", () => {
 
   context("After upgrade", () => {
     it("exists vaults - init not works, finalize works ", async () => {
-      const { vault: vault1 } = await createVaultProxy(
-        vaultOwner1,
-        vaultFactory,
-        vaultOwner1,
-        operator,
-        operator,
-        200n,
-        days(7n),
-        [],
-      );
+      const { vault: vault1 } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator);
 
-      await beacon.connect(admin).upgradeTo(implNew);
+      await beacon.connect(admin).upgradeTo(vaultImplUpgrade);
 
       const vault1WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault1, deployer);
 
@@ -356,18 +377,9 @@ describe("VaultFactory.sol", () => {
     });
 
     it("new vaults - init works, finalize not works ", async () => {
-      await beacon.connect(admin).upgradeTo(implNew);
+      await beacon.connect(admin).upgradeTo(vaultImplUpgrade);
 
-      const { vault: vault2 } = await createVaultProxy(
-        vaultOwner1,
-        vaultFactory,
-        vaultOwner1,
-        operator,
-        operator,
-        200n,
-        days(7n),
-        [],
-      );
+      const { vault: vault2 } = await createVaultProxy(vaultOwner1, vaultFactory, vaultOwner1, operator);
 
       const vault2WithNewImpl = await ethers.getContractAt("StakingVault__HarnessForTestUpgrade", vault2, deployer);
 
@@ -383,8 +395,8 @@ describe("VaultFactory.sol", () => {
   });
 
   context("createVaultWithDashboardWithoutConnectingToVaultHub", () => {
-    it("works with roles assigned to node operator", async () => {
-      const { vault, dashboard: _dashboard } = await createVaultProxyWithoutConnectingToVaultHub(
+    it("works with roles assigned by node operator manager", async () => {
+      const { vault, dashboard } = await createVaultProxyWithoutConnectingToVaultHub(
         vaultOwner1,
         vaultFactory,
         vaultOwner1,
@@ -394,45 +406,32 @@ describe("VaultFactory.sol", () => {
         days(7n),
         [
           {
-            role: await dashboard.NODE_OPERATOR_FEE_EXEMPT_ROLE(),
-            account: operator.address,
+            role: await dashboardImpl.NODE_OPERATOR_FEE_EXEMPT_ROLE(),
+            account: stranger,
           },
         ],
       );
 
       expect(await vaultFactory.deployedVaults(vault)).to.be.true;
-
-      // new instance of dashboard
-      const newDashboard = await ethers.getContractAt("Dashboard", await _dashboard.getAddress());
-      expect(await newDashboard.feeRecipient()).to.eq(operator.address);
-
-      const vaultConnection = await vaultHub.vaultConnection(vault);
-      expect(vaultConnection.vaultIndex).to.eq(0); // vault is not connected to the vaultHub
+      expect(await dashboard.feeRecipient()).to.eq(operator);
+      expect(await vaultHub.isVaultConnected(vault)).to.be.false;
     });
 
     it("works with empty roles", async () => {
-      const { vault, dashboard: _dashboard } = await createVaultProxyWithoutConnectingToVaultHub(
-        vaultOwner1,
+      const { vault, dashboard } = await createVaultProxyWithoutConnectingToVaultHub(
+        operator,
         vaultFactory,
         vaultOwner1,
         operator,
-        operator,
-        200n,
-        days(7n),
-        [],
       );
 
+      expect(await dashboard.hasRole(await dashboard.DEFAULT_ADMIN_ROLE(), vaultOwner1)).to.eq(true);
       expect(await vaultFactory.deployedVaults(vault)).to.be.true;
-
-      // new instance of dashboard
-      const newDashboard = await ethers.getContractAt("Dashboard", await _dashboard.getAddress());
-      expect(await newDashboard.feeRecipient()).to.eq(operator.address);
-
-      const vaultConnection = await vaultHub.vaultConnection(vault);
-      expect(vaultConnection.vaultIndex).to.eq(0);
+      expect(await dashboard.feeRecipient()).to.eq(operator);
+      expect(await vaultHub.isVaultConnected(vault)).to.be.false;
     });
 
-    it("reverts if node operator manager try to assign different role", async () => {
+    it("reverts if node operator manager try to assign default admin sub-role", async () => {
       await expect(
         createVaultProxyWithoutConnectingToVaultHub(
           vaultOwner1,
@@ -444,12 +443,12 @@ describe("VaultFactory.sol", () => {
           days(7n),
           [
             {
-              role: await dashboard.WITHDRAW_ROLE(),
-              account: operator.address,
+              role: await dashboardImpl.WITHDRAW_ROLE(),
+              account: operator,
             },
           ],
         ),
-      ).to.revertedWithCustomError(dashboard, "AccessControlUnauthorizedAccount");
+      ).to.revertedWithCustomError(dashboardImpl, "AccessControlUnauthorizedAccount");
     });
   });
 });
