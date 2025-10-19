@@ -303,10 +303,10 @@ export async function createVaultProxy(
   vaultFactory: VaultFactory,
   vaultOwner: HardhatEthersSigner,
   nodeOperator: HardhatEthersSigner,
-  nodeOperatorManager: HardhatEthersSigner,
-  nodeOperatorFeeBP: bigint,
-  confirmExpiry: bigint,
-  roleAssignments: Permissions.RoleAssignmentStruct[],
+  nodeOperatorManager: HardhatEthersSigner = nodeOperator,
+  nodeOperatorFeeBP: bigint = 200n,
+  confirmExpiry: bigint = days(7n),
+  roleAssignments: Permissions.RoleAssignmentStruct[] = [],
 ): Promise<CreateVaultResponse> {
   const tx = await vaultFactory
     .connect(caller)
@@ -352,10 +352,10 @@ export async function createVaultProxyWithoutConnectingToVaultHub(
   vaultFactory: VaultFactory,
   vaultOwner: HardhatEthersSigner,
   nodeOperator: HardhatEthersSigner,
-  nodeOperatorManager: HardhatEthersSigner,
-  nodeOperatorFeeBP: bigint,
-  confirmExpiry: bigint,
-  roleAssignments: Permissions.RoleAssignmentStruct[],
+  nodeOperatorManager: HardhatEthersSigner = nodeOperator,
+  nodeOperatorFeeBP: bigint = 200n,
+  confirmExpiry: bigint = days(7n),
+  roleAssignments: Permissions.RoleAssignmentStruct[] = [],
 ): Promise<CreateVaultResponse> {
   const tx = await vaultFactory
     .connect(caller)
