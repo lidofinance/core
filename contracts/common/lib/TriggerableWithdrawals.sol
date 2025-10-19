@@ -46,7 +46,7 @@ library TriggerableWithdrawals {
         bytes memory callData = new bytes(56);
 
         for (uint256 i = 0; i < keysCount; i++) {
-            _copyPubkeyToMemory(callData, pubkeys, i);
+            _copyAmountWithPubkeyToMemory(callData, 0, pubkeys, i);
 
             (bool success, ) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
 
@@ -126,8 +126,7 @@ library TriggerableWithdrawals {
 
         bytes memory callData = new bytes(56);
         for (uint256 i = 0; i < keysCount; i++) {
-            _copyAmountToMemory(callData, amounts[i]);
-            _copyPubkeyToMemory(callData, pubkeys, i);
+            _copyAmountWithPubkeyToMemory(callData, amounts[i], pubkeys, i);
 
             (bool success, ) = WITHDRAWAL_REQUEST.call{value: feePerRequest}(callData);
 
@@ -155,15 +154,23 @@ library TriggerableWithdrawals {
         return abi.decode(feeData, (uint256));
     }
 
-    function _copyPubkeyToMemory(bytes memory target, bytes calldata pubkeys, uint256 keyIndex) private pure {
+    function _copyAmountWithPubkeyToMemory(
+        bytes memory target,
+        uint64 amount,
+        bytes calldata pubkeys,
+        uint256 keyIndex
+    ) private pure {
         assembly {
-            calldatacopy(add(target, 32), add(pubkeys.offset, mul(keyIndex, PUBLIC_KEY_LENGTH)), PUBLIC_KEY_LENGTH)
-        }
-    }
-
-    function _copyAmountToMemory(bytes memory target, uint64 amount) private pure {
-        assembly {
+            // Write the amount first:
+            // mstore at [56..88) → uint64 lands in [80..88), zeroes [56..80)
             mstore(add(target, 56), amount)
+
+            // Then write the 48-byte pubkey into [32..80), overwriting the zeros above.
+            calldatacopy(
+                add(target, 32),
+                add(pubkeys.offset, mul(keyIndex, PUBLIC_KEY_LENGTH)),
+                PUBLIC_KEY_LENGTH
+            )
         }
     }
 
