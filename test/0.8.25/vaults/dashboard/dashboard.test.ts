@@ -222,7 +222,7 @@ describe("Dashboard.sol", () => {
     vaultImpl = await ethers.deployContract("StakingVault", [depositContract]);
     beacon = await ethers.deployContract("UpgradeableBeacon", [vaultImpl, deployer]);
 
-    factory = await ethers.deployContract("VaultFactory", [lidoLocator, beacon, dashboardImpl]);
+    factory = await ethers.deployContract("VaultFactory", [lidoLocator, beacon, dashboardImpl, ZeroAddress]);
     const createVaultTx = await factory
       .connect(vaultOwner)
       .createVaultWithDashboard(vaultOwner, nodeOperator, nodeOperator, nodeOperatorFeeBP, confirmExpiry, [], {
