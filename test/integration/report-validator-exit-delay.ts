@@ -122,7 +122,7 @@ describe("Report Validator Exit Delay", () => {
       toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
       [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
       encodedExitRequests,
-    )
+    );
 
     await expect(tx).to.not.be.reverted;
     await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
@@ -192,7 +192,7 @@ describe("Report Validator Exit Delay", () => {
       toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
       [toValidatorWitness(ACTIVE_VALIDATOR_PROOF, 0)],
       encodedExitRequests,
-    )
+    );
 
     await expect(tx).to.not.be.reverted;
     await expect(tx).to.not.emit(nor, "ValidatorExitStatusUpdated");
@@ -229,7 +229,7 @@ describe("Report Validator Exit Delay", () => {
       toProvableBeaconBlockHeader(ACTIVE_VALIDATOR_PROOF.beaconBlockHeader, blockRootTimestamp),
       witnesses,
       encodedExitRequests,
-    )
+    );
 
     await expect(tx).to.not.be.reverted;
     await expect(tx).to.emit(nor, "ValidatorExitStatusUpdated");
@@ -241,7 +241,7 @@ describe("Report Validator Exit Delay", () => {
       toHistoricalHeaderWitness(ACTIVE_VALIDATOR_PROOF),
       witnesses,
       encodedExitRequests,
-    )
+    );
 
     await expect(tx2).to.not.be.reverted;
     await expect(tx2).to.not.emit(nor, "ValidatorExitStatusUpdated");

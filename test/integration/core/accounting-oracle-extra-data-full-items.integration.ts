@@ -22,11 +22,7 @@ import { getProtocolContext, ProtocolContext, withCSM } from "lib/protocol";
 import { reportWithoutExtraData } from "lib/protocol/helpers/accounting";
 import { norSdvtEnsureOperators } from "lib/protocol/helpers/nor-sdvt";
 import { removeStakingLimit, setModuleStakeShareLimit } from "lib/protocol/helpers/staking";
-import {
-  CSM_MODULE_ID,
-  NOR_MODULE_ID,
-  SDVT_MODULE_ID,
-} from "lib/protocol/helpers/staking-module";
+import { CSM_MODULE_ID, NOR_MODULE_ID, SDVT_MODULE_ID } from "lib/protocol/helpers/staking-module";
 
 import { Snapshot } from "test/suite";
 

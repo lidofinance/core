@@ -67,7 +67,7 @@ describe("Integration: AccountingOracle extra data", () => {
         nodeOpIds: [],
         keysCounts: [],
       };
-      
+
       // Add at least 2 node operators with exited validators to test chunking
       for (let i = firstNodeOperatorInRange; i < firstNodeOperatorInRange + Math.min(2, numNodeOperators); i++) {
         const oldNumExited = await getExitedCount(BigInt(i));
@@ -96,36 +96,31 @@ describe("Integration: AccountingOracle extra data", () => {
 
   async function submitMainReport() {
     const { nor } = ctx.contracts;
-    
+
     // Split exitedKeys into two separate entries for different node operators to test chunking
     const firstExitedKeys = {
       moduleId: Number(MODULE_ID),
       nodeOpIds: exitedKeys.nodeOpIds.length > 0 ? [exitedKeys.nodeOpIds[0]] : [],
       keysCounts: exitedKeys.keysCounts.length > 0 ? [exitedKeys.keysCounts[0]] : [],
     };
-    
+
     const secondExitedKeys = {
       moduleId: Number(MODULE_ID),
       nodeOpIds: exitedKeys.nodeOpIds.length > 1 ? [exitedKeys.nodeOpIds[1]] : [],
       keysCounts: exitedKeys.keysCounts.length > 1 ? [exitedKeys.keysCounts[1]] : [],
     };
-    
+
     const extraData = prepareExtraData(
-      { exitedKeys: [firstExitedKeys, secondExitedKeys] }, 
-      { maxItemsPerChunk: 1 } // This will create 2 chunks from 2 items
+      { exitedKeys: [firstExitedKeys, secondExitedKeys] },
+      { maxItemsPerChunk: 1 }, // This will create 2 chunks from 2 items
     );
 
     const { totalExitedValidators } = await nor.getStakingModuleSummary();
-    
+
     // Add total exited validators for both entries
     const totalNewExited = NUM_NEWLY_EXITED_VALIDATORS + 1n; // First operator has 1, second has 1
 
-    return await reportWithoutExtraData(
-      ctx,
-      [totalExitedValidators + totalNewExited],
-      [NOR_MODULE_ID],
-      extraData,
-    );
+    return await reportWithoutExtraData(ctx, [totalExitedValidators + totalNewExited], [NOR_MODULE_ID], extraData);
   }
 
   it("should accept report with multiple keys per node operator (single chunk)", async () => {
@@ -133,7 +128,7 @@ describe("Integration: AccountingOracle extra data", () => {
 
     // Get initial summary
     const { totalExitedValidators } = await nor.getStakingModuleSummary();
-    
+
     // Use both node operators with exited keys for a single chunk test
     const { extraDataItemsCount, extraDataChunks, extraDataChunkHashes } = prepareExtraData({
       exitedKeys: [exitedKeys], // Use all exitedKeys in one chunk

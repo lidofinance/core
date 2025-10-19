@@ -15,10 +15,7 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
         initialized();
     }
 
-    function harness__initializeWithLocator(
-        uint256 _initialVersion,
-        address _locator
-    ) external {
+    function harness__initializeWithLocator(uint256 _initialVersion, address _locator) external {
         _setContractVersion(_initialVersion);
         LIDO_LOCATOR_POSITION.setStorageAddress(_locator);
         initialized();
@@ -92,12 +89,7 @@ contract NodeOperatorsRegistry__Harness is NodeOperatorsRegistry {
         _saveSummarySigningKeysStats(summarySigningKeysStats);
     }
 
-    function harness__setNodeOperatorLimits(
-        uint256 _nodeOperatorId,
-        uint64,
-        uint64,
-        uint64
-    ) external {
+    function harness__setNodeOperatorLimits(uint256 _nodeOperatorId, uint64, uint64, uint64) external {
         _updateSummaryMaxValidatorsCount(_nodeOperatorId);
     }
 

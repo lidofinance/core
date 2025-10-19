@@ -267,36 +267,56 @@ function generateHTML(data: ReportData): string {
     </div>
     
     <div class="info-grid">
-      ${data.network ? `
+      ${
+        data.network
+          ? `
       <div class="info-card">
         <div class="info-card-label">Network</div>
         <div class="info-card-value">${data.network}</div>
       </div>
-      ` : ""}
-      ${data.deployer ? `
+      `
+          : ""
+      }
+      ${
+        data.deployer
+          ? `
       <div class="info-card">
         <div class="info-card-label">Deployer</div>
         <div class="info-card-value code">${data.deployer}</div>
       </div>
-      ` : ""}
-      ${data.summary?.totalTransactions ? `
+      `
+          : ""
+      }
+      ${
+        data.summary?.totalTransactions
+          ? `
       <div class="info-card">
         <div class="info-card-label">Total Transactions</div>
         <div class="info-card-value">${data.summary.totalTransactions}</div>
       </div>
-      ` : ""}
-      ${data.summary?.totalGasUsed ? `
+      `
+          : ""
+      }
+      ${
+        data.summary?.totalGasUsed
+          ? `
       <div class="info-card">
         <div class="info-card-label">Total Gas Used</div>
         <div class="info-card-value">${data.summary.totalGasUsed}</div>
       </div>
-      ` : ""}
-      ${data.summary?.duration ? `
+      `
+          : ""
+      }
+      ${
+        data.summary?.duration
+          ? `
       <div class="info-card">
         <div class="info-card-label">Duration</div>
         <div class="info-card-value">${data.summary.duration}</div>
       </div>
-      ` : ""}
+      `
+          : ""
+      }
     </div>
     
     <div class="timeline-section">
