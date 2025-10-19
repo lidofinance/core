@@ -57,7 +57,7 @@ contract NodeOperatorFee is Permissions {
      */
     bytes32 public constant NODE_OPERATOR_PROVE_UNKNOWN_VALIDATOR_ROLE =
         keccak256("vaults.NodeOperatorFee.ProveUnknownValidatorsRole");
-    
+
     /**
      * @notice If the accrued fee exceeds this BP of the total value, it is considered abnormally high.
      * An abnormally high fee can only be disbursed by `DEFAULT_ADMIN_ROLE`.
@@ -74,7 +74,7 @@ contract NodeOperatorFee is Permissions {
      * Since these assumptions are highly conservative, in practice the operator
      * would need to disburse even less frequently before approaching the threshold.
      */
-    uint256 constant internal ABNORMALLY_HIGH_FEE_THRESHOLD_BP = 1_00; 
+    uint256 constant internal ABNORMALLY_HIGH_FEE_THRESHOLD_BP = 1_00;
 
     // ==================== Packed Storage Slot 1 ====================
     /**
@@ -320,7 +320,7 @@ contract NodeOperatorFee is Permissions {
         _setSettledGrowth(_newSettledGrowth);
         latestCorrectionTimestamp = uint64(block.timestamp);
 
-        emit CorrectionTimestampUpdated(latestCorrectionTimestamp);
+        emit CorrectionTimestampUpdated(block.timestamp);
     }
 
     /**
@@ -350,10 +350,10 @@ contract NodeOperatorFee is Permissions {
     function _setFeeRate(uint256 _newFeeRate) internal {
         if (_newFeeRate > TOTAL_BASIS_POINTS) revert FeeValueExceed100Percent();
 
-        uint16 oldFeeRate = feeRate;
-        uint16 newFeeRate = _newFeeRate.toUint16();
+        uint256 oldFeeRate = feeRate;
+        uint256 newFeeRate = _newFeeRate;
 
-        feeRate = newFeeRate;
+        feeRate = uint16(newFeeRate);
 
         emit FeeRateSet(msg.sender, oldFeeRate, newFeeRate);
     }
@@ -371,13 +371,15 @@ contract NodeOperatorFee is Permissions {
 
     /**
      * @dev Emitted when the node operator fee is set.
+     * @param sender the address of the sender
      * @param oldFeeRate The old node operator fee rate.
      * @param newFeeRate The new node operator fee rate.
      */
-    event FeeRateSet(address indexed sender, uint64 oldFeeRate, uint64 newFeeRate);
+    event FeeRateSet(address indexed sender, uint256 oldFeeRate, uint256 newFeeRate);
 
     /**
      * @dev Emitted when the node operator fee is disbursed.
+     * @param sender the address of the sender
      * @param fee the amount of disbursed fee.
      */
     event FeeDisbursed(address indexed sender, uint256 fee);
@@ -401,7 +403,7 @@ contract NodeOperatorFee is Permissions {
      * @dev Emitted when the settled growth is corrected.
      * @param timestamp new correction timestamp
      */
-    event CorrectionTimestampUpdated(uint64 timestamp);
+    event CorrectionTimestampUpdated(uint256 timestamp);
 
     // ==================== Errors ====================
 

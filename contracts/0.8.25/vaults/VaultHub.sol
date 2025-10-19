@@ -153,6 +153,8 @@ contract VaultHub is PausableUntilWithRoles {
 
     ILido public immutable LIDO;
     ILidoLocator public immutable LIDO_LOCATOR;
+    /// @dev it's cached as immutable to save the gas, but it's add some rigidity to the contract structure
+    /// and will require update of the VaultHub if HashConsensus changes
     IHashConsensus public immutable CONSENSUS_CONTRACT;
 
     /// @param _locator Lido Locator contract
