@@ -128,7 +128,7 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(
         nodeOperatorFeeImpl_.initialize(vaultOwner, nodeOperatorManager, 0n, days(7n)),
-      ).to.be.revertedWithCustomError(nodeOperatorFeeImpl_, "NonProxyCallsForbidden");
+      ).to.be.revertedWithCustomError(nodeOperatorFeeImpl_, "AlreadyInitialized");
     });
   });
 

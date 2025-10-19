@@ -93,12 +93,6 @@ abstract contract Permissions is AccessControlConfirmable {
     /// @dev 0x25482e7dc9e29f6da5bd70b6d19d17bbf44021da51ba0664a9f430c94a09c674
     bytes32 public constant VAULT_CONFIGURATION_ROLE = keccak256("vaults.Permissions.VaultConfiguration");
 
-    /**
-     * @notice Address of the implementation contract
-     * @dev Used to prevent initialization in the implementation
-     */
-    address private immutable _SELF;
-
     VaultHub public immutable VAULT_HUB;
     ILidoLocator public immutable LIDO_LOCATOR;
 
@@ -111,7 +105,8 @@ abstract contract Permissions is AccessControlConfirmable {
         _requireNotZero(_vaultHub);
         _requireNotZero(_lidoLocator);
 
-        _SELF = address(this);
+        initialized = true;
+
         // @dev vaultHub is cached as immutable to save gas for main operations
         VAULT_HUB = VaultHub(payable(_vaultHub));
         LIDO_LOCATOR = ILidoLocator(_lidoLocator);
@@ -123,7 +118,6 @@ abstract contract Permissions is AccessControlConfirmable {
      */
     modifier initializer() {
         if (initialized) revert AlreadyInitialized();
-        if (address(this) == _SELF) revert NonProxyCallsForbidden();
 
         initialized = true;
         _;
@@ -175,7 +169,7 @@ abstract contract Permissions is AccessControlConfirmable {
      * @dev If an account is not a member of a role, doesn't revert, emits no events.
      */
     function revokeRoles(RoleAssignment[] calldata _assignments) external {
-        if (_assignments.length == 0) revert ZeroArgument();
+        _requireNotZero(_assignments.length);
 
         for (uint256 i = 0; i < _assignments.length; i++) {
             revokeRole(_assignments[i].role, _assignments[i].account);
@@ -372,11 +366,6 @@ abstract contract Permissions is AccessControlConfirmable {
      * @notice Emitted when the contract is initialized
      */
     event Initialized();
-
-    /**
-     * @notice Error when direct calls to the implementation are forbidden
-     */
-    error NonProxyCallsForbidden();
 
     /**
      * @notice Error when the contract is already initialized.
