@@ -248,28 +248,6 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         return _vaultInfo(_vault, _vaultHub());
     }
 
-    function _vaultInfo(address _vault, VaultHub _vh) internal view returns (VaultInfo memory) {
-        IStakingVault vault = IStakingVault(_vault);
-        VaultHub.VaultConnection memory connection = _vh.vaultConnection(_vault);
-        VaultHub.VaultRecord memory record = _vh.vaultRecord(_vault);
-        return VaultInfo(
-            _vault,
-            vault.availableBalance() + vault.stagedBalance(),
-            record.inOutDelta.currentValue(),
-            vault.withdrawalCredentials(),
-            record.liabilityShares,
-            record.maxLiabilityShares,
-            _mintableStETH(_vault, _vh),
-            connection.shareLimit,
-            connection.reserveRatioBP,
-            connection.forcedRebalanceThresholdBP,
-            connection.infraFeeBP,
-            connection.liquidityFeeBP,
-            connection.reservationFeeBP,
-            _vh.isPendingDisconnect(_vault)
-        );
-    }
-
     /**
      * @notice batch method to mass check the validator stages in PredepositGuarantee contract
      * @param _pubkeys the array of validator's pubkeys to check
@@ -327,7 +305,8 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault
     /// @param _cumulativeLidoFees the cumulative Lido fees accrued on the vault (nominated in ether)
-    /// @param _liabilityShares the liabilityShares of the vault
+    /// @param _liabilityShares the liabilityShares value of the vault (on the vaultsDataRefSlot)
+    /// @param _maxLiabilityShares the maxLiabilityShares value of the vault (on the vaultsDataRefSlot)
     /// @param _proof the proof of the reported data
     function updateVaultData(
         address _vault,
@@ -389,18 +368,42 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
         delete quarantines[_vault];
     }
 
+    function _vaultInfo(address _vault, VaultHub _vh) internal view returns (VaultInfo memory) {
+        IStakingVault vault = IStakingVault(_vault);
+        VaultHub.VaultConnection memory connection = _vh.vaultConnection(_vault);
+        VaultHub.VaultRecord memory record = _vh.vaultRecord(_vault);
+        return VaultInfo(
+            _vault,
+            vault.availableBalance() + vault.stagedBalance(),
+            record.inOutDelta.currentValue(),
+            vault.withdrawalCredentials(),
+            record.liabilityShares,
+            record.maxLiabilityShares,
+            _mintableStETH(_vault, _vh),
+            connection.shareLimit,
+            connection.reserveRatioBP,
+            connection.forcedRebalanceThresholdBP,
+            connection.infraFeeBP,
+            connection.liquidityFeeBP,
+            connection.reservationFeeBP,
+            _vh.isPendingDisconnect(_vault)
+        );
+    }
+
     /// @notice handle sanity checks for the vault lazy report data
     /// @param _vault the address of the vault
     /// @param _totalValue the total value of the vault in refSlot
     /// @param _reportRefSlot the refSlot of the report
     /// @param _reportTimestamp the timestamp of the report
     /// @param _cumulativeLidoFees the cumulative Lido fees accrued on the vault (nominated in ether)
+    /// @param _liabilityShares the liabilityShares value of the vault (on the _reportRefSlot)
+    /// @param _maxLiabilityShares the maxLiabilityShares value of the vault (on the _reportRefSlot)
     /// @return totalValueWithoutQuarantine the smoothed total value of the vault after sanity checks
     /// @return inOutDeltaOnRefSlot the inOutDelta in the refSlot
     function _handleSanityChecks(
         address _vault,
         uint256 _totalValue,
-        uint48 _reportRefSlot,
+        uint256 _reportRefSlot,
         uint256 _reportTimestamp,
         uint256 _cumulativeLidoFees,
         uint256 _liabilityShares,
@@ -417,7 +420,7 @@ contract LazyOracle is ILazyOracle, AccessControlEnumerableUpgradeable {
 
         // 1. Calculate inOutDelta in the refSlot
         int256 currentInOutDelta = record.inOutDelta.currentValue();
-        inOutDeltaOnRefSlot = record.inOutDelta.getValueForRefSlot(_reportRefSlot);
+        inOutDeltaOnRefSlot = record.inOutDelta.getValueForRefSlot(uint48(_reportRefSlot));
 
         // 2. Sanity check for total value increase
         totalValueWithoutQuarantine = _processTotalValue(
