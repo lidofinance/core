@@ -55,6 +55,35 @@ describe("Scenario: Vault Report Slashing Reserve", () => {
 
   afterEach(async () => await Snapshot.restore(snapshot));
 
+  it("Report with non-zero slashing reserve updates the minimal reserve", async () => {
+    const { vaultHub } = ctx.contracts;
+
+    await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: ether("2") });
+
+    // check minimal reserve in the record
+    const record = await vaultHub.vaultRecord(stakingVault);
+    expect(record.minimalReserve).to.be.equal(ether("2"));
+
+    // check locked amount
+    expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("2"));
+  });
+
+  it("Report with zero slashing reserve resets the minimal reserve to CONNECT_DEPOSIT", async () => {
+    const { vaultHub } = ctx.contracts;
+
+    await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: ether("2") });
+
+    let record = await vaultHub.vaultRecord(stakingVault);
+    expect(record.minimalReserve).to.be.equal(ether("2"));
+    expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("2"));
+
+    await reportVaultDataWithProof(ctx, stakingVault, { slashingReserve: ether("0") });
+
+    record = await vaultHub.vaultRecord(stakingVault);
+    expect(record.minimalReserve).to.be.equal(ether("1"));
+    expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
+  });
+
   it("You cannot withdraw reported slashing reserve", async () => {
     const { vaultHub } = ctx.contracts;
 

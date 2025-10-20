@@ -300,7 +300,26 @@ describe("Integration: OperatorGrid", () => {
       agentSigner = await ctx.getSigner("agent");
     });
 
-    it("changing tier doesn't affect jail status", async () => {
+    it("Vault in jail can't mint stETH", async () => {
+      // Put vault in jail before disconnecting
+      await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, true);
+      expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
+
+      // Verify vault is jailed and can't mint normally
+      await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+    });
+
+    it("Vault can mint again after being removed from jail", async () => {
+      await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, true);
+      expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
+      await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+
+      await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, false);
+      expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.false;
+      await expect(dashboard.mintShares(owner, 100n)).to.not.be.reverted;
+    });
+
+    it("Changing tier doesn't affect jail status", async () => {
       // Register a group and tiers for tier changing
       await operatorGrid.connect(agentSigner).registerGroup(nodeOperator, ether("5000"));
       await operatorGrid.connect(agentSigner).registerTiers(nodeOperator, [
@@ -348,7 +367,7 @@ describe("Integration: OperatorGrid", () => {
       await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
     });
 
-    it("disconnect and connect back preserves jail status", async () => {
+    it("Disconnect and connect back preserves jail status", async () => {
       // Put vault in jail before disconnecting
       await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, true);
       expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
@@ -393,6 +412,49 @@ describe("Integration: OperatorGrid", () => {
       // Verify jail restrictions still apply after reconnection
       await dashboard.connect(owner).fund({ value: ether("2") });
       await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+    });
+
+    it("Jail blocks only minting and allows other operations", async () => {
+      const { lido } = ctx.contracts;
+
+      // Setup: Mint some shares first to prepare for testing burns and rebalances
+      await dashboard.mintShares(owner, ether("1"));
+      const initialLiabilityShares = await vaultHub.vaultRecord(stakingVault).then((r) => r.liabilityShares);
+      expect(initialLiabilityShares).to.be.gt(0n);
+
+      // Put vault in jail
+      await operatorGrid.connect(agentSigner).setVaultJailStatus(stakingVault, true);
+      expect(await operatorGrid.isVaultInJail(stakingVault)).to.be.true;
+
+      // 1. Verify minting is blocked
+      await expect(dashboard.mintShares(owner, 100n)).to.be.revertedWithCustomError(operatorGrid, "VaultInJail");
+
+      // 2. Verify burning is NOT blocked
+      const sharesToBurn = ether("0.1");
+      await lido.connect(owner).approve(dashboard, 10n * sharesToBurn);
+      await expect(dashboard.connect(owner).burnShares(sharesToBurn)).to.not.be.reverted;
+
+      // 3. Verify withdrawals are NOT blocked
+      const withdrawAmount = ether("0.1");
+      await expect(dashboard.withdraw(owner, withdrawAmount)).to.not.be.reverted;
+
+      // 4. Verify rebalancing is NOT blocked
+      // Add more funds to enable rebalancing
+      await dashboard.fund({ value: ether("2") });
+      const sharesToRebalance = await vaultHub.vaultRecord(stakingVault).then((r) => r.liabilityShares);
+      await expect(dashboard.rebalanceVaultWithShares(sharesToRebalance)).to.not.be.reverted;
+
+      // 5. Verify lazy reports are NOT blocked
+      await expect(reportVaultDataWithProof(ctx, stakingVault, { totalValue: await dashboard.totalValue() })).to.not.be
+        .reverted;
+
+      // 6. Verify disconnect is NOT blocked by jail status
+      // Ensure fresh report first
+      await reportVaultDataWithProof(ctx, stakingVault, { totalValue: await dashboard.totalValue() });
+      await expect(dashboard.connect(owner).voluntaryDisconnect()).to.not.be.reverted;
+
+      // Verify disconnect was initiated successfully
+      expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
     });
   });
 });
