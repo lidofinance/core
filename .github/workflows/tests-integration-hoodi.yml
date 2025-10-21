@@ -1,0 +1,28 @@
+name: Integration Tests On Upgrade
+# For local testing of this scenario use ./scripts/dao-upgrade-and-test-on-fork.sh
+
+on: [push]
+
+jobs:
+  test_hardhat_integration_fork:
+    name: Hardhat / Hoodi
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      NODE_OPTIONS: --max_old_space_size=7200
+      SKIP_GAS_REPORT: true
+      SKIP_CONTRACT_SIZE: true
+      SKIP_INTERFACES_CHECK: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Common setup
+        uses: ./.github/workflows/setup
+
+      - name: Run integration tests
+        run: yarn test:integration
+        env:
+          RPC_URL: "${{ secrets.HOODI_RPC_URL }}"
+          LOG_LEVEL: debug
+          NETWORK_STATE_FILE: deployed-hoodi.json
