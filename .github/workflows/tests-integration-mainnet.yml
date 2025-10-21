@@ -1,4 +1,4 @@
-name: Integration Tests On Upgrade
+name: Integration Tests on Hoodi Fork (Upgraded)
 # For local testing of this scenario use ./scripts/dao-upgrade-and-test-on-fork.sh
 
 on: [push]
