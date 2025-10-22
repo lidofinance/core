@@ -425,13 +425,17 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
-     *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
-     *          clearing them for future deposits via `PDG.topUpValidators`
+     *         allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG` clearing them for future
+     *         deposits via `PDG.topUpValidators`. Requires the node operator and vault owner have mutual trust.
      * @param _deposits array of IStakingVault.Deposit structs containing deposit data
      * @return totalAmount total amount of ether deposited to beacon chain
      * @dev requires the PDG policy set to `ALLOW_DEPOSIT_AND_PROVE`
      * @dev requires the caller to have the `NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE`
      * @dev Warning! vulnerable to deposit frontrunning and requires putting trust on the node operator
+     * @dev Warning! Prevents node operator fee disbursement till the moment the deposited amount is reported as the part
+     *      of the vault total value (depends on the length of the Ethereum entrance queue). Fee may never be disbursed
+     *      if the vault is disconnected before the deposit arrives. Recommended to disburse all available fees
+     *      before depositing via this method.
      */
     function unguaranteedDepositToBeaconChain(
         IStakingVault.Deposit[] calldata _deposits
