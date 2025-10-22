@@ -102,8 +102,4 @@ describe("Scenario: Vault Report Slashing Reserve", () => {
       "ExceedsMintingCapacity",
     );
   });
-
-  it("You cannot disconnect if slashing reserve is not zero", async () => {});
-
-  it("Pending disconnect is aborted if slashing reserve is not zero", async () => {});
 });
