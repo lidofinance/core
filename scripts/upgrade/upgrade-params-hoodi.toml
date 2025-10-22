@@ -23,7 +23,7 @@ maxDefaultTierShareLimit = 0                                     # Max share lim
 
 # Vault hub configuration for managing staking vaults
 [vaultHub]
-relativeShareLimitBP = 300           # Relative share limit in basis points (3%)
+relativeShareLimitBP = 1000                    # Relative share limit in basis points (10%)
 
 # Lazy oracle configuration for delayed reward calculations - https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-32.md
 [lazyOracle]

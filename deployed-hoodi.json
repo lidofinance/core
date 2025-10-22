@@ -359,7 +359,7 @@
   },
   "dashboardImpl": {
     "contract": "contracts/0.8.25/vaults/dashboard/Dashboard.sol",
-    "address": "0x7b2B6EA1e53B2039a493cA587805183883Cb8B88",
+    "address": "0x7CA203e3b7341341A4a83086780137eb283A9338",
     "constructorArgs": [
       "0x3508A952176b3c15387C97BE809eaffB1982176a",
       "0x7E99eE3C66636DE415D2d7C880938F2f40f94De4",
@@ -514,7 +514,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/LazyOracle.sol",
-      "address": "0x4965052b7aa07375A261317Daa2823A159c36ef6",
+      "address": "0x100200eE0067B4Aa95c7Ae0433d8467F5Ca74E78",
       "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"]
     }
   },
@@ -558,7 +558,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.9/LidoLocator.sol",
-      "address": "0x16e2D8ABc9d0682A10e10Ba5300DF000757BE522",
+      "address": "0x8717971067D6FeeB631d750B09Ba66a6B4E01BA3",
       "constructorArgs": [
         {
           "accountingOracle": "0xcb883B1bD0a41512b42D2dB267F2A2cd919FB216",
@@ -580,7 +580,7 @@
           "predepositGuarantee": "0xa5F55f3402beA2B14AE15Dae1b6811457D43581d",
           "wstETH": "0x7E99eE3C66636DE415D2d7C880938F2f40f94De4",
           "vaultHub": "0x4C9fFC325392090F789255b9948Ab1659b797964",
-          "vaultFactory": "0x67Fc99587B4Cd6FA16E26FF4782711f79055d7ad",
+          "vaultFactory": "0xf0Cf0c852Bb2b41eF8171399a71be79aa67e6295",
           "lazyOracle": "0xf41491C79C30e8f4862d3F4A5b790171adB8e04A",
           "operatorGrid": "0x501e678182bB5dF3f733281521D3f3D1aDe69917"
         }
@@ -631,7 +631,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/OperatorGrid.sol",
-      "address": "0x3C17C3feeaccdDA22Ed72e386c20E168f3CBa3c9",
+      "address": "0xab35DA5722B188E3b67896873F88e2dFA905c944",
       "constructorArgs": ["0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8"]
     }
   },
@@ -693,7 +693,7 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/predeposit_guarantee/PredepositGuarantee.sol",
-      "address": "0xDf9d7ce12DD859fa929A3Ef01Bc3BecF78fD3755",
+      "address": "0x6D2c164Be7cc36b03aBd0e2e133bE03A30ad3358",
       "constructorArgs": [
         "0x10000910",
         "0x0000000000000000000000000000000000000000000000000096000000000028",
@@ -732,16 +732,17 @@
   },
   "stakingVaultFactory": {
     "contract": "contracts/0.8.25/vaults/VaultFactory.sol",
-    "address": "0x67Fc99587B4Cd6FA16E26FF4782711f79055d7ad",
+    "address": "0xf0Cf0c852Bb2b41eF8171399a71be79aa67e6295",
     "constructorArgs": [
       "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
       "0xb3e6a8B6A752d3bb905A1B3Ef12bbdeE77E8160e",
-      "0x7b2B6EA1e53B2039a493cA587805183883Cb8B88"
+      "0x7CA203e3b7341341A4a83086780137eb283A9338",
+      "0x67Fc99587B4Cd6FA16E26FF4782711f79055d7ad"
     ]
   },
   "stakingVaultImplementation": {
     "contract": "contracts/0.8.25/vaults/StakingVault.sol",
-    "address": "0xdc79D1751D1435fEc9204c03ca3D64ceEB73A7df",
+    "address": "0xE96BE4FB723e68e7b96244b7399C64a58bcD0062",
     "constructorArgs": ["0x00000000219ab540356cBB839Cbe05303d7705Fa"]
   },
   "triggerableWithdrawalsGateway": {
@@ -855,12 +856,12 @@
     },
     "implementation": {
       "contract": "contracts/0.8.25/vaults/VaultHub.sol",
-      "address": "0xAA80eE34a21D48Ef2C99A2403101E08e4Fd18726",
+      "address": "0x36CdDa6Ff2cb8a83a0F328aA2Bf1B5200377FAf9",
       "constructorArgs": [
         "0xe2EF9536DAAAEBFf5b1c130957AB3E80056b06D8",
         "0x3508A952176b3c15387C97BE809eaffB1982176a",
         "0x32EC59a78abaca3f91527aeB2008925D5AaC1eFC",
-        300
+        1000
       ]
     }
   },

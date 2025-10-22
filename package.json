@@ -75,7 +75,7 @@
     "@nomicfoundation/hardhat-ignition-ethers": "0.15.12",
     "@nomicfoundation/hardhat-network-helpers": "1.0.12",
     "@nomicfoundation/hardhat-toolbox": "5.0.0",
-    "@nomicfoundation/hardhat-verify": "2.0.14",
+    "@nomicfoundation/hardhat-verify": "2.1.1",
     "@nomicfoundation/ignition-core": "0.15.11",
     "@openzeppelin/merkle-tree": "1.0.8",
     "@typechain/ethers-v6": "0.5.1",
