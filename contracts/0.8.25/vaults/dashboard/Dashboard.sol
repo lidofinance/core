@@ -252,9 +252,16 @@ contract Dashboard is NodeOperatorFee {
      * @notice Disconnects the underlying StakingVault from the hub and passing its ownership to Dashboard.
      *         After receiving the final report, one can call reconnectToVaultHub() to reconnect to the hub
      *         or abandonDashboard() to transfer the ownership to a new owner.
+     * @dev node operator fees can be lost if the fee recipient is set incorrectly
      */
     function voluntaryDisconnect() external {
-        disburseFee();
+        // try catch prevents blocking disconnection by setting wrong fee receiver (e.g. to non-receiving contract)
+        // but also it can prevent some clients from doing correct gas estimation
+        // so it's recommended to invoke disburseFee() first if having problems with gas estimation
+        (uint256 fee,,) = _calculateFee();
+        if (fee > 0) {
+            try this.disburseFee() {} catch {}
+        }
         _voluntaryDisconnect();
     }
 
