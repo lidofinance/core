@@ -7,7 +7,13 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { StakingModule__MockForStakingRouter, StakingRouter__Harness } from "typechain-types";
 
 import { certainAddress, ether } from "lib";
-import { getModuleMEB, StakingModuleStatus, StakingModuleType, TOTAL_BASIS_POINTS } from "lib/constants";
+import {
+  getModuleMEB,
+  StakingModuleStatus,
+  StakingModuleType,
+  TOTAL_BASIS_POINTS,
+  WithdrawalCredentialsType,
+} from "lib/constants";
 
 import { Snapshot } from "test/suite";
 
@@ -522,6 +528,7 @@ describe("StakingRouter.sol:rewards", () => {
       maxDepositsPerBlock,
       minDepositBlockDistance,
       moduleType,
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
     };
 
     await stakingRouter

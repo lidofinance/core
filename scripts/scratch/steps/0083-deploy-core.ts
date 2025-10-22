@@ -147,13 +147,6 @@ export async function main() {
   // Deploy StakingRouter
   //
 
-  // deploy deposit tracker
-
-  // const depositsTracker = await deployWithoutProxy(Sk.depositsTracker, "DepositsTracker", deployer);
-
-  // deploy temporary storage
-  const depositsTempStorage = await deployWithoutProxy(Sk.depositsTempStorage, "DepositsTempStorage", deployer);
-
   // deploy beacon chain depositor
   const beaconChainDepositor = await deployWithoutProxy(Sk.beaconChainDepositor, "BeaconChainDepositor", deployer);
 
@@ -172,7 +165,6 @@ export async function main() {
       libraries: {
         // DepositsTracker: depositsTracker.address,
         BeaconChainDepositor: beaconChainDepositor.address,
-        DepositsTempStorage: depositsTempStorage.address,
         SRLib: srLib.address,
       },
     },

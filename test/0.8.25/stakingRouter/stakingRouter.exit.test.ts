@@ -6,7 +6,7 @@ import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { StakingModule__MockForTriggerableWithdrawals, StakingRouter__Harness } from "typechain-types";
 
-import { certainAddress, ether, randomString, StakingModuleType } from "lib";
+import { certainAddress, ether, randomString, StakingModuleType, WITHDRAWAL_CREDENTIALS_TYPE_01 } from "lib";
 
 import { Snapshot } from "test/suite";
 
@@ -78,6 +78,7 @@ describe("StakingRouter.sol:exit", () => {
       /// @dev 0 = Legacy, 0x01 withdrawals, 1 = New, 0x02 withdrawals.
       /// @dev See {StakingModuleType} enum.
       moduleType: StakingModuleType.Legacy,
+      withdrawalCredentialsType: WITHDRAWAL_CREDENTIALS_TYPE_01,
     };
 
     // Add staking module

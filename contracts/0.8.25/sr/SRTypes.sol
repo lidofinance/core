@@ -20,9 +20,9 @@ enum StakingModuleStatus {
 }
 
 /// @dev Type identifier for modules
-///      For simplicity, only one deposit type is allowed per module.
-///      Legacy - keys count-based accounting, old IStakingModule, WC type 0x01
-///      New - balance-based accounting, new IStakingModuleV2, WC type 0x02
+///      Identify module accounting algorithm
+///      Legacy 
+///      New
 enum StakingModuleType {
     Legacy,
     New
@@ -68,6 +68,8 @@ struct StakingModuleConfig {
     /// @dev 0 = Legacy, 0x01 withdrawals, 1 = New, 0x02 withdrawals.
     /// @dev See {StakingModuleType} enum.
     uint256 moduleType;
+    /// @notice The type of withdrawal credentials for creation of validators
+    uint256 withdrawalCredentialsType;
 }
 
 /// @dev old data struct, kept for backward compatibility
@@ -106,6 +108,7 @@ struct StakingModule {
     /// @dev Must be harmonized with `OracleReportSanityChecker.appearedValidatorsPerDayLimit`.
     /// See docs for the `OracleReportSanityChecker.setAppearedValidatorsPerDayLimit` function).
     uint64 minDepositBlockDistance;
+    /// TODO: we dont need moduleType in this release
     /// @notice The type of staking module (Legacy/Standard), defines the module interface and withdrawal credentials type.
     /// @dev 0 = Legacy, 0x01 withdrawals, 1 = New, 0x02 withdrawals.
     /// @dev See {StakingModuleType} enum.
@@ -131,6 +134,8 @@ struct ModuleStateConfig {
     StakingModuleStatus status;
     /// @notice Staking module type (Legacy/Standard)
     StakingModuleType moduleType;
+    /// @notice The type of withdrawal credentials for creation of validators
+    uint8 withdrawalCredentialsType;
 }
 // /// @notice The type of withdrawal credentials for creation of validators
 // uint8 wcType;

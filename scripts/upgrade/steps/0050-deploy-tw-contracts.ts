@@ -92,9 +92,6 @@ export async function main() {
   // Staking Router
   //
 
-  // deploy temporary storage
-  const depositsTempStorage = await deployWithoutProxy(Sk.depositsTempStorage, "DepositsTempStorage", deployer);
-
   // deploy beacon chain depositor
   const beaconChainDepositor = await deployWithoutProxy(Sk.beaconChainDepositor, "BeaconChainDepositor", deployer);
 
@@ -112,13 +109,11 @@ export async function main() {
       libraries: {
         // DepositsTracker: depositsTracker.address,
         BeaconChainDepositor: beaconChainDepositor.address,
-        DepositsTempStorage: depositsTempStorage.address,
         SRLib: srLib.address,
       },
     },
   );
 
-  log(`DepositsTempStorage library address: ${depositsTempStorage.address}`);
   log(`BeaconChainDepositor library address: ${beaconChainDepositor.address}`);
   log(`SRLib library address: ${srLib.address}`);
   log(`StakingRouter implementation address: ${stakingRouterAddress.address}`);

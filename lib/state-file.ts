@@ -112,7 +112,6 @@ export enum Sk {
   dgDualGovernance = "dg:dualGovernance",
   dgEmergencyProtectedTimelock = "dg:emergencyProtectedTimelock",
   // SR public libs
-  depositsTempStorage = "depositsTempStorage",
   beaconChainDepositor = "beaconChainDepositor",
   srLib = "srLib",
 }
@@ -178,7 +177,6 @@ export function getAddress(contractKey: Sk, state: DeploymentState): string {
     case Sk.validatorConsolidationRequests:
     case Sk.twVoteScript:
     case Sk.v3VoteScript:
-    case Sk.depositsTempStorage:
     case Sk.beaconChainDepositor:
       return state[contractKey].address;
     default:

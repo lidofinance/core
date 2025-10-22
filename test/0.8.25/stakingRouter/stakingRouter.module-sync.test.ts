@@ -81,6 +81,7 @@ describe("StakingRouter.sol:module-sync", () => {
       maxDepositsPerBlock,
       minDepositBlockDistance,
       moduleType: StakingModuleType.Legacy,
+      withdrawalCredentialsType: WithdrawalCredentialsType.WC0x01,
     };
 
     await stakingRouter.addStakingModule(name, stakingModuleAddress, stakingModuleConfig);

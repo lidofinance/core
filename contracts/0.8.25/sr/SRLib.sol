@@ -179,7 +179,8 @@ library SRLib {
                     depositTargetShare: smOld.stakeShareLimit,
                     withdrawalProtectShare: smOld.priorityExitShareThreshold,
                     status: StakingModuleStatus(smOld.status),
-                    moduleType: StakingModuleType.Legacy
+                    moduleType: StakingModuleType.Legacy,
+                    withdrawalCredentialsType: SRUtils.WC_TYPE_01
                 })
             );
 
@@ -283,6 +284,7 @@ library SRLib {
         SRUtils._validateModuleName(_moduleName);
         SRUtils._validateModulesCount();
         SRUtils._validateModuleType(_moduleConfig.moduleType);
+        SRUtils._validateWithdrawalCredentialsType(_moduleConfig.withdrawalCredentialsType);
 
         // Check for duplicate module address
         /// @dev due to small number of modules, we can afford to do this check on add
@@ -301,6 +303,7 @@ library SRLib {
         moduleState.config.moduleAddress = _moduleAddress;
         moduleState.config.status = StakingModuleStatus.Active;
         moduleState.config.moduleType = StakingModuleType(_moduleConfig.moduleType);
+        moduleState.config.withdrawalCredentialsType = uint8(_moduleConfig.withdrawalCredentialsType);
 
         moduleState.name = _moduleName;
 
@@ -384,7 +387,7 @@ library SRLib {
         if (_getCapacity && stateConfig.status == StakingModuleStatus.Active) {
             // todo rethink getting capacity for new modules (maybe some additional limits will be applied)
             (,, uint256 depositableValidatorsCount) = _moduleId.getIStakingModule().getStakingModuleSummary();
-            capacity = SRUtils._getModuleCapacity(stateConfig.moduleType, depositableValidatorsCount);
+            capacity = SRUtils._getModuleCapacity(stateConfig.withdrawalCredentialsType, depositableValidatorsCount);
         }
         // else capacity = 0
     }
