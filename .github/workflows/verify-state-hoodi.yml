@@ -2,6 +2,9 @@ name: Verify State On Hoodi
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - "feat/ci-hoodi-state"
   schedule:
     - cron: "0 0 * * *" # runs every day at midnight UTC
 
