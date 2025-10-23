@@ -125,12 +125,7 @@ export const UpgradeParametersSchema = z.object({
   burner: BurnerSchema,
   oracleVersions: OracleVersionsSchema.optional(),
   aragonAppVersions: AragonAppVersionsSchema.optional(),
-  triggerableWithdrawalsGateway: TriggerableWithdrawalsGatewaySchema,
   consolidationGateway: ConsolidationGatewaySchema,
-  triggerableWithdrawals: z.object({
-    exit_events_lookback_window_in_slots: PositiveIntSchema,
-    nor_exit_deadline_in_sec: PositiveIntSchema,
-  }),
 });
 
 // Gate seal schema (for scratch deployment)
