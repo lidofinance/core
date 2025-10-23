@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage lines-valid="4911"  lines-covered="4683"  line-rate="0.9536"  branches-valid="2306"  branches-covered="2125"  branch-rate="0.9215000000000001"  timestamp="1761244313501" complexity="0" version="0.1">
+<coverage lines-valid="4911"  lines-covered="4686"  line-rate="0.9542"  branches-valid="2306"  branches-covered="2127"  branch-rate="0.9224"  timestamp="1761246432486" complexity="0" version="0.1">
 <sources>
 	<source>/home/runner/work/core/core</source>
 </sources>
@@ -2942,10 +2942,10 @@
 			<line number="168"  hits="1"  branch="false" />
 			<line number="169"  hits="1"  branch="false" />
 			<line number="171"  hits="1"  branch="false" />
-			<line number="172"  hits="12"  branch="false" />
-			<line number="173"  hits="12"  branch="false" />
-			<line number="175"  hits="12"  branch="false" />
-			<line number="176"  hits="12"  branch="false" />
+			<line number="172"  hits="39"  branch="false" />
+			<line number="173"  hits="39"  branch="false" />
+			<line number="175"  hits="39"  branch="false" />
+			<line number="176"  hits="39"  branch="false" />
 			<line number="182"  hits="3"  branch="true"  condition-coverage="50% (1/2)" />
 			<line number="183"  hits="0"  branch="false" />
 			<line number="185"  hits="3"  branch="false" />
@@ -3747,9 +3747,9 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25.vaults.dashboard"  line-rate="0.9476"  branch-rate="0.875" >
+	<package name="0.8.25.vaults.dashboard"  line-rate="0.9597"  branch-rate="0.8824" >
 	<classes>
-		<class name="Dashboard.sol"  filename="contracts/0.8.25/vaults/dashboard/Dashboard.sol"  line-rate="0.9167000000000001"  branch-rate="0.8332999999999999" >
+		<class name="Dashboard.sol"  filename="contracts/0.8.25/vaults/dashboard/Dashboard.sol"  line-rate="0.9394"  branch-rate="0.85" >
 		<methods>
 			<method name="constructor"  hits="4"  signature="()V" >
 				<lines><line number="90"  hits="4" /></lines>
@@ -3799,8 +3799,8 @@
 			<method name="voluntaryDisconnect"  hits="5"  signature="()V" >
 				<lines><line number="266"  hits="5" /></lines>
 			</method>
-			<method name="recoverFeeLeftover"  hits="0"  signature="()V" >
-				<lines><line number="275"  hits="0" /></lines>
+			<method name="recoverFeeLeftover"  hits="2"  signature="()V" >
+				<lines><line number="275"  hits="2" /></lines>
 			</method>
 			<method name="abandonDashboard"  hits="5"  signature="()V" >
 				<lines><line number="289"  hits="5" /></lines>
@@ -3853,8 +3853,8 @@
 			<method name="proveUnknownValidatorsToPDG"  hits="4"  signature="()V" >
 				<lines><line number="507"  hits="4" /></lines>
 			</method>
-			<method name="recoverERC20"  hits="5"  signature="()V" >
-				<lines><line number="523"  hits="5" /></lines>
+			<method name="recoverERC20"  hits="6"  signature="()V" >
+				<lines><line number="523"  hits="6" /></lines>
 			</method>
 			<method name="collectERC20FromVault"  hits="1"  signature="()V" >
 				<lines><line number="547"  hits="1" /></lines>
@@ -3948,9 +3948,9 @@
 			<line number="254"  hits="3"  branch="false" />
 			<line number="268"  hits="5"  branch="false" />
 			<line number="269"  hits="5"  branch="false" />
-			<line number="276"  hits="0"  branch="false" />
-			<line number="277"  hits="0"  branch="false" />
-			<line number="279"  hits="0"  branch="false" />
+			<line number="276"  hits="2"  branch="false" />
+			<line number="277"  hits="2"  branch="false" />
+			<line number="279"  hits="2"  branch="false" />
 			<line number="290"  hits="5"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="291"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="292"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
@@ -4006,11 +4006,11 @@
 			<line number="498"  hits="1"  branch="false" />
 			<line number="508"  hits="4"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="510"  hits="3"  branch="false" />
-			<line number="524"  hits="5"  branch="false" />
-			<line number="525"  hits="4"  branch="false" />
-			<line number="526"  hits="3"  branch="false" />
-			<line number="528"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="529"  hits="1"  branch="true"  condition-coverage="50% (1/2)" />
+			<line number="524"  hits="6"  branch="false" />
+			<line number="525"  hits="5"  branch="false" />
+			<line number="526"  hits="4"  branch="false" />
+			<line number="528"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="529"  hits="2"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="530"  hits="1"  branch="false" />
 			<line number="532"  hits="1"  branch="false" />
 			<line number="548"  hits="1"  branch="false" />
@@ -4155,7 +4155,7 @@
 			<line number="292"  hits="44"  branch="false" />
 			<line number="297"  hits="19"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="299"  hits="8"  branch="false" />
-			<line number="301"  hits="8"  branch="false" />
+			<line number="300"  hits="8"  branch="false" />
 			<line number="302"  hits="8"  branch="false" />
 			<line number="306"  hits="23"  branch="false" />
 			<line number="307"  hits="23"  branch="true"  condition-coverage="100% (2/2)" />
@@ -4205,8 +4205,8 @@
 			<method name="revokeRoles"  hits="5"  signature="()V" >
 				<lines><line number="171"  hits="5" /></lines>
 			</method>
-			<method name="onlyRoleMemberOrAdmin"  hits="248"  signature="()V" >
-				<lines><line number="189"  hits="248" /></lines>
+			<method name="onlyRoleMemberOrAdmin"  hits="249"  signature="()V" >
+				<lines><line number="189"  hits="249" /></lines>
 			</method>
 			<method name="_fund"  hits="11"  signature="()V" >
 				<lines><line number="200"  hits="11" /></lines>
@@ -4265,11 +4265,11 @@
 			<method name="_operatorGrid"  hits="6"  signature="()V" >
 				<lines><line number="358"  hits="6" /></lines>
 			</method>
-			<method name="_requireNotZero"  hits="22"  signature="()V" >
-				<lines><line number="362"  hits="22" /></lines>
+			<method name="_requireNotZero"  hits="23"  signature="()V" >
+				<lines><line number="362"  hits="23" /></lines>
 			</method>
-			<method name="_requireNotZero"  hits="108"  signature="()V" >
-				<lines><line number="366"  hits="108" /></lines>
+			<method name="_requireNotZero"  hits="110"  signature="()V" >
+				<lines><line number="366"  hits="110" /></lines>
 			</method>
 		</methods>
 		<lines>
@@ -4293,9 +4293,9 @@
 			<line number="172"  hits="5"  branch="false" />
 			<line number="174"  hits="3"  branch="false" />
 			<line number="175"  hits="13"  branch="false" />
-			<line number="190"  hits="248"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="190"  hits="249"  branch="true"  condition-coverage="100% (2/2)" />
 			<line number="191"  hits="34"  branch="false" />
-			<line number="193"  hits="214"  branch="false" />
+			<line number="193"  hits="215"  branch="false" />
 			<line number="201"  hits="11"  branch="false" />
 			<line number="210"  hits="3"  branch="false" />
 			<line number="219"  hits="20"  branch="false" />
@@ -4320,8 +4320,8 @@
 			<line number="350"  hits="491"  branch="false" />
 			<line number="355"  hits="11"  branch="false" />
 			<line number="359"  hits="6"  branch="false" />
-			<line number="363"  hits="22"  branch="true"  condition-coverage="100% (2/2)" />
-			<line number="367"  hits="108"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="363"  hits="23"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="367"  hits="110"  branch="true"  condition-coverage="100% (2/2)" />
 		</lines>
 		</class>
 	</classes>
@@ -4354,7 +4354,7 @@
 		</class>
 	</classes>
 	</package>
-	<package name="0.8.25.vaults.lib"  line-rate="1"  branch-rate="0.9444" >
+	<package name="0.8.25.vaults.lib"  line-rate="1"  branch-rate="1" >
 	<classes>
 		<class name="PinnedBeaconUtils.sol"  filename="contracts/0.8.25/vaults/lib/PinnedBeaconUtils.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
@@ -4373,19 +4373,19 @@
 			<line number="30"  hits="2"  branch="false" />
 		</lines>
 		</class>
-		<class name="RecoverTokens.sol"  filename="contracts/0.8.25/vaults/lib/RecoverTokens.sol"  line-rate="1"  branch-rate="0.5" >
+		<class name="RecoverTokens.sol"  filename="contracts/0.8.25/vaults/lib/RecoverTokens.sol"  line-rate="1"  branch-rate="1" >
 		<methods>
-			<method name="_recoverEth"  hits="1"  signature="()V" >
-				<lines><line number="32"  hits="1" /></lines>
+			<method name="_recoverEth"  hits="3"  signature="()V" >
+				<lines><line number="32"  hits="3" /></lines>
 			</method>
 			<method name="_recoverERC20"  hits="3"  signature="()V" >
 				<lines><line number="42"  hits="3" /></lines>
 			</method>
 		</methods>
 		<lines>
-			<line number="36"  hits="1"  branch="false" />
-			<line number="37"  hits="1"  branch="true"  condition-coverage="50% (1/2)" />
-			<line number="39"  hits="1"  branch="false" />
+			<line number="36"  hits="3"  branch="false" />
+			<line number="37"  hits="3"  branch="true"  condition-coverage="100% (2/2)" />
+			<line number="39"  hits="2"  branch="false" />
 			<line number="47"  hits="3"  branch="false" />
 			<line number="49"  hits="3"  branch="false" />
 		</lines>
