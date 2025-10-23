@@ -297,9 +297,9 @@ contract NodeOperatorFee is Permissions {
         if (fee == 0) return;
 
         _setSettledGrowth(growth);
-
         _doWithdraw(_recipient, fee);
-        emit FeeDisbursed(msg.sender, fee);
+
+        emit FeeDisbursed(msg.sender, fee, _recipient);
     }
 
     function _setSettledGrowth(int256 _newSettledGrowth) internal {
@@ -381,8 +381,9 @@ contract NodeOperatorFee is Permissions {
      * @dev Emitted when the node operator fee is disbursed.
      * @param sender the address of the sender
      * @param fee the amount of disbursed fee.
+     * @param recipient the address of recipient
      */
-    event FeeDisbursed(address indexed sender, uint256 fee);
+    event FeeDisbursed(address indexed sender, uint256 fee, address recipient);
 
     /**
      * @dev Emitted when the node operator fee recipient is set.
