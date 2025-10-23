@@ -303,6 +303,17 @@ export async function main() {
   ]);
   console.log("VaultFactory address", await vaultFactory.getAddress());
 
+  const consolidationGateway = await deployWithoutProxy(Sk.consolidationGateway, "ConsolidationGateway", deployer, [
+    agentAddress, // TODO: check
+    locator.address,
+    // ToDo: Replace dummy parameters with real ones
+    10, // maxConsolidationRequestsLimit,
+    1, // consolidationsPerFrame,
+    60, // frameDurationInSec
+  ]);
+
+  console.log("ConsolidationGateway address", await consolidationGateway.getAddress());
+
   //
   // Deploy new LidoLocator implementation
   //
