@@ -1225,8 +1225,9 @@ contract VaultHub is PausableUntilWithRoles {
         // Solve the equation for X:
         // L - liability, TV - totalValue
         // MR - maxMintableRatio, 100 - TOTAL_BASIS_POINTS, RR - reserveRatio
-        // X - amount of shares that should be withdrawn (TV - X) and used to repay the debt (LS - X)
-        // to reduce the L/TV ratio back to MR
+        // X - amount of ether that should be withdrawn (TV - X) and used to repay the debt (L - X) to reduce the
+        // L/TV ratio back to MR
+
         // (L - X) / (TV - X) = MR / 100
         // (L - X) * 100 = (TV - X) * MR
         // L * 100 - X * 100 = TV * MR - X * MR
