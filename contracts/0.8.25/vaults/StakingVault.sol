@@ -67,7 +67,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      * @notice Address of `BeaconChainDepositContract`
      *         Set immutably in the constructor to avoid storage costs
      */
-    address public immutable DEPOSIT_CONTRACT;
+    IDepositContract public immutable DEPOSIT_CONTRACT;
 
     /*
      * ╔══════════════════════════════════════════════════╗
@@ -104,7 +104,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
      */
     constructor(address _beaconChainDepositContract) {
         if (_beaconChainDepositContract == address(0)) revert ZeroArgument("_beaconChainDepositContract");
-        DEPOSIT_CONTRACT = _beaconChainDepositContract;
+        DEPOSIT_CONTRACT = IDepositContract(_beaconChainDepositContract);
         _disableInitializers();
     }
 
@@ -536,7 +536,7 @@ contract StakingVault is IStakingVault, Ownable2StepUpgradeable {
         uint256 balance = availableBalance();
         if (_deposit.amount > balance) revert InsufficientBalance(balance, _deposit.amount);
 
-        IDepositContract(DEPOSIT_CONTRACT).deposit{value: _deposit.amount}(
+        DEPOSIT_CONTRACT.deposit{value: _deposit.amount}(
             _deposit.pubkey,
             _withdrawalCredentials,
             _deposit.signature,

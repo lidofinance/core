@@ -148,8 +148,8 @@ abstract contract Permissions is AccessControlConfirmable {
      * @notice Returns the address of the underlying StakingVault.
      * @return The address of the StakingVault.
      */
-    function stakingVault() external view returns (address) {
-        return address(_stakingVault());
+    function stakingVault() external view returns (IStakingVault) {
+        return _stakingVault();
     }
 
     // ==================== Role Management Functions ====================

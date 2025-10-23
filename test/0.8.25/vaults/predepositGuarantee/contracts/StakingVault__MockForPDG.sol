@@ -52,7 +52,7 @@ contract StakingVault__MockForPDG is IStakingVault {
         withdrawalCredentials_ = _withdrawalCredentials;
     }
 
-    function DEPOSIT_CONTRACT() external view override returns (address) {}
+    function DEPOSIT_CONTRACT() external view override returns (IDepositContract) {}
 
     function initialize(address _owner, address _nodeOperator, address _depositor) external override {}
 
