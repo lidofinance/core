@@ -426,7 +426,8 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
     /// @param _requestedTierId id of the tier
     /// @param _requestedShareLimit share limit to set
     /// @return bool Whether the tier change was executed.
-    /// @dev Requires vault to be connected to VaultHub to finalize tier change.
+    /// @dev Node operator confirmation can be collected even if the vault is disconnected
+    /// @dev Requires vault to be connected to VaultHub to finalize tier change from the vault owner side.
     /// @dev Both vault owner (via Dashboard) and node operator confirmations are required.
     function changeTier(
         address _vault,
@@ -440,16 +441,10 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
         if (_requestedTierId == DEFAULT_TIER_ID) revert CannotChangeToDefaultTier();
 
         VaultHub vaultHub = _vaultHub();
-        bool isVaultConnected = vaultHub.isVaultConnected(_vault);
-
-        address vaultOwner = isVaultConnected
-            ? vaultHub.vaultConnection(_vault).owner
-            : IStakingVault(_vault).owner();
-
-        address nodeOperator = IStakingVault(_vault).nodeOperator();
-
         uint256 vaultTierId = $.vaultTier[_vault];
         if (vaultTierId == _requestedTierId) revert TierAlreadySet();
+
+        address nodeOperator = IStakingVault(_vault).nodeOperator();
 
         Tier storage requestedTier = $.tiers[_requestedTierId];
         if (nodeOperator != requestedTier.operator) revert TierNotInOperatorGroup();
@@ -457,6 +452,7 @@ contract OperatorGrid is AccessControlEnumerableUpgradeable, Confirmable2Address
             revert RequestedShareLimitTooHigh(_requestedShareLimit, requestedTier.shareLimit);
         }
 
+        address vaultOwner = vaultHub.vaultConnection(_vault).owner;
         // store the caller's confirmation; only proceed if the required number of confirmations is met.
         if (!_collectAndCheckConfirmations(msg.data, vaultOwner, nodeOperator)) return false;
         uint256 vaultLiabilityShares = vaultHub.liabilityShares(_vault);
