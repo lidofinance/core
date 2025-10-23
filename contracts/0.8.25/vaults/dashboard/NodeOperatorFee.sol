@@ -192,10 +192,10 @@ contract NodeOperatorFee is Permissions {
      * 4. Withdraws fee amount from vault to node operator recipient
      */
     function disburseFee() public {
-        (uint256 fee, int128 growth, uint256 abnormallyHighFeeThreshold) = _calculateFee();
+        (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) = _calculateFee();
         if (fee > abnormallyHighFeeThreshold) revert AbnormallyHighFee();
 
-       _disburseFee(fee, growth);
+        _disburseFee(fee, growth, feeRecipient);
     }
 
     /**
@@ -204,8 +204,8 @@ contract NodeOperatorFee is Permissions {
      * and the settled growth (used as baseline for fee) is set correctly.
      */
     function disburseAbnormallyHighFee() external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
-        (uint256 fee, int128 growth,) = _calculateFee();
-        _disburseFee(fee, growth);
+        (uint256 fee, int256 growth,) = _calculateFee();
+        _disburseFee(fee, growth, feeRecipient);
     }
 
     /**
@@ -292,13 +292,13 @@ contract NodeOperatorFee is Permissions {
         return LazyOracle(LIDO_LOCATOR.lazyOracle());
     }
 
-    function _disburseFee(uint256 fee, int128 growth) internal {
+    function _disburseFee(uint256 fee, int256 growth, address _recipient) internal {
         // it's important not to revert here so as not to block disconnect
         if (fee == 0) return;
 
         _setSettledGrowth(growth);
 
-        VAULT_HUB.withdraw(address(_stakingVault()), feeRecipient, fee);
+        _doWithdraw(_recipient, fee);
         emit FeeDisbursed(msg.sender, fee);
     }
 
@@ -335,9 +335,9 @@ contract NodeOperatorFee is Permissions {
         _correctSettledGrowth(settledGrowth + int256(_amount));
     }
 
-    function _calculateFee() internal view returns (uint256 fee, int128 growth, uint256 abnormallyHighFeeThreshold) {
+    function _calculateFee() internal view returns (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) {
         VaultHub.Report memory report = latestReport();
-        growth = int128(uint128(report.totalValue)) - int128(report.inOutDelta);
+        growth = int256(uint256(report.totalValue)) - report.inOutDelta;
         int256 unsettledGrowth = growth - settledGrowth;
 
         if (unsettledGrowth > 0) {

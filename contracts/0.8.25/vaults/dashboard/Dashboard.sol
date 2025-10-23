@@ -69,6 +69,12 @@ contract Dashboard is NodeOperatorFee {
     PDGPolicy public pdgPolicy = PDGPolicy.STRICT;
 
     /**
+     * @notice the amount of node operator fees accrued on the moment of disconnection and secured to be recovered to
+     *         the `feeRecipient` address using `recoverFeeLeftover` method
+     */
+    uint128 public feeLeftover;
+
+    /**
      * @notice Constructor sets the stETH, and WSTETH token addresses,
      * and passes the address of the vault hub up the inheritance chain.
      * @param _stETH Address of the stETH token contract.
@@ -249,20 +255,28 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Disconnects the underlying StakingVault from the hub and passing its ownership to Dashboard.
-     *         After receiving the final report, one can call reconnectToVaultHub() to reconnect to the hub
-     *         or abandonDashboard() to transfer the ownership to a new owner.
-     * @dev node operator fees can be lost if the fee recipient is set incorrectly
+     * @notice Initiates the disconnection of the underlying StakingVault from the hub and passing its ownership
+     *         to Dashboard contract. Disconnection is finalized by applying the next oracle report for this vault,
+     *         after which one can call reconnectToVaultHub() to reconnect the vault
+     *         or abandonDashboard() to transfer the ownership further to a new owner.
+     * @dev reverts if there is not enough ether on the vault balance to pay the accrued node operator fees
+     * @dev node operator fees accrued on the moment of disconnection are collected to Dashboard address as `feeLeftover`
+     *      and can be recovered later to the fee recipient address
      */
     function voluntaryDisconnect() external {
-        // try catch prevents blocking disconnection by setting wrong fee receiver (e.g. to non-receiving contract)
-        // but also it can prevent some clients from doing correct gas estimation
-        // so it's recommended to invoke disburseFee() first if having problems with gas estimation
-        (uint256 fee,,) = _calculateFee();
-        if (fee > 0) {
-            try this.disburseFee() {} catch {}
-        }
+        // fee are not disbursed to the feeRecipient address to avoid reverts blocking the disconnection
+        _collectFeeLeftover();
         _voluntaryDisconnect();
+    }
+
+    /**
+     * @notice Recovers the previously collected fees to the feeRecipient address
+     */
+    function recoverFeeLeftover() external {
+        uint256 feeToTransfer = feeLeftover;
+        feeLeftover = 0;
+
+        RecoverTokens._recoverEth(feeRecipient, feeToTransfer);
     }
 
     /**
@@ -512,6 +526,7 @@ contract Dashboard is NodeOperatorFee {
         _requireNotZero(_amount);
 
         if (_token == RecoverTokens.ETH) {
+            if (_amount > address(this).balance - feeLeftover) revert InsufficientBalance();
             RecoverTokens._recoverEth(_recipient, _amount);
         } else {
             RecoverTokens._recoverERC20(_token, _recipient, _amount);
@@ -721,6 +736,19 @@ contract Dashboard is NodeOperatorFee {
         }
     }
 
+    function _collectFeeLeftover() internal {
+        (uint256 fee, int256 growth, uint256 abnormallyHighFeeThreshold) = _calculateFee();
+        if (fee > abnormallyHighFeeThreshold) revert AbnormallyHighFee();
+
+        if (fee > 0) {
+            feeLeftover += uint128(fee);
+
+            _disableFundOnReceive();
+            _disburseFee(fee, growth, address(this));
+            _enableFundOnReceive();
+        }
+    }
+
     // ==================== Events ====================
 
     /**
@@ -775,4 +803,6 @@ contract Dashboard is NodeOperatorFee {
      * by the current active PDG policy.
      */
     error ForbiddenByPDGPolicy();
+
+    error InsufficientBalance();
 }
