@@ -238,8 +238,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
      * For more details see https://github.com/lidofinance/lido-improvement-proposals/blob/develop/LIPS/lip-10.md
      * @param _oldBurner The address of the old Burner contract to migrate from
      * @param _contractsWithBurnerAllowances Contracts that have allowances for the old burner to be migrated
+     * @param _initialMaxExternalRatioBP Initial maximum external ratio in basis points
      */
-    function finalizeUpgrade_v3(address _oldBurner, address[] _contractsWithBurnerAllowances) external {
+    function finalizeUpgrade_v3(address _oldBurner, address[] _contractsWithBurnerAllowances, uint256 _initialMaxExternalRatioBP) external {
         require(hasInitialized(), "NOT_INITIALIZED");
         _checkContractVersion(2);
         _setContractVersion(3);
@@ -247,6 +248,9 @@ contract Lido is Versioned, StETHPermit, AragonApp {
         _migrateStorage_v2_to_v3();
 
         _migrateBurner_v2_to_v3(_oldBurner, _contractsWithBurnerAllowances);
+
+        _setMaxExternalRatioBP(_initialMaxExternalRatioBP);
+        emit MaxExternalRatioBPSet(_initialMaxExternalRatioBP);
     }
 
     function _migrateStorage_v2_to_v3() internal {

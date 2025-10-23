@@ -56,6 +56,7 @@ export async function main() {
   const template = await deployWithoutProxy(Sk.v3Template, "V3Template", deployer, [
     addressesParams,
     parameters.v3VoteScript.expiryTimestamp,
+    parameters.v3VoteScript.initialMaxExternalRatioBP,
   ]);
 
   await deployWithoutProxy(Sk.v3VoteScript, "V3VoteScript", deployer, [

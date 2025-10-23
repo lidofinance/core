@@ -82,6 +82,8 @@ ao_consensus_version = 4              # Accounting Oracle consensus version
 # Format: Unix timestamp (seconds since epoch)
 # The upgrade transaction must be executed before this deadline
 expiryTimestamp = 1765324800          # December 10, 2025 00:00:00 UTC
+# Initial maximum external ratio in basis points for Lido v3
+initialMaxExternalRatioBP = 300      # 3% value set upon upgrade for the initial phase
 
 # Sources (todo)
 # - https://research.lido.fi/t/default-risk-assessment-framework-and-fees-parameters-for-lido-v3-stvaults/10504
