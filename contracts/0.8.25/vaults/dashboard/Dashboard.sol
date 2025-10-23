@@ -161,9 +161,20 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Returns the amount of shares to rebalance to restore vault healthiness or to cover redemptions
+     * @dev returns UINT256_MAX if it's impossible to make the vault healthy using rebalance
      */
     function healthShortfallShares() external view returns (uint256) {
         return VAULT_HUB.healthShortfallShares(address(_stakingVault()));
+    }
+
+    /**
+     * @notice Returns the amount of ether required to cover obligations shortfall of the vault
+     * @dev returns UINT256_MAX if it's impossible to cover obligations shortfall
+     * @dev NB: obligationsShortfallValue includes healthShortfallShares converted to ether and any unsettled Lido fees
+     *          in case they are greater than the minimum beacon deposit
+     */
+    function obligationsShortfallValue() external view returns (uint256) {
+        return VAULT_HUB.obligationsShortfallValue(address(_stakingVault()));
     }
 
     /**
@@ -231,9 +242,10 @@ contract Dashboard is NodeOperatorFee {
      * @notice Transfers the ownership of the underlying StakingVault from this contract to a new owner
      *         without disconnecting it from the hub
      * @param _newOwner Address of the new owner.
+     * @return bool True if the ownership transfer was executed, false if pending for confirmation
      */
-    function transferVaultOwnership(address _newOwner) external {
-        _transferVaultOwnership(_newOwner);
+    function transferVaultOwnership(address _newOwner) external returns (bool) {
+        return _transferVaultOwnership(_newOwner);
     }
 
     /**
@@ -247,14 +259,16 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Accepts the ownership over the StakingVault transferred from VaultHub on disconnect
-     * and immediately transfers it to a new pending owner. This new owner will have to accept the ownership
-     * on the StakingVault contract.
+     * @notice Accepts the ownership over the disconnected StakingVault transferred from VaultHub
+     *         and immediately passes it to a new pending owner. This new owner will have to accept the ownership
+     *         on the StakingVault contract.
+     *         Resets the settled growth to 0 to encourage correction before reconnection.
      * @param _newOwner The address to transfer the StakingVault ownership to.
      */
     function abandonDashboard(address _newOwner) external {
         if (VAULT_HUB.isVaultConnected(address(_stakingVault()))) revert ConnectedToVaultHub();
         if (_newOwner == address(this)) revert DashboardNotAllowed();
+        if (settledGrowth != 0) _setSettledGrowth(0);
 
         _acceptOwnership();
         _transferOwnership(_newOwner);
@@ -263,33 +277,34 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Accepts the ownership over the StakingVault and connects to VaultHub. Can be called to reconnect
      *         to the hub after voluntaryDisconnect()
+     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
      */
-    function reconnectToVaultHub() external {
+    function reconnectToVaultHub(uint256 _currentSettledGrowth) external {
         _acceptOwnership();
-        connectToVaultHub();
+        connectToVaultHub(_currentSettledGrowth);
     }
 
     /**
-     * @notice Connects to VaultHub, transferring ownership to VaultHub.
+     * @notice Connects to VaultHub, transferring underlying StakingVault ownership to VaultHub.
+     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
      */
-    function connectToVaultHub() public payable {
-        if (!isApprovedToConnect) revert ForbiddenToConnectByNodeOperator();
-
+    function connectToVaultHub(uint256 _currentSettledGrowth) public payable {
+        if (settledGrowth != int256(_currentSettledGrowth)) {
+            revert SettledGrowthMismatch();
+        }
         if (msg.value > 0) _stakingVault().fund{value: msg.value}();
         _transferOwnership(address(VAULT_HUB));
         VAULT_HUB.connectVault(address(_stakingVault()));
-
-        // node operator approval is one time only and is reset after connect
-        _setApprovedToConnect(false);
     }
 
     /**
      * @notice Changes the tier of the vault and connects to VaultHub
      * @param _tierId The tier to change to
      * @param _requestedShareLimit The requested share limit
+     * @param _currentSettledGrowth The current settled growth value to verify against the stored one
      */
-    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit) external payable {
-        connectToVaultHub();
+    function connectAndAcceptTier(uint256 _tierId, uint256 _requestedShareLimit, uint256 _currentSettledGrowth) external payable {
+        connectToVaultHub(_currentSettledGrowth);
         if (!_changeTier(_tierId, _requestedShareLimit)) {
             revert TierChangeNotConfirmed();
         }
@@ -327,7 +342,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Mints stETH tokens backed by the vault to the recipient.
-     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
+     * !NB: this will revert with `ZeroArgument()` if the amount of stETH is less than 1 share
      * @param _recipient Address of the recipient
      * @param _amountOfStETH Amount of stETH to mint
      */
@@ -361,7 +376,7 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Burns stETH tokens from the sender backed by the vault. Expects stETH amount approved to this contract.
-     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` if the amount of stETH is less than 1 share
+     * !NB: this will revert with `ZeroArgument()` if the amount of stETH is less than 1 share
      * @param _amountOfStETH Amount of stETH tokens to burn
      */
     function burnStETH(uint256 _amountOfStETH) external {
@@ -370,16 +385,16 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Burns wstETH tokens from the sender backed by the vault. Expects wstETH amount approved to this contract.
-     * !NB: this will revert with `VaultHub.ZeroArgument("_amountOfShares")` on 1 wei of wstETH due to rounding inside wstETH unwrap method
+     * @dev !NB: this will revert with `ZeroArgument()` on 1 wei of wstETH due to rounding inside wstETH unwrap method
      * @param _amountOfWstETH Amount of wstETH tokens to burn
-
      */
     function burnWstETH(uint256 _amountOfWstETH) external {
         _burnWstETH(_amountOfWstETH);
     }
 
     /**
-     * @notice Rebalances StakingVault by withdrawing ether to VaultHub corresponding to shares amount provided
+     * @notice Rebalances the vault's position by transferring ether corresponding to the passed `_shares`
+     *         number to Lido Core and writing it off from the vault's liability.
      * @param _shares amount of shares to rebalance
      */
     function rebalanceVaultWithShares(uint256 _shares) external {
@@ -387,15 +402,17 @@ contract Dashboard is NodeOperatorFee {
     }
 
     /**
-     * @notice Rebalances the vault by transferring ether given the shares amount
+     * @notice Rebalances the vault by transferring ether and writing off the respective shares amount fro the vault's
+     *         liability
      * @param _ether amount of ether to rebalance
+     * @dev the amount of ether transferred can differ a bit because of the rounding
      */
     function rebalanceVaultWithEther(uint256 _ether) external payable fundable {
         _rebalanceVault(_getSharesByPooledEth(_ether));
     }
 
     /**
-     * @notice Changes the PDG policy
+     * @notice Changes the PDG policy. PDGPolicy regulates the possibility of deposits without PredepositGuarantee
      * @param _pdgPolicy new PDG policy
      */
     function setPDGPolicy(PDGPolicy _pdgPolicy) external onlyRoleMemberOrAdmin(DEFAULT_ADMIN_ROLE) {
@@ -409,12 +426,12 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Withdraws ether from vault and deposits directly to provided validators bypassing the default PDG process,
      *          allowing validators to be proven post-factum via `proveUnknownValidatorsToPDG`
-     *          clearing them for future deposits via `PDG.depositToBeaconChain`
+     *          clearing them for future deposits via `PDG.topUpValidators`
      * @param _deposits array of IStakingVault.Deposit structs containing deposit data
      * @return totalAmount total amount of ether deposited to beacon chain
      * @dev requires the PDG policy set to `ALLOW_DEPOSIT_AND_PROVE`
      * @dev requires the caller to have the `NODE_OPERATOR_UNGUARANTEED_DEPOSIT_ROLE`
-     * @dev can be used as PDG shortcut if the node operator is trusted to not frontrun provided deposits
+     * @dev Warning! vulnerable to deposit frontrunning and requires putting trust on the node operator
      */
     function unguaranteedDepositToBeaconChain(
         IStakingVault.Deposit[] calldata _deposits
@@ -495,8 +512,7 @@ contract Dashboard is NodeOperatorFee {
      * @param _token Address of the token to collect
      * @param _recipient Address of the recipient
      * @param _amount Amount of tokens to collect
-     * @dev will revert on EIP-7528 ETH address with StakingVault.EthCollectionNotAllowed()
-     *      or on zero arguments with StakingVault.ZeroArgument()
+     * @dev will revert on EIP-7528 ETH address with EthCollectionNotAllowed() or on zero arguments with ZeroArgument()
      */
     function collectERC20FromVault(
         address _token,
@@ -538,9 +554,13 @@ contract Dashboard is NodeOperatorFee {
      * @param _amountsInGwei Withdrawal amounts in Gwei for each validator key. Must match _pubkeys length.
      *         Set amount to 0 for a full validator exit. For partial withdrawals, amounts may be trimmed to keep
      *         MIN_ACTIVATION_BALANCE on the validator to avoid deactivation.
-     * @param _refundRecipient Address to receive any fee refunds, if zero, refunds go to msg.sender.
+     * @param _refundRecipient Address to receive any fee refunds
      * @dev    A withdrawal fee must be paid via msg.value.
-     *         Use `StakingVault.calculateValidatorWithdrawalFee()` to determine the required fee for the current block.
+     *         You can use `StakingVault.calculateValidatorWithdrawalFee()` to calculate the approximate fee amount but
+     *         it's accurate only for the current block. The fee may change when the tx is included, so it's recommended
+     *         to send some surplus. The exact amount required will be paid and the excess will be refunded to the
+     *         `_refundRecipient` address. The fee required can grow exponentially, so limit msg.value wisely to avoid
+     *         overspending.
      */
     function triggerValidatorWithdrawals(
         bytes calldata _pubkeys,
@@ -554,9 +574,9 @@ contract Dashboard is NodeOperatorFee {
      * @notice Requests a change of tier on the OperatorGrid.
      * @param _tierId The tier to change to.
      * @param _requestedShareLimit The requested share limit.
-     * @return bool Whether the tier change was executed.
+     * @return bool True if the tier change was executed, false if pending for confirmation.
      * @dev Tier change confirmation logic:
-     *      - Both vault owner (via this function) AND node operator confirmations are always required
+     *      - Both vault owner (via this function) AND node operator (via OperatorGrid) confirmations are always required
      *      - First call returns false (pending), second call with both confirmations completes the tier change
      *      - Confirmations expire after the configured period (default: 1 day)
      */
@@ -566,10 +586,10 @@ contract Dashboard is NodeOperatorFee {
 
     /**
      * @notice Requests a sync of tier on the OperatorGrid.
-     * @return bool Whether the tier sync was executed.
+     * @return bool True if the tier sync was executed, false if pending for confirmation.
      * @dev Tier sync confirmation logic:
-     *      - Both vault owner (via this function) AND node operator confirmations are required
-     *      - First call returns false (pending), second call with both confirmations completes the sync
+     *      - Both vault owner (via this function) AND node operator (via OperatorGrid) confirmations are required
+     *      - First call returns false (pending), second call with both confirmations completes the operation
      *      - Confirmations expire after the configured period (default: 1 day)
      */
     function syncTier() external returns (bool) {
@@ -579,10 +599,10 @@ contract Dashboard is NodeOperatorFee {
     /**
      * @notice Requests a change of share limit on the OperatorGrid.
      * @param _requestedShareLimit The requested share limit.
-     * @return bool Whether the share limit change was executed.
+     * @return bool True if the share limit change was executed, false if pending for confirmation.
      * @dev Share limit update confirmation logic:
-     *      - Both vault owner (via this function) AND node operator confirmations required
-     *      - First call returns false (pending), second call with node operator confirmation completes the update
+     *      - Both vault owner (via this function) AND node operator (via OperatorGrid) confirmations required
+     *      - First call returns false (pending), second call with node operator confirmation completes the operation
      *      - Confirmations expire after the configured period (default: 1 day)
      */
     function updateShareLimit(uint256 _requestedShareLimit) external returns (bool) {

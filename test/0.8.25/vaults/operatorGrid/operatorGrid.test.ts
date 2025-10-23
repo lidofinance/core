@@ -138,7 +138,7 @@ describe("OperatorGrid.sol", () => {
       reservationFeeBP: 100,
       owner: vaultOwner,
       vaultIndex: 1,
-      isBeaconDepositsManuallyPaused: false,
+      beaconChainDepositsPauseIntent: false,
       disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
     });
     await vaultHub.mock__setVaultConnection(vault_NO1_V2, {
@@ -150,7 +150,7 @@ describe("OperatorGrid.sol", () => {
       reservationFeeBP: 100,
       owner: vaultOwner,
       vaultIndex: 2,
-      isBeaconDepositsManuallyPaused: false,
+      beaconChainDepositsPauseIntent: false,
       disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
     });
     await vaultHub.mock__setVaultConnection(vault_NO2_V1, {
@@ -162,7 +162,7 @@ describe("OperatorGrid.sol", () => {
       reservationFeeBP: 100,
       owner: vaultOwner,
       vaultIndex: 3,
-      isBeaconDepositsManuallyPaused: false,
+      beaconChainDepositsPauseIntent: false,
       disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
     });
     await vaultHub.mock__setVaultConnection(vault_NO2_V2, {
@@ -174,7 +174,7 @@ describe("OperatorGrid.sol", () => {
       reservationFeeBP: 100,
       owner: vaultOwner,
       vaultIndex: 4,
-      isBeaconDepositsManuallyPaused: false,
+      beaconChainDepositsPauseIntent: false,
       disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
     });
 
@@ -795,7 +795,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
@@ -838,7 +838,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
@@ -881,7 +881,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
       //and update tier sharesMinted
       await operatorGrid.connect(vaultHubAsSigner).onMintedShares(vault_NO1_V1, _liabilityShares, false);
@@ -926,7 +926,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
@@ -1042,7 +1042,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, tierId, tierShareLimit);
@@ -1078,7 +1078,7 @@ describe("OperatorGrid.sol", () => {
 
       const group = await operatorGrid.group(nodeOperator1);
 
-      const vaultTier = await operatorGrid.vaultInfo(vault_NO1_V1);
+      const vaultTier = await operatorGrid.vaultTierInfo(vault_NO1_V1);
       const tier = await operatorGrid.tier(vaultTier.tierId);
 
       expect(group.liabilityShares).to.equal(tierShareLimit);
@@ -1216,8 +1216,8 @@ describe("OperatorGrid.sol", () => {
       const group = await operatorGrid.group(nodeOperator1);
       const group2 = await operatorGrid.group(nodeOperator2);
 
-      const vaultTier = await operatorGrid.vaultInfo(vault_NO1_V1);
-      const vaultTier2 = await operatorGrid.vaultInfo(vault_NO2_V2);
+      const vaultTier = await operatorGrid.vaultTierInfo(vault_NO1_V1);
+      const vaultTier2 = await operatorGrid.vaultTierInfo(vault_NO2_V2);
 
       const tier = await operatorGrid.tier(vaultTier.tierId);
       const tier2 = await operatorGrid.tier(vaultTier2.tierId);
@@ -1252,7 +1252,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       const vaultShareLimit = tierShareLimit / 2;
@@ -1474,7 +1474,7 @@ describe("OperatorGrid.sol", () => {
           owner: vaultOwner,
           vaultIndex: 1,
           disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-          isBeaconDepositsManuallyPaused: false,
+          beaconChainDepositsPauseIntent: false,
         });
 
         const tierId = 1;
@@ -1611,7 +1611,7 @@ describe("OperatorGrid.sol", () => {
           owner: vaultOwner,
           vaultIndex: 1,
           disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-          isBeaconDepositsManuallyPaused: false,
+          beaconChainDepositsPauseIntent: false,
         });
       });
 
@@ -1729,8 +1729,8 @@ describe("OperatorGrid.sol", () => {
 
       const group = await operatorGrid.group(nodeOperator1);
 
-      const vaultTier = await operatorGrid.vaultInfo(vault_NO1_V1);
-      const vaultTier2 = await operatorGrid.vaultInfo(vault_NO1_V2);
+      const vaultTier = await operatorGrid.vaultTierInfo(vault_NO1_V1);
+      const vaultTier2 = await operatorGrid.vaultTierInfo(vault_NO1_V2);
 
       const tier = await operatorGrid.tier(vaultTier.tierId);
       const tier2 = await operatorGrid.tier(vaultTier2.tierId);
@@ -1782,7 +1782,7 @@ describe("OperatorGrid.sol", () => {
         infraFeeBP: 500,
         liquidityFeeBP: 400,
         reservationFeeBP: 100,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       const tier_NO1_Id1 = 1;
@@ -1800,7 +1800,7 @@ describe("OperatorGrid.sol", () => {
         retInfraFee,
         retLiquidityFee,
         retReservationFee,
-      ] = await operatorGrid.vaultInfo(vault_NO1_V1);
+      ] = await operatorGrid.vaultTierInfo(vault_NO1_V1);
 
       expect(retGroupOperator).to.equal(nodeOperator1);
       expect(retTierIndex).to.equal(tier_NO1_Id1);
@@ -1821,12 +1821,12 @@ describe("OperatorGrid.sol", () => {
     });
 
     it("does nothing if vault is already in default tier", async () => {
-      const vaultTierBefore = await operatorGrid.vaultInfo(vault_NO1_V1);
+      const vaultTierBefore = await operatorGrid.vaultTierInfo(vault_NO1_V1);
       expect(vaultTierBefore.tierId).to.equal(await operatorGrid.DEFAULT_TIER_ID());
 
       await operatorGrid.connect(vaultHubAsSigner).resetVaultTier(vault_NO1_V1);
 
-      const vaultTierAfter = await operatorGrid.vaultInfo(vault_NO1_V1);
+      const vaultTierAfter = await operatorGrid.vaultTierInfo(vault_NO1_V1);
       expect(vaultTierAfter.tierId).to.equal(await operatorGrid.DEFAULT_TIER_ID());
     });
 
@@ -1847,14 +1847,14 @@ describe("OperatorGrid.sol", () => {
       await operatorGrid.connect(vaultOwner).changeTier(vault_NO1_V1, 1, shareLimit);
       await operatorGrid.connect(nodeOperator1).changeTier(vault_NO1_V1, 1, shareLimit);
 
-      const vaultTierBefore = await operatorGrid.vaultInfo(vault_NO1_V1);
+      const vaultTierBefore = await operatorGrid.vaultTierInfo(vault_NO1_V1);
       expect(vaultTierBefore.tierId).to.equal(1);
 
       // Reset tier
       await operatorGrid.connect(vaultHubAsSigner).resetVaultTier(vault_NO1_V1);
 
       // Check final state
-      const vaultTierAfter = await operatorGrid.vaultInfo(vault_NO1_V1);
+      const vaultTierAfter = await operatorGrid.vaultTierInfo(vault_NO1_V1);
       expect(vaultTierAfter.tierId).to.equal(await operatorGrid.DEFAULT_TIER_ID());
     });
   });
@@ -1880,7 +1880,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
@@ -1923,7 +1923,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
@@ -1963,7 +1963,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       await vaultHub.mock__setVaultRecord(vault_NO1_V1, {
@@ -2013,7 +2013,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       const tierId = 1;
@@ -2067,7 +2067,7 @@ describe("OperatorGrid.sol", () => {
         owner: vaultOwner,
         vaultIndex: 1,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
       });
 
       const tierId = 1;
@@ -2120,7 +2120,7 @@ describe("OperatorGrid.sol", () => {
       infraFeeBP,
       liquidityFeeBP,
       reservationFeeBP,
-      isBeaconDepositsManuallyPaused: false,
+      beaconChainDepositsPauseIntent: false,
     });
 
     beforeEach(async () => {
@@ -2290,7 +2290,7 @@ describe("OperatorGrid.sol", () => {
       infraFeeBP,
       liquidityFeeBP,
       reservationFeeBP,
-      isBeaconDepositsManuallyPaused: false,
+      beaconChainDepositsPauseIntent: false,
     });
 
     beforeEach(async () => {
@@ -2484,7 +2484,7 @@ describe("OperatorGrid.sol", () => {
         reservationFeeBP: RESERVATION_FEE,
         owner: vaultOwner,
         vaultIndex: 1,
-        isBeaconDepositsManuallyPaused: false,
+        beaconChainDepositsPauseIntent: false,
         disconnectInitiatedTs: DISCONNECT_NOT_INITIATED,
       });
       vault = vault_NO1_V1;

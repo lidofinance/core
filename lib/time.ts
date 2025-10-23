@@ -29,6 +29,10 @@ export async function getNextBlockTimestamp() {
   return nextBlockTimestamp;
 }
 
+export async function getCurrentBlockNumber() {
+  return await ethers.provider.getBlockNumber();
+}
+
 export async function getNextBlockNumber() {
   const latestBlock = BigInt(await time.latestBlock());
   return latestBlock + 1n;

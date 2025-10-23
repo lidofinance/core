@@ -41,7 +41,7 @@ jobs:
           GAS_PRIORITY_FEE: 1
           GAS_MAX_FEE: 100
           NETWORK_STATE_FILE: deployed-mainnet-upgrade.json
-          GENESIS_TIME: 1606824023 # needed only for TW upgrade
+          UPGRADE_PARAMETERS_FILE: scripts/upgrade/upgrade-params-mainnet.toml
 
       - name: Mock Aragon voting
         run: yarn upgrade:mock-voting

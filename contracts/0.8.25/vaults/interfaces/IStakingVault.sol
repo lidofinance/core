@@ -18,7 +18,7 @@ interface IStakingVault {
      * @dev withdrawal credentials are provided by the vault
      * @custom:pubkey The validator's BLS public key (48 bytes)
      * @custom:signature BLS signature of the deposit data (96 bytes)
-     * @custom:amount Amount of ETH to deposit in wei (must be a multiple of 1 ETH)
+     * @custom:amount Amount of ETH to deposit in wei (must be a multiple of 1 Gwei and minimum of 1 ETH)
      * @custom:depositDataRoot The root hash of the deposit data per ETH beacon spec
      */
     struct Deposit {

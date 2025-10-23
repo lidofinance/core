@@ -12,7 +12,7 @@ import { loadContract } from "lib/contract";
 import { findEventsWithInterfaces } from "lib/event";
 import { DeploymentState, getAddress, Sk } from "lib/state-file";
 
-const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE || "scripts/upgrade/upgrade-params-mainnet.toml";
+const UPGRADE_PARAMETERS_FILE = process.env.UPGRADE_PARAMETERS_FILE;
 
 export { UpgradeParameters };
 
@@ -31,7 +31,7 @@ export function readUpgradeParameters(): UpgradeParameters {
   try {
     return validateUpgradeParameters(parsedData);
   } catch (error) {
-    throw new Error(`Invalid upgrade parameters: ${error}`);
+    throw new Error(`Invalid upgrade parameters (${UPGRADE_PARAMETERS_FILE}): ${error}`);
   }
 }
 

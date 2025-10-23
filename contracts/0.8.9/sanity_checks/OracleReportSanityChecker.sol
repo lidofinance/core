@@ -106,6 +106,8 @@ struct LimitsList {
     uint256 appearedValidatorsPerDayLimit;
     /// @notice The max annual increase of the total validators' balances on the Consensus Layer
     ///     since the previous oracle report
+    /// (the increase that is limited does not include fresh deposits to the Beacon Chain as well as withdrawn ether)
+    ///
     /// @dev Represented in the Basis Points (100% == 10_000)
     uint256 annualBalanceIncreaseBPLimit;
 

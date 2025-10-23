@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import { Dashboard, StakingVault } from "typechain-types";
 
@@ -65,7 +66,7 @@ describe("Integration: VaultHub", () => {
           .to.emit(vaultHub, "VaultDisconnectInitiated")
           .withArgs(stakingVault);
 
-        expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(tierId);
+        expect((await operatorGrid.vaultTierInfo(stakingVault)).tierId).to.be.equal(tierId);
         expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.true;
         expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
         expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
@@ -107,6 +108,19 @@ describe("Integration: VaultHub", () => {
         expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
         expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));
       });
+
+      it("Vault with balalnce more than total value", async () => {
+        const { vaultHub } = ctx.contracts;
+
+        await reportVaultDataWithProof(ctx, stakingVault, { totalValue: 100n, cumulativeLidoFees: 200n });
+        await setBalance(await stakingVault.getAddress(), ether("1.5"));
+
+        await vaultHub.connect(await ctx.getSigner("agent")).grantRole(await vaultHub.VAULT_MASTER_ROLE(), dao);
+
+        await expect(vaultHub.connect(dao).disconnect(stakingVault))
+          .to.emit(vaultHub, "VaultDisconnectInitiated")
+          .withArgs(stakingVault);
+      });
     });
   });
 
@@ -120,7 +134,7 @@ describe("Integration: VaultHub", () => {
         .to.emit(vaultHub, "VaultDisconnectCompleted")
         .withArgs(stakingVault);
 
-      expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(0n);
+      expect((await operatorGrid.vaultTierInfo(stakingVault)).tierId).to.be.equal(0n);
       expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.false;
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.false;
       expect(await vaultHub.locked(stakingVault)).to.be.equal(0n);
@@ -154,7 +168,7 @@ describe("Integration: VaultHub", () => {
         .to.emit(vaultHub, "VaultDisconnectAborted")
         .withArgs(stakingVault, ether("1"));
 
-      expect((await operatorGrid.vaultInfo(stakingVault)).tierId).to.be.equal(tierId);
+      expect((await operatorGrid.vaultTierInfo(stakingVault)).tierId).to.be.equal(tierId);
       expect(await vaultHub.isPendingDisconnect(stakingVault)).to.be.false;
       expect(await vaultHub.isVaultConnected(stakingVault)).to.be.true;
       expect(await vaultHub.locked(stakingVault)).to.be.equal(ether("1"));

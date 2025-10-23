@@ -16,7 +16,16 @@ import {
   WstETH__Harness,
 } from "typechain-types";
 
-import { advanceChainTime, days, ether, findEvents, getCurrentBlockTimestamp, getNextBlockTimestamp } from "lib";
+import {
+  ABNORMALLY_HIGH_FEE_THRESHOLD_BP,
+  advanceChainTime,
+  days,
+  ether,
+  findEvents,
+  getCurrentBlockTimestamp,
+  getNextBlockTimestamp,
+  TOTAL_BASIS_POINTS,
+} from "lib";
 
 import { deployLidoLocator } from "test/deploy";
 import { Snapshot } from "test/suite";
@@ -119,7 +128,7 @@ describe("NodeOperatorFee.sol", () => {
 
       await expect(
         nodeOperatorFeeImpl_.initialize(vaultOwner, nodeOperatorManager, 0n, days(7n)),
-      ).to.be.revertedWithCustomError(nodeOperatorFeeImpl_, "NonProxyCallsForbidden");
+      ).to.be.revertedWithCustomError(nodeOperatorFeeImpl_, "AlreadyInitialized");
     });
   });
 
@@ -145,7 +154,6 @@ describe("NodeOperatorFee.sol", () => {
       expect(await nodeOperatorFee.accruedFee()).to.equal(0n);
       expect(await nodeOperatorFee.settledGrowth()).to.equal(0n);
       expect(await nodeOperatorFee.latestCorrectionTimestamp()).to.equal(0n);
-      expect(await nodeOperatorFee.isApprovedToConnect()).to.be.false;
     });
   });
 
@@ -340,6 +348,60 @@ describe("NodeOperatorFee.sol", () => {
 
       expect(await nodeOperatorFee.accruedFee()).to.equal(0n);
     });
+
+    it("reverts if the fee is abnormally high", async () => {
+      const feeRate = await nodeOperatorFee.feeRate();
+      const totalValue = ether("100");
+      const pauseThreshold = (totalValue * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
+      const valueOverThreshold = 10n;
+      const rewards = (pauseThreshold * TOTAL_BASIS_POINTS) / feeRate + valueOverThreshold;
+      const inOutDelta = totalValue - rewards;
+      const expectedFee = (rewards * nodeOperatorFeeRate) / BP_BASE;
+      expect(expectedFee).to.be.greaterThan(
+        ((inOutDelta + rewards) * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS,
+      );
+
+      await hub.setReport(
+        {
+          totalValue,
+          inOutDelta,
+          timestamp: await getCurrentBlockTimestamp(),
+        },
+        true,
+      );
+
+      expect(await nodeOperatorFee.accruedFee()).to.equal(expectedFee);
+      await expect(nodeOperatorFee.disburseFee()).to.be.revertedWithCustomError(nodeOperatorFee, "AbnormallyHighFee");
+    });
+
+    it("disburse abnormally high fee", async () => {
+      const feeRate = await nodeOperatorFee.feeRate();
+      const totalValue = ether("100");
+      const pauseThreshold = (totalValue * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS;
+      const valueOverThreshold = 10n;
+      const rewards = (pauseThreshold * TOTAL_BASIS_POINTS) / feeRate + valueOverThreshold;
+      const inOutDelta = totalValue - rewards;
+      const expectedFee = (rewards * nodeOperatorFeeRate) / BP_BASE;
+      expect(expectedFee).to.be.greaterThan(
+        ((inOutDelta + rewards) * ABNORMALLY_HIGH_FEE_THRESHOLD_BP) / TOTAL_BASIS_POINTS,
+      );
+
+      await hub.setReport(
+        {
+          totalValue,
+          inOutDelta,
+          timestamp: await getCurrentBlockTimestamp(),
+        },
+        true,
+      );
+
+      expect(await nodeOperatorFee.accruedFee()).to.equal(expectedFee);
+      await expect(nodeOperatorFee.connect(vaultOwner).disburseAbnormallyHighFee()).to.emit(
+        nodeOperatorFee,
+        "FeeDisbursed",
+      );
+      expect(await nodeOperatorFee.accruedFee()).to.equal(0n);
+    });
   });
 
   context("addFeeExemption", () => {
@@ -375,6 +437,12 @@ describe("NodeOperatorFee.sol", () => {
         nodeOperatorFee,
         "SameSettledGrowth",
       );
+    });
+
+    it("reverts if the amount is too large", async () => {
+      await expect(
+        nodeOperatorFee.connect(nodeOperatorFeeExempter).addFeeExemption(2n ** 104n + 1n),
+      ).to.be.revertedWithCustomError(nodeOperatorFee, "UnexpectedFeeExemptionAmount");
     });
 
     it("adjuster can addFeeExemption", async () => {
@@ -416,23 +484,23 @@ describe("NodeOperatorFee.sol", () => {
     });
 
     it("settledGrowth is updated fee claim", async () => {
+      const totalValue = ether("100");
       const operatorFee = await nodeOperatorFee.feeRate();
-
-      const rewards = ether("10");
+      const rewards = ether("0.01");
+      const adjustment = ether("32"); // e.g. side deposit
 
       await hub.setReport(
         {
-          totalValue: rewards,
-          inOutDelta: 0n,
+          totalValue: totalValue + rewards + adjustment,
+          inOutDelta: totalValue,
           timestamp: await getCurrentBlockTimestamp(),
         },
         true,
       );
 
-      const expectedFee = (rewards * operatorFee) / BP_BASE;
+      const expectedFee = ((rewards + adjustment) * operatorFee) / BP_BASE;
       expect(await nodeOperatorFee.accruedFee()).to.equal(expectedFee);
 
-      const adjustment = rewards / 2n;
       const timestamp = await getNextBlockTimestamp();
       await nodeOperatorFee.connect(nodeOperatorFeeExempter).addFeeExemption(adjustment);
       expect(await nodeOperatorFee.settledGrowth()).to.deep.equal(adjustment);
@@ -521,8 +589,6 @@ describe("NodeOperatorFee.sol", () => {
           msgData,
         );
 
-      expect(await nodeOperatorFee.isApprovedToConnect()).to.be.false;
-
       expect(await nodeOperatorFee.settledGrowth()).to.equal(currentSettledGrowth);
 
       confirmTimestamp = await getNextBlockTimestamp();
@@ -541,7 +607,6 @@ describe("NodeOperatorFee.sol", () => {
 
       expect(await nodeOperatorFee.settledGrowth()).to.deep.equal(newSettledGrowth);
       expect(await nodeOperatorFee.latestCorrectionTimestamp()).to.deep.equal(timestamp);
-      expect(await nodeOperatorFee.isApprovedToConnect()).to.be.false;
     });
   });
 
@@ -696,12 +761,13 @@ describe("NodeOperatorFee.sol", () => {
 
       const noFeeRate = await nodeOperatorFee.feeRate();
 
-      const rewards = ether("1");
+      const totalValue = ether("100");
+      const rewards = ether("0.1");
 
       await hub.setReport(
         {
-          totalValue: rewards,
-          inOutDelta: 0n,
+          totalValue: totalValue + rewards,
+          inOutDelta: totalValue,
           timestamp: await getCurrentBlockTimestamp(),
         },
         true,
